@@ -9,7 +9,12 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, unwrapDb, withTransaction } from "~/server/db/helpers";
+import {
+  getDb,
+  unwrapDb,
+  uuidArrayParam,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   inventoryEntry,
   email as emailTable,
@@ -223,6 +228,58 @@ describe("stored derived values", () => {
       attempts: 1,
       lastError: expect.stringContaining("invalid input syntax"),
     });
+  });
+
+  it("publishes a record-writing sink without waiting on a member's open save", async () => {
+    const dish = await seedEntity(ctx.db, "recipe", {
+      name: "Synthetic locked dish",
+    });
+    const recipeId = await resolveLiveShortcode(ctx.db, dish.id, "recipe");
+    if (!recipeId) throw new Error("Synthetic recipe missing");
+    await drain();
+    await getDb(ctx.db).execute(
+      sql`SELECT derived_mark('recipe.totals', ARRAY[${recipeId}::uuid])`,
+    );
+    // The sink writes the Recipe row itself, like recipe totals.
+    const rowWriting = {
+      ...derivedComputes,
+      "recipe.totals": derivedSink({
+        prepare: async () => null,
+        publish: async (tx, ids) => {
+          await unwrapDb(tx).execute(sql`
+            UPDATE "Recipe" SET "totalsComputedAt" = now()
+             WHERE id = ANY(${uuidArrayParam(ids)})`);
+          return [...ids];
+        },
+      }),
+    };
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+    // A member save holds the Recipe row (and then its marks) until released.
+    const memberSave = withTransaction(ctx.db, async (tx) => {
+      await tx.execute(
+        sql`UPDATE "Recipe" SET notes = 'Synthetic edit' WHERE id = ${recipeId}`,
+      );
+      locked();
+      await held;
+    });
+    await rowLocked;
+    const claimed = (await claimDerivedMarks(ctx.db)).filter(
+      (mark) => mark.target === "recipe.totals",
+    );
+    expect(claimed.map((mark) => mark.ref)).toContain(recipeId);
+    await publishDerivedPage(
+      ctx.db,
+      await prepareDerivedPage(ctx.db, rowWriting, claimed),
+    );
+    // The locked record was skipped, not waited on; its mark stays pending.
+    expect(await marks("recipe.totals")).toContain(recipeId);
+    release();
+    await memberSave;
+    await drain();
+    expect(await marks("recipe.totals")).toEqual([]);
   });
 
   it("marks nothing for a save that changes no declared input", async () => {

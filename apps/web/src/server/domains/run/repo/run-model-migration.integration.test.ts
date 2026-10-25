@@ -10,7 +10,12 @@ import {
 } from "~/server/ai/repo/ai-evaluation-requests";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
-import { aiEvaluation, run, runStep } from "~/server/db/schema";
+import {
+  aiEvaluation,
+  aiEvaluationRequest,
+  run,
+  runStep,
+} from "~/server/db/schema";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   createProductIdentityFixture,
@@ -219,6 +224,17 @@ describe("AI evaluation slot cutover", () => {
         kind: "ai.evaluation",
         input: { evaluationId: row.id },
       });
+    // A member Run still waiting on the older duplicate.
+    const requester = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "suggestion_sweep",
+      trigger: "manual",
+      status: "running",
+      execution: false,
+    });
+    const older = rows.find((row) => row.state === "queued")!;
+    await getDb(ctx.db)
+      .insert(aiEvaluationRequest)
+      .values({ runId: requester, evaluationId: older.id });
     await getDb(ctx.db).execute(
       sql`ALTER TABLE "AiEvaluation" DROP COLUMN "slotKey"`,
     );
@@ -268,6 +284,13 @@ describe("AI evaluation slot cutover", () => {
         ),
       );
     expect(jobs.filter((row) => row.state === "cancelled")).toHaveLength(1);
+    // The requester's demand moved to the survivor instead of settling as cancelled.
+    expect(
+      await getDb(ctx.db)
+        .select({ evaluationId: aiEvaluationRequest.evaluationId })
+        .from(aiEvaluationRequest)
+        .where(eq(aiEvaluationRequest.runId, requester)),
+    ).toEqual([{ evaluationId: newest.id }]);
     expect(
       jobs.find((row) => row.key === `ai-evaluation:${newest.id}`)?.state,
     ).toBe("queued");

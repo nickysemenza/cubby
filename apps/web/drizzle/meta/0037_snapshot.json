@@ -2935,7 +2935,7 @@
         },
         "Job_kind_retired_check": {
           "name": "Job_kind_retired_check",
-          "value": "\"Job\".\"kind\" <> 'image.processing'"
+          "value": "\"Job\".\"kind\" NOT IN ('image.processing', 'refresh.family')"
         },
         "Job_attempts_check": {
           "name": "Job_attempts_check",

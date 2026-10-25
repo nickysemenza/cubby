@@ -151,6 +151,68 @@ const sortColumns = (
 });
 
 /** Clear exactly the claimed tickets; a newer ticket keeps its mark. */
+/**
+ * The marks this publication may write and clear, locked without waiting.
+ * A member save locks its record's row and then upserts its marks; a sink
+ * that writes the record (recipe totals) locks in the same order, so neither
+ * side ever waits on the other. Skipped marks keep their ticket and drain on a
+ * later page.
+ */
+const lockPublishableMarks = async (
+  tx: Executor,
+  declaration: StoredDerivedDeclaration,
+  marks: readonly Mark[],
+  recordRowsFirst: boolean,
+): Promise<Mark[]> => {
+  let candidates: readonly Mark[] = marks;
+  if (recordRowsFirst && marks.length > 0) {
+    const refs = marks.map((mark) => mark.ref);
+    const idRows = z.array(z.object({ id: z.string() }));
+    const held = new Set(
+      idRows
+        .parse(
+          (
+            await tx.execute(sql`
+              SELECT id::text AS id FROM ${ident(declaration.table)}
+               WHERE id = ANY(${uuidArrayParam(refs)}) FOR NO KEY UPDATE SKIP LOCKED`)
+          ).rows,
+        )
+        .map((row) => row.id),
+    );
+    const existing = new Set(
+      idRows
+        .parse(
+          (
+            await tx.execute(sql`
+              SELECT id::text AS id FROM ${ident(declaration.table)}
+               WHERE id = ANY(${uuidArrayParam(refs)})`)
+          ).rows,
+        )
+        .map((row) => row.id),
+    );
+    // A record that no longer exists has no row to lock; its mark still clears.
+    candidates = marks.filter(
+      (mark) => held.has(mark.ref) || !existing.has(mark.ref),
+    );
+  }
+  if (candidates.length === 0) return [];
+  const locked = await tx.execute(sql`
+    SELECT d.ref::text AS ref FROM "DerivedDirty" d
+      JOIN jsonb_to_recordset(${JSON.stringify(
+        candidates.map(({ ref, ticket }) => ({ ref, ticket })),
+      )}::jsonb) AS m(ref uuid, ticket bigint)
+        ON d.ref = m.ref AND d.ticket = m.ticket
+     WHERE d.target = ${declaration.target}
+     FOR UPDATE OF d SKIP LOCKED`);
+  const refs = new Set(
+    z
+      .array(z.object({ ref: z.string() }))
+      .parse(locked.rows)
+      .map((row) => row.ref),
+  );
+  return candidates.filter((mark) => refs.has(mark.ref));
+};
+
 const clearMarks = async (
   tx: Executor,
   target: string,
@@ -213,21 +275,11 @@ const publishSink = async (
   { sink, prepared }: { sink: DerivedSink; prepared: unknown },
 ): Promise<string[]> => {
   const tx = unwrapDb(db);
-  const current = await tx.execute(sql`
-    SELECT d.ref::text AS ref FROM "DerivedDirty" d
-      JOIN jsonb_to_recordset(${JSON.stringify(
-        marks.map(({ ref, ticket }) => ({ ref, ticket })),
-      )}::jsonb) AS m(ref uuid, ticket bigint)
-        ON d.ref = m.ref AND d.ticket = m.ticket
-     WHERE d.target = ${declaration.target}
-     FOR UPDATE OF d`);
-  const ids = z
-    .array(z.object({ ref: z.string() }))
-    .parse(current.rows)
-    .map((row) => row.ref);
+  const held = await lockPublishableMarks(tx, declaration, marks, true);
+  const ids = held.map((mark) => mark.ref);
   // Sinks reuse repository writers, which take the Database handle.
   const changed = ids.length ? await sink.publish(db, ids, prepared) : [];
-  await clearMarks(tx, declaration.target, marks);
+  await clearMarks(tx, declaration.target, held);
   return [...changed];
 };
 
@@ -238,7 +290,8 @@ const publishValues = async (
   marks: readonly Mark[],
   values: ReadonlyMap<string, DerivedComputed>,
 ): Promise<string[]> => {
-  const rows = marks
+  const held = await lockPublishableMarks(tx, declaration, marks, false);
+  const rows = held
     .filter((mark) => values.has(mark.ref))
     .map((mark) => {
       // SAFETY: filtered to ids present in `values` just above.
@@ -252,7 +305,7 @@ const publishValues = async (
         ...sortColumns(declaration, computed.sort),
       };
     });
-  const missing = marks
+  const missing = held
     .filter((mark) => !values.has(mark.ref))
     .map(({ ref, ticket }) => ({ ref, ticket }));
   const changed: string[] = [];
@@ -313,7 +366,7 @@ const publishValues = async (
         .map((row) => row.id),
     );
   }
-  await clearMarks(tx, declaration.target, marks);
+  await clearMarks(tx, declaration.target, held);
   return changed;
 };
 

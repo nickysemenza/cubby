@@ -1,3 +1,5 @@
+-- Fail safely for replay instead of queueing behind a writer (see the runbook).
+SET LOCAL lock_timeout = '2s';--> statement-breakpoint
 CREATE SEQUENCE "public"."DerivedTicket" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1;--> statement-breakpoint
 CREATE TABLE "DerivedDirty" (
 	"target" text NOT NULL,
@@ -50,15 +52,35 @@ WITH ranked AS (
   SET state = 'cancelled', receipt = jsonb_build_object('supersededBy', r.newest),
     error = 'Superseded by a newer evaluation in the same slot', "updatedAt" = now()
   FROM ranked r WHERE e.id = r.id AND r.position > 1
-  RETURNING e.id
+  RETURNING e.id, r.newest
+), movable AS (
+  -- A Run's outstanding request follows its slot's survivor (once per Run), so
+  -- the Run still waits for a result instead of settling on the cancellation.
+  SELECT DISTINCT ON (q."runId", c.newest) q.id, c.newest
+  FROM "AiEvaluationRequest" q JOIN cancelled c ON q."evaluationId" = c.id
+  WHERE q."cancelledAt" IS NULL AND q.receipt IS NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM "AiEvaluationRequest" s
+      WHERE s."runId" = q."runId" AND s."evaluationId" = c.newest)
+  ORDER BY q."runId", c.newest, q."createdAt", q.id
+), moved AS (
+  UPDATE "AiEvaluationRequest" q SET "evaluationId" = m.newest
+  FROM movable m WHERE q.id = m.id
+  RETURNING q."runId"
+), stopped AS (
+  UPDATE "Job" j
+  SET state = 'cancelled', generation = generation + 1,
+    "waitReason" = NULL, "waitUntil" = NULL,
+    "leaseToken" = NULL, "leaseExpiresAt" = NULL, "updatedAt" = now()
+  FROM cancelled e
+  WHERE j.key = 'ai-evaluation:' || e.id::text
+    AND j.state IN ('queued', 'running', 'retry_wait', 'paused')
+  RETURNING j.id
 )
-UPDATE "Job" j
-SET state = 'cancelled', generation = generation + 1,
-  "waitReason" = NULL, "waitUntil" = NULL,
-  "leaseToken" = NULL, "leaseExpiresAt" = NULL, "updatedAt" = now()
-FROM cancelled e
-WHERE j.key = 'ai-evaluation:' || e.id::text
-  AND j.state IN ('queued', 'running', 'retry_wait', 'paused');
+-- Wake the Runs whose demand moved; their coordinator re-reads its requests.
+UPDATE "Job" j SET "availableAt" = now(), "updatedAt" = now()
+WHERE j.key IN (SELECT DISTINCT 'run:' || "runId"::text FROM moved)
+  AND j.state IN ('queued', 'retry_wait');
 --> statement-breakpoint
 CREATE UNIQUE INDEX "AiEvaluation_open_slot_key" ON "AiEvaluation" ("slotKey")
   WHERE state IN ('queued','retry_wait');
@@ -2179,21 +2201,21 @@ BEGIN
     IF NEW."kind" = 'projectTool' THEN PERFORM derived_mark('project.dataQuality@18', ARRAY[NEW."fromEntityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."kind" = 'projectTool' THEN PERFORM derived_mark('project.dataQuality@18', ARRAY[OLD."fromEntityId"::uuid]); END IF;
-  ELSIF (OLD."kind" = 'projectTool' OR NEW."kind" = 'projectTool') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId") THEN
+  ELSIF (OLD."kind" = 'projectTool' OR NEW."kind" = 'projectTool') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId", OLD."kind") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId", NEW."kind") THEN
     PERFORM derived_mark('project.dataQuality@18', ARRAY[OLD."fromEntityId"::uuid] || ARRAY[NEW."fromEntityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."kind" = 'projectTool' THEN PERFORM derived_mark('task.dataQuality@25', ARRAY[NEW."fromEntityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."kind" = 'projectTool' THEN PERFORM derived_mark('task.dataQuality@25', ARRAY[OLD."fromEntityId"::uuid]); END IF;
-  ELSIF (OLD."kind" = 'projectTool' OR NEW."kind" = 'projectTool') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId") THEN
+  ELSIF (OLD."kind" = 'projectTool' OR NEW."kind" = 'projectTool') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId", OLD."kind") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId", NEW."kind") THEN
     PERFORM derived_mark('task.dataQuality@25', ARRAY[OLD."fromEntityId"::uuid] || ARRAY[NEW."fromEntityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."kind" = 'projectTool' THEN PERFORM derived_mark('task.dataQuality@62', ARRAY[NEW."fromEntityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."kind" = 'projectTool' THEN PERFORM derived_mark('task.dataQuality@62', ARRAY[OLD."fromEntityId"::uuid]); END IF;
-  ELSIF (OLD."kind" = 'projectTool' OR NEW."kind" = 'projectTool') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId") THEN
+  ELSIF (OLD."kind" = 'projectTool' OR NEW."kind" = 'projectTool') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId", OLD."kind") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId", NEW."kind") THEN
     PERFORM derived_mark('task.dataQuality@62', ARRAY[OLD."fromEntityId"::uuid] || ARRAY[NEW."fromEntityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
@@ -2228,14 +2250,14 @@ BEGIN
     IF NEW."kind" = 'wishCandidate' THEN PERFORM derived_mark('wish.dataQuality@4', ARRAY[NEW."fromEntityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."kind" = 'wishCandidate' THEN PERFORM derived_mark('wish.dataQuality@4', ARRAY[OLD."fromEntityId"::uuid]); END IF;
-  ELSIF (OLD."kind" = 'wishCandidate' OR NEW."kind" = 'wishCandidate') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId") THEN
+  ELSIF (OLD."kind" = 'wishCandidate' OR NEW."kind" = 'wishCandidate') AND (OLD."fromEntityId", OLD."deletedAt", OLD."toEntityId", OLD."kind") IS DISTINCT FROM (NEW."fromEntityId", NEW."deletedAt", NEW."toEntityId", NEW."kind") THEN
     PERFORM derived_mark('wish.dataQuality@4', ARRAY[OLD."fromEntityId"::uuid] || ARRAY[NEW."fromEntityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."kind" = 'gardenEntryPlanting' THEN PERFORM derived_mark('planting.dataQuality@4', ARRAY[NEW."toEntityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."kind" = 'gardenEntryPlanting' THEN PERFORM derived_mark('planting.dataQuality@4', ARRAY[OLD."toEntityId"::uuid]); END IF;
-  ELSIF (OLD."kind" = 'gardenEntryPlanting' OR NEW."kind" = 'gardenEntryPlanting') AND (OLD."toEntityId", OLD."deletedAt", OLD."fromEntityId") IS DISTINCT FROM (NEW."toEntityId", NEW."deletedAt", NEW."fromEntityId") THEN
+  ELSIF (OLD."kind" = 'gardenEntryPlanting' OR NEW."kind" = 'gardenEntryPlanting') AND (OLD."toEntityId", OLD."deletedAt", OLD."fromEntityId", OLD."kind") IS DISTINCT FROM (NEW."toEntityId", NEW."deletedAt", NEW."fromEntityId", NEW."kind") THEN
     PERFORM derived_mark('planting.dataQuality@4', ARRAY[OLD."toEntityId"::uuid] || ARRAY[NEW."toEntityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
@@ -2249,7 +2271,7 @@ BEGIN
     IF NEW."kind" = 'gardenEntryPlanting' THEN PERFORM derived_mark('plant.dataQuality@8', ARRAY[NEW."toEntityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."kind" = 'gardenEntryPlanting' THEN PERFORM derived_mark('plant.dataQuality@8', ARRAY[OLD."toEntityId"::uuid]); END IF;
-  ELSIF (OLD."kind" = 'gardenEntryPlanting' OR NEW."kind" = 'gardenEntryPlanting') AND (OLD."toEntityId", OLD."deletedAt", OLD."fromEntityId") IS DISTINCT FROM (NEW."toEntityId", NEW."deletedAt", NEW."fromEntityId") THEN
+  ELSIF (OLD."kind" = 'gardenEntryPlanting' OR NEW."kind" = 'gardenEntryPlanting') AND (OLD."toEntityId", OLD."deletedAt", OLD."fromEntityId", OLD."kind") IS DISTINCT FROM (NEW."toEntityId", NEW."deletedAt", NEW."fromEntityId", NEW."kind") THEN
     PERFORM derived_mark('plant.dataQuality@8', ARRAY[OLD."toEntityId"::uuid] || ARRAY[NEW."toEntityId"::uuid]);
   END IF;
   RETURN NULL;
@@ -5709,7 +5731,7 @@ BEGIN
     IF NEW."purpose" = 'mail_import' THEN PERFORM derived_mark('email.dataQuality@19', ARRAY(SELECT (e->>'orderMailId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(NEW."input" #> '{sources}') = 'array' THEN NEW."input" #> '{sources}' ELSE '[]'::jsonb END) AS e WHERE e->>'orderMailId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."purpose" = 'mail_import' THEN PERFORM derived_mark('email.dataQuality@19', ARRAY(SELECT (e->>'orderMailId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(OLD."input" #> '{sources}') = 'array' THEN OLD."input" #> '{sources}' ELSE '[]'::jsonb END) AS e WHERE e->>'orderMailId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
-  ELSIF (OLD."purpose" = 'mail_import' OR NEW."purpose" = 'mail_import') AND (OLD."input", OLD."status", OLD."deletedAt", OLD."ledgerPartyId") IS DISTINCT FROM (NEW."input", NEW."status", NEW."deletedAt", NEW."ledgerPartyId") THEN
+  ELSIF (OLD."purpose" = 'mail_import' OR NEW."purpose" = 'mail_import') AND (OLD."input", OLD."status", OLD."deletedAt", OLD."ledgerPartyId", OLD."purpose") IS DISTINCT FROM (NEW."input", NEW."status", NEW."deletedAt", NEW."ledgerPartyId", NEW."purpose") THEN
     PERFORM derived_mark('email.dataQuality@19', ARRAY(SELECT (e->>'orderMailId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(OLD."input" #> '{sources}') = 'array' THEN OLD."input" #> '{sources}' ELSE '[]'::jsonb END) AS e WHERE e->>'orderMailId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'orderMailId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(NEW."input" #> '{sources}') = 'array' THEN NEW."input" #> '{sources}' ELSE '[]'::jsonb END) AS e WHERE e->>'orderMailId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   RETURN NULL;
@@ -6403,9 +6425,12 @@ BEGIN
   END IF;
   RETURN NEW;
 END $$;--> statement-breakpoint
+LOCK TABLE "Job" IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint
 DELETE FROM "JobInvalidationCapture" WHERE key LIKE 'refresh:%';--> statement-breakpoint
 DELETE FROM "JobInvalidation" WHERE key LIKE 'refresh:%';--> statement-breakpoint
 WITH retired AS (DELETE FROM "Job" WHERE kind = 'refresh.family' RETURNING id) DELETE FROM "Entity" e USING retired r WHERE e.id = r.id AND e.kind = 'job';--> statement-breakpoint
+ALTER TABLE "Job" DROP CONSTRAINT "Job_kind_retired_check";--> statement-breakpoint
+ALTER TABLE "Job" ADD CONSTRAINT "Job_kind_retired_check" CHECK ("Job"."kind" NOT IN ('image.processing', 'refresh.family'));--> statement-breakpoint
 INSERT INTO "JobInvalidation" (key, "restartsPass") VALUES ('derived:drain', false) ON CONFLICT (key) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.price', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.ledgerExpectedQuantity', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint

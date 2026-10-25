@@ -54,8 +54,16 @@ const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
 const markStatement = (input: TriggerInput) => {
   const column = ident(input.tableColumn);
   const ignored = `ARRAY[${["updatedAt", ...input.except].map(literal).join(", ")}]`;
+  // A row entering or leaving the input's `where` filter changes membership
+  // even when no listed column changed, so the filter columns are watched too.
   const tracked = input.columns
-    ? [...new Set([input.tableColumn, ...input.columns])]
+    ? [
+        ...new Set([
+          input.tableColumn,
+          ...input.columns,
+          ...Object.keys(input.where ?? {}),
+        ]),
+      ]
     : null;
   const changed = tracked
     ? `(${tracked.map((name) => `OLD.${ident(name)}`).join(", ")}) IS DISTINCT FROM (${tracked.map((name) => `NEW.${ident(name)}`).join(", ")})`

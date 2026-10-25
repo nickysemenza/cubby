@@ -4,6 +4,7 @@ import { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
+import { derivedTriggerDdl } from "~/server/db/derived-trigger-ddl";
 import * as schema from "~/server/db/schema";
 
 // PL/pgSQL resolves trigger column references when a row fires, not when the
@@ -114,5 +115,33 @@ describe("stored derived declarations", () => {
         .filter((target) => !targets.has(target)),
     );
     expect(unknown).toEqual([]);
+  });
+});
+
+describe("generated derived triggers", () => {
+  // A row entering or leaving an input's `where` filter changes which values
+  // read it, so a watched-column input must also watch its filter columns.
+  it("watch the filter columns of inputs that list watched columns", () => {
+    const ddl = derivedTriggerDdl();
+    const watched = [...ddl.matchAll(/\(([^()]*)\) IS DISTINCT FROM \(/g)].map(
+      (match) => match[1] ?? "",
+    );
+    const unwatched = storedDerivedDeclarations().flatMap((declaration) =>
+      declaration.inputs.flatMap((input) =>
+        input.columns && input.where
+          ? Object.keys(input.where)
+              .filter(
+                (key) =>
+                  !watched.some(
+                    (tuple) =>
+                      tuple.includes(`OLD."${key}"`) &&
+                      tuple.includes(`OLD."${input.tableColumn}"`),
+                  ),
+              )
+              .map((key) => `${declaration.target}: ${input.table}.${key}`)
+          : [],
+      ),
+    );
+    expect(unwatched).toEqual([]);
   });
 });

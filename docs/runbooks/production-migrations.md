@@ -123,6 +123,50 @@ Jobs and their identities atomically. Verify the temporary backfill index is
 absent and both permanent identity constraints are validated. Report any checks
 not performed; migration success alone is not deployment verification.
 
+## Derived values cutover
+
+`0037_derived_values` (ADR 0021) runs as one ordinary transaction with a
+two-second lock acquisition timeout: a writer holding a needed lock fails the
+migration for replay instead of queueing behind it. It creates `DerivedValue`,
+`DerivedDirty` and the `DerivedTicket` sequence; drops `EntityQuality` and
+`EntityQualityCheck` (disposable, rebuilt by the drain); adds the generated
+`AiEvaluation.slotKey`, cancels older duplicate open evaluations per slot
+(moving each Run's outstanding request to the slot's survivor and waking that
+Run) before the open-slot unique index; installs the mark function and one
+trigger per source table; holds Job writers (`SHARE ROW EXCLUSIVE`) while it
+deletes retired `refresh.family` Jobs with their identities and extends the
+retired-kind check; then marks every stored value for backfill at propagation
+priority. A pre-cutover Worker's `refresh.family` write fails the check rather
+than landing as work nothing serves. Locally, about 270,000 backfill marks on a
+synthetic 38,000-Product corpus took under three seconds; rehearse against a
+retained production copy for real lock and SQL time.
+
+Fields read empty or stale until the drain publishes them; catch-up creates the
+`derived:drain` and `derived:reconcile` Jobs within a minute. Watch the backfill
+drain to zero and record its duration.
+
+After deployment, verify and report:
+
+- Backlog: `DerivedDirty` ready marks reach zero; list failing targets
+  (`attempts > 0`, `lastError`) and their age; no target stays deferred.
+- Slots: one open (`queued`/`retry_wait`) evaluation per `slotKey`; running and
+  result-ready evaluations retained; every uncancelled request on a cancelled
+  duplicate moved to its survivor; affected Runs advanced.
+- Jobs: no `refresh.family` Jobs or `refresh:*` captures/invalidations; every Job
+  still has its matching `job` identity; the retired-kind check is validated.
+- Data: waivers (`DataException`), member decisions, Assessments and source
+  evidence are unchanged against retained pre-deploy counts; stale dots clear
+  on web and Apple as the drain publishes.
+- Replay one of each against production-safe synthetic records or read-back: a
+  no-op save marks nothing; a reparent marks both endpoints; a save while a
+  page publishes neither deadlocks nor waits; a rejected target backs off with
+  its database message while others publish.
+- Throughput: drain duration, pages, expansion ratio (dependent marks per
+  fanout mark), publication latency, and the first reconcile bucket's drift.
+
+Report any check not performed; migration success alone is not deployment
+verification.
+
 ## Unified Job cutover
 
 This migration replaces the old job tables and removes business triggers. Use
