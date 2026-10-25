@@ -17,11 +17,11 @@ import {
 
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 import {
-  getSidebarGroupItems,
   type NavGroup,
   type NavItem,
   navItemLinkProps,
   navIconClass,
+  navActiveClass,
 } from "./nav-items";
 
 export function SidebarRailGroup({
@@ -33,7 +33,7 @@ export function SidebarRailGroup({
   activeTo: string | undefined;
   expanded?: boolean;
 }) {
-  const children = getSidebarGroupItems(group);
+  const children = group.children;
   const active = children.some((item) => item.to === activeTo);
   const Icon = group.icon;
 
@@ -51,7 +51,7 @@ export function SidebarRailGroup({
                     expanded
                       ? "w-full justify-start gap-2 px-2"
                       : "w-7 justify-center",
-                    active && "bg-muted text-foreground hover:bg-muted",
+                    active && ["text-foreground", navActiveClass(group)],
                   )}
                   aria-label={group.label}
                   aria-current={active ? "page" : undefined}
@@ -105,7 +105,7 @@ export function SidebarRailLeaf({
             {...navItemLinkProps(item, active)}
             className={cn(
               "mb-0.5 flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground",
-              active && "bg-muted text-foreground hover:bg-muted",
+              active && ["text-foreground", navActiveClass(item)],
             )}
             aria-label={item.label}
           />
@@ -134,7 +134,10 @@ function SidebarFlyoutItem({
   return (
     <DropdownMenuItem
       render={<Link {...navItemLinkProps(item, active)} />}
-      className={cn("gap-2", active && "bg-accent")}
+      className={cn(
+        "gap-2",
+        active && ["font-medium text-foreground-strong", navActiveClass(item)],
+      )}
     >
       <Icon
         className={navIconClass(item)}

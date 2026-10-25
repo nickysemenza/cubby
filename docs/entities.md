@@ -314,7 +314,7 @@ create: null, update: null }`, absent from both `storage` and every
 `intents.fields` roster — computed in the repo mapper from other columns, and
 points `titleField` at that field. `planting`, `gardenEntry`, `meal`,
 `financialTransaction`, `purchase`, `inventory`, and `vendorAccount` all use
-this pattern today. `domain` (a `WAYFINDING_DOMAINS` line or
+this pattern today. `domain` (one of the ordered `WAYFINDING_DOMAINS`: Plan, Cook, Pantry, Garden, House, Purchases, Finance, or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
 names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
@@ -325,9 +325,7 @@ also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
 (`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` and `entityFieldModels[entity].bulk` share the compiler-derived
-normal-update roster and the exclusions in the bulk edit contract below. Navigation
-grouping, the Records catalog, empty states and the native shell's sections
-all read it; none of them keep a per-entity list of their own.
+normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Wishes, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A `*Override` name is reserved for a

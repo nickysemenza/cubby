@@ -222,7 +222,13 @@ export const selectControlOptions = {
       location_typeDescriptions,
     ),
     locationTypeGlyphs,
-  ),
+  ).map((option) => ({
+    ...option,
+    color:
+      option.value === "bed" || option.value === "planter"
+        ? ("domain-garden" as const)
+        : option.color,
+  })),
   mealType: labeled(
     mealTypeValues,
     MEAL_TYPE_LABELS,
@@ -286,7 +292,13 @@ export const selectControlOptions = {
       tradeDescriptions,
     ),
     tradeGlyphs,
-  ),
+  ).map((option) => ({
+    ...option,
+    color:
+      option.value === "landscaping"
+        ? ("domain-garden" as const)
+        : option.color,
+  })),
   productKind: labeled(productKindValues, PRODUCT_KIND_LABELS, {
     role: "category",
     color: "domain-pantry",

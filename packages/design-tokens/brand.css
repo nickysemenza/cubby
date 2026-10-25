@@ -13,7 +13,7 @@
   --brand-domain-cook: #946626;
   --brand-domain-pantry: #3e7f72;
   --brand-domain-plan: #6a5fa8;
-  --brand-domain-house: #5b7a3a;
+  --brand-domain-house: #a35a3c;
   --brand-domain-finance: #4a6fa5;
   --brand-positive: #25734e;
   --brand-warning: #9b640d;
@@ -38,6 +38,15 @@
   --brand-category-6: #a65543;
   --brand-category-7: #5b7a3a;
   --brand-category-8: #5e6b7d;
+  --brand-domain-garden: #5b7a3a;
+  --brand-domain-purchases: #a24f72;
+  --brand-domain-plan-surface: #eceaf4;
+  --brand-domain-cook-surface: #f1ebe3;
+  --brand-domain-pantry-surface: #e6eeed;
+  --brand-domain-garden-surface: #eaeee5;
+  --brand-domain-house-surface: #f3eae6;
+  --brand-domain-purchases-surface: #f3e8ed;
+  --brand-domain-finance-surface: #e7ecf3;
   --brand-graphite: var(--brand-foreground);
   --brand-paper: var(--brand-canvas);
   --brand-paper-alt: var(--brand-inset);

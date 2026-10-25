@@ -22,7 +22,7 @@ export default defineEntity({
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
   presentation: {
     titleField: "displayName",
-    domain: "house",
+    domain: "garden",
     description: "Dated garden photos, observations, and harvests.",
     emptyState: {
       title: "No garden entries yet",
@@ -152,7 +152,7 @@ export default defineEntity({
         display: {
           columnGroup: "Observation",
           optionRole: "category",
-          optionColor: "domain-house",
+          optionColor: "domain-garden",
         },
         validation: {
           read: gardenEntryKind,

@@ -1,70 +1,43 @@
-import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
-import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { actionItems } from "~/entity/actions/action-items";
-import { AuthenticatedShellAccount } from "~/entity/navigation/authenticated-shell-controls";
 import { cn } from "~/lib/utils";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
-import { Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
 import { Overlay } from "~/ui/overlays/overlay";
-import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
+import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 import {
-  completeNavLeaves,
-  desktopNav,
-  homeNavItem,
-  isNavGroup,
-  mobileHouseholdItems,
-  type NavGroup,
+  sidebarSections,
+  settingsNavItem,
   type NavItem,
   navIconClass,
-  primaryNavGroups,
-  settingsNavItem,
-  workspaceUtilitySections,
+  navActiveClass,
 } from "./nav-items";
 
-export type WorkspaceNavigatorView = "household" | "utility";
-
 type SearchItem = { item: NavItem; section: string; keywords: string[] };
-
-function searchItem(item: NavItem, section: string): SearchItem {
-  return {
+const searchableItems: SearchItem[] = sidebarSections.flatMap((section) =>
+  section.children.map((item) => ({
     item,
-    section,
+    section: section.label,
     keywords: actionItems
       .filter((action) => action.path === item.to)
       .flatMap((action) => action.keywords ?? []),
-  };
-}
-
-const searchableItems: SearchItem[] = [
-  searchItem(homeNavItem, "Household"),
-  ...desktopNav.flatMap((node) =>
-    isNavGroup(node)
-      ? node.children.map((item) => searchItem(item, node.label))
-      : [searchItem(node, "Household")],
-  ),
-].filter(
-  ({ item }, index, all) =>
-    all.findIndex((candidate) => candidate.item.to === item.to) === index,
+  })),
 );
-
 export function filterWorkspaceDestinations(query: string): SearchItem[] {
   const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return [];
-  return searchableItems.filter(({ item, section, keywords }) =>
-    `${item.label} ${section} ${keywords.join(" ")}`
-      .toLocaleLowerCase()
-      .includes(needle),
-  );
+  return needle
+    ? searchableItems.filter(({ item, section, keywords }) =>
+        `${item.label} ${section} ${keywords.join(" ")}`
+          .toLocaleLowerCase()
+          .includes(needle),
+      )
+    : [];
 }
-
 function NavigatorLink({
   item,
   activeTo,
@@ -83,9 +56,9 @@ function NavigatorLink({
       to={item.to}
       onClick={onNavigate}
       className={cn(
-        "flex min-h-11 items-center gap-2 border border-transparent px-2 py-2 text-sm transition-colors hover:bg-muted hover:text-primary",
+        "flex h-9 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-muted hover:text-foreground-strong",
         !active && "text-muted-foreground",
-        active && "border-border bg-muted font-medium text-foreground",
+        active && ["font-medium text-foreground-strong", navActiveClass(item)],
       )}
       aria-current={active ? "page" : undefined}
     >
@@ -93,7 +66,7 @@ function NavigatorLink({
         className={cn("size-3.5 shrink-0", navIconClass(item))}
         aria-hidden
       />
-      <span className="min-w-0 flex-1 break-words">{item.label}</span>
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {item.entity && <NavigationCountBadge entity={item.entity} />}
       {section && (
         <span className="shrink-0 text-xs text-muted-foreground">
@@ -103,57 +76,16 @@ function NavigatorLink({
     </Link>
   );
 }
-
-function GroupDisclosure({
-  group,
-  activeTo,
-  onNavigate,
-}: {
-  group: NavGroup;
-  activeTo: string | undefined;
-  onNavigate: () => void;
-}) {
-  const Icon = group.icon;
-  return (
-    <Disclosure
-      summary={
-        <span className="inline-flex items-center gap-2">
-          <Icon
-            className={cn("size-3.5", navIconClass(group))}
-            aria-hidden="true"
-          />
-          {group.label}
-        </span>
-      }
-      className="border-b border-border px-2 py-2"
-    >
-      {group.children.map((item) => (
-        <NavigatorLink
-          key={item.to}
-          item={item}
-          activeTo={activeTo}
-          onNavigate={onNavigate}
-        />
-      ))}
-    </Disclosure>
-  );
-}
-
 export function WorkspaceNavigator({
   open,
   onOpenChange,
-  initialView,
   activeTo,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  initialView: WorkspaceNavigatorView;
   activeTo: string | undefined;
 }) {
-  const [view, setView] = useState<WorkspaceNavigatorView>(initialView);
   const [query, setQuery] = useState("");
-  const householdHeadingId = useId();
-  const workspaceHeadingId = useId();
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
 
@@ -170,46 +102,33 @@ export function WorkspaceNavigator({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
-    setView(initialView);
-    setQuery("");
-  }, [initialView, open]);
-
-  const results = useMemo(() => {
-    return filterWorkspaceDestinations(query);
-  }, [query]);
-
+    if (open) setQuery("");
+  }, [open]);
+  const results = useMemo(() => filterWorkspaceDestinations(query), [query]);
   const close = () => onOpenChange(false);
-  const searching = query.trim().length > 0;
-
   return (
     <Overlay
       placement="panel"
       open={open}
       onOpenChange={onOpenChange}
-      title={view === "household" ? "More" : "Tools & data"}
-      description={
-        view === "household"
-          ? "Household destinations and the complete workspace."
-          : "Reference data, utilities, and developer tools."
-      }
+      title="More"
+      bodyMode="form"
     >
-      <Stack gap="md">
-        <div className="relative">
-          <MagnifyingGlassIcon className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={focusOnMount}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Find a destination…"
-            aria-label="Find a workspace destination"
-            className="pl-8"
-          />
-        </div>
-
-        {searching ? (
+      <div className="relative shrink-0 border-b border-border p-3">
+        <MagnifyingGlassIcon className="absolute top-1/2 left-6 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          ref={focusOnMount}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Find a destination…"
+          aria-label="Find a workspace destination"
+          className="pl-8"
+        />
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
+        {query.trim() ? (
           <section aria-label="Destination search results">
-            {results.length > 0 ? (
+            {results.length ? (
               results.map(({ item, section }) => (
                 <NavigatorLink
                   key={item.to}
@@ -225,30 +144,28 @@ export function WorkspaceNavigator({
               </p>
             )}
           </section>
-        ) : view === "household" ? (
-          <>
+        ) : (
+          sidebarSections.map((section) => (
             <section
-              aria-label="Account"
-              className="flex min-h-12 items-center gap-2 border-y border-border px-2 py-1"
+              key={section.id}
+              aria-label={section.label || "Home and activity"}
+              className="mt-2.5"
             >
-              <AuthenticatedShellAccount />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Household account</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  Identity and application preferences
-                </p>
-              </div>
-              <NavigatorLink
-                item={settingsNavItem}
-                activeTo={activeTo}
-                onNavigate={close}
-              />
-            </section>
-            <section aria-labelledby={householdHeadingId}>
-              <h3 id={householdHeadingId} className="px-2 pb-1 eyebrow">
-                Household
-              </h3>
-              {mobileHouseholdItems.map((item) => (
+              {section.label && (
+                <h3 className="flex h-6 items-center gap-1 px-2 text-xs font-medium text-muted-foreground">
+                  {section.domain && (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "size-1.5 shrink-0 rounded-[2px]",
+                        domainChipClass(section.domain),
+                      )}
+                    />
+                  )}
+                  {section.label}
+                </h3>
+              )}
+              {section.children.map((item) => (
                 <NavigatorLink
                   key={item.to}
                   item={item}
@@ -257,58 +174,16 @@ export function WorkspaceNavigator({
                 />
               ))}
             </section>
-            <section aria-labelledby={workspaceHeadingId}>
-              <h3 id={workspaceHeadingId} className="px-2 pb-1 eyebrow">
-                Workspace
-              </h3>
-              {primaryNavGroups.map((group) => (
-                <GroupDisclosure
-                  key={group.label}
-                  group={group}
-                  activeTo={activeTo}
-                  onNavigate={close}
-                />
-              ))}
-            </section>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => setView("utility")}
-            >
-              <WrenchIcon />
-              Tools & data
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-fit"
-              onClick={() => setView("household")}
-            >
-              <CaretLeftIcon />
-              Back to household
-            </Button>
-            {workspaceUtilitySections.map((section) => (
-              <section key={section.title} aria-label={section.title}>
-                <h3 className="px-2 pb-1 eyebrow">{section.title}</h3>
-                {section.items.map((item) => (
-                  <NavigatorLink
-                    key={item.to}
-                    item={item}
-                    activeTo={activeTo}
-                    onNavigate={close}
-                  />
-                ))}
-              </section>
-            ))}
-          </>
+          ))
         )}
-      </Stack>
+        <div className="mt-3 border-t border-border pt-1">
+          <NavigatorLink
+            item={settingsNavItem}
+            activeTo={activeTo}
+            onNavigate={close}
+          />
+        </div>
+      </div>
     </Overlay>
   );
 }
-
-export const workspaceNavigatorLeavesForTest = completeNavLeaves;

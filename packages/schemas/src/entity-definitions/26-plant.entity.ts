@@ -57,7 +57,7 @@ export default defineEntity({
   identifiers: { brand: "PlantId", shortcode: "PLANT-" },
   presentation: {
     titleField: "displayName",
-    domain: "house",
+    domain: "garden",
     description:
       "Cultivars and species the household sows or buys as transplants, with verdicts.",
     emptyState: {
@@ -153,7 +153,7 @@ export default defineEntity({
           columnGroup: "Garden plan",
           columnLabel: "Guide",
           optionRole: "category",
-          optionColor: "domain-house",
+          optionColor: "domain-garden",
           optionGlyph: { phosphor: "Plant", sfSymbol: "leaf" },
         },
         validation: {
@@ -243,7 +243,7 @@ export default defineEntity({
         display: {
           list: false,
           optionRole: "category",
-          optionColor: "domain-house",
+          optionColor: "domain-garden",
           optionGlyph: { phosphor: "Flower", sfSymbol: "camera.macro" },
         },
         validation: {

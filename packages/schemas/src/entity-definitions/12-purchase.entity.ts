@@ -66,7 +66,7 @@ export default defineEntity({
       ],
     },
     titleField: "displayName",
-    domain: "finance",
+    domain: "purchases",
     description: "Orders and their itemized expense lines.",
     emptyState: {
       title: "No purchases yet",
@@ -553,7 +553,7 @@ export default defineEntity({
         display: {
           list: false,
           optionRole: "category",
-          optionColor: "domain-finance",
+          optionColor: "domain-purchases",
           optionGlyph: { phosphor: "Clock", sfSymbol: "clock" },
           valueOptions: [
             { value: "legacy", label: "Legacy" },

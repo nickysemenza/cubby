@@ -146,7 +146,6 @@ export function BottomNav() {
                 activeTo={activeTo}
                 open={isOpen}
                 onOpenChange={setIsOpen}
-                initialView="household"
               />
             )}
           </>

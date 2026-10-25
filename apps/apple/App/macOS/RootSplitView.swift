@@ -3,10 +3,11 @@ import SwiftUI
 
 struct RootSplitView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     @SceneStorage("cubby.selectedSection") private var storedSection = AppSection.today.rawValue
-    /// Comma-joined `AppDomain` raw values whose sidebar section the user collapsed. App-wide, so
-    /// a new window opens with the same sections folded.
+    /// Manifest section ids; retain existing domain preferences across windows and launches.
     @AppStorage("cubby.sidebar.collapsedDomains") private var collapsedDomains = ""
+    @AppStorage("cubby.sidebar.expandedSections") private var expandedSections = ""
     @State private var didRestoreSection = false
     @State private var browsing: NativeBrowserSession?
 
@@ -60,47 +61,58 @@ struct RootSplitView: View {
                 set: { if let value = $0 { model.navigator.macDestination = value } }
             )
         ) {
-            Section("Cubby") {
-                ForEach(AppSection.tabs.filter { $0 != .dev && $0 != .settings }) { section in
-                    Label(section.title, systemImage: section.symbol)
-                        .tag(SidebarDestination.section(section))
-                }
-            }
-            Section {
-                Label(AppSection.settings.title, systemImage: AppSection.settings.symbol)
-                    .tag(SidebarDestination.section(.settings))
-                    .accessibilityIdentifier("sidebar.settings")
-            }
-            let workingActivities = model.backgroundActivity.visibleActivities
-            if !workingActivities.isEmpty {
-                Section("Working") {
-                    ForEach(workingActivities) { activity in
-                        Button {
-                            model.navigator.openActivity(activity.link)
-                        } label: {
-                            HStack(spacing: 8) {
-                                if let progress = activity.progress {
-                                    ProgressView(value: progress).controlSize(.small)
-                                } else {
-                                    ProgressView().controlSize(.small)
+            ForEach(SidebarManifest.sections) { section in
+                if section.label.isEmpty {
+                    Section {
+                        manifestRows(section)
+                        ForEach([AppSection.capture, .photos, .browse, .search]) { native in
+                            Label {
+                                Text(native.title)
+                            } icon: {
+                                Image(systemName: native.symbol).foregroundStyle(.secondary)
+                            }
+                            .tag(SidebarDestination.section(native))
+                        }
+                    }
+                    Section {
+                        Label(AppSection.settings.title, systemImage: AppSection.settings.symbol)
+                            .tag(SidebarDestination.section(.settings))
+                            .accessibilityIdentifier("sidebar.settings")
+                    }
+                    let workingActivities = model.backgroundActivity.visibleActivities
+                    if !workingActivities.isEmpty {
+                        Section("Working") {
+                            ForEach(workingActivities) { activity in
+                                Button {
+                                    model.navigator.openActivity(activity.link)
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        if let progress = activity.progress {
+                                            ProgressView(value: progress).controlSize(.small)
+                                        } else {
+                                            ProgressView().controlSize(.small)
+                                        }
+                                        Text(activity.title)
+                                    }
                                 }
-                                Text(activity.title)
+                                .buttonStyle(.plain)
+                                .accessibilityHint("Opens Activity")
                             }
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityHint("Opens Activity")
                     }
-                }
-            }
-            ForEach(AppDomain.allCases) { domain in
-                Section(domain.title, isExpanded: isExpanded(domain)) {
-                    ForEach(
-                        EntityCatalog.all.filter {
-                            $0.key.domain == domain && $0.key.nativeActions.contains(.list)
-                        }.sorted { $0.plural < $1.plural }, id: \.key
-                    ) { descriptor in
-                        entitySidebarLabel(descriptor)
-                            .tag(SidebarDestination.entity(descriptor.key))
+                } else {
+                    Section(isExpanded: isExpanded(section)) {
+                        manifestRows(section)
+                    } header: {
+                        HStack(spacing: 6) {
+                            if let domain = section.domain {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(AppDomain(domain).color)
+                                    .frame(width: 6, height: 6)
+                                    .accessibilityHidden(true)
+                            }
+                            Text(section.label)
+                        }
                     }
                 }
             }
@@ -108,32 +120,84 @@ struct RootSplitView: View {
         .listStyle(.sidebar)
         .environment(\.sidebarRowSize, .small)
         .accessibilityIdentifier("sidebar.destinations")
-        .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
+        .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
     }
 
-    private func isExpanded(_ domain: AppDomain) -> Binding<Bool> {
+    private func isExpanded(_ section: SidebarManifest.Section) -> Binding<Bool> {
         Binding(
-            get: { !collapsedDomainSet.contains(domain.rawValue) },
+            get: {
+                if collapsedSectionSet.contains(section.id) { return false }
+                if expandedSectionSet.contains(section.id) { return true }
+                return !section.defaultFolded
+            },
             set: { expanded in
-                var collapsed = collapsedDomainSet
-                if expanded { collapsed.remove(domain.rawValue) } else { collapsed.insert(domain.rawValue) }
+                var collapsed = collapsedSectionSet
+                var opened = expandedSectionSet
+                if expanded {
+                    collapsed.remove(section.id)
+                    opened.insert(section.id)
+                } else {
+                    collapsed.insert(section.id)
+                    opened.remove(section.id)
+                }
                 collapsedDomains = collapsed.sorted().joined(separator: ",")
+                expandedSections = opened.sorted().joined(separator: ",")
             }
         )
     }
 
-    private var collapsedDomainSet: Set<String> {
+    private var collapsedSectionSet: Set<String> {
         Set(collapsedDomains.split(separator: ",").map(String.init))
     }
 
-    private func entitySidebarLabel(_ descriptor: EntityDescriptor) -> some View {
-        HStack {
-            Label(descriptor.plural, systemImage: descriptor.sfSymbol)
-            Spacer(minLength: 4)
-            if let count = model.browseCounts.count(for: descriptor.key) {
-                NativeCountBadge(count: count)
+    private var expandedSectionSet: Set<String> {
+        Set(expandedSections.split(separator: ",").map(String.init))
+    }
+
+    @ViewBuilder private func manifestRows(_ section: SidebarManifest.Section) -> some View {
+        ForEach(section.destinations, id: \.route) { destination in
+            if let native = destination.nativeDestination {
+                sidebarLabel(destination, domain: section.domain)
+                    .tag(native)
+            } else {
+                Button {
+                    if let url = destination.webURL(serverURL: model.client.baseURL) {
+                        openURL(url)
+                    }
+                } label: {
+                    sidebarLabel(destination, domain: section.domain)
+                }
+                .buttonStyle(.plain)
+                .selectionDisabled()
+                .accessibilityHint("Opens in the default browser")
             }
         }
+    }
+
+    private func sidebarLabel(
+        _ destination: SidebarManifest.Destination, domain: WayfindingDomain?
+    ) -> some View {
+        HStack {
+            Label {
+                Text(destination.label)
+            } icon: {
+                Image(
+                    systemName: destination.entity.map { EntityCatalog[$0].sfSymbol }
+                        ?? destination.sfSymbol ?? "link"
+                )
+                .foregroundStyle(domain.map { AppDomain($0).color } ?? .secondary)
+            }
+            Spacer(minLength: 4)
+            if let entity = destination.entity, let count = model.browseCounts.count(for: entity) {
+                NativeCountBadge(count: count)
+            }
+            if destination.nativeDestination == nil {
+                Image(systemName: "arrow.up.right")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder private var browserList: some View {

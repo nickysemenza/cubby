@@ -25,6 +25,13 @@ const assetRoles = {
   Info: "info",
   InfoSurface: "info-surface",
   NeutralStatus: "neutral-status",
+  DomainPlan: "domain-plan",
+  DomainCook: "domain-cook",
+  DomainPantry: "domain-pantry",
+  DomainGarden: "domain-garden",
+  DomainHouse: "domain-house",
+  DomainPurchases: "domain-purchases",
+  DomainFinance: "domain-finance",
   Category1: "category-1",
   Category2: "category-2",
   Category3: "category-3",
@@ -167,12 +174,27 @@ export function renderMetricsSwift(values: Record<string, string>) {
     "enum FieldGuideMetrics {",
     ...declarations,
     "",
+    "    static func domainColor(_ domain: String) -> Color? {",
+    "        switch domain {",
+    ...Object.entries(assetRoles)
+      .filter(([, role]) => role.startsWith("domain-"))
+      .map(
+        ([asset, role]) =>
+          `        case "${role.slice("domain-".length)}": Color("${asset}")`,
+      ),
+    "        default: nil",
+    "        }",
+    "    }",
+    "",
     "    static func optionColor(_ token: String?) -> Color? {",
     "        switch token {",
     // Option colors describe condition or category; pending actions use their assets directly.
-    // Domain tokens have no native asset, so a domain-tinted option renders as a neutral chip.
+    // Domain hues belong to navigation; domain-tinted options remain neutral chips.
     ...Object.entries(assetRoles)
-      .filter(([, role]) => !role.startsWith("action-"))
+      .filter(
+        ([, role]) =>
+          !role.startsWith("action-") && !role.startsWith("domain-"),
+      )
       .map(
         ([asset, role]) =>
           `        case "var(--${role})", "var(--brand-${role})": Color("${asset}")`,

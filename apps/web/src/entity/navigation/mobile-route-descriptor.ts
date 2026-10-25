@@ -1,6 +1,8 @@
 import { capitalize } from "@cubby/shared";
 import type { LinkProps } from "@tanstack/react-router";
 
+import { entities } from "~/entity/entities";
+
 import { completeNavLeaves, findActiveTo } from "./nav-items";
 
 type MobileTabId = "today" | "inventory" | "search" | "more";
@@ -36,10 +38,10 @@ function titleFromPath(pathname: string) {
 function labelForPath(pathname: string) {
   if (pathname.startsWith("/account/")) return "Account";
   const activeTo = findActiveTo(pathname);
-  return (
-    completeNavLeaves.find((item) => item.to === activeTo)?.label ??
-    titleFromPath(pathname)
-  );
+  const item = completeNavLeaves.find((entry) => entry.to === activeTo);
+  return item?.entity
+    ? entities[item.entity].pluralLabel
+    : (item?.label ?? titleFromPath(pathname));
 }
 
 function parentForPath(pathname: string): LinkProps["to"] | null {

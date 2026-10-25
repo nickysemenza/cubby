@@ -29,7 +29,7 @@ export default defineEntity({
       },
     },
     titleField: "displayName",
-    domain: "finance",
+    domain: "purchases",
     description: "A member's purchasing relationship with a vendor.",
     emptyState: {
       title: "No vendor accounts yet",
