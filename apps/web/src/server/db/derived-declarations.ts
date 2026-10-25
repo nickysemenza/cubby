@@ -59,7 +59,7 @@ export type DerivedDependency = {
     }
 );
 
-export type DerivedSortType = "number" | "date" | "text" | null;
+type DerivedSortType = "number" | "date" | "text" | null;
 
 export interface StoredDerivedDeclaration {
   readonly entity: Entity;

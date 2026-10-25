@@ -241,10 +241,11 @@ export const RUN_KINDS = {
       },
       {
         key: "derived-refresh",
-        label: "Derived work admission",
-        purpose: "Admits a fresh pass of every derived refresh family.",
-        action: "Admitting derived refresh",
-        unit: "families",
+        label: "Search artifact cleanup",
+        purpose:
+          "Retires search documents of removed records and queues retired embedding vectors for deletion.",
+        action: "Cleaning search artifacts",
+        unit: "artifacts",
         input: once,
       },
       {

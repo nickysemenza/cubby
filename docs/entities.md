@@ -2412,7 +2412,10 @@ coverage). Publication rings the existing reader notifications for every kind
 it touched. `derived.reconcile` marks one of 24 id buckets each hour at the
 lowest priority, so every stored value is rechecked daily without recomputing
 the corpus hourly, and logs `derived.drift` when a recompute changes a value:
-an undeclared input converges instead of staying silently wrong. The read-set
+an undeclared input converges instead of staying silently wrong. The daily
+maintenance Run's search artifact cleanup step retires search documents of
+records removed before their triggers existed and queues retired embedding
+vectors for deletion. The read-set
 tracer (`derived/repo/read-set.integration.test.ts`) fails CI when a compute
 reads a table its declaration does not list. A deploy that
 changes a value's rules marks it in its migration.

@@ -1,6 +1,6 @@
 import { imageId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepDeclaration } from "@cubby/schemas/run-fields";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -21,11 +21,16 @@ import {
   retryRunStep,
   type StepPlan,
 } from "~/server/domains/run/service/step-run";
+import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   withJobFixtureExecution,
   captureBackgroundQueue,
 } from "~/server/testing/background-queue";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import {
   maintenanceStepDrivers,
@@ -175,6 +180,31 @@ describe("maintenance Run", () => {
       }),
     ]);
     expect(await readRun(id)).toMatchObject({ status: "needs_review" });
+  });
+
+  // Documents of records removed before their derived triggers existed get
+  // no mark; the daily step retires them (the retired refresh pass did).
+  it("retires search documents whose record no longer exists", async () => {
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic orphaned search item" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", item.entityId);
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Product" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Entity" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
+    // As if the removal predated the triggers: nothing is marked.
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    const id = await startPass();
+    await drive(id, only("derived-refresh", {}));
+    const [document] = (
+      await getDb(ctx.db).execute(sql`
+        SELECT "deletedAt" IS NOT NULL AS retired FROM "SearchDocument"
+         WHERE "entityId" = ${item.entityId}::uuid`)
+    ).rows;
+    expect(document).toEqual({ retired: true });
   });
 
   it("returns the active pass instead of starting a second one", async () => {
