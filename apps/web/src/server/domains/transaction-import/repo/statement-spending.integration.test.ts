@@ -15,7 +15,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import {
   assessmentState,
-  job,
+  jobInvalidation,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
@@ -228,10 +228,17 @@ describe("statement spending review and re-import", () => {
           if (family === "search" && !external) {
             calls++;
             if (mode === "exhausted" || (mode !== "committed" && calls === 1)) {
+              // A genuine competing capture on another connection: it moves
+              // the search family's invalidation row the application's own
+              // capture writes next. Execution writes to the Job row no
+              // longer conflict with a capture.
               await getDb(ctx.db)
-                .update(job)
-                .set({ generation: sql`${job.generation} + 1` })
-                .where(eq(job.key, "refresh:search"));
+                .insert(jobInvalidation)
+                .values({ key: "refresh:search", restartsPass: true })
+                .onConflictDoUpdate({
+                  target: jobInvalidation.key,
+                  set: { revision: sql`${jobInvalidation.revision} + 1` },
+                });
             }
             if (mode === "committed" && calls === 1) {
               await runAfterCommit(db, async () => {

@@ -152,5 +152,13 @@ it("reopens stranded image work into executor lanes without losing history", asy
         )
       ).rows,
     ).toEqual([{ n: 0 }]);
+    // Review finding: a pre-cutover Worker kept writing the retired kind
+    // after the conversion, and no handler served it. The database refuses
+    // it, so no such write is ever accepted and stranded.
+    await expect(
+      client.query(
+        `INSERT INTO "Job" (key, kind, input) VALUES ('image-processing:${id(300)}', 'image.processing', '{}')`,
+      ),
+    ).rejects.toThrow(/Job_kind_retired_check/);
   });
 });

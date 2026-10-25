@@ -223,27 +223,37 @@ describe("Gmail ingestion and attachment storage", () => {
       mailboxId: mail.mailboxId,
       messageId: mail.messageId,
     };
+    // Captures move each family's JobInvalidation row; the execution Job
+    // rows are never written by a capture.
     const jobs = async () =>
       (
         await getDb(ctx.db).execute(
           sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'refresh.family' ORDER BY key`,
         )
       ).rows;
+    const invalidations = async () =>
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT key, revision::int, xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
+        )
+      ).rows;
     const searchGeneration = async () =>
       (
         await getDb(ctx.db).execute(
-          sql`SELECT generation FROM "Job" WHERE key = 'refresh:search'`,
+          sql`SELECT revision::int FROM "JobInvalidation" WHERE key = 'refresh:search'`,
         )
-      ).rows[0]?.generation;
+      ).rows[0]?.revision;
     expect(await searchGeneration()).toBeUndefined();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await searchGeneration()).toBe(1);
     const originalEmail = await readEmail(ctx.db, identity);
     expect(originalEmail).not.toBeNull();
     const originalJobs = await jobs();
+    const originalInvalidations = await invalidations();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await readEmail(ctx.db, identity)).toEqual(originalEmail);
     expect(await jobs()).toEqual(originalJobs);
+    expect(await invalidations()).toEqual(originalInvalidations);
 
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
@@ -259,6 +269,7 @@ describe("Gmail ingestion and attachment storage", () => {
       updatedAt: expect.any(Date),
     });
     expect(await searchGeneration()).toBe(2);
+    expect(await jobs()).toEqual(originalJobs);
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
       mail: {

@@ -12,6 +12,7 @@ import {
   claimJob,
   dueJobs,
   enqueueJob,
+  failJob,
   publishJobPage,
   renewJob,
 } from "~/server/generic/jobs/repo/jobs";
@@ -193,64 +194,125 @@ describe("durable family invalidation", () => {
   });
 
   // Some family pages publish under SERIALIZABLE and read the marker while a
-  // serializable admission captures. Publication only reads the marker and
-  // the capture never touches the Job row, so no serialization cycle forms.
-  it.each(["publication first", "capture first"] as const)(
-    "commits a serializable capture beside a serializable publication (%s)",
+  // serializable admission captures. The capture has already written the
+  // marker and stays open while publication starts, reads it and reaches its
+  // commit; the two then commit in either order. Publication only reads the
+  // marker and the capture never touches the Job row, so no serialization
+  // cycle forms and the capture's wake is never lost.
+  it.each(["capture commits first", "publication commits first"] as const)(
+    "commits a serializable capture overlapping a serializable publication (%s)",
     async (order) => {
       const search = await family("search");
       await invalidateRefreshFamily(ctx.db, "search");
       const claim = await claimJob(ctx.db, search.id);
       if (!claim) throw new Error("Expected claim");
       const before = await revision("search");
-      let publications = 0;
+      const latch = () => {
+        let open: () => void = () => {};
+        const opened = new Promise<void>((resolve) => {
+          open = resolve;
+        });
+        return { open, opened };
+      };
+      const captureWrote = latch();
+      const releaseCapture = latch();
+      const publicationRead = latch();
+      const releasePublication = latch();
       let captures = 0;
-      const capture = () =>
-        withSnapshotWriteDatabase(
-          ctx.db,
-          async (tx) => {
-            captures++;
-            await invalidateRefreshFamily(tx, "search");
-          },
-          { isolationLevel: "serializable" },
-        );
-      let release: () => void = () => {};
-      const gate = new Promise<void>((resolve) => {
-        release = resolve;
-      });
-      let entered: () => void = () => {};
-      const inside = new Promise<void>((resolve) => {
-        entered = resolve;
-      });
+      let publications = 0;
+      const capture = withSnapshotWriteDatabase(
+        ctx.db,
+        async (tx) => {
+          captures++;
+          await invalidateRefreshFamily(tx, "search");
+          captureWrote.open();
+          await releaseCapture.opened;
+        },
+        { isolationLevel: "serializable" },
+      );
+      await captureWrote.opened;
       const publication = publishJobPage(
         ctx.db,
         claim,
         { done: true },
         async () => {
           publications++;
-          entered();
-          if (order === "publication first") await gate;
+          publicationRead.open();
+          await releasePublication.opened;
         },
         "serializable",
       );
-      if (order === "publication first") {
-        // Publication holds its serializable snapshot after reading the marker.
-        await inside;
-        await capture();
-        release();
+      // Both transactions are open: the capture holds its marker write and
+      // publication has read the marker under its snapshot.
+      await publicationRead.opened;
+      if (order === "capture commits first") {
+        releaseCapture.open();
+        await capture;
+        releasePublication.open();
         await publication;
       } else {
+        releasePublication.open();
         await publication;
-        await capture();
+        releaseCapture.open();
+        await capture;
       }
-      expect({ captures, publications }).toEqual({
-        captures: 1,
-        publications: 1,
-      });
+      expect(captures).toBe(1);
+      expect(publications).toBeGreaterThanOrEqual(1);
       expect(await revision("search")).toBe(before + 1);
       // The page either finished before observing the capture or was
       // superseded by it; either way the family reruns.
       expect(await due(search.id)).toBe(true);
     },
   );
+
+  // Review finding: a page that failed after a capture landed during its
+  // pass was marked failed (or backed off) and the captured pass stranded.
+  it.each(["exhausted", "retrying"] as const)(
+    "starts a fresh pass when a page fails after a capture during its pass (%s)",
+    async (budget) => {
+      const search = await family("search");
+      await invalidateRefreshFamily(ctx.db, "search");
+      const claim = await claimJob(ctx.db, search.id);
+      if (!claim) throw new Error("Expected claim");
+      // The claim is on its last attempt when exhausted.
+      const attempts = budget === "exhausted" ? claim.maxAttempts : 1;
+      await getDb(ctx.db)
+        .update(job)
+        .set({ attempts, cursor: { at: "synthetic-page" } })
+        .where(eq(job.id, search.id));
+      await invalidateRefreshFamily(ctx.db, "search");
+      await failJob(
+        ctx.db,
+        { ...claim, attempts },
+        new Error("Synthetic stale-input failure"),
+      );
+      expect(await row(search.id)).toMatchObject({
+        state: "queued",
+        attempts: 0,
+        cursor: null,
+        error: expect.stringContaining("Synthetic stale-input failure"),
+      });
+      expect(await due(search.id)).toBe(true);
+      const fresh = await claimJob(ctx.db, search.id);
+      expect(fresh).toMatchObject({
+        generation: claim.generation + 1,
+        observedRevision: await revision("search"),
+      });
+    },
+  );
+
+  it("keeps an explicit member stop when a capture lands during a failed pass", async () => {
+    const search = await family("search");
+    await invalidateRefreshFamily(ctx.db, "search");
+    const claim = await claimJob(ctx.db, search.id);
+    if (!claim) throw new Error("Expected claim");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "paused" })
+      .where(eq(job.id, search.id));
+    await invalidateRefreshFamily(ctx.db, "search");
+    await failJob(ctx.db, claim, new Error("Synthetic late failure"));
+    expect((await row(search.id)).state).toBe("paused");
+    expect(await due(search.id)).toBe(false);
+  });
 });

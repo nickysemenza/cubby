@@ -4,7 +4,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { image, imageProcessingJob, job, run } from "~/server/db/schema";
+import {
+  image,
+  imageProcessingJob,
+  job,
+  jobInvalidation,
+  run,
+} from "~/server/db/schema";
 import {
   createTransparentDerivativeAndJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -20,6 +26,7 @@ import {
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   JOB_RETENTION_MS,
+  measureQueueHealth,
   pruneFinishedJobs,
 } from "~/server/generic/jobs/repo/queue-health";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -240,6 +247,54 @@ describe("queue watchdog, explain and retention", () => {
     expect((await readRunRollups(ctx.db, [owner!]))[0]?.counts).toEqual({
       due: 1,
     });
+  });
+
+  // Review finding: a completed Job woken by a capture was claimable but
+  // health counted it as not due and, once outside the claim window, omitted
+  // its kind and raised no alert.
+  it("counts an invalidation-woken Job as due in health and alerts when nothing claims it", async () => {
+    const search = await enqueueJob(ctx.db, {
+      key: "refresh:search",
+      kind: "refresh.family",
+      input: { family: "search" },
+    });
+    const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        observedRevision: 10,
+        lastClaimedAt: longAgo,
+        availableAt: longAgo,
+      })
+      .where(eq(job.id, search.id));
+    await getDb(ctx.db)
+      .insert(jobInvalidation)
+      .values({
+        key: "refresh:search",
+        revision: 11,
+        restartsPass: true,
+        updatedAt: new Date(Date.now() - 40 * 60_000),
+      })
+      .onConflictDoUpdate({
+        target: jobInvalidation.key,
+        set: { revision: 11, updatedAt: new Date(Date.now() - 40 * 60_000) },
+      });
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    expect(family).toMatchObject({ due: 1, claimsPerMinute: 0 });
+    // Pending since the capture, not since the old availableAt.
+    expect(family?.oldestDueSeconds).toBeGreaterThanOrEqual(39 * 60);
+    expect(family?.oldestDueSeconds).toBeLessThan(60 * 60);
+    expect(health.alerts).toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "no_claims" }),
+    );
+    expect(health.alerts).toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+    );
   });
 
   it("prunes finished Jobs past retention and keeps failed ones", async () => {
