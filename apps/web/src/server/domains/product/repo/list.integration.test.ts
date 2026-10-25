@@ -421,11 +421,8 @@ describe("product list staged projections", () => {
     expect(base.data.map((row) => row.id)).toEqual(
       full.data.map((row) => row.id),
     );
-    expect(base.data[0]).toMatchObject({
-      id: first.id,
-      name: "Staged A",
-      brandName: full.data[0]!.brandName,
-    });
+    // `base` is the id/count projection (view counts, relation paging); it binds no fields.
+    expect(base.data[0]).toEqual({ id: first.id });
     expect(queryCount).toBe(2);
     const idOnly = await listProductsRead(
       ctx.db,

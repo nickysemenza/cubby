@@ -2328,6 +2328,8 @@ export function listScaffold<
           }));
       let prefetched: ListPagePrefetch | undefined;
       let storedMeta: Promise<PageStoredMeta> | undefined;
+      // The id/count projection binds no fields, so it carries no envelope.
+      const withEnvelope = Boolean(spec.derived) && projection.kind !== "base";
       const readLoadedPageWithCount =
         loadIds && !spec.count
           ? () =>
@@ -2354,7 +2356,7 @@ export function listScaffold<
                 const pageIds = ids.map((row) => row.id);
                 prefetched = spec.prefetch?.(pageIds, projection);
                 // The envelope's stored meta needs only ids: read it beside the rows.
-                storedMeta = spec.derived
+                storedMeta = withEnvelope
                   ? loadPageStoredMeta(db, entity, pageIds)
                   : undefined;
                 // Awaited after hydration; this only keeps an early failure handled.
@@ -2448,7 +2450,7 @@ export function listScaffold<
             const context = await hydrationContext;
             const hydrate = () =>
               spec.hydrate(data, projection, context, prefetched);
-            const complete = spec.derived
+            const complete = withEnvelope
               ? await withPageDerived(db, entity, data, hydrate, storedMeta)
               : { data: await hydrate(), derived: undefined };
             const hydrated = complete.data;

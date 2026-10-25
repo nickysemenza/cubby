@@ -247,6 +247,13 @@ CREATE OR REPLACE FUNCTION derived_mark_assessment() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('product.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('product.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('product.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('product.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('product.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -275,11 +282,25 @@ BEGIN
     PERFORM derived_mark('cookbook.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('location.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('location.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('location.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('location.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('location.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('location.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('inventory.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('inventory.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('inventory.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('inventory.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -289,11 +310,25 @@ BEGIN
     PERFORM derived_mark('inventory.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('meal.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('meal.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('meal.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('meal.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('meal.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('meal.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('project.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('project.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('project.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('project.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -303,6 +338,13 @@ BEGIN
     PERFORM derived_mark('project.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('task.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('task.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('task.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('task.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -310,11 +352,25 @@ BEGIN
     PERFORM derived_mark('task.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('vendor.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('vendor.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('vendor.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('vendor.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('vendor.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('vendor.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('purchase.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('purchase.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('purchase.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('purchase.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -331,6 +387,13 @@ BEGIN
     PERFORM derived_mark('financialAccount.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('financialTransaction.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('financialTransaction.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('financialTransaction.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('financialTransaction.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('financialTransaction.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -343,6 +406,13 @@ BEGIN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('wish.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('wish.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('expense.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('expense.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('expense.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -359,11 +429,25 @@ BEGIN
     PERFORM derived_mark('image.searchDocument@4', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('planting.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('planting.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('planting.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('planting.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('planting.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('planting.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('gardenEntry.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('gardenEntry.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('gardenEntry.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('gardenEntry.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -373,11 +457,25 @@ BEGIN
     PERFORM derived_mark('gardenEntry.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('productCategory.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('productCategory.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('productCategory.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('plant.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('plant.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('plant.searchDocument@5', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(OLD."subject")) = 'array' THEN jsonb_build_array(OLD."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') || ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'));
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."family" = 'field' THEN PERFORM derived_mark('spendingCategory.automaticFields@2', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."family" = 'field' THEN PERFORM derived_mark('spendingCategory.automaticFields@2', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (OLD."family" = 'field' OR NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('spendingCategory.automaticFields@2', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'email_relevance' THEN PERFORM derived_mark('email.dataQuality@13', ARRAY(SELECT (e->>'recordId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."subject")) = 'array' THEN jsonb_build_array(NEW."subject") ELSE '[]'::jsonb END) AS e WHERE e->>'recordId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -394,6 +492,13 @@ CREATE TRIGGER "Assessment_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "As
 CREATE OR REPLACE FUNCTION derived_mark_assessmentstate() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'product' AND NEW."family" = 'field' THEN PERFORM derived_mark('product.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'product' AND OLD."family" = 'field' THEN PERFORM derived_mark('product.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'product' AND OLD."family" = 'field' OR NEW."entity" = 'product' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('product.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('product.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
@@ -423,11 +528,25 @@ BEGIN
     PERFORM derived_mark('cookbook.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'location' AND NEW."family" = 'field' THEN PERFORM derived_mark('location.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'location' AND OLD."family" = 'field' THEN PERFORM derived_mark('location.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'location' AND OLD."family" = 'field' OR NEW."entity" = 'location' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('location.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('location.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('location.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('location.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'inventory' AND NEW."family" = 'field' THEN PERFORM derived_mark('inventory.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'inventory' AND OLD."family" = 'field' THEN PERFORM derived_mark('inventory.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'inventory' AND OLD."family" = 'field' OR NEW."entity" = 'inventory' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('inventory.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('inventory.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
@@ -437,11 +556,25 @@ BEGIN
     PERFORM derived_mark('inventory.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'meal' AND NEW."family" = 'field' THEN PERFORM derived_mark('meal.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'meal' AND OLD."family" = 'field' THEN PERFORM derived_mark('meal.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'meal' AND OLD."family" = 'field' OR NEW."entity" = 'meal' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('meal.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('meal.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('meal.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('meal.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'project' AND NEW."family" = 'field' THEN PERFORM derived_mark('project.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'project' AND OLD."family" = 'field' THEN PERFORM derived_mark('project.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'project' AND OLD."family" = 'field' OR NEW."entity" = 'project' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('project.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('project.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
@@ -451,6 +584,13 @@ BEGIN
     PERFORM derived_mark('project.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'task' AND NEW."family" = 'field' THEN PERFORM derived_mark('task.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'task' AND OLD."family" = 'field' THEN PERFORM derived_mark('task.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'task' AND OLD."family" = 'field' OR NEW."entity" = 'task' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('task.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('task.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
@@ -458,11 +598,25 @@ BEGIN
     PERFORM derived_mark('task.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'vendor' AND NEW."family" = 'field' THEN PERFORM derived_mark('vendor.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'vendor' AND OLD."family" = 'field' THEN PERFORM derived_mark('vendor.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'vendor' AND OLD."family" = 'field' OR NEW."entity" = 'vendor' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('vendor.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('vendor.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('vendor.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('vendor.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'purchase' AND NEW."family" = 'field' THEN PERFORM derived_mark('purchase.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'purchase' AND OLD."family" = 'field' THEN PERFORM derived_mark('purchase.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'purchase' AND OLD."family" = 'field' OR NEW."entity" = 'purchase' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('purchase.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('purchase.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
@@ -493,6 +647,13 @@ BEGIN
     PERFORM derived_mark('financialAccount.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'financialTransaction' AND NEW."family" = 'field' THEN PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'financialTransaction' AND OLD."family" = 'field' THEN PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'financialTransaction' AND OLD."family" = 'field' OR NEW."entity" = 'financialTransaction' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('financialTransaction.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('financialTransaction.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
@@ -505,6 +666,13 @@ BEGIN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('wish.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('wish.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'expense' AND NEW."family" = 'field' THEN PERFORM derived_mark('expense.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'expense' AND OLD."family" = 'field' THEN PERFORM derived_mark('expense.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'expense' AND OLD."family" = 'field' OR NEW."entity" = 'expense' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('expense.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
@@ -521,11 +689,25 @@ BEGIN
     PERFORM derived_mark('image.searchDocument', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'planting' AND NEW."family" = 'field' THEN PERFORM derived_mark('planting.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'planting' AND OLD."family" = 'field' THEN PERFORM derived_mark('planting.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'planting' AND OLD."family" = 'field' OR NEW."entity" = 'planting' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('planting.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('planting.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('planting.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('planting.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'gardenEntry' AND NEW."family" = 'field' THEN PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'gardenEntry' AND OLD."family" = 'field' THEN PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'gardenEntry' AND OLD."family" = 'field' OR NEW."entity" = 'gardenEntry' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('gardenEntry.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
@@ -535,11 +717,25 @@ BEGIN
     PERFORM derived_mark('gardenEntry.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'productCategory' AND NEW."family" = 'field' THEN PERFORM derived_mark('productCategory.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'productCategory' AND OLD."family" = 'field' THEN PERFORM derived_mark('productCategory.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'productCategory' AND OLD."family" = 'field' OR NEW."entity" = 'productCategory' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('productCategory.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'image_description' THEN PERFORM derived_mark('plant.searchDocument@4', ARRAY[NEW."recordId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF OLD."family" = 'image_description' THEN PERFORM derived_mark('plant.searchDocument@4', ARRAY[OLD."recordId"::uuid]); END IF;
   ELSIF (OLD."family" = 'image_description' OR NEW."family" = 'image_description') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('plant.searchDocument@4', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entity" = 'spendingCategory' AND NEW."family" = 'field' THEN PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[NEW."recordId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entity" = 'spendingCategory' AND OLD."family" = 'field' THEN PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[OLD."recordId"::uuid]); END IF;
+  ELSIF (OLD."entity" = 'spendingCategory' AND OLD."family" = 'field' OR NEW."entity" = 'spendingCategory' AND NEW."family" = 'field') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[OLD."recordId"::uuid] || ARRAY[NEW."recordId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF NEW."family" = 'email_link' THEN PERFORM derived_mark('email.dataQuality@6', ARRAY(SELECT (e->>'eventId')::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(jsonb_build_array(NEW."data")) = 'array' THEN jsonb_build_array(NEW."data") ELSE '[]'::jsonb END) AS e WHERE e->>'eventId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')); END IF;
@@ -553,6 +749,112 @@ END $$;--> statement-breakpoint
 DROP TRIGGER IF EXISTS "AssessmentState_derived_mark" ON "AssessmentState";--> statement-breakpoint
 CREATE TRIGGER "AssessmentState_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "AssessmentState"
   FOR EACH ROW EXECUTE FUNCTION derived_mark_assessmentstate();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION derived_mark_auditlog() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'product' THEN PERFORM derived_mark('product.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'product' THEN PERFORM derived_mark('product.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'product' OR NEW."entityKind" = 'product') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('product.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'location' THEN PERFORM derived_mark('location.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'location' THEN PERFORM derived_mark('location.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'location' OR NEW."entityKind" = 'location') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('location.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'inventory' THEN PERFORM derived_mark('inventory.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'inventory' THEN PERFORM derived_mark('inventory.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'inventory' OR NEW."entityKind" = 'inventory') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('inventory.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'meal' THEN PERFORM derived_mark('meal.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'meal' THEN PERFORM derived_mark('meal.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'meal' OR NEW."entityKind" = 'meal') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('meal.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'project' THEN PERFORM derived_mark('project.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'project' THEN PERFORM derived_mark('project.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'project' OR NEW."entityKind" = 'project') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('project.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'task' THEN PERFORM derived_mark('task.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'task' THEN PERFORM derived_mark('task.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'task' OR NEW."entityKind" = 'task') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'vendor' THEN PERFORM derived_mark('vendor.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'vendor' THEN PERFORM derived_mark('vendor.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'vendor' OR NEW."entityKind" = 'vendor') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('vendor.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'purchase' THEN PERFORM derived_mark('purchase.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'purchase' THEN PERFORM derived_mark('purchase.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'purchase' OR NEW."entityKind" = 'purchase') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('purchase.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'financialTransaction' THEN PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'financialTransaction' THEN PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'financialTransaction' OR NEW."entityKind" = 'financialTransaction') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'expense' THEN PERFORM derived_mark('expense.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'expense' THEN PERFORM derived_mark('expense.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'expense' OR NEW."entityKind" = 'expense') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'planting' THEN PERFORM derived_mark('planting.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'planting' THEN PERFORM derived_mark('planting.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'planting' OR NEW."entityKind" = 'planting') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('planting.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'gardenEntry' THEN PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'gardenEntry' THEN PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'gardenEntry' OR NEW."entityKind" = 'gardenEntry') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'productCategory' THEN PERFORM derived_mark('productCategory.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'productCategory' THEN PERFORM derived_mark('productCategory.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'productCategory' OR NEW."entityKind" = 'productCategory') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('productCategory.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF NEW."entityKind" = 'spendingCategory' THEN PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[NEW."entityId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF OLD."entityKind" = 'spendingCategory' THEN PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[OLD."entityId"::uuid]); END IF;
+  ELSIF (OLD."entityKind" = 'spendingCategory' OR NEW."entityKind" = 'spendingCategory') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+  END IF;
+  RETURN NULL;
+END $$;--> statement-breakpoint
+DROP TRIGGER IF EXISTS "AuditLog_derived_mark" ON "AuditLog";--> statement-breakpoint
+CREATE TRIGGER "AuditLog_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "AuditLog"
+  FOR EACH ROW EXECUTE FUNCTION derived_mark_auditlog();--> statement-breakpoint
 CREATE OR REPLACE FUNCTION derived_mark_cookbook() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -2092,6 +2394,13 @@ BEGIN
     PERFORM derived_mark('financialTransaction.dataQuality@23', ARRAY[OLD."purchaseId"::uuid] || ARRAY[NEW."purchaseId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('expense.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('expense.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('expense.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('expense.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
@@ -2135,6 +2444,13 @@ CREATE OR REPLACE FUNCTION derived_mark_feedback() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('product.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('product.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('product.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('product.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('product.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
@@ -2163,11 +2479,25 @@ BEGIN
     PERFORM derived_mark('cookbook.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('location.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('location.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('location.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('location.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('location.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('location.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('inventory.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('inventory.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('inventory.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('inventory.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2177,11 +2507,25 @@ BEGIN
     PERFORM derived_mark('inventory.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('meal.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('meal.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('meal.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('meal.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('meal.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('meal.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('project.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2191,6 +2535,13 @@ BEGIN
     PERFORM derived_mark('project.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('task.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('task.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('task.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('task.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
@@ -2198,11 +2549,25 @@ BEGIN
     PERFORM derived_mark('task.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('vendor.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('vendor.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('vendor.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('vendor.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('vendor.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('vendor.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('purchase.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('purchase.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('purchase.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2219,6 +2584,13 @@ BEGIN
     PERFORM derived_mark('financialAccount.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('financialTransaction.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('financialTransaction.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('financialTransaction.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('financialTransaction.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('financialTransaction.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
@@ -2231,6 +2603,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('wish.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('wish.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('expense.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('expense.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('expense.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2247,11 +2626,25 @@ BEGIN
     PERFORM derived_mark('image.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('planting.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('planting.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('planting.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('planting.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('gardenEntry.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('gardenEntry.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('gardenEntry.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('gardenEntry.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2261,11 +2654,25 @@ BEGIN
     PERFORM derived_mark('gardenEntry.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('productCategory.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('productCategory.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('productCategory.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('plant.searchDocument@6', ARRAY[NEW."assessmentId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('plant.searchDocument@6', ARRAY[OLD."assessmentId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('plant.searchDocument@6', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('spendingCategory.automaticFields@3', ARRAY[NEW."assessmentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('spendingCategory.automaticFields@3', ARRAY[OLD."assessmentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('spendingCategory.automaticFields@3', ARRAY[OLD."assessmentId"::uuid] || ARRAY[NEW."assessmentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('email.dataQuality@14', ARRAY[NEW."assessmentId"::uuid]); END IF;
@@ -2354,6 +2761,13 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality@25', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('financialTransaction.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('financialTransaction.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('financialTransaction.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
@@ -2417,6 +2831,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('planting.dataQuality@5', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."deletedAt") THEN
     PERFORM derived_mark('planting.dataQuality@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('gardenEntry.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('gardenEntry.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -3589,6 +4010,13 @@ BEGIN
     PERFORM derived_mark('inventory.valuation', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('inventory.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('inventory.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('inventory.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('inventory.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('inventory.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
@@ -3704,6 +4132,13 @@ BEGIN
     PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."parentId"::uuid] || ARRAY[NEW."parentId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('location.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('location.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('location.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('location.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('location.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
@@ -3773,6 +4208,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('recipe.dataQuality@5', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."deletedAt") THEN
     PERFORM derived_mark('recipe.dataQuality@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('meal.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('meal.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('meal.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('meal.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -4015,6 +4457,13 @@ BEGIN
     PERFORM derived_mark('product.dataQuality', ARRAY[OLD."sourceProductId"::uuid] || ARRAY[NEW."sourceProductId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('planting.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('planting.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('planting.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('planting.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
@@ -4077,6 +4526,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('product.quantityVariance', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."categoryId", OLD."expectedQuantity", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."categoryId", NEW."expectedQuantity", NEW."deletedAt") THEN
     PERFORM derived_mark('product.quantityVariance', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('product.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('product.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('product.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('product.conversionCoverage@0', ARRAY[NEW."id"::uuid]); END IF;
@@ -4717,6 +5173,13 @@ BEGIN
     PERFORM derived_mark('expense.dataQuality@27', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('productCategory.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('productCategory.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('productCategory.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('productCategory.dataQuality', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('productCategory.dataQuality', ARRAY[OLD."id"::uuid]); END IF;
@@ -4787,6 +5250,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[OLD."parentProjectId"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."parentProjectId", OLD."startDate", OLD."endDate", OLD."status", OLD."deletedAt") IS DISTINCT FROM (NEW."parentProjectId", NEW."startDate", NEW."endDate", NEW."status", NEW."deletedAt") THEN
     PERFORM derived_mark('project.completionYear', ARRAY[OLD."parentProjectId"::uuid] || ARRAY[NEW."parentProjectId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('project.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('project.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -4949,6 +5419,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('vendor.dataQuality', ARRAY[OLD."vendorId"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."vendorId", OLD."deletedAt") IS DISTINCT FROM (NEW."vendorId", NEW."deletedAt") THEN
     PERFORM derived_mark('vendor.dataQuality', ARRAY[OLD."vendorId"::uuid] || ARRAY[NEW."vendorId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('purchase.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('purchase.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('purchase.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('purchase.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -5381,6 +5858,13 @@ BEGIN
     PERFORM derived_mark('productCategory.dataQuality@11', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('spendingCategory.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('spendingCategory.dataQuality', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('spendingCategory.dataQuality', ARRAY[OLD."id"::uuid]); END IF;
@@ -5457,6 +5941,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('project.dataQuality@10', ARRAY[OLD."projectId"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."projectId", OLD."deletedAt", OLD."subjectProductId") IS DISTINCT FROM (NEW."projectId", NEW."deletedAt", NEW."subjectProductId") THEN
     PERFORM derived_mark('project.dataQuality@10', ARRAY[OLD."projectId"::uuid] || ARRAY[NEW."projectId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('task.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('task.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('task.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -5662,6 +6153,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('task.dataQuality@75', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."id", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."deletedAt") THEN
     PERFORM derived_mark('task.dataQuality@75', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('vendor.automaticFields', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('vendor.automaticFields', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('vendor.automaticFields', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('vendor.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
@@ -5912,6 +6410,7 @@ INSERT INTO "JobInvalidation" (key, "restartsPass") VALUES ('derived:drain', fal
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.price', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.ledgerExpectedQuantity', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.quantityVariance', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.automaticFields', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.conversionCoverage', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.searchDocument', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.dataQuality', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
@@ -5923,44 +6422,57 @@ INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'ingredient.dataQualit
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'cookbook.searchDocument', t.id, 1 FROM "Cookbook" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'cookbook.dataQuality', t.id, 1 FROM "Cookbook" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'location.valuationRollup', t.id, 1 FROM "Location" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'location.automaticFields', t.id, 1 FROM "Location" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'location.searchDocument', t.id, 1 FROM "Location" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'location.dataQuality', t.id, 1 FROM "Location" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'inventory.valuation', t.id, 1 FROM "InventoryEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'inventory.automaticFields', t.id, 1 FROM "InventoryEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'inventory.searchDocument', t.id, 1 FROM "InventoryEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'inventory.dataQuality', t.id, 1 FROM "InventoryEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'meal.automaticFields', t.id, 1 FROM "Meal" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'meal.searchDocument', t.id, 1 FROM "Meal" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'meal.dataQuality', t.id, 1 FROM "Meal" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'ledgerParty.dataQuality', t.id, 1 FROM "LedgerParty" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'ledgerTransfer.dataQuality', t.id, 1 FROM "LedgerTransfer" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.startDate', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.completionYear', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.automaticFields', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.searchDocument', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.dataQuality', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'task.automaticFields', t.id, 1 FROM "Task" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'task.searchDocument', t.id, 1 FROM "Task" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'task.dataQuality', t.id, 1 FROM "Task" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'vendor.automaticFields', t.id, 1 FROM "Vendor" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'vendor.searchDocument', t.id, 1 FROM "Vendor" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'vendor.dataQuality', t.id, 1 FROM "Vendor" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'purchase.automaticFields', t.id, 1 FROM "Purchase" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'purchase.searchDocument', t.id, 1 FROM "Purchase" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'purchase.dataQuality', t.id, 1 FROM "Purchase" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'financialAccount.searchDocument', t.id, 1 FROM "FinancialAccount" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'financialAccount.dataQuality', t.id, 1 FROM "FinancialAccount" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'financialTransaction.automaticFields', t.id, 1 FROM "FinancialTransaction" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'financialTransaction.searchDocument', t.id, 1 FROM "FinancialTransaction" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'financialTransaction.dataQuality', t.id, 1 FROM "FinancialTransaction" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'wish.searchDocument', t.id, 1 FROM "Wish" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'wish.dataQuality', t.id, 1 FROM "Wish" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'expense.automaticFields', t.id, 1 FROM "Expense" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'expense.searchDocument', t.id, 1 FROM "Expense" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'expense.dataQuality', t.id, 1 FROM "Expense" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'image.searchDocument', t.id, 1 FROM "Image" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'image.dataQuality', t.id, 1 FROM "Image" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'planting.automaticFields', t.id, 1 FROM "Planting" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'planting.searchDocument', t.id, 1 FROM "Planting" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'planting.dataQuality', t.id, 1 FROM "Planting" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'gardenEntry.automaticFields', t.id, 1 FROM "GardenEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'gardenEntry.searchDocument', t.id, 1 FROM "GardenEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'gardenEntry.dataQuality', t.id, 1 FROM "GardenEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'productCategory.automaticFields', t.id, 1 FROM "ProductCategory" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'productCategory.dataQuality', t.id, 1 FROM "ProductCategory" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'run.dataQuality', t.id, 1 FROM "Run" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'device.dataQuality', t.id, 1 FROM "Device" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'plant.searchDocument', t.id, 1 FROM "Plant" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'plant.dataQuality', t.id, 1 FROM "Plant" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'spendingCategory.automaticFields', t.id, 1 FROM "SpendingCategory" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'spendingCategory.dataQuality', t.id, 1 FROM "SpendingCategory" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'email.dataQuality', t.id, 1 FROM "Email" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'imageJob.dataQuality', t.id, 1 FROM "ImageProcessingJob" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint

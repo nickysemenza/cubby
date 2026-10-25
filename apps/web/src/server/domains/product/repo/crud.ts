@@ -1211,9 +1211,15 @@ export const listProductsRead = async (
     count: totalCount,
     ...(sums ? { sums } : {}),
     ...(groups ? { groups, memberships, membershipCount } : {}),
-    ...(await withPageDerived(db, "product", results, () =>
-      plan.read(db, results, projection, filtered.context),
-    )),
+    // The id/count projection binds no fields, so it carries no envelope.
+    ...(projection.kind === "base"
+      ? {
+          data: await plan.read(db, results, projection, filtered.context),
+          derived: undefined,
+        }
+      : await withPageDerived(db, "product", results, () =>
+          plan.read(db, results, projection, filtered.context),
+        )),
   };
 };
 
