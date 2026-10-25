@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -301,18 +301,150 @@ describe("durable family invalidation", () => {
     },
   );
 
-  it("keeps an explicit member stop when a capture lands during a failed pass", async () => {
+  it.each(["paused", "cancelled"] as const)(
+    "keeps an explicit member stop (%s) when a capture lands during a failed pass",
+    async (stop) => {
+      const search = await family("search");
+      await invalidateRefreshFamily(ctx.db, "search");
+      const claim = await claimJob(ctx.db, search.id);
+      if (!claim) throw new Error("Expected claim");
+      await getDb(ctx.db)
+        .update(job)
+        .set({ state: stop })
+        .where(eq(job.id, search.id));
+      await invalidateRefreshFamily(ctx.db, "search");
+      await failJob(ctx.db, claim, new Error("Synthetic late failure"));
+      expect((await row(search.id)).state).toBe(stop);
+      expect(await due(search.id)).toBe(false);
+    },
+  );
+
+  // Review finding: failJob and claimJob read the marker, then terminalized
+  // the Job as failed in a later statement. A capture committing between the
+  // two left a failed Job behind an unobserved restarting revision, and
+  // nothing claimed it again. A test-only trigger latches the terminal write
+  // so the capture commits exactly inside that window.
+  const latchTerminalWrite = async (
+    execution: () => Promise<void>,
+    between: () => Promise<void>,
+  ) => {
+    const database = getDb(ctx.db);
+    await database.execute(
+      sql.raw(`CREATE FUNCTION synthetic_hold_job_failure() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.state = 'failed' AND OLD.state <> 'failed' THEN
+          PERFORM pg_advisory_xact_lock(424242);
+        END IF;
+        RETURN NEW;
+      END $$ LANGUAGE plpgsql`),
+    );
+    await database.execute(
+      sql.raw(`CREATE TRIGGER synthetic_hold_job_failure BEFORE UPDATE ON "Job"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_hold_job_failure()`),
+    );
+    try {
+      let pending: Promise<void> | undefined;
+      await withTransactionDatabase(ctx.db, async (holder) => {
+        const lock = await getDb(holder).execute<{ pid: number }>(
+          sql`SELECT pg_advisory_xact_lock(424242), pg_backend_pid() AS pid`,
+        );
+        const holderPid = lock.rows[0]?.pid;
+        if (!holderPid) throw new Error("Expected latch holder");
+        pending = execution();
+        pending.catch(() => undefined);
+        // The execution has read the marker and now waits in its terminal write.
+        await expect
+          .poll(async () => {
+            const waiting = await database.execute<{ waiting: boolean }>(
+              sql`SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity
+                WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))
+              ) AS waiting`,
+            );
+            return waiting.rows[0]?.waiting;
+          })
+          .toBe(true);
+        await between();
+      });
+      await pending;
+    } finally {
+      await database.execute(
+        sql.raw(`DROP TRIGGER IF EXISTS synthetic_hold_job_failure ON "Job"`),
+      );
+      await database.execute(
+        sql.raw(`DROP FUNCTION IF EXISTS synthetic_hold_job_failure()`),
+      );
+    }
+  };
+
+  const expectFreshPass = async (id: string, generation: number) => {
+    expect(await due(id)).toBe(true);
+    const fresh = await claimJob(ctx.db, id);
+    expect(fresh).toMatchObject({
+      generation: generation + 1,
+      attempts: 1,
+      cursor: null,
+      observedRevision: await revision("search"),
+    });
+  };
+
+  it("reruns a capture that commits while failJob terminalizes an exhausted pass", async () => {
     const search = await family("search");
     await invalidateRefreshFamily(ctx.db, "search");
     const claim = await claimJob(ctx.db, search.id);
     if (!claim) throw new Error("Expected claim");
+    // The claim is on its last attempt, so this failure is terminal.
     await getDb(ctx.db)
       .update(job)
-      .set({ state: "paused" })
+      .set({ attempts: claim.maxAttempts })
       .where(eq(job.id, search.id));
-    await invalidateRefreshFamily(ctx.db, "search");
-    await failJob(ctx.db, claim, new Error("Synthetic late failure"));
-    expect((await row(search.id)).state).toBe("paused");
-    expect(await due(search.id)).toBe(false);
+    await latchTerminalWrite(
+      () =>
+        failJob(
+          ctx.db,
+          { ...claim, attempts: claim.maxAttempts },
+          new Error("Synthetic final failure"),
+        ),
+      () => invalidateRefreshFamily(ctx.db, "search"),
+    );
+    // The failure is recorded as it happened; the capture still reruns.
+    expect((await row(search.id)).state).toBe("failed");
+    await expectFreshPass(search.id, claim.generation);
   });
+
+  it.each(["exhausted", "stalled"] as const)(
+    "reruns a capture that commits while a claim terminalizes an %s Job",
+    async (cause) => {
+      const search = await family("search");
+      await invalidateRefreshFamily(ctx.db, "search");
+      const claim = await claimJob(ctx.db, search.id);
+      if (!claim) throw new Error("Expected claim");
+      // The pass was interrupted; its next claim finds it out of budget.
+      const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+      await getDb(ctx.db)
+        .update(job)
+        .set({
+          state: "retry_wait",
+          availableAt: longAgo,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          ...(cause === "exhausted"
+            ? { attempts: claim.maxAttempts }
+            : { recoveryTimeoutMs: 60_000, lastUsefulProgressAt: longAgo }),
+        })
+        .where(eq(job.id, search.id));
+      let terminal: Awaited<ReturnType<typeof claimJob>> | undefined;
+      await latchTerminalWrite(
+        async () => {
+          terminal = await claimJob(ctx.db, search.id);
+        },
+        () => invalidateRefreshFamily(ctx.db, "search"),
+      );
+      expect(terminal).toBeNull();
+      expect((await row(search.id)).state).toBe("failed");
+      // The fresh pass gets a fresh budget and recovery window, so it does
+      // not fail again at once.
+      await expectFreshPass(search.id, claim.generation);
+    },
+  );
 });

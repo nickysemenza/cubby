@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -18,6 +18,7 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { invalidateRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   readJobQueue,
   readRunRollups,
@@ -294,6 +295,60 @@ describe("queue watchdog, explain and retention", () => {
     );
     expect(health.alerts).toContainEqual(
       expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+    );
+  });
+
+  // Review finding: every capture moved the marker's updatedAt, so a family
+  // pending for 45 minutes read as just due after one more capture, and a
+  // recent claim of another family of the kind also hid no_claims.
+  it("keeps the start of a long-pending invalidation across later captures", async () => {
+    const families = await Promise.all(
+      (["search", "quality"] as const).map((name) =>
+        enqueueJob(ctx.db, {
+          key: `refresh:${name}`,
+          kind: "refresh.family",
+          input: { family: name },
+        }),
+      ),
+    );
+    const [search, quality] = families;
+    if (!search || !quality) throw new Error("Expected family Jobs");
+    const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "completed", lastClaimedAt: longAgo, availableAt: longAgo })
+      .where(eq(job.id, search.id));
+    // Another family of the kind was claimed a minute ago.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "completed", lastClaimedAt: new Date(Date.now() - 60_000) })
+      .where(eq(job.id, quality.id));
+    const started = Date.now() - 45 * 60_000;
+    const captures = [started, started + 20 * 60_000, Date.now() - 30_000];
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      for (const at of captures) {
+        vi.setSystemTime(at);
+        await invalidateRefreshFamily(ctx.db, "search");
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    expect(family).toMatchObject({ due: 1 });
+    expect(family?.claimsPerMinute).toBeGreaterThan(0);
+    // Pending since the first unobserved capture, not the latest one.
+    expect(family?.oldestDueSeconds).toBeGreaterThanOrEqual(44 * 60);
+    expect(family?.oldestDueSeconds).toBeLessThan(50 * 60);
+    expect(health.alerts).toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+    );
+    expect(health.alerts).toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "no_claims" }),
     );
   });
 
