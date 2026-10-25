@@ -1,7 +1,7 @@
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
-import { defineEntity } from "./definition.js";
+import { type DerivedStoredInput, defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   ledgerPartyShortcode,
@@ -25,6 +25,35 @@ import {
 import { z } from "zod";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+
+/** Rows a project's folded dates read (stored derived inputs, ADR 0021). */
+const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["startDate", "endDate", "status", "parentProjectId", "deletedAt"],
+  },
+  {
+    table: "Project",
+    match: { parentProjectId: "id" },
+    columns: ["startDate", "endDate", "status", "parentProjectId", "deletedAt"],
+  },
+  {
+    table: "Task",
+    match: { projectId: "id" },
+    columns: ["dueDate", "dueEndDate", "status", "projectId", "deletedAt"],
+  },
+  {
+    table: "Expense",
+    match: { projectId: "id" },
+    columns: ["date", "projectId", "purchaseId", "deletedAt"],
+  },
+  {
+    table: "Purchase",
+    match: { defaultProjectId: "id" },
+    columns: ["date", "defaultProjectId", "deletedAt"],
+  },
+];
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "project",
@@ -906,8 +935,22 @@ Rules:
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
       // The effective start: the stored date, else the earliest task or
-      // expense date in the subtree below an unset start.
-      startDate: { type: "date" },
+      // expense date in the subtree below an unset start. Stored (ADR 0021):
+      // the recursive fold per row made start-date sorts ~430-630 ms.
+      startDate: {
+        type: "date",
+        stored: {
+          compute: "project.startDate",
+          inputs: PROJECT_DATE_INPUTS,
+          dependsOn: [
+            {
+              entity: "project",
+              key: "startDate",
+              match: { parentProjectId: "id" },
+            },
+          ],
+        },
+      },
       // A displayable image (PDF attachments don't count).
       image: { type: "boolean" },
       // Tracker membership, from the attention rules over tasks and budgets.
@@ -917,8 +960,21 @@ Rules:
         reason:
           "A project matches by its own dates or by any dated task or expense under it",
       },
-      // The year of the subtree's effective end, folded in TS.
-      completionYear: { type: "text" },
+      // The year of the subtree's effective end, folded in TS and stored.
+      completionYear: {
+        type: "text",
+        stored: {
+          compute: "project.completionYear",
+          inputs: PROJECT_DATE_INPUTS,
+          dependsOn: [
+            {
+              entity: "project",
+              key: "completionYear",
+              match: { parentProjectId: "id" },
+            },
+          ],
+        },
+      },
     },
     sort: {
       fields: [

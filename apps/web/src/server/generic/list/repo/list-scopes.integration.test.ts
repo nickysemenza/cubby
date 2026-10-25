@@ -34,6 +34,7 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
@@ -269,6 +270,7 @@ describe("declared list scopes", () => {
       sql`${effectiveFieldSql("task", "projectId")} = ANY(${uuidArrayParam(
         await retiredScopeProjects(old),
       )})`;
+    await drainStoredDerived(ctx.db);
     const actual = [];
     const expected = [];
     for (const [old, scope] of cases) {

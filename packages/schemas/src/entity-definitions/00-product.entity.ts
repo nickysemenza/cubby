@@ -1,7 +1,7 @@
 import { imageAssociationStorage } from "./image-associations";
 import { productReadSchemas } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
-import { defineEntity } from "./definition.js";
+import { type DerivedStoredInput, defineEntity } from "./definition.js";
 import {
   CURRENT_MEMBER_FILTER,
   OWNER_FILTER_HOUSEHOLD,
@@ -43,16 +43,8 @@ import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
 
-/** A stored derived value's input row (`model.derived.<key>.stored.inputs`). */
-type StoredInput = {
-  table: string;
-  match: Record<string, string>;
-  columns?: string[];
-  where?: Record<string, string>;
-};
-
 /** Kit links: a component's price and quantities read its kits' lines. */
-const KIT_LINK_INPUTS: StoredInput[] = [
+const KIT_LINK_INPUTS: DerivedStoredInput[] = [
   {
     table: "EntityLink",
     match: { fromEntityId: "id" },
@@ -74,7 +66,7 @@ const KIT_COMPONENT_LINK = {
 };
 
 /** Rows the effective price reads (stored derived inputs, ADR 0021). */
-const PRICING_INPUTS: StoredInput[] = [
+const PRICING_INPUTS: DerivedStoredInput[] = [
   {
     table: "Product",
     match: { id: "id" },
@@ -97,7 +89,7 @@ const PRICING_INPUTS: StoredInput[] = [
 ];
 
 /** Rows the ledger quantities read: acquisition lines, stock and locations. */
-const QUANTITY_INPUTS: StoredInput[] = [
+const QUANTITY_INPUTS: DerivedStoredInput[] = [
   {
     table: "Product",
     match: { id: "id" },

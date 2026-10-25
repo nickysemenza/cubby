@@ -481,6 +481,7 @@ describe("state predicates re-declared as values", () => {
           })
           .map((row) => row.shortcode),
       );
+    await drainStoredDerived(ctx.db);
     const listed = async (
       filters: Parameters<typeof projectList>[1],
       sorts: Parameters<typeof projectList>[2] = [],

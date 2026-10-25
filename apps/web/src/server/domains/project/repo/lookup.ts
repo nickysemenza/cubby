@@ -27,6 +27,7 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -51,11 +52,9 @@ import {
 } from "./helpers";
 import {
   aggregateSubtreeDates,
-  loadProjectDateWindows,
   loadProjectSubtreeRollups,
   loadProjectTree,
   type ProjectTree,
-  projectCompletionYear,
 } from "./subtree";
 
 const qb = new QueryBuilder();
@@ -89,17 +88,6 @@ const projectAttention = listPrepare((db) =>
   computeAttentionItems(projectReadDatabase(db)),
 );
 
-// Completion years fold each subtree's effective dates in TS; the tree it
-// loads is handed back so the list's rollups never query it twice.
-const projectCompletion = listPrepare(async (db) => {
-  const tree = await loadProjectTree(projectReadDatabase(db));
-  const { dateWindows } = await loadProjectDateWindows(
-    projectReadDatabase(db),
-    tree,
-  );
-  return { tree, dateWindows };
-});
-
 /**
  * Each project-grain attention type's list filter value. Read on render, not
  * at load: task and expense lists import `projectScaffold` for their project
@@ -111,30 +99,11 @@ const attentionFilterOf = (type: string) =>
     ([, attention]) => attention === type,
   )?.[0];
 
-export const projectScaffold = listScaffold("project", project, {
-  derived: {
-    image: inArray(project.id, projectIdsWithImages),
-    dateRange: ({ from, to }) =>
-      dashboardProjectDateCondition({
-        dateFrom: typeof from === "string" ? from : undefined,
-        dateTo: typeof to === "string" ? to : undefined,
-      }),
-    // The id-to-year map travels as one jsonb parameter, as inventory
-    // valuations do.
-    completionYear: projectCompletion.value(({ tree, dateWindows }) => {
-      const years = Object.fromEntries(
-        tree.allRows.flatMap((row) => {
-          const window = dateWindows.get(row.id);
-          return window === undefined
-            ? []
-            : [[row.id, projectCompletionYear(row, window)]];
-        }),
-      );
-      return sql`(${JSON.stringify(years)}::jsonb ->> (${project.id})::text)`;
-    }),
-    // Stop at explicit starts: descendants behind an override must not
-    // influence an ancestor's folded date.
-    startDate: sql`(
+/**
+ * The effective start the drain stores (ADR 0021). Stop at explicit starts:
+ * descendants behind an override must not influence an ancestor's folded date.
+ */
+export const projectStartDateSql = sql`(
       WITH RECURSIVE date_tree AS (
         SELECT p."id", p."startDate", 0 AS depth
         FROM "Project" p WHERE p."id" = "Project"."id" AND p."deletedAt" IS NULL
@@ -150,7 +119,19 @@ export const projectScaffold = listScaffold("project", project, {
         (SELECT min(e."date") FROM "Expense" e JOIN allocations a ON a."expenseId" = e."id"
          WHERE a."projectId" = node."id" AND e."deletedAt" IS NULL)
       ))) FROM date_tree node
-    )`,
+    )`;
+
+export const projectScaffold = listScaffold("project", project, {
+  derived: {
+    image: inArray(project.id, projectIdsWithImages),
+    dateRange: ({ from, to }) =>
+      dashboardProjectDateCondition({
+        dateFrom: typeof from === "string" ? from : undefined,
+        dateTo: typeof to === "string" ? to : undefined,
+      }),
+    // Stored (ADR 0021): the TS subtree fold no longer runs per list read.
+    completionYear: storedDerivedSql("project", "completionYear", project.id),
+    startDate: storedDerivedSql("project", "startDate", project.id),
   },
   rows: {
     attentionItems: projectAttention.rows((items) => {
@@ -279,9 +260,7 @@ export const buildProjectListQuery = async (
     { filters, sorts, projection: { kind: "base" }, readIntent },
     attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
   );
-  const loadedTree = context.has(projectCompletion)
-    ? context.get(projectCompletion).tree
-    : preparedTree;
+  const loadedTree = preparedTree;
   const whereClause = projectScaffold.where(filters, { context });
 
   const orderByArray =

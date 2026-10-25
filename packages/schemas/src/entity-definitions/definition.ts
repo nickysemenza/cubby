@@ -25,6 +25,14 @@ const entityReadCapability = z.enum([
 ]);
 
 /** The scalar shapes the entity compiler can persist and project. */
+/** One `model.derived.<key>.stored.inputs` row (ADR 0021), for shared input lists. */
+export type DerivedStoredInput = {
+  table: string;
+  match: Record<string, string>;
+  columns?: string[];
+  where?: Record<string, string>;
+};
+
 export const entityFieldKinds = [
   "text",
   "text-array",

@@ -122,6 +122,20 @@ BEGIN
   ELSIF (true OR true) AND (OLD."productId", OLD."productQuantity", OLD."lineKind", OLD."future", OLD."deletedAt") IS DISTINCT FROM (NEW."productId", NEW."productQuantity", NEW."lineKind", NEW."future", NEW."deletedAt") THEN
     PERFORM derived_mark('product.quantityVariance', ARRAY[OLD."productId"::uuid, NEW."productId"::uuid]);
   END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[NEW."projectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[OLD."projectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."projectId", OLD."date", OLD."purchaseId", OLD."deletedAt") IS DISTINCT FROM (NEW."projectId", NEW."date", NEW."purchaseId", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.startDate', ARRAY[OLD."projectId"::uuid, NEW."projectId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[NEW."projectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[OLD."projectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."projectId", OLD."date", OLD."purchaseId", OLD."deletedAt") IS DISTINCT FROM (NEW."projectId", NEW."date", NEW."purchaseId", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.completionYear', ARRAY[OLD."projectId"::uuid, NEW."projectId"::uuid]);
+  END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint
 DROP TRIGGER IF EXISTS "Expense_derived_mark" ON "Expense";--> statement-breakpoint
@@ -279,6 +293,86 @@ END $$;--> statement-breakpoint
 DROP TRIGGER IF EXISTS "ProductUnitMapping_derived_mark" ON "ProductUnitMapping";--> statement-breakpoint
 CREATE TRIGGER "ProductUnitMapping_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "ProductUnitMapping"
   FOR EACH ROW EXECUTE FUNCTION derived_mark_productunitmapping();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION derived_mark_project() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."id", OLD."startDate", OLD."endDate", OLD."status", OLD."parentProjectId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."startDate", NEW."endDate", NEW."status", NEW."parentProjectId", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.startDate', ARRAY[OLD."id"::uuid, NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[NEW."parentProjectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[OLD."parentProjectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."parentProjectId", OLD."startDate", OLD."endDate", OLD."status", OLD."deletedAt") IS DISTINCT FROM (NEW."parentProjectId", NEW."startDate", NEW."endDate", NEW."status", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.startDate', ARRAY[OLD."parentProjectId"::uuid, NEW."parentProjectId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."id", OLD."startDate", OLD."endDate", OLD."status", OLD."parentProjectId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."startDate", NEW."endDate", NEW."status", NEW."parentProjectId", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.completionYear', ARRAY[OLD."id"::uuid, NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[NEW."parentProjectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[OLD."parentProjectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."parentProjectId", OLD."startDate", OLD."endDate", OLD."status", OLD."deletedAt") IS DISTINCT FROM (NEW."parentProjectId", NEW."startDate", NEW."endDate", NEW."status", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.completionYear', ARRAY[OLD."parentProjectId"::uuid, NEW."parentProjectId"::uuid]);
+  END IF;
+  RETURN NULL;
+END $$;--> statement-breakpoint
+DROP TRIGGER IF EXISTS "Project_derived_mark" ON "Project";--> statement-breakpoint
+CREATE TRIGGER "Project_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "Project"
+  FOR EACH ROW EXECUTE FUNCTION derived_mark_project();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION derived_mark_purchase() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[NEW."defaultProjectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[OLD."defaultProjectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."defaultProjectId", OLD."date", OLD."deletedAt") IS DISTINCT FROM (NEW."defaultProjectId", NEW."date", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.startDate', ARRAY[OLD."defaultProjectId"::uuid, NEW."defaultProjectId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[NEW."defaultProjectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[OLD."defaultProjectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."defaultProjectId", OLD."date", OLD."deletedAt") IS DISTINCT FROM (NEW."defaultProjectId", NEW."date", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.completionYear', ARRAY[OLD."defaultProjectId"::uuid, NEW."defaultProjectId"::uuid]);
+  END IF;
+  RETURN NULL;
+END $$;--> statement-breakpoint
+DROP TRIGGER IF EXISTS "Purchase_derived_mark" ON "Purchase";--> statement-breakpoint
+CREATE TRIGGER "Purchase_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "Purchase"
+  FOR EACH ROW EXECUTE FUNCTION derived_mark_purchase();--> statement-breakpoint
+CREATE OR REPLACE FUNCTION derived_mark_task() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[NEW."projectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.startDate', ARRAY[OLD."projectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."projectId", OLD."dueDate", OLD."dueEndDate", OLD."status", OLD."deletedAt") IS DISTINCT FROM (NEW."projectId", NEW."dueDate", NEW."dueEndDate", NEW."status", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.startDate', ARRAY[OLD."projectId"::uuid, NEW."projectId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[NEW."projectId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('project.completionYear', ARRAY[OLD."projectId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."projectId", OLD."dueDate", OLD."dueEndDate", OLD."status", OLD."deletedAt") IS DISTINCT FROM (NEW."projectId", NEW."dueDate", NEW."dueEndDate", NEW."status", NEW."deletedAt") THEN
+    PERFORM derived_mark('project.completionYear', ARRAY[OLD."projectId"::uuid, NEW."projectId"::uuid]);
+  END IF;
+  RETURN NULL;
+END $$;--> statement-breakpoint
+DROP TRIGGER IF EXISTS "Task_derived_mark" ON "Task";--> statement-breakpoint
+CREATE TRIGGER "Task_derived_mark" AFTER INSERT OR UPDATE OR DELETE ON "Task"
+  FOR EACH ROW EXECUTE FUNCTION derived_mark_task();--> statement-breakpoint
 INSERT INTO "Job" (key, kind, input, state) VALUES ('derived:drain', 'derived.drain', '{}'::jsonb, 'queued'), ('derived:reconcile', 'derived.reconcile', '{}'::jsonb, 'completed') ON CONFLICT (key) DO NOTHING;--> statement-breakpoint
 INSERT INTO "JobInvalidation" (key, "restartsPass") VALUES ('derived:drain', false) ON CONFLICT (key) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.price', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
@@ -286,4 +380,6 @@ INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.ledgerExpecte
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.quantityVariance', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'location.valuationRollup', t.id, 1 FROM "Location" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'inventory.valuation', t.id, 1 FROM "InventoryEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.startDate', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'project.completionYear', t.id, 1 FROM "Project" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 -- derived:end
