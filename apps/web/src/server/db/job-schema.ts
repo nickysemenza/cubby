@@ -15,6 +15,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -113,3 +114,19 @@ export const jobInvalidation = pgTable("JobInvalidation", {
   restartsPass: boolean("restartsPass").notNull(),
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 });
+
+/**
+ * When each `JobInvalidation` revision was captured, append-only: a capture
+ * inserts its revision here and nothing updates a row. Health dates a Job's
+ * outstanding work from its first revision past `observedRevision`, so later
+ * captures cannot reset the pending age; retention deletes observed rows.
+ */
+export const jobInvalidationCapture = pgTable(
+  "JobInvalidationCapture",
+  {
+    key: text("key").notNull(),
+    revision: bigint("revision", { mode: "number" }).notNull(),
+    capturedAt: timestamp("capturedAt", { mode: "date" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.key, table.revision] })],
+);

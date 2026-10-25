@@ -108,6 +108,8 @@ const kindHealth = z.object({
   lane: jobLane,
   due: z.number().int().nonnegative(),
   oldestDueSeconds: z.number().int().nonnegative().nullable(),
+  /** Due Jobs no claim served for the whole claim window. */
+  unclaimedDue: z.number().int().nonnegative(),
   claimsPerMinute: z.number().nonnegative(),
   dueGrowth: z.number().int().nullable(),
   expiredLeases: z.number().int().nonnegative(),

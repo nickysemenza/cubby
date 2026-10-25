@@ -1,1 +1,0 @@
-ALTER TABLE "Device" ADD COLUMN "appleIntelligenceAvailable" boolean;

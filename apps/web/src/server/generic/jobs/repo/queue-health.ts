@@ -4,7 +4,7 @@ import { and, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import type { QueueHealthSnapshot } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
+import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import {
   jobDue,
@@ -44,13 +44,19 @@ export async function measureQueueHealth(
   // The drain's own predicate, so invalidation-woken Jobs count as due.
   const due = jobDue(now);
   const woken = unobservedJobInvalidation();
-  // When each due Job became due: an unobserved capture wakes it at the
-  // marker's write, an expired lease at its expiry.
+  // When each due Job became due: an unobserved capture wakes it at its
+  // first revision past `observedRevision` (later captures keep that start;
+  // the marker's own write time only dates history from before the capture
+  // log), an expired lease at its expiry.
   const dueSince = sql`(CASE
-    WHEN ${woken} AND (${job.state} = ${jobState.enum.completed} OR ${job.availableAt} > ${at})
-      THEN (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key)
+    WHEN ${woken} AND (${job.state} IN (${jobState.enum.completed}, ${jobState.enum.failed}) OR ${job.availableAt} > ${at})
+      THEN coalesce(
+        (SELECT min(c."capturedAt") FROM "JobInvalidationCapture" c
+          WHERE c.key = "Job".key AND c.revision > coalesce("Job"."observedRevision", 0)),
+        (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key))
     WHEN ${job.state} = ${jobState.enum.running} THEN ${job.leaseExpiresAt}
     ELSE ${job.availableAt} END)`;
+  const windowStart = sql`${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute'`;
   const rows = await getDb(db)
     .select({
       kind: job.kind,
@@ -58,14 +64,16 @@ export async function measureQueueHealth(
       oldestDueSeconds: sql<
         number | null
       >`extract(epoch FROM ${at} - min(${dueSince}) FILTER (WHERE ${due}))::int`,
-      recentClaims: sql<number>`count(*) FILTER (WHERE ${job.lastClaimedAt} > ${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute')::int`,
+      // Still due though due since before the window: no claim served it.
+      unclaimedDue: sql<number>`count(*) FILTER (WHERE ${due} AND ${dueSince} <= ${windowStart})::int`,
+      recentClaims: sql<number>`count(*) FILTER (WHERE ${job.lastClaimedAt} > ${windowStart})::int`,
       expiredLeases: sql<number>`count(*) FILTER (WHERE ${job.state} = ${jobState.enum.running} AND ${job.leaseExpiresAt} <= ${at})::int`,
       queued: sql<number>`count(*) FILTER (WHERE ${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}))::int`,
     })
     .from(job)
     .where(
       sql`${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running})
-        OR ${job.lastClaimedAt} > ${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute'
+        OR ${job.lastClaimedAt} > ${windowStart}
         OR ${due}`,
     )
     .groupBy(job.kind)
@@ -80,6 +88,7 @@ export async function measureQueueHealth(
       lane: jobKindPolicy(row.kind).lane,
       due: row.due,
       oldestDueSeconds: row.oldestDueSeconds,
+      unclaimedDue: row.unclaimedDue,
       claimsPerMinute: row.recentClaims / CLAIM_WINDOW_MINUTES,
       dueGrowth: prior === undefined ? null : row.due - prior,
       expiredLeases: row.expiredLeases,
@@ -113,11 +122,19 @@ export function queueAlerts(
         code: "oldest_due",
         evidence: `oldest due ${kind.oldestDueSeconds}s; ${kind.due} due; ${kind.claimsPerMinute} claims/min`,
       });
-    if (policy.drained && kind.due > 0 && kind.claimsPerMinute === 0)
+    // Claims of one Job do not cover another: a Job unserved for the whole
+    // window while the kind's claims could have served every due Job was
+    // passed over, not queued behind a backlog.
+    const claims = kind.claimsPerMinute * CLAIM_WINDOW_MINUTES;
+    if (
+      policy.drained &&
+      kind.due > 0 &&
+      (claims === 0 || (kind.unclaimedDue > 0 && claims >= kind.due))
+    )
       alerts.push({
         kind: kind.kind,
         code: "no_claims",
-        evidence: `${kind.due} due; 0 claims in ${CLAIM_WINDOW_MINUTES} min`,
+        evidence: `${kind.due} due; ${kind.unclaimedDue} unclaimed for ${CLAIM_WINDOW_MINUTES} min; ${claims} claims in ${CLAIM_WINDOW_MINUTES} min`,
       });
     if (kind.dueGrowth !== null && kind.dueGrowth >= T.dueGrowth)
       alerts.push({
@@ -205,5 +222,26 @@ export async function pruneFinishedJobs(
     .delete(job)
     .where(inArray(job.id, doomed))
     .returning({ id: job.id });
+  return deleted.length;
+}
+
+/**
+ * Delete one bounded batch of capture times every claim of their Job has
+ * observed. Captures only insert newer revisions, so this never races one.
+ */
+export async function pruneObservedInvalidationCaptures(
+  db: Database,
+  { limit }: { limit: number },
+): Promise<number> {
+  const doomed = sql`SELECT c.key, c.revision FROM "JobInvalidationCapture" c
+    JOIN "Job" j ON j.key = c.key
+    WHERE c.revision <= coalesce(j."observedRevision", 0) LIMIT ${limit}`;
+  const deleted = await getDb(db)
+    .delete(jobInvalidationCapture)
+    // Qualified by hand: drizzle renders bare column names in some statements.
+    .where(
+      sql`("JobInvalidationCapture".key, "JobInvalidationCapture".revision) IN (${doomed})`,
+    )
+    .returning({ key: jobInvalidationCapture.key });
   return deleted.length;
 }

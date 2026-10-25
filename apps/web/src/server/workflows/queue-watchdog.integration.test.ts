@@ -9,6 +9,7 @@ import {
   imageProcessingJob,
   job,
   jobInvalidation,
+  jobInvalidationCapture,
   run,
 } from "~/server/db/schema";
 import {
@@ -29,6 +30,7 @@ import {
   JOB_RETENTION_MS,
   measureQueueHealth,
   pruneFinishedJobs,
+  pruneObservedInvalidationCaptures,
 } from "~/server/generic/jobs/repo/queue-health";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
@@ -370,5 +372,23 @@ describe("queue watchdog, explain and retention", () => {
         (row) => row.key,
       ),
     ).toContain("synthetic.old-failed");
+  });
+
+  it("prunes only capture times every claim of their Job observed", async () => {
+    for (let capture = 0; capture < 3; capture++)
+      await invalidateRefreshFamily(ctx.db, "search");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ observedRevision: 2 })
+      .where(eq(job.key, "refresh:search"));
+    expect(
+      await pruneObservedInvalidationCaptures(ctx.db, { limit: 100 }),
+    ).toBe(2);
+    expect(
+      await getDb(ctx.db)
+        .select({ revision: jobInvalidationCapture.revision })
+        .from(jobInvalidationCapture)
+        .where(eq(jobInvalidationCapture.key, "refresh:search")),
+    ).toEqual([{ revision: 3 }]);
   });
 });

@@ -1,7 +1,7 @@
 export { entityQuality, entityQualityCheck } from "./entity-quality-schema";
 export { assessmentEmailLink } from "./assessment-email-link-schema";
 export { assessmentCorrectionLock } from "./assessment-correction-lock-schema";
-export { job, jobInvalidation } from "./job-schema";
+export { job, jobInvalidation, jobInvalidationCapture } from "./job-schema";
 import {
   aiAnalysisEntityKind,
   type AiAnalysisEntityKind,

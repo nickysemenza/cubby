@@ -33,7 +33,11 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { job, jobInvalidation } from "~/server/db/retained-tables";
+import {
+  job,
+  jobInvalidation,
+  jobInvalidationCapture,
+} from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
 import {
@@ -142,11 +146,14 @@ export async function enqueueJob(
 /**
  * A durable invalidation this Job has not observed yet (`JobInvalidation`):
  * outstanding work even while the Job row itself reads `completed`.
+ * `restartsPass` narrows it to markers whose captures restart a pass.
  */
-export const unobservedJobInvalidation = () =>
+export const unobservedJobInvalidation = (
+  options: { restartsPass?: true } = {},
+) =>
   // Qualified by hand: drizzle renders bare column names in some statements,
   // which inside this subquery would compare the marker with itself.
-  sql<boolean>`EXISTS (SELECT 1 FROM "JobInvalidation" ji WHERE ji.key = "Job".key AND ji.revision > coalesce("Job"."observedRevision", 0))`;
+  sql<boolean>`EXISTS (SELECT 1 FROM "JobInvalidation" ji WHERE ji.key = "Job".key AND ji.revision > coalesce("Job"."observedRevision", 0)${options.restartsPass ? sql` AND ji."restartsPass"` : sql``})`;
 
 /** Whether a Job is claimable now: the one predicate the drain, claims and health share. */
 export const jobDue = (now: Date) => due(now);
@@ -163,6 +170,16 @@ const due = (now: Date) =>
       inArray(job.state, ["queued", "retry_wait", "completed"]),
       unobservedJobInvalidation(),
     ),
+    // Failure is no stop for new input: execution reads the marker before a
+    // terminal write, so a capture can commit in between, and no transaction
+    // shape closes that window without the capture touching the Job row.
+    // Waking failed Jobs the restarting capture did not see makes the order
+    // irrelevant; the claim starts a fresh pass. Paused and cancelled are
+    // member stops and never wake.
+    and(
+      eq(job.state, "failed"),
+      unobservedJobInvalidation({ restartsPass: true }),
+    ),
   );
 
 /**
@@ -177,18 +194,27 @@ export async function recordJobInvalidation(
   input: Omit<EnqueueJobInput, "invalidate"> & { restartsPass: boolean },
 ) {
   const { restartsPass, ...enqueue } = input;
-  const [marker] = await repositoryQueries(db)
+  const capturedAt = new Date();
+  const client = repositoryQueries(db);
+  const [marker] = await client
     .insert(jobInvalidation)
-    .values({ key: enqueue.key, restartsPass })
+    .values({ key: enqueue.key, restartsPass, updatedAt: capturedAt })
     .onConflictDoUpdate({
       target: jobInvalidation.key,
       set: {
         revision: sql`${jobInvalidation.revision} + 1`,
-        updatedAt: new Date(),
+        updatedAt: capturedAt,
       },
     })
     .returning({ revision: jobInvalidation.revision });
-  if (marker?.revision === 1) await enqueueJob(db, enqueue);
+  if (!marker) throw new Error(`Invalidation of ${enqueue.key} not recorded`);
+  // Append-only, so health can date the first revision a claim has not
+  // observed without either side reading the other's row.
+  await client
+    .insert(jobInvalidationCapture)
+    .values({ key: enqueue.key, revision: marker.revision, capturedAt })
+    .onConflictDoNothing();
+  if (marker.revision === 1) await enqueueJob(db, enqueue);
 }
 
 /** Expiry revokes ownership; it never reclaims a live lease for another execution. */
@@ -365,6 +391,10 @@ export async function claimJob(
       available.cursor = null;
       available.result = null;
       available.error = null;
+      // A fresh pass also gets a fresh recovery window; otherwise a woken
+      // stalled Job would fail again at once and wake again on every drain.
+      if (available.recoveryTimeoutMs !== null)
+        available.lastUsefulProgressAt = now;
     }
     const { retry } = jobKindPolicy(available.kind);
     const stalled =
@@ -416,6 +446,7 @@ export async function claimJob(
           result: null,
           error: null,
           observedRevision: marker.revision,
+          lastUsefulProgressAt: available.lastUsefulProgressAt,
         }),
       })
       .where(eq(job.id, id))

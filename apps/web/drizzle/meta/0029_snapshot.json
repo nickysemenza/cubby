@@ -1,5 +1,5 @@
 {
-  "id": "fce82b0a-8a61-48a3-ac6f-bf1f4ecde607",
+  "id": "d57367e7-2445-4932-8e66-6c06c3f3898f",
   "prevId": "46194957-0f00-458d-a363-c77de03c8ebc",
   "version": "7",
   "dialect": "postgresql",
@@ -2826,6 +2826,45 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.JobInvalidationCapture": {
+      "name": "JobInvalidationCapture",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capturedAt": {
+          "name": "capturedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "JobInvalidationCapture_key_revision_pk": {
+          "name": "JobInvalidationCapture_key_revision_pk",
+          "columns": [
+            "key",
+            "revision"
+          ]
+        }
+      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -6380,12 +6419,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
-        },
-        "appleIntelligenceAvailable": {
-          "name": "appleIntelligenceAvailable",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": false
         },
         "ledgerPartyId": {
           "name": "ledgerPartyId",

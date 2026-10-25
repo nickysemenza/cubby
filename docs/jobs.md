@@ -101,6 +101,15 @@ would never settle, because the pass's own Run records invalidate quality. Publi
 a page whose pass began before a capture, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
 dies is never lost: the finished or reclaimed Job still trails the marker.
+Failure does not end a restarting family either: execution reads the marker
+before its terminal write, so a capture can commit in between, and a failed
+Job trailing a restarting marker is due again with a fresh pass and recovery
+window. Paused and cancelled Jobs are member stops and never wake.
+
+Each capture also appends its revision and time to `JobInvalidationCapture`.
+Health dates a woken Job from its first revision past `observedRevision`, so
+repeated captures keep the original pending start; retention deletes rows a
+claim has observed.
 
 ## Retries
 
@@ -196,13 +205,17 @@ The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
 first repairs image execution in bounded batches (retires moot work, reopens
 legacy leased rows, restarts stopped executions of open rows), then measures
 per-kind due count, oldest due age, claims per minute, due growth, expired
-leases and image/Job disagreement against `QUEUE_ALERT_THRESHOLDS`. New
+leases and image/Job disagreement against `QUEUE_ALERT_THRESHOLDS`.
+`no_claims` fires when a drained kind with due work had no claims in the
+window, or when a Job stayed due through the whole window although the
+kind's claims could have served every due Job (claims of one family do not
+cover another). New
 alerts log at error level with raw numbers; Activity reads them through
 `job.health`. There is no household push channel for them: push
 registrations exist only per photo Run.
 
 The `jobs.retention` Job prunes completed and cancelled Jobs older than
-`JOB_RETENTION_MS` in bounded batches. Failed Jobs, embedding Jobs (their
+`JOB_RETENTION_MS`, and observed capture times, in bounded batches. Failed Jobs, embedding Jobs (their
 cleanup reads finished rows), and all domain evidence (image attempts, AI
 evaluations, Run history, audit) stay.
 

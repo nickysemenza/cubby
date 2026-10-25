@@ -17,6 +17,7 @@ import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   measureQueueHealth,
   pruneFinishedJobs,
+  pruneObservedInvalidationCaptures,
 } from "~/server/generic/jobs/repo/queue-health";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
@@ -75,18 +76,23 @@ export const queueWatchdogHandler = defineJobHandler(
   },
 );
 
-/** Prune finished Job rows in bounded batches; domain evidence stays. */
+/**
+ * Prune finished Job rows and observed invalidation capture times in bounded
+ * batches; domain evidence stays.
+ */
 export const jobRetentionHandler = defineJobHandler(
   z.object({}),
   async (db) => {
     const pruned = await pruneFinishedJobs(db, { limit: RETENTION_BATCH });
+    const captures = await pruneObservedInvalidationCaptures(db, {
+      limit: RETENTION_BATCH,
+    });
+    const more = pruned >= RETENTION_BATCH || captures >= RETENTION_BATCH;
     return {
       page: {
         done: false,
-        availableAt: new Date(
-          Date.now() + (pruned >= RETENTION_BATCH ? 0 : RETENTION_INTERVAL_MS),
-        ),
-        result: { pruned, prunedAt: new Date().toISOString() },
+        availableAt: new Date(Date.now() + (more ? 0 : RETENTION_INTERVAL_MS)),
+        result: { pruned, captures, prunedAt: new Date().toISOString() },
       },
     };
   },
