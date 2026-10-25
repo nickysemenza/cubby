@@ -31,15 +31,16 @@ import {
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import type {
+  ListBindingGroup,
+  ListProjection,
+} from "~/server/generic/list/repo/list-contracts";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { traceListGroup } from "~/server/observability/list-read-tracing";
 
 import { ListContext, derivedFieldsOf } from "./field-compiler";
 import { loadRelationProjection } from "./relation-projection";
 
-/** Repository batch bindings retain their local preparation names. They are never deferred reads. */
-export type ListBindingGroup = "media" | "quality" | "relations" | "derived";
 export const wantsListGroup = (
   projection: ListProjection,
   group: ListBindingGroup,

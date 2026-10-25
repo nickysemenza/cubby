@@ -2,8 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Entity } from "@cubby/schemas/entity";
 
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import type { ListBindingGroup } from "~/server/generic/list/repo/list-projection";
+import type {
+  ListBindingGroup,
+  ListProjection,
+} from "~/server/generic/list/repo/list-contracts";
 import { type AppSpan, withTrace } from "~/server/observability/tracing";
 
 interface ListReadTraceContext {
