@@ -59,20 +59,22 @@ describe("recipe totals cascade", () => {
     );
     const child = await createRecipe(
       ctx.db,
-      makeRecipeInput({
-        name: "Child",
+      {
+        ...makeRecipeInput({
+          name: "Child",
+          sections: [
+            {
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                ingredientRef(ingredient.shortcode, {
+                  amounts: [{ value: 2, unit: "each" }],
+                }),
+              ],
+            },
+          ],
+        }),
         yield: { value: 1, unit: "each" },
-        sections: [
-          {
-            instructions: [{ instruction: "Mix" }],
-            ingredients: [
-              ingredientRef(ingredient.shortcode, {
-                amounts: [{ value: 2, unit: "each" }],
-              }),
-            ],
-          },
-        ],
-      }),
+      },
       ctx.actor,
     );
     const subRecipe = (id: RecipeShortcode) => ({
@@ -83,30 +85,34 @@ describe("recipe totals cascade", () => {
     });
     const parent = await createRecipe(
       ctx.db,
-      makeRecipeInput({
-        name: "Parent",
+      {
+        ...makeRecipeInput({
+          name: "Parent",
+          sections: [
+            {
+              instructions: [{ instruction: "Use child" }],
+              ingredients: [subRecipe(child.id)],
+            },
+          ],
+        }),
         yield: { value: 1, unit: "each" },
-        sections: [
-          {
-            instructions: [{ instruction: "Use child" }],
-            ingredients: [subRecipe(child.id)],
-          },
-        ],
-      }),
+      },
       ctx.actor,
     );
     const grandparent = await createRecipe(
       ctx.db,
-      makeRecipeInput({
-        name: "Grandparent",
+      {
+        ...makeRecipeInput({
+          name: "Grandparent",
+          sections: [
+            {
+              instructions: [{ instruction: "Use parent" }],
+              ingredients: [subRecipe(parent.id)],
+            },
+          ],
+        }),
         yield: { value: 1, unit: "each" },
-        sections: [
-          {
-            instructions: [{ instruction: "Use parent" }],
-            ingredients: [subRecipe(parent.id)],
-          },
-        ],
-      }),
+      },
       ctx.actor,
     );
     const resolve = async (code: string) => {
