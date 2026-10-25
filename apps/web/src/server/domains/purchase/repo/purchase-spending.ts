@@ -53,6 +53,7 @@ type PurchaseSpendingPurchase = {
 type PurchaseSpendingLine = PurchaseSpendingLineInput & {
   id: ExpenseShortcode;
   name: string;
+  productQuantity: number | null;
 };
 
 /**
@@ -181,6 +182,7 @@ const loadLines = async (
       cost: expense.cost,
       date: expense.date,
       lineKind: expense.lineKind,
+      productQuantity: expense.productQuantity,
       future: expense.future,
     })
     .from(expense)
@@ -223,6 +225,7 @@ const loadLines = async (
       cost: row.cost,
       date: row.date,
       lineKind: row.lineKind,
+      productQuantity: row.productQuantity,
       future: row.future,
       claimDates: claimDates.get(row.uuid) ?? [],
     } satisfies PurchaseSpendingLine,

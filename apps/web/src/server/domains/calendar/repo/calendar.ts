@@ -22,6 +22,7 @@ import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import type { SQL } from "drizzle-orm";
 import {
   and,
+  eq,
   gte,
   inArray,
   isNotNull,
@@ -36,7 +37,15 @@ import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
-import { expense, project, task, meal, planting } from "~/server/db/schema";
+import {
+  expense,
+  expenseAttribution,
+  ledgerParty,
+  project,
+  task,
+  meal,
+  planting,
+} from "~/server/db/schema";
 import { expenseInheritanceReadExtras } from "~/server/domains/expense/repo/expense-inheritance";
 import { dbExpenseToAPI } from "~/server/domains/expense/repo/helpers";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -200,6 +209,7 @@ const loadCalendarExpenses = async (
       and(
         condition,
         or(isNull(expense.purchaseId), sql`${expense.future} = true`),
+        sql`NOT (coalesce(${expense.cost}, 0) = 0 AND coalesce(${expense.productQuantity}, 0) < 0)`,
         isNotNull(expense[calendarSources.spending.dates[0]]),
         gte(expense[calendarSources.spending.dates[0]], input.startDate),
         lte(expense[calendarSources.spending.dates[0]], endInclusive),
@@ -237,31 +247,42 @@ const loadCalendarPurchaseItems = async (
       ? await calendarSourceWhere(db, input, "spending")
       : undefined,
   });
-  return events.map((event) => ({
-    kind: "purchase",
-    id: event.purchase.id,
-    title: event.purchase.vendorName ?? event.purchase.title,
-    vendor: event.purchase.vendorName,
-    occurrence: event.occurrence,
-    startDate: event.date,
-    endDateExclusive: shiftPlainDate(event.date, 1),
-    interaction: "read-only",
-    cost: event.amount,
-    ledgerAmount: event.ledgerAmount,
-    basis: event.basis,
-    dateBasis: event.dateBasis,
-    evidenceNote:
-      event.ambiguities.length > 0
-        ? "Some refund evidence could not be matched uniquely. Review the full purchase."
-        : undefined,
-    lines: event.lines.map(({ line }) => ({
-      id: line.id,
-      name: line.name,
-      cost: line.cost,
-      productName: null,
-    })),
-    displayImages: [],
-  }));
+  return events
+    .filter(
+      (event) =>
+        !(
+          event.lines.length > 0 &&
+          event.lines.every(
+            ({ line }) =>
+              (line.cost ?? 0) === 0 && (line.productQuantity ?? 0) < 0,
+          )
+        ),
+    )
+    .map((event) => ({
+      kind: "purchase",
+      id: event.purchase.id,
+      title: event.purchase.vendorName ?? event.purchase.title,
+      vendor: event.purchase.vendorName,
+      occurrence: event.occurrence,
+      startDate: event.date,
+      endDateExclusive: shiftPlainDate(event.date, 1),
+      interaction: "read-only",
+      cost: event.amount,
+      ledgerAmount: event.ledgerAmount,
+      basis: event.basis,
+      dateBasis: event.dateBasis,
+      evidenceNote:
+        event.ambiguities.length > 0
+          ? "Some refund evidence could not be matched uniquely. Review the full purchase."
+          : undefined,
+      lines: event.lines.map(({ line }) => ({
+        id: line.id,
+        name: line.name,
+        cost: line.cost,
+        productName: null,
+      })),
+      displayImages: [],
+    }));
 };
 
 const loadCalendarProjects = async (
@@ -329,6 +350,10 @@ const mapTaskItems = async (
             status: value.status,
             trade: value.trade,
             projectName: value.projectName,
+            assignedProjectName:
+              row.fieldResolutions.projectId?.mode === "explicit"
+                ? value.projectName
+                : null,
             subjectProductName: value.subjectProductName,
             displayImages: [],
           },
@@ -521,14 +546,88 @@ export async function getCalendarRange(
     ...mapProjectItems(projectRows, projectDates, input),
     ...mapPlantingItems(plantingRows, input),
   ]);
+  const spendingLineCodes = [
+    ...new Set(
+      items.flatMap((item) =>
+        item.kind === "expense"
+          ? [item.id]
+          : item.kind === "purchase"
+            ? item.lines.map((line) => line.id)
+            : [],
+      ),
+    ),
+  ];
+  const spendingRows = spendingLineCodes.length
+    ? await getDb(db)
+        .select({
+          shortcode: expense.shortcode,
+          projectName: project.name,
+          partyName: ledgerParty.name,
+        })
+        .from(expense)
+        .leftJoin(
+          project,
+          and(eq(project.id, expense.projectId), notDeleted(project)),
+        )
+        .leftJoin(
+          expenseAttribution,
+          and(
+            eq(expenseAttribution.expenseId, expense.id),
+            eq(expenseAttribution.role, "beneficiary"),
+            notDeleted(expenseAttribution),
+          ),
+        )
+        .leftJoin(
+          ledgerParty,
+          and(
+            eq(ledgerParty.id, expenseAttribution.ledgerPartyId),
+            notDeleted(ledgerParty),
+          ),
+        )
+        .where(
+          and(
+            inArray(expense.shortcode, spendingLineCodes),
+            notDeleted(expense),
+          ),
+        )
+    : [];
+  const spendingByLine = new Map<string, typeof spendingRows>();
+  for (const row of spendingRows) {
+    const rows = spendingByLine.get(row.shortcode) ?? [];
+    rows.push(row);
+    spendingByLine.set(row.shortcode, rows);
+  }
   const covers = await resolvePublicEntityDisplayImageLists(
     db,
     items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
   );
-  const hydrated = items.map((item) => ({
-    ...item,
-    displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
-  }));
+  const hydrated = items.map((item) => {
+    const rows = (
+      item.kind === "expense"
+        ? [item.id]
+        : item.kind === "purchase"
+          ? item.lines.map((line) => line.id)
+          : []
+    ).flatMap((code) => spendingByLine.get(code) ?? []);
+    return {
+      ...item,
+      ...((item.kind === "expense" || item.kind === "purchase") && {
+        spendingContext: {
+          projectNames: [
+            ...new Set(
+              rows.flatMap((row) => (row.projectName ? [row.projectName] : [])),
+            ),
+          ].sort(),
+          partyNames: [
+            ...new Set(
+              rows.flatMap((row) => (row.partyName ? [row.partyName] : [])),
+            ),
+          ].sort(),
+        },
+      }),
+      displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
+    };
+  });
   return { items: hydrated, days: summarizeCalendarDays(input, hydrated) };
 }
 

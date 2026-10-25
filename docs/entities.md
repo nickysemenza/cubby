@@ -2052,6 +2052,12 @@ and edits still use canonical entity kinds and ids; occurrence keys distinguish
 Purchase originals, dated refunds, and Planting milestones in layout and day
 membership. Garden feed UIDs are unchanged.
 
+Calendar pills show explicitly assigned Projects (excluding inherited defaults)
+and spending beneficiary LedgerParty names, including the contributing lines
+of Purchase occurrences.
+Absent context has no placeholder. Spending omits discards (zero or unknown
+cost with negative product quantity); refunds and sales remain visible.
+
 Spending is computed from existing relationships, not stored. Batched Purchase
 evidence loaders feed pure TypeScript calculation functions; the calendar consumes
 the resulting events. Relationship metadata remains declarative and continues to

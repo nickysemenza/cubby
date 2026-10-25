@@ -102,7 +102,13 @@ export const calendarTaskItem = z.object({
   status: taskStatusSchema,
   trade: tradeSchema,
   projectName: z.string().nullable(),
+  assignedProjectName: z.string().nullable().optional(),
   subjectProductName: z.string().nullable(),
+});
+
+const calendarSpendingContext = z.object({
+  projectNames: z.array(z.string()),
+  partyNames: z.array(z.string()),
 });
 
 export const calendarExpenseItem = z.object({
@@ -117,6 +123,7 @@ export const calendarExpenseItem = z.object({
   trade: tradeSchema.nullable(),
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
+  spendingContext: calendarSpendingContext.optional(),
 });
 
 export const calendarPurchaseItem = z.object({
@@ -132,6 +139,7 @@ export const calendarPurchaseItem = z.object({
   basis: z.enum(["stated_total", "expense_lines", "settlement", "unknown"]),
   dateBasis: z.string(),
   evidenceNote: z.string().optional(),
+  spendingContext: calendarSpendingContext.optional(),
   lines: z.array(
     z.object({
       id: expenseShortcode,
