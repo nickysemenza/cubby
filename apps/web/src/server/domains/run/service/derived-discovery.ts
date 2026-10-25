@@ -1,10 +1,15 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { jobWaitReason } from "@cubby/schemas/job";
 import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { CONNECTION_ROSTER_PAGE } from "~/server/domains/run/repo/connection-refresh";
+import {
+  CONNECTION_DISCOVERY_PENDING_CAP,
+  CONNECTION_ROSTER_PAGE,
+  pendingConnectionEvaluations,
+} from "~/server/domains/run/repo/connection-refresh";
 import {
   claimDerivedDiscovery,
   prepareConnectionDiscoveryPage,
@@ -13,6 +18,8 @@ import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
+
+const DISCOVERY_BACKPRESSURE_MS = 5 * 60_000;
 
 const cursorSchema = z.object({
   after: z.string().nullable(),
@@ -32,10 +39,24 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
     if (!activation?.enabled || !activation.manifest["entity-connections"])
       return { page: { done: true, result: { outcome: "disabled" } } };
     const previous = cursorSchema.parse(claim.cursor ?? { after: null });
+    // Backpressure: hold the cursor until the evaluation backlog drains.
+    if (
+      (await pendingConnectionEvaluations(db)) >=
+      CONNECTION_DISCOVERY_PENDING_CAP
+    )
+      return {
+        page: {
+          done: false,
+          cursor: previous,
+          waitUntil: new Date(Date.now() + DISCOVERY_BACKPRESSURE_MS),
+          waitReason: jobWaitReason.enum.rate_limit,
+        },
+      };
     const page = await prepareConnectionDiscoveryPage(db, {
       runId: previous.runId,
       after: previous.after,
       limit: CONNECTION_ROSTER_PAGE,
+      newestFirst: true,
       createRun: (tx) =>
         ensureRun(tx, systemActor(), {
           purpose: "connection_discovery",

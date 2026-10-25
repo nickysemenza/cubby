@@ -10,11 +10,13 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   gt,
   inArray,
   isNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 
@@ -141,6 +143,11 @@ export async function scheduleConnectionRefresh(
 type RosterInput = {
   after: string | null;
   limit: number;
+  /**
+   * Routine discovery walks newest records first so current data is evaluated
+   * before a backfill reaches old rows; `after` is then a `createdAt|id` cursor.
+   */
+  newestFirst?: boolean;
   entityKinds?: readonly string[];
   /** The population cutoff a Sweep step froze with its count. */
   createdBefore?: Date | null;
@@ -178,7 +185,7 @@ async function connectionRosterTargets(db: Database, input: RosterInput) {
       snapshot: record.source,
     })),
     scanned: page.length,
-    next: page.length === input.limit ? (page.at(-1)?.id ?? null) : null,
+    next: page.length === input.limit ? (page.at(-1)?.cursor ?? null) : null,
   };
 }
 
@@ -208,8 +215,10 @@ export async function prepareConnectionDiscoveryRoster(
   },
 ) {
   const page = await connectionRosterTargets(db, input);
+  // A cancelled or failed Run in the cursor never receives more work.
+  const current = input.runId && (await runIsActive(db, input.runId));
   const runId =
-    input.runId ??
+    (current ? input.runId : null) ??
     ((await hasAdmissibleTarget(db, page.targets))
       ? await input.createRun(db)
       : null);
@@ -221,6 +230,34 @@ export async function prepareConnectionDiscoveryRoster(
 
 /** Records one connection roster page queues, for Sweeps and routine discovery alike. */
 export const CONNECTION_ROSTER_PAGE = 25;
+
+/**
+ * Routine discovery pauses while this many connection evaluations wait, so a
+ * first pass over every record (~55k once) drains at queue pace instead of
+ * flooding it. The pass keeps its cursor and resumes when the backlog drops.
+ */
+export const CONNECTION_DISCOVERY_PENDING_CAP = 250;
+
+export async function pendingConnectionEvaluations(db: Database) {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(aiEvaluation)
+    .where(
+      and(
+        eq(aiEvaluation.feature, "entity-connections"),
+        inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
+      ),
+    );
+  return row?.count ?? 0;
+}
+
+async function runIsActive(db: Database, runId: RunId) {
+  const [row] = await getDb(db)
+    .select({ status: run.status })
+    .from(run)
+    .where(and(eq(run.id, runId), notDeleted(run)));
+  return row?.status === "running" || row?.status === "paused";
+}
 
 /** How many sources a connection Sweep's scope covers; the roster pages the same predicate. */
 export async function countConnectionSweepSources(
@@ -257,28 +294,48 @@ export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
 /** Cursor coverage includes records without stock or prior acquisition. */
 async function connectionDiscoveryRecords(
   db: Database,
-  { after, limit, entityKinds, createdBefore }: RosterInput,
+  { after, limit, entityKinds, createdBefore, newestFirst }: RosterInput,
 ) {
+  // Entity ids are random, so newest-first pages by (createdAt, id).
+  const [afterCreatedAt, afterId] =
+    newestFirst && after ? after.split("|") : [];
   const rows = await getDb(db)
     .select({
       id: entityIdentity.id,
       entity: entityIdentity.kind,
       shortcode: entityIdentity.shortcode,
+      // Text keeps microseconds; a Date cursor would skip same-millisecond rows.
+      createdAt: sql<string>`${entityIdentity.createdAt}::text`,
     })
     .from(entityIdentity)
     .where(
       and(
         sourcePredicate(entityKinds, createdBefore),
-        after ? gt(entityIdentity.id, after) : undefined,
+        !after
+          ? undefined
+          : newestFirst && afterCreatedAt && afterId
+            ? or(
+                sql`${entityIdentity.createdAt} < ${afterCreatedAt}::timestamp`,
+                and(
+                  sql`${entityIdentity.createdAt} = ${afterCreatedAt}::timestamp`,
+                  sql`${entityIdentity.id} < ${afterId}::uuid`,
+                ),
+              )
+            : gt(entityIdentity.id, after),
       ),
     )
-    .orderBy(asc(entityIdentity.id))
+    .orderBy(
+      ...(newestFirst
+        ? [desc(entityIdentity.createdAt), desc(entityIdentity.id)]
+        : [asc(entityIdentity.id)]),
+    )
     .limit(limit);
   return rows.flatMap((row) =>
     row.shortcode
       ? [
           {
             id: row.id,
+            cursor: newestFirst ? `${row.createdAt}|${row.id}` : row.id,
             source: {
               entityKind: entitySchema.parse(row.entity),
               entityId: row.shortcode,
