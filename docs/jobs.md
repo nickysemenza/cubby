@@ -143,10 +143,13 @@ after a capture; only a completed Job, or a restarting marker, wakes at once. Re
 ever finishing under ordinary household writes (search reached generation
 ~29k with new records unindexed); `image.device.wake` still restarts.
 Refresh families never exhaust: a failing page backs off (1 min doubling to
-15 min) and resumes. A never-exhausted kind has no terminal failure, so a
-`failed` row (an older build's final attempt, written even after the policy
-migration) is due again once available; paused and cancelled remain member
-stops. Publication of a restarting kind rereads the marker and supersedes
+15 min) and resumes. Never-exhausted kinds (`NEVER_EXHAUSTED_JOB_KINDS`) have
+no terminal failure at all: the `Job_never_exhausted_failure` trigger (0033)
+stores any `failed` write of one, such as an older build's final attempt, as
+`retry_wait` with its error and attempts, at least a minute out; a guard test
+keeps its kind list equal to the policy. Paused and cancelled remain member
+stops. The watchdog arms the existing device wake while parked device work
+exists, so device work an older build backed off without a wake still rings. Publication of a restarting kind rereads the marker and supersedes
 a page whose pass began before a capture, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
 dies is never lost: the finished or reclaimed Job still trails the marker.

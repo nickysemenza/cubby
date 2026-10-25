@@ -176,15 +176,6 @@ const due = (now: Date) =>
       inArray(job.state, ["queued", "retry_wait"]),
       unobservedJobInvalidation({ restartsPass: true }),
     ),
-    // A never-exhausted kind has no terminal failure; a failed row (written
-    // by an older build's final attempt) is due like any waiting one.
-    NEVER_EXHAUSTED_JOB_KINDS.length
-      ? and(
-          eq(job.state, "failed"),
-          inArray(job.kind, [...NEVER_EXHAUSTED_JOB_KINDS]),
-          lte(job.availableAt, now),
-        )
-      : undefined,
     // Failure is no stop for new input: execution reads the marker before a
     // terminal write, so a capture can commit in between, and no transaction
     // shape closes that window without the capture touching the Job row.

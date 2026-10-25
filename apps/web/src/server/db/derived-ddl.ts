@@ -4,6 +4,7 @@ import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-schema
 import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 
 import { assessmentHistoryDdl, statementSuggestionDdl } from "./assessment-ddl";
+import { jobNeverExhaustedDdl } from "./job-never-exhausted-ddl";
 import { productBrandDdl } from "./product-brand-ddl";
 
 /**
@@ -61,5 +62,5 @@ const classificationConstraintSql = (): string =>
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${productBrandDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n`;
+  return `${productBrandDdl()}\n\n${jobNeverExhaustedDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${assessmentHistoryDdl()}\n\n${statementSuggestionDdl()}\n`;
 }

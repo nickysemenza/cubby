@@ -100,16 +100,15 @@ export async function parkedDeviceWork(
     due: boolean | null;
     next: number | null;
   }>(sql`SELECT
-      bool_or((state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.failed}) AND "availableAt" <= ${at})
+      bool_or((state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "availableAt" <= ${at})
         OR (state = ${jobState.enum.running} AND "leaseExpiresAt" <= ${at})) AS due,
       -- Epoch milliseconds: the driver would read a zoneless timestamp as local time.
       (extract(epoch FROM min(CASE
-        WHEN state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.failed}) AND "availableAt" > ${at} THEN "availableAt"
+        WHEN state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "availableAt" > ${at} THEN "availableAt"
         WHEN state = ${jobState.enum.running} AND "leaseExpiresAt" > ${at} THEN "leaseExpiresAt" END)) * 1000)::float8 AS next
     FROM "Job"
     WHERE kind = 'image.device'
-      -- Image work never ends failed: a failed row is due once available.
-      AND state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.failed})`);
+      AND state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running})`);
   const row = result.rows[0];
   return {
     due: row?.due ?? false,

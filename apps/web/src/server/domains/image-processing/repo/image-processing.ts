@@ -91,6 +91,7 @@ import {
 } from "./image-processing-history";
 import {
   armDeviceWake,
+  parkedDeviceWork,
   ringImageProcessingCompanionsAfterCommit,
 } from "./image-processing-ring";
 
@@ -693,14 +694,8 @@ export async function claimImageProcessingJob(
                     ? eq(durableJob.kind, "image.device")
                     : undefined,
                   or(
-                    // Image work never ends failed; an older build's failed
-                    // row is claimable once its time comes.
                     and(
-                      inArray(durableJob.state, [
-                        "queued",
-                        "retry_wait",
-                        "failed",
-                      ]),
+                      inArray(durableJob.state, ["queued", "retry_wait"]),
                       lte(durableJob.availableAt, now),
                     ),
                     and(
@@ -1072,15 +1067,11 @@ export const retryBackingOffDeviceWork = (db: Database) =>
     )!,
   );
 
-/**
- * Open rows whose execution is missing or stopped: work no executor would
- * reach. A failed image execution is not stopped: image kinds never exhaust,
- * so it is due again once available, keeping its attempts and backoff.
- */
+/** Open rows whose execution is missing or stopped: work no executor would reach. */
 const strandedImageWork =
   () => sql<boolean>`${imageProcessingJob.state} = ${imageProcessingJobState.enum.pending}
   AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || "ImageProcessingJob".id::text
-    AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.failed}))`;
+    AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}))`;
 
 /** Open image rows without a live execution: the watchdog's disagreement count. */
 export async function countStrandedImageProcessing(db: Database) {
@@ -1102,6 +1093,11 @@ export async function repairImageProcessingExecution(
   limit: number,
 ) {
   const retired = await retireObsoleteImageProcessingJobs(db, { limit });
+  // Device work an older build backed off never armed the wake, and the
+  // drain never claims it; arming the existing wake while parked work exists
+  // keeps it from idling until an unrelated ring or reconnect.
+  const parked = await parkedDeviceWork(db, new Date());
+  if (parked.due || parked.next) await armDeviceWake(db);
   // Rows a pre-cutover writer left leased or device-waiting are open work.
   const reopened = await getDb(db)
     .update(imageProcessingJob)
@@ -1135,7 +1131,10 @@ export async function repairImageProcessingExecution(
     const keys = stranded.map((row) => imageProcessingJobKey(row.id));
     await retryJobsNow(
       db,
-      and(inArray(durableJob.key, keys), eq(durableJob.state, "cancelled"))!,
+      and(
+        inArray(durableJob.key, keys),
+        inArray(durableJob.state, ["failed", "cancelled"]),
+      )!,
     );
     // A finished or paused execution of open work restarts too.
     await getDb(db)

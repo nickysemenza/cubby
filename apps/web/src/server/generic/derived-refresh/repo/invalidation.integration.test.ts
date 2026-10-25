@@ -248,13 +248,13 @@ describe("durable family invalidation", () => {
 
   // Review finding: an older Worker holding a family's final attempt across
   // the policy migration writes `failed` after it; nothing woke the family,
-  // because its marker no longer restarts and repeats skip failed Jobs.
+  // because its marker no longer restarts and repeats skip failed Jobs. The
+  // database stores that write as a backoff instead.
   it("resumes a family an older build failed after the policy change", async () => {
     const searchJob = await family("search");
     await invalidateRefreshFamily(ctx.db, "search");
     const claim = await claimJob(ctx.db, searchJob.id);
     if (!claim) throw new Error("Expected search claim");
-    // The older build's final-attempt failure, after a capture landed.
     await invalidateRefreshFamily(ctx.db, "search");
     await getDb(ctx.db)
       .update(job)
@@ -266,7 +266,16 @@ describe("durable family invalidation", () => {
         error: "Job exhausted attempts after interrupted execution",
       })
       .where(eq(job.id, searchJob.id));
-    expect(await due(searchJob.id)).toBe(true);
+    expect(await row(searchJob.id)).toMatchObject({
+      state: "retry_wait",
+      cursor: { at: "synthetic-later-page" },
+      error: "Job exhausted attempts after interrupted execution",
+    });
+    expect(await due(searchJob.id)).toBe(false);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(Date.now() - 1_000) })
+      .where(eq(job.id, searchJob.id));
     expect(await claimJob(ctx.db, searchJob.id)).toMatchObject({
       state: "running",
       cursor: { at: "synthetic-later-page" },

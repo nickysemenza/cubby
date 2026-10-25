@@ -1,5 +1,5 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,8 +15,10 @@ import {
   run,
 } from "~/server/db/schema";
 import {
+  claimImageProcessingJob,
   createTransparentDerivativeAndJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   imageProcessingLane,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -25,13 +27,14 @@ import {
   invalidateRefreshFamily,
   scheduleRefreshFamilies,
 } from "~/server/generic/derived-refresh/repo/families";
+import { NEVER_EXHAUSTED_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import {
   readJobQueue,
   readRunRollups,
   retryJobSet,
 } from "~/server/generic/jobs/repo/job-queue";
-import { enqueueJob, jobDue } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   JOB_RETENTION_MS,
   measureQueueHealth,
@@ -130,20 +133,12 @@ describe("queue watchdog, explain and retention", () => {
       .select({ id: imageProcessingJob.id, state: imageProcessingJob.state })
       .from(imageProcessingJob);
     expect(rows.every((row) => row.state === "pending")).toBe(true);
-    // Image work never ends failed: an older build's failed execution is due
-    // on its own availability, so repair leaves its attempts and backoff.
-    const failed = await execution(exhausted.jobId);
-    expect(failed).toMatchObject({
-      state: "failed",
+    // Image work never ends failed: the database stored the older build's
+    // failure as a backoff, which repair leaves with its error.
+    expect(await execution(exhausted.jobId)).toMatchObject({
+      state: "retry_wait",
       error: "Job exhausted attempts",
     });
-    // Due by the shared predicate; device pulls, not the drain, claim it.
-    expect(
-      await getDb(ctx.db)
-        .select({ id: job.id })
-        .from(job)
-        .where(and(eq(job.id, failed!.id), jobDue(new Date()))),
-    ).toHaveLength(1);
     // The expired lease stays with its token: the next device pull reclaims it.
     expect(await execution(expired.jobId)).toMatchObject({
       state: "running",
@@ -158,6 +153,82 @@ describe("queue watchdog, explain and retention", () => {
         expiredLeases: 1,
       }),
     );
+  });
+
+  // Review finding: device work an older build backed off across the
+  // cutover had no wake armed; the drain never claims device work, an early
+  // pull found nothing, and the work idled until an unrelated ring.
+  it("arms the device wake for device work backing off without one", async () => {
+    const lift = await subjectLift();
+    const later = new Date(Date.now() + 10 * 60_000);
+    // The older build's failure: the database keeps it as a backoff.
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "failed",
+        attempts: 2,
+        error: "Synthetic older-build failure",
+        availableAt: later,
+      })
+      .where(eq(job.key, `image-processing:${lift.jobId}`));
+    await getDb(ctx.db).delete(job).where(eq(job.key, "image.device.wake"));
+    await getDb(ctx.db)
+      .delete(jobInvalidation)
+      .where(eq(jobInvalidation.key, "image.device.wake"));
+    // An early pull finds nothing.
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        kinds: ["subject_lift"],
+        leaseMs: 60_000,
+        processorRevisions: [IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION],
+      }),
+    ).toBeNull();
+    expect(await runWatchdog()).toBe("succeeded");
+    const [wake] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "image.device.wake"));
+    if (!wake) throw new Error("Expected the device wake");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, wake.id));
+    await advanceJob(ctx.db, wake.id, productionJobHandlers);
+    // The wake sleeps until the work comes due; the work keeps its counters.
+    const [scheduled] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.id, wake.id));
+    expect(scheduled?.availableAt.getTime()).toBe(later.getTime());
+    expect(await execution(lift.jobId)).toMatchObject({
+      state: "retry_wait",
+      attempts: 2,
+      error: "Synthetic older-build failure",
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(Date.now() - 1_000) })
+      .where(eq(job.key, `image-processing:${lift.jobId}`));
+    expect(
+      await claimImageProcessingJob(ctx.db, {
+        kinds: ["subject_lift"],
+        leaseMs: 60_000,
+        processorRevisions: [IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION],
+      }),
+    ).toMatchObject({ id: lift.jobId });
+    expect((await execution(lift.jobId)).attempts).toBe(2);
+  });
+
+  // The migration's guard trigger names the never-exhausted kinds; a kind
+  // added to the policy must be added to it in a migration.
+  it("keeps the never-exhausted failure trigger in step with the policy", async () => {
+    const result = await getDb(ctx.db).execute<{ source: string }>(
+      sql`SELECT prosrc AS source FROM pg_proc WHERE proname = 'job_never_exhausted_failure'`,
+    );
+    const kinds = [...(result.rows[0]?.source ?? "").matchAll(/'([a-z.]+)'/g)]
+      .map((match) => match[1])
+      .filter((kind) => kind !== "retry_wait");
+    expect(kinds.sort()).toEqual([...NEVER_EXHAUSTED_JOB_KINDS].sort());
   });
 
   it("explains a Run, its image job and a Job, and counts lanes by reason", async () => {
