@@ -125,7 +125,11 @@ execution-sensitive inputs match.
 A manual dispatch starts every lane, still cached. `fresh=true` sets
 `NX_SKIP_REMOTE_CACHE=true`: each runner starts with an empty local cache and
 reuses prerequisites it just built, avoiding repeated WASM compilation. Fresh
-results do not read or write the remote cache.
+results do not read or write the remote cache. For timing actual web test
+execution with ordinary build-cache reuse, dispatch `fresh-tests=true` instead:
+only the required Vitest and Playwright execution steps bypass remote results.
+Dependency installation, WASM, the explicit web build and other checks retain
+their usual caches. Full `fresh=true` still overrides this narrower mode.
 This is separate from `purchase-import=true` and `live-email=true`; live
 evaluations never start merely because a run is manual or fresh. Manual
 aggregation is named `Manual CI diagnostics`, not the required PR check.

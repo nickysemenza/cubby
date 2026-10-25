@@ -15,6 +15,10 @@ on:
         description: Bypass remote passes; reuse only results freshly produced on this runner
         type: boolean
         default: false
+      fresh-tests:
+        description: Execute Vitest and Playwright without remote passes; retain cached build prerequisites
+        type: boolean
+        default: false
       purchase-import:
         description: Run the informational purchase-import browser after required diagnostics succeed
         type: boolean
@@ -256,6 +260,8 @@ jobs:
         run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
       - name: Run Vitest shard
         if: ${{ matrix.vitest }}
+        env:
+          NX_SKIP_REMOTE_CACHE: ${{ (inputs.fresh || inputs.fresh-tests) && 'true' || 'false' }}
         run: ${{ matrix.run }}
       - name: Upload Vitest blob and attachments
         if: ${{ !cancelled() && matrix.vitest }}
@@ -273,6 +279,7 @@ jobs:
         if: ${{ matrix.browser }}
         env:
           CUBBY_E2E_WORKERS: ${{ matrix.browser-workers || '2' }}
+          NX_SKIP_REMOTE_CACHE: ${{ (inputs.fresh || inputs.fresh-tests) && 'true' || 'false' }}
         uses: ./.github/actions/playwright
         with:
           command: ${{ matrix.run }}
