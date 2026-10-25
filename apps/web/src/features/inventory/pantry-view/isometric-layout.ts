@@ -173,6 +173,7 @@ export function getItemHeight(category: ProductCategory | null): number {
     case "tools":
       return 0.65;
     case "books":
+    case "music":
       return 0.3;
     case "software":
       return 0.3;

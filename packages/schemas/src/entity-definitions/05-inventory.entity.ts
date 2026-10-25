@@ -127,6 +127,44 @@ export default defineEntity(
             groupBy: [{ key: "category", level: 2 }],
             pin: { surface: "home", order: 0 },
           },
+          // `@me` includes the viewing member's stock; `@household` includes
+          // explicitly shared stock, so both members see shared collections.
+          {
+            id: "books",
+            label: "Books",
+            description: "Your books, grouped by genre",
+            filters: [
+              { id: "placement", value: ["stock"] },
+              {
+                id: "ownerLedgerPartyId",
+                value: [CURRENT_MEMBER_FILTER, OWNER_FILTER_HOUSEHOLD],
+              },
+              { id: "categoryFeature", value: ["books"] },
+            ],
+            sort: [
+              { id: "category", desc: false },
+              { id: "product", desc: false },
+            ],
+            view: "shelf",
+            groupBy: [{ key: "category", level: 2 }],
+            pin: { surface: "home", order: 4 },
+          },
+          {
+            id: "records",
+            label: "Records",
+            description: "Your records",
+            filters: [
+              { id: "placement", value: ["stock"] },
+              {
+                id: "ownerLedgerPartyId",
+                value: [CURRENT_MEMBER_FILTER, OWNER_FILTER_HOUSEHOLD],
+              },
+              { id: "categoryFeature", value: ["music"] },
+            ],
+            sort: [{ id: "product", desc: false }],
+            view: "shelf",
+            pin: { surface: "home", order: 5 },
+          },
           {
             id: "my-stuff",
             label: "My stuff",
