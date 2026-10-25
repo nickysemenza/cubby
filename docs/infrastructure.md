@@ -968,6 +968,23 @@ nearest non-database span; untraced work omits the attribute. This supplements
 `db.query.text`, binding role and returned-row count for caller-level query
 comparisons without exporting record identifiers or arguments.
 
+Serialization failures also emit `db-transaction` structured logs independently
+of trace sampling. Each aborted attempt records `requestId` when the Start
+request supplied a valid Ray ID, `boundaryId`, `rootBoundaryId`, `rootAttempt`,
+`parentBoundaryId`, `callerOwned`, `caller`, `isolationLevel`, `attempt`, `limit`,
+`startedAt`, `durationMs`, `boundaryDurationMs`, `phase`, `beforeCommitKey`,
+`sqlState`, `retry` and `retryDelayMs`. Recovery records the committed attempt
+before after-commit consumers run; those consumers cannot enter the retry catch.
+Unknown raw caller-owned boundaries omit ancestor identity instead of inventing
+an outer attempt. These logs carry no SQL parameters or submitted evidence.
+The existing Job logs include `jobKey`, generation and Job identity; publish/fail
+logs also retain `publicationStartedAt` and `publicationDurationMs` when a
+publication was attempted. Compare those intervals and the exact refresh key
+with the aborted transaction interval to find candidate competing publications.
+Overlap alone cannot prove which writer replaced the tuple. Current Job idleness
+does not establish whether a page published during the failed request, and pool
+slot timeout `58000` remains a separate diagnostic from serialization `40001`.
+
 Authenticated Start, workflow-stream, HTTP and MCP failures follow the
 [raw diagnostic contract](agents/domain-rules.md#error-diagnostics). Only credential-shaped
 values are redacted. Request-scoped reporting captures the original exception

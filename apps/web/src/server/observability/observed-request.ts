@@ -23,6 +23,7 @@ export type ObservedResult = {
 export type OperationObservation<Result> = {
   origin: RequestOrigin;
   workload: Workload;
+  requestId?: string;
   inspectResult?: (result: Result) => ObservedResult;
 };
 
@@ -54,6 +55,7 @@ async function observeRequest<T>(options: {
   type: "query" | "mutation" | "subscription";
   origin: RequestOrigin;
   workload: Workload;
+  requestId?: string;
   run: (span: AppSpan) => Promise<T>;
   inspectResult?: (result: T) => ObservedResult;
 }): Promise<T> {
@@ -98,7 +100,7 @@ async function observeRequest<T>(options: {
       } finally {
         span.setAttributes(databaseMetricAttributes(dbMetrics));
       }
-    });
+    }, options.requestId);
   });
 }
 

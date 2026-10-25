@@ -1,4 +1,5 @@
 import { sleep } from "@cubby/shared/retry";
+import { createLogger } from "@cubby/worker-tracing";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -7,10 +8,25 @@ import {
   createDatabase,
   resolveDatabaseRuntime,
 } from "~/server/db/database-runtime";
+import { databaseRequestId } from "~/server/db/db-observability";
 import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import { isSerializationFailure } from "~/server/errors/db-errors";
-import { TraceNames, withTrace } from "~/server/observability/tracing";
+import {
+  databaseTraceCaller,
+  TraceNames,
+  withTrace,
+} from "~/server/observability/tracing";
+
+const transactionLog = createLogger("db-transaction");
+type TransactionAttempt = {
+  boundaryId: string;
+  rootBoundaryId: string | undefined;
+  rootAttempt: number | undefined;
+  isolationLevel: PgTransactionConfig["isolationLevel"] | "default" | "unknown";
+  caller: string | undefined;
+};
+const transactionAttempts = new WeakMap<object, TransactionAttempt>();
 
 /** Work that must not happen unless the enclosing transaction commits. */
 export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
@@ -210,8 +226,40 @@ const withTransactionAttempts = async <T>(
   attempts: number,
 ): Promise<T> => {
   const parentBefore = beforeCommitQueues.get(db);
-  const limit = isTransaction(getDb(db)) ? 1 : attempts;
+  const callerOwned = isTransaction(getDb(db));
+  const parentAttempt = transactionAttempts.get(getDb(db));
+  const limit = callerOwned ? 1 : attempts;
+  const boundaryId = crypto.randomUUID();
+  const boundaryStarted = performance.now();
   for (let attempt = 1; ; attempt++) {
+    const diagnostic: TransactionAttempt = {
+      boundaryId,
+      rootBoundaryId:
+        parentAttempt?.rootBoundaryId ?? (callerOwned ? undefined : boundaryId),
+      rootAttempt:
+        parentAttempt?.rootAttempt ?? (callerOwned ? undefined : attempt),
+      isolationLevel:
+        parentAttempt?.isolationLevel ??
+        (callerOwned ? "unknown" : (config?.isolationLevel ?? "default")),
+      caller: parentAttempt?.caller ?? databaseTraceCaller(),
+    };
+    const started = performance.now();
+    const startedAt = Date.now();
+    let phase = "body";
+    let beforeCommitKey: string | undefined;
+    const fields = () => ({
+      ...diagnostic,
+      parentBoundaryId: parentAttempt?.boundaryId,
+      requestId: databaseRequestId(),
+      callerOwned,
+      attempt,
+      limit,
+      phase,
+      beforeCommitKey,
+      startedAt,
+      durationMs: Math.round(performance.now() - started),
+      boundaryDurationMs: Math.round(performance.now() - boundaryStarted),
+    });
     const pending: AfterCommitEffect[] = [];
     const changes = new Set<string>();
     const before: BeforeCommitEntry[] = [];
@@ -219,6 +267,7 @@ const withTransactionAttempts = async <T>(
     try {
       result = await withTrace(TraceNames.db("transaction"), async () => {
         return await getDb(db).transaction(async (tx) => {
+          transactionAttempts.set(tx, diagnostic);
           afterCommitQueues.set(tx, pending);
           committedChanges.set(tx, changes);
           beforeCommitQueues.set(tx, before);
@@ -226,37 +275,48 @@ const withTransactionAttempts = async <T>(
           try {
             const value = await fn(tx);
             if (!parentBefore) {
-              for (const entry of before.filter(
-                (entry) => entry.phase === "validation",
-              ))
-                await entry.effect(tx);
-              for (const entry of before.filter(
-                (entry) => entry.phase === "fence",
-              ))
-                await entry.effect(tx);
-              for (const entry of before.filter(
-                (entry) => entry.phase === "capture",
-              ))
-                await entry.effect(tx);
               // Capture may wait for another writer. Recheck live ownership
               // after that work, then complete Jobs in the same transaction.
-              for (const entry of before.filter(
-                (entry) => entry.phase === "publication",
-              ))
-                await entry.effect(tx);
+              for (const commitPhase of [
+                "validation",
+                "fence",
+                "capture",
+                "publication",
+              ] as const) {
+                phase = `before-commit:${commitPhase}`;
+                for (const entry of before.filter(
+                  (entry) => entry.phase === commitPhase,
+                )) {
+                  beforeCommitKey = entry.key;
+                  await entry.effect(tx);
+                }
+              }
             }
+            phase = callerOwned ? "savepoint-release" : "commit";
+            beforeCommitKey = undefined;
             return value;
           } finally {
             transactionParents.delete(tx);
+            transactionAttempts.delete(tx);
           }
         }, config);
       });
     } catch (error) {
-      if (attempt >= limit || !isSerializationFailure(error)) throw error;
+      if (!isSerializationFailure(error)) throw error;
+      const retry = attempt < limit;
+      transactionLog.warn("serialization attempt aborted", {
+        ...fields(),
+        sqlState: "40001",
+        retry,
+        retryDelayMs: retry ? 200 * attempt : 0,
+      });
+      if (!retry) throw error;
       // Immediate retries can collide with the same background publication page.
       await sleep(200 * attempt);
       continue;
     }
+    if (attempt > 1)
+      transactionLog.info("serialization recovery committed", fields());
     // Commit succeeded: effect failures must never enter the replay catch.
     if (parentBefore)
       for (const entry of before) enrollBeforeCommit(parentBefore, entry);
