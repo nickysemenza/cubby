@@ -999,7 +999,17 @@ export const compilePresentation = (
       hero: {
         ...detail.hero,
         images: capabilities.images.storage === "gallery",
-        actions: [...(facts.hasUpdate ? ["edit"] : []), ...detail.hero.actions],
+        actions: [
+          ...new Set([
+            ...(facts.hasUpdate ? ["edit"] : []),
+            ...(capabilities.lifecycle !== "readOnly" &&
+            capabilities.delete !== null &&
+            capabilities.operationOwners.delete === "kernel"
+              ? ["delete"]
+              : []),
+            ...detail.hero.actions,
+          ]),
+        ],
       },
       sections: sections.map((section) => ({
         ...section,
