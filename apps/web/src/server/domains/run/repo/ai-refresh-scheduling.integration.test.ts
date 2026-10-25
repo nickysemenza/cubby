@@ -9,9 +9,10 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, product, run } from "~/server/db/schema";
+import { aiEvaluation, job, product, run } from "~/server/db/schema";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -283,6 +284,122 @@ describe("AI refresh scheduling admission", () => {
       }),
     ]);
     expect(rows.filter((row) => row.state === "cancelled")).toHaveLength(2);
+  });
+
+  // Review finding: the supersede matched only feature and record, so a
+  // catalog evaluation of P cancelled a queued P-Q pair evaluation another
+  // Run may have requested.
+  it("never replaces a shared pair evaluation with a catalog one", async () => {
+    const recordId = crypto.randomUUID();
+    const request = {
+      ...input("product-pair"),
+      input: aiRefreshRunInput.parse({
+        ...input("product-pair").input,
+        mailboxId: undefined,
+      }),
+    };
+    const provenance = aiProvenance.parse({
+      dependencies: [],
+      inputFingerprint: "synthetic-pair",
+      optionFingerprint: "",
+      model: null,
+    });
+    // Pairs are shared work, enqueued as production does (pair snapshot).
+    const owner = await ensureRun(ctx.db, systemActor(), input("pair-owner"));
+    await enqueueAiEvaluation(ctx.db, {
+      runId: owner,
+      executionKind: "ai_refresh",
+      feature: "product-identity",
+      workKey: "product-identity:synthetic-pair",
+      shareKey: "product-identity:synthetic-pair",
+      target: aiEvaluationTarget.parse({
+        kind: "product_pair",
+        entity: "product",
+        recordId,
+        otherId: crypto.randomUUID(),
+        field: null,
+        assessmentIds: [],
+      }),
+      provenance,
+      snapshot: {},
+    });
+    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+      {
+        target: aiEvaluationTarget.parse({
+          kind: "product",
+          entity: "product",
+          recordId,
+          field: null,
+          assessmentIds: [],
+        }),
+        provenance: { ...provenance, inputFingerprint: "synthetic-catalog" },
+        snapshot: {},
+      },
+    ]);
+    const states = await getDb(ctx.db)
+      .select({ state: aiEvaluation.state, target: aiEvaluation.target })
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.feature, "product-identity"));
+    expect(states.map((row) => row.state).sort()).toEqual(["queued", "queued"]);
+  });
+
+  // Review finding: reopening superseded work used the reopen budget, so an
+  // input alternating before anything ran was refused for good after three
+  // returns, leaving the current fingerprint unevaluated.
+  it("keeps re-admitting a Product whose input keeps changing back", async () => {
+    const recordId = crypto.randomUUID();
+    const productTarget = (inputFingerprint: string) => ({
+      target: aiEvaluationTarget.parse({
+        kind: "product",
+        entity: "product",
+        recordId,
+        field: null,
+        assessmentIds: [],
+      }),
+      provenance: aiProvenance.parse({
+        dependencies: [],
+        inputFingerprint,
+        optionFingerprint: "",
+        model: null,
+      }),
+      snapshot: {},
+    });
+    const request = {
+      ...input("product-alternating"),
+      input: aiRefreshRunInput.parse({
+        ...input("product-alternating").input,
+        mailboxId: undefined,
+      }),
+    };
+    for (let round = 0; round < 5; round++)
+      for (const fingerprint of ["synthetic-a", "synthetic-b"])
+        await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+          productTarget(fingerprint),
+        ]);
+    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+      productTarget("synthetic-a"),
+    ]);
+    const queued = await getDb(ctx.db)
+      .select({ provenance: aiEvaluation.provenance })
+      .from(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.feature, "product-identity"),
+          eq(aiEvaluation.state, "queued"),
+        ),
+      );
+    expect(queued).toEqual([
+      {
+        provenance: expect.objectContaining({
+          inputFingerprint: "synthetic-a",
+        }),
+      },
+    ]);
+    const jobs = await getDb(ctx.db)
+      .select({ state: job.state })
+      .from(job)
+      .where(eq(job.kind, "ai.evaluation"));
+    expect(jobs.filter((row) => row.state === "queued")).toHaveLength(1);
   });
 
   it("does not join a new activation's work to an older policy Run", async () => {

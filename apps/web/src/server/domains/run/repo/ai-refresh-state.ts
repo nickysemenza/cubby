@@ -99,7 +99,18 @@ const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
 const supersededReceipt = z.object({ supersededBy: z.uuid() });
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
-/** The row a work key's retries and reopens currently end at, with its reopen count. */
+/**
+ * Bound on a work key's chain walk. Reopens after a supersession do not use
+ * the reopen budget (an input can change back and forth before anything
+ * runs), so a chain can be longer than the budget.
+ */
+const MAX_CHAIN_HOPS = 256;
+
+/**
+ * The row a work key's retries and reopens currently end at, with its reopen
+ * count against the budget and the number of reopen rows (which names the
+ * next one).
+ */
 async function workKeyTip(
   db: Database,
   workKey: string,
@@ -107,7 +118,8 @@ async function workKeyTip(
 ) {
   let tip = base;
   let reopens = 0;
-  for (let hop = 0; tip && hop <= MAX_REOPENS * 4; hop++) {
+  let reopenRows = 0;
+  for (let hop = 0; tip && hop <= MAX_CHAIN_HOPS; hop++) {
     const next = retryReceipt.safeParse(tip.receipt).data?.retryEvaluationId;
     if (!next) break;
     const [row] = await getDb(db)
@@ -115,10 +127,14 @@ async function workKeyTip(
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, next));
     if (!row) break;
+    const previous = tip;
     tip = row;
     // An operator retry of a reopen (`<workKey>:reopen:<n>:operator-retry:<k>`)
-    // also counts toward the cap.
-    if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) reopens++;
+    // also counts toward the cap; a reopen of superseded work does not.
+    if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) {
+      reopenRows++;
+      if (!supersededReceipt.safeParse(previous.receipt).success) reopens++;
+    }
   }
   const [owner] =
     tip && ["blocked", "obsolete", "cancelled"].includes(tip.state)
@@ -130,6 +146,7 @@ async function workKeyTip(
   return {
     tip,
     reopens,
+    reopenRows,
     reopenable:
       tip !== undefined &&
       reopens < MAX_REOPENS &&
@@ -171,6 +188,9 @@ async function supersedeQueuedRecordWork(
       and(
         eq(aiEvaluation.feature, feature),
         inArray(aiEvaluation.state, ["queued", "retry_wait"]),
+        // Same target kind: a Product's catalog evaluation never replaces a
+        // shared pair evaluation (`product_pair`) other Runs may request.
+        sql`${aiEvaluation.target} @> ${JSON.stringify({ kind: target.kind })}::jsonb`,
         sql`${aiEvaluation.id} <> ${keepId}::uuid`,
         sql`${aiEvaluation.target}->>'entity' = ${target.entity}`,
         sql`${aiEvaluation.target}->>'recordId' = ${target.recordId}`,
@@ -267,7 +287,7 @@ async function insertTarget(
     const chain = await workKeyTip(tx, workKey, base);
     if (!chain.reopenable || !chain.tip) return 0;
     const [replacement] = await insert(
-      `${workKey}${REOPEN_SEPARATOR}${chain.reopens + 1}`,
+      `${workKey}${REOPEN_SEPARATOR}${chain.reopenRows + 1}`,
       tx,
     );
     if (!replacement) return 0;
