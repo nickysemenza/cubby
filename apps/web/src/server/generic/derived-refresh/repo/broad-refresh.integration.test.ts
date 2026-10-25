@@ -120,6 +120,8 @@ describe("broad refresh jobs", () => {
     await invalidateRefreshFamily(ctx.db, "search");
     const first = await page();
     expect(first.cursor).not.toBeNull();
+    // One page scans a full search page of sources.
+    expect(first.cursor).toMatchObject({ scanned: SEARCH_REFRESH_PAGE_SIZE });
     const published = await titles();
     const behind = every.filter(
       (index) => published.get(ids[index]!) === named(index, "v2"),
