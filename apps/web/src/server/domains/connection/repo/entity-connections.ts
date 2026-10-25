@@ -68,10 +68,7 @@ const keyFor = (candidate: ConnectionCandidate) =>
   ]);
 
 /** Capture candidate evidence before later inference; no proposal is published here. */
-export async function prepareEntityConnection(
-  db: Database,
-  raw: ConnectionCandidate,
-) {
+async function prepareEntityConnection(db: Database, raw: ConnectionCandidate) {
   const [publish] = await prepareEntityConnections(db, [raw]);
   return publish!;
 }
