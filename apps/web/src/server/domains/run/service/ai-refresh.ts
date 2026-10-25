@@ -115,6 +115,9 @@ import {
 
 const log = createLogger("ai-refresh");
 
+/** Connection units per publication transaction; see the publication loop. */
+const CONNECTION_UNITS_PER_TRANSACTION = 2;
+
 export type AiRefreshPorts = {
   context?: EntityKernelContext;
   suggestPorts?: SuggestFieldsPorts;
@@ -777,16 +780,25 @@ export async function executeAiRefreshTarget(
           productIdentityPorts: ports.productIdentityPorts,
         },
       );
-      const checkSource = async (transactionDb: Database) => {
-        if (
-          (await connectionSourceFingerprint(transactionDb, source)) !==
-          claimed.provenance.inputFingerprint
-        )
-          throw new Error(
-            "Connection discovery source changed during evaluation",
-          );
-      };
-      for (const [index, publish] of preparation.publications.entries())
+      const fenceSource = (transactionDb: Database) =>
+        checkConnectionSourceBeforeCommit(
+          transactionDb,
+          () => connectionSourceFingerprint(transactionDb, source),
+          claimed.provenance.inputFingerprint,
+        );
+      // Units publish a few per transaction: each transaction's guard and
+      // fences cost about ten statements, while one transaction over every
+      // unit held activation and a pooled connection for 100+ statements (#2819).
+      const units = preparation.publications;
+      for (
+        let offset = 0;
+        offset < units.length;
+        offset += CONNECTION_UNITS_PER_TRANSACTION
+      ) {
+        const chunk = units.slice(
+          offset,
+          offset + CONNECTION_UNITS_PER_TRANSACTION,
+        );
         await withTrace(
           TraceNames.service("connections", "publish"),
           () =>
@@ -795,26 +807,24 @@ export async function executeAiRefreshTarget(
               id,
               token,
               async (transactionDb) => {
-                await checkSource(transactionDb);
-                await publish(transactionDb);
-                await checkConnectionSourceBeforeCommit(transactionDb, () =>
-                  connectionSourceFingerprint(transactionDb, source),
-                );
+                for (const publish of chunk) await publish(transactionDb);
+                await fenceSource(transactionDb);
                 return null;
               },
               "continue",
             ),
-          { "connection.publication": index },
+          {
+            "connection.publication": offset,
+            "connection.units": chunk.length,
+          },
         );
+      }
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
-        await checkSource(transactionDb);
         if (!preparation.complete)
           throw new Error(
             `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
           );
-        await checkConnectionSourceBeforeCommit(transactionDb, () =>
-          connectionSourceFingerprint(transactionDb, source),
-        );
+        await fenceSource(transactionDb);
         return { source, discovered: true };
       });
       return true;
@@ -1137,8 +1147,13 @@ export async function executeAiRefreshTarget(
     const message = scrubErrorMessage(
       error instanceof Error ? error.message : String(error),
     );
+    // A changed connection source has a new fingerprint and so a new work key;
+    // discovery re-admits it (possibly after its pending backlog drains), so
+    // retrying this attempt against the old fingerprint can never succeed.
+    // Candidate-side evidence changes keep retrying: they do not re-admit
+    // this source.
     const obsolete =
-      /obsolete|changed during inference|decided during inference|no longer exists/.test(
+      /obsolete|changed during inference|decided during inference|no longer exists|Connection (discovery )?source changed/.test(
         message,
       );
     const admissionWait = message.includes("AI Gateway admission is waiting");

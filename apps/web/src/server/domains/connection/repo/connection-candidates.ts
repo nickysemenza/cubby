@@ -2,7 +2,7 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { manufacturerSource } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { Database } from "~/server/db";
@@ -23,7 +23,10 @@ import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { classificationPolicySql } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { retrieveEmailConnectionCandidates } from "./email-connections";
 
@@ -278,21 +281,37 @@ async function settlementCandidates(
   return result;
 }
 
-export async function expenseConnectionEligible(db: Database, code: string) {
-  const [row] = await getDb(db)
-    .select({ id: expense.id })
+/** The Expense codes still eligible for an acquisition connection, in one statement. */
+export async function eligibleConnectionExpenses(
+  db: Database,
+  codes: readonly string[],
+): Promise<Set<string>> {
+  const shortcodes = new Map(
+    codes.map((code) => [parseShortcodeFor("expense", code), code] as const),
+  );
+  if (shortcodes.size === 0) return new Set();
+  const rows = await getDb(db)
+    .select({ shortcode: expense.shortcode })
     .from(expense)
     .where(
       and(
-        eq(expense.shortcode, code),
+        inArray(expense.shortcode, [...shortcodes.keys()]),
         isNull(expense.productId),
         eq(expense.lineKind, "principal"),
         expenseAcquisitionPairPredicate(sql`true`),
         sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql('"Expense"'))}`,
       ),
-    )
-    .limit(1);
-  return row !== undefined;
+    );
+  return new Set(
+    rows.flatMap(({ shortcode }) => {
+      const code = shortcodes.get(parseShortcodeFor("expense", shortcode));
+      return code === undefined ? [] : [code];
+    }),
+  );
+}
+
+export async function expenseConnectionEligible(db: Database, code: string) {
+  return (await eligibleConnectionExpenses(db, [code])).has(code);
 }
 
 /** Shorter brandName values match too many ordinary line words. */
@@ -344,24 +363,56 @@ export function otherBrandNamed(
 }
 
 /** The brand-bearing text of an acquisition endpoint: Product brandName or Expense line. */
+export const acquisitionBrandKey = (ref: EntityRef) =>
+  `${ref.entityKind}:${ref.entityId}`;
+
+/** `acquisitionBrandText` for many refs: one statement per entity kind. */
+export async function acquisitionBrandTexts(
+  db: Database,
+  refs: readonly EntityRef[],
+): Promise<Map<string, string | null>> {
+  const texts = new Map<string, string | null>(
+    refs.map((ref) => [acquisitionBrandKey(ref), null]),
+  );
+  const codes = (kind: string) => [
+    ...new Set(
+      refs.filter((ref) => ref.entityKind === kind).map((ref) => ref.entityId),
+    ),
+  ];
+  const products = codes("product");
+  const expenses = codes("expense");
+  const [productRows, expenseRows] = await Promise.all([
+    products.length
+      ? getDb(db)
+          .select({
+            code: product.shortcode,
+            text: productBrandNameSql(product.brandId),
+          })
+          .from(product)
+          .where(inArray(product.shortcode, products))
+      : [],
+    expenses.length
+      ? getDb(db)
+          .select({ code: expense.shortcode, text: expense.name })
+          .from(expense)
+          .where(inArray(expense.shortcode, expenses))
+      : [],
+  ]);
+  for (const row of productRows)
+    texts.set(`product:${row.code}`, row.text ?? null);
+  for (const row of expenseRows)
+    texts.set(`expense:${row.code}`, row.text ?? null);
+  return texts;
+}
+
 export async function acquisitionBrandText(
   db: Database,
   ref: EntityRef,
 ): Promise<string | null> {
-  if (ref.entityKind === "product") {
-    const [row] = await getDb(db)
-      .select({ text: productBrandNameSql(product.brandId) })
-      .from(product)
-      .where(eq(product.shortcode, ref.entityId))
-      .limit(1);
-    return row?.text ?? null;
-  }
-  const [row] = await getDb(db)
-    .select({ text: expense.name })
-    .from(expense)
-    .where(eq(expense.shortcode, ref.entityId))
-    .limit(1);
-  return row?.text ?? null;
+  return (
+    (await acquisitionBrandTexts(db, [ref])).get(acquisitionBrandKey(ref)) ??
+    null
+  );
 }
 
 /** Notes are currently absent from SearchDocument; bridge only one concrete source. */
@@ -416,34 +467,79 @@ export async function retrieveAcquisitionNotes(
   return result;
 }
 
+export const acquisitionPairKey = (productCode: string, purchaseCode: string) =>
+  `${productCode}:${purchaseCode}`;
+
+/**
+ * The Product/Purchase pairs with no recorded acquisition (no confirmed link
+ * and no acquisition Expense), keyed by `acquisitionPairKey`, in two
+ * statements for any number of pairs.
+ */
+export async function eligibleAcquisitionPairs(
+  db: Database,
+  pairs: readonly { productCode: string; purchaseCode: string }[],
+): Promise<Set<string>> {
+  if (pairs.length === 0) return new Set();
+  const productCodes = [...new Set(pairs.map((pair) => pair.productCode))];
+  const purchaseCodes = [...new Set(pairs.map((pair) => pair.purchaseCode))];
+  const [productIds, purchaseIds] = await Promise.all([
+    resolveAllOrThrow(db, "product", productCodes),
+    resolveAllOrThrow(db, "purchase", purchaseCodes),
+  ]);
+  // Link endpoints are untyped uuids; key by the plain id string.
+  const productById = new Map<string, string>(
+    productIds.map((id, index) => [id, productCodes[index]!]),
+  );
+  const purchaseById = new Map<string, string>(
+    purchaseIds.map((id, index) => [id, purchaseCodes[index]!]),
+  );
+  const recorded = new Set<string>();
+  const [confirmed, acquired] = await Promise.all([
+    getDb(db)
+      .select({
+        purchaseId: entityLink.fromEntityId,
+        productId: entityLink.toEntityId,
+      })
+      .from(entityLink)
+      .where(
+        and(
+          liveLinks("purchaseProduct"),
+          inArray(entityLink.fromEntityId, purchaseIds),
+          inArray(entityLink.toEntityId, productIds),
+          eq(entityLink.acquisitionConfirmed, true),
+        ),
+      ),
+    getDb(db)
+      .select({ purchaseId: expense.purchaseId, productId: expense.productId })
+      .from(expense)
+      .where(
+        expenseAcquisitionPairPredicate(
+          and(
+            inArray(expense.purchaseId, purchaseIds),
+            inArray(expense.productId, productIds),
+          ) ?? sql`false`,
+        ),
+      ),
+  ]);
+  for (const row of [...confirmed, ...acquired]) {
+    const productCode = row.productId && productById.get(row.productId);
+    const purchaseCode = row.purchaseId && purchaseById.get(row.purchaseId);
+    if (productCode && purchaseCode)
+      recorded.add(acquisitionPairKey(productCode, purchaseCode));
+  }
+  return new Set(
+    pairs
+      .map((pair) => acquisitionPairKey(pair.productCode, pair.purchaseCode))
+      .filter((key) => !recorded.has(key)),
+  );
+}
+
 export async function acquisitionPairEligible(
   db: Database,
   productCode: string,
   purchaseCode: string,
 ) {
-  const productId = await resolveOrThrow(db, "product", productCode);
-  const purchaseId = await resolveOrThrow(db, "purchase", purchaseCode);
-  const [confirmed] = await getDb(db)
-    .select({ id: entityLink.id })
-    .from(entityLink)
-    .where(
-      and(
-        liveLinks("purchaseProduct"),
-        eq(entityLink.fromEntityId, purchaseId),
-        eq(entityLink.toEntityId, productId),
-        eq(entityLink.acquisitionConfirmed, true),
-      ),
-    )
-    .limit(1);
-  if (confirmed) return false;
-  const [acquired] = await getDb(db)
-    .select({ id: expense.id })
-    .from(expense)
-    .where(
-      expenseAcquisitionPairPredicate(
-        sql`${expense.purchaseId}=${purchaseId} AND ${expense.productId}=${productId}`,
-      ),
-    )
-    .limit(1);
-  return acquired === undefined;
+  return (
+    await eligibleAcquisitionPairs(db, [{ productCode, purchaseCode }])
+  ).has(acquisitionPairKey(productCode, purchaseCode));
 }

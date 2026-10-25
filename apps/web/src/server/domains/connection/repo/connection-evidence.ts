@@ -231,16 +231,29 @@ export async function connectionRecord(
   lock = false,
 ) {
   const kind = z.enum(shortcodeEntities).parse(ref.entityKind);
-  const id = await resolveOrThrow(db, kind, ref.entityId);
+  const parsed = parseShortcode(ref.entityId);
+  if (parsed?.type !== kind) {
+    await resolveOrThrow(db, kind, ref.entityId);
+    throw new Error(`Connection ${kind} no longer exists`);
+  }
   const table: ShortcodeTable = SHORTCODE_TABLE[kind];
+  // One statement by live shortcode: resolving first doubled every record read.
   const query = getDb(db)
-    .select({ row: connectionRelevantRowSql(kind, table) })
+    .select({ id: table.id, row: connectionRelevantRowSql(kind, table) })
     .from(table)
-    .where(and(eq(table.id, id), notDeleted(table)))
+    .where(and(eq(table.shortcode, parsed.shortcode), notDeleted(table)))
     .limit(1);
   const [value] = lock ? await query.for("update") : await query;
-  if (!value) throw new Error(`Connection ${kind} no longer exists`);
-  return { id, row: snapshotJson(connectionRelevantRow(kind, value.row)) };
+  // A missing record keeps the resolver's not-found error (retryable: a retry
+  // rediscovers without it); only a live code without a row "no longer exists".
+  if (!value) {
+    await resolveOrThrow(db, kind, ref.entityId);
+    throw new Error(`Connection ${kind} no longer exists`);
+  }
+  return {
+    id: parseEntityId(kind, value.id),
+    row: snapshotJson(connectionRelevantRow(kind, value.row)),
+  };
 }
 
 /** Dependency payloads several unlocked captures can share. */

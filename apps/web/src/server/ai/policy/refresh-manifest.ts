@@ -50,7 +50,23 @@ export function fieldPolicyFingerprint(
   );
 }
 
+let compiled: Promise<AiRefreshManifest> | undefined;
+
+/**
+ * The manifest is a function of static declarations, so it is hashed once per
+ * isolate; every evaluation used to rehash every feature and field policy.
+ * Callers receive a copy and may not mutate the shared result.
+ */
 export async function compiledRefreshManifest(): Promise<AiRefreshManifest> {
+  // A failed compile is not cached; the next caller recompiles.
+  compiled ??= compileRefreshManifest().catch((error: unknown) => {
+    compiled = undefined;
+    throw error;
+  });
+  return structuredClone(await compiled);
+}
+
+async function compileRefreshManifest(): Promise<AiRefreshManifest> {
   const entries: AiRefreshManifest = {};
   entries["entity-connections"] = {
     promptVersion: "1",

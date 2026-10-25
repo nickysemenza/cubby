@@ -16,7 +16,7 @@ import { evaluateProductIdentity } from "~/server/ai/product-identity";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { retrieveConnectionCandidates } from "~/server/domains/connection/repo/connection-candidates";
-import { prepareEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+import { prepareEntityConnections as prepareConnectionCandidates } from "~/server/domains/connection/repo/entity-connections";
 import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
@@ -60,18 +60,13 @@ export async function prepareEntityConnections(
 ) {
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
-  const captured = new Set<string>();
-  const captureCandidates = async (
-    candidates: readonly ConnectionCandidate[],
-  ) => {
+  // Candidates from every stage prepare together, in stage order, so their
+  // records, dependencies and eligibility load once per kind.
+  const captured = new Map<string, ConnectionCandidate>();
+  const captureCandidates = (candidates: readonly ConnectionCandidate[]) => {
     for (const candidate of candidates) {
       const key = `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
-      if (captured.has(key)) continue;
-      const publish = await prepareEntityConnection(db, candidate);
-      captured.add(key);
-      publishers.push(async (transactionDb) => {
-        await publish(transactionDb);
-      });
+      if (!captured.has(key)) captured.set(key, candidate);
     }
   };
   const stage = <T>(name: string, fn: () => Promise<T>) =>
@@ -84,7 +79,7 @@ export async function prepareEntityConnections(
   // Indexed/semantic retrieval may call a model; preserve earlier candidates first.
   const acquisition = await stage("acquisitionScan", async () => {
     const scan = await discoverAcquisitionCandidateScan(db, source);
-    await captureCandidates(scan.candidates);
+    captureCandidates(scan.candidates);
     return scan;
   });
   const candidates: ConnectionCandidate[] = [];
@@ -125,7 +120,16 @@ export async function prepareEntityConnections(
           });
     }
   }
-  await captureCandidates(candidates);
+  captureCandidates(candidates);
+  publishers.push(
+    ...(
+      await stage("prepare", () =>
+        prepareConnectionCandidates(db, [...captured.values()]),
+      )
+    ).map((publish) => async (transactionDb: Database) => {
+      await publish(transactionDb);
+    }),
+  );
   if (source.entityKind === "product") {
     publishers.push(
       ...(

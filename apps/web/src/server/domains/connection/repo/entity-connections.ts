@@ -44,8 +44,9 @@ import {
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
-  acquisitionPairEligible,
-  expenseConnectionEligible,
+  acquisitionPairKey,
+  eligibleAcquisitionPairs,
+  eligibleConnectionExpenses,
 } from "./connection-candidates";
 import {
   captureConnectionBasis,
@@ -70,15 +71,39 @@ export async function prepareEntityConnection(
   db: Database,
   raw: ConnectionCandidate,
 ) {
-  const candidate = connectionCandidate.parse(raw);
-  const prepared = connectionAssessmentEvidence.parse({
-    version: 1,
-    candidate,
-    basis: await captureConnectionBasis(db, candidate),
-  });
-  await assertAcquisitionConnectionEligible(db, candidate);
-  return (transactionDb: Database) =>
-    publishPreparedEntityConnection(transactionDb, prepared);
+  const [publish] = await prepareEntityConnections(db, [raw]);
+  return publish!;
+}
+
+/**
+ * `prepareEntityConnection` for a candidate set: records, dependencies and
+ * eligibility load per kind for the whole set rather than per candidate, so
+ * preparation cost does not grow by round trips with the candidate count.
+ */
+export async function prepareEntityConnections(
+  db: Database,
+  raws: readonly ConnectionCandidate[],
+) {
+  const candidates = raws.map((raw) => connectionCandidate.parse(raw));
+  const publishers: ((
+    transactionDb: Database,
+  ) => Promise<ConnectionProposal>)[] = [];
+  await forEachConnectionBasis(
+    db,
+    candidates.map((candidate) => ({ candidate })),
+    async ({ candidate }, basis) => {
+      const prepared = connectionAssessmentEvidence.parse({
+        version: 1,
+        candidate,
+        basis,
+      });
+      publishers.push((transactionDb) =>
+        publishPreparedEntityConnection(transactionDb, prepared),
+      );
+    },
+  );
+  await assertAcquisitionConnectionsEligible(db, candidates);
+  return publishers;
 }
 
 /** Immediate callers still capture their basis before entering publication locks. */
@@ -533,20 +558,41 @@ async function assertAcquisitionConnectionEligible(
   db: Database,
   candidate: ConnectionCandidate,
 ): Promise<void> {
-  if (
-    candidate.relation === "product-expense" &&
-    !(await expenseConnectionEligible(db, candidate.target.entityId))
-  )
+  await assertAcquisitionConnectionsEligible(db, [candidate]);
+}
+
+async function assertAcquisitionConnectionsEligible(
+  db: Database,
+  candidates: readonly ConnectionCandidate[],
+): Promise<void> {
+  const expenses = candidates.flatMap((candidate) =>
+    candidate.relation === "product-expense" ? [candidate.target.entityId] : [],
+  );
+  const pairs = candidates.flatMap((candidate) =>
+    candidate.relation === "product-purchase"
+      ? [
+          {
+            productCode: candidate.source.entityId,
+            purchaseCode: candidate.target.entityId,
+          },
+        ]
+      : [],
+  );
+  const [eligibleExpenses, eligiblePairs] = await Promise.all([
+    eligibleConnectionExpenses(db, expenses),
+    eligibleAcquisitionPairs(db, pairs),
+  ]);
+  if (expenses.some((code) => !eligibleExpenses.has(code)))
     throw new Error(
       "Connection Expense is no longer eligible for acquisition or is already assigned to a Product",
     );
   if (
-    candidate.relation === "product-purchase" &&
-    !(await acquisitionPairEligible(
-      db,
-      candidate.source.entityId,
-      candidate.target.entityId,
-    ))
+    pairs.some(
+      (pair) =>
+        !eligiblePairs.has(
+          acquisitionPairKey(pair.productCode, pair.purchaseCode),
+        ),
+    )
   )
     throw new Error(
       "Connection Product/Purchase pair is no longer eligible because acquisition is already recorded",
