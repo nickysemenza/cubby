@@ -7,7 +7,7 @@ import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import { JOB_DRAIN } from "../limits";
-import { dueJobs, enqueueJob } from "./jobs";
+import { dueJobPositions, dueJobs, enqueueJob } from "./jobs";
 
 /** Deterministic drain rounds: each selected Job is claimed, then finished. */
 async function drainRounds(
@@ -94,4 +94,46 @@ describe("fair drain under a flood", () => {
       expect(flood.length).toBeGreaterThan(50);
     },
   );
+
+  // Review finding: diagnostics ranked every run-owned Job ahead of all
+  // backfill, but selection reserves backfill a share of each batch, so the
+  // reported "ahead" (and the ETA from it) disagreed with the drain.
+  it("reports queue positions in the drain's own selection order", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const ids: string[] = [];
+    for (let index = 0; index < 25; index++)
+      ids.push(
+        (
+          await enqueueJob(ctx.db, {
+            key: `synthetic.owned.${index}`,
+            kind: "synthetic.owned",
+            input: {},
+            runId,
+          })
+        ).id,
+      );
+    for (let index = 0; index < 10; index++)
+      ids.push(
+        (
+          await enqueueJob(ctx.db, {
+            key: `synthetic.backfill.${index}`,
+            kind: "synthetic.backfill",
+            input: {},
+          })
+        ).id,
+      );
+    const predicted = await dueJobPositions(ctx.db, ids);
+    const served: string[] = [];
+    await drainRounds(ctx.db, 4, (batch) => {
+      served.push(...batch.map((row) => row.id));
+    });
+    expect(served).toHaveLength(ids.length);
+    expect(Object.fromEntries(predicted)).toEqual(
+      Object.fromEntries(served.map((id, index) => [id, index])),
+    );
+  });
 });

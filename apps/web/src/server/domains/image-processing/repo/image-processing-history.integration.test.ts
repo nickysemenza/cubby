@@ -1,8 +1,11 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import * as storage from "~/server/clients/s3";
 import { getDb } from "~/server/db/helpers";
 import { job as durableJob } from "~/server/db/retained-tables";
@@ -22,6 +25,7 @@ import {
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import * as cloudDescription from "~/server/domains/image-processing/service/cloud-description";
 import {
   scheduleImageProcessingJobs,
   completeCompanionImageProcessingResult,
@@ -571,6 +575,87 @@ describe("image execution history conservation", () => {
         .where(eq(aiAnalysis.entityId, source.id)),
     ).toEqual([]);
   });
+  // Review finding: a device-normalized AVIF reaches the cloud provider from
+  // the completion path, whose catch recorded an exhausted AI budget (or a
+  // typed provider wait) as a failed attempt with failure backoff. It is a
+  // funding wait, like the drain's own cloud dispatch.
+  it("waits for AI funding without an attempt when a normalized AVIF meets an exhausted budget", async () => {
+    const { source, jobId } = await setup();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ contentType: "image/avif" })
+      .where(eq(image.id, source.id));
+    const lease = await claim(jobId);
+    await assignCloud(jobId, lease.attemptId);
+    const key = storage.imageAnalysisKey("staging", lease.attemptId);
+    await reserveImageAnalysisInput(ctx.db, lease.attemptId, key);
+    // A minimal baseline JPEG: SOI, a 3x2 SOF0 frame, EOI.
+    const bytes = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x03, 0x00, 0x02, 0x03,
+      0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
+    ]);
+    const resumeAt = new Date(Date.now() + 6 * 60 * 60_000).toISOString();
+    const read = vi
+      .spyOn(storage, "getS3Object")
+      .mockImplementation(
+        async () =>
+          new Response(bytes, { headers: { "content-type": "image/jpeg" } }),
+      );
+    const describe = vi
+      .spyOn(cloudDescription, "completeCloudImageDescription")
+      .mockRejectedValue(
+        new AiBudgetExhaustedError(
+          fromPartial<ConstructorParameters<typeof AiBudgetExhaustedError>[0]>({
+            windowEnd: resumeAt,
+          }),
+          "Synthetic AI budget reached",
+        ),
+      );
+    try {
+      await completeCompanionImageProcessingResult(ctx.db, {
+        jobId,
+        attemptId: lease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "normalized",
+          key,
+          contentType: "image/jpeg",
+          sha256: await sha256Hex(bytes),
+          width: 2,
+          height: 3,
+        },
+      });
+      expect(describe).toHaveBeenCalledTimes(1);
+    } finally {
+      read.mockRestore();
+      describe.mockRestore();
+    }
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    expect(execution).toMatchObject({
+      waitReason: "ai_funding_window",
+      attempts: 0,
+      leaseToken: null,
+    });
+    expect(execution?.availableAt.toISOString()).toBe(resumeAt);
+    const [attempt] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingAttempt)
+      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+    expect(attempt?.state).toBe("released");
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(saved).toMatchObject({
+      state: "pending",
+      lastError: "Synthetic AI budget reached",
+    });
+  });
+
   it("does not retry skips or work for an obsolete source", async () => {
     const { source, jobId } = await setup();
     const lease = await claim(jobId);

@@ -1,10 +1,12 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import { getDb } from "~/server/db/helpers";
 import {
+  aiEvaluationRequest,
   image,
   imageProcessingJob,
   job,
@@ -19,7 +21,10 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { invalidateRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
+import {
+  invalidateRefreshFamily,
+  scheduleRefreshFamilies,
+} from "~/server/generic/derived-refresh/repo/families";
 import {
   readJobQueue,
   readRunRollups,
@@ -252,6 +257,129 @@ describe("queue watchdog, explain and retention", () => {
     });
   });
 
+  // Review finding: rollups counted an expired lease as leased, and any
+  // leased count suppressed `stalled`, so a Run whose only executor died
+  // never read as stalled.
+  it("separates expired from live leases in a Run's rollup and its stall", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const abandoned = await enqueueJob(ctx.db, {
+      key: "synthetic.abandoned",
+      kind: "synthetic.abandoned",
+      input: {},
+      runId,
+    });
+    const hourAgo = new Date(Date.now() - 60 * 60_000);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "running",
+        leaseToken: crypto.randomUUID(),
+        leaseExpiresAt: new Date(Date.now() - 30 * 60_000),
+        lastClaimedAt: hourAgo,
+      })
+      .where(eq(job.id, abandoned.id));
+    await getDb(ctx.db)
+      .update(run)
+      .set({ startedAt: hourAgo })
+      .where(eq(run.id, runId));
+    const [owner] = await getDb(ctx.db)
+      .select({ id: run.id, shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, runId));
+    const [expired] = await readRunRollups(ctx.db, [owner!]);
+    expect(expired?.counts.leased).toBeUndefined();
+    expect(expired).toMatchObject({ expiredLeases: 1, stalled: true });
+    // A live lease is progress in flight: counted as leased, not stalled.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ leaseExpiresAt: new Date(Date.now() + 60_000) })
+      .where(eq(job.id, abandoned.id));
+    const [live] = await readRunRollups(ctx.db, [owner!]);
+    expect(live).toMatchObject({
+      counts: { leased: 1 },
+      expiredLeases: 0,
+      stalled: false,
+    });
+  });
+
+  // Review finding: rollups, explain and job.queue matched a Run's work by
+  // Job.runId, but AI evaluation Jobs carry none (one evaluation can serve
+  // several Runs), so a Run's queued evaluations vanished from all three.
+  it("attributes AI evaluation Jobs to every Run that owns or still requests them", async () => {
+    const runs = [];
+    for (let index = 0; index < 3; index++)
+      runs.push(
+        await ensureRun(ctx.db, ctx.actor, {
+          purpose: "ai_suggest",
+          trigger: "manual",
+          execution: false,
+        }),
+      );
+    const [owner, requester, withdrawn] = runs as [RunId, RunId, RunId];
+    const evaluation = (runId: RunId) =>
+      enqueueAiEvaluation(ctx.db, {
+        runId,
+        executionKind: "suggestion_sweep",
+        shareKey: "synthetic-shared-evaluation",
+        feature: "field-suggestion",
+        target: {
+          kind: "field",
+          entity: "product",
+          recordId: crypto.randomUUID(),
+          field: "categoryId",
+          assessmentIds: [],
+        },
+        provenance: {
+          dependencies: [],
+          inputFingerprint: "synthetic-input",
+          optionFingerprint: "synthetic-options",
+          model: null,
+        },
+        snapshot: {},
+        state: "queued",
+      });
+    const shared = await evaluation(owner);
+    for (const runId of [requester, withdrawn])
+      expect((await evaluation(runId)).id).toBe(shared.id);
+    await getDb(ctx.db)
+      .update(aiEvaluationRequest)
+      .set({ cancelledAt: new Date() })
+      .where(eq(aiEvaluationRequest.runId, withdrawn));
+    const owners = await getDb(ctx.db)
+      .select({ id: run.id, shortcode: run.shortcode })
+      .from(run)
+      .where(inArray(run.id, runs));
+    const byId = new Map(owners.map((row) => [row.id, row]));
+    const rollups = await readRunRollups(
+      ctx.db,
+      runs.map((id) => byId.get(id)!),
+    );
+    // Owned and requested once each, counted once per Run; a withdrawn
+    // request no longer counts.
+    expect(rollups.map((rollup) => rollup.counts)).toEqual([
+      { due: 1 },
+      { due: 1 },
+      {},
+    ]);
+    const queue = await readJobQueue(ctx.db, {
+      filter: {},
+      runId: requester,
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    expect(queue.jobs.map((row) => row.key)).toEqual([
+      `ai-evaluation:${shared.id}`,
+    ]);
+    const explained = await explainWaiting(ctx.db, byId.get(owner)!.shortcode);
+    expect(explained.steps.map((step) => step.label)).toContainEqual(
+      expect.stringContaining(`ai-evaluation:${shared.id}`),
+    );
+  });
+
   // Review finding: a completed Job woken by a capture was claimable but
   // health counted it as not due and, once outside the claim window, omitted
   // its kind and raised no alert.
@@ -351,6 +479,53 @@ describe("queue watchdog, explain and retention", () => {
     );
     expect(health.alerts).toContainEqual(
       expect.objectContaining({ kind: "refresh.family", code: "no_claims" }),
+    );
+  });
+
+  // Review finding: the periodic catch-up (`repeatJob`) requeues a finished
+  // family with availability "now" without serving it, which erased the
+  // pending age of a capture the family had not observed yet.
+  it("keeps a woken family's pending age when the catch-up requeues it", async () => {
+    const search = await enqueueJob(ctx.db, {
+      key: "refresh:search",
+      kind: "refresh.family",
+      input: { family: "search" },
+    });
+    const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        lastClaimedAt: longAgo,
+        availableAt: longAgo,
+        updatedAt: longAgo,
+      })
+      .where(eq(job.id, search.id));
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() - 45 * 60_000);
+      await invalidateRefreshFamily(ctx.db, "search");
+    } finally {
+      vi.useRealTimers();
+    }
+    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    const [requeued] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.id, search.id));
+    expect(requeued?.state).toBe("queued");
+    expect(requeued!.availableAt.getTime()).toBeGreaterThan(
+      Date.now() - 60_000,
+    );
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    // The capture, 45 minutes ago, still dates the work past the deadline.
+    expect(family?.oldestDueSeconds).toBeGreaterThanOrEqual(44 * 60);
+    expect(health.alerts).toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
     );
   });
 

@@ -2379,8 +2379,12 @@ locks the owning Job and validates its live token and generation, rechecks the
 specific authoritative inputs, then commits output and cursor together.
 Standalone explicit refresh paths use this same Job or specific input
 validation. No global input revision or publication epoch stands in for that
-check. Failed, cancelled and manually paused Jobs require explicit retry;
-ordinary captures and periodic wakes do not revive them.
+check. Cancelled and manually paused Jobs are member stops: only explicit
+retry revives them, never a capture or periodic wake. A failed Job stays
+failed under periodic wakes, but a capture its restarting family has not
+observed wakes it into a fresh pass, because the capture is new input the
+failed pass never read ([durable invalidation](jobs.md#durable-invalidation)).
+Other failed Jobs require explicit retry.
 
 Authoritative removal acquires the search-family Job before retiring search
 artifacts, matching search publication's Job-before-artifact lock order. Orphan

@@ -19,6 +19,7 @@ import {
   aiAnalysis,
   image,
   imageDerivative,
+  imageProcessingAttempt,
   imageProcessingJob,
   imageProcessingOrphan,
   searchDocument,
@@ -822,7 +823,12 @@ describe("durable image representations", () => {
     expect(analyses[0]?.result).toEqual(result.outcome.description);
   });
 
-  it("keeps no-subject terminal with no transparent URL and makes persisted failures queryable", async () => {
+  // Review finding: every executor `skipped` result terminalized the job,
+  // though no_subject, not_suitable and unsupported_format are executor
+  // verdicts, not moot endings (deletion, replacement, supersession, policy
+  // exclusion), which only the server decides. They now record a retryable
+  // failure that backs off and asks for attention after repeated failures.
+  it("retries an executor's no-subject skip as a recorded failure with no transparent URL and makes persisted failures queryable", async () => {
     const row = await source();
     const lease = await claimImageProcessingJob(ctx.db, {
       jobId: row.jobId,
@@ -847,6 +853,25 @@ describe("durable image representations", () => {
         row.shortcode,
       )?.transparent,
     ).toBeNull();
+    const [skipped] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, row.jobId));
+    expect(skipped).toMatchObject({
+      state: "pending",
+      lastError: "no_subject",
+    });
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${row.jobId}`));
+    expect(execution).toMatchObject({ state: "retry_wait", attempts: 1 });
+    expect(execution!.availableAt.getTime()).toBeGreaterThan(Date.now());
+    const [attempt] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingAttempt)
+      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+    expect(attempt).toMatchObject({ state: "failed", error: "no_subject" });
     const failed = await source();
     const failedLease = await claimImageProcessingJob(ctx.db, {
       jobId: failed.jobId,

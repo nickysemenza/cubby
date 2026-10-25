@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -12,7 +12,9 @@ import {
   imageProcessingJob,
 } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
+import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
 
 import {
   claimImageProcessingJob,
@@ -33,7 +35,11 @@ describe("background companion leases", () => {
   const ctx = withTestDb();
   const userId = "synthetic-background-user";
   const deviceId = crypto.randomUUID();
-  async function job(processorRevision: number, contentType = "image/jpeg") {
+  async function job(
+    processorRevision: number,
+    contentType = "image/jpeg",
+    runId: RunId | null = null,
+  ) {
     const row = await createUploadedImageRecord(ctx.db, {
       key: `tests/${crypto.randomUUID()}.jpg`,
       filename: "panel.jpg",
@@ -50,6 +56,7 @@ describe("background companion leases", () => {
       kind: "describe_image",
       sourceContentHash: hash,
       processorRevision,
+      runId,
     });
     if (!created) throw new Error("Expected job");
     return created;
@@ -148,6 +155,52 @@ describe("background companion leases", () => {
       leasedAt: execution?.lastClaimedAt?.toISOString(),
       expired: false,
     });
+  });
+
+  // Review finding: device pulls ordered parked work only by availability,
+  // so an active Run's photos waited behind older backfill, and nothing kept
+  // backfill's reserved share once Run work led.
+  it("serves an active Run's device work before older backfill", async () => {
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const owned = await job(
+      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/jpeg",
+      runId,
+    );
+    expect((await claim())?.id).toBe(owned);
+    expect((await claim())?.id).toBe(backfill);
+  });
+
+  it("keeps backfill's reserved share of device pulls while Run work leads", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const owned: string[] = [];
+    for (let index = 0; index < 6; index++)
+      owned.push(
+        await job(
+          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+          "image/jpeg",
+          runId,
+        ),
+      );
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const order: string[] = [];
+    for (let pull = 0; pull < 7; pull++) {
+      const lease = await claim();
+      if (lease) order.push(lease.id);
+    }
+    expect(order).toHaveLength(7);
+    // The drain's share: one slot in every 1 / JOB_BACKFILL_SHARE claims.
+    expect(order.indexOf(backfill)).toBeLessThan(
+      Math.ceil(1 / JOB_BACKFILL_SHARE),
+    );
+    expect(order.filter((id) => owned.includes(id))).toHaveLength(6);
   });
 
   it("filters processor revision and exclusively claims each device job", async () => {
