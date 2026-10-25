@@ -28,6 +28,7 @@ import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import {
   claimImageProcessingJob,
+  finalizeCompanionImageLeases,
   releaseImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -514,6 +515,7 @@ export async function claimCompanionImageCommands(
   const batch = await withImageProcessingTransaction(db, async (tx) => {
     const admission: DeviceImageClaimBatch = {
       ownedStreak: await lockDeviceAdmission(tx),
+      handedOffIds: [],
       candidateLimit:
         input.maxCommands > 1 ? input.maxCommands * COMPANION_CLAIM_TRIES : 0,
     };
@@ -573,6 +575,7 @@ export async function claimCompanionImageCommands(
           break;
         }
         commands.push(command);
+        admission.handedOffIds.push(claimed.id);
         tries = 0;
       } catch (error) {
         // The savepoint may have rolled back a service after updating the transaction-local copy.
@@ -591,7 +594,14 @@ export async function claimCompanionImageCommands(
       }
     }
     // All successful leases share one wake invalidation; per-claim attempts and URLs stay distinct.
-    if (commands.length) await armDeviceWake(tx);
+    if (commands.length) {
+      await armDeviceWake(tx);
+      const expires = await finalizeCompanionImageLeases(tx, {
+        claims: commands,
+        leaseMs: input.leaseMs,
+      });
+      for (const command of commands) command.deadline = expires.toISOString();
+    }
     return { commands, failure };
   });
   if (batch.failure && !batch.commands.length) throw batch.failure.error;

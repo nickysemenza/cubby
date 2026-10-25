@@ -254,7 +254,10 @@ Device wire contract:
   admission lock. A bounded candidate page per class avoids rescanning the full
   queue for every slot; each hand-off rechecks due times, leases and Run class
   within that page, preserving per-command capabilities, device preference,
-  attempts, leases and presigned URLs. An empty array/null command means no
+  attempts, leases and presigned URLs. A prepared Job cannot re-enter the batch
+  even if its initial lease expires during later preparation. Immediately before
+  hand-off, still-owned leases are re-armed together and every returned command
+  receives the fresh deadline. An empty array/null command means no
   hand-off: refused claims are released first. A preparation failure releases
   and backs off that claim. An already prepared prefix is returned; if there
   is none, the pull throws after the release commits. Neither valid commands

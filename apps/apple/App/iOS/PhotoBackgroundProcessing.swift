@@ -116,11 +116,12 @@ enum LibrarySyncBackgroundProcessing {
                 await imports
                 return model.hasPendingPhotoImports
             }
+            async let companionHasMore = model.runCompanionJobsInBackground()
             await model.startAutomaticPhotoMatching()
             await model.photoLibrary.waitForMatching()
             await model.libraryMetadataSync?.runInBackground()
             await imports
-            return false
+            return await companionHasMore
         }
         task.expirationHandler = {
             worker.cancel()
@@ -130,13 +131,13 @@ enum LibrarySyncBackgroundProcessing {
                 model.interruptPhotoImports()
             }
         }
-        let importsRemain = await worker.value
+        let companionHasMore = await worker.value
         let expired = worker.isCancelled
         task.expirationHandler = nil
         task.setTaskCompleted(success: !expired)
         // Reschedule only when the window ended early or the scan is unfinished, so a fully
         // synced library does not relaunch on every background transition's behalf.
-        if expired || importsRemain || model.photoLibrary.hasPendingMatching
+        if expired || companionHasMore || model.photoLibrary.hasPendingMatching
             || model.hasPendingPhotoImports
         {
             scheduleIfNeeded(model: model)

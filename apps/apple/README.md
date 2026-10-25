@@ -216,7 +216,9 @@ requires external power and network connectivity for opportunistic overnight
 work. Both windows use the shared slot setting, renew every 15 s, and retain
 undelivered results in the same outbox. A foreground subscription settles and
 releases its claims before a system window starts, then resumes when the
-window ends if the app is active. Library sync no longer owns image execution.
+window ends if the app is active. Library sync retains its concurrent companion pass, so that window still processes
+image work alongside photo matching and metadata sync. Overlapping windows use the
+same worker; expiration cancels only the pass owned by that window.
 The OS chooses charging-window timing; a physical iPhone must verify continued
 processing, system cancellation and overnight scheduling without a debugger.
 Identifiers/background modes come from `project.yml`; iOS background GPU access

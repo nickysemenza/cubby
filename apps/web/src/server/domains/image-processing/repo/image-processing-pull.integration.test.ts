@@ -2,10 +2,13 @@ import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { IMAGE_PROCESSING_PROTOCOL_VERSION } from "@cubby/schemas/image-processing";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { job as durableJob } from "~/server/db/retained-tables";
+import {
+  job as durableJob,
+  jobLaneAdmission,
+} from "~/server/db/retained-tables";
 import {
   image,
   imageProcessingAttempt,
@@ -14,6 +17,7 @@ import {
   run,
 } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
+import * as companionDispatch from "~/server/domains/image-processing/service/dispatch";
 import {
   claimCompanionImageCommands,
   pullCompanionImageProcessing,
@@ -160,6 +164,160 @@ describe("background companion leases", () => {
     const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
     expect(attempts).toHaveLength(8);
     expect(attempts.every((attempt) => attempt.state === "running")).toBe(true);
+  });
+
+  it("finalizes leases expired while preparing later items without handing a job off twice", async () => {
+    const owner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const jobs = [
+      await job(
+        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        "image/jpeg",
+        owner,
+      ),
+      await job(
+        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        "image/jpeg",
+        owner,
+      ),
+    ];
+    const prepare = companionDispatch.prepareCompanionImageCommand;
+    let prepared = 0;
+    let firstDeadline = 0;
+    const spy = vi
+      .spyOn(companionDispatch, "prepareCompanionImageCommand")
+      .mockImplementation(async (claimed) => {
+        const command = await prepare(claimed);
+        prepared += 1;
+        if (prepared === 1) {
+          firstDeadline = Date.parse(command.deadline);
+          vi.setSystemTime(new Date(firstDeadline - 10_000));
+        }
+        if (prepared === 2) vi.setSystemTime(new Date(firstDeadline + 10_000));
+        return command;
+      });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      // There is a free slot after both jobs prepare, and the first lease is now expired.
+      const pulled = await batchPull(3);
+      expect(
+        new Set(pulled.commands.map((command) => command.jobId)).size,
+      ).toBe(pulled.commands.length);
+      expect(pulled.commands.map((command) => command.jobId).sort()).toEqual(
+        [...jobs].sort(),
+      );
+      expect(firstDeadline).toBeLessThan(Date.now());
+      expect(
+        pulled.commands.every(
+          (command) => Date.parse(command.deadline) >= Date.now() + 59_000,
+        ),
+      ).toBe(true);
+      const executions = await getDb(ctx.db)
+        .select()
+        .from(durableJob)
+        .where(eq(durableJob.kind, "image.device"));
+      for (const command of pulled.commands) {
+        expect(
+          executions
+            .find((execution) => execution.leaseToken === command.attemptId)
+            ?.leaseExpiresAt?.toISOString(),
+        ).toBe(command.deadline);
+      }
+      const attempts = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingAttempt);
+      expect(attempts).toHaveLength(2);
+      expect(new Set(attempts.map((attempt) => attempt.jobId)).size).toBe(2);
+      expect(await deviceOwnedStreak(ctx.db)).toBe(2);
+    } finally {
+      vi.useRealTimers();
+      spy.mockRestore();
+    }
+  });
+
+  it("rolls back reservation and fairness after a successful prefix before taking backfill again", async () => {
+    const owner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const prefix = await job(
+      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/jpeg",
+      owner,
+    );
+    const refused = await job(
+      IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/avif",
+    );
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", owner);
+    await getDb(ctx.db)
+      .insert(jobLaneAdmission)
+      .values({ lane: "image.device", ownedStreak: 3 });
+    const reserve = companionDispatch.reserveCompanionAnalysisOutput;
+    let reservationSucceeded = false;
+    const spy = vi
+      .spyOn(companionDispatch, "reserveCompanionAnalysisOutput")
+      .mockImplementation(async (tx, command) => {
+        const accepted = await reserve(tx, command);
+        if (command.jobId === refused) {
+          reservationSucceeded = accepted;
+          return false;
+        }
+        return accepted;
+      });
+    try {
+      const device = hello();
+      const pulled = await pullCompanionImageProcessing(
+        ctx.db,
+        {
+          hello: {
+            ...device,
+            capabilities: {
+              ...device.capabilities,
+              jpegNormalization: { available: true, revision: 1 },
+            },
+          },
+          leaseSeconds: 60,
+          maxCommands: 2,
+        },
+        userId,
+      );
+      expect(reservationSucceeded).toBe(true);
+      expect(pulled.commands.map((command) => command.jobId)).toEqual([
+        prefix,
+        backfill,
+      ]);
+      expect(await deviceOwnedStreak(ctx.db)).toBe(0);
+      const attempts = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingAttempt);
+      expect(attempts.map((attempt) => attempt.jobId).sort()).toEqual(
+        [prefix, backfill].sort(),
+      );
+      const [released] = await getDb(ctx.db)
+        .select()
+        .from(durableJob)
+        .where(eq(durableJob.key, `image-processing:${refused}`));
+      expect(released?.leaseToken).toBeNull();
+      expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
+      const [row] = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, refused));
+      expect(row?.attempts).toBe(0);
+      const assigned = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingEvent)
+        .where(eq(imageProcessingEvent.jobId, refused));
+      expect(
+        assigned.some((event) => event.event === "execution.assigned"),
+      ).toBe(false);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("concurrent batches never hand the same attempt or job to two devices", async () => {

@@ -162,20 +162,26 @@ struct CompanionImageWorkerTests {
 
     /// Regression: a pull in flight when the subscription ended (iOS backgrounding, or here
     /// participation turning off) still started its job outside the window that asked for it.
-    @Test func aCommandPulledAfterTheSubscriptionEndsIsReleased() async throws {
+    @Test func aBatchPulledAfterTheSubscriptionEndsIsReleased() async throws {
         let pullGate = Gate()
-        let transport = QueuedCompanionTransport(commands: [try describeCommand()], pullGate: pullGate)
+        let transport = QueuedCompanionTransport(
+            commands: [
+                try describeCommand(), try describeCommand(attempt: "00000000-0000-4000-8000-000000000003"),
+            ], pullGate: pullGate)
         let executions = ExecutionCounter()
         let worker = CompanionImageWorker(
             baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true,
-            outbox: try outbox(), transport: transport, execute: { try await executions.run($0) })
+            maximumConcurrentCommands: 2, outbox: try outbox(), transport: transport,
+            execute: { try await executions.run($0) })
         await worker.start()
         await worker.requestDrain()
         await pullGate.arrivals()
         await worker.setParticipating(false)
         pullGate.open()
-        await transport.releases.arrivals()
+        await transport.releases.arrivals(2)
+        await worker.releasesIdle()
+        #expect(await transport.released.count == 2)
         await worker.commandsIdle()
         #expect(await executions.count == 0)
         await worker.stop()

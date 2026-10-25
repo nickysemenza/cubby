@@ -23,6 +23,7 @@ import {
   imageProcessingSource,
 } from "@cubby/schemas/image-processing";
 import type {
+  ImageProcessingCommand,
   ImageProcessingJobKind,
   ImageProcessingJobState,
   ImageProcessingTerminalResult as ImageProcessingResult,
@@ -39,6 +40,7 @@ import {
   lte,
   ne,
   not,
+  notInArray,
   or,
   sql,
 } from "drizzle-orm";
@@ -585,17 +587,18 @@ async function rebuildTransparentDerivative(
   return live;
 }
 
+/** A bounded candidate page per class, owned by the pull transaction's admission lock. */
+export type DeviceImageClaimBatch = DeviceAdmission & {
+  candidateLimit: number;
+  candidateIds?: string[];
+  handedOffIds: string[];
+};
+
 /**
  * Claim one job with a bounded lease. No HTTP path waits for device work.
  * Expired leases are safe to reclaim because every completion must echo
  * the Job's lease token as its attemptId; reclaiming one is not an attempt.
  */
-/** A bounded candidate page per class, owned by the pull transaction's admission lock. */
-export type DeviceImageClaimBatch = DeviceAdmission & {
-  candidateLimit: number;
-  candidateIds?: string[];
-};
-
 export async function claimImageProcessingJob(
   db: Database,
   input: {
@@ -707,6 +710,12 @@ export async function claimImageProcessingJob(
           .where(
             and(
               input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
+              input.deviceAdmission?.handedOffIds.length
+                ? notInArray(
+                    imageProcessingJob.id,
+                    input.deviceAdmission.handedOffIds,
+                  )
+                : undefined,
               candidateIds
                 ? inArray(imageProcessingJob.id, [...candidateIds])
                 : undefined,
@@ -884,6 +893,48 @@ export async function claimImageProcessingJob(
       };
     },
   );
+}
+
+/**
+ * Preparation may outlast an early lease. The transaction still owns the Job locks, so unchanged
+ * tokens can be re-armed together immediately before commit without counting another service.
+ */
+export async function finalizeCompanionImageLeases(
+  db: Database,
+  input: {
+    claims: readonly Pick<ImageProcessingCommand, "jobId" | "attemptId">[];
+    leaseMs: number;
+  },
+): Promise<Date> {
+  const now = new Date();
+  const expires = new Date(now.getTime() + input.leaseMs);
+  if (!input.claims.length) return expires;
+  const renewed = await getDb(db)
+    .update(durableJob)
+    .set({
+      leaseExpiresAt: expires,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(durableJob.kind, "image.device"),
+        eq(durableJob.state, "running"),
+        or(
+          ...input.claims.map((claim) =>
+            and(
+              eq(durableJob.key, imageProcessingJobKey(claim.jobId)),
+              eq(durableJob.leaseToken, claim.attemptId),
+            ),
+          ),
+        ),
+      ),
+    )
+    .returning({ id: durableJob.id });
+  if (renewed.length !== input.claims.length)
+    throw new Error(
+      "Companion image batch lost a prepared lease before hand-off",
+    );
+  return expires;
 }
 
 /**

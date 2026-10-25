@@ -61,6 +61,36 @@ struct CompanionImageBackgroundTests {
         #expect(try await outbox.pending().isEmpty)
     }
 
+    /// A response already in flight can return its whole batch after expiration cancels the task.
+    @Test func cancellationWhileABatchPullReturnsReleasesEveryClaim() async throws {
+        let commands = [
+            try command(),
+            try command(
+                job: "00000000-0000-4000-8000-000000000003", attempt: "00000000-0000-4000-8000-000000000004"),
+        ]
+        let pull = Gate()
+        let transport = BackgroundTransportFixture(commands: commands, pullGate: pull)
+        let fileURL = try outboxFile()
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+        let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        let executions = BackgroundExecutionFixture()
+        let runner = CompanionImageBackgroundRunner(
+            outbox: outbox,
+            execute: {
+                try await executions.complete($0)
+            })
+        let task = Task {
+            await runner.run(transport: transport, hello: hello(), maximumConcurrentCommands: { 2 })
+        }
+        await pull.arrivals()
+        task.cancel()
+        pull.open()
+        _ = await task.value
+        #expect(await transport.releaseCount == 2)
+        #expect(await executions.count == 0)
+        #expect(try await outbox.pending().isEmpty)
+    }
+
     @Test func replayAcknowledgesWithoutRepeatingExecution() async throws {
         let command = try command()
         let transport = BackgroundTransportFixture(commands: [command], failFirstCompletion: true)
@@ -426,6 +456,7 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     let releaseError: (any Error)?
     /// Holds each completion on `completionHold` (ignoring cancellation), then throws this.
     let completionError: (any Error)?
+    let pullGate: Gate?
     nonisolated let completionHold = Gate()
     private(set) var completionCount = 0
     private(set) var rejectedCount = 0
@@ -441,8 +472,9 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         waitDuringCompletion: Bool = false,
         renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture),
         renewError: (any Error)? = nil, rejectedJobs: Set<String> = [],
-        releaseError: (any Error)? = nil, completionError: (any Error)? = nil
+        releaseError: (any Error)? = nil, completionError: (any Error)? = nil, pullGate: Gate? = nil
     ) {
+        self.pullGate = pullGate
         self.releaseError = releaseError
         self.completionError = completionError
         self.commands = commands
@@ -459,6 +491,7 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         pullCount += 1
         let batch = Array(commands.prefix(maxCommands))
         commands.removeFirst(batch.count)
+        await pullGate?.hold()
         return .init(command: batch.first, commands: batch, remotePaused: false)
     }
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
