@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync, realpathSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import { localPreviewOrigins } from "../../src/lib/local-preview-origins.ts";
 
 export interface DevProfile {
   schemaVersion: 1;
@@ -129,6 +130,9 @@ function localVars({
     SENTRY_ENVIRONMENT:
       inherited.CUBBY_DEV_TELEMETRY === "true" ? "development" : "test",
     APP_ORIGIN: origin,
+    CUBBY_DEV_ORIGIN_ALIASES: localPreviewOrigins(
+      inherited.CUBBY_DEV_ORIGIN_ALIASES,
+    ).join(","),
     BETTER_AUTH_URL: origin,
     BETTER_AUTH_SECRET: createHash("sha256")
       .update(`cubby-local-${id}`)

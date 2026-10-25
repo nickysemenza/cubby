@@ -15,6 +15,7 @@ const optionalUrl = z.preprocess(
 const authConfigurationSchema = z.object({
   BETTER_AUTH_SECRET: z.string().min(1),
   BETTER_AUTH_URL: optionalUrl,
+  CUBBY_DEV_ORIGIN_ALIASES: optionalText,
   NODE_ENV: z.enum(["development", "test", "production"]),
   ALLOW_SIGNUP: z.enum(["true", "false"]).default("false"),
   INSECURE_AUTH_COOKIES: z.enum(["true", "false"]).default("false"),

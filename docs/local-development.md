@@ -69,6 +69,37 @@ Debug Swift apps launched with `--cubby-dev-server <origin>` use
 cache without a browser redirect. This mode accepts only loopback HTTP servers
 and rejects redirects; it is absent from release app builds.
 
+### Tailscale HTTPS previews
+
+Set `CUBBY_DEV_ORIGIN_ALIASES` to comma-separated exact HTTPS Tailscale origins
+before starting `pnpm dev`, for example
+`https://dev-machine.example-tailnet.ts.net:8445`. Restart the runtime after
+changing aliases. This is an explicit per-checkout trust grant: it enables real
+synthetic login, auth POSTs and browser operations at each listed origin. It does
+not change the localhost discovery origin, checkout identity, database guards,
+production auth policy, or the loopback-only native development login contract.
+Aliases must be HTTPS `ts.net` origins with no credentials, path, query or fragment.
+Never share one external origin between simultaneous checkouts.
+
+Inspect `tailscale serve status --json` first and choose an unused HTTPS port;
+never reset Serve or replace another preview's route. After startup, use the
+selected port from `pnpm dev status` and publish a persistent route, for example
+`tailscale serve --bg --https=8445 'http://[::1]:3000'`. Match the actual listener: this runtime may bind IPv6
+localhost while `127.0.0.1` refuses connections. Keep the supervisor running
+independently of a short-lived tool session; use `CUBBY_DEV_IDLE_MINUTES=0`
+when a review must outlive the normal idle timeout.
+
+Serve preserves the external request host and HTTPS scheme. The Worker checks
+that request URL against the exact aliases, independently of forwarded headers;
+forwarded headers never add trusted origins. Vite uses the alias hostnames for
+its host guard and derives secure HMR WebSockets and the external port from the
+browser URL; Serve must proxy WebSocket upgrades. Better Auth trusts the same
+explicit aliases. Open the published HTTPS `/__dev/ready`, then `/__dev/login`,
+and verify an authenticated browser operation and HMR before sharing the link.
+A failed readiness or browser check is a blocker, not a verified preview.
+
+### Checkout data and identity
+
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` (published at `localhost:55432`), and its Worker resources are named with
 that id. PostgreSQL's container is shared with every checkout and with test runs'

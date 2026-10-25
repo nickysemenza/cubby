@@ -131,3 +131,34 @@ it("accepts empty optional provider bindings from the default local profile", as
     },
   );
 });
+
+it("trusts explicit local preview aliases for auth without trusting other tailnet origins", async () => {
+  const alias = "https://dev-machine.example-tailnet.ts.net:8445";
+  await withCfEnv(
+    bindings({ NODE_ENV: "development", CUBBY_DEV_ORIGIN_ALIASES: alias }),
+    async () => {
+      const auth = getAuth();
+      await auth.$context;
+      const trustedOrigins = auth.options.trustedOrigins;
+      expect(typeof trustedOrigins).toBe("function");
+      if (typeof trustedOrigins !== "function") return;
+      const origins = await trustedOrigins(
+        new Request(`${alias}/api/auth/sign-in/email`, {
+          headers: { origin: alias },
+        }),
+      );
+      expect(origins).toContain(alias);
+      expect(origins).not.toContain(
+        "https://other.example-tailnet.ts.net:8445",
+      );
+    },
+  );
+  await withCfEnv(
+    bindings({ NODE_ENV: "production", CUBBY_DEV_ORIGIN_ALIASES: alias }),
+    async () => {
+      const auth = getAuth();
+      await auth.$context;
+      expect(auth.options.trustedOrigins).toEqual(["cubby-mobile://"]);
+    },
+  );
+});

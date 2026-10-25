@@ -3,6 +3,7 @@ import { Client } from "pg";
 import type { ExecutionContext, MessageBatch } from "@cloudflare/workers-types";
 import { z } from "zod";
 
+import { isLocalPreviewOrigin } from "../../src/lib/local-preview-origins";
 import { withCfEnv } from "../../src/server/cf-env";
 import worker from "../../src/cf-server";
 import { QUEUE_NAMES, localQueueNames } from "../../src/server/worker-identity";
@@ -24,6 +25,7 @@ type LocalDevEnv = Env &
   LocalStorageEnv & {
     DATABASE_URL: string;
     CUBBY_DEV_ID: string;
+    CUBBY_DEV_ORIGIN_ALIASES: string;
     CUBBY_DEV_DB_NAME: string;
     CUBBY_DEV_PROFILE: "offline" | "integrations";
     CUBBY_DEV_MIGRATION_COUNT: string;
@@ -63,7 +65,11 @@ function assertLocalEnvironment(request: Request, env: LocalDevEnv) {
     !env.CUBBY_DEV_ID ||
     env.E2E_AUTH_TEST_MODE === "true" ||
     !loopback.has(origin.hostname) ||
-    new URL(request.url).origin !== origin.origin ||
+    !isLocalPreviewOrigin(
+      new URL(request.url).origin,
+      origin.origin,
+      env.CUBBY_DEV_ORIGIN_ALIASES,
+    ) ||
     database.pathname.slice(1) !== env.CUBBY_DEV_DB_NAME ||
     !(
       loopback.has(hyperdrive.hostname) ||
@@ -190,9 +196,16 @@ export default {
         { status: 403 },
       );
     }
+    // The URL passed the exact origin guard; downstream protocol consumers must
+    // not let client-supplied forwarding headers select another origin.
+    const url = new URL(request.url);
+    const headers = new Headers(request.headers);
+    headers.delete("forwarded");
+    headers.set("x-forwarded-host", url.host);
+    headers.set("x-forwarded-proto", url.protocol.slice(0, -1));
+    request = new Request(request, { headers });
     env = dispatchEnvironment(env);
     await seedUsda(env);
-    const url = new URL(request.url);
     if (url.pathname === "/__dev/health" || url.pathname === "/__dev/ready") {
       if (request.method !== "GET")
         return new Response(null, { status: 405, headers: { Allow: "GET" } });

@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
+import {
+  isLocalPreviewOrigin,
+  localPreviewOrigins,
+} from "../../src/lib/local-preview-origins";
 import { resolveDevProfile } from "./dev-profile.ts";
 
 // Failure modes: inherited production targets, cross-checkout state collisions,
@@ -92,4 +96,38 @@ test("dev profiles never redirect the gateway, and offline dev carries no key", 
   });
   assert.equal(offline.vars.AI_GATEWAY_API_KEY, "");
   assert.equal("AI_GATEWAY_ID" in offline.vars, false);
+});
+
+// Aliases relax only the external origin; checkout/database selection stays local.
+test("explicit HTTPS previews retain checkout identity and reject other origins", () => {
+  const alias = "https://dev-machine.example-tailnet.ts.net:8445";
+  const local = resolveDevProfile("/tmp/cubby-preview", {});
+  const preview = resolveDevProfile("/tmp/cubby-preview", {
+    CUBBY_DEV_ORIGIN_ALIASES: `${alias}, ${alias}/`,
+  });
+  assert.equal(preview.vars.CUBBY_DEV_ORIGIN_ALIASES, alias);
+  assert.equal(preview.origin, local.origin);
+  assert.equal(preview.databaseUrl, local.databaseUrl);
+  assert.equal(preview.id, local.id);
+  assert.equal(preview.vars.APP_ORIGIN, local.origin);
+  assert.equal(preview.vars.BETTER_AUTH_URL, local.origin);
+  assert.equal(isLocalPreviewOrigin(alias, local.origin, alias), true);
+  assert.equal(isLocalPreviewOrigin(local.origin, local.origin, alias), true);
+  for (const other of [
+    "https://other.example-tailnet.ts.net:8445",
+    "https://dev-machine.example-tailnet.ts.net:8446",
+    "http://dev-machine.example-tailnet.ts.net:8445",
+  ])
+    assert.equal(isLocalPreviewOrigin(other, local.origin, alias), false);
+  for (const invalid of [
+    "https://example.com",
+    "https://*.ts.net",
+    "http://dev.example.ts.net",
+    `${alias}/path`,
+    `${alias}?query`,
+    `${alias}#fragment`,
+    "https://user:password@dev.example.ts.net",
+    `${alias},`,
+  ])
+    assert.throws(() => localPreviewOrigins(invalid));
 });
