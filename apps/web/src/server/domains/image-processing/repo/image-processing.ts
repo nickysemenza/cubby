@@ -20,6 +20,7 @@ import {
   type ImageDescriptionResult,
   IMAGE_DESCRIPTION_PROMPT_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+  imageProcessingSource,
 } from "@cubby/schemas/image-processing";
 import type {
   ImageProcessingJobKind,
@@ -183,9 +184,22 @@ const currentImageProcessingProcessor = () => sql<boolean>`(
     AND ${imageProcessingJob.processorRevision} IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
 )`;
 
+/**
+ * Source types a device command can carry. Device work on any other type
+ * (a GIF, say) is type-excluded: its command would fail validation on every
+ * pull, so it settles as skipped instead of holding a lease forever.
+ */
+const DEVICE_SOURCE_TYPES = imageProcessingSource.shape.contentType.options;
+
 const obsoleteImageProcessingSource = () => sql<boolean>`(
   ${image.deletedAt} IS NOT NULL OR ${image.status} <> ${ImageStatus.enum.UPLOADED}
   OR ${image.sha256} IS NULL OR ${image.sha256} <> ${imageProcessingJob.sourceContentHash}
+  OR (${image.contentType} NOT IN (${sql.join(
+    DEVICE_SOURCE_TYPES.map((type) => sql`${type}`),
+    sql`, `,
+  )}) AND EXISTS (SELECT 1 FROM "Job" dj
+    WHERE dj.key = 'image-processing:' || ${imageProcessingJob.id}::text
+      AND dj.kind = 'image.device'))
 )`;
 
 type JobIdentity = {
@@ -445,8 +459,9 @@ export async function createTransparentDerivativeAndJob(
 }
 
 /**
- * Settle open work whose source image was removed or replaced, or whose
- * processor revision was superseded: the only moot endings image work has.
+ * Settle open work whose source image was removed or replaced, whose device
+ * work has a type no device command carries, or whose processor revision was
+ * superseded: the only moot endings image work has.
  * `jobId` scopes it to one row inside that row's own execution; otherwise a
  * bounded batch also completes the parked Jobs no executor will claim.
  */
@@ -480,7 +495,7 @@ export async function retireObsoleteImageProcessingJobs(
       .set({
         state: "skipped",
         completedAt: new Date(),
-        lastError: "Image source or processor is obsolete",
+        lastError: "Image source, type or processor is obsolete",
       })
       .where(batch ? inArray(imageProcessingJob.id, batch) : obsolete)
       .returning({ id: imageProcessingJob.id }),

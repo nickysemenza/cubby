@@ -214,7 +214,8 @@ control refusals are `RUN_CONTROL_REFUSED` (409), never 500.
 
 Image processing is never abandoned. `ImageProcessingJob.state` stores only
 the outcome: `pending` while open, `ready`, or `skipped` for a moot ending
-(image deleted, upload replaced, processor superseded, type excluded). Only
+(image deleted, upload replaced, processor superseded, type excluded: device
+work on a source type no device command carries, such as a GIF). Only
 the server decides a moot ending: an executor's `skipped` (`no_subject`,
 `not_suitable`, `unsupported_format`) is recorded as a retryable failure that
 keeps its reason code, backs off and asks for attention like any failure. A
