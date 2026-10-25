@@ -14,9 +14,9 @@ const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
 const DEVICE_LANE = "image.device";
 
 /**
- * How many device claims in a row were run-owned when admitted, up to
- * `DEVICE_OWNED_STREAK`, for queue positions. Each claim, reclaims included,
- * is one service; a claim the server then cannot hand over still counts.
+ * How many device claims in a row were run-owned when admitted, for queue
+ * positions. Each claim, reclaims included, is one service; a claim the
+ * server cannot hand over is undone by `refuseDeviceAdmission`.
  */
 export async function deviceOwnedStreak(db: Database): Promise<number> {
   const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
@@ -37,13 +37,57 @@ export async function lockDeviceAdmission(db: Database): Promise<number> {
   return result.rows[0]?.streak ?? 0;
 }
 
+/** What a refused hand-off needs to undo its claim's admission exactly. */
+export type DeviceAdmission = {
+  runOwned: boolean;
+  /** The streak this claim replaced. */
+  priorStreak: number;
+  /** Backfill admissions so far, this claim's included. */
+  backfillAdmissions: number;
+};
+
 /** Counts one admitted claim by the class it was admitted under. */
-export async function recordDeviceAdmission(db: Database, runOwned: boolean) {
+export async function recordDeviceAdmission(
+  db: Database,
+  runOwned: boolean,
+  priorStreak: number,
+): Promise<DeviceAdmission> {
+  const result = await repositoryQueries(db).execute<{ backfill: string }>(sql`
+    UPDATE "JobLaneAdmission"
+    SET "ownedStreak" = ${runOwned ? sql`"ownedStreak" + 1` : sql`0`},
+      "backfillAdmissions" = "backfillAdmissions" + ${runOwned ? 0 : 1},
+      "updatedAt" = now()
+    WHERE lane = ${DEVICE_LANE}
+    RETURNING "backfillAdmissions" AS backfill`);
+  return {
+    runOwned,
+    priorStreak,
+    backfillAdmissions: Number(result.rows[0]?.backfill ?? 0),
+  };
+}
+
+/**
+ * Undoes the admission of a claim the server could not hand over, in its
+ * release's transaction, as if the claim had never been admitted. While no
+ * backfill was admitted since, only Run claims were (each adding one): a
+ * refused Run claim takes back its own one, and a refused backfill restores
+ * the streak it reset plus those Run claims. A backfill admitted since
+ * already spent the turn, so the streak stands.
+ */
+export async function refuseDeviceAdmission(
+  db: Database,
+  admission: DeviceAdmission,
+) {
   await repositoryQueries(db).execute(sql`
     UPDATE "JobLaneAdmission"
-    SET "ownedStreak" = ${runOwned ? sql`least("ownedStreak" + 1, ${DEVICE_OWNED_STREAK})` : sql`0`},
+    SET "ownedStreak" = ${
+      admission.runOwned
+        ? sql`greatest("ownedStreak" - 1, 0)`
+        : sql`"ownedStreak" + ${admission.priorStreak}`
+    },
       "updatedAt" = now()
-    WHERE lane = ${DEVICE_LANE}`);
+    WHERE lane = ${DEVICE_LANE}
+      AND "backfillAdmissions" = ${admission.backfillAdmissions}`);
 }
 
 /** Whether the next device pull owes backfill its turn. */

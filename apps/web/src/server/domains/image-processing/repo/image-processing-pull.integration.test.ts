@@ -24,6 +24,7 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   releaseAssignedImageProcessingJob,
+  releaseImageProcessingLease,
   renewAssignedImageProcessingLease,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
@@ -307,6 +308,110 @@ describe("background companion leases", () => {
       claim(crypto.randomUUID()),
     ]);
     expect(leases.map((lease) => lease?.id)).toContain(backfill);
+  });
+
+  // Review finding: a backfill claim reset the streak when admitted, so a
+  // hand-off the server then refused (participation turned off) released it
+  // with the turn spent, and another device served four more Run Jobs first.
+  // A refusal now undoes its admission as if the claim had never happened,
+  // without overwriting admissions other devices made in between.
+  describe("a refused hand-off", () => {
+    const runJob = async (owner: RunId) =>
+      job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", owner);
+    const backfillJob = () => job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    /** Four served Run claims: backfill's turn is next. */
+    async function owedBackfill() {
+      const owner = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+        trigger: "manual",
+      });
+      for (let index = 0; index < 4; index++) {
+        await runJob(owner);
+        const lease = await claim(crypto.randomUUID());
+        if (!lease) throw new Error("Expected Run lease");
+        await assign(lease);
+      }
+      return owner;
+    }
+    const refuse = (lease: Awaited<ReturnType<typeof claim>>) =>
+      releaseImageProcessingLease(ctx.db, {
+        jobId: lease!.id,
+        attemptId: lease!.attemptId,
+        reason: "Device assignment was refused",
+        event: "dispatch.released",
+        refusedAdmission: lease!.admission ?? undefined,
+      });
+
+    it("keeps backfill owed", async () => {
+      const owner = await owedBackfill();
+      const backfill = await backfillJob();
+      await runJob(owner);
+      const refused = await claim(crypto.randomUUID());
+      expect(refused).toMatchObject({
+        id: backfill,
+        admission: { runOwned: false },
+      });
+      expect(await refuse(refused)).toBe(true);
+      expect((await claim(crypto.randomUUID()))?.id).toBe(backfill);
+    });
+
+    it("keeps backfill owed past Run claims another device made meanwhile", async () => {
+      const owner = await owedBackfill();
+      const backfill = await backfillJob();
+      const owned = [await runJob(owner), await runJob(owner)];
+      const refused = await claim(crypto.randomUUID());
+      expect(refused?.id).toBe(backfill);
+      // Another device is served while the first hand-off is still settling.
+      const other = crypto.randomUUID();
+      const served = await claim(other);
+      expect(served?.id).toBe(owned[0]);
+      await assign(served!, other);
+      expect(await refuse(refused)).toBe(true);
+      expect((await claim(other))?.id).toBe(backfill);
+    });
+
+    it("leaves the turn spent by a backfill another device took meanwhile", async () => {
+      const owner = await owedBackfill();
+      const first = await backfillJob();
+      const second = await backfillJob();
+      const refused = await claim(crypto.randomUUID());
+      expect(refused?.id).toBe(first);
+      // No Run work is due, so the other device takes the second backfill.
+      const other = crypto.randomUUID();
+      const served = await claim(other);
+      expect(served?.id).toBe(second);
+      await assign(served!, other);
+      const owned = await runJob(owner);
+      expect(await refuse(refused)).toBe(true);
+      // Backfill already had its turn: Run work leads again.
+      expect((await claim(other))?.id).toBe(owned);
+    });
+
+    it("gives back a refused Run claim's slot only", async () => {
+      const owner = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+        trigger: "manual",
+      });
+      for (let index = 0; index < 3; index++) {
+        await runJob(owner);
+        const lease = await claim(crypto.randomUUID());
+        if (!lease) throw new Error("Expected Run lease");
+        await assign(lease);
+      }
+      const owned = [await runJob(owner), await runJob(owner)];
+      const backfill = await backfillJob();
+      const refused = await claim(crypto.randomUUID());
+      expect(refused).toMatchObject({
+        id: owned[0],
+        admission: { runOwned: true },
+      });
+      expect(await refuse(refused)).toBe(true);
+      // The fourth Run slot is free again; backfill follows it.
+      const next = await claim(crypto.randomUUID());
+      expect(next?.admission?.runOwned).toBe(true);
+      await assign(next!);
+      expect((await claim(crypto.randomUUID()))?.id).toBe(backfill);
+    });
   });
 
   // Review finding: the backfill turn counted any Job with a runId as

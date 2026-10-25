@@ -112,7 +112,12 @@ last ran only orders candidates within it. A service is one device claim
 and a Run ending later never reclassifies services already counted. The
 streak lives in the `image.device` row of `JobLaneAdmission`, which each
 device claim locks and updates in its transaction, so concurrent pulls take
-their turns one at a time.
+their turns one at a time. A claim the server cannot hand over (preparation
+fails, participation turned off, output reservation fails) is undone in its
+release's transaction as if never admitted: a refused Run claim gives back its
+slot, and a refused backfill restores the streak it reset plus Run claims
+admitted since, unless another backfill was admitted meanwhile
+(`backfillAdmissions` moved), which already spent the turn.
 
 ## Durable invalidation
 

@@ -136,10 +136,15 @@ export const jobInvalidationCapture = pgTable(
  * row, classifies the claim when it admits it, and advances or resets
  * `ownedStreak` in the claim's transaction: concurrent pulls cannot both take
  * Run work at backfill's turn, and a Run finishing later never reclassifies
- * services already counted.
+ * services already counted. A claim the server cannot hand over is undone in
+ * its release's transaction.
  */
 export const jobLaneAdmission = pgTable("JobLaneAdmission", {
   lane: text("lane").primaryKey(),
   ownedStreak: integer("ownedStreak").notNull().default(0),
+  /** Backfill claims admitted, so a refused hand-off can tell if one came since. */
+  backfillAdmissions: bigint("backfillAdmissions", { mode: "number" })
+    .notNull()
+    .default(0),
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 });

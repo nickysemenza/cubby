@@ -10,11 +10,16 @@ import {
   imageProcessingEvent,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
-import { job as durableJob } from "~/server/db/retained-tables";
+import {
+  job as durableJob,
+  jobLaneAdmission,
+} from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
 import { claimCompanionImageCommand } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
+import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {
@@ -177,8 +182,18 @@ describe("image job retry policy", () => {
           leaseMs: 60_000,
         });
     };
+    // Backfill's turn is due; the refused hand-off must leave it owed.
+    const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
+    await getDb(ctx.db)
+      .insert(jobLaneAdmission)
+      .values({ lane: "image.device", ownedStreak: DEVICE_OWNED_STREAK })
+      .onConflictDoUpdate({
+        target: jobLaneAdmission.lane,
+        set: { ownedStreak: DEVICE_OWNED_STREAK },
+      });
     const optedOut = await device(false);
     expect(await optedOut()).toBeNull();
+    expect(await deviceOwnedStreak(ctx.db)).toBe(DEVICE_OWNED_STREAK);
     expect(await jobOf(jobId)).toMatchObject({
       state: "pending",
       executionState: "queued",

@@ -66,8 +66,10 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   deviceBackfillTurn,
+  type DeviceAdmission,
   lockDeviceAdmission,
   recordDeviceAdmission,
+  refuseDeviceAdmission,
 } from "~/server/generic/jobs/repo/device-admission";
 import {
   enqueueJob,
@@ -210,6 +212,8 @@ export type ClaimedImageProcessingJob = {
   runId: RunId | null;
   /** Database-authoritative end of this attempt's presigned capabilities. */
   leaseExpiresAt: Date;
+  /** A device claim's fairness admission; null for cloud claims. */
+  admission: DeviceAdmission | null;
 };
 
 /** Read-only source boundary shared by scheduling and the AI Gateway service. */
@@ -590,9 +594,10 @@ export async function claimImageProcessingJob(
       !currentExecution && input.processorRevisions !== undefined;
     // Device pulls take their turns one at a time: the lane's admission row
     // stays locked until this claim commits its class.
-    const backfillTurn =
-      devicePull &&
-      deviceBackfillTurn(await lockDeviceAdmission(databaseForTransaction(tx)));
+    const priorStreak = devicePull
+      ? await lockDeviceAdmission(databaseForTransaction(tx))
+      : 0;
+    const backfillTurn = devicePull && deviceBackfillTurn(priorStreak);
     // The internal policy keeps claims within the device’s supported job kinds.
     // A retry prefers a different device than the one its last attempt ran
     // on, within the class whose turn it is; a lone device still takes its
@@ -721,11 +726,13 @@ export async function claimImageProcessingJob(
         input.leaseMs,
       ));
     if (!execution) return null;
-    if (devicePull)
-      await recordDeviceAdmission(
-        databaseForTransaction(tx),
-        candidate.runOwned,
-      );
+    const admission = devicePull
+      ? await recordDeviceAdmission(
+          databaseForTransaction(tx),
+          candidate.runOwned,
+          priorStreak,
+        )
+      : null;
     // A device lease can lapse while every device idles; the wake rings then.
     if (execution.kind === "image.device")
       await armDeviceWake(databaseForTransaction(tx));
@@ -796,6 +803,7 @@ export async function claimImageProcessingJob(
       derivativeKey,
       attemptId,
       leaseExpiresAt: execution.leaseExpiresAt,
+      admission,
     };
   });
 }
@@ -893,6 +901,11 @@ export async function releaseImageProcessingLease(
     delayMs?: number;
     event: "dispatch.released" | "execution.released";
     source?: "server" | "device";
+    /**
+     * The fairness class of a device claim the server could not hand over;
+     * the release undoes its admission so a refused backfill stays owed.
+     */
+    refusedAdmission?: DeviceAdmission;
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
@@ -957,6 +970,11 @@ export async function releaseImageProcessingLease(
       source: input.source ?? "server",
       details: { reason: input.reason },
     });
+    if (input.refusedAdmission && execution.kind === "image.device")
+      await refuseDeviceAdmission(
+        databaseForTransaction(tx),
+        input.refusedAdmission,
+      );
     return true;
   });
 }

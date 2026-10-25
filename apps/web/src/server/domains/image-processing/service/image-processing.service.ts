@@ -507,6 +507,7 @@ export async function claimCompanionImageCommand(
       deviceId: device.deviceId,
     });
     if (!claimed) return null;
+    // The device never receives this claim, so its admission is undone.
     const release = (reason: string, delayMs?: number) =>
       releaseImageProcessingLease(db, {
         jobId: claimed.id,
@@ -514,6 +515,7 @@ export async function claimCompanionImageCommand(
         reason,
         delayMs,
         event: "dispatch.released",
+        refusedAdmission: claimed.admission ?? undefined,
       });
     let command: ImageProcessingCommand;
     try {
