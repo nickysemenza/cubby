@@ -4,7 +4,7 @@ import type {
 } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 
-import { doorbellRing } from "~/lib/doorbell";
+import { doorbellRing, type DatabaseChanges } from "~/lib/doorbell";
 import {
   databaseFreshness,
   type DatabaseFreshnessRpc,
@@ -37,11 +37,11 @@ export class DatabaseFreshnessDurableObject
     return acceptDoorbell(this.ctx, request);
   }
 
-  async publishChanges(categories: string[]): Promise<void> {
+  async publishChanges(changes: DatabaseChanges): Promise<void> {
     const ring = doorbellRing.parse({
       type: "ring",
       topic: "household.changed",
-      categories,
+      changes,
     });
     // Notification-triggered reads must bypass Hyperdrive's bounded-stale cache.
     await this.recordWrite();

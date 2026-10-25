@@ -5,6 +5,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import * as React from "react";
 
 import { cn } from "~/lib/utils";
+import { BackgroundRefreshStatus } from "~/ui/feedback/background-refresh-status";
 import { useNavAuthed } from "~/ui/hooks/use-nav-authed";
 import { useVirtualKeyboard } from "~/ui/hooks/use-virtual-keyboard";
 import { Row } from "~/ui/layout";
@@ -111,6 +112,11 @@ export function BottomNav() {
       )}
       aria-label="Main navigation"
     >
+      {authed && (
+        <span className="pointer-events-none absolute top-1 right-1">
+          <BackgroundRefreshStatus compact />
+        </span>
+      )}
       <Row align="center" justify="around" className="h-14">
         {authed ? (
           <>

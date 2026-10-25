@@ -113,6 +113,39 @@ import {
   ringImageProcessingCompanionsAfterCommit,
 } from "./image-processing-ring";
 
+/** Doorbell readers address records by shortcode, while workers hold storage UUIDs. */
+async function imageProcessingRecordChanges(
+  db: Database | DrizzleTransaction,
+  jobIds: readonly (typeof imageProcessingJob.$inferSelect.id)[],
+  imageIds: readonly ImageId[] = [],
+) {
+  const dbc = unwrapDb(db);
+  return {
+    imageJob:
+      jobIds.length > 200
+        ? null
+        : jobIds.length
+          ? (
+              await dbc
+                .select({ shortcode: imageProcessingJob.shortcode })
+                .from(imageProcessingJob)
+                .where(inArray(imageProcessingJob.id, [...jobIds]))
+            ).map((row) => row.shortcode)
+          : [],
+    image:
+      imageIds.length > 200
+        ? null
+        : imageIds.length
+          ? (
+              await dbc
+                .select({ shortcode: image.shortcode })
+                .from(image)
+                .where(inArray(image.id, [...imageIds]))
+            ).map((row) => row.shortcode)
+          : [],
+  };
+}
+
 /** A server-side failure is retried later; image work never fails terminally. */
 export const SERVER_FAILURE_RETRYABLE = true;
 
@@ -540,6 +573,7 @@ export async function retireObsoleteImageProcessingJobs(
   await recordChange(db, {
     kind: "projection",
     categories: ["imageJob"],
+    changes: await imageProcessingRecordChanges(db, ids),
     refresh: ["quality"],
   });
   return ids.length;
@@ -876,6 +910,11 @@ export async function claimImageProcessingJob(
         await recordChange(tx, {
           kind: "projection",
           categories: ["image", "imageJob"],
+          changes: await imageProcessingRecordChanges(
+            tx,
+            [candidate.id],
+            [parseEntityId("image", candidate.imageId)],
+          ),
           refresh: ["quality"],
         });
       const {
@@ -1182,6 +1221,7 @@ export async function retryImageProcessingNow(
     await recordChange(tx, {
       kind: "projection",
       categories: ["imageJob"],
+      changes: await imageProcessingRecordChanges(tx, ids),
       refresh: ["quality"],
     });
     return ids;
@@ -1717,6 +1757,7 @@ export async function completeImageProcessingJob(
     await recordChange(tx, {
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
+      changes: await imageProcessingRecordChanges(tx, [job.id], [job.imageId]),
       // Selected descriptions are inputs to image and attached-owner search documents.
       refresh:
         job.kind === "describe_image"
@@ -1837,7 +1878,11 @@ export async function saveImageDescriptionAnalysis(
     },
     { suggestedValue: result.description },
   );
-  await recordChange(db, { kind: "projection", categories: ["image"] });
+  await recordChange(db, {
+    kind: "projection",
+    categories: ["image"],
+    changes: await imageProcessingRecordChanges(db, [], [input.imageId]),
+  });
 }
 
 /**

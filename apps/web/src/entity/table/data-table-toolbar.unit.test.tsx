@@ -68,7 +68,6 @@ describe("DataTableToolbar query tier", () => {
   it("keeps rest and bulk tiers mounted while disabling both during updates", () => {
     render(<ToolbarHarness />, { wrapper: queryWrapper });
 
-    expect(screen.getByText("Updating…")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create" })).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Delete selected" }),

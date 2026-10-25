@@ -1,15 +1,12 @@
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Spinner } from "~/ui/primitives/spinner";
 
 import { ErrorDisplay } from "./error-display";
 
 /** Freshness is independent of whether the preceding write was accepted. */
 export function QueryRefreshStatus({
-  refreshing,
   error,
   onRetry,
 }: {
-  refreshing: boolean;
   error?: unknown;
   onRetry?: () => void;
 }) {
@@ -25,11 +22,5 @@ export function QueryRefreshStatus({
         <ErrorDisplay error={error} title="updated data" onRetry={onRetry} />
       </div>
     );
-  if (!refreshing) return null;
-  return (
-    <output className="flex items-center gap-1.5 py-1 text-xs text-muted-foreground">
-      <Spinner size="sm" />
-      Updating…
-    </output>
-  );
+  return null;
 }

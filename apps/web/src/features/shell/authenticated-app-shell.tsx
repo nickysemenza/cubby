@@ -20,6 +20,10 @@ import { MainNav } from "~/features/shell/main-nav";
 import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
+import {
+  BackgroundRefreshStatus,
+  ShellStatusSlot,
+} from "~/ui/feedback/background-refresh-status";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import {
@@ -313,6 +317,16 @@ function WorkspaceSidebar({
           />
         ))}
       </nav>
+      <ShellStatusSlot>
+        <span className={cn("flex", expanded && "lg:hidden")}>
+          <BackgroundRefreshStatus compact />
+        </span>
+        {expanded && (
+          <span className="hidden lg:flex">
+            <BackgroundRefreshStatus />
+          </span>
+        )}
+      </ShellStatusSlot>
       <div
         className={cn(
           "flex flex-col items-center gap-0.5 border-t border-border p-1.5",

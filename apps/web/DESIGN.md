@@ -53,6 +53,13 @@ Settings and long analytical workspaces (expense analytics, portfolio analytics,
 
 Today/Home titles itself with the household day and keeps Log meal and New task in the page header. A key-numbers strip (Tasks due, Needs you, Spent this month, Pantry on hand) leads, then Today and Needs you side by side as ruled 32px rows, then What changed grouped by household day with the day in a quiet gutter. From 1280px a right rail holds Meals, Money (recorded spend by month), Today’s nutrition, Pantry by location and Your views; below it the rail follows the main column. Records and Insights stay behind disclosure. Every figure is an existing query value; never invent pace, progress scores, risk predictions, or AI panels.
 
+Background refetches use one reserved status line at the bottom of the desktop
+sidebar: a small spinner and muted “Syncing…” after 300ms of continuous activity.
+The collapsed rail and mobile BottomNav show only the spinner. The sidebar slot
+accepts shared shell status content; feedback never inserts progress rows above
+headers, in tables, or in previews. Retained-data refresh errors and Retry stay
+inline. Native workspace routes have no shell feedback.
+
 ## Elevation & Depth
 
 Resting page and detail sections are open and flat, separated by 1px hairlines and whitespace. Section headings are plain semibold text; no gray bands and no cards around resting content. Rounded, shadowed containers are reserved for things that float: the inspector, popovers, menus and dialogs. Floating primitives share `popoverElevationClassName` and `--brand-elevation-popover`; the responsive schema inspector uses the same token only while floating. `cubby/no-shadow-utility` rejects sized and arbitrary shadow utilities; these floating surfaces carry explicit lint exceptions. Resting surfaces and table boundaries use flat hairlines. Motion explains state, respects reduced motion, and stays immediate for frequent search, navigation, and table work. Do not add page-load or media entrance animation.

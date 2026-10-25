@@ -1,4 +1,5 @@
-// Types only, importing nothing: the global
+import type { DatabaseChanges } from "~/lib/doorbell";
+// Types only, with the shared doorbell payload: the global
 // worker-environment.d.ts reaches this file through worker-bindings.ts, and
 // tsc re-checks the whole program after an edit to anything it reaches
 // (`git show 18f8bd430:docs/reports/local-check-performance.md`).
@@ -12,6 +13,6 @@ export interface DatabaseFreshness {
 export interface DatabaseFreshnessRpc {
   readFreshness(): DatabaseFreshness;
   recordWrite(): Promise<DatabaseFreshness>;
-  publishChanges(categories: string[]): Promise<void>;
+  publishChanges(changes: DatabaseChanges): Promise<void>;
   fetch(request: Request): Promise<Response>;
 }

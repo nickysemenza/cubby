@@ -1,5 +1,6 @@
 import { createLogger } from "@cubby/worker-tracing";
 
+import { mergeDatabaseChanges, type DatabaseChanges } from "~/lib/doorbell";
 import { afterResponse, getDatabaseFreshnessNamespace } from "~/server/cf-env";
 
 import type { DatabaseFreshness } from "./state";
@@ -21,14 +22,16 @@ const getPort = () =>
 
 /** Failure cannot turn an already committed write into a failed save. */
 export async function notifyDatabaseChanges(
-  categories: readonly string[],
+  changes: DatabaseChanges,
 ): Promise<void> {
   try {
     const target = getPort();
     if (!target) return;
     await afterResponse(
       boundedRpc(async () => {
-        await target.publishChanges([...new Set(categories)]);
+        const bounded: DatabaseChanges = {};
+        mergeDatabaseChanges(bounded, changes);
+        await target.publishChanges(bounded);
       }).catch((error: unknown) => {
         log.warn("change notification failed", { error });
       }),
