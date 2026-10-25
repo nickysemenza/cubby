@@ -244,6 +244,53 @@ describe("connection discovery pacing", () => {
     expect(inStopped).toEqual([]);
   });
 
+  it("keeps the stopped Run's identity across a page that admits nothing", async () => {
+    await tasks(["Synthetic late continuation task"]);
+    const keyed = async (db: Database, replacing: RunId | null) => {
+      const activation = await readAiRefreshActivation(db);
+      if (!activation) throw new Error("Synthetic AI refresh is not active");
+      return ensureRun(db, systemActor(), {
+        purpose: "connection_discovery",
+        trigger: "scheduled",
+        status: "running",
+        execution: false,
+        clientKey: `connection-discovery:synthetic-claim:2${replacing ? `:after:${replacing}` : ""}`,
+        input: connectionDiscoveryRunInput.parse({
+          kind: "connection_discovery",
+          activation,
+        }),
+      });
+    };
+    const stopped = await keyed(ctx.db, null);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, stopped));
+    // A page with nothing admissible right after the stop.
+    const empty = await prepareConnectionDiscoveryRoster(ctx.db, {
+      runId: stopped,
+      after: null,
+      limit: 25,
+      entityKinds: ["plant"],
+      newestFirst: true,
+      createRun: keyed,
+    });
+    expect(empty).toMatchObject({ runId: null, replacing: stopped });
+    const later = await prepareConnectionDiscoveryRoster(ctx.db, {
+      runId: empty.runId,
+      replacing: empty.replacing,
+      after: null,
+      limit: 25,
+      entityKinds: ["task"],
+      newestFirst: true,
+      createRun: keyed,
+    });
+    expect(later.runId).not.toBeNull();
+    expect(later.runId).not.toBe(stopped);
+    expect(later.inserted).toBe(1);
+    expect(later.replacing).toBeNull();
+  });
+
   it("re-admits an input that reverts before its replacement ran", async () => {
     const [created] = await tasks(["Synthetic reverting task"]);
     const [row] = await getDb(ctx.db)

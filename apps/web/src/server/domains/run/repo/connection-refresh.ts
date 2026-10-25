@@ -211,6 +211,8 @@ export async function prepareConnectionDiscoveryRoster(
   db: Database,
   input: RosterInput & {
     runId: RunId | null;
+    /** A stopped Run this pass continues from, until a continuation opens. */
+    replacing?: RunId | null;
     /**
      * Opens the pass's Run. `replacing` names a stopped Run the cursor carried,
      * so the continuation gets its own idempotency key instead of resolving
@@ -222,10 +224,13 @@ export async function prepareConnectionDiscoveryRoster(
   const page = await connectionRosterTargets(db, input);
   // A cancelled or failed Run in the cursor never receives more work.
   const current = input.runId && (await runIsActive(db, input.runId));
+  // Keep the stopped owner's identity across pages that admit nothing, or a
+  // later page would reopen the original key and resolve the stopped Run.
+  const stopped = current ? null : (input.runId ?? input.replacing ?? null);
   const opened =
     current || !(await hasAdmissibleTarget(db, page.targets))
       ? null
-      : await input.createRun(db, input.runId);
+      : await input.createRun(db, stopped);
   // Recheck the owner admission resolved to: an idempotent open can return an
   // existing Run that was stopped since.
   const runId =
@@ -234,7 +239,13 @@ export async function prepareConnectionDiscoveryRoster(
   const inserted = runId
     ? await insertEvaluationTargets(db, runId, page.targets)
     : 0;
-  return { scanned: page.scanned, inserted, next: page.next, runId };
+  return {
+    scanned: page.scanned,
+    inserted,
+    next: page.next,
+    runId,
+    replacing: runId ? null : stopped,
+  };
 }
 
 /** Records one connection roster page queues, for Sweeps and routine discovery alike. */

@@ -25,6 +25,8 @@ const cursorSchema = z.object({
   after: z.string().nullable(),
   // Cursors from before lazy Run creation carry no runId.
   runId: runEntityId.nullable().default(null),
+  // A stopped Run the pass continues from until a continuation Run opens.
+  replacing: runEntityId.nullable().default(null),
 });
 
 /**
@@ -54,6 +56,7 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
       };
     const page = await prepareConnectionDiscoveryPage(db, {
       runId: previous.runId,
+      replacing: previous.replacing,
       after: previous.after,
       limit: CONNECTION_ROSTER_PAGE,
       newestFirst: true,
@@ -74,7 +77,13 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
       page: {
         done: !page.next,
         ...(page.next
-          ? { cursor: { after: page.next, runId: page.runId } }
+          ? {
+              cursor: {
+                after: page.next,
+                runId: page.runId,
+                replacing: page.replacing,
+              },
+            }
           : { result: { outcome: page.runId ? "admitted" : "nothing" } }),
       },
       publish: async (tx) => {
