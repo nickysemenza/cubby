@@ -57,6 +57,10 @@ export const jobWaitingOn = z.discriminatedUnion("reason", [
     reason: z.literal("leased"),
     lane: jobLane,
     executor: z.string().nullable(),
+    /** The leasing device's installation id as its executor assignment records it; null for cloud executors. */
+    executorDeviceId: z.string().nullable(),
+    /** When the current lease was claimed. */
+    leasedAt: z.iso.datetime().nullable(),
     leaseExpiresAt: z.iso.datetime(),
     /** An expired lease is reclaimed by the next claim; the old executor lost it. */
     expired: z.boolean(),

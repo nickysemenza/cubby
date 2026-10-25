@@ -203,6 +203,8 @@ const jobs: JobListOut = {
       reason: "leased",
       lane: "server",
       executor: "Cubby server",
+      executorDeviceId: null,
+      leasedAt: ago(1),
       leaseExpiresAt: ago(-4),
       expired: false,
     },

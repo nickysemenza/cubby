@@ -31,6 +31,7 @@ type WaitingFacts = Pick<
   | "waitUntil"
   | "availableAt"
   | "leaseExpiresAt"
+  | "lastClaimedAt"
 >;
 
 /**
@@ -46,6 +47,7 @@ export function deriveJobWaitingOn(
     /** Claims per second the Job's queue (drain or device pulls) served recently. */
     claimsPerSecond?: number;
     executor?: string | null;
+    executorDeviceId?: string | null;
   },
 ): JobWaitingOn | null {
   const lane = jobKindPolicy(job.kind).lane;
@@ -62,6 +64,8 @@ export function deriveJobWaitingOn(
         reason: "leased",
         lane,
         executor: context.executor ?? null,
+        executorDeviceId: context.executorDeviceId ?? null,
+        leasedAt: job.lastClaimedAt ? at(job.lastClaimedAt) : null,
         leaseExpiresAt: at(job.leaseExpiresAt ?? context.now),
         expired:
           !job.leaseExpiresAt ||
@@ -214,7 +218,8 @@ export async function loadJobWaitingOn(
         now,
         aheadCount: (device ? deviceAhead : drainAhead).get(row.id) ?? 0,
         claimsPerSecond: device ? throughput.device : throughput.drained,
-        executor: executors.get(row.id) ?? defaultExecutor(row.kind),
+        executor: executors.get(row.id)?.name ?? defaultExecutor(row.kind),
+        executorDeviceId: executors.get(row.id)?.deviceId ?? null,
       }),
     );
   }
@@ -250,11 +255,13 @@ async function positions(
   return new Map(result.rows.map((row) => [row.id, row.ahead]));
 }
 
-/** The executor named on a leased image attempt (the lease token is its id). */
+/** The executor assigned to a leased image attempt (the lease token is its id). */
 async function leasedExecutors(
   db: Database,
   running: readonly JobRow[],
-): Promise<Map<string, string | null>> {
+): Promise<
+  Map<string, { name: string | null; deviceId: string | null } | null>
+> {
   const tokens = running.flatMap((row) =>
     row.leaseToken && row.key.startsWith("image-processing:")
       ? [{ id: row.id, token: row.leaseToken }]
@@ -264,13 +271,15 @@ async function leasedExecutors(
   const result = await repositoryQueries(db).execute<{
     id: string;
     name: string | null;
-  }>(sql`SELECT a.id::text AS id, a.executor->>${"name"} AS name
+    deviceId: string | null;
+  }>(sql`SELECT a.id::text AS id, a.executor->>${"name"} AS name,
+      a.executor->>${"deviceId"} AS "deviceId"
     FROM "ImageProcessingAttempt" a
     WHERE a.id IN (${sql.join(
       tokens.map((entry) => sql`${entry.token}::uuid`),
       sql`, `,
     )})`);
-  const byToken = new Map(result.rows.map((row) => [row.id, row.name]));
+  const byToken = new Map(result.rows.map((row) => [row.id, row]));
   return new Map(
     tokens.map((entry) => [entry.id, byToken.get(entry.token) ?? null]),
   );

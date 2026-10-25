@@ -263,6 +263,8 @@ describe("job runtime policy", () => {
     ).toMatchObject({
       reason: "leased",
       executor: "Synthetic iPad",
+      // Without an assigned device (a cloud executor) there is no device id.
+      executorDeviceId: null,
       expired: true,
     });
   });

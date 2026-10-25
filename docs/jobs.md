@@ -35,7 +35,9 @@ waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
   `etaSeconds` from claims over the last 30 minutes.
 - `waiting_device`: parked device work; position in device-pull order.
 - `waiting_funding`: an `ai_funding_window` wait until the window resets.
-- `leased`: an executor holds it; `expired` once the lease lapsed unreclaimed.
+- `leased`: an executor holds it, named with its device installation id
+  (`executorDeviceId`, null for cloud) and `leasedAt` (the claim time);
+  `expired` once the lease lapsed unreclaimed.
 - `backing_off`: a failure backoff or provider wait (`cause`) until a time.
 - `blocked`: waiting on other work, such as a device preparing AVIF input.
 - `paused`: stopped by a member or its Run.

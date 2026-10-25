@@ -12,6 +12,7 @@ import {
   imageProcessingJob,
 } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 
 import {
   claimImageProcessingJob,
@@ -121,6 +122,32 @@ describe("background companion leases", () => {
       60_000,
     );
     expect(await claim()).toBeNull();
+  });
+
+  // Apple matches its own leases by device id and shows lease age.
+  it("names the leasing device and when its lease was claimed in job.queue", async () => {
+    const parked = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const lease = await claim();
+    if (!lease) throw new Error("Expected lease");
+    await assign(lease);
+    const [execution] = await getDb(ctx.db)
+      .select({ lastClaimedAt: durableJob.lastClaimedAt })
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${parked}`));
+    const queue = await readJobQueue(ctx.db, {
+      filter: { kinds: ["image.device"] },
+      runId: null,
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    expect(queue.jobs).toHaveLength(1);
+    expect(queue.jobs[0]?.waitingOn).toMatchObject({
+      reason: "leased",
+      executor: "Test phone",
+      executorDeviceId: deviceId,
+      leasedAt: execution?.lastClaimedAt?.toISOString(),
+      expired: false,
+    });
   });
 
   it("filters processor revision and exclusively claims each device job", async () => {
