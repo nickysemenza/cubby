@@ -45,6 +45,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
+import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -56,6 +57,7 @@ import {
   databaseForTransaction,
   isTransaction,
   notDeleted,
+  shortcodeSetCondition,
   sqlEnumConstant,
   withTransaction,
 } from "~/server/db/helpers";
@@ -392,6 +394,7 @@ const vendorLatestPurchaseDate = vendorPurchases().max<string>((p) => p.date);
 async function loadVendorMailSearch(
   client: Database | DrizzleTransaction,
   ids?: readonly VendorId[],
+  shortcodes?: readonly string[],
 ): Promise<Record<string, MailSearchState>> {
   const db = isTransaction(client) ? databaseForTransaction(client) : client;
   const [rows, mailboxes] = await Promise.all([
@@ -403,7 +406,13 @@ async function loadVendorMailSearch(
       })
       .from(vendor)
       .where(
-        and(notDeleted(vendor), ids ? inArray(vendor.id, [...ids]) : undefined),
+        and(
+          notDeleted(vendor),
+          ids ? inArray(vendor.id, [...ids]) : undefined,
+          shortcodes
+            ? shortcodeSetCondition(sql`${vendor.shortcode}`, [...shortcodes])
+            : undefined,
+        ),
       ),
     listMemberMailboxes(db),
   ]);
@@ -440,7 +449,12 @@ async function loadVendorMailSearch(
 const vendorMailSearchSql = (states: Record<string, MailSearchState>) =>
   sql<MailSearchState | null>`(${JSON.stringify(states)}::jsonb ->> (${sql.raw('"Vendor"."id"')}::text))`;
 
-const vendorMailSearch = listPrepare((db) => loadVendorMailSearch(db));
+// An id-restricted read (a list enrichment page) selects only those rows, so
+// it needs only their states; loading every Vendor ran per enrichment page.
+const requestedIds = z.object({ ids: z.array(z.string()).optional() });
+const vendorMailSearch = listPrepare((db, values) =>
+  loadVendorMailSearch(db, undefined, requestedIds.parse(values).ids),
+);
 
 export async function getVendorCoverage(
   db: Database,
