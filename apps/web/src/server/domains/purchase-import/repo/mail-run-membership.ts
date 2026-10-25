@@ -1,5 +1,6 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
+  MAIL_RUN_ROSTER_LIMIT,
   mailResearchRunInput,
   runInputsErased,
 } from "@cubby/schemas/run-fields";
@@ -153,10 +154,12 @@ export async function admitSupportingMailSource(
     await assertMailRunMembership(tx, runId, mail.id);
     return;
   }
-  if (roster.sources.length >= 50)
+  // Targets fill at most 50 slots, so a full batch still admits the originals
+  // its notices need; reaching the backstop means the coordinator is looping.
+  if (roster.sources.length >= MAIL_RUN_ROSTER_LIMIT)
     throw createAppError(
       "MAIL_SOURCE_ADMISSION_REFUSED",
-      "This Mail import Run already holds fifty Emails; the supporting original waits for a later import.",
+      `This Mail import Run already holds ${MAIL_RUN_ROSTER_LIMIT} Emails; resolve the current Email unresolved naming the supporting original.`,
     );
   const [message] = await tx
     .select()

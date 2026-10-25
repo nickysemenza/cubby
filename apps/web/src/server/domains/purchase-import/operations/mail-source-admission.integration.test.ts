@@ -14,8 +14,10 @@
  * notice through a shipping Email that ties tracking to the order number has
  * no admission path; batched via paths can form a cycle without reaching the
  * Run's admitted Emails; a supporting original another Run holds is refused
- * without naming that Run, so the coordinator escalates instead of linking.
- * Deterministic original checks precede all admission judgments.
+ * without naming that Run, so the coordinator escalates instead of linking;
+ * a Run holding a full 50-target batch refuses the supporting original its
+ * notice needs, leaving the notice unresolved, or a looping coordinator grows
+ * the roster past its backstop. Deterministic original checks precede all admission judgments.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LedgerPartyId, RunId } from "@cubby/schemas/identifiers";
@@ -23,7 +25,10 @@ import {
   preparePurchaseImportInput,
   type ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
-import { mailResearchRunInput } from "@cubby/schemas/run-fields";
+import {
+  MAIL_RUN_ROSTER_LIMIT,
+  mailResearchRunInput,
+} from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -41,6 +46,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { admitSupportingMailSource } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
@@ -519,6 +525,64 @@ describe("Mail import source admission", () => {
         .from(purchase)
         .where(and(eq(purchase.orderId, "SYN-5"), notDeleted(purchase))),
     ).toHaveLength(1);
+  });
+
+  it("admits a notice's supporting original into a full 50-target batch", async () => {
+    const { party, vendor } = await world();
+    const shipment = await retain(
+      party.id,
+      "full-batch-shipment",
+      "Your order SYN-20 has shipped",
+      { threadId: "synthetic-thread-20" },
+    );
+    const others = [];
+    for (let index = 0; index < 49; index += 1)
+      others.push(
+        await retain(
+          party.id,
+          `full-batch-${index}`,
+          `Shipped SYN-${100 + index}`,
+        ),
+      );
+    const original = await retain(
+      party.id,
+      "full-batch-original",
+      "Order SYN-20 confirmed: Synthetic kettle USD 24.00",
+      { threadId: "synthetic-thread-20" },
+    );
+    const { id, actor } = await mailRun(
+      party,
+      [shipment, ...others],
+      "discovery",
+    );
+    await preparePurchaseImport(
+      ctx.db,
+      prepareInput(id, "full-batch", vendor.shortcode, original, "SYN-20"),
+      actor,
+      decisions({ attribution: "recipient", relation: "same_purchase" }),
+    );
+    expect(await rosterOf(id)).toHaveLength(51);
+    expect(await emailRow(original)).toEqual({
+      runId: id,
+      status: "researching",
+    });
+  });
+
+  it("refuses a supporting original once the roster reaches its backstop", async () => {
+    const { party } = await world();
+    const roster = [];
+    for (let index = 0; index < MAIL_RUN_ROSTER_LIMIT; index += 1)
+      roster.push(await retain(party.id, `backstop-${index}`, `SYN-${index}`));
+    const extra = await retain(party.id, "backstop-extra", "Order SYN-999");
+    const { id } = await mailRun(party, roster, "discovery");
+    await expect(
+      admitSupportingMailSource(ctx.db, id, extra),
+    ).rejects.toMatchObject({
+      reason: "MAIL_SOURCE_ADMISSION_REFUSED",
+      message: expect.stringContaining(`${MAIL_RUN_ROSTER_LIMIT} Emails`),
+    });
+    expect(await rosterOf(id)).toHaveLength(MAIL_RUN_ROSTER_LIMIT);
+    expect(await emailRow(extra)).toEqual({ runId: null, status: "pending" });
   });
 
   it.each([

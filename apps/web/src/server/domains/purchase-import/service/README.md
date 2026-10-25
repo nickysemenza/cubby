@@ -140,7 +140,9 @@ pending: nothing here starts Product research.
    decision confidently finds the same purchase as a roster Email (or, along
    a `via` path, as the Email before it, the first against the roster) and
    `mail-attribution` finds the recipient's own transaction, within the
-   roster's 50 Emails and the Run's execution claims. A Run the member did not
+   Run's execution claims. Supporting originals append past admission's 50
+   targets up to the roster backstop (`MAIL_RUN_ROSTER_LIMIT`), so a full
+   batch never strands a notice whose original is still unclaimed. A Run the member did not
    explicitly select (`trigger` other than `foreground`) prepares a Purchase
    only from an Email attributed to its recipient: forwarding alone never
    proves ownership, and an unattributed Email may still link to an existing
