@@ -8,7 +8,7 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
         case stopped
         /// The master "Automatic work on this device" switch is off.
         case automaticWorkOff
-        /// iOS outside the foreground: the subscription closes; charging windows still run.
+        /// iOS outside the foreground: the subscription closes; system background windows still run.
         case backgrounded
         /// macOS system sleep: claims were released and pulling stops until wake.
         case asleep
@@ -303,6 +303,8 @@ public actor CompanionImageWorker {
         socket?.cancel(with: .goingAway, reason: nil)
     }
 
+    private var backgroundWindowActive = false
+
     private var wireDeviceID: String { deviceID.uuidString.lowercased() }
 
     public func start() {
@@ -414,16 +416,36 @@ public actor CompanionImageWorker {
         reportActivity()
     }
 
-    /// The charging task owns this finite HTTP window; it does not reopen an iOS subscription.
-    public func runInBackground(client: CubbyClient) async -> Bool {
-        await runInBackground(transport: client, hello: hello(foreground: false))
+    /// The system background task owns this HTTP window; it does not reopen an iOS subscription.
+    public func runInBackground(
+        client: CubbyClient,
+        progress: (@MainActor @Sendable (_ processed: Int, _ total: Int) -> Void)? = nil
+    ) async -> Bool {
+        await runInBackground(transport: client, hello: hello(foreground: false), progress: progress)
     }
 
     func runInBackground(
-        transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello
+        transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello,
+        progress: (@MainActor @Sendable (_ processed: Int, _ total: Int) -> Void)? = nil
     ) async -> Bool {
         guard shouldRun, isParticipating, !updateRequired, backgroundTask == nil else { return false }
-        let task = Task { await backgroundRunner.run(transport: transport, hello: hello) }
+        // One executor owns the shared slots. Settle any resident pull before the HTTP window.
+        backgroundWindowActive = true
+        let residentDrain = drainTask
+        let residentCommands = Array(commandTasks.values)
+        reconcileConnection()
+        let task = Task {
+            await residentDrain?.waitUnlessCancelled()
+            for command in residentCommands { await command.waitUnlessCancelled() }
+            await releasesIdle()
+            guard shouldRun, isParticipating, !Task.isCancelled else {
+                return CompanionBackgroundOutcome.resumable
+            }
+            return await backgroundRunner.run(
+                transport: transport, hello: hello, maximumJobs: Int.max,
+                maximumConcurrentCommands: { await self.maximumConcurrentCommands },
+                progress: progress)
+        }
         backgroundTask = task
         let outcome = await withTaskCancellationHandler {
             await task.value
@@ -431,6 +453,8 @@ public actor CompanionImageWorker {
             task.cancel()
         }
         backgroundTask = nil
+        backgroundWindowActive = false
+        reconcileConnection()
         deliverySnapshot = await delivery.snapshot
         switch outcome {
         case .updateRequired(let error):
@@ -458,7 +482,7 @@ public actor CompanionImageWorker {
     }
 
     private var platformAllowsConnection: Bool {
-        guard isParticipating, !updateRequired, !systemAsleep else { return false }
+        guard isParticipating, !updateRequired, !systemAsleep, !backgroundWindowActive else { return false }
         #if os(macOS)
             // A Mac keeps working while another app is frontmost; it reports `foreground` as is.
             return true
@@ -645,31 +669,40 @@ public actor CompanionImageWorker {
                 defer { isPulling = false }
                 pulled = try await transport.pull(
                     hello: hello(foreground: foreground),
-                    leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
+                    leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds,
+                    maxCommands: maximumConcurrentCommands - commandTasks.count)
             }
             reportActivity()
             // The subscription ended during the pull (background, participation off, sleep,
             // stop): hand the claim back instead of running it outside the window that asked.
-            if let command = pulled.command, !isCurrent() {
-                releaseBestEffort(command)
+            if !isCurrent() {
+                for command in pulled.commands { releaseBestEffort(command) }
                 return
             }
             if pulled.remotePaused != remotePaused {
                 remotePaused = pulled.remotePaused
                 reportActivity()
             }
-            guard let command = pulled.command else {
+            guard !pulled.commands.isEmpty else {
                 lastError = nil
                 reportActivity()
                 return
             }
             guard CompanionWorkAcceptance.acceptsCommand(remotePaused: pulled.remotePaused) else {
-                releaseBestEffort(command)
+                for command in pulled.commands { releaseBestEffort(command) }
                 return
             }
-            if case .unsupported(let detail) = startCommand(command) {
-                throw CompanionUnsupportedCommand(detail: detail)
+            var unsupported: String?
+            for command in pulled.commands {
+                // A setting change during the pull may shrink the pool. Return the excess.
+                guard commandTasks.count < maximumConcurrentCommands else {
+                    releaseBestEffort(command)
+                    continue
+                }
+                if case .unsupported(let detail) = startCommand(command) { unsupported = detail }
             }
+            // Start/release the entire batch before backing off an unsupported variant.
+            if let unsupported { throw CompanionUnsupportedCommand(detail: unsupported) }
         }
     }
 

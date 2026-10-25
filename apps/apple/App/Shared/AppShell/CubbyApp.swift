@@ -122,6 +122,7 @@ struct CubbyApp: App {
                     if phase == .background {
                         PhotoBackgroundProcessing.scheduleIfNeeded(model: model)
                         LibrarySyncBackgroundProcessing.scheduleIfNeeded(model: model)
+                        ImageQueueBackgroundProcessing.scheduleIfNeeded(model: model)
                     }
                 #endif
             }

@@ -99,9 +99,37 @@ struct CompanionImageWorkerTests {
         await worker.requestDrain()
         await transport.completions.arrivals(2)
         await worker.commandsIdle()
-        #expect(await transport.pulls >= 3)
+        #expect(await transport.pulls >= 2)
         #expect(try await store.pending().isEmpty)
         await worker.stop()
+    }
+
+    /// A single round trip fills the configured pool, even while all executions are blocked.
+    @Test func aBatchRequestsFreeSlotsAndStartsEveryReturnedCommand() async throws {
+        let execution = Gate()
+        let transport = QueuedCompanionTransport(commands: [
+            try describeCommand(),
+            try describeCommand(attempt: "00000000-0000-4000-8000-000000000003"),
+            try describeCommand(attempt: "00000000-0000-4000-8000-000000000004"),
+        ])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Synthetic phone", foreground: true,
+            maximumConcurrentCommands: 3, outbox: try outbox(), transport: transport,
+            execute: { command in
+                try await execution.pass()
+                return try Self.failedResult(command)
+            })
+        await worker.start()
+        await worker.requestDrain()
+        await execution.arrivals(3)
+        await worker.drainIdle()
+        #expect(await transport.requestedSlots == [3])
+        #expect(try await worker.drainState().outstandingCommands == 3)
+        await worker.stopAndReleaseClaims()
+        #expect(await transport.released.count == 3)
+        execution.open()
+        await worker.commandsIdle()
     }
 
     /// One slot pool: with every slot busy the worker does not pull, and widening the pool (the
@@ -134,20 +162,26 @@ struct CompanionImageWorkerTests {
 
     /// Regression: a pull in flight when the subscription ended (iOS backgrounding, or here
     /// participation turning off) still started its job outside the window that asked for it.
-    @Test func aCommandPulledAfterTheSubscriptionEndsIsReleased() async throws {
+    @Test func aBatchPulledAfterTheSubscriptionEndsIsReleased() async throws {
         let pullGate = Gate()
-        let transport = QueuedCompanionTransport(commands: [try describeCommand()], pullGate: pullGate)
+        let transport = QueuedCompanionTransport(
+            commands: [
+                try describeCommand(), try describeCommand(attempt: "00000000-0000-4000-8000-000000000003"),
+            ], pullGate: pullGate)
         let executions = ExecutionCounter()
         let worker = CompanionImageWorker(
             baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true,
-            outbox: try outbox(), transport: transport, execute: { try await executions.run($0) })
+            maximumConcurrentCommands: 2, outbox: try outbox(), transport: transport,
+            execute: { try await executions.run($0) })
         await worker.start()
         await worker.requestDrain()
         await pullGate.arrivals()
         await worker.setParticipating(false)
         pullGate.open()
-        await transport.releases.arrivals()
+        await transport.releases.arrivals(2)
+        await worker.releasesIdle()
+        #expect(await transport.released.count == 2)
         await worker.commandsIdle()
         #expect(await executions.count == 0)
         await worker.stop()
@@ -597,6 +631,7 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
     private let pullError: (any Error)?
     private let renewal: CompanionLeaseRenewal
     private(set) var pulls = 0
+    private(set) var requestedSlots: [Int] = []
     private(set) var released: [CompanionImageCommandClaim] = []
     private(set) var delivered: [String] = []
     nonisolated let completions = Gate()
@@ -617,14 +652,16 @@ private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
         self.renewal = renewal
     }
 
-    func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
+    func pull(hello: ImageProcessingHello, leaseSeconds: Int, maxCommands: Int) async throws
         -> PullCompanionImageProcessingOutput
     {
         pulls += 1
         if let pullError { throw pullError }
-        let next = commands.isEmpty ? nil : commands.removeFirst()
+        requestedSlots.append(maxCommands)
+        let batch = Array(commands.prefix(maxCommands))
+        commands.removeFirst(batch.count)
         try await pullGate?.pass()
-        return .init(command: next, remotePaused: false)
+        return .init(command: batch.first, commands: batch, remotePaused: false)
     }
 
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
