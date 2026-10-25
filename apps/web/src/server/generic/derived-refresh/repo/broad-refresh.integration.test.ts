@@ -35,7 +35,11 @@ import {
   refreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
+import {
+  invalidateRefreshFamily,
+  scheduleRefreshFamilies,
+  SEARCH_REFRESH_PAGE_SIZE,
+} from "./families";
 
 // Broad pages must discover writes without endpoint capture, retain later
 // invalidation during preparation, and never publish stale output after it.
@@ -54,7 +58,7 @@ describe("broad refresh jobs", () => {
       ctx.db,
       location,
       "location",
-      Array.from({ length: 30 }, (_, index) => ({
+      Array.from({ length: SEARCH_REFRESH_PAGE_SIZE + 5 }, (_, index) => ({
         shortcode: `LOC-${3000 + index}`,
         name: `Synthetic shelf ${index} v1`,
         type: "room" as const,
@@ -116,6 +120,8 @@ describe("broad refresh jobs", () => {
     await invalidateRefreshFamily(ctx.db, "search");
     const first = await page();
     expect(first.cursor).not.toBeNull();
+    // One page scans a full search page of sources.
+    expect(first.cursor).toMatchObject({ scanned: SEARCH_REFRESH_PAGE_SIZE });
     const published = await titles();
     const behind = every.filter(
       (index) => published.get(ids[index]!) === named(index, "v2"),
@@ -161,7 +167,7 @@ describe("broad refresh jobs", () => {
       ctx.db,
       location,
       "location",
-      Array.from({ length: 30 }, (_, index) => ({
+      Array.from({ length: SEARCH_REFRESH_PAGE_SIZE + 5 }, (_, index) => ({
         shortcode: `LOC-${4000 + index}`,
         name: `Synthetic bin ${index}`,
         type: "room" as const,

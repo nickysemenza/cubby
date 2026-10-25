@@ -2417,7 +2417,8 @@ the Job cursor. An idle pass leaves no Run. The pass's first page fixes a
 cutoff (records created, or for embeddings documents updated, by then) that
 rides in the Job cursor; the COUNT and every page apply it, so later records
 wait for the next pass. Search counts its sources across every searchable
-table. The step's COUNT runs when the Run opens and starts `done` at the
+table, and each search page scans `SEARCH_REFRESH_PAGE_SIZE` (200) sources,
+rebuilding only stale or missing documents. The step's COUNT runs when the Run opens and starts `done` at the
 records earlier pages scanned. A full pass outlasts the gap between household
 writes, so invalidating a pass in progress (running, or queued with a cursor)
 lets it finish, and the capture leaves it due for a full pass
