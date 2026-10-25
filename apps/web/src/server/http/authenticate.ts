@@ -463,14 +463,15 @@ export const delegatedRunHolds = (
   scope: {
     actorUserId: string | null;
     ledgerPartyId: string | null;
-    purpose: string;
+    public: { purpose: string };
   },
   actorUserId: string,
   party: { id: string } | null | undefined,
 ) =>
   scope.actorUserId === actorUserId &&
   !!party &&
-  (party.id === scope.ledgerPartyId || scope.purpose === "photo_inventory");
+  (party.id === scope.ledgerPartyId ||
+    scope.public.purpose === "photo_inventory");
 
 export const authenticate = createAuthenticator({
   getSession: (options) => getAuth().api.getSession(options),

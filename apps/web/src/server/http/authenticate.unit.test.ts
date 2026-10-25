@@ -230,7 +230,7 @@ describe("a delegated Run", () => {
     purpose: string,
     ledgerPartyId = "party-member-b",
     actorUserId = "user-a",
-  ) => ({ actorUserId, ledgerPartyId, purpose });
+  ) => ({ actorUserId, ledgerPartyId, public: { purpose } });
   it("holds a photo Run the actor started, whichever member owns it", () => {
     expect(delegatedRunHolds(run("photo_inventory"), "user-a", member)).toBe(
       true,

@@ -31,17 +31,7 @@ export async function readPurchaseAgentConversation(input: {
   const scope = await loadRunScopeByShortcode(input.context.db, input.publicId);
   // The same rule as Run delegation: a photo Run may be owned by the other
   // member's party.
-  if (
-    !delegatedRunHolds(
-      {
-        actorUserId: scope.actorUserId,
-        ledgerPartyId: scope.ledgerPartyId,
-        purpose: scope.purpose,
-      },
-      input.context.auth.userId,
-      input.party,
-    )
-  )
+  if (!delegatedRunHolds(scope, input.context.auth.userId, input.party))
     throw new Error("Import Run does not belong to this member");
   const agents = getPurchaseImportRunAgentNamespace();
   if (!agents)
