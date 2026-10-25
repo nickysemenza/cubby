@@ -165,6 +165,12 @@ still unacknowledged stay in the outbox and replay on the next connection.
 
 ### Companion worker lifecycle (app and CLI)
 
+Describe-image and subject-lift commands share one pool of slots
+(`CompanionImageConcurrency`); the worker pulls only while a slot is free, so the server keeps no
+per-device limit. Automatic is 8 on Mac and 4 on iPhone/iPad. Settings › Image work sets an
+explicit 1–16 per device (UserDefaults `imageWork.concurrentJobs`, 0 = Automatic), applied on the
+next pull without a restart; `cubby companion --jobs N` sets it for the CLI.
+
 The resident worker and the iOS charging window both claim with a 60 s lease and renew each
 running command every 15 s through `imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal
 (`lease_lost`, `job_obsolete`) stops that command without recording or releasing it. Every claim
@@ -184,17 +190,26 @@ delivery or claim release, cancels execution, keeps recorded results, ends backg
 worker's life, latches the app's update banner (the worker's client shares the app's request
 observer), and Activity shows "Update required to process images". Activity's "This device" row
 always names the worker phase (idle, connected, pulling, processing N, update required, paused
-from the web, automatic work off, asleep, disconnected with the last error). Below it, the household
-queue reads `job.queue` (a failed refresh keeps the earlier counts beside an inline error): Apple-device and cloud-AI counts by waiting-on reason (funding waits with
-their reopening time), leases split into this device's (matched by the worker's live claims, never
-by device name) and other devices' with lease expiry and the server's `expired` flag, and Jobs
-backing off; Runs needing attention carry their `job.runRollups` counts, stall flag and
-expired leases awaiting reclaim.
+from the web, automatic work off, asleep, disconnected with the last error). While image work
+waits for a device, a banner at the top reads `job.deviceBacklog` ("N images waiting for an Apple
+device · M working · about X at the current pace", the pace omitted without a server ETA) and, when
+no device claimed work recently and this one is not processing, says to keep Cubby open on a Mac.
+Processing image jobs are the generic imageJob rows of the `processing` saved view (live leases),
+each with its IPR code, its Run and a live lease countdown from `leaseExpiresAt`. Rows whose
+`leaseDeviceId` is this install's Device (matched by `installationId`, never by name) sit under
+the worker row; the rest group by Device under "Other devices", followed by one counted row per
+executor holding expired leases (the `job.queue` `leases` summary). Activity reloads every 15 s
+while on screen. The household queue reads `job.queue` (a failed refresh keeps the earlier counts
+beside an inline error): Apple-device and cloud-AI counts by waiting-on reason (funding waits with
+their reopening time), "Waiting for Apple · N" opening the imageJob `waiting-for-apple` view, and
+Jobs backing off; Runs needing attention (the manifest's `attention` saved view, which excludes
+system AI passes) carry their `job.runRollups` counts, stall flag and expired leases awaiting
+reclaim.
 
 The worker subscribes to the `imageProcessing.work` doorbell (`/api/doorbell`). The ring carries
 no job: on subscribe, on every ring and after each result the worker drains, calling
-`imageProcessing.pull` with its hello until nothing is claimable (at most four jobs run at once)
-and delivering each result through `imageProcessing.complete`. A missed ring costs latency, not
+`imageProcessing.pull` with its hello until nothing is claimable or every slot is busy, and
+delivering each result through `imageProcessing.complete`. A missed ring costs latency, not
 work, because `pull` also claims `waiting_for_device` jobs. `--once` therefore drains a backlog
 before it goes idle. A job that
 just found no device backs off for a minute before it can be claimed again, so a quiet

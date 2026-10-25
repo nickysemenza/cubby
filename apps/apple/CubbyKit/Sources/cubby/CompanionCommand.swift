@@ -38,6 +38,13 @@ struct CompanionCommand: AsyncParsableCommand {
         name: .customLong("connect-timeout"),
         help: "--once: seconds disconnected (at start or after a drop) before giving up.")
     var connectTimeoutSeconds: Int = 30
+    @Option(
+        help: """
+            Image jobs run at once, one pool shared by describe_image and subject_lift \
+            (\(CompanionImageConcurrency.range.lowerBound)…\(CompanionImageConcurrency.range.upperBound)). \
+            Default: Automatic (\(CompanionImageConcurrency.automatic) on this platform).
+            """)
+    var jobs: Int?
     @Flag(help: "Also print socket errors, job ids on each processing phase, and drain-state changes.")
     var verbose = false
 
@@ -53,6 +60,10 @@ struct CompanionCommand: AsyncParsableCommand {
         try await CLI.run {
             guard idleSeconds > 0, connectTimeoutSeconds > 0 else {
                 throw CLIError.message("--idle-seconds and --connect-timeout must be positive.")
+            }
+            let range = CompanionImageConcurrency.range
+            if let jobs, !range.contains(jobs) {
+                throw CLIError.message("--jobs must be within \(range.lowerBound)…\(range.upperBound).")
             }
             guard global.apiKey == nil else {
                 throw CLIError.message(
@@ -98,10 +109,14 @@ struct CompanionCommand: AsyncParsableCommand {
             log("describe_image: available (SystemLanguageModel.default with .vision)")
         }
 
+        let slots = CompanionImageConcurrency.slots(for: jobs)
+        log("jobs: \(slots) at once\(jobs == nil ? " (Automatic)" : "")")
+
         let (events, continuation) = AsyncStream<Event>.makeStream()
         let worker = CompanionImageWorker(
             baseURL: context.baseURL, credentials: context.credentials, deviceID: deviceID,
-            deviceName: deviceName, foreground: true, outbox: outbox, identity: context.identity,
+            deviceName: deviceName, foreground: true, maximumConcurrentCommands: slots,
+            outbox: outbox, identity: context.identity,
             failureObserver: { continuation.yield(.failure(String(describing: $0))) },
             activityObserver: { continuation.yield(.activity($0)) },
             jobObserver: { continuation.yield(.job($0)) })

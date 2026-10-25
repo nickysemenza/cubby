@@ -616,6 +616,14 @@ final class AppModel {
         await companionImageWorker?.stopAndReleaseClaims()
     }
 
+    /// Applies Settings › Image work (`CompanionImageConcurrency.defaultsKey`, stored per device)
+    /// to the running worker; it takes effect on the next pull, without a restart.
+    func applyImageWorkConcurrency() {
+        let slots = CompanionImageConcurrency.slots(for: CompanionImageConcurrency.storedChoice())
+        let worker = companionImageWorker
+        Task { await worker?.setMaximumConcurrentCommands(slots) }
+    }
+
     func runCompanionJobsInBackground() async -> Bool {
         guard phase == .signedIn, participation.automaticWork else { return false }
         return await companionImageWorker?.runInBackground(client: client) ?? false
@@ -641,6 +649,8 @@ final class AppModel {
                 deviceName: Self.suggestedDeviceName,
                 foreground: companionSceneActive,
                 isParticipating: participation.automaticWork,
+                maximumConcurrentCommands: CompanionImageConcurrency.slots(
+                    for: CompanionImageConcurrency.storedChoice()),
                 outbox: outbox,
                 identity: Self.identity,
                 // A 426 from image work latches `UpdateAvailableBanner` like any other request.
