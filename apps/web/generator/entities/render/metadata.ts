@@ -398,21 +398,74 @@ export const renderEntityMetadataArtifacts = (
         " * generated triggers and list reads.\n" +
         " */\n" +
         `export const generatedStoredDerived = ${JSON.stringify(
-          entities.flatMap((entity) =>
-            Object.entries(entity.fieldModel.derived).flatMap(([key, entry]) =>
-              "stored" in entry && entry.stored
-                ? [
-                    {
-                      entity: entity.key,
-                      key,
-                      table: entity.descriptor.dbTable ?? null,
-                      type: "type" in entry ? entry.type : "number",
-                      stored: entry.stored,
-                    },
-                  ]
-                : [],
+          entities.flatMap((entity) => [
+            ...Object.entries(entity.fieldModel.derived).flatMap(
+              ([key, entry]) =>
+                "stored" in entry && entry.stored
+                  ? [
+                      {
+                        entity: entity.key,
+                        key,
+                        table: entity.descriptor.dbTable ?? null,
+                        type: "type" in entry ? entry.type : "number",
+                        stored: entry.stored,
+                      },
+                    ]
+                  : [],
             ),
-          ),
+            // Stored quality (ADR 0021): the record's own row, its waivers and
+            // its attachments, plus the declared reads of its evaluator.
+            ...(entity.dataQuality && entity.descriptor.dbTable
+              ? [
+                  {
+                    entity: entity.key,
+                    key: "dataQuality",
+                    table: entity.descriptor.dbTable,
+                    type: "number",
+                    stored: {
+                      compute: `quality.${entity.key}`,
+                      inputs: [
+                        {
+                          table: entity.descriptor.dbTable,
+                          match: { id: "id" },
+                        },
+                        {
+                          table: "DataException",
+                          match: { entityId: "id" },
+                          where: { entityKind: entity.key },
+                        },
+                        {
+                          table: "EntityAttachment",
+                          match: { entityId: "id" },
+                          where: { entityKind: entity.key },
+                        },
+                        // An attached image's integrity changes the
+                        // displayable-image checks of every record it is on.
+                        {
+                          table: "Image",
+                          match: { id: "id" },
+                          columns: [
+                            "renderStatus",
+                            "storageStatus",
+                            "detectedContentType",
+                            "deletedAt",
+                          ],
+                          path: [
+                            {
+                              table: "EntityAttachment",
+                              from: "imageId",
+                              to: "entityId",
+                              where: { entityKind: entity.key },
+                            },
+                          ],
+                        },
+                        ...entity.dataQuality.inputs,
+                      ],
+                    },
+                  },
+                ]
+              : []),
+          ]),
           null,
           2,
         )} as const;\n`,

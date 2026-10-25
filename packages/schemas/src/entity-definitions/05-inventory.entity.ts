@@ -1053,6 +1053,8 @@ export default defineEntity(
       delete: { mode: "soft", bulk: true },
       merge: false,
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [{ table: "Location", match: { id: "locationId" } }],
         checks: [
           {
             id: "inventory_unknown_location",

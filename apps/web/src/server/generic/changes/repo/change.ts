@@ -44,8 +44,8 @@ export async function recordChange(
   db: RepositoryQueryInput,
   change: RepositoryChange,
 ): Promise<void> {
-  // Run source state is completed-import evidence for Email quality. Progress
-  // publications remain projection metadata and enroll no family by default.
+  // Run and audit writes feed no family; stored quality reads Run state
+  // through its generated triggers (ADR 0021).
   const families =
     change.kind === "projection"
       ? (change.refresh ?? [])
@@ -53,9 +53,7 @@ export async function recordChange(
           change.categories.every(
             (category) => category === "run" || category === "auditLog",
           )
-        ? change.categories.includes("run")
-          ? ["quality"]
-          : []
+        ? []
         : refreshFamily.options;
   if (families.length && !("rollback" in db) && !repositoryParentDatabase(db)) {
     await repositoryTransaction(db, (tx) => recordChange(tx, change));

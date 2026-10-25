@@ -1060,6 +1060,8 @@ export default defineEntity(
       delete: { mode: "hard", bulk: true },
       merge: false,
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [{ table: "EntityAttachment", match: { imageId: "id" } }],
         checks: [
           {
             id: "image_provenance_unknown",

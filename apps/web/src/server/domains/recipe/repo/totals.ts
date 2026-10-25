@@ -71,7 +71,6 @@ const updateRecipeTotalsBatch = async (
     await recordChange(db, {
       kind: "projection",
       categories: ["recipe"],
-      refresh: ["quality"],
     });
 };
 

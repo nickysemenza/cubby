@@ -869,6 +869,21 @@ export default defineEntity({
     // Relevance-conditional Email pipeline gaps; an unrelated Email can only
     // lack a member review.
     dataQuality: {
+      // Rows the stored evaluator reads beyond its own row (ADR 0021).
+      inputs: [
+        { table: "OrderMail", match: { id: "orderMailId" } },
+        { table: "OrderMailAttachment", match: { orderMailId: "orderMailId" } },
+        { table: "EmailCandidateObservation", match: { emailId: "id" } },
+        { table: "EmailClassificationObservation", match: { emailId: "id" } },
+        // A completed mail import names its originals in `input.sources`.
+        {
+          table: "Run",
+          match: { input: "orderMailId" },
+          json: { array: ["sources"], key: "orderMailId" },
+          where: { purpose: "mail_import" },
+          columns: ["status", "deletedAt", "input", "ledgerPartyId"],
+        },
+      ],
       checks: [
         {
           id: "email_relevance_undecided",

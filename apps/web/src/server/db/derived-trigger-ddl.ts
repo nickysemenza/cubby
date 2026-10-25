@@ -9,6 +9,7 @@
  */
 import {
   fanoutTarget,
+  isFanoutInput,
   storedDerivedDeclarations,
 } from "~/server/db/derived-declarations";
 
@@ -25,6 +26,7 @@ type TriggerInput = {
   tableColumn: string;
   columns: readonly string[] | null;
   where: Readonly<Record<string, string>> | null;
+  json: { readonly array: readonly string[]; readonly key: string } | null;
 };
 
 /** `row` holds every declared `where` value. */
@@ -34,6 +36,16 @@ const whereSql = (row: "OLD" | "NEW", where: TriggerInput["where"]) =>
         .map(([column, value]) => `${row}.${ident(column)} = ${literal(value)}`)
         .join(" AND ")
     : "true";
+
+/** The uuid values a row contributes: its column, or `key` of a JSON array's elements. */
+// A malformed JSON value contributes nothing rather than failing the save:
+// a non-array is treated as empty and non-uuid elements are skipped.
+const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
+  if (!input.json) return `ARRAY[${row}.${ident(input.tableColumn)}::uuid]`;
+  const array = `${row}.${ident(input.tableColumn)} #> '{${input.json.array.join(",")}}'`;
+  const key = literal(input.json.key);
+  return `ARRAY(SELECT (e->>${key})::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) AS e WHERE e->>${key} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')`;
+};
 
 const markStatement = (input: TriggerInput) => {
   const column = ident(input.tableColumn);
@@ -52,11 +64,11 @@ const markStatement = (input: TriggerInput) => {
   const oldWhere = whereSql("OLD", input.where);
   const newWhere = whereSql("NEW", input.where);
   return `  IF TG_OP = 'INSERT' THEN
-    IF ${newWhere} THEN PERFORM derived_mark(${target}, ARRAY[NEW.${column}::uuid]); END IF;
+    IF ${newWhere} THEN PERFORM derived_mark(${target}, ${refsSql("NEW", input)}); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF ${oldWhere} THEN PERFORM derived_mark(${target}, ARRAY[OLD.${column}::uuid]); END IF;
+    IF ${oldWhere} THEN PERFORM derived_mark(${target}, ${refsSql("OLD", input)}); END IF;
   ELSIF (${oldWhere} OR ${newWhere}) AND ${changedCondition} THEN
-    PERFORM derived_mark(${target}, ARRAY[OLD.${column}::uuid, NEW.${column}::uuid]);
+    PERFORM derived_mark(${target}, ${refsSql("OLD", input)} || ${refsSql("NEW", input)});
   END IF;`;
 };
 
@@ -64,11 +76,10 @@ const markStatement = (input: TriggerInput) => {
 export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
   const byTable = new Map<string, TriggerInput[]>();
   for (const declaration of storedDerivedDeclarations())
-    for (const input of declaration.inputs) {
-      const target =
-        input.entityColumn === "id"
-          ? declaration.target
-          : fanoutTarget(declaration.target, input.entityColumn);
+    for (const [index, input] of declaration.inputs.entries()) {
+      const target = isFanoutInput(input)
+        ? fanoutTarget(declaration.target, index)
+        : declaration.target;
       const entries = byTable.get(input.table) ?? [];
       if (
         !entries.some(
@@ -76,7 +87,8 @@ export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
             entry.target === target &&
             entry.tableColumn === input.tableColumn &&
             JSON.stringify(entry.columns) === JSON.stringify(input.columns) &&
-            JSON.stringify(entry.where) === JSON.stringify(input.where),
+            JSON.stringify(entry.where) === JSON.stringify(input.where) &&
+            JSON.stringify(entry.json) === JSON.stringify(input.json),
         )
       )
         entries.push({
@@ -84,6 +96,7 @@ export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
           tableColumn: input.tableColumn,
           columns: input.columns,
           where: input.where,
+          json: input.json,
         });
       byTable.set(input.table, entries);
     }

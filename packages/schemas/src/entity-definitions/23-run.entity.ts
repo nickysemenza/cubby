@@ -1460,6 +1460,8 @@ export default defineEntity({
     // The run service and import writers own every write.
     lifecycle: "readOnly",
     dataQuality: {
+      // Rows the stored evaluator reads beyond its own row (ADR 0021).
+      inputs: [{ table: "RunOperation", match: { runId: "id" } }],
       checks: [
         {
           id: "run_attribution",

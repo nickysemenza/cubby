@@ -1,16 +1,17 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { entityQuality, job, jobInvalidationCapture } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import {
   purchaseChecks,
@@ -24,26 +25,7 @@ import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
 // stale outcomes or changed comparison inputs reopen a durable member waiver.
 describe("stored Purchase quality", () => {
   const ctx = withTestDb();
-  const refresh = async () => {
-    for (let page = 0; page < 8; page++) {
-      const [intent] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent) throw new Error("Expected quality intent from source write");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic Purchase quality pass exceeded page budget");
-  };
+  const refresh = () => drainStoredDerived(ctx.db);
   const seed = async (label: string, statedTotal: number | null = null) => {
     const vendor = await createRepoEntity(ctx, "vendor", {
       name: `Synthetic ${label} vendor`,
@@ -174,23 +156,24 @@ describe("stored Purchase quality", () => {
         state: "satisfied",
       }),
     );
-    expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
     await refresh();
     const [published] = await unwrapDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.entityId, order.entityId));
-    expect(published?.rulesVersion).toBe(PURCHASE_QUALITY_RULES_VERSION);
-    const [before] = await unwrapDb(ctx.db)
-      .select({ revision: sql<number>`count(*)::int` })
-      .from(jobInvalidationCapture)
-      .where(eq(jobInvalidationCapture.key, "refresh:quality"));
+      .execute(
+        sql`SELECT value->>'rulesVersion' AS "rulesVersion" FROM "DerivedValue"
+          WHERE "entityId" = ${order.entityId} AND key = 'dataQuality'`,
+      )
+      .then((result) => result.rows as { rulesVersion: string }[]);
+    expect(Number(published?.rulesVersion)).toBe(
+      PURCHASE_QUALITY_RULES_VERSION,
+    );
+    // An Expense edit marks its Purchase's stored quality (ADR 0021).
+    expect(
+      await derivedMarkTickets(ctx.db, "purchase.dataQuality", order.entityId),
+    ).toEqual([]);
     await updateExpense(ctx.db, line.output.id, { cost: 7 }, ctx.actor);
-    const [after] = await unwrapDb(ctx.db)
-      .select({ revision: sql<number>`count(*)::int` })
-      .from(jobInvalidationCapture)
-      .where(eq(jobInvalidationCapture.key, "refresh:quality"));
-    expect(after!.revision).toBeGreaterThan(before!.revision);
+    expect(
+      await derivedMarkTickets(ctx.db, "purchase.dataQuality", order.entityId),
+    ).toHaveLength(1);
     expect((await list()).data).toEqual([]);
     expect(await queue()).toEqual([]);
     await refresh();

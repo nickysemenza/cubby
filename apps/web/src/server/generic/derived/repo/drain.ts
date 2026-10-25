@@ -5,16 +5,19 @@
  * unchanged since the claim, so a save that lands during compute keeps the
  * record dirty for the next page.
  */
-import { sql } from "drizzle-orm";
+import { isNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  type DerivedInput,
+  type DerivedPathStep,
   dependentsOf,
   parseTarget,
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import type {
@@ -91,7 +94,7 @@ export async function prepareDerivedPage(
   const failed = new Map<string, string>();
   for (const [target, group] of groupByTarget(marks)) {
     const parsed = parseTarget(target);
-    if (!parsed || parsed.fanoutColumn) continue;
+    if (!parsed || parsed.fanoutInput) continue;
     const compute = computes[parsed.declaration.compute];
     if (!compute) {
       failed.set(target, `No compute adapter ${parsed.declaration.compute}`);
@@ -153,8 +156,13 @@ const propagate = async (
     declaration.key,
   )) {
     const refs =
-      "through" in dependency
-        ? sql`SELECT l.${ident(dependency.through.dependent)} AS id
+      "path" in dependency
+        ? pathSql(
+            dependency.path,
+            sql`SELECT unnest(${uuidArrayParam(changedIds)})`,
+          )
+        : "through" in dependency
+          ? sql`SELECT l.${ident(dependency.through.dependent)} AS id
                 FROM ${ident(dependency.through.table)} l
                WHERE l.${ident(dependency.through.source)} = ANY(${uuidArrayParam(changedIds)})
                  ${sql.join(
@@ -163,13 +171,13 @@ const propagate = async (
                        sql` AND l.${ident(column)} = ${value}`,
                    ),
                  )}`
-        : sql`SELECT d.id FROM ${ident(dependent.table)} d
+          : sql`SELECT d.id FROM ${ident(dependent.table)} d
                 JOIN ${ident(declaration.table)} s
                   ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
                WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;
     await tx.execute(sql`
       INSERT INTO "DerivedDirty" (target, ref, priority)
-      SELECT DISTINCT ${dependent.target}, r.id, 1 FROM (${refs}) r
+      SELECT DISTINCT ${dependent.target}, r.id, 1 FROM (${refs}) AS r(id) WHERE r.id IS NOT NULL
       ON CONFLICT (target, ref) DO UPDATE SET
         ticket = nextval('"DerivedTicket"'),
         priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
@@ -220,9 +228,11 @@ const publishValues = async (
       ), written AS (
         INSERT INTO "DerivedValue" ("entityId", kind, key, value, "decidedBy",
           "inputHash", "sortNumber", "sortDate", "sortText", "computedAt")
-        SELECT c."entityId", e.kind, ${declaration.key}, c.value, c."decidedBy",
+        SELECT c."entityId", ${entityIdentity.kind}, ${declaration.key}, c.value, c."decidedBy",
           c."inputHash", c."sortNumber", c."sortDate", c."sortText", now()
-          FROM current c JOIN "Entity" e ON e.id = c."entityId"
+          FROM current c
+          JOIN ${entityIdentity} ON ${entityIdentity.id} = c."entityId"
+         WHERE ${isNull(entityIdentity.deletedAt)}
         ON CONFLICT ("entityId", key) DO UPDATE SET
           value = EXCLUDED.value, "decidedBy" = EXCLUDED."decidedBy",
           "inputHash" = EXCLUDED."inputHash", "sortNumber" = EXCLUDED."sortNumber",
@@ -261,19 +271,34 @@ const publishValues = async (
   return changed;
 };
 
+/** Values reached from `start` along a join path, as one nested subquery. */
+const pathSql = (path: readonly DerivedPathStep[], start: SQL): SQL =>
+  path.reduce<SQL>(
+    (previous, step) =>
+      sql`SELECT ${ident(step.to)} FROM ${ident(step.table)} WHERE ${ident(step.from)} IN (${previous})${sql.join(
+        Object.entries(step.where ?? {}).map(
+          ([column, value]) => sql` AND ${ident(column)} = ${value}`,
+        ),
+      )}`,
+    start,
+  );
+
 /** Expand fanout marks into their dependents' marks, then clear them. */
 const expandFanout = async (
   tx: Executor,
   declaration: StoredDerivedDeclaration,
-  column: string,
+  input: DerivedInput,
   target: string,
   marks: readonly Mark[],
 ): Promise<number> => {
+  const refs = sql`SELECT unnest(${uuidArrayParam(marks.map((mark) => mark.ref))})`;
+  const dependents = input.path
+    ? pathSql(input.path, refs)
+    : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
   const result = await tx.execute(sql`
     INSERT INTO "DerivedDirty" (target, ref, priority)
-    SELECT DISTINCT ${declaration.target}, d.id, 1
-      FROM ${ident(declaration.table)} d
-     WHERE d.${ident(column)} = ANY(${uuidArrayParam(marks.map((mark) => mark.ref))})
+    SELECT DISTINCT ${declaration.target}, r.id, 1
+      FROM (${dependents}) AS r(id) WHERE r.id IS NOT NULL
     ON CONFLICT (target, ref) DO UPDATE SET
       ticket = nextval('"DerivedTicket"'),
       priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
@@ -319,12 +344,12 @@ export async function publishDerivedPage(
       await clearMarks(tx, target, marks);
       continue;
     }
-    const { declaration, fanoutColumn } = parsed;
-    if (fanoutColumn) {
+    const { declaration, fanoutInput } = parsed;
+    if (fanoutInput) {
       expanded += await expandFanout(
         tx,
         declaration,
-        fanoutColumn,
+        fanoutInput,
         target,
         marks,
       );

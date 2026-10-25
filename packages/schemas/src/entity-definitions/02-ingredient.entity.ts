@@ -710,6 +710,8 @@ export default defineEntity(
         scope: ["recipeId"],
       },
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [{ table: "Product", match: { ingredientId: "id" } }],
         checks: [
           {
             id: "ingredient_product",

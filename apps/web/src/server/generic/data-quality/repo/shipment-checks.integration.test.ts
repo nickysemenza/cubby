@@ -3,7 +3,7 @@ import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence"
 import { datedShipmentEventTime } from "@cubby/schemas/shipment-evidence";
 import type { ShipmentPurpose } from "@cubby/schemas/shipment-fields";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
@@ -12,9 +12,6 @@ import { describe, expect, it } from "vitest";
 import { unwrapDb, withTransaction } from "~/server/db/helpers";
 import {
   dataExceptionRecord,
-  entityQuality,
-  entityQualityCheck,
-  job,
   purchase,
   shipment,
   shipmentObservation,
@@ -35,10 +32,22 @@ import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-id
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { scoreSql } from "~/server/generic/data-quality/repo/sql";
 import { REFRESH_PAGE_SIZE } from "~/server/generic/derived-refresh/repo/families";
-import { invalidateRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import {
+  claimDerivedMarks,
+  markAllStoredDerived,
+  prepareDerivedPage,
+  publishDerivedPage,
+} from "~/server/generic/derived/repo/drain";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
+import {
+  storedQuality,
+  storedQualityIds,
+} from "~/server/testing/quality.fixtures";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import {
   shipmentChecks,
@@ -137,27 +146,7 @@ describe("Shipment evidence quality", () => {
     return { code, row };
   };
 
-  const refresh = async () => {
-    for (let page = 0; page < 4; page++) {
-      const [intent] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent)
-        throw new Error("Expected quality refresh intent from source write");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic quality pass exceeded its expected page budget");
-  };
+  const refresh = () => drainStoredDerived(ctx.db);
 
   it("requires known purpose and a live purchase or a reviewed non-purchase association", async () => {
     const parcel = await seed([shipped, delivered], {
@@ -228,7 +217,6 @@ describe("Shipment evidence quality", () => {
       .set({ purchaseAssociationReviewed: true })
       .where(eq(shipment.id, parcel.row.id));
     expect((await quality()).score).toBeLessThan(100);
-    await invalidateRefreshFamily(ctx.db, "quality");
     await refresh();
     const filtered = await listShipmentsRead(
       ctx.db,
@@ -487,35 +475,18 @@ describe("Shipment evidence quality", () => {
     expect(
       (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
     ).toBe(100);
-    expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
+    expect(await storedQualityIds(ctx.db)).toEqual([]);
     await refresh();
     expect((await stored()).score).toBe(100);
     // Shipment fixtures also create other stored kinds, such as carrier Vendors.
-    const backfilled = await unwrapDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.kind, "shipment"));
-    expect(backfilled.map((row) => row.entityId).sort()).toEqual(
+    expect(await storedQualityIds(ctx.db, "shipment")).toEqual(
       [...historical.map((row) => row.id), parcel.row.id].sort(),
     );
-    expect(
-      await unwrapDb(ctx.db)
-        .select()
-        .from(entityQualityCheck)
-        .where(eq(entityQualityCheck.kind, "shipment")),
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          entityId: historical[0]!.id,
-          checkKey: "shipment_purchase_association",
-          state: "gap",
-        }),
-        expect.objectContaining({
-          entityId: historical[0]!.id,
-          checkKey: "shipment_purpose",
-          state: "gap",
-        }),
-      ]),
+    expect((await storedQuality(ctx.db, historical[0]!.id))?.checks).toEqual(
+      expect.objectContaining({
+        shipment_purchase_association: "gap",
+        shipment_purpose: "gap",
+      }),
     );
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
     await editShipmentObservation(
@@ -536,18 +507,15 @@ describe("Shipment evidence quality", () => {
     ).toBe(90);
     await refresh();
     expect((await stored()).score).toBe(90);
-    // An older version is stale even when the check states are unchanged.
-    await unwrapDb(ctx.db)
-      .update(entityQuality)
-      .set({ rulesVersion: 0, score: 1 })
-      .where(eq(entityQuality.entityId, parcel.row.id));
-    await invalidateRefreshFamily(ctx.db, "quality");
+    // An older version is stale even when the check states are unchanged:
+    // reconciliation republishes it.
+    await unwrapDb(ctx.db).execute(sql`
+      UPDATE "DerivedValue" SET value = jsonb_set(value, '{rulesVersion}', '0'),
+        "sortNumber" = 1
+       WHERE "entityId" = ${parcel.row.id} AND key = 'dataQuality'`);
+    await markAllStoredDerived(ctx.db);
     await refresh();
-    const [quality] = await unwrapDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.entityId, parcel.row.id));
-    expect(quality).toMatchObject({
+    expect(await storedQuality(ctx.db, parcel.row.id)).toMatchObject({
       score: 90,
       rulesVersion: SHIPMENT_QUALITY_RULES_VERSION,
     });
@@ -563,7 +531,7 @@ describe("Shipment evidence quality", () => {
       "shipment_span",
     );
     expect((await stored()).score).toBe(90);
-    await invalidateRefreshFamily(ctx.db, "quality");
+    // Recording the waiver marked the record; the drain applies it.
     await refresh();
     expect((await stored()).score).toBe(100);
     await editShipmentObservation(
@@ -595,48 +563,35 @@ describe("Shipment evidence quality", () => {
         .where(eq(shipment.id, parcel.row.id));
       await tombstoneEntityIdentities(tx, [parcel.row.id]);
     });
-    expect(
-      await unwrapDb(ctx.db)
-        .select()
-        .from(entityQuality)
-        .where(eq(entityQuality.entityId, parcel.row.id)),
-    ).toEqual([]);
-    expect(
-      await unwrapDb(ctx.db)
-        .select()
-        .from(entityQualityCheck)
-        .where(eq(entityQualityCheck.entityId, parcel.row.id)),
-    ).toEqual([]);
+    expect(await storedQuality(ctx.db, parcel.row.id)).toBeUndefined();
   });
 
   it("publishes the latest verdict when a write lands during preparation", async () => {
     const parcel = await seed([shipped, delivered]);
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
-    const [intent] = await unwrapDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, "refresh:quality"));
-    const result = await advanceJob(ctx.db, intent!.id, {
-      "refresh.family": {
-        prepare: async (db, claim) => {
-          const prepared = await refreshFamilyHandler.prepare(db, claim);
-          await editShipmentObservation(
-            ctx.db,
-            {
-              shipmentId: parcel.code,
-              observationId: timeline.observations.find(
-                (o) => o.kind === "delivered",
-              )!.observationId,
-              patch: { time: instant("2026-06-01T12:00:00Z") },
-            },
-            ctx.actor,
-          );
-          return prepared;
-        },
+    const plan = await prepareDerivedPage(
+      ctx.db,
+      derivedComputes,
+      await claimDerivedMarks(ctx.db),
+    );
+    await editShipmentObservation(
+      ctx.db,
+      {
+        shipmentId: parcel.code,
+        observationId: timeline.observations.find(
+          (o) => o.kind === "delivered",
+        )!.observationId,
+        patch: { time: instant("2026-06-01T12:00:00Z") },
       },
-    });
-    // The pass in progress is not restarted; its publication reads the edit.
-    expect(result).toBe("succeeded");
+      ctx.actor,
+    );
+    // The edit re-ticketed the mark, so the stale page cannot clear it; the
+    // next drain publishes the edit's verdict (ADR 0021).
+    await publishDerivedPage(ctx.db, plan);
+    expect(
+      await derivedMarkTickets(ctx.db, "shipment.dataQuality", parcel.row.id),
+    ).toHaveLength(1);
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")

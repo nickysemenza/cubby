@@ -1,14 +1,11 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import { eq, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
-import { unwrapDb } from "~/server/db/helpers";
-import { entityQuality, job, jobInvalidationCapture } from "~/server/db/schema";
 import {
   createExpense,
   updateExpense,
@@ -22,11 +19,18 @@ import {
   attachProductComponents,
   detachProductComponents,
 } from "~/server/domains/product/repo/product-components";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/generic/work-queue/service/work-queue-read";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
+import {
+  storedQuality,
+  storedQualityIds,
+} from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   createInventoryFixture,
@@ -36,7 +40,6 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { productChecks, PRODUCT_QUALITY_RULES_VERSION } from "./checks/product";
 import { clearDataException, setDataException } from "./exceptions";
@@ -46,35 +49,10 @@ import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
 // quality enrollment; queue research reconstructs kit prices before paging.
 describe("stored Product quality", () => {
   const ctx = withTestDb();
-  const refresh = async () => {
-    for (let page = 0; page < 8; page++) {
-      const [intent] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent) throw new Error("Expected quality intent from source write");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic Product quality pass exceeded page budget");
-  };
-  // A source write appends capture input without replacing the Job row.
-  const generation = async () => {
-    const [intent] = await unwrapDb(ctx.db)
-      .select({ revision: sql<number>`count(*)::int` })
-      .from(jobInvalidationCapture)
-      .where(eq(jobInvalidationCapture.key, "refresh:quality"));
-    if (!intent) throw new Error("Missing quality invalidation");
-    return intent.revision;
-  };
+  const refresh = () => drainStoredDerived(ctx.db);
+  // A source write marks the record's stored quality with a fresh ticket.
+  const generation = async () =>
+    Math.max(0, ...(await derivedMarkTickets(ctx.db, "product.dataQuality")));
   const seed = async () => {
     const item = await createProductIdentityFixture(
       ctx.db,
@@ -136,12 +114,9 @@ describe("stored Product quality", () => {
         .map((check) => check.check),
     ).toContain("product_price");
     await readRecordWorkQueue(ctx.db, null, item.id, false);
-    expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
+    expect(await storedQualityIds(ctx.db)).toEqual([]);
     await refresh();
-    const [published] = await unwrapDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.entityId, item.entityId));
+    const published = await storedQuality(ctx.db, item.entityId);
     expect(published?.rulesVersion).toBe(PRODUCT_QUALITY_RULES_VERSION);
     const priceGap = async () =>
       (await loadDataQualities(ctx.db, "product", [item.entityId], "stored"))
@@ -276,7 +251,7 @@ describe("stored Product quality", () => {
       expect(statements.join("\n")).not.toMatch(
         /work_product_price|\bkpe\.|"knownCost"|"knownUnitCount"/,
       );
-      expect(measured.tables).toContain("EntityQualityCheck");
+      expect(measured.tables).toContain("DerivedValue");
       expect(
         measured.result.items.some(
           (row) => row.source === "research" && row.id === item.id,

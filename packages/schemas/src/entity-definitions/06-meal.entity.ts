@@ -972,6 +972,8 @@ Rules:
       delete: { mode: "soft", bulk: true },
       merge: false,
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [{ table: "MealRecipe", match: { mealId: "id" } }],
         checks: [
           {
             id: "meal_recipe_cost_incomplete",

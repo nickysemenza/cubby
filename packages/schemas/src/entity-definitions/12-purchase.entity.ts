@@ -2079,6 +2079,11 @@ export default defineEntity({
   search: "lexical",
   capabilities: {
     dataQuality: {
+      // Rows the stored evaluator reads beyond its own row (ADR 0021).
+      inputs: [
+        { table: "Expense", match: { purchaseId: "id" } },
+        { table: "Vendor", match: { id: "vendorId" } },
+      ],
       exceptions: true,
       related: ["product"],
       checks: [

@@ -9,11 +9,8 @@ import {
 } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { derivedValue } from "~/server/db/derived-value-schema";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import {
-  entityQuality,
-  entityQualityCheck,
-} from "~/server/db/entity-quality-schema";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import {
   findPgError,
@@ -94,13 +91,8 @@ export async function tombstoneEntityIdentities(
   if (ids.length === 0) return;
   // Publication locks its Job before projection rows; removal uses that order too.
   await lockRefreshFamily(tx, "search");
-  await lockRefreshFamily(tx, "quality");
-  await tx
-    .delete(entityQualityCheck)
-    .where(inArray(entityQualityCheck.entityId, [...ids]));
-  await tx
-    .delete(entityQuality)
-    .where(inArray(entityQuality.entityId, [...ids]));
+  // A tombstone has no derived values; the drain never republishes one.
+  await tx.delete(derivedValue).where(inArray(derivedValue.entityId, [...ids]));
   await tx
     .update(entityIdentity)
     .set({ deletedAt: at })

@@ -379,12 +379,12 @@ describe("durable family invalidation", () => {
       generation: first.generation + 1,
       cursor: null,
     });
-    // A pass that finishes first (quality) keeps its cursor across a capture
+    // A pass that finishes first (recipes) keeps its cursor across a capture
     // and a reclaim, completes, and its scheduled repeat reruns it.
-    const quality = await family("quality");
-    await invalidateRefreshFamily(ctx.db, "quality");
+    const quality = await family("recipes");
+    await invalidateRefreshFamily(ctx.db, "recipes");
     const pass = await claimJob(ctx.db, quality.id);
-    if (!pass) throw new Error("Expected quality claim");
+    if (!pass) throw new Error("Expected recipes claim");
     await getDb(ctx.db)
       .update(job)
       .set({
@@ -392,7 +392,7 @@ describe("durable family invalidation", () => {
         leaseExpiresAt: new Date(Date.now() - 1_000),
       })
       .where(eq(job.id, quality.id));
-    await invalidateRefreshFamily(ctx.db, "quality");
+    await invalidateRefreshFamily(ctx.db, "recipes");
     const resumed = await claimJob(ctx.db, quality.id);
     expect(resumed).toMatchObject({
       generation: pass.generation,

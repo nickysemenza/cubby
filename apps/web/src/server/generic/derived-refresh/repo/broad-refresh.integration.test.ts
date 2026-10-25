@@ -1,11 +1,7 @@
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  entityQuality,
-  entityQualityCheck,
-} from "~/server/db/entity-quality-schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   job,
@@ -15,18 +11,11 @@ import {
   searchDocument,
 } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
-import { qualityRefreshDriver } from "~/server/generic/data-quality/repo/refresh";
-import {
-  prepareQualityPublications,
-  publishQualityRows,
-} from "~/server/generic/data-quality/repo/stored";
 import { jobDue } from "~/server/generic/jobs/repo/jobs";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
-  createImageFixture,
-  insertEntityAttachments,
   insertEntityFixtures,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -194,96 +183,6 @@ describe("broad refresh jobs", () => {
     expect(document?.title).toBe("Synthetic late bin");
   });
 
-  it("returns authoritative publication changes for changed, unchanged and retired outcomes", async () => {
-    const [saved] = await insertEntityFixtures(ctx.db, location, "location", [
-      { shortcode: "LOC-2345", name: "Synthetic publication", type: "room" },
-    ]);
-    if (!saved) throw new Error("Expected location fixture");
-    const ids = [saved.id];
-    const rows = await prepareQualityPublications(ctx.db, "location", ids);
-    const publish = async (next: typeof rows) =>
-      withTransactionDatabase(ctx.db, (tx) =>
-        publishQualityRows(tx, ids, next),
-      );
-    expect(await publish(rows)).toEqual(ids);
-    expect(await publish(rows)).toEqual([]);
-    const revised = rows.map((row) => ({
-      ...row,
-      rulesVersion: row.rulesVersion + 1,
-    }));
-    expect(await publish(revised)).toEqual(ids);
-    expect(await publish(revised)).toEqual([]);
-    await getDb(ctx.db)
-      .update(location)
-      .set({ deletedAt: new Date() })
-      .where(eq(location.id, saved.id));
-    const retired = await prepareQualityPublications(ctx.db, "location", ids);
-    expect(retired).toEqual([]);
-    expect(await publish(retired)).toEqual(ids);
-    expect(await publish([])).toEqual([]);
-    expect(await publishQualityRows(ctx.db, [], [])).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(entityQuality)
-        .where(eq(entityQuality.entityId, saved.id)),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(entityQualityCheck)
-        .where(eq(entityQualityCheck.entityId, saved.id)),
-    ).toEqual([]);
-  });
-
-  it("publishes a source edit committed after preparation and keeps exact idle pending counts", async () => {
-    const [saved] = await insertEntityFixtures(ctx.db, location, "location", [
-      { shortcode: "LOC-2345", name: "Synthetic publication", type: "room" },
-    ]);
-    if (!saved) throw new Error("Expected location fixture");
-    const image = await createImageFixture(
-      ctx.db,
-      "synthetic-concurrent-quality",
-    );
-    const boundary = new Date().toISOString();
-    const before = await prepareQualityPublications(ctx.db, "location", [
-      saved.id,
-    ]);
-    const page = await qualityRefreshDriver.page(ctx.db, null, boundary);
-    expect(page.pending).toBeGreaterThan(0);
-    await insertEntityAttachments(ctx.db, {
-      entityId: saved.id,
-      imageId: image.id,
-      sortOrder: 0,
-    });
-    const current = await prepareQualityPublications(ctx.db, "location", [
-      saved.id,
-    ]);
-    expect(before[0]?.checks.location_display_image).toBe("gap");
-    expect(current[0]?.checks.location_display_image).toBe("pass");
-    const result = await withTransactionDatabase(ctx.db, (tx) =>
-      page.publish(tx),
-    );
-    expect(result.changed).toBeGreaterThan(0);
-    const [published] = await getDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.entityId, saved.id));
-    const checks = await getDb(ctx.db)
-      .select()
-      .from(entityQualityCheck)
-      .where(eq(entityQualityCheck.entityId, saved.id));
-    expect(published?.score).toBe(current[0]?.score);
-    expect(
-      Object.fromEntries(checks.map((check) => [check.checkKey, check.state])),
-    ).toEqual(current[0]?.checks);
-    const idle = await qualityRefreshDriver.page(ctx.db, null, boundary);
-    expect(idle.pending).toBe(0);
-    expect(
-      await withTransactionDatabase(ctx.db, (tx) => idle.publish(tx)),
-    ).toMatchObject({ changed: 0 });
-  });
-
   it("rolls family intent back with a rejected save", async () => {
     await expect(
       withTransactionDatabase(ctx.db, async (tx) => {
@@ -348,69 +247,6 @@ describe("broad refresh jobs", () => {
       .from(job)
       .where(eq(job.id, pending.id));
     expect(advanced?.result).toMatchObject({ runId: pass!.id });
-    // Recording the quality family's own Run must not restart its generation.
-    const [qualityJob] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, "refresh:quality"));
-    if (!qualityJob) throw new Error("Expected quality intent");
-    await advanceJob(ctx.db, qualityJob.id, {
-      "refresh.family": refreshFamilyHandler,
-    });
-    const [qualityPass] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.id, qualityJob.id));
-    expect(qualityPass?.state).toBe("completed");
-  });
-
-  it("finishes a quality pass that household writes keep invalidating", async () => {
-    // Production writes arrive faster than a full pass; each one used to
-    // restart the pass and supersede the page in flight.
-    await insertEntityFixtures(
-      ctx.db,
-      location,
-      "location",
-      Array.from({ length: 201 }, (_, index) => ({
-        shortcode: `LOC-${String(3000 + index)}`,
-        name: `Synthetic room ${index}`,
-        type: "room",
-      })),
-    );
-    await invalidateRefreshFamily(ctx.db, "quality");
-    const current = async () => {
-      const [row] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!row) throw new Error("Expected quality intent");
-      return row;
-    };
-    const first = await current();
-    await advanceJob(ctx.db, first.id, {
-      "refresh.family": refreshFamilyHandler,
-    });
-    const between = await current();
-    expect(between.cursor).not.toBeNull();
-    await invalidateRefreshFamily(ctx.db, "quality");
-    expect(await current()).toMatchObject({
-      generation: between.generation,
-      cursor: between.cursor,
-    });
-    for (let page = 0; (await current()).state !== "completed"; page++) {
-      if (page === 10) throw new Error("Quality pass did not finish");
-      await advanceJob(ctx.db, first.id, {
-        "refresh.family": refreshFamilyHandler,
-      });
-    }
-    const [published] = await getDb(ctx.db)
-      .select({ n: count() })
-      .from(entityQuality)
-      .where(eq(entityQuality.kind, "location"));
-    const [locations] = await getDb(ctx.db)
-      .select({ n: count() })
-      .from(location);
-    expect(published?.n).toBe(locations?.n);
   });
 
   it("leaves no Run for a pass with nothing to change", async () => {

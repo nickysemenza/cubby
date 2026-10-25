@@ -2005,6 +2005,13 @@ Rules:
       },
     ],
     dataQuality: {
+      // Rows the stored evaluator reads beyond its own row (ADR 0021).
+      inputs: [
+        // Inherited Purchase defaults (project, trade, category) change the
+        // Expense's effective values.
+        { table: "Purchase", match: { id: "purchaseId" } },
+        { table: "Product", match: { id: "productId" } },
+      ],
       exceptions: true,
       checks: [
         {

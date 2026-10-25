@@ -17,6 +17,21 @@ export interface DerivedInput {
   readonly columns: readonly string[] | null;
   /** Only rows holding these column values count. */
   readonly where: Readonly<Record<string, string>> | null;
+  /** A join path from the matched value to this entity's ids. */
+  readonly path: readonly DerivedPathStep[] | null;
+  /** The matched column is JSON; values are `key` of the array at `array`. */
+  readonly json: {
+    readonly array: readonly string[];
+    readonly key: string;
+  } | null;
+}
+
+/** One join step: `to` of `table` rows whose `from` holds a previous value. */
+export interface DerivedPathStep {
+  readonly table: string;
+  readonly from: string;
+  readonly to: string;
+  readonly where?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -29,6 +44,7 @@ export type DerivedDependency = {
   readonly key: string;
 } & (
   | { readonly sourceColumn: string; readonly entityColumn: string }
+  | { readonly path: readonly DerivedPathStep[] }
   | {
       readonly through: {
         readonly table: string;
@@ -53,6 +69,13 @@ export interface StoredDerivedDeclaration {
   readonly dependsOn: readonly DerivedDependency[];
 }
 
+const pathStep = z.object({
+  table: z.string(),
+  from: z.string(),
+  to: z.string(),
+  where: z.record(z.string(), z.string()).optional(),
+});
+
 /** The generated registry's entry, parsed at this boundary. */
 const storedEntry = z.object({
   entity: entitySchema,
@@ -67,6 +90,10 @@ const storedEntry = z.object({
         match: z.record(z.string(), z.string()),
         columns: z.array(z.string()).optional(),
         where: z.record(z.string(), z.string()).optional(),
+        path: z.array(pathStep).optional(),
+        json: z
+          .object({ array: z.array(z.string()), key: z.string() })
+          .optional(),
       }),
     ),
     dependsOn: z
@@ -76,6 +103,11 @@ const storedEntry = z.object({
             entity: entitySchema,
             key: z.string(),
             match: z.record(z.string(), z.string()),
+          }),
+          z.object({
+            entity: entitySchema,
+            key: z.string(),
+            path: z.array(pathStep),
           }),
           z.object({
             entity: entitySchema,
@@ -132,10 +164,18 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               entityColumn,
               columns: input.columns ?? null,
               where: input.where ?? null,
+              path: input.path ?? null,
+              json: input.json ?? null,
             };
           }),
           dependsOn: (entry.stored.dependsOn ?? []).map(
             (dependency): DerivedDependency => {
+              if ("path" in dependency)
+                return {
+                  entity: dependency.entity,
+                  key: dependency.key,
+                  path: dependency.path,
+                };
               if ("through" in dependency)
                 return {
                   entity: dependency.entity,
@@ -184,18 +224,26 @@ export function storedDerivedByTarget(
   );
 }
 
-/** Fanout targets carry the entity column the drain matches: `<entity>.<key>@<column>`. */
-export const fanoutTarget = (target: string, entityColumn: string) =>
-  `${target}@${entityColumn}`;
+/** Whether a changed input row marks records directly or through the drain. */
+export const isFanoutInput = (input: DerivedInput) =>
+  input.entityColumn !== "id" || input.path !== null || input.json !== null;
+
+/** A fanout mark names its input: `<entity>.<key>@<input index>`. */
+export const fanoutTarget = (target: string, inputIndex: number) =>
+  `${target}@${inputIndex}`;
 
 export function parseTarget(target: string): {
   declaration: StoredDerivedDeclaration;
-  fanoutColumn: string | null;
+  fanoutInput: DerivedInput | null;
 } | null {
-  const [base, fanoutColumn] = target.split("@");
+  const [base, index] = target.split("@");
   const declaration = base ? storedDerivedByTarget(base) : null;
-  return declaration
-    ? { declaration, fanoutColumn: fanoutColumn ?? null }
+  if (!declaration) return null;
+  if (index === undefined) return { declaration, fanoutInput: null };
+  const input = declaration.inputs[Number(index)];
+  // A retired input's pending fanout has nothing left to expand.
+  return input && isFanoutInput(input)
+    ? { declaration, fanoutInput: input }
     : null;
 }
 

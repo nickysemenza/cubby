@@ -3698,6 +3698,40 @@ Rules:
       // included, so a named catalog entry scores instead of reading as not
       // assessed.
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [
+          { table: "InventoryEntry", match: { productId: "id" } },
+          { table: "Expense", match: { productId: "id" } },
+          // A kit's acquisition lines price its components.
+          {
+            table: "Expense",
+            match: { productId: "id" },
+            path: [
+              { table: "EntityLink", from: "fromEntityId", to: "toEntityId" },
+            ],
+          },
+          {
+            table: "EntityLink",
+            match: { fromEntityId: "id" },
+            where: { kind: "productComponent" },
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "productComponent" },
+          },
+          {
+            table: "EntityExternalId",
+            match: { entityId: "id" },
+            where: { entityKind: "product" },
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "purchaseProduct" },
+          },
+          { table: "ProductCategory", match: { id: "categoryId" } },
+        ],
         exceptions: true,
         listOrder: 7,
         checks: [

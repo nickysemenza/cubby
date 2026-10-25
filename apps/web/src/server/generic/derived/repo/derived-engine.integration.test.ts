@@ -81,6 +81,15 @@ describe("stored derived values", () => {
         sql`SELECT ref::text AS ref FROM "DerivedDirty" WHERE target = ${target} ORDER BY ref`,
       )
     ).rows.map((row) => String((row as { ref: string }).ref));
+  const fanoutMarks = async (target: string) =>
+    (
+      await getDb(ctx.db).execute(
+        sql`SELECT target, ref::text AS ref FROM "DerivedDirty" WHERE target LIKE ${`${target}@%`}`,
+      )
+    ).rows.map((row) => ({
+      target: String((row as { target: string }).target),
+      ref: String((row as { ref: string }).ref),
+    }));
   const drain = async () => {
     for (let page = 0; page < 20; page++) {
       const claimed = await claimDerivedMarks(ctx.db);
@@ -195,10 +204,11 @@ describe("stored derived values", () => {
       bUnit: "m",
     });
     // The save wrote one fanout mark, not a mark per inventory row.
-    expect(await marks("inventory.valuation@productId")).toEqual([twine]);
+    const fanout = await fanoutMarks("inventory.valuation");
+    expect(fanout.map((mark) => mark.ref)).toEqual([twine]);
     expect(await marks("inventory.valuation")).toEqual([]);
     await drain();
-    expect(await marks("inventory.valuation@productId")).toEqual([]);
+    expect(await fanoutMarks("inventory.valuation")).toEqual([]);
     expect((await valuation(entry))?.meta.state).toBe("fresh");
   });
 

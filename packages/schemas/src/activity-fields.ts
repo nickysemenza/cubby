@@ -292,15 +292,6 @@ export const RUN_KINDS = {
         family: "search",
       },
       {
-        key: "quality",
-        label: "Data quality",
-        purpose: "Recomputes stored entity quality checks and scores.",
-        action: "Checking quality",
-        unit: "records",
-        input: counted,
-        family: "quality",
-      },
-      {
         key: "recipes",
         label: "Recipe totals",
         purpose: "Recomputes recipe nutrition and cost totals.",

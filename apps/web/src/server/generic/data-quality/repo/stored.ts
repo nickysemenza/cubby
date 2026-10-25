@@ -15,10 +15,6 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  entityQuality,
-  entityQualityCheck,
-} from "~/server/db/entity-quality-schema";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { dataExceptionRecord } from "~/server/db/retained-tables";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
@@ -114,11 +110,9 @@ export async function loadPublishedQuality(
   const [result, exceptions] = await Promise.all([
     unwrapDb(db)
       .execute(sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
-      q.score, coalesce(jsonb_object_agg(c."checkKey", c.state) FILTER (WHERE c."checkKey" IS NOT NULL), '{}'::jsonb) AS checks
-      FROM ${t} LEFT JOIN ${entityQuality} q ON q."entityId" = ${t.id} AND q.kind = ${kind}
-      LEFT JOIN ${entityQualityCheck} c ON c."entityId" = ${t.id} AND c.kind = ${kind}
-      WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}
-      GROUP BY ${t.id}, ${t.shortcode}, q.score`),
+      q."sortNumber" AS score, coalesce(q.value->'checks', '{}'::jsonb) AS checks
+      FROM ${t} LEFT JOIN "DerivedValue" q ON q."entityId" = ${t.id} AND q.key = 'dataQuality'
+      WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`),
     loadExceptions(db, kind, ids),
   ]);
   return z
@@ -170,74 +164,4 @@ export async function prepareQualityPublications(
       checks: row.checks,
     }))
     .sort((a, b) => a.entityId.localeCompare(b.entityId));
-}
-
-/** Compare only persisted outcomes and version, not a second stored input fingerprint. */
-export async function changedQualityIds(
-  db: ReaderDb,
-  ids: readonly string[],
-  rows: readonly QualityPublication[],
-): Promise<string[]> {
-  if (!ids.length) return [];
-  const tx = unwrapDb(db);
-  const existing = await tx
-    .select()
-    .from(entityQuality)
-    .where(inArray(entityQuality.entityId, [...ids]));
-  const checks = await tx
-    .select()
-    .from(entityQualityCheck)
-    .where(inArray(entityQualityCheck.entityId, [...ids]));
-  const byId = new Map(rows.map((row) => [row.entityId, row]));
-  return ids.filter((id) => {
-    const row = byId.get(id);
-    const old = existing.find((item) => item.entityId === id);
-    if (!row)
-      return old !== undefined || checks.some((check) => check.entityId === id);
-    const oldChecks = checks.filter((check) => check.entityId === id);
-    const nextChecks = new Map(Object.entries(row.checks));
-    return (
-      !old ||
-      old.score !== row.score ||
-      old.kind !== row.kind ||
-      old.rulesVersion !== row.rulesVersion ||
-      oldChecks.length !== Object.keys(row.checks).length ||
-      oldChecks.some((check) => nextChecks.get(check.checkKey) !== check.state)
-    );
-  });
-}
-
-/** Publication is called only inside the family Job's validated transaction. */
-export async function publishQualityRows(
-  db: ReaderDb,
-  ids: readonly string[],
-  rows: readonly QualityPublication[],
-): Promise<string[]> {
-  const changed = await changedQualityIds(db, ids, rows);
-  if (!changed.length) return changed;
-  const tx = unwrapDb(db);
-  await tx
-    .delete(entityQualityCheck)
-    .where(inArray(entityQualityCheck.entityId, changed));
-  await tx
-    .delete(entityQuality)
-    .where(inArray(entityQuality.entityId, changed));
-  const next = rows.filter((row) => changed.includes(row.entityId));
-  if (!next.length) return changed;
-  const computedAt = new Date();
-  await tx
-    .insert(entityQuality)
-    .values(
-      next.map(({ checks: _checks, ...row }) => ({ ...row, computedAt })),
-    );
-  const values = next.flatMap((row) =>
-    Object.entries(row.checks).map(([checkKey, state]) => ({
-      entityId: row.entityId,
-      kind: row.kind,
-      checkKey,
-      state,
-    })),
-  );
-  if (values.length) await tx.insert(entityQualityCheck).values(values);
-  return changed;
 }

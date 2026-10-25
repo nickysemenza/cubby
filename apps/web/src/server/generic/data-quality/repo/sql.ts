@@ -33,7 +33,7 @@ import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
  * `NOT a AND b` once emptied a production worklist because the group was a
  * bare conjunction. The unit test asserts the shape on the rendered SQL.
  *
- * Predicates read published `EntityQualityCheck`/`EntityQuality` rows through
+ * Predicates read the published `dataQuality` derived value (ADR 0021) through
  * indexed per-row lookups, so they stay valid under any FROM clause.
  */
 const group = (inner: SQL): SQL => sql`(${inner})`;

@@ -524,7 +524,6 @@ export async function retireObsoleteImageProcessingJobs(
   await recordChange(db, {
     kind: "projection",
     categories: ["imageJob"],
-    refresh: ["quality"],
   });
   return ids.length;
 }
@@ -804,7 +803,6 @@ export async function claimImageProcessingJob(
       await recordChange(tx, {
         kind: "projection",
         categories: ["image", "imageJob"],
-        refresh: ["quality"],
       });
     const {
       previousAttemptId: _previousAttemptId,
@@ -1067,7 +1065,6 @@ export async function retryImageProcessingNow(
     await recordChange(tx, {
       kind: "projection",
       categories: ["imageJob"],
-      refresh: ["quality"],
     });
     return ids;
   });
@@ -1603,10 +1600,7 @@ export async function completeImageProcessingJob(
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
       // Selected descriptions are inputs to image and attached-owner search documents.
-      refresh:
-        job.kind === "describe_image"
-          ? (["quality", "search"] as const)
-          : (["quality"] as const),
+      refresh: job.kind === "describe_image" ? (["search"] as const) : [],
     });
     if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };

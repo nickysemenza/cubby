@@ -31,6 +31,13 @@ export type DerivedStoredInput = {
   match: Record<string, string>;
   columns?: string[];
   where?: Record<string, string>;
+  path?: {
+    table: string;
+    from: string;
+    to: string;
+    where?: Record<string, string>;
+  }[];
+  json?: { array: string[]; key: string };
 };
 
 export const entityFieldKinds = [
@@ -991,22 +998,50 @@ const buildMetadataSchemas = () => {
   const derivedMatchSchema = z
     .record(nonEmptyString(), nonEmptyString())
     .refine((match) => Object.keys(match).length === 1, "one column pair");
+  /**
+   * A join path the drain walks from changed values to the records to mark:
+   * each step selects `to` from `table` rows whose `from` is in the previous
+   * step's values. Walked set-based outside the save, never in a trigger.
+   */
+  const derivedPathSchema = z
+    .array(
+      z
+        .object({
+          table: nonEmptyString(),
+          from: nonEmptyString(),
+          to: nonEmptyString(),
+          /** Only rows holding these column values continue the path. */
+          where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+        })
+        .strict(),
+    )
+    .min(1);
+  const derivedInputSchema = z
+    .object({
+      table: nonEmptyString(),
+      match: derivedMatchSchema,
+      columns: z.array(nonEmptyString()).min(1).optional(),
+      /** Only rows whose column holds this value count (a link kind). */
+      where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+      /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
+      path: derivedPathSchema.optional(),
+      /**
+       * The matched column is JSON: its values are `key` of each element of
+       * the array at `array` (a mail-import Run's `input.sources`).
+       */
+      json: z
+        .object({
+          array: z.array(nonEmptyString()).min(1),
+          key: nonEmptyString(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict();
   const derivedStoreSchema = z
     .object({
       compute: nonEmptyString(),
-      inputs: z
-        .array(
-          z
-            .object({
-              table: nonEmptyString(),
-              match: derivedMatchSchema,
-              columns: z.array(nonEmptyString()).min(1).optional(),
-              /** Only rows whose column holds this value count (a link kind). */
-              where: z.record(nonEmptyString(), nonEmptyString()).optional(),
-            })
-            .strict(),
-        )
-        .min(1),
+      inputs: z.array(derivedInputSchema).min(1),
       dependsOn: z
         .array(
           z.union([
@@ -1015,6 +1050,14 @@ const buildMetadataSchemas = () => {
                 entity: nonEmptyString(),
                 key: derivedKey,
                 match: derivedMatchSchema,
+              })
+              .strict(),
+            /** From the changed record's id along a join path to the records to mark. */
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                path: derivedPathSchema,
               })
               .strict(),
             /** Through a link table: `source` holds the changed record, `dependent` the record to mark. */
@@ -2294,6 +2337,12 @@ const buildMetadataSchemas = () => {
         .default(false),
       /** Scored entities whose gaps roll up into this one (`relatedGaps`). */
       related: z.array(nonEmptyString()).optional().default([]),
+      /**
+       * Rows the stored quality evaluation reads beyond the record's own row,
+       * its waivers and its attachments (ADR 0021): a change marks the
+       * record's stored quality for recompute.
+       */
+      inputs: z.array(derivedInputSchema).optional().default([]),
       /** Where the synthesized `dataQuality` list column sits; unordered = last. */
       listOrder: z.number().int().nonnegative().optional(),
     })

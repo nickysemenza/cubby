@@ -4,7 +4,8 @@ import {
   type BackgroundTaskMessage,
 } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
@@ -37,7 +38,6 @@ export function drainDerivedRefreshFrontier(
   // Lists read published quality and stored derived values, so fixtures
   // settle them alongside search.
   const pending = drainFamilyJobs(db, "search", maxPages)
-    .then(() => drainFamilyJobs(db, "quality", maxPages))
     .then(() => drainStoredDerived(db))
     .finally(() => frontierDrains.delete(db));
   frontierDrains.set(db, pending);
@@ -46,7 +46,7 @@ export function drainDerivedRefreshFrontier(
 
 async function drainFamilyJobs(
   db: Database,
-  family: "search" | "quality",
+  family: "search",
   maxPages: number,
 ): Promise<void> {
   const deadline = performance.now() + 30_000;
@@ -105,6 +105,26 @@ export async function drainStoredDerived(
     await publishDerivedPage(db, plan);
   }
   throw new Error(`Stored derived drain exceeded ${maxPages} pages`);
+}
+
+/**
+ * Pending derived marks for `target` (and one record), for invalidation
+ * assertions. Without `ref`, fanout marks (`<target>@<input>`) count too.
+ */
+export async function derivedMarkTickets(
+  db: Database,
+  target: string,
+  ref?: string,
+): Promise<number[]> {
+  const rows = await getDb(db).execute(
+    ref
+      ? sql`SELECT ticket FROM "DerivedDirty" WHERE target = ${target} AND ref = ${ref}`
+      : sql`SELECT ticket FROM "DerivedDirty" WHERE target = ${target} OR target LIKE ${`${target}@%`}`,
+  );
+  return z
+    .array(z.object({ ticket: z.coerce.number() }))
+    .parse(rows.rows)
+    .map((row) => row.ticket);
 }
 
 /** Settle only recipe intent using real Job ownership and an optional USDA fixture seam. */
