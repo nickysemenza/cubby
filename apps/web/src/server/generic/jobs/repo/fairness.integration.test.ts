@@ -128,12 +128,14 @@ describe("fair drain under a flood", () => {
       );
     const predicted = await dueJobPositions(ctx.db, ids);
     const served: string[] = [];
+    // Other due work (the Run's own bookkeeping Jobs) is served too; each
+    // position counts every Job the drain serves first.
     await drainRounds(ctx.db, 4, (batch) => {
       served.push(...batch.map((row) => row.id));
     });
-    expect(served).toHaveLength(ids.length);
+    expect(ids.every((id) => served.includes(id))).toBe(true);
     expect(Object.fromEntries(predicted)).toEqual(
-      Object.fromEntries(served.map((id, index) => [id, index])),
+      Object.fromEntries(ids.map((id) => [id, served.indexOf(id)])),
     );
   });
 });
