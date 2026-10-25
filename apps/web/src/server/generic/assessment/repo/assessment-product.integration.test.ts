@@ -24,6 +24,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
+  job,
   assessment,
   assessmentState,
   entityExternalId,
@@ -1104,10 +1105,72 @@ describe("stored Product identity pairs", () => {
       provenance,
     );
     expect(other.id).toBe(first.id);
+    expect(other.workKey).toBe(first.workKey);
     expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
     expect(await getDb(ctx.db).select().from(aiEvaluationRequest)).toHaveLength(
       2,
     );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic changed pair A" })
+      .where(eq(product.id, ids[0]!));
+    const changed = await requestProductIdentityPair(
+      ctx.db,
+      [ids[0]!, ids[1]!],
+      runs[0]!,
+      provenance,
+    );
+    expect(changed.id).toBe(first.id);
+    expect(changed.slotKey).toBe(first.slotKey);
+    expect(changed.workKey).not.toBe(first.workKey);
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "ai.evaluation")),
+    ).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "running" })
+      .where(eq(aiEvaluation.id, first.id));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic pair request A" })
+      .where(eq(product.id, ids[0]!));
+    const reverted = await requestProductIdentityPair(
+      ctx.db,
+      [ids[0]!, ids[1]!],
+      runs[0]!,
+      provenance,
+    );
+    expect(reverted.id).not.toBe(first.id);
+    expect(reverted.slotKey).toBe(first.slotKey);
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(2);
+    // Reverting again updates the queued slot even while the same input runs.
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic changed pair A" })
+      .where(eq(product.id, ids[0]!));
+    const waiting = await requestProductIdentityPair(
+      ctx.db,
+      [ids[0]!, ids[1]!],
+      runs[0]!,
+      provenance,
+    );
+    expect(waiting.id).toBe(reverted.id);
+    expect(waiting.provenance.inputFingerprint).toBe(
+      changed.provenance.inputFingerprint,
+    );
+    await getDb(ctx.db).update(aiEvaluation).set({ state: "completed" });
+    const settled = await requestProductIdentityPair(
+      ctx.db,
+      [ids[0]!, ids[1]!],
+      runs[0]!,
+      provenance,
+    );
+    expect(settled.id).toBe(reverted.id);
+    expect(await getDb(ctx.db).select().from(aiEvaluation)).toHaveLength(2);
   });
   it("does not retrieve candidates from shared research URLs or claimed variants", async () => {
     const a = await productFixture(ctx, "Synthetic catalog alpha", {

@@ -4,7 +4,10 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import {
+  enqueueAiEvaluation,
+  evaluationSlotKey,
+} from "~/server/ai/repo/ai-evaluation-requests";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { aiEvaluation, run, runStep } from "~/server/db/schema";
@@ -84,7 +87,11 @@ describe("run model cutover", () => {
       makeProductInput({ name: "Synthetic cutover target" }),
       ctx.actor,
     );
-    const evaluation = (runId: typeof survivor, shareKey: string) =>
+    const evaluation = (
+      runId: typeof survivor,
+      shareKey: string,
+      field = "categoryId",
+    ) =>
       enqueueAiEvaluation(ctx.db, {
         runId,
         executionKind: "suggestion_sweep",
@@ -94,7 +101,7 @@ describe("run model cutover", () => {
           kind: "field",
           entity: "product",
           recordId: product.entityId,
-          field: "categoryId",
+          field,
           assessmentIds: [],
         },
         provenance: {
@@ -109,17 +116,11 @@ describe("run model cutover", () => {
     // Owned by a released child, but still requested by a live Run.
     const shared = await evaluation(children[0]!, "synthetic-shared");
     expect((await evaluation(survivor, "synthetic-shared")).id).toBe(shared.id);
-    const orphaned = await evaluation(children[1]!, "synthetic-orphaned");
-    const refresh = await enqueueJob(ctx.db, {
-      key: "refresh:recipes",
-      kind: "refresh.family",
-      input: { family: "recipes" },
-    });
-    await getDb(ctx.db)
-      .update(job)
-      .set({ cursor: { after: crypto.randomUUID() } })
-      .where(eq(job.id, refresh.id));
-
+    const orphaned = await evaluation(
+      children[1]!,
+      "synthetic-orphaned",
+      "brandId",
+    );
     await withTransactionDatabase(ctx.db, async (tx) => {
       for (const statement of cutover)
         await getDb(tx).execute(sql.raw(statement));
@@ -169,12 +170,106 @@ describe("run model cutover", () => {
       )[0]?.state;
     expect(await jobState(`ai-evaluation:${shared.id}`)).toBe("queued");
     expect(await jobState(`ai-evaluation:${orphaned.id}`)).toBe("cancelled");
-    expect(
-      (await getDb(ctx.db).select().from(job).where(eq(job.id, refresh.id)))[0],
-    ).toMatchObject({
-      cursor: null,
-      generation: refresh.generation + 1,
-      state: "queued",
+  });
+});
+
+// Exercise the populated predecessor, including duplicate queued work and its Jobs.
+describe("AI evaluation slot cutover", () => {
+  const ctx = withTestDb();
+  it("backfills keys, retains running evidence and cancels only older open duplicates", async () => {
+    const owner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "manual",
+      status: "running",
+      execution: false,
     });
+    const target = {
+      kind: "product" as const,
+      entity: "product" as const,
+      recordId: crypto.randomUUID(),
+      field: null,
+      assessmentIds: [],
+    };
+    await getDb(ctx.db).execute(sql`DROP INDEX "AiEvaluation_open_slot_key"`);
+    const rows = await getDb(ctx.db)
+      .insert(aiEvaluation)
+      .values(
+        (["completed", "running", "queued", "retry_wait"] as const).map(
+          (state, index) => ({
+            runId: owner,
+            feature: "product-identity",
+            target,
+            workKey: `synthetic-predecessor-${index}`,
+            provenance: {
+              dependencies: [],
+              inputFingerprint: `synthetic-input-${index}`,
+              optionFingerprint: "",
+              model: null,
+            },
+            snapshot: { revision: index },
+            state,
+            createdAt: new Date(Date.UTC(2026, 9, 1, 0, index)),
+          }),
+        ),
+      )
+      .returning();
+    for (const row of rows)
+      await enqueueJob(ctx.db, {
+        key: `ai-evaluation:${row.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: row.id },
+      });
+    await getDb(ctx.db).execute(
+      sql`ALTER TABLE "AiEvaluation" DROP COLUMN "slotKey"`,
+    );
+    const migration = readFileSync(
+      new URL(
+        "../../../../../drizzle/0035_derived_values.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    )
+      .split("--> statement-breakpoint")
+      .filter((statement) => statement.includes('"slotKey"'));
+    expect(migration).toHaveLength(4);
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      for (const statement of migration)
+        await getDb(tx).execute(sql.raw(statement));
+    });
+    const retained = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, owner));
+    const newest = rows.find((row) => row.state === "retry_wait")!;
+    expect(retained).toHaveLength(4);
+    expect(
+      retained.every(
+        (row) =>
+          row.slotKey ===
+          evaluationSlotKey({ feature: "product-identity", target }),
+      ),
+    ).toBe(true);
+    expect(retained.find((row) => row.id === newest.id)?.state).toBe(
+      "retry_wait",
+    );
+    expect(retained.find((row) => row.state === "cancelled")?.receipt).toEqual({
+      supersededBy: newest.id,
+    });
+    expect(retained.find((row) => row.state === "running")?.snapshot).toEqual({
+      revision: 1,
+    });
+    const jobs = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(
+        inArray(
+          job.key,
+          rows.map((row) => `ai-evaluation:${row.id}`),
+        ),
+      );
+    expect(jobs.filter((row) => row.state === "cancelled")).toHaveLength(1);
+    expect(
+      jobs.find((row) => row.key === `ai-evaluation:${newest.id}`)?.state,
+    ).toBe("queued");
   });
 });

@@ -109,7 +109,7 @@ describe("connection discovery pacing", () => {
     ).toEqual([...recordIds].reverse());
   });
 
-  it("replaces a changed record's older queued evaluation", async () => {
+  it("updates a changed record's queued evaluation without cancelling its Job", async () => {
     const [created] = await tasks(["Synthetic replaceable task"]);
     const page = () =>
       prepareConnectionDiscoveryRoster(ctx.db, {
@@ -133,12 +133,12 @@ describe("connection discovery pacing", () => {
     const states = (await connectionEvaluations(ctx.db, row!.id)).map(
       (item) => item.state,
     );
-    expect(states.sort()).toEqual(["cancelled", "queued"]);
+    expect(states).toEqual(["queued"]);
     const cancelledJobs = await getDb(ctx.db)
       .select({ state: job.state })
       .from(job)
       .where(and(eq(job.kind, "ai.evaluation"), eq(job.state, "cancelled")));
-    expect(cancelledJobs).toHaveLength(1);
+    expect(cancelledJobs).toHaveLength(0);
   });
 
   it.each([
@@ -330,7 +330,7 @@ describe("connection discovery pacing", () => {
     expect(replay.replacing).toBeNull();
   });
 
-  it("re-admits an input that reverts before its replacement ran", async () => {
+  it("updates the queued slot when input reverts before execution", async () => {
     const [created] = await tasks(["Synthetic reverting task"]);
     const [row] = await getDb(ctx.db)
       .select({ id: task.id })
@@ -349,19 +349,18 @@ describe("connection discovery pacing", () => {
       getDb(ctx.db).update(task).set({ name }).where(eq(task.id, row!.id));
     await page(); // fingerprint A queued
     await rename("Synthetic reverting task, edited");
-    await page(); // B queued, A superseded
+    await page(); // queued slot now captures B
     await rename("Synthetic reverting task");
-    await page(); // back to A: must queue again, B superseded
+    await page(); // the same queued slot captures A again
     const states = (await connectionEvaluations(ctx.db, row!.id)).map(
       (item) => item.state,
     );
     expect(states.filter((state) => state === "queued")).toHaveLength(1);
-    expect(states.filter((state) => state === "cancelled")).toHaveLength(2);
+    expect(states).toEqual(["queued"]);
   });
 
-  // Review finding: a superseded receipt reopened work even after the member
-  // cancelled the Run that owned it.
-  it("never re-admits superseded work whose Run the member cancelled", async () => {
+  // Even an unfinished queued slot remains stopped after its owner is cancelled.
+  it("never updates a queued slot whose Run the member cancelled", async () => {
     const [created] = await tasks(["Synthetic cancelled reverting task"]);
     const [row] = await getDb(ctx.db)
       .select({ id: task.id })
@@ -381,7 +380,7 @@ describe("connection discovery pacing", () => {
     const first = await page(); // fingerprint A queued
     if (!first.runId) throw new Error("Synthetic discovery admitted nothing");
     await rename("Synthetic cancelled reverting task, edited");
-    await page(); // B queued, A superseded
+    await page(); // queued slot now captures B
     await getDb(ctx.db)
       .update(run)
       .set({ status: "failed", failureCode: "user_cancelled" })

@@ -333,7 +333,7 @@ record (~55k), which starved every other kind for days.
 - Routine connection discovery (`discovery.connections`) holds its cursor while
   `CONNECTION_DISCOVERY_PENDING_CAP` connection evaluations wait (`rate_limit`),
   walks the newest records first, and never appends to a stopped Run. A changed
-  record's new evaluation cancels its older queued one. Cancelled work whose Run
+  record updates its queued slot in place, retaining its Job. Cancelled work whose Run
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
   decision) is re-admitted at that pace; a member's cancel stays final.
 - Publication correction work is one `assessment.correction` Job per
@@ -341,6 +341,24 @@ record (~55k), which starved every other kind for days.
   still resolved after commit under serializable isolation.
 - `run.funding-resume` is one Job per funding window; its handler resumes every
   paused Run.
+
+Each AI evaluation slot identifies feature, entity, record, field and (for a
+Product pair) the other Product. A generated text key uses UTF-8 length prefixes;
+input and option fingerprints remain execution evidence, outside the slot key.
+A partial unique index permits one `queued` or `retry_wait` row per slot.
+The pending share-key lookup is nonunique: input can revert to a running
+attempt while a queued successor already exists in the slot.
+Changed input updates that row's snapshot, target, provenance and work key in
+place and clears any result, receipt or error captured for its older input.
+A running or result-ready row keeps its captured evidence; one queued
+successor may wait beside it. A failed running attempt becomes obsolete when a
+queued successor already occupies its slot; it cannot re-enter `retry_wait` beside
+that successor. Completed current input is not queued again.
+Reverting after another input was evaluated creates a new row and reuses the
+AI response cache. Declined input (`blocked`, `obsolete`, or cancelled as
+superseded) receives at most three automatic attempts; member-cancelled Runs
+veto automatic readmission. Attempt suffixes keep work keys unique without
+receipt chains. Explicit member retries retain their `retryEvaluationId` receipt.
 
 ## Planned: batch evaluation
 

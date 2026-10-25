@@ -1092,8 +1092,13 @@ Confirmed image descriptions remain authoritative in display, classification and
 Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Current nonnull model disagreements and retained historical identity conflicts block pair application, including weak recommendations. Equal current model strings or research notes do not verify identity or clear historical conflicts; uncertain variant matches remain pending review. An explicit merge can supersede historical advice only after identity inputs differ from every retained conflicting comparison, with current conflicts rechecked transactionally. Automatic matching remains blocked; notes do not unlock it. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
 
 The deployed AI refresh manifest compares exact per-feature prompt/policy
-versions, including rollbacks. Its Run-backed AiEvaluation ledger deduplicates
-feature-specific evidence/option fingerprints and fences publication against
+versions, including rollbacks. Its Run-backed AiEvaluation ledger admits one
+queued slot per feature, entity, record, field and optional pair endpoint.
+Changing evidence updates queued input and its Job in place; executing input
+remains frozen with at most one queued successor. Settled reverts create a new
+attempt served by the AI response cache. Declined attempts are bounded per input,
+and member cancellation vetoes automatic readmission (see [Jobs](jobs.md#producers)).
+The ledger fences publication against
 the active generation, Workflow attempt and target-field audit revision. A
 member edit returning the field to its earlier value still invalidates the
 outstanding result. Discovery refreshes the live Product catalog, uncertain
