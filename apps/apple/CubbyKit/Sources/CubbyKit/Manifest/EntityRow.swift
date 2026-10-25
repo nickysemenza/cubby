@@ -24,6 +24,15 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
         self.raw = raw
     }
 
+    /// List freshness travels beside rows; attach only this row's envelope before projection.
+    static func attachingDerived(to object: JSONValue, sidecars: JSONValue?) -> JSONValue {
+        guard var raw = object.objectValue, let id = raw["id"]?.stringValue,
+            let sidecar = sidecars?[id]
+        else { return object }
+        raw["derived"] = sidecar
+        return .object(raw)
+    }
+
     /// The row's `raw` payload as a typed alias (`row.decode(ProductDetail.self)`), for a slot
     /// that needs more than keyed access. `raw` was projected from the decoded typed value with
     /// the same date spelling `JSONDecoder.cubby()` reads, so the round trip is lossless.

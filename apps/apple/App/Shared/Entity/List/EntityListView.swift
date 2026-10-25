@@ -1131,46 +1131,50 @@ struct EntityListView: View {
                     .focusable()
                     .accessibilityLabel("\(field.label): Not applicable. \(reason)")
             } else if let fact {
-                HStack(spacing: FieldGuideTokens.Space.xs) {
-                    if field.listRenderer == .dataQuality {
-                        if EntityRowPresentation.needsData(in: row) {
-                            HStack(spacing: FieldGuideTokens.Space.xs) {
-                                Circle().fill(.orange).frame(width: 6, height: 6)
-                                Text("Needs data")
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
+                        DerivedValueStatus(raw: row.raw, field: field.key)
+                        if field.listRenderer == .dataQuality {
+                            if EntityRowPresentation.needsData(in: row) {
+                                HStack(spacing: FieldGuideTokens.Space.xs) {
+                                    Circle().fill(.orange).frame(width: 6, height: 6)
+                                    Text("Needs data")
+                                }
+                            } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
+                                Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
                             }
-                        } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
-                            Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
-                        }
-                    } else if let reference = EntityFieldValue.reference(
-                        in: row.raw, field: field, surface: "list")
-                    {
-                        tableReference(reference, value: fact.value)
-                            .buttonStyle(.borderless)
-                            .accessibilityIdentifier(
-                                "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
-                        if fact.inherited { InheritedMarker() }
-                    } else if let option = EntityFieldValue.option(
-                        in: row.raw, field: field, surface: "list"),
-                        let chip = StatusChip(text: fact.value, option: option)
-                    {
-                        chip
-                    } else {
-                        Group {
-                            if let date = fact.dateValue {
-                                #if os(macOS)
-                                    DateDisplay(date, compact: true)
-                                #else
-                                    DateDisplay(date, compact: true, stacked: true)
-                                #endif
-                            } else {
-                                InheritedMarker.text(fact.segments)
-                                    .accessibilityLabel(fact.spokenValue)
+                        } else if let reference = EntityFieldValue.reference(
+                            in: row.raw, field: field, surface: "list")
+                        {
+                            tableReference(reference, value: fact.value)
+                                .buttonStyle(.borderless)
+                                .accessibilityIdentifier(
+                                    "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
+                            if fact.inherited { InheritedMarker() }
+                        } else if let option = EntityFieldValue.option(
+                            in: row.raw, field: field, surface: "list"),
+                            let chip = StatusChip(text: fact.value, option: option)
+                        {
+                            chip
+                        } else {
+                            Group {
+                                if let date = fact.dateValue {
+                                    #if os(macOS)
+                                        DateDisplay(date, compact: true)
+                                    #else
+                                        DateDisplay(date, compact: true, stacked: true)
+                                    #endif
+                                } else {
+                                    InheritedMarker.text(fact.segments)
+                                        .accessibilityLabel(fact.spokenValue)
+                                }
                             }
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         }
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
+                    DerivedProvenanceCaption(raw: row.raw, field: field.key)
                 }
             } else {
                 Text("—").foregroundStyle(.tertiary)
@@ -1403,6 +1407,7 @@ struct EntityRowView: View {
             previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
         ) {
             HStack(spacing: FieldGuideTokens.Space.xs) {
+                DerivedValueStatus(raw: row.raw, field: nil)
                 if layout.needsData {
                     Circle().fill(.orange).frame(width: 6, height: 6)
                 }
@@ -1425,10 +1430,13 @@ struct EntityRowView: View {
                 RelativeDateDisplay(value: date)
             }
         } supplement: {
-            EmptyView()
+            ForEach(presentation.facts) { fact in
+                DerivedProvenanceCaption(raw: row.raw, field: fact.id)
+            }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText(for: layout))
+        .accessibilityLabel(
+            accessibilityText(for: layout) + (DerivedValueStatus.isUpdating(in: row.raw) ? ", Updating" : ""))
     }
 
     private func accessibilityText(for layout: Layout) -> String {
