@@ -1,8 +1,7 @@
 import CubbyKit
 import SwiftUI
 
-/// Where am I? An 8pt dot, or the entity's own glyph, in secondary ink. Domains carry no color:
-/// the glyph and the section title identify them, matching the web.
+/// A neutral record-context mark. Sidebar wayfinding applies domain hues separately.
 struct DomainMark: View {
     enum Style {
         case dot

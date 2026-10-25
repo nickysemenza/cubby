@@ -120,7 +120,7 @@ const swiftIdentifier = (raw: string): string =>
 
 /** A Swift enum case name for a source identifier, backtick-escaped when the
  * camelCased identifier collides with a Swift keyword. */
-const swiftCaseName = (raw: string): string => {
+export const swiftCaseName = (raw: string): string => {
   const identifier = swiftIdentifier(raw);
   return SWIFT_RESERVED_WORDS.has(identifier)
     ? `\`${identifier}\``

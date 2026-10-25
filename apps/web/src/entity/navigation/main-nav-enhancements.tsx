@@ -2,7 +2,7 @@ import { AuthenticatedShellControls } from "~/entity/navigation/authenticated-sh
 import { cn } from "~/lib/utils";
 
 import { NavDropdown } from "./nav-dropdown";
-import { desktopNav, isNavGroup } from "./nav-items";
+import { navGroups, topNavItems } from "./nav-items";
 import { NavLink } from "./nav-link";
 
 type MainNavEnhancementsProps = React.HTMLAttributes<HTMLElement>;
@@ -25,13 +25,12 @@ export function MainNavEnhancements({
         )}
         {...props}
       >
-        {desktopNav.map((node) =>
-          isNavGroup(node) ? (
-            <NavDropdown key={node.label} group={node} />
-          ) : (
-            <NavLink key={node.to} item={node} />
-          ),
-        )}
+        {topNavItems.map((item) => (
+          <NavLink key={item.to} item={item} />
+        ))}
+        {navGroups.map((group) => (
+          <NavDropdown key={group.id} group={group} />
+        ))}
       </nav>
 
       <AuthenticatedShellControls includeAccount />

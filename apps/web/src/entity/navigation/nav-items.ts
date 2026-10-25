@@ -1,18 +1,31 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import type { WayfindingDomain } from "@cubby/schemas/entity-summary";
+import { SIDEBAR_SECTIONS } from "@cubby/schemas/sidebar-manifest";
+import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
+import { BookOpenTextIcon } from "@phosphor-icons/react/dist/csr/BookOpenText";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { ChartLineIcon } from "@phosphor-icons/react/dist/csr/ChartLine";
+import { ChefHatIcon } from "@phosphor-icons/react/dist/csr/ChefHat";
+import { CreditCardIcon } from "@phosphor-icons/react/dist/csr/CreditCard";
+import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
 import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
-import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
 import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
+import { LayoutIcon } from "@phosphor-icons/react/dist/csr/Layout";
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
 import { PaletteIcon } from "@phosphor-icons/react/dist/csr/Palette";
+import { PlantIcon } from "@phosphor-icons/react/dist/csr/Plant";
 import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug";
 import { PulseIcon } from "@phosphor-icons/react/dist/csr/Pulse";
 import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
+import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
+import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { WarehouseIcon } from "@phosphor-icons/react/dist/csr/Warehouse";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
@@ -25,50 +38,120 @@ import {
   domainForEntity,
   domainForRoute,
   domainIconClass,
-  type WayfindingDomain,
+  domainSurfaceClass,
 } from "../../ui/navigation/domain-wayfinding";
-import { activityViews, recordViews } from "./application-views";
 
-/** A navigable destination. `to` is typed against the generated route tree. */
 export type NavItem = {
   to: LinkProps["to"];
   entity?: BrowserRoutedEntity;
   label: string;
   icon: Icon;
+  domain?: WayfindingDomain | null;
 };
-
-/** A dropdown that nests leaves. Discriminated from {@link NavItem} by `children`. */
 export type NavGroup = {
+  id: string;
   label: string;
   icon: Icon;
   children: NavItem[];
-  /** The stable Field Guide line for the five household domains. */
-  domain?: WayfindingDomain;
-  /** Presentation tier. The complete manifest stays semantic truth while each
-   * shell chooses how much of it to expose at once. */
-  tier: "primary" | "utility" | "developer";
-  /**
-   * Optional landing route for the group itself (a section overview page).
-   * Most groups here are pure dropdown triggers with no page of their own —
-   * leave unset. Consumers that link a group label (e.g. the list-page
-   * eyebrow) treat an unset `to` as "no route" and render plain text.
-   */
+  domain: WayfindingDomain | null;
+  defaultFolded: boolean;
   to?: LinkProps["to"];
 };
 
-type NavNode = NavItem | NavGroup;
+const routeIcons = {
+  "/": HouseIcon,
+  "/activity": PulseIcon,
+  "/work-queue": ListChecksIcon,
+  "/problems": WarningIcon,
+  "/calendar": CalendarBlankIcon,
+  "/meals/suggestions": SparkleIcon,
+  "/meals/shopping-list": ShoppingCartIcon,
+  "/ingredients/workbench": ListChecksIcon,
+  "/ingredients/equivalences": ArrowsLeftRightIcon,
+  "/recipes/compare": LayoutIcon,
+  "/recipes/import": BookOpenTextIcon,
+  "/pantry-view": CubeFocusIcon,
+  "/inventory/triage": ListChecksIcon,
+  "/locations/arrange": WarehouseIcon,
+  "/collections": PaletteIcon,
+  "/labels": QrCodeIcon,
+  "/garden-workbench": PlantIcon,
+  "/tools": WrenchIcon,
+  "/cash-flow": ChartLineIcon,
+  "/household-contribution": ArrowsLeftRightIcon,
+  "/runs/types": ListChecksIcon,
+  "/suggestions": LightbulbIcon,
+  "/collections/assignments": PaletteIcon,
+  "/entities": NetworkIcon,
+  "/graph": NetworkIcon,
+  "/design": PaletteIcon,
+  "/ai": SparkleIcon,
+  "/search/debug": MagnifyingGlassIcon,
+  "/mcp": PlugIcon,
+};
+const sectionIcons = {
+  top: HouseIcon,
+  plan: CalendarBlankIcon,
+  cook: ChefHatIcon,
+  pantry: WarehouseIcon,
+  garden: PlantIcon,
+  house: WrenchIcon,
+  purchases: ShoppingBagIcon,
+  finance: CreditCardIcon,
+  records: DatabaseIcon,
+  dev: WrenchIcon,
+};
 
-/** Route and entity destinations share the same identity hues on every shell. */
+/** Web adds glyph components; ordering, labels, membership and defaults stay shared. */
+export const sidebarSections: NavGroup[] = SIDEBAR_SECTIONS.map((section) => ({
+  id: section.id,
+  label: section.label,
+  domain: section.domain,
+  defaultFolded: section.defaultFolded,
+  icon: sectionIcons[section.id],
+  children: section.destinations.map((destination): NavItem => ({
+    to: destination.route,
+    label: destination.label,
+    domain: section.domain,
+    ...("entity" in destination
+      ? {
+          entity: destination.entity,
+          icon: entities[destination.entity].phosphorIcon,
+        }
+      : { icon: routeIcons[destination.route] }),
+  })),
+}));
+export const navGroups = sidebarSections.filter(
+  (section) => section.id !== "top",
+);
+export const topNavItems = sidebarSections
+  .filter((section) => section.id === "top")
+  .flatMap((section) => section.children);
+const homeNavItem: NavItem = { to: "/", label: "Home", icon: HouseIcon };
+export const settingsNavItem: NavItem = {
+  to: "/settings",
+  label: "Settings",
+  icon: GearIcon,
+};
+export const completeNavLeaves = [
+  ...sidebarSections.flatMap((section) => section.children),
+  settingsNavItem,
+];
 export function navIconClass(node: NavItem | NavGroup): string {
-  if ("children" in node) return domainIconClass(node.domain);
-  return node.entity
-    ? domainIconClass(domainForEntity(node.entity))
-    : domainIconClass(domainForRoute(node.to ?? "/"));
+  const domain =
+    node.domain !== undefined
+      ? node.domain
+      : "children" in node
+        ? null
+        : node.entity
+          ? domainForEntity(node.entity)
+          : domainForRoute(node.to ?? "/");
+  return domainIconClass(domain) || "text-muted-foreground";
 }
-
-export const isNavGroup = (node: NavNode): node is NavGroup =>
-  "children" in node;
-
+/** Current rows use the section hue, including entity destinations filed outside their identity domain. */
+export function navActiveClass(node: NavItem | NavGroup): string {
+  return domainSurfaceClass(node.domain);
+}
 export function navItemLinkProps(item: NavItem, active: boolean) {
   return {
     to: item.to,
@@ -77,198 +160,27 @@ export function navItemLinkProps(item: NavItem, active: boolean) {
     "aria-current": active ? ("page" as const) : undefined,
   };
 }
-
-// The handful of leaves shared across surfaces that aren't derived from the
-// desktop tree (top-level desktop + bottom tabs / public bar). Everything else
-// is inlined where it's used.
-/** Home is a direct workspace destination rather than a grouped leaf. */
-export const homeNavItem: NavItem = { to: "/", label: "Home", icon: HouseIcon };
-const inventory: NavItem = {
-  to: "/inventory",
-  entity: "inventory",
-  label: "Inventory",
-  icon: entities.inventory.phosphorIcon,
-};
-export const settingsNavItem: NavItem = {
-  to: "/settings",
-  label: "Settings",
-  icon: GearIcon,
-};
-
-/** Sidebar groups omit Settings because the workspace footer owns it. */
-export function getSidebarGroupItems(group: NavGroup): NavItem[] {
-  return group.children.filter((item) => item.to !== settingsNavItem.to);
-}
-
-/**
- * The signed-in desktop bar, top to bottom — the single source of truth for the
- * authed IA. Dropdowns nest their leaves and own their trigger icon. Active
- * state is derived (see {@link findActiveTo}), so nothing carries match logic.
- *
- * `Dev` is intentionally always present in the manifest — cubby is a personal
- * tool, so utility navigation and Cmd-K retain it without a production gate.
- */
-const activityDirectoryNavItem: NavItem = {
-  to: "/activities",
-  label: "Activities",
-  icon: PulseIcon,
-};
-const recordDirectoryNavItem: NavItem = {
-  to: "/records",
-  label: "Records",
-  icon: DatabaseIcon,
-};
-
-export const desktopNav: NavNode[] = [
-  activityDirectoryNavItem,
-  ...activityViews.map((view): NavGroup => ({
-    label: view.label,
-    icon: view.icon,
-    domain: view.key,
-    tier: "primary",
-    children: [...view.destinations],
-  })),
-  {
-    ...recordDirectoryNavItem,
-    tier: "primary",
-    children: recordViews.filter(
-      (view) =>
-        !activityViews.some((activity) =>
-          activity.destinations.some(
-            (destination) =>
-              "entity" in destination && destination.entity === view.entity,
-          ),
-        ),
-    ),
-  },
-  {
-    label: "More",
-    icon: DotsThreeIcon,
-    tier: "utility",
-    children: [
-      { to: "/labels", label: "Labels", icon: QrCodeIcon },
-      { to: "/problems", label: "Problems", icon: WarningIcon },
-      { to: "/work-queue", label: "Work queue", icon: ListChecksIcon },
-      { to: "/suggestions", label: "Suggestions", icon: LightbulbIcon },
-      { to: "/activity", label: "Activity", icon: PulseIcon },
-      { to: "/collections", label: "Collections", icon: PaletteIcon },
-      { to: "/entities", label: "Entity explorer", icon: NetworkIcon },
-      { to: "/graph", label: "Graph", icon: NetworkIcon },
-      { to: "/search", label: "Search", icon: MagnifyingGlassIcon },
-      settingsNavItem,
-    ],
-  },
-  {
-    label: "Dev",
-    icon: WrenchIcon,
-    tier: "developer",
-    children: [
-      { to: "/design", label: "Design", icon: PaletteIcon },
-      { to: "/ai", label: "AI", icon: SparkleIcon },
-      { to: "/search/debug", label: "Search debug", icon: MagnifyingGlassIcon },
-      { to: "/mcp", label: "MCP tools", icon: PlugIcon },
-    ],
-  },
-];
-
-/** Every rendered authed leaf, including contextual links under Activities. */
-const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
-  isNavGroup(node) ? node.children : [node],
-);
-
-/** Canonical signed-in destination universe, with contextual links deduped. */
-export const completeNavLeaves: NavItem[] = [
-  homeNavItem,
-  ...desktopLeaves,
-].filter(
-  (item, index, all) =>
-    all.findIndex((candidate) => candidate.to === item.to) === index,
-);
-
-/** Tiered views derived from the canonical manifest. Never hand-copy leaves
- * into a second navigation tree: breadcrumbs, Cmd-K and shells must agree. */
-export const primaryNavGroups = desktopNav.filter(
-  (node): node is NavGroup => isNavGroup(node) && node.tier === "primary",
-);
-const utilityNavGroups = desktopNav.filter(
-  (node): node is NavGroup => isNavGroup(node) && node.tier === "utility",
-);
-const developerNavGroups = desktopNav.filter(
-  (node): node is NavGroup => isNavGroup(node) && node.tier === "developer",
-);
-
-function leafAt(to: LinkProps["to"]): NavItem {
-  const item = desktopLeaves.find((leaf) => leaf.to === to);
-  if (!item) throw new Error(`Navigation target ${String(to)} is missing`);
-  return item;
-}
-
-/** Secondary phone destinations shown before the deeper taxonomy. */
-export const mobileHouseholdItems: NavItem[] = [
-  homeNavItem,
-  activityDirectoryNavItem,
-  recordDirectoryNavItem,
-  leafAt("/locations"),
-  leafAt("/calendar"),
-  leafAt("/meals"),
-  leafAt("/projects"),
-  leafAt("/expenses"),
-  leafAt("/problems"),
-];
-
-export const workspaceUtilitySections: NavSection[] = [
-  ...utilityNavGroups.map((group) => ({
-    title: group.label,
-    items: getSidebarGroupItems(group),
-  })),
-  ...developerNavGroups.map((group) => ({
-    title: group.label,
-    items: group.children,
-  })),
-];
-
-/** Three persistent task destinations; the More trigger is the fourth tab. */
 export const bottomNavItems: NavItem[] = [
   { to: "/", label: "Today", icon: HouseIcon },
-  inventory,
+  {
+    to: "/inventory",
+    entity: "inventory",
+    label: "Inventory",
+    icon: entities.inventory.phosphorIcon,
+  },
   { to: "/search", label: "Search", icon: MagnifyingGlassIcon },
 ];
-
-/** A labeled group of leaves in the mobile "More" sheet. */
-export type NavSection = { title: string; items: NavItem[] };
-
-/** Signed-out bar / bottom tabs — always flat leaves (no dropdowns). */
 export const publicNavItems: NavItem[] = [
   homeNavItem,
   { to: "/docs", label: "Docs", icon: FileTextIcon },
 ];
-
-/**
- * The top-level nav group an entity's list page lives under, derived from
- * {@link desktopNav} — the single source of truth for the IA. Matches the
- * entity's `routes.list` against each group's children so the group label
- * can never drift from the real nav (see the hand-kept map this replaced,
- * `ENTITY_NAV_GROUP` in the page header, which fell out of sync with the Data/
- * Cook reorg noted above).
- *
- * Every entity's list route appears exactly once across {@link desktopNav}
- * (verified by `nav-items.unit.test.ts`), so this is unambiguous and needs no
- * fallback — an entity added to `entities.tsx` without a nav home is a bug the
- * test catches, not a case for `undefined` here to paper over silently.
- * Deliberately walks {@link desktopNav} directly rather than
- * {@link desktopLeaves}, which flattens groups away and drops the parent
- * reference this needs.
- */
 export function getEntityNavGroup(
   entity: BrowserRoutedEntity,
 ): NavGroup | undefined {
-  const listRoute = entities[entity].routes.list;
-  return desktopNav.find(
-    (node): node is NavGroup =>
-      isNavGroup(node) && node.children.some((child) => child.to === listRoute),
+  return sidebarSections.find((section) =>
+    section.children.some((item) => item.entity === entity),
   );
 }
-
 /** Every reachable nav target, deduped — the universe active matching resolves over. */
 const allTargets: string[] = uniq(
   [...completeNavLeaves, ...bottomNavItems, ...publicNavItems].map((leaf) =>

@@ -309,3 +309,22 @@ enum SidebarDestination: Hashable {
     case section(AppSection)
     case entity(EntityKey)
 }
+
+// Shared rows without a native screen remain browser actions, outside List selection.
+extension SidebarManifest.Destination {
+    var nativeDestination: SidebarDestination? {
+        if let entity, entity.nativeActions.contains(.list) {
+            return .entity(entity)
+        }
+        switch route {
+        case "/": return .section(.today)
+        case "/activity": return .section(.activity)
+        case "/graph": return .section(.graph)
+        default: return nil
+        }
+    }
+
+    func webURL(serverURL: URL) -> URL? {
+        URL(string: route, relativeTo: serverURL)?.absoluteURL
+    }
+}

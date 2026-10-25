@@ -348,7 +348,7 @@
   --sidebar-accent-foreground: var(--brand-foreground);
   --sidebar-border: var(--brand-hairline);
   --sidebar-ring: var(--link);
-  --app-sidebar-expanded-width: 12.5rem;
+  --app-sidebar-expanded-width: 11rem;
   --app-sidebar-collapsed-width: 2.5rem;
   --app-sidebar-header-height: 2.5rem;
 }

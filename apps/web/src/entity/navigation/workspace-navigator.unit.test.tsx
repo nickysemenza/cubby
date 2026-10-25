@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { dashboard } from "~/integrations/tanstack-query/generated/catalog/dashboard.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { mobileHouseholdItems } from "./nav-items";
+import { completeNavLeaves } from "./nav-items";
 import { WorkspaceNavigator } from "./workspace-navigator";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -26,7 +26,6 @@ function renderNavigator() {
     <WorkspaceNavigator
       open
       onOpenChange={(open) => openChanges.push(open)}
-      initialView="household"
       activeTo="/projects"
     />,
     { wrapper: harness.wrapper },
@@ -41,7 +40,7 @@ describe("WorkspaceNavigator interactions", () => {
       project: 0,
     });
     expect(
-      mobileHouseholdItems.find((item) => item.to === "/projects")?.entity,
+      completeNavLeaves.find((item) => item.to === "/projects")?.entity,
     ).toBe("project");
     renderNavigator();
     expect(
@@ -59,12 +58,12 @@ describe("WorkspaceNavigator interactions", () => {
         .getAllByRole("link", { name: "Projects" })
         .every((link) => link.getAttribute("aria-current") === "page"),
     ).toBe(true);
-    expect(screen.getByRole("link", { name: "Records" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Records" })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("link", { name: "Locations" })[0]);
     expect(openChanges).toContain(false);
   });
 
-  it("searches across household and utility tiers", () => {
+  it("searches across every section", () => {
     renderNavigator();
     const search = screen.getByRole("textbox", {
       name: "Find a workspace destination",
@@ -75,21 +74,9 @@ describe("WorkspaceNavigator interactions", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Dev")).toBeInTheDocument();
     fireEvent.change(search, { target: { value: "" } });
+    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Tools & data" }),
-    ).toBeInTheDocument();
-  });
-
-  it("moves between household and utility views", () => {
-    renderNavigator();
-    fireEvent.click(screen.getByRole("button", { name: "Tools & data" }));
-    const back = screen.getByRole("button", { name: "Back to household" });
-    expect(back).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "More" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Dev" })).toBeInTheDocument();
-    fireEvent.click(back);
-    expect(
-      screen.getByRole("button", { name: "Tools & data" }),
+      screen.getByRole("link", { name: "Search debug" }),
     ).toBeInTheDocument();
   });
 });

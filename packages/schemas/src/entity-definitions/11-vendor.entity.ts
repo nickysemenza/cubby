@@ -42,7 +42,7 @@ export default defineEntity({
       ],
     },
     titleField: "name",
-    domain: "finance",
+    domain: "purchases",
     description:
       "Brands, sellers and service providers, including shipment carriers.",
     emptyState: {
@@ -314,7 +314,7 @@ export default defineEntity({
           columnGroup: "Purchasing",
           columnLabel: "Profile",
           optionRole: "category",
-          optionColor: "domain-finance",
+          optionColor: "domain-purchases",
           optionGlyph: { phosphor: "Storefront", sfSymbol: "storefront" },
         },
         validation: {
@@ -538,7 +538,7 @@ export default defineEntity({
           columnGroup: "Purchasing",
           columnLabel: "Evidence",
           optionRole: "category",
-          optionColor: "domain-finance",
+          optionColor: "domain-purchases",
         },
         validation: {
           read: vendorOrderEvidence.nullable(),

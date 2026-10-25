@@ -12,6 +12,19 @@ enum FieldGuideMetrics {
     static let space5: CGFloat = 16
     static let space6: CGFloat = 16
 
+    static func domainColor(_ domain: String) -> Color? {
+        switch domain {
+        case "plan": Color("DomainPlan")
+        case "cook": Color("DomainCook")
+        case "pantry": Color("DomainPantry")
+        case "garden": Color("DomainGarden")
+        case "house": Color("DomainHouse")
+        case "purchases": Color("DomainPurchases")
+        case "finance": Color("DomainFinance")
+        default: nil
+        }
+    }
+
     static func optionColor(_ token: String?) -> Color? {
         switch token {
         case "var(--interaction)", "var(--brand-interaction)": Color("AccentColor")

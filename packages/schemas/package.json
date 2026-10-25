@@ -60,6 +60,7 @@
     "./entity-core": "./src/entity-core.ts",
     "./entity-definitions/definition": "./src/entity-definitions/definition.ts",
     "./entity-definitions/label-field": "./src/entity-definitions/label-field.ts",
+    "./sidebar-manifest": "./src/sidebar-manifest.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-section-actions": "./src/entity-section-actions.ts",
     "./entity-preview": "./src/entity-preview.ts",

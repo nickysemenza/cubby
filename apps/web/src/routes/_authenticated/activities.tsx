@@ -1,25 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
-
-import { ApplicationDirectory } from "~/entity/navigation/application-directory";
-import { pageTitle } from "~/lib/page-title";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/activities")({
-  validateSearch: z.object({ q: z.string().optional() }),
-  head: () => ({ meta: [{ title: pageTitle("Activities") }] }),
-  component: ActivitiesPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/" });
+  },
 });
-
-function ActivitiesPage() {
-  const q = Route.useSearch({ select: (search) => search.q });
-  const navigate = Route.useNavigate();
-  return (
-    <ApplicationDirectory
-      mode="activities"
-      query={q ?? ""}
-      onQueryChange={(query) => {
-        void navigate({ search: query ? { q: query } : {}, replace: true });
-      }}
-    />
-  );
-}
