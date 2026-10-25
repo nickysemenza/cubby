@@ -211,17 +211,26 @@ export async function prepareConnectionDiscoveryRoster(
   db: Database,
   input: RosterInput & {
     runId: RunId | null;
-    createRun: (tx: Database) => Promise<RunId>;
+    /**
+     * Opens the pass's Run. `replacing` names a stopped Run the cursor carried,
+     * so the continuation gets its own idempotency key instead of resolving
+     * back to the stopped Run.
+     */
+    createRun: (tx: Database, replacing: RunId | null) => Promise<RunId>;
   },
 ) {
   const page = await connectionRosterTargets(db, input);
   // A cancelled or failed Run in the cursor never receives more work.
   const current = input.runId && (await runIsActive(db, input.runId));
+  const opened =
+    current || !(await hasAdmissibleTarget(db, page.targets))
+      ? null
+      : await input.createRun(db, input.runId);
+  // Recheck the owner admission resolved to: an idempotent open can return an
+  // existing Run that was stopped since.
   const runId =
     (current ? input.runId : null) ??
-    ((await hasAdmissibleTarget(db, page.targets))
-      ? await input.createRun(db)
-      : null);
+    (opened && (await runIsActive(db, opened)) ? opened : null);
   const inserted = runId
     ? await insertEvaluationTargets(db, runId, page.targets)
     : 0;

@@ -57,13 +57,13 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
       after: previous.after,
       limit: CONNECTION_ROSTER_PAGE,
       newestFirst: true,
-      createRun: (tx) =>
+      createRun: (tx, replacing) =>
         ensureRun(tx, systemActor(), {
           purpose: "connection_discovery",
           trigger: "scheduled",
           status: "running",
           execution: false,
-          clientKey: `connection-discovery:${claim.id}:${claim.generation}`,
+          clientKey: `connection-discovery:${claim.id}:${claim.generation}${replacing ? `:after:${replacing}` : ""}`,
           input: connectionDiscoveryRunInput.parse({
             kind: "connection_discovery",
             activation,

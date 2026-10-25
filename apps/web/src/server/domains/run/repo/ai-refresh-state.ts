@@ -92,6 +92,11 @@ const MAX_REOPENS = 3;
 export const SUPERSEDED_RUN_FAILURE = "superseded";
 const REOPEN_SEPARATOR = ":reopen:";
 const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
+/**
+ * Cancelled because the record changed before it ran, not by a member: the
+ * record can change back, so this work key may reopen.
+ */
+const supersededReceipt = z.object({ supersededBy: z.uuid() });
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 /** The row a work key's retries and reopens currently end at, with its reopen count. */
@@ -131,7 +136,8 @@ async function workKeyTip(
       // A Run stopped as superseded (backlog cleared, not a member's decision)
       // leaves its cancelled work for paced discovery to re-admit.
       (tip.state === "cancelled"
-        ? owner?.failureCode === SUPERSEDED_RUN_FAILURE
+        ? owner?.failureCode === SUPERSEDED_RUN_FAILURE ||
+          supersededReceipt.safeParse(tip.receipt).success
         : ["blocked", "obsolete"].includes(tip.state) &&
           owner?.failureCode !== "user_cancelled"),
   };
@@ -152,6 +158,7 @@ async function supersedeQueuedConnectionWork(
     .set({
       state: "cancelled",
       error: "Superseded by a newer evaluation of the changed record",
+      receipt: { supersededBy: keepId },
       updatedAt: new Date(),
     })
     .where(

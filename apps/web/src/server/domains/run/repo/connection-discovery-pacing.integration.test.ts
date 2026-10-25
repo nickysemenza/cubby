@@ -1,3 +1,4 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { and, eq, inArray } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -199,6 +200,77 @@ describe("connection discovery pacing", () => {
       .from(aiEvaluation)
       .where(eq(aiEvaluation.runId, stopped));
     expect(inStopped).toEqual([]);
+  });
+
+  it("continues a stopped Run under its own key when the open is idempotent", async () => {
+    await tasks(["Synthetic keyed continuation task"]);
+    // Production opens the pass Run with a key per Job claim; reopening with
+    // the same key returns the stopped Run, which must not receive work.
+    const keyed = async (db: Database, replacing: RunId | null) => {
+      const activation = await readAiRefreshActivation(db);
+      if (!activation) throw new Error("Synthetic AI refresh is not active");
+      return ensureRun(db, systemActor(), {
+        purpose: "connection_discovery",
+        trigger: "scheduled",
+        status: "running",
+        execution: false,
+        clientKey: `connection-discovery:synthetic-claim:1${replacing ? `:after:${replacing}` : ""}`,
+        input: connectionDiscoveryRunInput.parse({
+          kind: "connection_discovery",
+          activation,
+        }),
+      });
+    };
+    const stopped = await keyed(ctx.db, null);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, stopped));
+    const page = await prepareConnectionDiscoveryRoster(ctx.db, {
+      runId: stopped,
+      after: null,
+      limit: 25,
+      entityKinds: ["task"],
+      newestFirst: true,
+      createRun: keyed,
+    });
+    expect(page.runId).not.toBeNull();
+    expect(page.runId).not.toBe(stopped);
+    expect(page.inserted).toBe(1);
+    const inStopped = await getDb(ctx.db)
+      .select({ id: aiEvaluation.id })
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, stopped));
+    expect(inStopped).toEqual([]);
+  });
+
+  it("re-admits an input that reverts before its replacement ran", async () => {
+    const [created] = await tasks(["Synthetic reverting task"]);
+    const [row] = await getDb(ctx.db)
+      .select({ id: task.id })
+      .from(task)
+      .where(eq(task.shortcode, created!.output.id));
+    const page = () =>
+      prepareConnectionDiscoveryRoster(ctx.db, {
+        runId: null,
+        after: null,
+        limit: 25,
+        entityKinds: ["task"],
+        newestFirst: true,
+        createRun: createDiscoveryRun,
+      });
+    const rename = (name: string) =>
+      getDb(ctx.db).update(task).set({ name }).where(eq(task.id, row!.id));
+    await page(); // fingerprint A queued
+    await rename("Synthetic reverting task, edited");
+    await page(); // B queued, A superseded
+    await rename("Synthetic reverting task");
+    await page(); // back to A: must queue again, B superseded
+    const states = (await connectionEvaluations(ctx.db, row!.id)).map(
+      (item) => item.state,
+    );
+    expect(states.filter((state) => state === "queued")).toHaveLength(1);
+    expect(states.filter((state) => state === "cancelled")).toHaveLength(2);
   });
 
   it("holds its cursor while the evaluation backlog is at the cap", async () => {
