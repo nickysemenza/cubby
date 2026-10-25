@@ -211,6 +211,13 @@
       "when": 1792901273027,
       "tag": "0029_job_invalidation_capture",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792901686373,
+      "tag": "0030_device_apple_intelligence",
+      "breakpoints": true
     }
   ]
 }
