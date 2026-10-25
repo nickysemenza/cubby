@@ -86,7 +86,6 @@ import {
   type IncomingEdgeKey,
   type IncomingEdgePolicy,
 } from "~/server/db/entity-incoming-edges";
-import { correlated } from "~/server/db/helpers";
 import {
   associatePendingImages,
   countWhere,
@@ -105,6 +104,7 @@ import {
   withTransaction,
   touchUpdatedAt,
 } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   imageDerivative,
   imageProcessingOrphan,
@@ -946,10 +946,10 @@ export async function selectImagesForProvenanceClassification(
       updatedAtToken: sql<string>`${image.updatedAt}::text`,
       capturedAt: image.capturedAt,
       provenanceEvidence: image.provenanceEvidence,
-      sightingSourceTypes: correlated<
-        string[]
-      >(`ARRAY(SELECT DISTINCT s."sourceType" FROM "ImageSighting" s
-        WHERE s."imageId" = "Image"."id" AND s."deletedAt" IS NULL ORDER BY s."sourceType")`),
+      sightingSourceTypes: sql<string[]>`ARRAY(${related(
+        imageSighting,
+        (s) => sql`${s.imageId} = ${outer(image.id)}`,
+      ).aggregate((s) => sql`DISTINCT ${s.sourceType}`)} ORDER BY 1)`,
     })
     .from(image)
     .where(

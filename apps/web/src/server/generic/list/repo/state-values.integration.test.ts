@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import {
   financialTransactionAllocation,
   inventoryEntry,
@@ -18,10 +19,10 @@ import {
   purchase,
 } from "~/server/db/schema";
 import {
-  postedRefundTotalSql,
-  vendorExpenseCountSql,
-  vendorExpenseTotalSql,
-  vendorUnpricedExpenseCountSql,
+  postedRefundTotal,
+  vendorExpenseCount,
+  vendorExpenseTotal,
+  vendorUnpricedExpenseCount,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
 import {
@@ -392,14 +393,14 @@ describe("state predicates re-declared as values", () => {
 
     // The retired `reconciliation` predicate's per-verdict conditions.
     const tolerance = cents(RECONCILIATION_TOLERANCE);
-    const total = sql.raw(vendorExpenseTotalSql('"Purchase"'));
+    const total = vendorExpenseTotal(outer(purchase.id));
     const gap = sql`abs(floor((${purchase.statedTotal} * 100)::numeric + 0.5) - floor((${total} * 100)::numeric + 0.5))`;
     const delta = sql`(floor((${total} * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5))`;
-    const refundAdjusted = sql`${sql.raw(vendorUnpricedExpenseCountSql('"Purchase"'))} = 0
+    const refundAdjusted = sql`${vendorUnpricedExpenseCount(outer(purchase.id))} = 0
       AND ${delta} < ${-tolerance}
-      AND floor((${sql.raw(postedRefundTotalSql('"Purchase"'))} * 100)::numeric + 0.5) = ${delta}`;
+      AND floor((${postedRefundTotal(outer(purchase.id))} * 100)::numeric + 0.5) = ${delta}`;
     const comparable = sql`${purchase.statedTotal} IS NOT NULL
-      AND (${gap} <= ${tolerance} OR ${sql.raw(vendorExpenseCountSql('"Purchase"'))} > 0)`;
+      AND (${gap} <= ${tolerance} OR ${vendorExpenseCount(outer(purchase.id))} > 0)`;
     const verdicts = {
       unknown: sql`(${purchase.statedTotal} IS NULL OR NOT (${comparable}))`,
       match: sql`(${purchase.statedTotal} IS NOT NULL AND ${gap} <= ${tolerance})`,

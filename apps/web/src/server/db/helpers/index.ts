@@ -44,7 +44,6 @@ export {
   auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
-  correlated,
   sqlEnumConstant,
   countWhere,
   eqAny,

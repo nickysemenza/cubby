@@ -50,7 +50,6 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
-  correlated,
   getDb,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -60,7 +59,16 @@ import {
   sqlEnumConstant,
   withTransaction,
 } from "~/server/db/helpers";
-import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
+import { outer, related } from "~/server/db/helpers/related";
+import {
+  entityAttachment,
+  expense,
+  image,
+  product,
+  productCategory,
+  purchase,
+  vendor,
+} from "~/server/db/schema";
 import { reapUnreferencedImages } from "~/server/domains/image/repo/image";
 import {
   displayableImageSql,
@@ -298,86 +306,70 @@ export const VENDOR_MERGE_EDGE_POLICY = {
  * not reach a vendor's spend, and an emptied charge (expenses deleted, charge
  * kept) must read as zero rather than as its old total.
  *
- * Hand-qualified raw SQL wrapped in `correlated()` — see its doc comment in
- * `db/helpers/query.ts`. This file is where that trap showed its loud
- * face: interpolated columns emitted `WHERE "vendorId" = "id"`, which made
- * `/vendors` fail outright with `column reference "id" is ambiguous` and made
- * `vendorOptions` silently count 0.
+ * `related()` renders every reference qualified. This file is where Drizzle's
+ * bare-column trap showed its loud face: interpolated columns emitted
+ * `WHERE "vendorId" = "id"`, which made `/vendors` fail outright with
+ * `column reference "id" is ambiguous` and made `vendorOptions` silently
+ * count 0.
  */
-export const vendorPurchaseCount = correlated<number>(
-  `(SELECT count(*)::int FROM "Purchase" p
-     WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
-);
+const vendorPurchases = () =>
+  related(purchase, (p) => sql`${p.vendorId} = ${outer(vendor.id)}`);
+const vendorBrandedProducts = () =>
+  related(product, (g) => sql`${g.brandId} = ${outer(vendor.id)}`);
+/** Expenses on the Vendor's live Purchases. */
+const vendorExpenses = () =>
+  vendorPurchases().join(expense, (e, p) => sql`${e.purchaseId} = ${p.id}`);
 
-const vendorBrandedProductCount = correlated<number>(
-  `(SELECT count(*)::int FROM "Product" p
-     WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
-);
+export const vendorPurchaseCount = vendorPurchases().count();
 
-// Qualify the outer identity so role predicates also work inside grouped reads.
-const vendorRole = correlated<VendorOut["role"]>(
-  `(SELECT CASE WHEN roles.seller AND roles.brand THEN 'both'
-    WHEN roles.seller THEN 'seller' WHEN roles.brand THEN 'brand' ELSE 'unused' END
-    FROM (SELECT
-      EXISTS (SELECT 1 FROM "Purchase" p WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL) AS seller,
-      EXISTS (SELECT 1 FROM "Product" p WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL) AS brand
-    ) roles)`,
-);
+const vendorBrandedProductCount = vendorBrandedProducts().count();
 
-const vendorBrandCategoryCount = correlated<number>(
-  `(SELECT count(DISTINCT pc.id)::int FROM "Product" p
-    JOIN "ProductCategory" pc ON pc.id=p."categoryId" AND pc."deletedAt" IS NULL
-    WHERE p."brandId"="Vendor"."id" AND p."deletedAt" IS NULL)`,
-);
+const role = vendorOut.shape.role.enum;
+const vendorRole = sql<VendorOut["role"]>`(SELECT CASE
+  WHEN roles.seller AND roles.brand THEN ${sqlEnumConstant(vendorOut.shape.role, role.both)}
+  WHEN roles.seller THEN ${sqlEnumConstant(vendorOut.shape.role, role.seller)}
+  WHEN roles.brand THEN ${sqlEnumConstant(vendorOut.shape.role, role.brand)}
+  ELSE ${sqlEnumConstant(vendorOut.shape.role, role.unused)} END
+  FROM (SELECT ${vendorPurchases().exists()} AS seller,
+    ${vendorBrandedProducts().exists()} AS brand) roles)`;
 
-const vendorPurchasedBrandProductCount = correlated<number>(
-  `(SELECT count(DISTINCT g.id)::int FROM "Product" g
-    JOIN "Expense" e ON e."productId"=g.id AND e."deletedAt" IS NULL
-    JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-    WHERE g."brandId"="Vendor"."id" AND g."deletedAt" IS NULL)`,
-);
+const vendorBrandCategoryCount = vendorBrandedProducts()
+  .join(productCategory, (pc, g) => sql`${pc.id} = ${g.categoryId}`)
+  .countDistinct((pc) => pc.id);
+
+const vendorPurchasedBrandProductCount = vendorBrandedProducts()
+  .where((g) =>
+    related(expense, (e) => sql`${e.productId} = ${g.id}`)
+      .join(purchase, (p, e) => sql`${p.id} = ${e.purchaseId}`)
+      .exists(),
+  )
+  .count();
 
 // Brand attribution requires a linked live Product. Seller spend also includes
 // unlinked lines; these two sums overlap and must never be added together.
-const vendorBrandSpend = correlated<number>(
-  `(SELECT COALESCE(sum(e.cost),0)::double precision FROM "Product" g
-    JOIN "Expense" e ON e."productId"=g.id AND e."deletedAt" IS NULL
-    JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-    WHERE g."brandId"="Vendor"."id" AND g."deletedAt" IS NULL)`,
-);
+const vendorBrandSpend = vendorBrandedProducts()
+  .join(expense, (e, g) => sql`${e.productId} = ${g.id}`)
+  .where((e) =>
+    related(purchase, (p) => sql`${p.id} = ${e.purchaseId}`).exists(),
+  )
+  .sum((e) => e.cost);
 
-const vendorExpenseCount = correlated<number>(
-  `(SELECT count(*)::int FROM "Expense" e
-    JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
-    WHERE p."vendorId"="Vendor"."id" AND e."deletedAt" IS NULL)`,
-);
+const vendorExpenseCount = vendorExpenses().count();
 
-const vendorFirstPurchaseDate = correlated<string | null>(
-  `(SELECT min(p.date) FROM "Purchase" p
-    WHERE p."vendorId"="Vendor"."id" AND p."deletedAt" IS NULL)`,
-);
+const vendorFirstPurchaseDate = vendorPurchases().min<string>((p) => p.date);
 
 const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
-  WHERE vp."vendorId"=${sql.raw('"Vendor"."id"')} AND vp."deletedAt" IS NULL
+  WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
     AND ${purchaseHasPrimaryDocumentSql("vp")})`;
 
 const vendorMissingItemizationCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
-  WHERE vp."vendorId"=${sql.raw('"Vendor"."id"')} AND vp."deletedAt" IS NULL
+  WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
     AND ${effectivePurchaseItemizationExpectationSql("vp")}=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
     AND NOT ${purchaseHasItemizationSql("vp")})`;
 
-const vendorSpend = correlated<number>(
-  `(SELECT COALESCE(sum(e."cost"), 0)::double precision
-      FROM "Expense" e
-      INNER JOIN "Purchase" p
-        ON p."id" = e."purchaseId" AND p."deletedAt" IS NULL
-     WHERE p."vendorId" = "Vendor"."id" AND e."deletedAt" IS NULL)`,
-);
+const vendorSpend = vendorExpenses().sum((e) => e.cost);
 
-const vendorLatestPurchaseDate = correlated<string | null>(
-  `(SELECT max(p."date") FROM "Purchase" p
-     WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
-);
+const vendorLatestPurchaseDate = vendorPurchases().max<string>((p) => p.date);
 
 /**
  * Each live Vendor's Mail search state (`MailSearchState`) across every
