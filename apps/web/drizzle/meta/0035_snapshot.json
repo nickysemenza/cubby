@@ -5313,6 +5313,16 @@
           "primaryKey": false,
           "notNull": true
         },
+        "slotKey": {
+          "name": "slotKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "generated": {
+            "as": "octet_length(\"feature\")::text || ':' || \"feature\" || octet_length(COALESCE(\"target\"->>'entity', ''))::text || ':' || COALESCE(\"target\"->>'entity', '') || octet_length(COALESCE(\"target\"->>'recordId', ''))::text || ':' || COALESCE(\"target\"->>'recordId', '') || octet_length(COALESCE(\"target\"->>'field', ''))::text || ':' || COALESCE(\"target\"->>'field', '') || octet_length(COALESCE(\"target\"->>'otherId', ''))::text || ':' || COALESCE(\"target\"->>'otherId', '')",
+            "type": "stored"
+          }
+        },
         "workKey": {
           "name": "workKey",
           "type": "text",
@@ -5404,6 +5414,49 @@
         }
       },
       "indexes": {
+        "AiEvaluation_open_slot_key": {
+          "name": "AiEvaluation_open_slot_key",
+          "columns": [
+            {
+              "expression": "slotKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"AiEvaluation\".\"state\" IN ('queued','retry_wait')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "AiEvaluation_slot_history_idx": {
+          "name": "AiEvaluation_slot_history_idx",
+          "columns": [
+            {
+              "expression": "slotKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "createdAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "AiEvaluation_work_key": {
           "name": "AiEvaluation_work_key",
           "columns": [
@@ -5429,7 +5482,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "where": "\"AiEvaluation\".\"shareKey\" IS NOT NULL AND \"AiEvaluation\".\"state\" IN ('queued','running','result_ready','retry_wait')",
           "concurrently": false,
           "method": "btree",

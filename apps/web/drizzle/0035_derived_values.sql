@@ -32,6 +32,42 @@ CREATE INDEX "DerivedDirty_ready_idx" ON "DerivedDirty" USING btree ("priority",
 CREATE INDEX "DerivedValue_kind_key_number_idx" ON "DerivedValue" USING btree ("kind","key","sortNumber");--> statement-breakpoint
 CREATE INDEX "DerivedValue_kind_key_date_idx" ON "DerivedValue" USING btree ("kind","key","sortDate");--> statement-breakpoint
 CREATE INDEX "DerivedValue_kind_key_text_idx" ON "DerivedValue" USING btree ("kind","key","sortText");--> statement-breakpoint
+-- One open AI evaluation per logical target: cancel older duplicates before the slot index.
+ALTER TABLE "AiEvaluation" ADD COLUMN "slotKey" text GENERATED ALWAYS AS (
+  octet_length("feature")::text || ':' || "feature" || octet_length(COALESCE("target"->>'entity', ''))::text || ':' || COALESCE("target"->>'entity', '') || octet_length(COALESCE("target"->>'recordId', ''))::text || ':' || COALESCE("target"->>'recordId', '') || octet_length(COALESCE("target"->>'field', ''))::text || ':' || COALESCE("target"->>'field', '') || octet_length(COALESCE("target"->>'otherId', ''))::text || ':' || COALESCE("target"->>'otherId', '')
+) STORED NOT NULL;
+--> statement-breakpoint
+WITH ranked AS (
+  SELECT id, first_value(id) OVER slot AS newest,
+    row_number() OVER slot AS position
+  FROM "AiEvaluation"
+  WHERE state IN ('queued', 'retry_wait')
+  WINDOW slot AS (PARTITION BY "slotKey" ORDER BY "createdAt" DESC, id DESC)
+), cancelled AS (
+  UPDATE "AiEvaluation" e
+  SET state = 'cancelled', receipt = jsonb_build_object('supersededBy', r.newest),
+    error = 'Superseded by a newer evaluation in the same slot', "updatedAt" = now()
+  FROM ranked r WHERE e.id = r.id AND r.position > 1
+  RETURNING e.id
+)
+UPDATE "Job" j
+SET state = 'cancelled', generation = generation + 1,
+  "waitReason" = NULL, "waitUntil" = NULL,
+  "leaseToken" = NULL, "leaseExpiresAt" = NULL, "updatedAt" = now()
+FROM cancelled e
+WHERE j.key = 'ai-evaluation:' || e.id::text
+  AND j.state IN ('queued', 'running', 'retry_wait', 'paused');
+--> statement-breakpoint
+CREATE UNIQUE INDEX "AiEvaluation_open_slot_key" ON "AiEvaluation" ("slotKey")
+  WHERE state IN ('queued','retry_wait');
+--> statement-breakpoint
+CREATE INDEX "AiEvaluation_slot_history_idx" ON "AiEvaluation" ("slotKey", "createdAt", "id");
+--> statement-breakpoint
+DROP INDEX "AiEvaluation_pending_share_key";
+--> statement-breakpoint
+CREATE INDEX "AiEvaluation_pending_share_key" ON "AiEvaluation" ("shareKey")
+  WHERE "shareKey" IS NOT NULL AND state IN ('queued','running','result_ready','retry_wait');
+--> statement-breakpoint
 -- derived:begin
 CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[]) RETURNS void
 LANGUAGE plpgsql AS $$
