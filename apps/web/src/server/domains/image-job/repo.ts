@@ -8,19 +8,21 @@ import {
   imageJobOut,
 } from "@cubby/schemas/image-job";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
-import { describeJobWaitingOn } from "@cubby/schemas/job";
+import { describeJobWaitingOn, jobState } from "@cubby/schemas/job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   isTransaction,
+  notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
+import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { job } from "~/server/db/retained-tables";
-import { imageProcessingJob } from "~/server/db/schema";
+import { device, imageProcessingJob } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityReader,
@@ -127,6 +129,39 @@ const loadFacts = async (
   );
 };
 
+type Execution = Pick<
+  ImageJobOut,
+  "waitingOn" | "leaseDeviceId" | "leaseExpiresAt"
+>;
+
+/**
+ * The Device (`DEV-` code) behind each lease token. An image Job's lease
+ * token is its current attempt's id, and the attempt's executor names the
+ * install (`executor.deviceId` is `Device.installationId`). Cloud attempts and
+ * deleted installs have no Device and stay absent.
+ */
+const loadLeaseDevices = async (
+  db: Database | DrizzleTransaction,
+  leaseTokens: readonly string[],
+): Promise<Map<string, string>> => {
+  if (leaseTokens.length === 0) return new Map();
+  const rows = await unwrapDb(db)
+    .select({ token: imageProcessingAttempt.id, shortcode: device.shortcode })
+    .from(imageProcessingAttempt)
+    .innerJoin(
+      device,
+      and(
+        eq(
+          device.installationId,
+          sql`${imageProcessingAttempt.executor}->>${"deviceId"}`,
+        ),
+        notDeleted(device),
+      ),
+    )
+    .where(inArray(imageProcessingAttempt.id, [...leaseTokens]));
+  return new Map(rows.map((row) => [row.token, row.shortcode]));
+};
+
 /**
  * An executor's skip reason is stored as a code: on a job that retries it
  * (executor skips are failures now) or on one an older release ended as
@@ -172,7 +207,7 @@ const imageJobRead = {
     );
     const execution = bind.batch(async ({ db, rows }) => {
       const open = rows.filter((row) => row.state === "pending");
-      if (!open.length) return new Map<string, string | null>();
+      if (!open.length) return new Map<string, Execution>();
       const keyOf = new Map(
         open.map((row) => [imageProcessingJobKey(row.id), row.id]),
       );
@@ -180,23 +215,50 @@ const imageJobRead = {
         .select()
         .from(job)
         .where(inArray(job.key, [...keyOf.keys()]));
-      const waiting = await loadJobWaitingOn(
-        isTransaction(db) ? databaseForTransaction(db) : db,
-        jobs,
-      );
+      const [waiting, holders] = await Promise.all([
+        loadJobWaitingOn(
+          isTransaction(db) ? databaseForTransaction(db) : db,
+          jobs,
+        ),
+        loadLeaseDevices(
+          db,
+          jobs.flatMap((entry) =>
+            entry.state === jobState.enum.running && entry.leaseToken
+              ? [entry.leaseToken]
+              : [],
+          ),
+        ),
+      ]);
       return new Map(
-        jobs.map((entry) => [
-          keyOf.get(entry.key) ?? "",
-          describeJobWaitingOn(waiting.get(entry.id) ?? null),
-        ]),
+        jobs.map((entry): [string, Execution] => {
+          const running = entry.state === jobState.enum.running;
+          return [
+            keyOf.get(entry.key) ?? "",
+            {
+              waitingOn: describeJobWaitingOn(waiting.get(entry.id) ?? null),
+              leaseDeviceId:
+                running && entry.leaseToken
+                  ? (holders.get(entry.leaseToken) ?? null)
+                  : null,
+              leaseExpiresAt: running ? entry.leaseExpiresAt : null,
+            },
+          ];
+        }),
       );
     });
     return [
       execution.fields(
-        imageJobOut.pick({ waitingOn: true }),
-        (row, loaded) => ({
-          waitingOn: loaded.get(row.id) ?? null,
+        imageJobOut.pick({
+          waitingOn: true,
+          leaseDeviceId: true,
+          leaseExpiresAt: true,
         }),
+        (row, loaded) =>
+          loaded.get(row.id) ?? {
+            waitingOn: null,
+            leaseDeviceId: null,
+            leaseExpiresAt: null,
+          },
       ),
       images.fields(
         imageJobOut.pick({ imageId: true, displayName: true }),
