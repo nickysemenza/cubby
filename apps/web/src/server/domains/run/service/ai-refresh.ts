@@ -84,6 +84,7 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { checkConnectionSourceBeforeCommit } from "../repo/ai-refresh-state";
 import {
@@ -785,20 +786,25 @@ export async function executeAiRefreshTarget(
             "Connection discovery source changed during evaluation",
           );
       };
-      for (const publish of preparation.publications)
-        await publishAiEvaluation(
-          db,
-          id,
-          token,
-          async (transactionDb) => {
-            await checkSource(transactionDb);
-            await publish(transactionDb);
-            await checkConnectionSourceBeforeCommit(transactionDb, () =>
-              connectionSourceFingerprint(transactionDb, source),
-            );
-            return null;
-          },
-          "continue",
+      for (const [index, publish] of preparation.publications.entries())
+        await withTrace(
+          TraceNames.service("connections", "publish"),
+          () =>
+            publishAiEvaluation(
+              db,
+              id,
+              token,
+              async (transactionDb) => {
+                await checkSource(transactionDb);
+                await publish(transactionDb);
+                await checkConnectionSourceBeforeCommit(transactionDb, () =>
+                  connectionSourceFingerprint(transactionDb, source),
+                );
+                return null;
+              },
+              "continue",
+            ),
+          { "connection.publication": index },
         );
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
         await checkSource(transactionDb);
