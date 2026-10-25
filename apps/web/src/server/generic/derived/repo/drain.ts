@@ -335,9 +335,12 @@ const expandFanout = async (
   const dependents = input.path
     ? pathSql(input.path, refs)
     : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+  // Dependents keep the triggering mark's priority, so a member edit's
+  // dependents are not queued behind a backfill.
+  const priority = Math.min(...marks.map((mark) => mark.priority));
   const result = await tx.execute(sql`
     INSERT INTO "DerivedDirty" (target, ref, priority)
-    SELECT DISTINCT ${declaration.target}, r.id, 1
+    SELECT DISTINCT ${declaration.target}, r.id, ${priority}::int
       FROM (${dependents}) AS r(id) WHERE r.id IS NOT NULL
     ON CONFLICT (target, ref) DO UPDATE SET
       ticket = nextval('"DerivedTicket"'),
@@ -359,8 +362,10 @@ const deferFailed = async (
     UPDATE "DerivedDirty" d SET
       attempts = d.attempts + 1,
       "lastError" = ${error.slice(0, 2000)},
+      -- The exponent is clamped first: an unbounded power overflows bigint
+      -- after ~50 failures and would roll back every page holding the mark.
       "readyAt" = now() + least(${FAILURE_MAX_MS}::bigint,
-        ${FAILURE_BASE_MS}::bigint * (2 ^ d.attempts)::bigint) * interval '1 millisecond'
+        ${FAILURE_BASE_MS}::bigint * (2 ^ least(d.attempts, 10))::bigint) * interval '1 millisecond'
       FROM jsonb_to_recordset(${JSON.stringify(
         marks.map(({ ref, ticket }) => ({ ref, ticket })),
       )}::jsonb) AS m(ref uuid, ticket bigint)
@@ -386,13 +391,16 @@ export async function publishDerivedPage(
     }
     const { declaration, fanoutInput } = parsed;
     if (fanoutInput) {
-      expanded += await expandFanout(
+      const created = await expandFanout(
         tx,
         declaration,
         fanoutInput,
         target,
         marks,
       );
+      expanded += created;
+      // Readers learn the dependents are now updating.
+      if (created > 0) categories.add(declaration.entity);
       continue;
     }
     const failure = plan.failed.get(target);

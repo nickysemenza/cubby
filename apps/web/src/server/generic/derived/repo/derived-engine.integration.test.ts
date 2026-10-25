@@ -120,6 +120,39 @@ describe("stored derived values", () => {
     expect(await marks("inventory.valuation")).toEqual([]);
   });
 
+  it("backs off a long-failing target without overflowing the delay", async () => {
+    const beans = await makeProduct("Synthetic failing beans", 2);
+    await drain();
+    await getDb(ctx.db).execute(sql`
+      INSERT INTO "DerivedDirty" (target, ref, priority, attempts)
+      VALUES ('product.price', ${beans}, 0, 60)
+      ON CONFLICT (target, ref) DO UPDATE SET attempts = 60`);
+    const failing = {
+      ...derivedComputes,
+      "product.price": async () => {
+        throw new Error("Synthetic compute failure");
+      },
+    };
+    await publishDerivedPage(
+      ctx.db,
+      await prepareDerivedPage(
+        ctx.db,
+        failing,
+        await claimDerivedMarks(ctx.db),
+      ),
+    );
+    const [row] = (
+      await getDb(ctx.db).execute(sql`
+        SELECT attempts, "lastError", "readyAt" <= now() + interval '15 minutes' AS bounded
+          FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${beans}`)
+    ).rows;
+    expect(row).toMatchObject({
+      attempts: 61,
+      lastError: expect.stringContaining("Synthetic compute failure"),
+      bounded: true,
+    });
+  });
+
   it("marks nothing for a save that changes no declared input", async () => {
     const beans = await makeProduct("Synthetic lentils", 3);
     await drain();
@@ -251,6 +284,11 @@ describe("stored derived values", () => {
     expect(await marks("task.searchDocument")).toEqual(
       [parent, child].map((task) => task.entityId).sort(),
     );
+    // An edit's dependents keep its priority instead of queuing behind backfill.
+    const priorities = await getDb(ctx.db).execute(
+      sql`SELECT DISTINCT priority FROM "DerivedDirty" WHERE target = 'task.searchDocument'`,
+    );
+    expect(priorities.rows).toEqual([{ priority: 0 }]);
   });
 
   it("recomputes dependents when a value they read changes", async () => {
