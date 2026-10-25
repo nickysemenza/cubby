@@ -29,7 +29,19 @@ import type {
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
 import { jobState } from "@cubby/schemas/job";
-import { and, asc, desc, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  lte,
+  ne,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -40,6 +52,7 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
+  isTransaction,
   unwrapDb,
   notDeleted,
   withTransaction,
@@ -69,6 +82,7 @@ import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   deviceBackfillTurn,
   lockDeviceAdmission,
+  type DeviceAdmission,
 } from "~/server/generic/jobs/repo/device-admission";
 import {
   enqueueJob,
@@ -576,6 +590,12 @@ async function rebuildTransparentDerivative(
  * Expired leases are safe to reclaim because every completion must echo
  * the Job's lease token as its attemptId; reclaiming one is not an attempt.
  */
+/** A bounded candidate page per class, owned by the pull transaction's admission lock. */
+export type DeviceImageClaimBatch = DeviceAdmission & {
+  candidateLimit: number;
+  candidateIds?: string[];
+};
+
 export async function claimImageProcessingJob(
   db: Database,
   input: {
@@ -589,237 +609,281 @@ export async function claimImageProcessingJob(
     allowAvifNormalization?: boolean;
     /** A device pull prefers work whose last attempt ran on another device. */
     deviceId?: string;
+    /** The batch owns the admission lock and arms the wake once before committing. */
+    deviceAdmission?: DeviceImageClaimBatch;
   },
 ): Promise<ClaimedImageProcessingJob | null> {
   // Candidate selection uses the same due-time clock as the shared Job claim.
   const now = new Date();
   const currentExecution = currentJobExecution();
-  return await withTransaction(db, async (tx) => {
-    if (currentExecution) {
-      if (
-        !input.jobId ||
-        currentExecution.claim.kind !== "image.cloud" ||
-        currentExecution.claim.key !== imageProcessingJobKey(input.jobId)
-      )
-        throw new Error(
-          "Image processing requires its own universal Job claim",
+  const client = getDb(db);
+  return await withTransactionOn(
+    input.deviceAdmission && isTransaction(client) ? client : db,
+    async (tx) => {
+      if (currentExecution) {
+        if (
+          !input.jobId ||
+          currentExecution.claim.kind !== "image.cloud" ||
+          currentExecution.claim.key !== imageProcessingJobKey(input.jobId)
+        )
+          throw new Error(
+            "Image processing requires its own universal Job claim",
+          );
+        await assertJobClaim(
+          databaseForTransaction(tx),
+          currentExecution.claim,
+          "update",
         );
-      await assertJobClaim(
-        databaseForTransaction(tx),
-        currentExecution.claim,
-        "update",
-      );
-      await retireObsoleteImageProcessingJobs(databaseForTransaction(tx), {
-        jobId: input.jobId,
-      });
-    }
-    // Device admission keeps the drain's priorities: an active Run's work
-    // leads, but backfill keeps its reserved share of pulls.
-    const devicePull =
-      !currentExecution && input.processorRevisions !== undefined;
-    // Device pulls take their turns one at a time: the lane's admission row
-    // stays locked until the transaction that hands this claim over ends.
-    const backfillTurn =
-      devicePull &&
-      deviceBackfillTurn(await lockDeviceAdmission(databaseForTransaction(tx)));
-    // The internal policy keeps claims within the device’s supported job kinds.
-    // A retry prefers a different device than the one its last attempt ran
-    // on, within the class whose turn it is; a lone device still takes its
-    // own retries.
-    const ranOnThisDevice = input.deviceId
-      ? sql<boolean>`EXISTS (SELECT 1 FROM ${imageProcessingAttempt} a
+        await retireObsoleteImageProcessingJobs(databaseForTransaction(tx), {
+          jobId: input.jobId,
+        });
+      }
+      // Device admission keeps the drain's priorities: an active Run's work
+      // leads, but backfill keeps its reserved share of pulls.
+      const devicePull =
+        !currentExecution && input.processorRevisions !== undefined;
+      // Device pulls take their turns one at a time: the lane's admission row
+      // stays locked until the transaction that hands this claim over ends.
+      const backfillTurn =
+        devicePull &&
+        deviceBackfillTurn(
+          input.deviceAdmission?.ownedStreak ??
+            (await lockDeviceAdmission(databaseForTransaction(tx))),
+        );
+      // The internal policy keeps claims within the device’s supported job kinds.
+      // A retry prefers a different device than the one its last attempt ran
+      // on, within the class whose turn it is; a lone device still takes its
+      // own retries.
+      const ranOnThisDevice = input.deviceId
+        ? sql<boolean>`EXISTS (SELECT 1 FROM ${imageProcessingAttempt} a
           WHERE a.id = ${imageProcessingJob.attemptId}
             AND a.executor->>'deviceId' = ${input.deviceId})`
-      : undefined;
-    const candidates = () =>
-      tx
-        .select({
-          id: imageProcessingJob.id,
-          executionId: durableJob.id,
-          imageId: imageProcessingJob.imageId,
-          kind: imageProcessingJob.kind,
-          sourceContentHash: imageProcessingJob.sourceContentHash,
-          processorRevision: imageProcessingJob.processorRevision,
-          previousAttemptId: imageProcessingJob.attemptId,
-          submissionId: imageProcessingJob.submissionId,
-          derivativeId: imageProcessingJob.derivativeId,
-          runId: imageProcessingJob.runId,
-          originalKey: image.key,
-          originalContentType: image.contentType,
-          derivativeKey: imageDerivative.key,
-        })
-        .from(imageProcessingJob)
-        .innerJoin(
-          durableJob,
-          eq(
-            durableJob.key,
-            sql`'image-processing:' || ${imageProcessingJob.id}::text`,
-          ),
-        )
-        .innerJoin(
-          image,
-          and(
-            eq(image.id, imageProcessingJob.imageId),
-            notDeleted(image),
-            eq(image.status, "UPLOADED"),
-            eq(image.sha256, imageProcessingJob.sourceContentHash),
-          ),
-        )
-        .leftJoin(
-          imageDerivative,
-          and(
-            eq(imageDerivative.id, imageProcessingJob.derivativeId),
-            notDeleted(imageDerivative),
-          ),
-        )
-        .where(
-          and(
-            input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
-            inArray(imageProcessingJob.kind, [...input.kinds]),
-            eq(imageProcessingJob.state, "pending"),
-            currentImageProcessingProcessor(),
-            input.processorRevisions
-              ? or(
-                  inArray(imageProcessingJob.processorRevision, [
-                    ...input.processorRevisions,
-                  ]),
-                  input.allowAvifNormalization
-                    ? and(
-                        eq(imageProcessingJob.kind, "describe_image"),
-                        eq(
-                          imageProcessingJob.processorRevision,
-                          IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-                        ),
-                        eq(image.contentType, "image/avif"),
-                      )
-                    : undefined,
-                )
-              : undefined,
-            currentExecution
-              ? and(
-                  eq(durableJob.id, currentExecution.claim.id),
-                  eq(durableJob.state, "running"),
-                  eq(durableJob.generation, currentExecution.claim.generation),
-                  eq(durableJob.leaseToken, currentExecution.claim.leaseToken),
-                  gt(durableJob.leaseExpiresAt, now),
-                )
-              : and(
-                  // Devices claim parked device work directly, honoring its
-                  // backoff; an expired lease is claimable at once.
-                  input.processorRevisions
-                    ? eq(durableJob.kind, "image.device")
-                    : undefined,
-                  or(
-                    and(
-                      inArray(durableJob.state, ["queued", "retry_wait"]),
-                      lte(durableJob.availableAt, now),
+        : undefined;
+      const candidates = (
+        runOwned?: boolean,
+        limit = 1,
+        candidateIds?: readonly string[],
+      ) =>
+        tx
+          .select({
+            id: imageProcessingJob.id,
+            executionId: durableJob.id,
+            imageId: imageProcessingJob.imageId,
+            kind: imageProcessingJob.kind,
+            sourceContentHash: imageProcessingJob.sourceContentHash,
+            processorRevision: imageProcessingJob.processorRevision,
+            previousAttemptId: imageProcessingJob.attemptId,
+            submissionId: imageProcessingJob.submissionId,
+            derivativeId: imageProcessingJob.derivativeId,
+            runId: imageProcessingJob.runId,
+            originalKey: image.key,
+            originalContentType: image.contentType,
+            derivativeKey: imageDerivative.key,
+          })
+          .from(imageProcessingJob)
+          .innerJoin(
+            durableJob,
+            eq(
+              durableJob.key,
+              sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+            ),
+          )
+          .innerJoin(
+            image,
+            and(
+              eq(image.id, imageProcessingJob.imageId),
+              notDeleted(image),
+              eq(image.status, "UPLOADED"),
+              eq(image.sha256, imageProcessingJob.sourceContentHash),
+            ),
+          )
+          .leftJoin(
+            imageDerivative,
+            and(
+              eq(imageDerivative.id, imageProcessingJob.derivativeId),
+              notDeleted(imageDerivative),
+            ),
+          )
+          .where(
+            and(
+              input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
+              candidateIds
+                ? inArray(imageProcessingJob.id, [...candidateIds])
+                : undefined,
+              runOwned === undefined
+                ? undefined
+                : runOwned
+                  ? jobRunOwned()
+                  : not(jobRunOwned()),
+              inArray(imageProcessingJob.kind, [...input.kinds]),
+              eq(imageProcessingJob.state, "pending"),
+              currentImageProcessingProcessor(),
+              input.processorRevisions
+                ? or(
+                    inArray(imageProcessingJob.processorRevision, [
+                      ...input.processorRevisions,
+                    ]),
+                    input.allowAvifNormalization
+                      ? and(
+                          eq(imageProcessingJob.kind, "describe_image"),
+                          eq(
+                            imageProcessingJob.processorRevision,
+                            IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+                          ),
+                          eq(image.contentType, "image/avif"),
+                        )
+                      : undefined,
+                  )
+                : undefined,
+              currentExecution
+                ? and(
+                    eq(durableJob.id, currentExecution.claim.id),
+                    eq(durableJob.state, "running"),
+                    eq(
+                      durableJob.generation,
+                      currentExecution.claim.generation,
                     ),
-                    and(
-                      eq(durableJob.state, "running"),
-                      lte(durableJob.leaseExpiresAt, now),
+                    eq(
+                      durableJob.leaseToken,
+                      currentExecution.claim.leaseToken,
+                    ),
+                    gt(durableJob.leaseExpiresAt, now),
+                  )
+                : and(
+                    // Devices claim parked device work directly, honoring its
+                    // backoff; an expired lease is claimable at once.
+                    input.processorRevisions
+                      ? eq(durableJob.kind, "image.device")
+                      : undefined,
+                    or(
+                      and(
+                        inArray(durableJob.state, ["queued", "retry_wait"]),
+                        lte(durableJob.availableAt, now),
+                      ),
+                      and(
+                        eq(durableJob.state, "running"),
+                        lte(durableJob.leaseExpiresAt, now),
+                      ),
                     ),
                   ),
-                ),
-          ),
-        )
-        .orderBy(
-          ...(devicePull
-            ? [backfillTurn ? asc(jobRunOwned()) : desc(jobRunOwned())]
-            : []),
-          ...(ranOnThisDevice ? [asc(ranOnThisDevice)] : []),
-          asc(durableJob.availableAt),
-          asc(imageProcessingJob.id),
-        )
-        .limit(1);
-    const lock = (query: ReturnType<typeof candidates>) =>
-      currentExecution
-        ? query.for("update", { of: [imageProcessingJob, image] })
-        : query.for("update", {
-            of: [imageProcessingJob, image],
-            skipLocked: true,
-          });
-    const [candidate] = await lock(candidates());
-    if (!candidate) return null;
-
-    const execution =
-      currentExecution?.claim ??
-      (await claimJob(
-        databaseForTransaction(tx),
-        candidate.executionId,
-        input.leaseMs,
-      ));
-    if (!execution) return null;
-    // A device lease can lapse while every device idles; the wake rings then.
-    if (execution.kind === "image.device")
-      await armDeviceWake(databaseForTransaction(tx));
-    let derivativeId = candidate.derivativeId;
-    if (candidate.kind === "subject_lift" && !candidate.derivativeKey)
-      derivativeId = (await rebuildTransparentDerivative(tx, candidate)).id;
-
-    const attemptId = execution.leaseToken;
-    if (
-      candidate.previousAttemptId &&
-      candidate.previousAttemptId !== attemptId
-    )
-      await tx
-        .update(imageProcessingAttempt)
-        .set({
-          state: "expired",
-          completedAt: new Date(),
-          error: "Universal Job lease expired",
-        })
-        .where(
-          and(
-            eq(imageProcessingAttempt.id, candidate.previousAttemptId),
-            eq(imageProcessingAttempt.state, "running"),
-          ),
+            ),
+          )
+          .orderBy(
+            ...(devicePull
+              ? [backfillTurn ? asc(jobRunOwned()) : desc(jobRunOwned())]
+              : []),
+            ...(ranOnThisDevice ? [asc(ranOnThisDevice)] : []),
+            asc(durableJob.availableAt),
+            asc(imageProcessingJob.id),
+          )
+          .limit(limit);
+      const lock = (query: ReturnType<typeof candidates>) =>
+        currentExecution
+          ? query.for("update", { of: [imageProcessingJob, image] })
+          : query.for("update", {
+              of: [imageProcessingJob, image],
+              skipLocked: true,
+            });
+      const batch = input.deviceAdmission;
+      if (
+        batch &&
+        batch.candidateLimit > 0 &&
+        batch.candidateIds === undefined
+      ) {
+        // Rank each class once at household scale, then re-check/order the bounded identities for
+        // every claim. Run status and due/lease predicates remain authoritative on each hand-off.
+        // The retry budget bounds the page even when output reservation refuses candidates.
+        const owned = await lock(candidates(true, batch.candidateLimit));
+        const backfill = await lock(candidates(false, batch.candidateLimit));
+        batch.candidateIds = [...owned, ...backfill].map(
+          (candidate) => candidate.id,
         );
-    // Every lease gets a new server-chosen key. A late PUT authorized by an
-    // earlier presigned URL can therefore never overwrite the next attempt.
-    const derivativeKey =
-      candidate.kind === "subject_lift"
-        ? generateImageKey(`image-${candidate.imageId}-transparent.png`)
-        : candidate.derivativeKey;
-    if (candidate.kind === "subject_lift" && derivativeId) {
-      if (candidate.derivativeKey)
+      }
+      const [candidate] = await lock(
+        candidates(undefined, 1, batch?.candidateIds),
+      );
+      if (!candidate) return null;
+
+      const execution =
+        currentExecution?.claim ??
+        (await claimJob(
+          databaseForTransaction(tx),
+          candidate.executionId,
+          input.leaseMs,
+        ));
+      if (!execution) return null;
+      // A device lease can lapse while every device idles; the wake rings then.
+      if (execution.kind === "image.device" && !input.deviceAdmission)
+        await armDeviceWake(databaseForTransaction(tx));
+      let derivativeId = candidate.derivativeId;
+      if (candidate.kind === "subject_lift" && !candidate.derivativeKey)
+        derivativeId = (await rebuildTransparentDerivative(tx, candidate)).id;
+
+      const attemptId = execution.leaseToken;
+      if (
+        candidate.previousAttemptId &&
+        candidate.previousAttemptId !== attemptId
+      )
         await tx
-          .insert(imageProcessingOrphan)
-          .values({
-            key: candidate.derivativeKey,
-            attemptId: candidate.previousAttemptId,
-            reason: "Superseded image-processing output key",
+          .update(imageProcessingAttempt)
+          .set({
+            state: "expired",
+            completedAt: new Date(),
+            error: "Universal Job lease expired",
           })
-          .onConflictDoNothing();
+          .where(
+            and(
+              eq(imageProcessingAttempt.id, candidate.previousAttemptId),
+              eq(imageProcessingAttempt.state, "running"),
+            ),
+          );
+      // Every lease gets a new server-chosen key. A late PUT authorized by an
+      // earlier presigned URL can therefore never overwrite the next attempt.
+      const derivativeKey =
+        candidate.kind === "subject_lift"
+          ? generateImageKey(`image-${candidate.imageId}-transparent.png`)
+          : candidate.derivativeKey;
+      if (candidate.kind === "subject_lift" && derivativeId) {
+        if (candidate.derivativeKey)
+          await tx
+            .insert(imageProcessingOrphan)
+            .values({
+              key: candidate.derivativeKey,
+              attemptId: candidate.previousAttemptId,
+              reason: "Superseded image-processing output key",
+            })
+            .onConflictDoNothing();
+        await tx
+          .update(imageDerivative)
+          .set({ key: derivativeKey!, status: "pending", failureReason: null })
+          .where(eq(imageDerivative.id, derivativeId));
+      }
+      // The Job owns execution state; the row records only its current attempt.
       await tx
-        .update(imageDerivative)
-        .set({ key: derivativeKey!, status: "pending", failureReason: null })
-        .where(eq(imageDerivative.id, derivativeId));
-    }
-    // The Job owns execution state; the row records only its current attempt.
-    await tx
-      .update(imageProcessingJob)
-      .set({ attemptId, dispatchedAt: new Date() })
-      .where(eq(imageProcessingJob.id, candidate.id));
-    if (candidate.kind === "subject_lift" && derivativeId)
-      await recordChange(tx, {
-        kind: "projection",
-        categories: ["image", "imageJob"],
-        refresh: ["quality"],
-      });
-    const {
-      previousAttemptId: _previousAttemptId,
-      executionId: _executionId,
-      ...claimed
-    } = candidate;
-    return {
-      ...claimed,
-      derivativeId,
-      imageId: parseEntityId("image", claimed.imageId),
-      derivativeKey,
-      attemptId,
-      leaseExpiresAt: execution.leaseExpiresAt,
-    };
-  });
+        .update(imageProcessingJob)
+        .set({ attemptId, dispatchedAt: new Date() })
+        .where(eq(imageProcessingJob.id, candidate.id));
+      if (candidate.kind === "subject_lift" && derivativeId)
+        await recordChange(tx, {
+          kind: "projection",
+          categories: ["image", "imageJob"],
+          refresh: ["quality"],
+        });
+      const {
+        previousAttemptId: _previousAttemptId,
+        executionId: _executionId,
+        ...claimed
+      } = candidate;
+      return {
+        ...claimed,
+        derivativeId,
+        imageId: parseEntityId("image", claimed.imageId),
+        derivativeKey,
+        attemptId,
+        leaseExpiresAt: execution.leaseExpiresAt,
+      };
+    },
+  );
 }
 
 /**

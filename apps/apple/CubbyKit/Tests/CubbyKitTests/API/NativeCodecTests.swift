@@ -111,7 +111,7 @@ struct NativeCodecTests {
     }
 
     @Test func requiredNullableKeyMustBePresent() throws {
-        let present: JSONValue = ["command": .null, "remotePaused": false]
+        let present: JSONValue = ["command": .null, "commands": [], "remotePaused": false]
         let output: PullCompanionImageProcessingOutput = try present.decoded()
         #expect(output.command == nil)
         #expect(try JSONValue(encoding: output)["command"] == .null)

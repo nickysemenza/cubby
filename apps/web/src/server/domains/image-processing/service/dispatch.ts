@@ -195,58 +195,64 @@ export async function prepareCompanionImageCommand(
   if (claimed.kind === "identify_image")
     throw new Error("Image identification is server-only");
   if (claimed.kind === "describe_image") {
-    const command = imageProcessingCommand.parse({
+    const analysisKey =
+      claimed.originalContentType === "image/avif" &&
+      claimed.processorRevision !== IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION
+        ? imageAnalysisKey("staging", claimed.attemptId)
+        : null;
+    const [sourceUrl, uploadUrl] = await Promise.all([
+      generatePresignedDownloadUrl({ key: claimed.originalKey }),
+      analysisKey
+        ? generatePresignedUploadUrl({
+            key: analysisKey,
+            contentType: "image/jpeg",
+          })
+        : null,
+    ]);
+    return imageProcessingCommand.parse({
       kind: "describe_image",
       jobId: claimed.id,
       attemptId: claimed.attemptId,
       deadline: claimed.leaseExpiresAt.toISOString(),
       source: {
-        url: await generatePresignedDownloadUrl({ key: claimed.originalKey }),
+        url: sourceUrl,
         sha256: claimed.sourceContentHash,
         contentType: claimed.originalContentType,
       },
       promptRevision: IMAGE_DESCRIPTION_PROMPT_REVISION,
       resultSchemaRevision: IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
+      ...(analysisKey && uploadUrl
+        ? {
+            analysisOutput: {
+              key: analysisKey,
+              contentType: "image/jpeg",
+              uploadUrl,
+            },
+          }
+        : {}),
     });
-    if (command.kind !== "describe_image")
-      throw new Error("Expected description command");
-    if (
-      claimed.originalContentType === "image/avif" &&
-      claimed.processorRevision !== IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION
-    ) {
-      const key = imageAnalysisKey("staging", claimed.attemptId);
-      command.analysisOutput = {
-        key,
-        contentType: "image/jpeg",
-        uploadUrl: await generatePresignedUploadUrl({
-          key,
-          contentType: "image/jpeg",
-        }),
-      };
-    }
-    return command;
   }
   // The claim rebuilds a missing derivative and mints a fresh output key.
   if (!claimed.derivativeKey)
     throw new Error("Subject-lift lease has no output key");
+  const [sourceUrl, uploadUrl] = await Promise.all([
+    generatePresignedDownloadUrl({ key: claimed.originalKey }),
+    generatePresignedUploadUrl({
+      key: claimed.derivativeKey,
+      contentType: "image/png",
+    }),
+  ]);
   return imageProcessingCommand.parse({
     kind: "subject_lift",
     jobId: claimed.id,
     attemptId: claimed.attemptId,
     deadline: claimed.leaseExpiresAt.toISOString(),
     source: {
-      url: await generatePresignedDownloadUrl({ key: claimed.originalKey }),
+      url: sourceUrl,
       sha256: claimed.sourceContentHash,
       contentType: claimed.originalContentType,
     },
-    output: {
-      key: claimed.derivativeKey,
-      uploadUrl: await generatePresignedUploadUrl({
-        key: claimed.derivativeKey,
-        contentType: "image/png",
-      }),
-      contentType: "image/png",
-    },
+    output: { key: claimed.derivativeKey, uploadUrl, contentType: "image/png" },
   });
 }
 

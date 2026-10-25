@@ -166,17 +166,17 @@ still unacknowledged stay in the outbox and replay on the next connection.
 ### Companion worker lifecycle (app and CLI)
 
 Describe-image and subject-lift commands share one pool of slots
-(`CompanionImageConcurrency`); the worker pulls only while a slot is free, so the server keeps no
+(`CompanionImageConcurrency`); the worker asks for all free slots in one batch pull (`maxCommands`, up to 16), so the server keeps no
 per-device limit. Automatic is 8 on Mac and 4 on iPhone/iPad. Settings › Image work sets an
 explicit 1–16 per device (UserDefaults `imageWork.concurrentJobs`, 0 = Automatic), applied on the
 next pull without a restart; `cubby companion --jobs N` sets it for the CLI.
 
-The resident worker and the iOS charging window both claim with a 60 s lease and renew each
+The resident worker and iOS background windows both claim with a 60 s lease and renew each
 running command every 15 s through `imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal
 (`lease_lost`, `job_obsolete`) stops that command without recording or releasing it. Every claim
 the device stops working on before recording a result is released best-effort (bounded at 3 s):
 stop, sign-out, quit (macOS settles a pull in flight, bounded at 3 s, then waits for the
-releases), iOS backgrounding, participation off, macOS
+releases), iOS backgrounding outside a granted system window, participation off, macOS
 system sleep, a remote pause, and a command this build cannot parse — after which the drain backs
 off before pulling again. macOS reports `foreground` from the scene state, keeps working while
 locked or in the background, stops pulling during system sleep, and pulls immediately on wake and
@@ -206,9 +206,26 @@ Jobs backing off; Runs needing attention (the manifest's `attention` saved view,
 system AI passes) carry their `job.runRollups` counts, stall flag and expired leases awaiting
 reclaim.
 
+On iOS 26+, **Process queue now** in Activity and Settings › Image work submits
+an immediate `BGContinuedProcessingTaskRequest`. The companion drains inside the
+system-granted window after locking the screen or backgrounding, reports its
+processed/discovered command counts to the system progress UI, and releases
+unrecorded claims before completing after expiration or system cancellation.
+A separate `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
+requires external power and network connectivity for opportunistic overnight
+work. Both windows use the shared slot setting, renew every 15 s, and retain
+undelivered results in the same outbox. A foreground subscription settles and
+releases its claims before a system window starts, then resumes when the
+window ends if the app is active. Library sync no longer owns image execution.
+The OS chooses charging-window timing; a physical iPhone must verify continued
+processing, system cancellation and overnight scheduling without a debugger.
+Identifiers/background modes come from `project.yml`; iOS background GPU access
+is declared in the app entitlement and requested only on supported devices.
+macOS keeps its existing awake/background behavior.
+
 The worker subscribes to the `imageProcessing.work` doorbell (`/api/doorbell`). The ring carries
 no job: on subscribe, on every ring and after each result the worker drains, calling
-`imageProcessing.pull` with its hello until nothing is claimable or every slot is busy, and
+`imageProcessing.pull` with its hello and free-slot count until nothing is claimable or every slot is busy, and
 delivering each result through `imageProcessing.complete`. A missed ring costs latency, not
 work, because `pull` also claims `waiting_for_device` jobs. `--once` therefore drains a backlog
 before it goes idle. A job that

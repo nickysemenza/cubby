@@ -8,13 +8,16 @@ import {
 } from "~/server/generic/jobs/repo/jobs";
 
 /**
- * Device pulls claim one Job at a time but keep the drain's two classes: an
+ * Device pulls claim a bounded batch but keep the drain's two classes: an
  * active, member-visible Run's parked work (`jobRunOwned`) leads, and after
  * this many run-owned device services in a row backfill is owed the next.
  */
 const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
 
 const DEVICE_LANE = "image.device";
+
+/** Transaction-local streak, read under the admission lock and updated after each assignment. */
+export type DeviceAdmission = { ownedStreak: number };
 
 /**
  * How many device services in a row were run-owned, up to
@@ -47,19 +50,24 @@ export async function lockDeviceAdmission(db: Database): Promise<number> {
  * hand-off that commits is a service, and a Run ending later never
  * reclassifies it. A refused or failed hand-off writes nothing.
  */
-export async function recordDeviceService(db: Database, key: string) {
-  await lockDeviceAdmission(db);
-  await repositoryQueries(db).execute(sql`
-    UPDATE "JobLaneAdmission"
-    SET "ownedStreak" = CASE WHEN served.owned
-        THEN least("ownedStreak" + 1, ${DEVICE_OWNED_STREAK}) ELSE 0 END,
+export async function recordDeviceService(
+  db: Database,
+  key: string,
+): Promise<number> {
+  // The upsert itself locks the lane; a separate lock query repeats that round trip.
+  const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
+    INSERT INTO "JobLaneAdmission" (lane, "ownedStreak", "updatedAt")
+    SELECT ${DEVICE_LANE}, CASE WHEN ${jobRunOwned()} THEN 1 ELSE 0 END, now()
+    FROM "Job" WHERE "Job".key = ${key} AND "Job".kind = ${DEVICE_LANE}
+    ON CONFLICT (lane) DO UPDATE SET
+      "ownedStreak" = CASE WHEN EXCLUDED."ownedStreak" > 0
+        THEN least("JobLaneAdmission"."ownedStreak" + 1, ${DEVICE_OWNED_STREAK}) ELSE 0 END,
       "updatedAt" = now()
-    FROM (SELECT ${jobRunOwned()} AS owned FROM "Job"
-      WHERE "Job".key = ${key} AND "Job".kind = ${DEVICE_LANE}) served
-    WHERE lane = ${DEVICE_LANE}`);
+    RETURNING "ownedStreak" AS streak`);
+  return result.rows[0]?.streak ?? 0;
 }
 
-/** Whether the next device pull owes backfill its turn. */
+/** Whether the next device hand-off owes backfill its turn. */
 export const deviceBackfillTurn = (streak: number) =>
   streak >= DEVICE_OWNED_STREAK;
 

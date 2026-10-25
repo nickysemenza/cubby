@@ -1,4 +1,5 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { IMAGE_PROCESSING_PROTOCOL_VERSION } from "@cubby/schemas/image-processing";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,7 +14,10 @@ import {
   run,
 } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
-import { claimCompanionImageCommand } from "~/server/domains/image-processing/service/image-processing.service";
+import {
+  claimCompanionImageCommands,
+  pullCompanionImageProcessing,
+} from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
@@ -107,6 +111,132 @@ describe("background companion leases", () => {
         retryable: true,
       },
     },
+  });
+
+  const hello = (installationId = crypto.randomUUID()) =>
+    ({
+      protocolVersion: IMAGE_PROCESSING_PROTOCOL_VERSION,
+      type: "hello",
+      deviceId: installationId,
+      platform: "ios",
+      appVersion: "1",
+      participation: { automaticWork: true },
+      capabilities: {
+        foreground: true,
+        visionSubjectLift: { available: false },
+        actualImageDescription: { available: true, revision: 1 },
+      },
+    }) as const;
+  const batchPull = (maxCommands?: number) =>
+    pullCompanionImageProcessing(
+      ctx.db,
+      { hello: hello(), leaseSeconds: 60, maxCommands },
+      userId,
+    );
+
+  it("fills a batch in fair hand-off order and keeps the legacy first command", async () => {
+    const owner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const owned: string[] = [];
+    for (let index = 0; index < 8; index++)
+      owned.push(
+        await job(
+          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+          "image/jpeg",
+          owner,
+        ),
+      );
+    const pulled = await batchPull(8);
+    expect(pulled.commands).toHaveLength(8);
+    expect(pulled.command).toEqual(pulled.commands[0]);
+    const order = pulled.commands.map((command) => command.jobId);
+    expect(order.slice(0, 4).every((id) => owned.includes(id))).toBe(true);
+    expect(order[4]).toBe(backfill);
+    expect(new Set(order).size).toBe(8);
+    expect(await deviceOwnedStreak(ctx.db)).toBe(3);
+    const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
+    expect(attempts).toHaveLength(8);
+    expect(attempts.every((attempt) => attempt.state === "running")).toBe(true);
+  });
+
+  it("concurrent batches never hand the same attempt or job to two devices", async () => {
+    for (let index = 0; index < 12; index++)
+      await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const batches = await Promise.all([batchPull(8), batchPull(8)]);
+    const commands = batches.flatMap((batch) => batch.commands);
+    expect(batches.map((batch) => batch.commands.length).sort()).toEqual([
+      4, 8,
+    ]);
+    expect(new Set(commands.map((command) => command.jobId)).size).toBe(12);
+    expect(new Set(commands.map((command) => command.attemptId)).size).toBe(12);
+  });
+
+  it("defaults an old client's pull to one command", async () => {
+    await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const pulled = await batchPull();
+    expect(pulled.commands).toHaveLength(1);
+    expect(pulled.command).toEqual(pulled.commands[0]);
+  });
+
+  it("returns prepared commands and releases a later failed hand-off with backoff", async () => {
+    const ready = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const unsupported = await job(
+      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/gif",
+    );
+    const pulled = await batchPull(2);
+    expect(pulled.commands.map((command) => command.jobId)).toEqual([ready]);
+    expect(pulled.command).toEqual(pulled.commands[0]);
+    const [released] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${unsupported}`));
+    expect(released?.leaseToken).toBeNull();
+    expect(released!.availableAt.getTime()).toBeGreaterThan(Date.now());
+    const attempts = await getDb(ctx.db).select().from(imageProcessingAttempt);
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.jobId).toBe(ready);
+    expect(await deviceOwnedStreak(ctx.db)).toBe(0);
+  });
+
+  it("releases a refused batch hand-off without counting service or an attempt", async () => {
+    const waiting = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const device = hello();
+    await createDevice(
+      ctx.db,
+      {
+        installationId: device.deviceId,
+        name: "Synthetic stopped phone",
+        platform: "ios",
+        appVersion: "1",
+        osVersion: "26",
+        automaticWork: false,
+        remotePaused: false,
+      },
+      TEST_ACTOR,
+    );
+    expect(
+      await claimCompanionImageCommands(ctx.db, {
+        device,
+        userId,
+        leaseMs: 60_000,
+        maxCommands: 8,
+      }),
+    ).toEqual([]);
+    expect(await deviceOwnedStreak(ctx.db)).toBe(0);
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${waiting}`));
+    expect(execution?.leaseToken).toBeNull();
+    expect(execution?.state).toBe("queued");
+    expect(
+      await getDb(ctx.db).select().from(imageProcessingAttempt),
+    ).toHaveLength(0);
   });
 
   it("claims parked device work at once but preserves retry backoff", async () => {
@@ -327,7 +457,7 @@ describe("background companion leases", () => {
         );
       return async () =>
         (
-          await claimCompanionImageCommand(ctx.db, {
+          await claimCompanionImageCommands(ctx.db, {
             device: {
               deviceId: installationId,
               platform: "ios",
@@ -342,8 +472,9 @@ describe("background companion leases", () => {
             },
             userId,
             leaseMs: 60_000,
+            maxCommands: 1,
           })
-        )?.jobId ?? null;
+        )[0]?.jobId ?? null;
     }
 
     it("keeps backfill owed when its hand-off is refused", async () => {

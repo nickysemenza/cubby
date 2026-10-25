@@ -624,14 +624,11 @@ final class AppModel {
         Task { await worker?.setMaximumConcurrentCommands(slots) }
     }
 
-    func runCompanionJobsInBackground() async -> Bool {
+    func runCompanionJobsInBackground(
+        progress: (@MainActor @Sendable (_ processed: Int, _ total: Int) -> Void)? = nil
+    ) async -> Bool {
         guard phase == .signedIn, participation.automaticWork else { return false }
-        return await companionImageWorker?.runInBackground(client: client) ?? false
-    }
-
-    func endCompanionBackgroundRun() {
-        let worker = companionImageWorker
-        Task { await worker?.endBackgroundRun() }
+        return await companionImageWorker?.runInBackground(client: client, progress: progress) ?? false
     }
 
     private func configureCompanionImageWorker() {

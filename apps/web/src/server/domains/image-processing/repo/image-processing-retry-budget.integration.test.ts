@@ -16,7 +16,7 @@ import {
 } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
-import { claimCompanionImageCommand } from "~/server/domains/image-processing/service/image-processing.service";
+import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { deviceOwnedStreak } from "~/server/generic/jobs/repo/device-admission";
 import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
@@ -165,7 +165,7 @@ describe("image job retry policy", () => {
         TEST_ACTOR,
       );
       return () =>
-        claimCompanionImageCommand(ctx.db, {
+        claimCompanionImageCommands(ctx.db, {
           device: {
             deviceId: installationId,
             platform: "ios",
@@ -180,7 +180,8 @@ describe("image job retry policy", () => {
           },
           userId: TEST_ACTOR.userId,
           leaseMs: 60_000,
-        });
+          maxCommands: 1,
+        }).then((commands) => commands[0] ?? null);
     };
     // Backfill's turn is due; the refused hand-off must leave it owed.
     const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
