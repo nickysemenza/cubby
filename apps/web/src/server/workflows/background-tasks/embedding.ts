@@ -266,7 +266,11 @@ export function embeddingJobHandler(
     };
   }
 
-  async function prepareBatch(db: Database, claims: readonly JobClaim[]) {
+  async function executeBatch(
+    db: Database,
+    claims: readonly JobClaim[],
+    context: Parameters<NonNullable<JobHandler["batch"]>["execute"]>[2],
+  ) {
     const results = new Map<string, PromiseSettledResult<PreparedJobPage>>();
     if (!port.configured())
       throw new Error("Embedding provider or Vectorize binding is unavailable");
@@ -364,10 +368,15 @@ export function embeddingJobHandler(
         results.set(claim.id, { status: "rejected", reason });
       }
     }
+    if (results.size) {
+      await context.checkpoint(results);
+      results.clear();
+    }
     let chunk: EmbeddingSubmission[] = [];
     let bytes = 0;
     const flush = async () => {
-      if (!chunk.length) return;
+      if (!chunk.length) return true;
+      if (Date.now() >= context.deadline) return false;
       const entries = chunk;
       chunk = [];
       bytes = 0;
@@ -418,28 +427,40 @@ export function embeddingJobHandler(
         for (const entry of entries)
           results.set(entry.claim.id, { status: "rejected", reason });
       }
+      // Persist receipts before the next provider call, including the last
+      // in-flight chunk when its call crossed the drain deadline.
+      await context.checkpoint(results);
+      results.clear();
+      return true;
     };
     for (const entry of submissions) {
       // BPE tokens cannot outnumber UTF-8 bytes. Long individual inputs run
       // alone: preserve provider validation without poisoning their neighbors.
       const inputBytes = new TextEncoder().encode(entry.input.text).length;
       if (
-        chunk.length >= EMBEDDING_BATCH_SIZE ||
-        bytes + inputBytes > EMBEDDING_REQUEST_TOKEN_LIMIT ||
-        inputBytes > EMBEDDING_INPUT_TOKEN_LIMIT
+        (chunk.length >= EMBEDDING_BATCH_SIZE ||
+          bytes + inputBytes > EMBEDDING_REQUEST_TOKEN_LIMIT ||
+          inputBytes > EMBEDDING_INPUT_TOKEN_LIMIT) &&
+        !(await flush())
       )
-        await flush();
+        return;
       chunk.push(entry);
       bytes += inputBytes;
-      if (inputBytes > EMBEDDING_INPUT_TOKEN_LIMIT) await flush();
+      if (inputBytes > EMBEDDING_INPUT_TOKEN_LIMIT && !(await flush())) return;
     }
     await flush();
-    return results;
   }
   return {
-    batch: { size: EMBEDDING_BATCH_SIZE, prepare: prepareBatch },
+    batch: { size: EMBEDDING_BATCH_SIZE, execute: executeBatch },
     prepare: async (db, claim) => {
-      const result = (await prepareBatch(db, [claim])).get(claim.id);
+      const results = new Map<string, PromiseSettledResult<PreparedJobPage>>();
+      await executeBatch(db, [claim], {
+        deadline: Infinity,
+        checkpoint: async (pages) => {
+          for (const [id, page] of pages) results.set(id, page);
+        },
+      });
+      const result = results.get(claim.id);
       if (!result) throw new Error("Embedding preparation omitted a Job");
       if (result.status === "rejected") throw result.reason;
       return result.value;

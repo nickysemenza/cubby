@@ -20,6 +20,7 @@ import {
   pauseClaimedJob,
   publishJobPage,
   renewJob,
+  releaseJobClaim,
   type JobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 
@@ -67,6 +68,7 @@ async function executeClaim(
   db: Database,
   claimed: JobClaim,
   prepare: () => Promise<PreparedJobPage>,
+  { renewLease = true }: { renewLease?: boolean } = {},
 ) {
   const id = claimed.id;
   const details: JobExecutionDetails = { stepKey: null };
@@ -94,23 +96,25 @@ async function executeClaim(
     });
   entry().info("claim");
   let renewing: Promise<boolean> | undefined;
-  const heartbeat = setInterval(() => {
-    if (!renewing) {
-      renewing = renewJob(db, claimed)
-        .then((renewed) => {
-          if (!renewed) entry().warn("lease renewal refused");
-          else entry().info("lease renewed");
-          return renewed;
-        })
-        .catch((error: unknown) => {
-          entry().error("lease renewal failed", { error });
-          return false;
-        })
-        .finally(() => {
-          renewing = undefined;
-        });
-    }
-  }, JOB_HEARTBEAT_MS);
+  const heartbeat = renewLease
+    ? setInterval(() => {
+        if (!renewing) {
+          renewing = renewJob(db, claimed)
+            .then((renewed) => {
+              if (!renewed) entry().warn("lease renewal refused");
+              else entry().info("lease renewed");
+              return renewed;
+            })
+            .catch((error: unknown) => {
+              entry().error("lease renewal failed", { error });
+              return false;
+            })
+            .finally(() => {
+              renewing = undefined;
+            });
+        }
+      }, JOB_HEARTBEAT_MS)
+    : undefined;
   try {
     const prepared = await withJobExecution(db, claimed, prepare, details);
     entry().info("page", {
@@ -182,7 +186,7 @@ async function executeClaim(
     entry().error("fail", { error });
     return "failed";
   } finally {
-    clearInterval(heartbeat);
+    if (heartbeat !== undefined) clearInterval(heartbeat);
     await renewing;
   }
 }
@@ -192,51 +196,79 @@ async function advanceBatch(
   db: Database,
   ids: readonly string[],
   batch: NonNullable<JobHandler["batch"]>,
+  deadline: number,
 ) {
-  const claims: JobClaim[] = [];
+  const pending = new Map<string, JobClaim>();
   const outcomes: string[] = [];
   let renewing: Promise<void> | undefined;
   const heartbeat = setInterval(() => {
     renewing ??= (async () => {
-      for (const claim of claims) await renewJob(db, claim);
-    })()
-      .catch((error: unknown) => {
-        log.error("batch lease renewal failed", { error });
-      })
-      .finally(() => {
-        renewing = undefined;
-      });
+      for (const claim of pending.values()) {
+        try {
+          const renewed = await renewJob(db, claim, { skipLocked: true });
+          if (!renewed)
+            log.warn("batch lease renewal refused", { jobId: claim.id });
+        } catch (error) {
+          // A failed or contended Job must not consume its siblings' renewal turn.
+          log.error("batch lease renewal failed", { jobId: claim.id, error });
+        }
+      }
+    })().finally(() => {
+      renewing = undefined;
+    });
   }, JOB_HEARTBEAT_MS);
+  const checkpoint: Parameters<
+    NonNullable<JobHandler["batch"]>["execute"]
+  >[2]["checkpoint"] = async (results) => {
+    for (const [id, result] of results) {
+      const claim = pending.get(id);
+      if (!claim) throw new Error("Batch checkpoint included an unclaimed Job");
+      outcomes.push(
+        await executeClaim(
+          db,
+          claim,
+          async () => {
+            if (result.status === "rejected") throw result.reason;
+            return result.value;
+          },
+          { renewLease: false },
+        ),
+      );
+      pending.delete(id);
+    }
+  };
   try {
     for (const id of ids) {
+      if (Date.now() >= deadline) break;
       const claim = await claimJob(db, id);
-      if (claim) claims.push(claim);
+      if (claim) pending.set(claim.id, claim);
       else outcomes.push("skipped");
     }
-    if (!claims.length) return outcomes;
-    let results: ReadonlyMap<string, PromiseSettledResult<PreparedJobPage>>;
+    if (!pending.size || Date.now() >= deadline) return outcomes;
     try {
-      results = await withJobBatchExecution(() => batch.prepare(db, claims));
+      await withJobBatchExecution(() =>
+        batch.execute(db, [...pending.values()], { deadline, checkpoint }),
+      );
+      if (pending.size && Date.now() < deadline)
+        throw new Error("Batch handler omitted a Job result");
     } catch (reason) {
-      results = new Map(
-        claims.map((claim) => [claim.id, { status: "rejected", reason }]),
+      await checkpoint(
+        new Map(
+          [...pending.keys()].map((id) => [id, { status: "rejected", reason }]),
+        ),
       );
     }
-    for (const claim of claims) {
-      outcomes.push(
-        await executeClaim(db, claim, async () => {
-          const result = results.get(claim.id);
-          if (!result) throw new Error("Batch handler omitted a Job result");
-          if (result.status === "rejected") throw result.reason;
-          return result.value;
-        }),
-      );
-    }
-    return outcomes;
   } finally {
     clearInterval(heartbeat);
     await renewing;
+    // Never leave unstarted work leased across a drain yield, or charge its
+    // claim against the retry budget. Completed chunks have already committed.
+    for (const claim of pending.values())
+      outcomes.push(
+        (await releaseJobClaim(db, claim)) ? "released" : "superseded",
+      );
   }
+  return outcomes;
 }
 
 /**
@@ -299,6 +331,7 @@ export async function drainDueJobs(
               db,
               group.map((entry) => entry.id),
               batch,
+              deadline,
             )),
           );
         else outcomes.push(await advanceJob(db, candidate.id, handlers));

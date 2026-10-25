@@ -603,6 +603,7 @@ export async function claimJob(
 export async function renewJob(
   db: RepositoryQueryInput,
   claim: Pick<JobClaim, "id" | "leaseToken" | "generation">,
+  { skipLocked = false }: { skipLocked?: boolean } = {},
 ): Promise<boolean> {
   const [row] = await repositoryQueries(db)
     .update(job)
@@ -617,6 +618,17 @@ export async function renewJob(
         eq(job.leaseToken, claim.leaseToken),
         eq(job.generation, claim.generation),
         sql`${job.leaseExpiresAt} > now()`,
+        // Batch heartbeats must not wait behind a sibling's publication lock.
+        skipLocked
+          ? inArray(
+              job.id,
+              repositoryQueries(db)
+                .select({ id: job.id })
+                .from(job)
+                .where(eq(job.id, claim.id))
+                .for("update", { skipLocked: true }),
+            )
+          : undefined,
       ),
     )
     .returning({ id: job.id });
@@ -640,6 +652,8 @@ export async function releaseJobClaim(
     .update(job)
     .set({
       state: "queued",
+      // Exhausting kinds count the claim up front; a release refunds it.
+      attempts: sql`CASE WHEN ${inArray(job.kind, [...NEVER_EXHAUSTED_JOB_KINDS])} THEN ${job.attempts} ELSE greatest(0, ${job.attempts} - 1) END`,
       waitReason,
       waitUntil: waitReason ? availableAt : null,
       leaseToken: null,

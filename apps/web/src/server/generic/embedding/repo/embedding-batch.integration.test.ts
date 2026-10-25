@@ -1,13 +1,14 @@
 import type { JobId } from "@cubby/schemas/identifiers";
+import { pollUntil } from "@cubby/shared/retry";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq, inArray, ne } from "drizzle-orm";
+import { eq, inArray, ne, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import { readAiBudget } from "~/server/ai/budget";
 import { setCfEnv } from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { entityEmbedding, job, aiUsage } from "~/server/db/retained-tables";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
@@ -17,7 +18,13 @@ import {
   productionVectorStore,
   createInMemoryVectorizeIndex,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
+import {
+  enqueueJob,
+  claimJob,
+  renewJob,
+  publishJobPage,
+} from "~/server/generic/jobs/repo/jobs";
 import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import {
@@ -38,6 +45,7 @@ describe("embedding batches in the shared drain", () => {
   afterEach(() => {
     setCfEnv(undefined);
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
   const calls: string[][] = [];
   const port = (): EmbeddingRefreshPort => ({
@@ -343,6 +351,237 @@ describe("embedding batches in the shared drain", () => {
       rows.filter((row) => row.state === "queued" && row.cursor !== null),
     ).toHaveLength(2);
   });
+
+  it("checkpoints slow chunks, releases unstarted claims at the budget, and serves a new Run next", async () => {
+    const { jobs } = await seed(6, "é".repeat(5000));
+    const embeddingPort = port();
+    const now = Date.now();
+    let elapsed = 0;
+    vi.spyOn(Date, "now").mockImplementation(() => now + elapsed);
+    const uploaded: JobId[] = [];
+    const checkpoints: boolean[] = [];
+    const events: string[] = [];
+    let member: Awaited<ReturnType<typeof enqueueJob>> | undefined;
+    const measured: EmbeddingRefreshPort = {
+      ...embeddingPort,
+      vectorStore: {
+        ...embeddingPort.vectorStore,
+        upsert: async (vectors) => {
+          uploaded.push(
+            ...jobs
+              .filter((row) => vectors.some((vector) => vector.id === row.id))
+              .map((row) => row.id),
+          );
+          return embeddingPort.vectorStore.upsert(vectors);
+        },
+      },
+      embed: async (texts, opts) => {
+        if (uploaded.length)
+          checkpoints.push(
+            (await read(uploaded)).every(
+              (row) => row.state === "queued" && row.cursor !== null,
+            ),
+          );
+        events.push("embedding");
+        elapsed += 8_000;
+        if (!member) {
+          const runId = await ensureRun(ctx.db, ctx.actor, {
+            purpose: "ai_suggest",
+            trigger: "manual",
+            execution: false,
+          });
+          member = await enqueueJob(ctx.db, {
+            key: "synthetic.mid-batch-member",
+            kind: "synthetic.member",
+            input: {},
+            runId,
+          });
+          await getDb(ctx.db)
+            .update(job)
+            .set({ availableAt: new Date(now + 60_000) })
+            .where(ne(job.kind, "embedding.refresh"));
+          await getDb(ctx.db)
+            .update(job)
+            .set({ availableAt: new Date(0) })
+            .where(eq(job.id, member.id));
+        }
+        return embeddingPort.embed(texts, opts);
+      },
+    };
+    const handlers = {
+      "embedding.refresh": embeddingJobHandler(measured),
+      "synthetic.member": {
+        prepare: async () => {
+          events.push("member");
+          return { page: { done: true } };
+        },
+      },
+    };
+    const outcomes = await drainDueJobs(ctx.db, handlers, 64, 20_000, 1);
+    expect(calls).toHaveLength(3);
+    expect(elapsed).toBe(24_000); // One in-flight chunk can cross the deadline.
+    expect(checkpoints).toEqual([true, true]);
+    expect(outcomes.filter((outcome) => outcome === "released")).toHaveLength(
+      3,
+    );
+    const rows = await read(jobs.map((row) => row.id));
+    expect(rows.filter((row) => row.cursor !== null)).toHaveLength(3);
+    expect(
+      rows
+        .filter((row) => row.cursor === null)
+        .every(
+          (row) =>
+            row.state === "queued" &&
+            row.attempts === 0 &&
+            row.leaseToken === null,
+        ),
+    ).toBe(true);
+    const firstWakeEvents = events.length;
+    await drainDueJobs(ctx.db, handlers, 2, 20_000, 1);
+    expect(events[firstWakeEvents]).toBe("member");
+    if (!member) throw new Error("Missing synthetic member Job");
+    expect((await read([member.id]))[0]?.state).toBe("completed");
+  });
+
+  it.each(["error", "locked"])(
+    "renews healthy batch siblings despite one %s, then fences its expired reclaimed claim",
+    async (failure) => {
+      const { jobs } = await seed(3);
+      const bad = jobs[0]!;
+      const healthy = jobs.slice(1);
+      await getDb(ctx.db)
+        .update(job)
+        .set({ key: "synthetic.renewal-failure", priority: 100 })
+        .where(eq(job.id, bad.id));
+      const setRealInterval = globalThis.setInterval;
+      let heartbeat: (() => void) | undefined;
+      vi.spyOn(globalThis, "setInterval").mockImplementation(
+        (callback, delay, ...args) => {
+          if (delay === JOB_HEARTBEAT_MS && typeof callback === "function")
+            heartbeat = () => callback(...args);
+          return setRealInterval(callback, delay, ...args);
+        },
+      );
+      const entered = Promise.withResolvers<void>();
+      const finish = Promise.withResolvers<void>();
+      const unlocked = Promise.withResolvers<void>();
+      const locked = Promise.withResolvers<void>();
+      const embeddingPort = port();
+      const draining = drainDueJobs(
+        ctx.db,
+        {
+          "embedding.refresh": embeddingJobHandler({
+            ...embeddingPort,
+            embed: async (texts, opts) => {
+              entered.resolve();
+              await finish.promise;
+              return embeddingPort.embed(texts, opts);
+            },
+          }),
+        },
+        3,
+      );
+      let holding: Promise<void> | undefined;
+      try {
+        await entered.promise;
+        const expires = new Date(Date.now() + 60_000);
+        await getDb(ctx.db)
+          .update(job)
+          .set({ leaseExpiresAt: expires })
+          .where(
+            inArray(
+              job.id,
+              jobs.map((row) => row.id),
+            ),
+          );
+        const [prior] = await read([bad.id]);
+        if (!prior?.leaseToken) throw new Error("Missing synthetic claim");
+        if (failure === "error") {
+          await getDb(ctx.db)
+            .execute(sql`CREATE FUNCTION synthetic_renewal_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+          IF OLD.key = 'synthetic.renewal-failure' AND NEW."leaseToken" = OLD."leaseToken" AND NEW."leaseExpiresAt" > OLD."leaseExpiresAt"
+          THEN RAISE EXCEPTION 'Synthetic renewal failure'; END IF; RETURN NEW; END $$`);
+          await getDb(ctx.db).execute(
+            sql`CREATE TRIGGER synthetic_renewal_failure BEFORE UPDATE ON "Job" FOR EACH ROW EXECUTE FUNCTION synthetic_renewal_failure()`,
+          );
+        } else {
+          holding = withTransactionDatabase(ctx.db, async (tx) => {
+            await getDb(tx)
+              .select()
+              .from(job)
+              .where(eq(job.id, bad.id))
+              .for("update");
+            locked.resolve();
+            await unlocked.promise;
+          });
+          holding.catch(locked.reject);
+          await locked.promise;
+        }
+        if (!heartbeat) throw new Error("Missing batch heartbeat");
+        heartbeat();
+        await pollUntil(
+          async () =>
+            (await read(healthy.map((row) => row.id))).every(
+              (row) => row.leaseExpiresAt && row.leaseExpiresAt > expires,
+            )
+              ? true
+              : undefined,
+          {
+            label: "healthy batch lease renewals",
+            timeoutMs: 5_000,
+            intervalMs: 10,
+          },
+        );
+        expect((await read([bad.id]))[0]?.leaseExpiresAt).toEqual(expires);
+        unlocked.resolve();
+        await holding;
+        await getDb(ctx.db)
+          .update(job)
+          .set({ leaseExpiresAt: new Date(Date.now() - 1000) })
+          .where(eq(job.id, bad.id));
+        const old = {
+          id: bad.id,
+          leaseToken: prior.leaseToken,
+          generation: prior.generation,
+        };
+        expect(await renewJob(ctx.db, old)).toBe(false);
+        const replacement = await claimJob(ctx.db, bad.id);
+        if (!replacement) throw new Error("Expected synthetic lease reclaim");
+        expect(replacement.leaseToken).not.toBe(prior.leaseToken);
+        finish.resolve();
+        await draining;
+        expect((await read([bad.id]))[0]).toMatchObject({
+          state: "running",
+          leaseToken: replacement.leaseToken,
+          cursor: null,
+        });
+        await getDb(ctx.db)
+          .update(job)
+          .set({ availableAt: new Date(0) })
+          .where(
+            inArray(
+              job.id,
+              healthy.map((row) => row.id),
+            ),
+          );
+        await drain(embeddingPort);
+        expect(
+          (await read(healthy.map((row) => row.id))).every(
+            (row) => row.state === "completed",
+          ),
+        ).toBe(true);
+        expect(await publishJobPage(ctx.db, replacement, { done: true })).toBe(
+          true,
+        );
+        expect((await read([bad.id]))[0]?.state).toBe("completed");
+      } finally {
+        unlocked.resolve();
+        finish.resolve();
+        await holding;
+        await draining;
+      }
+    },
+  );
 
   it.each([
     { model: "text-embedding-3-large" as const, dimensions: 1536 },

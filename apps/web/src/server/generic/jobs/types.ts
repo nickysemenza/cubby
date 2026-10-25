@@ -14,13 +14,20 @@ export type PreparedJobPage = {
 };
 export type JobHandler = {
   prepare(db: Database, job: JobClaim): Promise<PreparedJobPage>;
-  /** One lane prepares a bounded kind batch; every result still publishes separately. */
+  /** One lane executes a bounded kind batch; every checkpoint publishes separately. */
   batch?: {
     size: number;
-    prepare(
+    execute(
       db: Database,
       claims: readonly JobClaim[],
-    ): Promise<ReadonlyMap<string, PromiseSettledResult<PreparedJobPage>>>;
+      context: {
+        deadline: number;
+        /** Await publication of this completed chunk before starting more work. */
+        checkpoint(
+          results: ReadonlyMap<string, PromiseSettledResult<PreparedJobPage>>,
+        ): Promise<void>;
+      },
+    ): Promise<void>;
   };
 };
 export type JobHandlers = Readonly<Record<string, JobHandler>>;

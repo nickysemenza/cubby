@@ -232,7 +232,7 @@ and fails after `maxAttempts`; each claim counts. A never-exhausted kind
 reported failures: a claim, a release, or reclaiming a vanished executor's
 expired lease is not an attempt. It backs off from `baseMs` doubling to
 `maxMs` (24 h for images) forever. `releaseJobClaim` hands a claim back
-without counting; typed waits (`JobDeferredError`, funding) never count.
+without counting (refunding an exhausting kind's up-front claim attempt); typed waits (`JobDeferredError`, funding) never count.
 
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
@@ -409,6 +409,21 @@ Run-owned and backfill embedding Jobs form separate batches. Each batch occupies
 one of the existing three execution lanes; claims, lease renewals and publication stay serial within that lane;
 freshness and visibility use bounded shared lookups, so widening embeddings
 does not multiply database sockets or change other kinds' concurrency.
+
+Each completed provider/upload chunk checkpoints its own Job receipts before
+another provider call starts. The handler checks the shared 20-second drain
+deadline between chunks; an in-flight chunk and its publication may finish past
+that deadline, but no later chunk starts. Unstarted claims are released, refunding
+the up-front claim attempt for exhausting kinds. The next wake reselects fairly,
+so newly arrived Run-owned work can lead instead of waiting for every long input
+in the original batch.
+
+One heartbeat renews only the batch's pending claims, serially on one database
+socket. Each renewal catches its own failure and uses `FOR UPDATE SKIP LOCKED`
+to avoid waiting on another transaction's Job-row lock. A refused or failed
+renewal leaves that Job's existing deadline intact; healthy siblings still renew.
+An expired claim cannot renew or publish after reclamation, and completed
+checkpoints leave the heartbeat set immediately.
 
 Fresh submissions with the same stored provider/model/dimensions share one
 embedding call and Vectorize upload. Requests contain at most 64 texts, below
