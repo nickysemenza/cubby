@@ -69,6 +69,7 @@ import {
   readCorrectionTarget,
   correctionTargetIds,
 } from "~/server/generic/assessment/repo/correction-sources";
+import { recordCorrectionWork } from "~/server/generic/assessment/repo/correction-work";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { lockFieldCorrectionScope } from "~/server/generic/assessment/repo/field-correction-lock";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
@@ -217,6 +218,42 @@ describe("confirmed correction propagation", () => {
     const completed = await getDb(ctx.db).select().from(job);
     await enrollSuggestionCorrections(ctx.db, apply);
     expect(await getDb(ctx.db).select().from(job)).toEqual(completed);
+  });
+
+  it("checks one publication commit's served targets in one Job", async () => {
+    const source = await correct();
+    const first = await propose();
+    const second = await propose();
+    await getDb(ctx.db)
+      .delete(job)
+      .where(eq(job.kind, "assessment.correction"));
+    await recordCorrectionWork(ctx.db, {
+      kind: "publications",
+      ids: [first.prediction.id, second.prediction.id],
+    });
+    const queued = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.kind, "assessment.correction"));
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({
+      key: `assessment-correction-publication:${first.prediction.id}`,
+      input: {
+        sourceFeedbackId: null,
+        targetAssessmentIds: [first.prediction.id, second.prediction.id],
+      },
+    });
+    await drain();
+    const enrolled = await getDb(ctx.db)
+      .select({ key: job.key })
+      .from(job)
+      .where(eq(job.kind, "assessment.correction"));
+    expect(enrolled.map((row) => row.key)).toEqual(
+      expect.arrayContaining([
+        `assessment-correction:${source.result.feedbackId}:${first.prediction.id}`,
+        `assessment-correction:${source.result.feedbackId}:${second.prediction.id}`,
+      ]),
+    );
   });
 
   async function preparedQuestion(

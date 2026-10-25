@@ -1,8 +1,11 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { sha256Hex } from "@cubby/shared/sha256";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import * as storage from "~/server/clients/s3";
 import { getDb } from "~/server/db/helpers";
 import { job as durableJob } from "~/server/db/retained-tables";
@@ -14,6 +17,7 @@ import {
   imageProcessingJob,
   imageProcessingOrphan,
   imageProcessingSubmissionJob,
+  jobInvalidation,
 } from "~/server/db/schema";
 import {
   createDevice,
@@ -21,6 +25,7 @@ import {
   updateDevice,
 } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
+import * as cloudDescription from "~/server/domains/image-processing/service/cloud-description";
 import {
   scheduleImageProcessingJobs,
   completeCompanionImageProcessingResult,
@@ -38,8 +43,7 @@ import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   getLeasedImageProcessingJobContext,
-  markImageProcessingWaitingForDevice,
-  retryFailedImageProcessingJobs,
+  retryImageProcessingNow,
 } from "./image-processing";
 import {
   assignImageProcessingExecutor,
@@ -100,7 +104,8 @@ describe("image execution history conservation", () => {
       .select()
       .from(durableJob)
       .where(eq(durableJob.key, `image-processing:${jobId}`));
-    expect(intent?.kind).toBe("image.processing");
+    // A JPEG cloud description runs in the server's cloud lane.
+    expect(intent?.kind).toBe("image.cloud");
     const lease = await claim(jobId);
     const [running] = await getDb(ctx.db)
       .select()
@@ -203,17 +208,32 @@ describe("image execution history conservation", () => {
         },
       },
     });
+    // A non-retryable report is not terminal: the job stays open and backs off.
+    const [open] = await getDb(ctx.db)
+      .select({ state: imageProcessingJob.state })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(open?.state).toBe("pending");
     const submission = await createImageProcessingSubmission(ctx.db);
+    const imageId = parseEntityId("image", source.id);
+    // Every open job of the image is retried now, the Apple description too.
     expect(
-      await retryFailedImageProcessingJobs(ctx.db, 25, {
+      await retryImageProcessingNow(ctx.db, {
+        imageId,
         submissionId: submission.id,
       }),
-    ).toEqual([jobId]);
+    ).toContain(jobId);
+    // Retry now is repeatable; membership is recorded once.
+    await retryImageProcessingNow(ctx.db, {
+      imageId,
+      submissionId: submission.id,
+    });
     expect(
-      await retryFailedImageProcessingJobs(ctx.db, 25, {
-        submissionId: submission.id,
-      }),
-    ).toEqual([]);
+      await getDb(ctx.db)
+        .select()
+        .from(imageProcessingSubmissionJob)
+        .where(eq(imageProcessingSubmissionJob.submissionId, submission.id)),
+    ).toHaveLength(2);
     const next = await claim(jobId);
     expect(await assignCloud(jobId, next.attemptId)).toBe(true);
     const attempts = await getDb(ctx.db)
@@ -227,25 +247,8 @@ describe("image execution history conservation", () => {
     expect(attempts[1]?.submissionId).toBe(submission.id);
     expect(attempts[0]?.submissionId).not.toBe(submission.id);
   });
-  it("records waiting without a device call, preserves assignments and rejects stale delivery once", async () => {
+  it("preserves assignments and rejects a reclaimed attempt's delivery once", async () => {
     const { jobId } = await setup();
-    const waiting = await claim(jobId);
-    await markImageProcessingWaitingForDevice(ctx.db, {
-      jobId,
-      attemptId: waiting.attemptId,
-    });
-    // A lease nobody executes is not an attempt.
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(imageProcessingAttempt)
-        .where(eq(imageProcessingAttempt.jobId, jobId)),
-    ).toHaveLength(0);
-    // Claims use the application clock, which can lag the database clock in CI.
-    await getDb(ctx.db)
-      .update(durableJob)
-      .set({ availableAt: new Date(0) })
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
     const lease = await claim(jobId);
     const deviceId = crypto.randomUUID();
     const assignment = {
@@ -271,10 +274,12 @@ describe("image execution history conservation", () => {
         deviceId,
       }),
     ).toBe(false);
+    // The lease expires and another claim replaces the attempt.
     await getDb(ctx.db)
       .update(durableJob)
       .set({ leaseExpiresAt: new Date(0) })
       .where(eq(durableJob.key, `image-processing:${jobId}`));
+    await claim(jobId);
     const result = {
       jobId,
       attemptId: lease.attemptId,
@@ -296,7 +301,13 @@ describe("image execution history conservation", () => {
       .from(imageProcessingAttempt)
       .where(eq(imageProcessingAttempt.id, lease.attemptId));
     expect(recorded?.executor?.deviceId).toBe(deviceId);
-    expect(recorded?.completedAt).toBeNull();
+    // The reclaim expired it; the late skip is an executor failure, so it
+    // lands in this attempt's history like any late failure, without
+    // touching the newer attempt.
+    expect(recorded).toMatchObject({
+      state: "failed",
+      error: "unsupported_format",
+    });
     const events = await getDb(ctx.db)
       .select()
       .from(imageProcessingEvent)
@@ -396,9 +407,9 @@ describe("image execution history conservation", () => {
       .where(eq(imageProcessingOrphan.key, key));
     expect(orphans).toHaveLength(1);
   });
-  // A companion can return after its signed PUT or lease expires, or after the source changes.
+  // A companion can return after another attempt reclaimed its lease, or after the source changes.
   // Neither a new reservation nor retaining uploaded input may revive that stale attempt.
-  it.each(["expired", "stopped", "replaced", "deleted"])(
+  it.each(["reclaimed", "stopped", "replaced", "deleted"])(
     "fences analysis input after the source is %s",
     async (change) => {
       const { source, jobId } = await setup();
@@ -408,11 +419,12 @@ describe("image execution history conservation", () => {
       expect(
         await reserveImageAnalysisInput(ctx.db, lease.attemptId, key),
       ).toBe(true);
-      if (change === "expired") {
+      if (change === "reclaimed") {
         await getDb(ctx.db)
           .update(durableJob)
           .set({ leaseExpiresAt: new Date(0) })
           .where(eq(durableJob.key, `image-processing:${jobId}`));
+        await claim(jobId);
       } else if (change === "stopped") {
         await getDb(ctx.db)
           .update(durableJob)
@@ -466,7 +478,10 @@ describe("image execution history conservation", () => {
       .select()
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    expect(saved?.state).toBe("leased");
+    expect(saved).toMatchObject({
+      state: "pending",
+      attemptId: lease.attemptId,
+    });
   });
   it("allows only the normalization owner to read storage and fail its attempt", async () => {
     const { source, jobId } = await setup();
@@ -554,7 +569,10 @@ describe("image execution history conservation", () => {
       .select()
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    expect(saved?.state).toBe("leased");
+    expect(saved).toMatchObject({
+      state: "pending",
+      attemptId: lease.attemptId,
+    });
     expect(
       await getDb(ctx.db)
         .select()
@@ -562,7 +580,88 @@ describe("image execution history conservation", () => {
         .where(eq(aiAnalysis.entityId, source.id)),
     ).toEqual([]);
   });
-  it("does not retry terminal skips or failures for an obsolete source", async () => {
+  // Review finding: a device-normalized AVIF reaches the cloud provider from
+  // the completion path, whose catch recorded an exhausted AI budget (or a
+  // typed provider wait) as a failed attempt with failure backoff. It is a
+  // funding wait, like the drain's own cloud dispatch.
+  it("waits for AI funding without an attempt when a normalized AVIF meets an exhausted budget", async () => {
+    const { source, jobId } = await setup();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ contentType: "image/avif" })
+      .where(eq(image.id, source.id));
+    const lease = await claim(jobId);
+    await assignCloud(jobId, lease.attemptId);
+    const key = storage.imageAnalysisKey("staging", lease.attemptId);
+    await reserveImageAnalysisInput(ctx.db, lease.attemptId, key);
+    // A minimal baseline JPEG: SOI, a 3x2 SOF0 frame, EOI.
+    const bytes = new Uint8Array([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x03, 0x00, 0x02, 0x03,
+      0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
+    ]);
+    const resumeAt = new Date(Date.now() + 6 * 60 * 60_000).toISOString();
+    const read = vi
+      .spyOn(storage, "getS3Object")
+      .mockImplementation(
+        async () =>
+          new Response(bytes, { headers: { "content-type": "image/jpeg" } }),
+      );
+    const describe = vi
+      .spyOn(cloudDescription, "completeCloudImageDescription")
+      .mockRejectedValue(
+        new AiBudgetExhaustedError(
+          fromPartial<ConstructorParameters<typeof AiBudgetExhaustedError>[0]>({
+            windowEnd: resumeAt,
+          }),
+          "Synthetic AI budget reached",
+        ),
+      );
+    try {
+      await completeCompanionImageProcessingResult(ctx.db, {
+        jobId,
+        attemptId: lease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "normalized",
+          key,
+          contentType: "image/jpeg",
+          sha256: await sha256Hex(bytes),
+          width: 2,
+          height: 3,
+        },
+      });
+      expect(describe).toHaveBeenCalledTimes(1);
+    } finally {
+      read.mockRestore();
+      describe.mockRestore();
+    }
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    expect(execution).toMatchObject({
+      waitReason: "ai_funding_window",
+      attempts: 0,
+      leaseToken: null,
+    });
+    expect(execution?.availableAt.toISOString()).toBe(resumeAt);
+    const [attempt] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingAttempt)
+      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+    expect(attempt?.state).toBe("released");
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(saved).toMatchObject({
+      state: "pending",
+      lastError: "Synthetic AI budget reached",
+    });
+  });
+
+  it("does not retry skips or work for an obsolete source", async () => {
     const { source, jobId } = await setup();
     const lease = await claim(jobId);
     await completeImageProcessingJob(ctx.db, {
@@ -578,11 +677,12 @@ describe("image execution history conservation", () => {
         },
       },
     });
+    const imageId = parseEntityId("image", source.id);
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, source.id));
-    expect(await retryFailedImageProcessingJobs(ctx.db, 25)).toEqual([]);
+    expect(await retryImageProcessingNow(ctx.db, { imageId })).toEqual([]);
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "a".repeat(64) })
@@ -591,7 +691,9 @@ describe("image execution history conservation", () => {
       .update(imageProcessingJob)
       .set({ state: "skipped" })
       .where(eq(imageProcessingJob.id, jobId));
-    expect(await retryFailedImageProcessingJobs(ctx.db, 25)).toEqual([]);
+    expect(await retryImageProcessingNow(ctx.db, { imageId })).not.toContain(
+      jobId,
+    );
   });
   it("adopts cloud analysis only with its live lease and keeps rejected output in attempt history", async () => {
     const { source, jobId } = await setup();
@@ -612,12 +714,15 @@ describe("image execution history conservation", () => {
       resultSchemaRevision: 1,
       inputFingerprint: "test-input",
     };
+    // Captures bump each family's invalidation revision, not its Job row.
     const familyGenerations = () =>
       getDb(ctx.db)
-        .select({ key: durableJob.key, generation: durableJob.generation })
-        .from(durableJob)
-        .where(eq(durableJob.kind, "refresh.family"))
-        .orderBy(durableJob.key);
+        .select({
+          key: jobInvalidation.key,
+          generation: jobInvalidation.revision,
+        })
+        .from(jobInvalidation)
+        .orderBy(jobInvalidation.key);
     const before = await familyGenerations();
     const outcome = {
       kind: "describe_image" as const,

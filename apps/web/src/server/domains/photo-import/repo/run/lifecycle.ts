@@ -73,7 +73,10 @@ type LifecycleRun = {
  */
 function derivePhotoRunLifecycle(
   run: LifecycleRun,
-  images: readonly Pick<PhotoRunImage, "id" | "targetState" | "describe">[],
+  images: readonly Pick<
+    PhotoRunImage,
+    "id" | "targetState" | "describe" | "cloudDescriptionMissing"
+  >[],
   proposals: Pick<PhotoGroupProposalList, "proposals">["proposals"],
 ): PhotoRunLifecycle {
   const pending = images.filter((image) => image.targetState === "pending");
@@ -136,6 +139,9 @@ function derivePhotoRunLifecycle(
     describedImageCount:
       pending.length - inFlight.length - failedImageIds.length,
     failedImageIds,
+    withoutCloudDescriptionCount: pending.filter(
+      (image) => image.cloudDescriptionMissing,
+    ).length,
     skippedImageCount: images.filter((image) => image.targetState === "skipped")
       .length,
     proposedGroupCount,

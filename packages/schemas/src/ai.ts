@@ -374,7 +374,10 @@ export const aiUsageFilterOptionsOut = z.object({
   feature: z.array(z.string()),
 });
 
-export const aiUsageRecentOut = z.array(aiUsageEntrySchema);
+/** An object, not a bare array: MCP structured results must be objects. */
+export const aiUsageRecentOut = z.object({
+  items: z.array(aiUsageEntrySchema),
+});
 export type AiUsageEntry = z.infer<typeof aiUsageEntrySchema>;
 
 /** `run.aiUsage` — one Run's AI calls, newest first, cursor-paginated. */
@@ -450,7 +453,10 @@ export const aiUsageSummaryRowSchema = z.object({
   durationMs: z.number().int(),
 });
 
-export const aiUsageSummaryOut = z.array(aiUsageSummaryRowSchema);
+/** An object, not a bare array: MCP structured results must be objects. */
+export const aiUsageSummaryOut = z.object({
+  items: z.array(aiUsageSummaryRowSchema),
+});
 export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;
 
 /**

@@ -1,6 +1,6 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
+import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -20,10 +20,13 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
+import { recordDeviceService } from "~/server/generic/jobs/repo/device-admission";
 import {
   externalJobClaim,
-  publishJobPage,
+  releaseJobClaim,
 } from "~/server/generic/jobs/repo/jobs";
+
+import { armDeviceWake } from "./image-processing-ring";
 
 export async function recordImageProcessingEvent(
   db: Database | DrizzleTransaction,
@@ -113,8 +116,10 @@ export async function assignImageProcessingExecutor(
         and(
           eq(imageProcessingJob.id, input.jobId),
           eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
-          sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
+          eq(imageProcessingJob.state, "pending"),
+          // Wall time, not now(): a device hand-off assigns inside the
+          // transaction that claimed, and now() stays at its start.
+          sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">clock_timestamp())`,
         ),
       )
       .for("update");
@@ -143,6 +148,12 @@ export async function assignImageProcessingExecutor(
       diagnostics: input.diagnostics,
     });
     if (number === null) return false;
+    // A device's committed hand-off is one service for pull fairness.
+    if (executor.kind === "device")
+      await recordDeviceService(
+        databaseForTransaction(tx),
+        `image-processing:${input.jobId}`,
+      );
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:assigned`,
@@ -200,7 +211,7 @@ export async function attachSubmissionJobs(
     for (const job of jobs) {
       const disposition = !existingIds.includes(job.id)
         ? "new"
-        : ["pending", "leased", "waiting_for_device"].includes(job.state)
+        : job.state === "pending"
           ? "running"
           : "reused";
       await tx
@@ -239,12 +250,19 @@ export async function lockImageProcessingSubmissionSource(
 }
 
 /**
- * Job deferral does not spend its failure budget. Recorded executor refusals
- * remain immutable attempt history.
+ * A typed wait (AI funding, provider capacity, a device preparing input)
+ * never spends the failure budget: the claim is released with its stored wait
+ * reason and the attempt is kept as released history.
  */
 export async function deferImageProcessingJob(
   db: Database,
-  input: { jobId: string; attemptId: string; until: Date; reason: string },
+  input: {
+    jobId: string;
+    attemptId: string;
+    until: Date;
+    reason: string;
+    waitReason: JobWaitReason;
+  },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
     const execution = await externalJobClaim(
@@ -254,42 +272,41 @@ export async function deferImageProcessingJob(
       true,
     );
     if (!execution) return false;
-    await publishJobPage(databaseForTransaction(tx), execution, {
-      done: false,
+    const rows = await tx
+      .update(imageProcessingJob)
+      .set({ lastError: input.reason })
+      .where(
+        and(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.attemptId, input.attemptId),
+          eq(imageProcessingJob.state, "pending"),
+        ),
+      )
+      .returning({ id: imageProcessingJob.id });
+    if (!rows.length) return false;
+    await releaseJobClaim(databaseForTransaction(tx), execution, {
       availableAt: input.until,
+      waitReason: input.waitReason,
     });
+    // Parked device work waits out the deferral; the wake rings when it ends.
+    if (execution.kind === "image.device")
+      await armDeviceWake(databaseForTransaction(tx));
     await tx
       .update(imageProcessingAttempt)
-      .set({ state: "failed", completedAt: sql`now()`, error: input.reason })
+      .set({ state: "released", completedAt: sql`now()`, error: input.reason })
       .where(
         and(
           eq(imageProcessingAttempt.id, input.attemptId),
           eq(imageProcessingAttempt.jobId, input.jobId),
         ),
-      )
-      .returning({ id: imageProcessingAttempt.id });
-    const rows = await tx
-      .update(imageProcessingJob)
-      .set({
-        state: "pending",
-        attemptId: null,
-        lastError: input.reason,
-      })
-      .where(
-        and(
-          eq(imageProcessingJob.id, input.jobId),
-          eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
-        ),
-      )
-      .returning({ id: imageProcessingJob.id });
-    if (!rows.length) return false;
+      );
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:deferred`,
       event: "dispatch.deferred",
       level: "info",
       source: "server",
+      details: { waitReason: input.waitReason, until: input.until },
     });
     return true;
   });

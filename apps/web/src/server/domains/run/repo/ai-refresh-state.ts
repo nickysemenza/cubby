@@ -47,7 +47,7 @@ import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { cancelJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 import {
   hasAiRefreshRunCapacity,
@@ -88,8 +88,15 @@ const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
 // shape). The bound stops a persistently declined source from re-spending
 // every pass; failed and cancelled work stays with the operator's retry.
 const MAX_REOPENS = 3;
+/** failureCode of a Run whose queued work was cleared as redundant, not refused. */
+export const SUPERSEDED_RUN_FAILURE = "superseded";
 const REOPEN_SEPARATOR = ":reopen:";
 const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
+/**
+ * Cancelled because the record changed before it ran, not by a member: the
+ * record can change back, so this work key may reopen.
+ */
+const supersededReceipt = z.object({ supersededBy: z.uuid() });
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 /** The row a work key's retries and reopens currently end at, with its reopen count. */
@@ -114,7 +121,7 @@ async function workKeyTip(
     if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) reopens++;
   }
   const [owner] =
-    tip && ["blocked", "obsolete"].includes(tip.state)
+    tip && ["blocked", "obsolete", "cancelled"].includes(tip.state)
       ? await getDb(db)
           .select({ failureCode: run.failureCode })
           .from(run)
@@ -125,10 +132,55 @@ async function workKeyTip(
     reopens,
     reopenable:
       tip !== undefined &&
-      ["blocked", "obsolete"].includes(tip.state) &&
+      reopens < MAX_REOPENS &&
+      // A member's cancel of the owning Run vetoes every reopen, also of work
+      // superseded before that cancel.
       owner?.failureCode !== "user_cancelled" &&
-      reopens < MAX_REOPENS,
+      // A Run stopped as superseded (backlog cleared, not a member's decision)
+      // leaves its cancelled work for paced discovery to re-admit.
+      (tip.state === "cancelled"
+        ? owner?.failureCode === SUPERSEDED_RUN_FAILURE ||
+          supersededReceipt.safeParse(tip.receipt).success
+        : ["blocked", "obsolete"].includes(tip.state)),
   };
+}
+
+/**
+ * A changed record's new fingerprint replaces its older queued evaluation:
+ * that one can only end obsolete, and keeping it doubles the backlog.
+ */
+async function supersedeQueuedConnectionWork(
+  db: Database,
+  target: EvaluationTargetInput["target"],
+  keepId: string,
+) {
+  if (target.kind !== "connection") return;
+  const stale = await getDb(db)
+    .update(aiEvaluation)
+    .set({
+      state: "cancelled",
+      error: "Superseded by a newer evaluation of the changed record",
+      receipt: { supersededBy: keepId },
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(aiEvaluation.feature, "entity-connections"),
+        inArray(aiEvaluation.state, ["queued", "retry_wait"]),
+        sql`${aiEvaluation.id} <> ${keepId}::uuid`,
+        sql`${aiEvaluation.target}->>'entity' = ${target.entity}`,
+        sql`${aiEvaluation.target}->>'recordId' = ${target.recordId}`,
+      ),
+    )
+    .returning({ id: aiEvaluation.id });
+  if (!stale.length) return;
+  const executions = await getDb(db).execute<{ id: string }>(
+    sql`SELECT id FROM "Job" WHERE key IN (${sql.join(
+      stale.map((row) => sql`${`ai-evaluation:${row.id}`}`),
+      sql`, `,
+    )})`,
+  );
+  for (const execution of executions.rows) await cancelJob(db, execution.id);
 }
 
 /** Whether any target would insert a new row or reopen a settled one. */
@@ -189,12 +241,15 @@ async function insertTarget(
         .onConflictDoNothing()
         .returning({ id: aiEvaluation.id });
       if (!blockedReason)
-        for (const row of rows)
+        for (const row of rows) {
           await enqueueJob(tx, {
             key: `ai-evaluation:${row.id}`,
             kind: "ai.evaluation",
             input: { evaluationId: row.id },
           });
+          if (target.kind === "connection")
+            await supersedeQueuedConnectionWork(tx, target, row.id);
+        }
       return rows;
     });
   if ((await insert(workKey, db)).length) return 1;

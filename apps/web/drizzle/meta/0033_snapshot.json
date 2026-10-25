@@ -1,6 +1,6 @@
 {
-  "id": "54b6fc0a-93e1-45b1-86b0-59c8dad607b7",
-  "prevId": "8e95df53-3ba2-4733-bd63-7424612d6acb",
+  "id": "f66581e4-2a93-4464-9485-4f1208b0e160",
+  "prevId": "760aa746-c70d-4bff-8734-bed9c580fec2",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2595,6 +2595,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "observedRevision": {
+          "name": "observedRevision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "error": {
           "name": "error",
           "type": "text",
@@ -2715,6 +2721,33 @@
           "with": {},
           "method": "btree",
           "concurrently": false
+        },
+        "Job_kind_state_idx": {
+          "name": "Job_kind_state_idx",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "availableAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
         }
       },
       "foreignKeys": {
@@ -2748,11 +2781,126 @@
           "name": "Job_state_check",
           "value": "\"Job\".\"state\" IN ('queued','running','retry_wait','paused','completed','failed','cancelled')"
         },
+        "Job_kind_retired_check": {
+          "name": "Job_kind_retired_check",
+          "value": "\"Job\".\"kind\" <> 'image.processing'"
+        },
         "Job_attempts_check": {
           "name": "Job_attempts_check",
           "value": "\"Job\".\"attempts\" >= 0 AND \"Job\".\"maxAttempts\" > 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.JobInvalidation": {
+      "name": "JobInvalidation",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "restartsPass": {
+          "name": "restartsPass",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.JobInvalidationCapture": {
+      "name": "JobInvalidationCapture",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "capturedAt": {
+          "name": "capturedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "JobInvalidationCapture_key_revision_pk": {
+          "name": "JobInvalidationCapture_key_revision_pk",
+          "columns": [
+            "key",
+            "revision"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.JobLaneAdmission": {
+      "name": "JobLaneAdmission",
+      "schema": "",
+      "columns": {
+        "lane": {
+          "name": "lane",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ownedStreak": {
+          "name": "ownedStreak",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.jwks": {
@@ -6304,6 +6452,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "appleIntelligenceAvailable": {
+          "name": "appleIntelligenceAvailable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
         },
         "ledgerPartyId": {
           "name": "ledgerPartyId",
@@ -9873,7 +10027,7 @@
         },
         "ImageProcessingAttempt_state_check": {
           "name": "ImageProcessingAttempt_state_check",
-          "value": "\"ImageProcessingAttempt\".\"state\" IN ('leased','running','waiting','expired','ready','skipped','failed')"
+          "value": "\"ImageProcessingAttempt\".\"state\" IN ('leased','running','waiting','expired','released','ready','skipped','failed')"
         }
       },
       "isRLSEnabled": false

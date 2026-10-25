@@ -37,21 +37,30 @@ export const correctionPropagationHandler = defineJobHandler(
   async (db, claim, input) => {
     // Resolve roots after publication commits, closing the history-scan enrollment race.
     if (input.sourceFeedbackId === null) {
-      const targetId = input.targetAssessmentId;
-      if (!targetId)
+      // Batches carry targetAssessmentIds; Jobs queued before batching carry one id.
+      const targetIds = input.targetAssessmentIds.length
+        ? input.targetAssessmentIds
+        : input.targetAssessmentId
+          ? [input.targetAssessmentId]
+          : [];
+      if (!targetIds.length)
         throw new Error("Publication correction work requires a target");
       return {
         isolationLevel: "serializable",
         page: { done: true },
         publish: async (tx) => {
-          const target = await readCorrectionTarget(tx, targetId);
-          const sources = target
-            ? await correctionSourcesForTarget(tx, target)
-            : [];
-          for (const source of sources)
-            if (source.assessmentId !== targetId)
-              await enqueueCorrectionWork(tx, source.feedbackId, targetId);
-          return { enrolled: sources.length };
+          let enrolled = 0;
+          for (const targetId of targetIds) {
+            const target = await readCorrectionTarget(tx, targetId);
+            const sources = target
+              ? await correctionSourcesForTarget(tx, target)
+              : [];
+            for (const source of sources)
+              if (source.assessmentId !== targetId)
+                await enqueueCorrectionWork(tx, source.feedbackId, targetId);
+            enrolled += sources.length;
+          }
+          return { enrolled };
         },
       };
     }

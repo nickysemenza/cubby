@@ -74,6 +74,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  not,
   notInArray,
   or,
   sql,
@@ -89,6 +90,7 @@ import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   aiUsage,
   auditLog,
@@ -141,6 +143,7 @@ import {
   failOperationsForRun,
 } from "~/server/domains/run/repo/run-operation";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
+import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -1028,7 +1031,27 @@ export async function resumeAuthorizedRuns(
   });
 }
 
+/**
+ * A funding-paused import an older coordinator stopped for review while its
+ * targets were still pending. It is waiting for AI funding, not for review:
+ * resume and the funding window both continue it.
+ *
+ * Retry and restart leave the predecessor in `needs_review` with its
+ * `execution_limit` code, but its unresolved targets now belong to the
+ * successor (photo targets are copied, Mail sources transferred). A
+ * predecessor with any successor is therefore never funding-resumable.
+ */
+const isFundingStoppedForReview = (row: {
+  status: string;
+  failureCode: string | null;
+  hasSuccessor: boolean;
+}) =>
+  row.status === "needs_review" &&
+  row.failureCode === "execution_limit" &&
+  !row.hasSuccessor;
+
 /** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
+
 export async function redispatchBudgetPausedImports(
   db: Database,
   now = new Date(),
@@ -1048,12 +1071,21 @@ export async function redispatchBudgetPausedImports(
       })
       .where(
         and(
-          eq(runTable.status, "paused_auth"),
+          inArray(runTable.status, ["paused_auth", "needs_review"]),
           eq(runTable.failureCode, "execution_limit"),
           inArray(runTable.purpose, [...agentImportRunPurpose.options]),
           lt(runTable.updatedAt, pausedBefore),
           notDeleted(runTable),
           isNull(runTable.retiredAt),
+          // The work moved even if the successor was deleted.
+          not(
+            related(
+              runTable,
+              (successor) =>
+                sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+              { includeDeleted: true },
+            ).exists(),
+          ),
         ),
       )
       .returning({
@@ -1873,6 +1905,7 @@ export async function controlRun(
     const [locked] = await tx
       .select({
         status: runTable.status,
+        failureCode: runTable.failureCode,
         ledgerPartyId: runTable.ledgerPartyId,
         actorUserId: runTable.actorUserId,
         actorName: runTable.actorName,
@@ -1914,7 +1947,8 @@ export async function controlRun(
           "dispatch_failed",
         ]).has(locked.status)
       )
-        throw new Error(
+        throw createAppError(
+          "RUN_CONTROL_REFUSED",
           `Only a finished run can be started again (${locked.status})`,
         );
       if (!agentImportRunPurpose.safeParse(locked.purpose).success)
@@ -2051,7 +2085,8 @@ export async function controlRun(
     }
     if (input.action === "retry" || input.action === "escalate_sol") {
       if (!new Set(["needs_review", "completed", "failed"]).has(locked.status))
-        throw new Error(
+        throw createAppError(
+          "RUN_CONTROL_REFUSED",
           `Purchase import run is not terminal in ${locked.status}`,
         );
       const successorVendorAccountId = locked.vendorAccountId
@@ -2201,7 +2236,10 @@ export async function controlRun(
             locked.coordinatorStartedAt !== null
           : !ACTIVE_RUN_STATUSES.some((status) => status === locked.status)
       )
-        throw new Error(`Purchase import run is immutable in ${locked.status}`);
+        throw createAppError(
+          "RUN_CONTROL_REFUSED",
+          `Purchase import run is immutable in ${locked.status}`,
+        );
       await tx
         .update(runTable)
         .set({
@@ -2231,7 +2269,10 @@ export async function controlRun(
     }
     if (input.action === "pause") {
       if (locked.status !== "running")
-        throw new Error(`Purchase import run is fenced in ${locked.status}`);
+        throw createAppError(
+          "RUN_CONTROL_REFUSED",
+          `Purchase import run is fenced in ${locked.status}`,
+        );
       await tx
         .update(runTable)
         .set({ status: "paused", updatedAt: new Date() })
@@ -2249,9 +2290,23 @@ export async function controlRun(
           input.action === "run_now_paid"
             ? ["paused", "paused_auth"]
             : ["paused", "paused_auth", "paused_offline"],
-        ).has(locked.status)
+        ).has(locked.status) &&
+        !isFundingStoppedForReview({
+          ...locked,
+          hasSuccessor:
+            (
+              await tx
+                .select({ id: runTable.id })
+                .from(runTable)
+                .where(eq(runTable.predecessorRunId, scope.runId))
+                .limit(1)
+            ).length > 0,
+        })
       )
-        throw new Error(`Purchase import run is fenced in ${locked.status}`);
+        throw createAppError(
+          "RUN_CONTROL_REFUSED",
+          `Purchase import run is fenced in ${locked.status}`,
+        );
       const dispatchEventId = crypto.randomUUID();
       await tx
         .update(runTable)

@@ -5,13 +5,14 @@ import {
   imageProcessingCommand,
 } from "@cubby/schemas/image-processing";
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
+import { jobWaitReason } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
-import { getImageProcessingNamespace } from "~/server/cf-env";
 import {
   generatePresignedDownloadUrl,
   generatePresignedUploadUrl,
@@ -22,7 +23,6 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
   completeImageProcessingJob,
-  markImageProcessingWaitingForDevice,
   SERVER_FAILURE_RETRYABLE,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
@@ -36,10 +36,7 @@ import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
 import { completeCloudImageDescription } from "./cloud-description";
 import { completeCloudImageIdentification } from "./cloud-identification";
-import {
-  COMPANION_LEASE_MS,
-  type ImageProcessingCompanionRpc,
-} from "./contracts";
+import { COMPANION_LEASE_MS } from "./contracts";
 import { safeImageProcessingError } from "./safe-error";
 
 export type CloudImageDispatchOptions = {
@@ -47,25 +44,31 @@ export type CloudImageDispatchOptions = {
   describe?: Parameters<typeof completeCloudImageDescription>[2];
 };
 
-type ImageProcessingStub = ReturnType<
-  NonNullable<ReturnType<typeof getImageProcessingNamespace>>["getByName"]
->;
+/** An AVIF identification waits this long for a device to prepare its rendition. */
+const RENDITION_WAIT_MS = 10 * 60_000;
 
-function companionRpc(value: ImageProcessingStub): ImageProcessingCompanionRpc {
-  // SAFETY: this binding names ImageProcessingDurableObject, whose public RPC
-  // surface implements ImageProcessingCompanionRpc.
-  return value as ImageProcessingCompanionRpc;
-}
+const cloudExecutor = (name: string) => ({
+  kind: "cloud" as const,
+  deviceId: null,
+  name,
+  platform: "cloud" as const,
+  appVersion: null,
+  osVersion: null,
+});
 
-/** Dispatch one durable row. A missing device changes state to waiting; it never blocks a request or queue lease. */
+/**
+ * Run one cloud-lane row under the drain's `image.cloud` claim. Device work
+ * never reaches here: it is parked for device pulls. A typed wait releases
+ * the claim without an attempt; any other failure is retried with backoff.
+ */
 export async function dispatchImageProcessingWakeup(
   db: Database,
   jobId: string,
   options: CloudImageDispatchOptions = {},
-): Promise<"dispatched" | "completed" | "waiting" | "deferred" | "skipped"> {
+): Promise<"completed" | "deferred" | "failed" | "skipped"> {
   const claimed = await claimImageProcessingJob(db, {
     jobId,
-    kinds: ["identify_image", "describe_image", "subject_lift"],
+    kinds: ["identify_image", "describe_image"],
     leaseMs: COMPANION_LEASE_MS,
   });
   if (!claimed) return "skipped";
@@ -75,23 +78,19 @@ export async function dispatchImageProcessingWakeup(
         claimed.originalContentType === "image/avif" &&
         !(await getVerifiedImageRenditionKey(db, claimed.imageId))
       ) {
-        await markImageProcessingWaitingForDevice(db, {
+        await deferImageProcessingJob(db, {
           jobId: claimed.id,
           attemptId: claimed.attemptId,
+          until: new Date(Date.now() + RENDITION_WAIT_MS),
+          reason: "Waiting for an Apple device to prepare a JPEG rendition",
+          waitReason: jobWaitReason.enum.device,
         });
-        return "waiting";
+        return "deferred";
       }
       const assigned = await assignImageProcessingExecutor(db, {
         jobId: claimed.id,
         attemptId: claimed.attemptId,
-        executor: {
-          kind: "cloud",
-          deviceId: null,
-          name: providerFor(IMAGE_IDENTIFICATION_MODEL),
-          platform: "cloud",
-          appVersion: null,
-          osVersion: null,
-        },
+        executor: cloudExecutor(providerFor(IMAGE_IDENTIFICATION_MODEL)),
       });
       if (!assigned) return "skipped";
       return (await completeCloudImageIdentification(db, {
@@ -103,73 +102,33 @@ export async function dispatchImageProcessingWakeup(
         ? "completed"
         : "skipped";
     }
-    if (
-      claimed.kind === "describe_image" &&
-      claimed.processorRevision !==
-        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION &&
-      claimed.originalContentType !== "image/avif"
-    ) {
-      const assigned = await assignImageProcessingExecutor(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        executor: {
-          kind: "cloud",
-          deviceId: null,
-          name: providerFor(IMAGE_DESCRIPTION_FEATURE.model),
-          platform: "cloud",
-          appVersion: null,
-          osVersion: null,
-        },
-      });
-      if (!assigned) return "skipped";
-      return (await completeCloudImageDescription(
-        db,
-        {
-          jobId: claimed.id,
-          attemptId: claimed.attemptId,
-          imageId: claimed.imageId,
-          runId: claimed.runId,
-        },
-        options.describe,
-      ))
-        ? "completed"
-        : "skipped";
-    }
-
-    // Device work goes back to the claimable pool; a ring tells companions to
-    // pull it, and the pull assigns and leases it.
-    await markImageProcessingWaitingForDevice(db, {
+    const assigned = await assignImageProcessingExecutor(db, {
       jobId: claimed.id,
       attemptId: claimed.attemptId,
+      executor: cloudExecutor(providerFor(IMAGE_DESCRIPTION_FEATURE.model)),
     });
-    const namespace = getImageProcessingNamespace();
-    if (!namespace) return "waiting";
-    const reached = await companionRpc(namespace.getByName("household")).ring();
-    return reached > 0 ? "dispatched" : "waiting";
+    if (!assigned) return "skipped";
+    return (await completeCloudImageDescription(
+      db,
+      {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        imageId: claimed.imageId,
+        runId: claimed.runId,
+      },
+      options.describe,
+    ))
+      ? "completed"
+      : "skipped";
   } catch (error) {
-    const deferred = findErrorCause(
-      error,
-      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
-    );
-    if (deferred) {
-      await deferImageProcessingJob(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        until: deferred.until,
-        reason: deferred.message,
-      });
+    if (
+      await deferCloudAttemptForTypedWait(
+        db,
+        { jobId: claimed.id, attemptId: claimed.attemptId },
+        error,
+      )
+    )
       return "deferred";
-    }
-    if (error instanceof AiBudgetExhaustedError) {
-      await deferImageProcessingJob(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        until: new Date(error.resumeAt),
-        reason: error.message,
-      });
-      return "deferred";
-    }
-    const detail = safeImageProcessingError(error);
     await completeImageProcessingJob(db, {
       result: {
         jobId: claimed.id,
@@ -179,14 +138,54 @@ export async function dispatchImageProcessingWakeup(
           kind: claimed.kind,
           status: "failed",
           retryable: SERVER_FAILURE_RETRYABLE,
-          reason: detail,
+          reason: safeImageProcessingError(error),
         },
       },
     });
-    // The database row is visible to Problems and periodic repair republishes
-    // it; never leave a leased row hidden after a provider/storage failure.
-    return "waiting";
+    // The cause is on the row and its Job backs off; the next claim retries.
+    return "failed";
   }
+}
+
+/**
+ * A typed provider wait (`JobDeferredError`) or exhausted AI money is a wait,
+ * never an attempt: the claim is released until the wait ends. Returns
+ * whether `error` was such a wait. Every cloud provider call shares this,
+ * including the description of a device-normalized AVIF.
+ */
+export async function deferCloudAttemptForTypedWait(
+  db: Database,
+  attempt: { jobId: string; attemptId: string },
+  error: UnparsedError,
+): Promise<boolean> {
+  const deferred = findErrorCause(
+    error,
+    (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+  );
+  if (deferred) {
+    await deferImageProcessingJob(db, {
+      ...attempt,
+      until: deferred.until,
+      reason: deferred.message,
+      waitReason: deferred.reason,
+    });
+    return true;
+  }
+  const exhausted = findErrorCause(
+    error,
+    (cause): cause is AiBudgetExhaustedError =>
+      cause instanceof AiBudgetExhaustedError,
+  );
+  if (exhausted) {
+    await deferImageProcessingJob(db, {
+      ...attempt,
+      until: new Date(exhausted.resumeAt),
+      reason: exhausted.message,
+      waitReason: jobWaitReason.enum.ai_funding_window,
+    });
+    return true;
+  }
+  return false;
 }
 
 /** Both transports mint exactly the same source/output capabilities. */
@@ -227,8 +226,7 @@ export async function prepareCompanionImageCommand(
     }
     return command;
   }
-  // The claim fails a subject lift without a live derivative and mints a
-  // fresh output key for every other one.
+  // The claim rebuilds a missing derivative and mints a fresh output key.
   if (!claimed.derivativeKey)
     throw new Error("Subject-lift lease has no output key");
   return imageProcessingCommand.parse({
@@ -268,14 +266,11 @@ export async function reserveCompanionAnalysisOutput(
   );
 }
 
-/** Both companion pull and queue dispatch claim the same universal execution row. */
+/** The server drain's `image.cloud` handler; device work is claimed by device pulls. */
 export const imageProcessingJobHandler = defineJobHandler(
   z.object({ processingId: z.uuid() }),
   async (db, _claim, input) => {
     const outcome = await dispatchImageProcessingWakeup(db, input.processingId);
-    return {
-      page: { done: true, result: { outcome } },
-      ...(outcome === "dispatched" ? { awaitExternal: true as const } : {}),
-    };
+    return { page: { done: true, result: { outcome } } };
   },
 );

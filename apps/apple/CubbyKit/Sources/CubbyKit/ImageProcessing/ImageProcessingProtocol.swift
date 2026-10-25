@@ -1,12 +1,17 @@
 import Foundation
+import Synchronization
 
 public enum CompanionImageProcessingProtocol {
     public static let version = 1
     /// The doorbell topic that rings when image work may be claimable.
     static let doorbellPath = "/api/doorbell"
     static let doorbellTopic = URLQueryItem(name: "topic", value: "imageProcessing.work")
-    /// A resident worker's claim matches the server's companion window (`COMPANION_LEASE_MS`).
-    static let residentLeaseSeconds = 300
+    /// A resident worker's claim (`imageProcessing.pull` `leaseSeconds`). Short so a vanished
+    /// device's work is reclaimed quickly; a live command keeps it with `heartbeatInterval` renewals.
+    static let residentLeaseSeconds = 60
+    /// Each in-flight command renews its lease this often through `imageProcessing.renew`, well
+    /// inside `residentLeaseSeconds` so one missed renewal does not lose the lease.
+    static let heartbeatInterval = Duration.seconds(15)
 
     public static func attemptKey(jobID: String, attemptID: String) -> String {
         "\(jobID):\(attemptID)"
@@ -92,5 +97,56 @@ struct CompanionImageCommandMetadata: Sendable {
         case .unrecognized(let raw):
             throw UnsupportedNativeResponse(context: "image-processing command", raw: raw)
         }
+    }
+}
+
+/// The job and attempt a command claims, read without recognizing its variant, so a command this
+/// build cannot execute is still handed back with `imageProcessing.release`.
+struct CompanionImageCommandClaim: Sendable, Equatable {
+    let jobID: String
+    let attemptID: String
+
+    init(jobID: String, attemptID: String) {
+        self.jobID = jobID
+        self.attemptID = attemptID
+    }
+
+    init?(_ command: ImageProcessingCommand) {
+        if let metadata = try? CompanionImageCommandMetadata(command) {
+            self.init(jobID: metadata.jobID, attemptID: metadata.attemptID)
+            return
+        }
+        guard let raw = try? JSONValue(encoding: command),
+            let jobID = raw["jobId"]?.stringValue, let attemptID = raw["attemptId"]?.stringValue
+        else { return nil }
+        self.init(jobID: jobID, attemptID: attemptID)
+    }
+}
+
+/// `imageProcessing.renew`'s answer: the extended lease, or why the server will not extend it.
+enum CompanionLeaseRenewal: Sendable, Equatable {
+    case renewed(leaseExpiresAt: Date)
+    /// `lease_lost` or `job_obsolete`, verbatim: the device must stop this command.
+    case refused(reason: String)
+}
+
+/// One in-flight command's lease deadline. It starts at the command's `deadline` and moves with
+/// every accepted `imageProcessing.renew`, so a heartbeated command is not cut off at its first
+/// lease. The worker binds it as a task-local around `execute`, which reaches the executor's
+/// deadline checks without widening every `execute` closure.
+final class CompanionCommandLease: Sendable {
+    @TaskLocal static var current: CompanionCommandLease?
+
+    private let storedDeadline: Mutex<Date>
+
+    init(deadline: Date) {
+        storedDeadline = Mutex(deadline)
+    }
+
+    var deadline: Date { storedDeadline.withLock { $0 } }
+
+    /// Moves the deadline later; a stale or earlier renewal never shortens it.
+    func extend(to deadline: Date) {
+        storedDeadline.withLock { $0 = max($0, deadline) }
     }
 }

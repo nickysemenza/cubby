@@ -1,15 +1,17 @@
+import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import {
   backgroundTaskMessageSchema,
   type BackgroundTaskMessage,
 } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { scheduleRefreshFamilies } from "~/server/generic/derived-refresh/repo/families";
+import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import {
@@ -42,11 +44,22 @@ async function drainFamilyJobs(
   const deadline = performance.now() + 30_000;
   for (let page = 0; page < maxPages; page++) {
     const [pending] = await getDb(db)
-      .select()
+      .select({ job, invalidated: unobservedJobInvalidation() })
       .from(job)
-      .where(eq(job.key, `refresh:${family}`));
-    if (!pending || pending.state === "completed") return;
-    if (["failed", "cancelled", "paused"].includes(pending.state))
+      .where(eq(job.key, `refresh:${family}`))
+      .then((rows) =>
+        rows.map((row) =>
+          Object.assign(row.job, { invalidated: row.invalidated }),
+        ),
+      );
+    if (!pending || (pending.state === "completed" && !pending.invalidated))
+      return;
+    // Families never exhaust; repeated failures ask for attention instead.
+    if (
+      ["failed", "cancelled", "paused"].includes(pending.state) ||
+      (pending.state === "retry_wait" &&
+        pending.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS)
+    )
       throw new Error(
         `Synthetic ${family} refresh stopped: ${pending.error ?? pending.state}`,
       );
@@ -85,11 +98,22 @@ export async function drainRecipeRefreshJobs(
     : refreshFamilyHandler;
   for (let page = 0; page < maxPages; page++) {
     const [pending] = await getDb(db)
-      .select()
+      .select({ job, invalidated: unobservedJobInvalidation() })
       .from(job)
-      .where(eq(job.key, "refresh:recipes"));
-    if (!pending || pending.state === "completed") return;
-    if (["failed", "cancelled", "paused"].includes(pending.state))
+      .where(eq(job.key, "refresh:recipes"))
+      .then((rows) =>
+        rows.map((row) =>
+          Object.assign(row.job, { invalidated: row.invalidated }),
+        ),
+      );
+    if (!pending || (pending.state === "completed" && !pending.invalidated))
+      return;
+    // Families never exhaust; repeated failures ask for attention instead.
+    if (
+      ["failed", "cancelled", "paused"].includes(pending.state) ||
+      (pending.state === "retry_wait" &&
+        pending.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS)
+    )
       throw new Error(
         `Synthetic recipe refresh stopped: ${pending.error ?? pending.state}`,
       );
@@ -147,7 +171,10 @@ export function captureBackgroundQueue() {
           .where(
             and(
               inArray(job.kind, Object.keys(handlers)),
-              inArray(job.state, ["queued", "retry_wait"]),
+              or(
+                inArray(job.state, ["queued", "retry_wait"]),
+                and(eq(job.state, "completed"), unobservedJobInvalidation()),
+              ),
             ),
           )
           .orderBy(job.availableAt, job.id)
@@ -156,7 +183,7 @@ export function captureBackgroundQueue() {
           messages.length = 0;
           return page;
         }
-        if (pending.availableAt > new Date())
+        if (pending.state !== "completed" && pending.availableAt > new Date())
           throw new Error(
             `Synthetic drain reached deferred Job ${pending.kind}`,
           );

@@ -242,7 +242,7 @@ function RunLineageAndInputs({ run }: { run: RunDetail }) {
   const links = [
     ["Parent run", run.parentRunId],
     ["Retry of", run.predecessorRunPublicId],
-    ["Restarted as", run.successorRunPublicId],
+    ["Retried as", run.successorRunPublicId],
   ] as const;
   if (
     !run.restartInputs &&

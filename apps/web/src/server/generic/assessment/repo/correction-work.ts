@@ -18,6 +18,8 @@ import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 export const correctionWorkInput = z.object({
   sourceFeedbackId: assessmentChildHandle.nullable(),
   targetAssessmentId: assessmentChildHandle.nullable().default(null),
+  /** One publication commit's served targets, checked together. */
+  targetAssessmentIds: z.array(assessmentChildHandle).default([]),
 });
 
 export async function recordCorrectionWork(
@@ -38,7 +40,18 @@ export async function recordCorrectionWork(
       .select()
       .from(assessment)
       .where(inArray(assessment.id, [...change.ids]));
-    for (const row of rows) await enqueueCorrectionsForPublication(db, row);
+    // One Job per publication commit: live field suggestions publish a record's
+    // fields together, and per-assessment Jobs were ~1k/h of mostly no-ops.
+    const targets = rows
+      .filter(correctionEligiblePublication)
+      .map((row) => row.id);
+    if (targets.length)
+      await enqueueCorrectionIntent(db, {
+        key: `assessment-correction-publication:${targets[0]}`,
+        sourceFeedbackId: null,
+        targetAssessmentId: null,
+        targetAssessmentIds: targets,
+      });
   }
 }
 
@@ -77,6 +90,7 @@ async function enqueueCorrectionIntent(
     key: string;
     sourceFeedbackId: string | null;
     targetAssessmentId: string | null;
+    targetAssessmentIds?: readonly string[];
   },
 ) {
   await enqueueJob(db, {
@@ -85,6 +99,9 @@ async function enqueueCorrectionIntent(
     input: {
       sourceFeedbackId: input.sourceFeedbackId,
       targetAssessmentId: input.targetAssessmentId,
+      ...(input.targetAssessmentIds?.length
+        ? { targetAssessmentIds: [...input.targetAssessmentIds] }
+        : {}),
     },
   });
   await runAfterCommit(db, async () => {
@@ -115,23 +132,19 @@ async function enqueueConfirmedCorrection(
 }
 
 /** New immutable proposals revisit existing authority; reads never initiate repair. */
-async function enqueueCorrectionsForPublication(
-  db: Database,
+function correctionEligiblePublication(
   prediction: typeof assessment.$inferSelect,
 ) {
-  if (!prediction.served) return;
-  if (prediction.family === "field") {
-    if (!fieldCorrectionKey(prediction.evidence)) return;
-  } else if (prediction.family === "image_description") {
+  if (!prediction.served) return false;
+  if (prediction.family === "field")
+    return Boolean(fieldCorrectionKey(prediction.evidence));
+  if (prediction.family === "image_description") {
     const subject = assessmentSubjects.image_description.parse(
       prediction.subject,
     );
-    if (!subject.contentHash || prediction.fingerprint !== subject.contentHash)
-      return;
-  } else return;
-  await enqueueCorrectionIntent(db, {
-    key: `assessment-correction-publication:${prediction.id}`,
-    sourceFeedbackId: null,
-    targetAssessmentId: prediction.id,
-  });
+    return Boolean(
+      subject.contentHash && prediction.fingerprint === subject.contentHash,
+    );
+  }
+  return false;
 }

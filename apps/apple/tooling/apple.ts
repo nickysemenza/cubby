@@ -24,7 +24,7 @@
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_MARKETING_VERSION } from "@cubby/shared/apple-client-version";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
@@ -344,9 +344,9 @@ const mac = async (options: Options) => {
     "Print :CFBundleShortVersionString",
     join(app, "Contents/Info.plist"),
   ]).trim();
-  if (version !== APPLE_CLIENT_COMPATIBILITY_VERSION)
+  if (version !== APPLE_MARKETING_VERSION)
     throw new Error(
-      `Built app version ${version} differs from compatibility version ${APPLE_CLIENT_COMPATIBILITY_VERSION}`,
+      `Built app version ${version} differs from marketing version ${APPLE_MARKETING_VERSION}`,
     );
   const installed = join("/Applications", `${MAC_IDENTITY.productName}.app`);
   const verifyApproval = existsSync(installed)

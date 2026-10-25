@@ -7,7 +7,11 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import { job } from "~/server/db/retained-tables";
-import { enqueueJob, repeatJob } from "~/server/generic/jobs/repo/jobs";
+import {
+  enqueueJob,
+  recordJobInvalidation,
+  repeatJob,
+} from "~/server/generic/jobs/repo/jobs";
 
 /** The manifest's `derived_refresh` steps are the families. */
 export const refreshFamily = derivedRefreshFamily;
@@ -32,27 +36,27 @@ export async function lockRefreshFamily(
     .for("update");
 }
 
-/** Explicit projection dependencies reuse the same durable family Job. */
+/**
+ * Explicit projection dependencies reuse the same durable family Job. The
+ * capture writes only the family's invalidation row, never its execution
+ * row: a source save's transaction must not conflict with the family Job's
+ * claims, renewals and publication on other connections.
+ */
 export async function invalidateRefreshFamily(
   db: RepositoryQueryInput,
   family: RefreshFamily,
 ) {
-  if (family === "quality") {
-    // A full quality pass outlasts the gap between household writes. Restarting
-    // it on each write superseded every page, so production never published.
-    // A pass in progress (running, or queued between pages with a cursor)
-    // finishes, and its scheduled repeat covers this change.
-    const [current] = await repositoryQueries(db)
-      .select({ state: job.state, cursor: job.cursor })
-      .from(job)
-      .where(eq(job.key, `refresh:${family}`));
-    if (current?.state === "running" || current?.cursor != null) return;
-  }
-  await enqueueJob(db, {
+  await recordJobInvalidation(db, {
     key: `refresh:${family}`,
     kind: "refresh.family",
     input: { family },
-    invalidate: true,
+    // A broad pass outlasts the gap between household writes. Restarting it
+    // on each write superseded every page, so production never published:
+    // quality first, then search (generation ~29k with new records left
+    // unindexed). A pass in progress finishes, then a capture made while it
+    // ran leaves it due for a full pass, so an edit behind its cursor or a
+    // record created after its cutoff is not lost.
+    restartsPass: false,
   });
 }
 

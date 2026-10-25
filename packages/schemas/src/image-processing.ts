@@ -37,6 +37,8 @@ export const imageProcessingAttemptState = z.enum([
   "running",
   "waiting",
   "expired",
+  /** Handed back without a result (device stop, server hand-off); never a failure. */
+  "released",
   "ready",
   "skipped",
   "failed",
@@ -473,7 +475,7 @@ export const evaluateAppleImageDescriptionOutput = z.object({
  */
 export const pullCompanionImageProcessingInput = z.object({
   hello: imageProcessingHello,
-  leaseSeconds: z.int().min(20).max(300).default(90),
+  leaseSeconds: z.int().min(20).max(300).default(60),
 });
 export const pullCompanionImageProcessingOutput = z.object({
   command: imageProcessingCommand.nullable(),
@@ -494,6 +496,24 @@ export const releaseCompanionImageProcessingInput = z.object({
 export const releaseCompanionImageProcessingOutput = z.object({
   released: z.boolean(),
 });
+/** A heartbeat every 15 s keeps a device attempt's 60 s lease alive. */
+export const renewCompanionImageProcessingInput = z.object({
+  deviceId: z.uuid(),
+  jobId: z.uuid(),
+  attemptId: z.uuid(),
+});
+export const renewCompanionImageProcessingOutput = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    /** The renewed lease end; the command's deadline moves with it. */
+    leaseExpiresAt: isoDateTime,
+  }),
+  z.object({
+    ok: z.literal(false),
+    /** `lease_lost`: another attempt owns the job; `job_obsolete`: the work is settled or moot. Stop either way. */
+    reason: z.enum(["lease_lost", "job_obsolete"]),
+  }),
+]);
 
 import { runShortcode } from "./identifier-fields";
 import { imageAssociationStorage } from "./entity-definitions/image-associations";

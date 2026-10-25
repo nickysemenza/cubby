@@ -11,9 +11,11 @@ import {
 } from "~/server/db/image-processing-schema";
 import { job as durableJob } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
-import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { dueJobs } from "~/server/generic/jobs/repo/jobs";
+import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 
+import { imageJobDisplayStateSql } from "./image-job-state";
 import {
   claimImageProcessingJob,
   createTransparentDerivativeAndJob,
@@ -21,7 +23,7 @@ import {
 import { assignImageProcessingExecutor } from "./image-processing-history";
 import { pruneExecutorlessWaitingAttempts } from "./image-processing-maintenance";
 
-describe("waiting for a device records no attempt", () => {
+describe("device work waits parked and records no attempt", () => {
   const ctx = withTestDb();
 
   async function subjectLiftJob() {
@@ -44,11 +46,6 @@ describe("waiting for a device records no attempt", () => {
     if (!scheduled) throw new Error("Expected persisted job");
     return scheduled.jobId;
   }
-  const makeDue = (jobId: string) =>
-    getDb(ctx.db)
-      .update(durableJob)
-      .set({ availableAt: new Date(0) })
-      .where(eq(durableJob.key, `image-processing:${jobId}`));
   const attemptsOf = (jobId: string) =>
     getDb(ctx.db)
       .select()
@@ -68,36 +65,35 @@ describe("waiting for a device records no attempt", () => {
       .from(imageProcessingEvent)
       .where(eq(imageProcessingEvent.jobId, jobId));
 
-  it("writes no attempt and leaves job.attempts alone across idle cycles", async () => {
+  // Production finding: ~4k device-waiting jobs were re-claimed by the server
+  // drain every 60 s. Device work is now parked: the drain never claims it.
+  it("parks device work out of the server drain without attempts or polling", async () => {
     const jobId = await subjectLiftJob();
-    for (let cycle = 0; cycle < 4; cycle++) {
-      await makeDue(jobId);
-      expect(await dispatchImageProcessingWakeup(ctx.db, jobId)).toBe(
-        "waiting",
-      );
-    }
-    expect(await attemptsOf(jobId)).toHaveLength(0);
-    const job = await jobOf(jobId);
-    expect(job.attempts).toBe(0);
-    expect(job.state).toBe("waiting_for_device");
     const [execution] = await getDb(ctx.db)
       .select()
       .from(durableJob)
       .where(eq(durableJob.key, `image-processing:${jobId}`));
+    if (!execution) throw new Error("Missing execution");
     expect(execution).toMatchObject({
+      kind: "image.device",
       state: "queued",
       attempts: 0,
-      waitReason: "device",
       subjectKind: "image",
-      subjectId: job.imageId,
     });
-    expect(execution?.waitUntil).toEqual(execution?.availableAt);
-    expect(execution!.waitUntil!.getTime()).toBeGreaterThan(Date.now());
-    const events = await eventsOf(jobId);
-    expect(events.filter((e) => e.event === "dispatch.waiting")).toHaveLength(
-      1,
-    );
-    expect(events.some((e) => e.event === "attempt.claimed")).toBe(false);
+    for (let cycle = 0; cycle < 4; cycle++)
+      expect((await dueJobs(ctx.db, 25)).map((row) => row.id)).not.toContain(
+        execution.id,
+      );
+    expect(await attemptsOf(jobId)).toHaveLength(0);
+    expect((await jobOf(jobId)).attempts).toBe(0);
+    expect(
+      (await loadJobWaitingOn(ctx.db, [execution])).get(execution.id),
+    ).toMatchObject({ reason: "waiting_device", lane: "apple_device" });
+    const [displayed] = await getDb(ctx.db)
+      .select({ state: imageJobDisplayStateSql() })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(displayed?.state).toBe("waiting_for_device");
   });
 
   it("creates exactly one attempt when a device takes the lease", async () => {

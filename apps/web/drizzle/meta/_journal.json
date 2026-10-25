@@ -197,6 +197,48 @@
       "when": 1792899581758,
       "tag": "0027_email_link_event_index",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792899581759,
+      "tag": "0028_job_invalidation",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792899581760,
+      "tag": "0029_image_job_lanes",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792901273027,
+      "tag": "0030_job_invalidation_capture",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792901686373,
+      "tag": "0031_device_apple_intelligence",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792907644810,
+      "tag": "0032_job_lane_admission",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792910638080,
+      "tag": "0033_refresh_family_policy",
+      "breakpoints": true
     }
   ]
 }

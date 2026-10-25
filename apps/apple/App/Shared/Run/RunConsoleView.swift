@@ -229,6 +229,7 @@ struct RunPhotoBatchSlot: View {
                     id: itemID, position: 0, capturedAt: nil, capturedAtOffsetMinutes: nil,
                     targetState: .pending, skipReason: nil,
                     originalUrl: "synthetic://shirt", cutoutUrl: nil, cutout: .ready, describe: .ready,
+                    cloudDescriptionMissing: false,
                     describeStartedAt: .now.addingTimeInterval(-1.3), describeCompletedAt: .now,
                     describeAttemptMs: nil, describeWaitingMs: nil,
                     localAnalysisReady: true, cutoutReason: nil, describeReason: nil,
@@ -238,6 +239,7 @@ struct RunPhotoBatchSlot: View {
                     id: labelID, position: 1, capturedAt: nil, capturedAtOffsetMinutes: nil,
                     targetState: .pending, skipReason: nil,
                     originalUrl: "synthetic://label", cutoutUrl: nil, cutout: .skipped, describe: .ready,
+                    cloudDescriptionMissing: false,
                     describeStartedAt: nil, describeCompletedAt: nil, describeAttemptMs: nil,
                     describeWaitingMs: nil,
                     localAnalysisReady: true, cutoutReason: "Label evidence does not need a cutout",
@@ -252,8 +254,8 @@ struct RunPhotoBatchSlot: View {
                 lifecycle: .init(
                     processor: .cubby, phase: .readyForReview, plannedImageCount: 2,
                     openBatchCount: 0, finalizedImageCount: 2, describedImageCount: 2,
-                    failedImageIds: [], skippedImageCount: 0, proposedGroupCount: 1,
-                    committedGroupCount: 0, dispatchError: nil))
+                    failedImageIds: [], withoutCloudDescriptionCount: 0, skippedImageCount: 0,
+                    proposedGroupCount: 1, committedGroupCount: 0, dispatchError: nil))
             let run = try! RunSnapshot([
                 "runId": .string(runID), "purpose": "photo_inventory", "status": "running",
                 "findings": [], "operations": [],

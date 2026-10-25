@@ -16,6 +16,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
+import { imageJobDisplayStateSql } from "./image-job-state";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -41,7 +42,9 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
   ) => {
     const result = await getDb(db).execute(sql`
       WITH current_images AS (
-        SELECT i.id, j.state, j.result
+        SELECT i.id,
+          CASE WHEN j.id IS NULL THEN NULL ELSE ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} END AS state,
+          j.result
         FROM "Image" i
         LEFT JOIN "ImageProcessingJob" j ON j."imageId" = i.id AND j."deletedAt" IS NULL
           AND j.kind = ${kind} AND j."sourceContentHash" = i.sha256 AND j."processorRevision" = ${revision}

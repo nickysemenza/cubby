@@ -52,7 +52,7 @@ const selectByInstallationId = (
   installationId: string,
 ) =>
   tx
-    .select({ id: device.id })
+    .select({ id: device.id, appVersion: device.appVersion })
     .from(device)
     .where(and(eq(device.installationId, installationId), notDeleted(device)))
     .limit(1);
@@ -73,8 +73,10 @@ export async function upsertDeviceFromHello(
     appVersion: string | null;
     osVersion: string | null;
     automaticWork: boolean;
+    /** The hello's actual-image Foundation Models availability. */
+    appleIntelligenceAvailable?: boolean;
   },
-): Promise<DeviceParticipation> {
+): Promise<DeviceParticipation & { appVersionChanged: boolean }> {
   return withTransaction(db, async (transactionDb) => {
     const tx = unwrapDb(transactionDb);
     const now = new Date();
@@ -128,6 +130,10 @@ export async function upsertDeviceFromHello(
         osVersion: hello.osVersion,
         // The device owns its own switch; the web owns `remotePaused`.
         automaticWork: hello.automaticWork,
+        // A hello without capabilities keeps the last reported value.
+        ...(hello.appleIntelligenceAvailable === undefined
+          ? {}
+          : { appleIntelligenceAvailable: hello.appleIntelligenceAvailable }),
         lastSeenAt: now,
       })
       .where(eq(device.id, id))
@@ -141,7 +147,11 @@ export async function upsertDeviceFromHello(
         categories: ["device"],
       });
     // SAFETY: `id` was just found-or-created live, in the same transaction.
-    return updated!;
+    return {
+      ...updated!,
+      // A new install or app version may succeed where an older build failed.
+      appVersionChanged: existing?.appVersion !== hello.appVersion,
+    };
   });
 }
 

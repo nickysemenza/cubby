@@ -8,7 +8,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { job, product } from "~/server/db/schema";
+import { job, jobInvalidation, product } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -16,8 +16,10 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-// Real second-connection updates replace Job tuples after snapshot creation.
-// Recovery must replay only aborted DB work and retain submitted review evidence.
+// A concurrent capture on a second connection replaces the family's
+// invalidation tuple after snapshot creation. Recovery must replay only
+// aborted DB work and retain submitted review evidence. Execution writes to
+// the family Job (claim, renew, publish) never conflict with a capture.
 describe("snapshot write recovery", () => {
   const ctx = withTestDb();
   let queue: ReturnType<typeof captureBackgroundQueue>;
@@ -31,13 +33,40 @@ describe("snapshot write recovery", () => {
       makeProductInput({ name, notes: "Synthetic original note" }),
       ctx.actor,
     );
+  const replaceInvalidation = () =>
+    getDb(ctx.db)
+      .update(jobInvalidation)
+      .set({ revision: sql`${jobInvalidation.revision} + 1` })
+      .where(eq(jobInvalidation.key, "refresh:search"));
   const replaceJobGeneration = () =>
     getDb(ctx.db)
       .update(job)
       .set({ generation: sql`${job.generation} + 1` })
       .where(eq(job.key, "refresh:search"));
 
-  it("commits one business result and one publication after late Job generation contention", async () => {
+  // Production finding: a family Job's claim and renewal on another backend
+  // replaced the tuple the capture wrote and aborted admission with 40001.
+  it("never aborts a capture for execution writes to the family Job", async () => {
+    const subject = await fixture();
+    let attempts = 0;
+    await withSnapshotWriteDatabase(
+      ctx.db,
+      async (tx) => {
+        attempts++;
+        await getDb(tx).select().from(job).where(eq(job.key, "refresh:search"));
+        await getDb(tx)
+          .update(product)
+          .set({ notes: "Synthetic saved note" })
+          .where(eq(product.id, subject.entityId));
+        await replaceJobGeneration();
+        await recordChange(tx, { kind: "source", categories: ["product"] });
+      },
+      { isolationLevel: "serializable" },
+    );
+    expect(attempts).toBe(1);
+  });
+
+  it("commits one business result and one publication after late capture contention", async () => {
     const subject = await fixture();
     let attempts = 0;
     const publications: number[] = [];
@@ -45,7 +74,10 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         const attempt = ++attempts;
-        await getDb(tx).select().from(job).where(eq(job.key, "refresh:search"));
+        await getDb(tx)
+          .select()
+          .from(jobInvalidation)
+          .where(eq(jobInvalidation.key, "refresh:search"));
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
@@ -53,7 +85,7 @@ describe("snapshot write recovery", () => {
         await runAfterCommit(tx, async () => {
           publications.push(attempt);
         });
-        if (attempt === 1) await replaceJobGeneration();
+        if (attempt === 1) await replaceInvalidation();
         await recordChange(tx, { kind: "source", categories: ["product"] });
       },
       { isolationLevel: "serializable" },
@@ -95,7 +127,7 @@ describe("snapshot write recovery", () => {
               .update(product)
               .set({ notes: "Synthetic changed evidence" })
               .where(eq(product.id, evidence.entityId));
-            await replaceJobGeneration();
+            await replaceInvalidation();
           }
           await recordChange(tx, { kind: "source", categories: ["product"] });
         },
@@ -121,12 +153,12 @@ describe("snapshot write recovery", () => {
           const attempt = ++attempts;
           await getDb(tx)
             .select()
-            .from(job)
-            .where(eq(job.key, "refresh:search"));
+            .from(jobInvalidation)
+            .where(eq(jobInvalidation.key, "refresh:search"));
           await runAfterCommit(tx, async () => {
             publications.push(attempt);
           });
-          await replaceJobGeneration();
+          await replaceInvalidation();
           await recordChange(tx, { kind: "source", categories: ["product"] });
         },
         { isolationLevel: "repeatable read" },
@@ -149,9 +181,9 @@ describe("snapshot write recovery", () => {
               attempts++;
               await getDb(tx)
                 .select()
-                .from(job)
-                .where(eq(job.key, "refresh:search"));
-              await replaceJobGeneration();
+                .from(jobInvalidation)
+                .where(eq(jobInvalidation.key, "refresh:search"));
+              await replaceInvalidation();
               await recordChange(tx, {
                 kind: "source",
                 categories: ["product"],

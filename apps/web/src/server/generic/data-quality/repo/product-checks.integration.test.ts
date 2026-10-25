@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { unwrapDb } from "~/server/db/helpers";
-import { entityQuality, job } from "~/server/db/schema";
+import { entityQuality, job, jobInvalidation } from "~/server/db/schema";
 import {
   createExpense,
   updateExpense,
@@ -66,13 +66,14 @@ describe("stored Product quality", () => {
     }
     throw new Error("Synthetic Product quality pass exceeded page budget");
   };
+  // A capture bumps the family's invalidation revision, not its Job row.
   const generation = async () => {
     const [intent] = await unwrapDb(ctx.db)
       .select()
-      .from(job)
-      .where(eq(job.key, "refresh:quality"));
-    if (!intent) throw new Error("Missing quality Job");
-    return intent.generation;
+      .from(jobInvalidation)
+      .where(eq(jobInvalidation.key, "refresh:quality"));
+    if (!intent) throw new Error("Missing quality invalidation");
+    return intent.revision;
   };
   const seed = async () => {
     const item = await createProductIdentityFixture(

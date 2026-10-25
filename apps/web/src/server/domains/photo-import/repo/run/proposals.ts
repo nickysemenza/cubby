@@ -88,7 +88,9 @@ import {
   productCategory,
   entityExternalId,
 } from "~/server/db/schema";
+import { imageJobDisplayStateSql } from "~/server/domains/image-processing/repo/image-job-state";
 import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
@@ -1548,6 +1550,7 @@ async function approveRow(
         .select({
           imageId: imageProcessingJob.imageId,
           state: imageProcessingJob.state,
+          processorRevision: imageProcessingJob.processorRevision,
         })
         .from(imageProcessingJob)
         .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
@@ -1558,22 +1561,31 @@ async function approveRow(
               roster.images.map((entry) => entry.imageId),
             ),
             eq(imageProcessingJob.kind, "describe_image"),
-            eq(
-              imageProcessingJob.processorRevision,
+            inArray(imageProcessingJob.processorRevision, [
               IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-            ),
+              IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+            ]),
             eq(imageProcessingJob.sourceContentHash, image.sha256),
           ),
         );
-      const latestByImage = new Map<ImageId, string>();
+      // Either description settles a photo: running out of AI money never
+      // blocks one an Apple device already described.
+      const settled = new Set<ImageId>();
+      const requested = new Set<ImageId>();
       for (const job of descriptionJobs) {
         const id = imageId.parse(job.imageId);
-        if (!latestByImage.has(id)) latestByImage.set(id, job.state);
+        if (job.processorRevision === IMAGE_DESCRIPTION_PROCESSOR_REVISION)
+          requested.add(id);
+        if (
+          job.state === "ready" ||
+          (job.state === "skipped" &&
+            job.processorRevision === IMAGE_DESCRIPTION_PROCESSOR_REVISION)
+        )
+          settled.add(id);
       }
-      const unfinished = roster.images.filter((entry) => {
-        const state = latestByImage.get(entry.imageId);
-        return state && state !== "ready" && state !== "skipped";
-      });
+      const unfinished = roster.images.filter(
+        (entry) => requested.has(entry.imageId) && !settled.has(entry.imageId),
+      );
       if (unfinished.length)
         throw new Error(
           `AI description is still processing or needs retry for ${countLabel(unfinished.length, "photo")}`,
@@ -1844,7 +1856,7 @@ async function loadPhotoRunImages(
         imageId: imageProcessingJob.imageId,
         kind: imageProcessingJob.kind,
         processorRevision: imageProcessingJob.processorRevision,
-        state: imageProcessingJob.state,
+        state: imageJobDisplayStateSql(),
         lastError: imageProcessingJob.lastError,
         dispatchedAt: imageProcessingJob.dispatchedAt,
         completedAt: imageProcessingJob.completedAt,
@@ -1892,16 +1904,24 @@ async function loadPhotoRunImages(
     : [];
   const locallyAnalyzed = new Set(localAnalyses.map((entry) => entry.imageId));
   const hashById = new Map(rows.map((row) => [row.imageId, row.sha256]));
-  // Cloud descriptions own the review gate and timing; Apple descriptions
-  // remain independent evidence, regardless of their revision hash order.
+  // Cloud descriptions own the timing; either description settles the
+  // review gate, so an Apple description stands in while cloud work waits
+  // (for AI funding, say) and the photo notes the missing cloud description.
   const jobByKey = new Map<string, (typeof jobs)[number]>();
+  const appleDescribed = new Set<string>();
   for (const job of jobs) {
     if (job.sourceContentHash !== hashById.get(job.imageId)) continue;
     if (
       job.kind === "describe_image" &&
       job.processorRevision !== IMAGE_DESCRIPTION_PROCESSOR_REVISION
-    )
+    ) {
+      if (
+        job.processorRevision === IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION &&
+        job.state === "ready"
+      )
+        appleDescribed.add(job.imageId);
       continue;
+    }
     const key = `${job.imageId}:${job.kind}`;
     if (!jobByKey.has(key)) jobByKey.set(key, job);
   }
@@ -1914,6 +1934,8 @@ async function loadPhotoRunImages(
       selectImageDescriptionEvidence([], null, null);
     const cutout = jobByKey.get(`${row.imageId}:subject_lift`);
     const describe = jobByKey.get(`${row.imageId}:describe_image`);
+    const cloudDescriptionMissing =
+      appleDescribed.has(row.imageId) && describe?.state !== "ready";
     return {
       id: parseShortcodeFor("image", row.shortcode),
       position: row.position,
@@ -1924,7 +1946,8 @@ async function loadPhotoRunImages(
       originalUrl: rendition.original,
       cutoutUrl: rendition.transparent,
       cutout: cutout?.state ?? null,
-      describe: describe?.state ?? null,
+      describe: cloudDescriptionMissing ? "ready" : (describe?.state ?? null),
+      cloudDescriptionMissing,
       ...descriptionJobTiming(describe, descriptionAttempts),
       // Device-reported completion is the source of truth going forward;
       // an AiAnalysis row from before this column existed still counts, so
@@ -1938,7 +1961,10 @@ async function loadPhotoRunImages(
         cutout && (cutout.state === "skipped" || cutout.state === "failed")
           ? cutout.lastError
           : null,
-      describeReason: describe?.state === "failed" ? describe.lastError : null,
+      describeReason:
+        describe?.state === "failed" || cloudDescriptionMissing
+          ? (describe?.lastError ?? null)
+          : null,
       description: selectedDescription.description,
       descriptionEvidence: selectedDescription,
       recognizedText: summary?.recognizedText ?? null,

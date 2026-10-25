@@ -1,8 +1,27 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
-import { jobState, jobWaitReason } from "@cubby/schemas/job";
+import {
+  jobLane,
+  jobState,
+  jobWaitingOn,
+  jobWaitingOnReason,
+  jobWaitReason,
+} from "@cubby/schemas/job";
+import { SHORTCODE_BODY_PATTERN, SHORTCODE_PREFIX } from "@cubby/shared";
 import { z } from "zod";
 
-import { defineContract, query } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
+
+/** `job.explain` names a Run, image job or Email by code, or a Job by id. */
+const explainTarget = z
+  .string()
+  .trim()
+  .regex(
+    new RegExp(
+      `^(?:(?:${[SHORTCODE_PREFIX.run, SHORTCODE_PREFIX.imageJob, SHORTCODE_PREFIX.email].join("|")})${SHORTCODE_BODY_PATTERN}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`,
+      "i",
+    ),
+    "Expected a RUN-, IPR- or EML- code or a Job id",
+  );
 
 /** One Job as diagnostics read it: execution facts only, never domain state. */
 const jobFacts = z.object({
@@ -24,10 +43,118 @@ const jobFacts = z.object({
   subject: z.object({ kind: z.string(), id: z.string() }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  /** Same-kind due Jobs the fair drain serves first; null when not due. */
+  /** Due Jobs the fair drain serves first; null when not due. */
   ahead: z.number().int().nonnegative().nullable(),
+  lane: jobLane,
+  /** What the Job waits on now (`generic/jobs/repo/waiting-on.ts`); null when terminal. */
+  waitingOn: jobWaitingOn.nullable(),
+  /** The Run that owns it, as its public code. */
+  runId: runShortcode.nullable(),
 });
 export type JobFacts = z.infer<typeof jobFacts>;
+
+/** A Run's live Jobs by what they wait on, and whether it stopped progressing. */
+const runRollup = z.object({
+  runId: runShortcode,
+  /**
+   * Live Jobs per waiting-on reason; terminal Jobs are not counted. `leased`
+   * counts live leases only: an expired one is in `expiredLeases`.
+   */
+  counts: z.partialRecord(jobWaitingOnReason, z.number().int().nonnegative()),
+  /** Running Jobs whose executor's lease lapsed; the next claim reclaims them. */
+  expiredLeases: z.number().int().nonnegative(),
+  /** The Run itself waits for AI funding (paused, or a legacy review stop). */
+  waitingForFunding: z.boolean(),
+  /** Latest claim or completion across the Run's Jobs. */
+  lastProgressAt: z.iso.datetime().nullable(),
+  /** Live Jobs remain but none was claimed or finished for `stallMinutes`. */
+  stalled: z.boolean(),
+  stallMinutes: z.number().int().positive(),
+});
+export type RunRollup = z.infer<typeof runRollup>;
+
+/** A filtered Job set: every key narrows; an empty filter is every live Job. */
+const jobSetFilter = z.strictObject({
+  lanes: z.array(jobLane).min(1).optional(),
+  kinds: z.array(z.string().min(1)).min(1).max(50).optional(),
+  reasons: z.array(jobWaitingOnReason).min(1).optional(),
+  states: z.array(jobState).min(1).optional(),
+  runId: runShortcode.optional(),
+  /** Never-exhausted work past its attention threshold, plus failed Jobs. */
+  needsAttention: z.boolean().optional(),
+  ids: z.array(z.uuid()).min(1).max(500).optional(),
+});
+export type JobSetFilter = z.infer<typeof jobSetFilter>;
+
+const jobQueueOut = z.object({
+  /** Live Jobs per lane and waiting-on reason, for the whole filtered set. */
+  counts: z.array(
+    z.object({
+      lane: jobLane,
+      reason: jobWaitingOnReason,
+      count: z.number().int().nonnegative(),
+    }),
+  ),
+  total: z.number().int().nonnegative(),
+  /** The set's leased image work per executor; expired leases await reclaim. */
+  leases: z.array(
+    z.object({
+      executor: z.string().nullable(),
+      live: z.number().int().nonnegative(),
+      expired: z.number().int().nonnegative(),
+    }),
+  ),
+  jobs: z.array(jobFacts),
+});
+
+/** One kind's queue health as the watchdog measured it. */
+const kindHealth = z.object({
+  kind: z.string(),
+  lane: jobLane,
+  due: z.number().int().nonnegative(),
+  oldestDueSeconds: z.number().int().nonnegative().nullable(),
+  /** Due Jobs no claim served for the whole claim window. */
+  unclaimedDue: z.number().int().nonnegative(),
+  claimsPerMinute: z.number().nonnegative(),
+  dueGrowth: z.number().int().nullable(),
+  expiredLeases: z.number().int().nonnegative(),
+  queued: z.number().int().nonnegative(),
+});
+const queueAlert = z.object({
+  kind: z.string().nullable(),
+  code: z.enum([
+    "oldest_due",
+    "no_claims",
+    "due_growth",
+    "expired_leases",
+    "image_disagreement",
+    "over_capacity",
+  ]),
+  /** The raw numbers that tripped it, verbatim. */
+  evidence: z.string(),
+});
+export const queueHealthSnapshot = z.object({
+  measuredAt: z.iso.datetime(),
+  kinds: z.array(kindHealth),
+  /** Open image rows whose Job is missing, stopped or finished. */
+  imageDisagreement: z.number().int().nonnegative(),
+  alerts: z.array(queueAlert),
+});
+export type QueueHealthSnapshot = z.infer<typeof queueHealthSnapshot>;
+
+/** One link of an explain chain: a record, its state and what it waits on. */
+const explainStep = z.object({
+  ref: z.string(),
+  kind: z.enum(["run", "imageJob", "email", "job"]),
+  label: z.string(),
+  state: z.string(),
+  waitingOn: jobWaitingOn.nullable(),
+  detail: z.string().nullable(),
+});
+const explainOut = z.object({
+  steps: z.array(explainStep),
+  rollup: runRollup.nullable(),
+});
 
 /** Fan-out Jobs of one kind (a step's per-item evaluations) as counts. */
 const jobGroup = z.object({
@@ -101,6 +228,8 @@ const jobListOut = z.object({
   groups: z.array(jobGroup),
   limits: z.array(limitEntry),
   binding: limitBinding,
+  /** A Run owner's waiting-on rollup; null for a subject. */
+  rollup: runRollup.nullable(),
 });
 export type JobListOut = z.infer<typeof jobListOut>;
 
@@ -150,6 +279,47 @@ export const jobContract = defineContract(
       input: jobListInput,
       output: jobListOut,
       // Job state moves while a Run executes; Run writes refresh it.
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    queue: query({
+      description:
+        "Live Jobs grouped by lane (apple_device, frontier_ai, server, external) and what they wait on (due, waiting_device, waiting_funding, leased, backing_off, blocked, paused, update_required), with one page of matching Jobs. Filter by lane, kind, reason, state, Run or attention.",
+      input: z.strictObject({
+        filter: jobSetFilter.default({}),
+        pageIndex: z.int().nonnegative().default(0),
+        pageSize: z.int().min(1).max(100).default(25),
+      }),
+      output: jobQueueOut,
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    retryNow: mutation({
+      description:
+        "Retry now: make every Job in the filtered set due immediately, clearing backoff and provider waits. Failed and cancelled Jobs reopen with a fresh attempt budget; running and member-paused Jobs are left alone. Prior errors are kept.",
+      input: z.strictObject({ filter: jobSetFilter }),
+      output: z.object({ retried: z.number().int().nonnegative() }),
+      invalidates: ["runOnly", "image"],
+    }),
+    explain: query({
+      description:
+        "Explain what a Run (RUN-), image job (IPR-), Email (EML-) or Job (uuid) is waiting on, as a chain from the record to the Jobs that block it.",
+      input: z.strictObject({ id: explainTarget }),
+      output: explainOut,
+      cache: { tags: [["run"], ["image"]], profile: "live-status" },
+    }),
+    runRollups: query({
+      exposure: "view",
+      input: z.strictObject({
+        runIds: z.array(runShortcode).min(1).max(100),
+      }),
+      output: z.object({ rollups: z.array(runRollup) }),
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    health: query({
+      description:
+        "The queue watchdog's latest per-kind health (oldest due age, claims per minute, due growth, expired leases, image/Job disagreement) and the alerts it raised, with raw numbers.",
+      input: z.strictObject({}),
+      // An object even before the first measurement: MCP structured results must be objects.
+      output: z.object({ snapshot: queueHealthSnapshot.nullable() }),
       cache: { tags: [["run"]], profile: "live-status" },
     }),
     logs: query({

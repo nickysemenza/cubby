@@ -534,8 +534,10 @@ describe("household AI funding at the paid transport boundary", () => {
       .select()
       .from(job)
       .where(eq(job.kind, "run.funding-resume"));
+    // One resume per funding window, not per Run: its handler resumes all.
     expect(resume).toMatchObject({
-      runId,
+      runId: null,
+      key: expect.stringMatching(/^funding-resume:\d{4}-\d{2}-\d{2}T/),
       waitReason: "ai_funding_window",
       waitUntil: expect.any(Date),
     });
@@ -545,7 +547,7 @@ describe("household AI funding at the paid transport boundary", () => {
       .update(job)
       .set({
         availableAt: new Date(0),
-        input: { runId, until: new Date(0).toISOString() },
+        input: { until: new Date(0).toISOString() },
       })
       .where(eq(job.id, resume.id));
     expect(await advanceJob(ctx.db, resume.id, productionJobHandlers)).toBe(
@@ -569,6 +571,26 @@ describe("household AI funding at the paid transport boundary", () => {
           .where(eq(job.kind, "purchase.dispatch"))
       ).map((item) => item.runId),
     ).toEqual([runId]);
+  });
+
+  // Production finding: each paused Run armed its own resume per window,
+  // although one handler run resumes every paused Run.
+  it("arms one funding resume per window for every paused Run", async () => {
+    const first = await setup("mail_import");
+    const second = await setup("mail_import");
+    await spend(first, AI_BUDGET_LIMIT_USD);
+    for (const runId of [first, second])
+      await expect(
+        paidRunPreflight(ctx.db, runId)(chatRequest()),
+      ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    expect(await status(second)).toMatchObject({ status: "paused_auth" });
+    const timers = await getDb(ctx.db)
+      .select({ key: job.key, runId: job.runId })
+      .from(job)
+      .where(eq(job.kind, "run.funding-resume"));
+    expect(timers).toEqual([
+      { key: expect.stringMatching(/^funding-resume:/), runId: null },
+    ]);
   });
 
   // Review finding: a budget raise brought the funding timer forward and it

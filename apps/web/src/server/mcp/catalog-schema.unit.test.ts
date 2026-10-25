@@ -594,6 +594,20 @@ describe("MCP catalog schemas", () => {
     // This compiles every advertised input and output graph, not one schema.
   }, 15_000);
 
+  it("publishes object outputs for every action", () => {
+    // `structuredContent` must be an object; a bare array output fails every
+    // call at the output stage (seen with ai_read.usage_recent).
+    const arrays: string[] = [];
+    for (const tool of compiledMcpTools(
+      MCP_TOOL_BINDINGS,
+      MCP_TOOL_DECLARATIONS,
+    ))
+      for (const [name, action] of tool.actions)
+        if (safeToJsonSchema(action.output, "output").type === "array")
+          arrays.push(`${tool.name}.${name}`);
+    expect(arrays).toEqual([]);
+  });
+
   it.each([
     { candidates: z.tuple([]), accepted: [], rejected: ["candidate"] },
     {
@@ -645,6 +659,9 @@ describe("MCP catalog schemas", () => {
       // An Image job joins image-processing submissions by their `IPS-` public
       // id; a submission is a child row, not a shortcode entity.
       "entity_read.filters.submissionId",
+      // Jobs have no shortcode: a Job set filter names execution rows by id.
+      "maintenance.retry_now.filter.ids",
+      "maintenance_read.queue.filter.ids",
       // A tree list's children scope names a parent of the listed entity's own
       // kind, so no single prefix pattern fits.
       "entity_read.nesting.parentId",

@@ -3,6 +3,7 @@ import {
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { createLogger } from "@cubby/worker-tracing";
 import { eq } from "drizzle-orm";
@@ -78,17 +79,24 @@ export async function publishBackgroundTasks(
       const task = backgroundTaskSchema.parse(input);
       if (task.kind === "image-processing.wakeup") {
         const [processing] = await repositoryQueries(tx)
-          .select({ imageId: imageProcessingJob.imageId })
+          .select({
+            id: imageProcessingJob.id,
+            imageId: imageProcessingJob.imageId,
+            kind: imageProcessingJob.kind,
+            processorRevision: imageProcessingJob.processorRevision,
+            runId: imageProcessingJob.runId,
+            state: imageProcessingJob.state,
+          })
           .from(imageProcessingJob)
           .where(eq(imageProcessingJob.id, task.jobId));
-        if (!processing) continue;
-        await enqueueJob(tx, {
-          key: `image-processing:${task.jobId}`,
-          kind: "image.processing",
-          subjectKind: "image",
-          subjectId: processing.imageId,
-          input: { processingId: task.jobId },
-          runId: task.runId,
+        if (processing?.state !== "pending") continue;
+        const { enqueueImageProcessingExecution } =
+          await import("~/server/domains/image-processing/repo/image-processing");
+        await enqueueImageProcessingExecution(tx, {
+          ...processing,
+          runId:
+            processing.runId ??
+            (task.runId ? parseEntityId("run", task.runId) : null),
         });
         continue;
       }

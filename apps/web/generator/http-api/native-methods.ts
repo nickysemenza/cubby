@@ -166,6 +166,10 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     method: "releaseCompanionImageProcessing",
     doc: null,
   },
+  "imageProcessing.renew": {
+    method: "renewCompanionImageProcessing",
+    doc: null,
+  },
   "photoImport.candidates": { method: "photoProductCandidates", doc: null },
   "photoImport.chooseExisting": {
     method: "choosePhotoGroupProduct",

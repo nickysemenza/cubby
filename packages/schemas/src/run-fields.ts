@@ -71,6 +71,16 @@ export const runStatus = z.enum([
   "failed",
   "dispatch_failed",
 ]);
+/**
+ * The status a Run reads as: its stored status, except that a Run stopped for
+ * review or failed whose open work moved to a retry successor reads
+ * `retried`, and a funding stop reads `waiting_for_funding`.
+ */
+export const runDisplayStatus = z.enum([
+  ...runStatus.options,
+  "retried",
+  "waiting_for_funding",
+]);
 export const runTargetEntityKind = z.enum([
   "purchase",
   "product",

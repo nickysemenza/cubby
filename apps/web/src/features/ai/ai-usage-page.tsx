@@ -674,7 +674,7 @@ export function AiUsagePage() {
   // React's hydration and can win in either direction. RTable gates its rows on
   // hydration itself; the metrics above it gate here so both renders match.
   const hydrated = useHydrated();
-  const summaryRows = summaryQuery.error ? undefined : summaryQuery.data;
+  const summaryRows = summaryQuery.error ? undefined : summaryQuery.data?.items;
   const totals = useMemo(
     () => usageTotals((hydrated ? summaryRows : undefined) ?? []),
     [hydrated, summaryRows],
@@ -913,7 +913,7 @@ export function AiUsagePage() {
           />
         ) : null}
         <RecentTable
-          rows={recentQuery.error ? undefined : recentQuery.data}
+          rows={recentQuery.error ? undefined : recentQuery.data?.items}
           isLoading={recentQuery.isLoading}
           error={recentQuery.error}
           onRetry={refreshRecent}

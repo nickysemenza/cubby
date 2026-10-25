@@ -57,23 +57,30 @@ describe("legacy mailbox Email supersession", () => {
       messageId: metadata.mail.messageId,
       checksum: "e".repeat(64),
     });
+    // The capture moves the search family's JobInvalidation row; the
+    // execution Job row is never written by a capture.
     const search = async () =>
       (
         await getDb(ctx.db).execute(
-          sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'refresh:search'`,
+          sql`SELECT j.generation, j.xmin::text AS xmin, m.revision::int AS revision, m.xmin::text AS "markerXmin"
+            FROM "Job" j JOIN "JobInvalidation" m ON m.key = j.key WHERE j.key = 'refresh:search'`,
         )
       ).rows[0];
-    const originalJob = await search();
+    const original = await search();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await readEmail(ctx.db, identity)).toEqual(current);
     expect(
       await readEmail(ctx.db, { ...identity, mailboxId: `legacy:${party.id}` }),
     ).toMatchObject({ orderMailId: legacy.id, status: "excluded" });
-    const supersededJob = await search();
-    expect(supersededJob?.generation).toBe(Number(originalJob?.generation) + 1);
-    expect(supersededJob?.xmin).not.toBe(originalJob?.xmin);
+    const superseded = await search();
+    expect(superseded?.revision).toBe(Number(original?.revision) + 1);
+    expect(superseded?.markerXmin).not.toBe(original?.markerXmin);
+    expect({
+      generation: superseded?.generation,
+      xmin: superseded?.xmin,
+    }).toEqual({ generation: original?.generation, xmin: original?.xmin });
     await saveMailboxMetadata(ctx.db, metadata);
-    expect(await search()).toEqual(supersededJob);
+    expect(await search()).toEqual(superseded);
   });
 
   it("excludes a pending legacy copy once the current mailbox holds the message", async () => {

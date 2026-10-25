@@ -7,16 +7,20 @@ import SwiftUI
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 
+    @State private var queue: HouseholdQueueOverview?
+    @State private var queueError: String?
+
     var body: some View {
         List {
             localExecution
+            HouseholdQueueSections(
+                queue: queue, error: queueError,
+                claimedImageJobIDs: appModel.companionImageActivity.claimedJobIDs)
             Section("Household work") {
                 NavigationLink(value: Route.entityList(.run)) {
                     Label("Runs", systemImage: "arrow.triangle.2.circlepath")
                 }
-                NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
-                    Label("Runs needing attention", systemImage: "exclamationmark.circle")
-                }
+                RunsNeedingAttentionRows(queue: queue)
                 NavigationLink(value: Route.entityList(.imageJob)) {
                     Label("Image jobs", systemImage: "photo.badge.checkmark")
                 }
@@ -26,6 +30,9 @@ struct ActivityView: View {
             }
         }
         .navigationTitle("Activity")
+        .refreshable { await loadQueue() }
+        // Reload when this device's own phase changes (a job finished, a reconnect).
+        .task(id: appModel.companionImageActivity.phase) { await loadQueue() }
         .inspector(
             isPresented: Binding(
                 get: { appModel.navigator.selectedActivity != nil },
@@ -39,13 +46,23 @@ struct ActivityView: View {
         }
     }
 
+    private func loadQueue() async {
+        guard appModel.phase == .signedIn else { return }
+        do {
+            queue = try await HouseholdQueueOverview.load(client: appModel.client)
+            queueError = nil
+        } catch is CancellationError {
+        } catch {
+            Diagnostics.report(error, context: "activity.householdQueue")
+            queueError = error.localizedDescription
+        }
+    }
+
     @ViewBuilder private var localExecution: some View {
         let activities = appModel.backgroundActivity.visibleActivities
         Section {
-            if activities.isEmpty {
-                ContentUnavailableView(
-                    "No device-local work reported", systemImage: "checkmark.circle")
-            } else {
+            CompanionWorkerStatusRow(activity: appModel.companionImageActivity)
+            if !activities.isEmpty {
                 ForEach(activities) { activity in
                     let row = LocalActivityRow(activity: activity) {
                         appModel.backgroundActivity.cancel(id: activity.id)

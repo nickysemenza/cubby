@@ -89,6 +89,14 @@ export const LIMITS_CATALOG = [
     source: `${JOBS_LIMITS} JOB_DRAIN.batch`,
   },
   {
+    key: "drain.concurrency",
+    label: "Pages each drain runs at once",
+    scope: "drain",
+    value: JOB_DRAIN.concurrency,
+    unit: "pages",
+    source: `${JOBS_LIMITS} JOB_DRAIN.concurrency`,
+  },
+  {
     key: "lease.duration",
     label: "Job lease",
     scope: "job lease",
@@ -283,7 +291,7 @@ export type BindingInput = {
     availableAt: Date;
     attempts: number;
     maxAttempts: number;
-    /** Same-kind due Jobs ranked ahead; null when the Job is not due. */
+    /** Due Jobs the fair drain serves first; null when the Job is not due. */
     ahead: number | null;
   } | null;
   /** Jobs of every kind holding a live lease now. */
@@ -298,8 +306,11 @@ export type BindingInput = {
 };
 
 const at = (date: Date) => formatInstant(date, "dateShortTime");
+/** Pages all consumers can run at once. */
+const PAGE_SLOTS =
+  BACKGROUND_QUEUE_CONSUMER.maxConcurrency * JOB_DRAIN.concurrency;
 const consumers = (running: number) =>
-  `${formatCount(Math.min(running, BACKGROUND_QUEUE_CONSUMER.maxConcurrency))} of ${formatCount(BACKGROUND_QUEUE_CONSUMER.maxConcurrency)} consumers busy`;
+  `${formatCount(Math.min(running, PAGE_SLOTS))} of ${formatCount(PAGE_SLOTS)} drain pages busy`;
 
 const binding = (key: LimitKey, evidence: string): LimitBinding => ({
   status: "binding",
@@ -367,8 +378,8 @@ export function evaluateBinding(input: BindingInput): LimitBinding {
     const ahead =
       job.ahead === null
         ? null
-        : `${formatCount(job.ahead)} same-kind ${job.ahead === 1 ? "Job" : "Jobs"} ahead`;
-    if (input.runningJobs >= BACKGROUND_QUEUE_CONSUMER.maxConcurrency)
+        : `${formatCount(job.ahead)} ${job.ahead === 1 ? "Job" : "Jobs"} ahead`;
+    if (input.runningJobs >= PAGE_SLOTS)
       return binding(
         "queue.concurrency",
         [consumers(input.runningJobs), ahead].filter(Boolean).join("; "),

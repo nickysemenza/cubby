@@ -245,7 +245,8 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   });
 
   // Storage checksum errors are durable failures, with only the owning attempt
-  // allowed to complete; an expired result cannot even adopt valid bytes.
+  // allowed to complete. A result after its lease expired is adopted until a
+  // newer claim replaces the attempt, then refused even with valid bytes.
   await seed();
   const invalid = await claim();
   expect(
@@ -286,6 +287,8 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     .update(job)
     .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
     .where(eq(job.key, `image-processing:${expired.command.jobId}`));
+  const reclaimed = await claim();
+  expect(reclaimed.command.jobId).toBe(expired.command.jobId);
   expect(
     completeCompanionImageProcessingOutput.parse(
       await post("complete", {

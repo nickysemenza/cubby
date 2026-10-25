@@ -13,6 +13,7 @@ import {
 } from "@cubby/schemas/image-identification";
 import {
   imageProcessingJobKind,
+  imageProcessingJobState,
   imageDescriptionResult,
   imageDescriptionAnalysis,
   selectImageDescription,
@@ -27,19 +28,7 @@ import type {
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
 import { jobState } from "@cubby/schemas/job";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  lte,
-  ne,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -54,6 +43,7 @@ import {
   notDeleted,
   withTransaction,
   withTransactionOn,
+  withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
 import {
@@ -63,7 +53,6 @@ import {
   imageProcessingAttempt,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
-import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { job as durableJob } from "~/server/db/retained-tables";
 import { aiAnalysis, image } from "~/server/db/schema";
 import {
@@ -77,27 +66,64 @@ import { readConfirmedDescription } from "~/server/generic/assessment/repo/asses
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
+  deviceBackfillTurn,
+  lockDeviceAdmission,
+} from "~/server/generic/jobs/repo/device-admission";
+import {
   enqueueJob,
   claimJob,
   externalJobClaim,
   publishJobPage,
   failJob,
-  retryJob,
+  releaseJobClaim,
+  retryJobsNow,
   assertJobClaim,
+  jobRunOwned,
   JobSupersededError,
+  type JobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { imageJobDisplayStateSql } from "./image-job-state";
 import {
   insertImageProcessingAttempt,
   recordImageProcessingEvent,
 } from "./image-processing-history";
+import {
+  armDeviceWake,
+  parkedDeviceWork,
+  repeatDeviceWake,
+  ringImageProcessingCompanionsAfterCommit,
+} from "./image-processing-ring";
 
-/** Failures since the last operator retry that end a job as `failed`. */
-export const IMAGE_PROCESSING_MAX_ATTEMPTS = 3;
-
-/** A server-side failure stays retryable; the failure budget decides when it ends. */
+/** A server-side failure is retried later; image work never fails terminally. */
 export const SERVER_FAILURE_RETRYABLE = true;
+
+/** The universal Job owning one ImageProcessingJob's execution. */
+export const imageProcessingJobKey = (id: string) => `image-processing:${id}`;
+
+export type ImageProcessingLane = "image.cloud" | "image.device";
+
+/**
+ * Which executor runs a job, fixed by its identity: Apple devices run subject
+ * lifts, Apple descriptions and the JPEG preparation an AVIF cloud
+ * description needs; the server runs every other cloud call. Mirrored by the
+ * lane split in `drizzle/0029_image_job_lanes.sql`.
+ */
+export function imageProcessingLane(job: {
+  kind: ImageProcessingJobKind;
+  processorRevision: number;
+  contentType: string | null;
+}): ImageProcessingLane {
+  if (job.kind === "subject_lift") return "image.device";
+  if (
+    job.kind === "describe_image" &&
+    (job.processorRevision === IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION ||
+      job.contentType === "image/avif")
+  )
+    return "image.device";
+  return "image.cloud";
+}
 
 // Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
@@ -187,6 +213,18 @@ export type ClaimedImageProcessingJob = {
   /** Database-authoritative end of this attempt's presigned capabilities. */
   leaseExpiresAt: Date;
 };
+
+/**
+ * One image-processing transaction for a service-owned sequence of repo
+ * steps; inside another, a savepoint. A device hand-off runs its claim,
+ * assignment and release in one.
+ */
+export async function withImageProcessingTransaction<T>(
+  db: Database,
+  operation: (transactionDb: Database) => Promise<T>,
+): Promise<T> {
+  return withTransactionDatabase(db, operation);
+}
 
 /** Read-only source boundary shared by scheduling and the AI Gateway service. */
 export async function getUploadedImageProcessingSource(
@@ -304,17 +342,45 @@ async function ensureImageProcessingJob(
       ),
       values: () => ({ ...values, state: "pending" as const }),
     });
-    if (["pending", "leased", "waiting_for_device"].includes(row.state))
-      await enqueueJob(tx, {
-        key: `image-processing:${row.id}`,
-        kind: "image.processing",
-        subjectKind: "image",
-        subjectId: row.imageId,
-        input: { processingId: row.id },
-        runId: row.runId,
-      });
+    if (row.state === "pending")
+      await enqueueImageProcessingExecution(databaseForTransaction(tx), row);
     return row;
   });
+}
+
+/**
+ * The one enqueue of an open job's execution, in the caller's transaction.
+ * Device work is parked for device pulls and rings connected companions after
+ * commit; it is never claimed by the server drain.
+ */
+export async function enqueueImageProcessingExecution(
+  db: Database,
+  row: {
+    id: string;
+    imageId: string;
+    kind: ImageProcessingJobKind;
+    processorRevision: number;
+    runId: RunId | null;
+  },
+) {
+  const [source] = await getDb(db)
+    .select({ contentType: image.contentType })
+    .from(image)
+    .where(eq(image.id, row.imageId));
+  const lane = imageProcessingLane({
+    ...row,
+    contentType: source?.contentType ?? null,
+  });
+  await enqueueJob(db, {
+    key: imageProcessingJobKey(row.id),
+    kind: lane,
+    subjectKind: "image",
+    subjectId: row.imageId,
+    input: { processingId: row.id },
+    runId: row.runId,
+  });
+  if (lane === "image.device")
+    await ringImageProcessingCompanionsAfterCommit(db);
 }
 
 export async function createTransparentDerivativeAndJob(
@@ -379,11 +445,122 @@ export async function createTransparentDerivativeAndJob(
 }
 
 /**
- * Expired leases are safe to retry because every completion must echo
- * attemptId. An expired executor attempt spends the retry budget, so an
- * executor that always dies mid-job cannot loop forever.
+ * Settle open work whose source image was removed or replaced, or whose
+ * processor revision was superseded: the only moot endings image work has.
+ * `jobId` scopes it to one row inside that row's own execution; otherwise a
+ * bounded batch also completes the parked Jobs no executor will claim.
  */
-/** Claim one job with a bounded lease. No HTTP path waits for device work. */
+export async function retireObsoleteImageProcessingJobs(
+  db: Database,
+  input: { jobId: string } | { limit: number },
+): Promise<number> {
+  const dbc = getDb(db);
+  const scoped = "jobId" in input;
+  const obsolete = and(
+    eq(imageProcessingJob.state, "pending"),
+    scoped ? eq(imageProcessingJob.id, input.jobId) : undefined,
+    // includes-deleted: retire work whose source image was removed.
+    sql`EXISTS (SELECT 1 FROM ${image} WHERE ${image.id}=${imageProcessingJob.imageId} AND (${obsoleteImageProcessingSource()} OR NOT ${currentImageProcessingProcessor()}))`,
+  );
+  const batch = scoped
+    ? null
+    : (
+        await dbc
+          .select({ id: imageProcessingJob.id })
+          .from(imageProcessingJob)
+          .where(obsolete)
+          .orderBy(asc(imageProcessingJob.id))
+          .limit(input.limit)
+          .for("update", { skipLocked: true })
+      ).map((row) => row.id);
+  if (batch?.length === 0) return 0;
+  const result = {
+    rows: await dbc
+      .update(imageProcessingJob)
+      .set({
+        state: "skipped",
+        completedAt: new Date(),
+        lastError: "Image source or processor is obsolete",
+      })
+      .where(batch ? inArray(imageProcessingJob.id, batch) : obsolete)
+      .returning({ id: imageProcessingJob.id }),
+  };
+  const ids = result.rows.map((row) => row.id);
+  if (!ids.length) return 0;
+  if (!scoped)
+    await dbc
+      .update(durableJob)
+      .set({
+        state: "completed",
+        generation: sql`${durableJob.generation} + 1`,
+        result: { outcome: "skipped" },
+        waitReason: null,
+        waitUntil: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(durableJob.key, ids.map(imageProcessingJobKey)),
+          inArray(durableJob.state, ["queued", "retry_wait", "running"]),
+        ),
+      );
+  await recordChange(db, {
+    kind: "projection",
+    categories: ["imageJob"],
+    refresh: ["quality"],
+  });
+  return ids.length;
+}
+
+/**
+ * Give a subject lift whose output record disappeared a fresh pending
+ * derivative instead of failing it; the claim then mints its output key.
+ */
+async function rebuildTransparentDerivative(
+  tx: DrizzleTransaction,
+  job: { id: string; imageId: string; sourceContentHash: string },
+) {
+  await tx
+    .insert(imageDerivative)
+    .values({
+      imageId: parseEntityId("image", job.imageId),
+      purpose: "transparent",
+      status: "pending",
+      key: generateImageKey(`image-${job.imageId}-transparent.png`),
+      sourceContentHash: job.sourceContentHash,
+      processorRevision: IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+    })
+    .onConflictDoNothing();
+  const [live] = await tx
+    .select({ id: imageDerivative.id, key: imageDerivative.key })
+    .from(imageDerivative)
+    .where(
+      and(
+        eq(imageDerivative.imageId, parseEntityId("image", job.imageId)),
+        eq(imageDerivative.purpose, "transparent"),
+        eq(imageDerivative.sourceContentHash, job.sourceContentHash),
+        eq(
+          imageDerivative.processorRevision,
+          IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+        ),
+        notDeleted(imageDerivative),
+      ),
+    );
+  if (!live) throw new Error("Transparent derivative was not rebuilt");
+  await tx
+    .update(imageProcessingJob)
+    .set({ derivativeId: live.id })
+    .where(eq(imageProcessingJob.id, job.id));
+  return live;
+}
+
+/**
+ * Claim one job with a bounded lease. No HTTP path waits for device work.
+ * Expired leases are safe to reclaim because every completion must echo
+ * the Job's lease token as its attemptId; reclaiming one is not an attempt.
+ */
 export async function claimImageProcessingJob(
   db: Database,
   input: {
@@ -395,6 +572,8 @@ export async function claimImageProcessingJob(
     processorRevisions?: readonly number[];
     /** A normalization-capable device may prepare cloud AVIF input, never other cloud jobs. */
     allowAvifNormalization?: boolean;
+    /** A device pull prefers work whose last attempt ran on another device. */
+    deviceId?: string;
   },
 ): Promise<ClaimedImageProcessingJob | null> {
   // Candidate selection uses the same due-time clock as the shared Job claim.
@@ -404,8 +583,8 @@ export async function claimImageProcessingJob(
     if (currentExecution) {
       if (
         !input.jobId ||
-        currentExecution.claim.kind !== "image.processing" ||
-        currentExecution.claim.key !== `image-processing:${input.jobId}`
+        currentExecution.claim.kind !== "image.cloud" ||
+        currentExecution.claim.key !== imageProcessingJobKey(input.jobId)
       )
         throw new Error(
           "Image processing requires its own universal Job claim",
@@ -415,139 +594,138 @@ export async function claimImageProcessingJob(
         currentExecution.claim,
         "update",
       );
-      await tx
-        .update(imageProcessingJob)
-        .set({
-          state: "skipped",
-          completedAt: new Date(),
-          lastError: "Image source or processor is obsolete",
+      await retireObsoleteImageProcessingJobs(databaseForTransaction(tx), {
+        jobId: input.jobId,
+      });
+    }
+    // Device admission keeps the drain's priorities: an active Run's work
+    // leads, but backfill keeps its reserved share of pulls.
+    const devicePull =
+      !currentExecution && input.processorRevisions !== undefined;
+    // Device pulls take their turns one at a time: the lane's admission row
+    // stays locked until the transaction that hands this claim over ends.
+    const backfillTurn =
+      devicePull &&
+      deviceBackfillTurn(await lockDeviceAdmission(databaseForTransaction(tx)));
+    // The internal policy keeps claims within the device’s supported job kinds.
+    // A retry prefers a different device than the one its last attempt ran
+    // on, within the class whose turn it is; a lone device still takes its
+    // own retries.
+    const ranOnThisDevice = input.deviceId
+      ? sql<boolean>`EXISTS (SELECT 1 FROM ${imageProcessingAttempt} a
+          WHERE a.id = ${imageProcessingJob.attemptId}
+            AND a.executor->>'deviceId' = ${input.deviceId})`
+      : undefined;
+    const candidates = () =>
+      tx
+        .select({
+          id: imageProcessingJob.id,
+          executionId: durableJob.id,
+          imageId: imageProcessingJob.imageId,
+          kind: imageProcessingJob.kind,
+          sourceContentHash: imageProcessingJob.sourceContentHash,
+          processorRevision: imageProcessingJob.processorRevision,
+          previousAttemptId: imageProcessingJob.attemptId,
+          submissionId: imageProcessingJob.submissionId,
+          derivativeId: imageProcessingJob.derivativeId,
+          runId: imageProcessingJob.runId,
+          originalKey: image.key,
+          originalContentType: image.contentType,
+          derivativeKey: imageDerivative.key,
         })
+        .from(imageProcessingJob)
+        .innerJoin(
+          durableJob,
+          eq(
+            durableJob.key,
+            sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+          ),
+        )
+        .innerJoin(
+          image,
+          and(
+            eq(image.id, imageProcessingJob.imageId),
+            notDeleted(image),
+            eq(image.status, "UPLOADED"),
+            eq(image.sha256, imageProcessingJob.sourceContentHash),
+          ),
+        )
+        .leftJoin(
+          imageDerivative,
+          and(
+            eq(imageDerivative.id, imageProcessingJob.derivativeId),
+            notDeleted(imageDerivative),
+          ),
+        )
         .where(
           and(
-            eq(imageProcessingJob.id, input.jobId),
-            inArray(imageProcessingJob.state, [
-              "pending",
-              "waiting_for_device",
-              "leased",
-            ]),
-            // includes-deleted: retire work whose source image was removed.
-            sql`EXISTS (SELECT 1 FROM ${image} WHERE ${image.id}=${imageProcessingJob.imageId} AND (${obsoleteImageProcessingSource()} OR NOT ${currentImageProcessingProcessor()}))`,
-          ),
-        );
-    }
-    // The internal policy keeps claims within the device’s supported job kinds.
-    const candidates = tx
-      .select({
-        id: imageProcessingJob.id,
-        executionId: durableJob.id,
-        imageId: imageProcessingJob.imageId,
-        kind: imageProcessingJob.kind,
-        sourceContentHash: imageProcessingJob.sourceContentHash,
-        processorRevision: imageProcessingJob.processorRevision,
-        previousAttemptId: imageProcessingJob.attemptId,
-        submissionId: imageProcessingJob.submissionId,
-        derivativeId: imageProcessingJob.derivativeId,
-        runId: imageProcessingJob.runId,
-        originalKey: image.key,
-        originalContentType: image.contentType,
-        derivativeKey: imageDerivative.key,
-      })
-      .from(imageProcessingJob)
-      .innerJoin(
-        durableJob,
-        eq(
-          durableJob.key,
-          sql`'image-processing:' || ${imageProcessingJob.id}::text`,
-        ),
-      )
-      .innerJoin(
-        image,
-        and(
-          eq(image.id, imageProcessingJob.imageId),
-          notDeleted(image),
-          eq(image.status, "UPLOADED"),
-          eq(image.sha256, imageProcessingJob.sourceContentHash),
-        ),
-      )
-      .leftJoin(
-        imageDerivative,
-        and(
-          eq(imageDerivative.id, imageProcessingJob.derivativeId),
-          notDeleted(imageDerivative),
-        ),
-      )
-      .where(
-        and(
-          input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
-          inArray(imageProcessingJob.kind, [...input.kinds]),
-          inArray(imageProcessingJob.state, [
-            "pending",
-            "waiting_for_device",
-            "leased",
-          ]),
-          currentImageProcessingProcessor(),
-          input.processorRevisions
-            ? or(
-                inArray(imageProcessingJob.processorRevision, [
-                  ...input.processorRevisions,
-                ]),
-                input.allowAvifNormalization
-                  ? and(
-                      eq(imageProcessingJob.kind, "describe_image"),
-                      eq(
-                        imageProcessingJob.processorRevision,
-                        IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-                      ),
-                      eq(image.contentType, "image/avif"),
-                    )
-                  : undefined,
-              )
-            : undefined,
-          currentExecution
-            ? and(
-                eq(durableJob.id, currentExecution.claim.id),
-                eq(durableJob.state, "running"),
-                eq(durableJob.generation, currentExecution.claim.generation),
-                eq(durableJob.leaseToken, currentExecution.claim.leaseToken),
-                gt(durableJob.leaseExpiresAt, now),
-              )
-            : or(
-                and(
-                  inArray(durableJob.state, ["queued", "retry_wait"]),
-                  input.processorRevisions
-                    ? or(
-                        lte(durableJob.availableAt, now),
-                        eq(imageProcessingJob.state, "waiting_for_device"),
+            input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
+            inArray(imageProcessingJob.kind, [...input.kinds]),
+            eq(imageProcessingJob.state, "pending"),
+            currentImageProcessingProcessor(),
+            input.processorRevisions
+              ? or(
+                  inArray(imageProcessingJob.processorRevision, [
+                    ...input.processorRevisions,
+                  ]),
+                  input.allowAvifNormalization
+                    ? and(
+                        eq(imageProcessingJob.kind, "describe_image"),
+                        eq(
+                          imageProcessingJob.processorRevision,
+                          IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+                        ),
+                        eq(image.contentType, "image/avif"),
                       )
-                    : lte(durableJob.availableAt, now),
-                ),
-                and(
+                    : undefined,
+                )
+              : undefined,
+            currentExecution
+              ? and(
+                  eq(durableJob.id, currentExecution.claim.id),
                   eq(durableJob.state, "running"),
-                  lte(durableJob.leaseExpiresAt, now),
+                  eq(durableJob.generation, currentExecution.claim.generation),
+                  eq(durableJob.leaseToken, currentExecution.claim.leaseToken),
+                  gt(durableJob.leaseExpiresAt, now),
+                )
+              : and(
+                  // Devices claim parked device work directly, honoring its
+                  // backoff; an expired lease is claimable at once.
+                  input.processorRevisions
+                    ? eq(durableJob.kind, "image.device")
+                    : undefined,
+                  or(
+                    and(
+                      inArray(durableJob.state, ["queued", "retry_wait"]),
+                      lte(durableJob.availableAt, now),
+                    ),
+                    and(
+                      eq(durableJob.state, "running"),
+                      lte(durableJob.leaseExpiresAt, now),
+                    ),
+                  ),
                 ),
-              ),
-        ),
-      )
-      .orderBy(asc(durableJob.availableAt), asc(imageProcessingJob.id))
-      .limit(1);
-    const [candidate] = await (currentExecution
-      ? candidates.for("update", { of: [imageProcessingJob, image] })
-      : candidates.for("update", {
-          of: [imageProcessingJob, image],
-          skipLocked: true,
-        }));
+          ),
+        )
+        .orderBy(
+          ...(devicePull
+            ? [backfillTurn ? asc(jobRunOwned()) : desc(jobRunOwned())]
+            : []),
+          ...(ranOnThisDevice ? [asc(ranOnThisDevice)] : []),
+          asc(durableJob.availableAt),
+          asc(imageProcessingJob.id),
+        )
+        .limit(1);
+    const lock = (query: ReturnType<typeof candidates>) =>
+      currentExecution
+        ? query.for("update", { of: [imageProcessingJob, image] })
+        : query.for("update", {
+            of: [imageProcessingJob, image],
+            skipLocked: true,
+          });
+    const [candidate] = await lock(candidates());
     if (!candidate) return null;
 
-    if (!currentExecution && input.processorRevisions)
-      await tx
-        .update(durableJob)
-        .set({ availableAt: new Date() })
-        .where(
-          and(
-            eq(durableJob.id, candidate.executionId),
-            eq(durableJob.state, "queued"),
-          ),
-        );
     const execution =
       currentExecution?.claim ??
       (await claimJob(
@@ -556,29 +734,12 @@ export async function claimImageProcessingJob(
         input.leaseMs,
       ));
     if (!execution) return null;
-    // A missing output record is a permanent domain failure, retained on Job.
-    if (candidate.kind === "subject_lift" && !candidate.derivativeKey) {
-      execution.attempts = execution.maxAttempts;
-      await failJob(
-        databaseForTransaction(tx),
-        execution,
-        new Error("Transparent derivative is unavailable"),
-      );
-      await tx
-        .update(imageProcessingJob)
-        .set({
-          state: "failed",
-          completedAt: new Date(),
-          lastError: "Transparent derivative is unavailable",
-        })
-        .where(eq(imageProcessingJob.id, candidate.id));
-      await recordChange(tx, {
-        kind: "projection",
-        categories: ["imageJob"],
-        refresh: ["quality"],
-      });
-      return null;
-    }
+    // A device lease can lapse while every device idles; the wake rings then.
+    if (execution.kind === "image.device")
+      await armDeviceWake(databaseForTransaction(tx));
+    let derivativeId = candidate.derivativeId;
+    if (candidate.kind === "subject_lift" && !candidate.derivativeKey)
+      derivativeId = (await rebuildTransparentDerivative(tx, candidate)).id;
 
     const attemptId = execution.leaseToken;
     if (
@@ -604,29 +765,27 @@ export async function claimImageProcessingJob(
       candidate.kind === "subject_lift"
         ? generateImageKey(`image-${candidate.imageId}-transparent.png`)
         : candidate.derivativeKey;
-    if (candidate.kind === "subject_lift" && candidate.derivativeId) {
-      await tx
-        .insert(imageProcessingOrphan)
-        .values({
-          key: candidate.derivativeKey!,
-          attemptId: candidate.previousAttemptId,
-          reason: "Superseded image-processing output key",
-        })
-        .onConflictDoNothing();
+    if (candidate.kind === "subject_lift" && derivativeId) {
+      if (candidate.derivativeKey)
+        await tx
+          .insert(imageProcessingOrphan)
+          .values({
+            key: candidate.derivativeKey,
+            attemptId: candidate.previousAttemptId,
+            reason: "Superseded image-processing output key",
+          })
+          .onConflictDoNothing();
       await tx
         .update(imageDerivative)
         .set({ key: derivativeKey!, status: "pending", failureReason: null })
-        .where(eq(imageDerivative.id, candidate.derivativeId));
+        .where(eq(imageDerivative.id, derivativeId));
     }
+    // The Job owns execution state; the row records only its current attempt.
     await tx
       .update(imageProcessingJob)
-      .set({
-        state: "leased",
-        attemptId,
-        dispatchedAt: new Date(),
-      })
+      .set({ attemptId, dispatchedAt: new Date() })
       .where(eq(imageProcessingJob.id, candidate.id));
-    if (candidate.kind === "subject_lift" && candidate.derivativeId)
+    if (candidate.kind === "subject_lift" && derivativeId)
       await recordChange(tx, {
         kind: "projection",
         categories: ["image", "imageJob"],
@@ -639,6 +798,7 @@ export async function claimImageProcessingJob(
     } = candidate;
     return {
       ...claimed,
+      derivativeId,
       imageId: parseEntityId("image", claimed.imageId),
       derivativeKey,
       attemptId,
@@ -647,7 +807,15 @@ export async function claimImageProcessingJob(
   });
 }
 
-/** Read the one output key bound to a live attempt before validating its bytes. */
+/**
+ * The attempt still owns its Job: the lease token is unchanged. An expired
+ * lease no newer claim replaced still belongs to it, so a late result is
+ * adopted rather than dropped; a reclaim replaces the token atomically.
+ */
+const attemptOwnsExecution = (attemptId: string) =>
+  sql<boolean>`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${attemptId}::uuid)`;
+
+/** Read the one output key bound to the current attempt before validating its bytes. */
 export async function getLeasedImageProcessingOutputKey(
   db: Database,
   input: { jobId: string; attemptId: string },
@@ -666,8 +834,8 @@ export async function getLeasedImageProcessingOutputKey(
       and(
         eq(imageProcessingJob.id, input.jobId),
         eq(imageProcessingJob.attemptId, input.attemptId),
-        eq(imageProcessingJob.state, "leased"),
-        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
+        eq(imageProcessingJob.state, "pending"),
+        attemptOwnsExecution(input.attemptId),
       ),
     )
     .limit(1);
@@ -710,8 +878,8 @@ export async function getLeasedImageProcessingJobContext(
       and(
         eq(imageProcessingJob.id, input.jobId),
         eq(imageProcessingJob.attemptId, input.attemptId),
-        eq(imageProcessingJob.state, "leased"),
-        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
+        eq(imageProcessingJob.state, "pending"),
+        attemptOwnsExecution(input.attemptId),
       ),
     )
     .limit(1);
@@ -719,97 +887,95 @@ export async function getLeasedImageProcessingJobContext(
 }
 
 /**
- * No capable device was reachable. A lease with no executor is not an
- * attempt, and a capable device's pull claims this row before the cooldown;
- * the per-job event key keeps idle cycles out of history.
+ * Hand a claimed attempt back without counting it: the server could not hand
+ * the work over, or a device let it go. `delayMs` keeps a hand-off that keeps
+ * failing from spinning; the recorded cause stays on the row.
  */
-export async function markImageProcessingWaitingForDevice(
+export async function releaseImageProcessingLease(
   db: Database,
-  input: { jobId: string; attemptId: string },
-): Promise<void> {
-  await withTransaction(db, async (tx) => {
+  input: {
+    jobId: string;
+    attemptId: string;
+    reason: string;
+    delayMs?: number;
+    event: "dispatch.released" | "execution.released";
+    source?: "server" | "device";
+  },
+): Promise<boolean> {
+  return withTransaction(db, async (tx) => {
     const execution = await externalJobClaim(
       tx,
-      `image-processing:${input.jobId}`,
+      imageProcessingJobKey(input.jobId),
       input.attemptId,
       true,
+      { lateAdoption: true },
     );
-    if (!execution) return;
-    await publishJobPage(databaseForTransaction(tx), execution, {
-      done: false,
-      waitUntil: new Date(Date.now() + 60_000),
-      waitReason: "device",
-    });
-    const rows = await tx
-      .update(imageProcessingJob)
-      .set({
-        state: "waiting_for_device",
-        attemptId: null,
-      })
-      .where(
-        and(
-          eq(imageProcessingJob.id, input.jobId),
-          eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
-        ),
-      )
-      .returning({ id: imageProcessingJob.id });
-    if (rows.length)
-      await recordImageProcessingEvent(tx, {
-        jobId: input.jobId,
-        eventKey: "dispatch:waiting",
-        event: "dispatch.waiting",
-      });
-  });
-}
-
-/**
- * A capable device claimed the row but it could not be handed over. The row
- * returns to `pending` so the cooldown holds: a waiting row would be reclaimed
- * by the same device's next pull, rotating subject-lift output keys each time.
- * Each backoff spends the retry budget, so a hand-off that always fails ends.
- */
-export async function backOffImageProcessingLease(
-  db: Database,
-  input: { jobId: string; attemptId: string; reason: string },
-): Promise<void> {
-  await withTransaction(db, async (tx) => {
+    if (!execution) return false;
     const [job] = await tx
-      .select({
-        id: imageProcessingJob.id,
-        derivativeId: imageProcessingJob.derivativeId,
-      })
+      .select({ derivativeId: imageProcessingJob.derivativeId })
       .from(imageProcessingJob)
       .where(
         and(
           eq(imageProcessingJob.id, input.jobId),
           eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
+          eq(imageProcessingJob.state, "pending"),
         ),
       )
       .for("update");
-    if (!job) return;
-    await settleImageProcessingFailure(tx, job, {
-      reason: input.reason,
-      retryable: true,
-      set: { attemptId: null },
+    if (!job) return false;
+    if (job.derivativeId) {
+      const [output] = await tx
+        .select({ key: imageDerivative.key })
+        .from(imageDerivative)
+        .where(eq(imageDerivative.id, job.derivativeId));
+      if (output)
+        await tx
+          .insert(imageProcessingOrphan)
+          .values({
+            key: output.key,
+            attemptId: input.attemptId,
+            reason: input.reason,
+          })
+          .onConflictDoNothing();
+    }
+    await tx
+      .update(imageProcessingAttempt)
+      .set({ state: "released", completedAt: sql`now()`, error: input.reason })
+      .where(
+        and(
+          eq(imageProcessingAttempt.id, input.attemptId),
+          eq(imageProcessingAttempt.state, "running"),
+        ),
+      );
+    await releaseJobClaim(databaseForTransaction(tx), execution, {
+      availableAt: new Date(Date.now() + (input.delayMs ?? 0)),
     });
+    // Released device work goes to another companion: ring at once, and
+    // through the wake once a delayed release comes due.
+    if (execution.kind === "image.device") {
+      await armDeviceWake(databaseForTransaction(tx));
+      if (!input.delayMs) await ringImageProcessingCompanionsAfterCommit(tx);
+    }
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
-      eventKey: "dispatch:backoff",
-      event: "dispatch.backoff",
-      level: "error",
+      eventKey: `${input.attemptId}:released`,
+      event: input.event,
+      level: input.delayMs ? "error" : "info",
+      source: input.source ?? "server",
       details: { reason: input.reason },
     });
+    return true;
   });
 }
 
-/** Bounded maintenance retry; old result/runtime remains immutable history. */
-export async function retryFailedImageProcessingJobs(
+/**
+ * Retry now: an image's open jobs become due immediately, backoff cleared and
+ * prior errors kept. Every job stays open until a result or a moot ending.
+ */
+export async function retryImageProcessingNow(
   db: Database,
-  limit: number,
-  options?: {
-    imageId?: ImageId;
+  options: {
+    imageId: ImageId;
     submissionId?: string;
     kinds?: readonly ImageProcessingJobKind[];
   },
@@ -831,29 +997,29 @@ export async function retryFailedImageProcessingJobs(
       )
       .where(
         and(
-          eq(imageProcessingJob.state, "failed"),
-          options?.imageId
-            ? eq(imageProcessingJob.imageId, options.imageId)
-            : undefined,
-          options?.kinds
+          // `failed` is a legacy terminal state the migration reopened for
+          // current processors; any left over is reopened here too.
+          inArray(imageProcessingJob.state, ["pending", "failed"]),
+          eq(imageProcessingJob.imageId, options.imageId),
+          options.kinds
             ? inArray(imageProcessingJob.kind, [...options.kinds])
             : undefined,
           currentImageProcessingProcessor(),
         ),
       )
-      .orderBy(asc(imageProcessingJob.completedAt), asc(imageProcessingJob.id))
-      .limit(limit)
+      .orderBy(asc(imageProcessingJob.id))
       .for("update", { skipLocked: true });
     if (!rows.length) return [];
     const ids = rows.map((row) => row.id);
-    for (const id of ids) {
-      const [execution] = await tx
-        .select({ id: durableJob.id })
-        .from(durableJob)
-        .where(eq(durableJob.key, `image-processing:${id}`));
-      if (execution) await retryJob(databaseForTransaction(tx), execution.id);
-    }
-    if (options?.submissionId)
+    await tx
+      .update(imageProcessingJob)
+      .set({
+        state: "pending",
+        completedAt: null,
+        ...(options.submissionId ? { submissionId: options.submissionId } : {}),
+      })
+      .where(inArray(imageProcessingJob.id, ids));
+    if (options.submissionId)
       await tx
         .insert(imageProcessingSubmissionJob)
         .values(
@@ -865,16 +1031,24 @@ export async function retryFailedImageProcessingJobs(
           })),
         )
         .onConflictDoNothing();
-    await tx
-      .update(imageProcessingJob)
-      .set({
-        state: "pending",
-        attemptId: null,
-        lastError: null,
-        completedAt: null,
-        submissionId: options?.submissionId ?? null,
+    const transactionDb = databaseForTransaction(tx);
+    const reopened = await tx
+      .select({
+        id: imageProcessingJob.id,
+        imageId: imageProcessingJob.imageId,
+        kind: imageProcessingJob.kind,
+        processorRevision: imageProcessingJob.processorRevision,
+        runId: imageProcessingJob.runId,
       })
+      .from(imageProcessingJob)
       .where(inArray(imageProcessingJob.id, ids));
+    // Executions missing since a legacy failure are recreated in their lane.
+    for (const row of reopened)
+      await enqueueImageProcessingExecution(transactionDb, row);
+    await retryJobsNow(
+      transactionDb,
+      inArray(durableJob.key, ids.map(imageProcessingJobKey)),
+    );
     await recordChange(tx, {
       kind: "projection",
       categories: ["imageJob"],
@@ -884,23 +1058,138 @@ export async function retryFailedImageProcessingJobs(
   });
 }
 
-export async function findImageProcessingWakeupsForImage(
+/** A newer Apple build may succeed where an older one failed: due again now. */
+export const retryBackingOffDeviceWork = (db: Database) =>
+  retryJobsNow(
+    db,
+    and(
+      eq(durableJob.kind, "image.device"),
+      eq(durableJob.state, "retry_wait"),
+    )!,
+  );
+
+/** Open rows whose execution is missing or stopped: work no executor would reach. */
+const strandedImageWork =
+  () => sql<boolean>`${imageProcessingJob.state} = ${imageProcessingJobState.enum.pending}
+  AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || "ImageProcessingJob".id::text
+    AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}))`;
+
+/** Open image rows without a live execution: the watchdog's disagreement count. */
+export async function countStrandedImageProcessing(db: Database) {
+  const [row] = await getDb(db)
+    .select({ count: sql<number>`count(*)::int` })
+    .from(imageProcessingJob)
+    .where(strandedImageWork());
+  return row?.count ?? 0;
+}
+
+/**
+ * Self-healing for image execution, run by the queue watchdog in bounded
+ * batches: retire moot work, reopen legacy terminal or leased rows, and give
+ * every open row a live Job in its lane. Image work is never abandoned, so a
+ * stopped execution of open work is always a bug to repair, not a decision.
+ */
+export async function repairImageProcessingExecution(
+  db: Database,
+  limit: number,
+) {
+  const retired = await retireObsoleteImageProcessingJobs(db, { limit });
+  // Device work an older build backed off never armed the wake, and the
+  // drain never claims it; arming the existing wake while parked work exists
+  // keeps it from idling until an unrelated ring or reconnect.
+  // A missing wake is created and a finished one requeued; a live one keeps
+  // its schedule and retry state (`repeatDeviceWake`).
+  const parked = await parkedDeviceWork(db, new Date());
+  if (parked.due || parked.next) await repeatDeviceWake(db);
+  // Rows a pre-cutover writer left leased or device-waiting are open work.
+  const reopened = await getDb(db)
+    .update(imageProcessingJob)
+    .set({ state: "pending", completedAt: null })
+    .where(
+      inArray(
+        imageProcessingJob.id,
+        getDb(db)
+          .select({ id: imageProcessingJob.id })
+          .from(imageProcessingJob)
+          .where(
+            inArray(imageProcessingJob.state, ["leased", "waiting_for_device"]),
+          )
+          .limit(limit),
+      ),
+    )
+    .returning({ id: imageProcessingJob.id });
+  const stranded = await getDb(db)
+    .select({
+      id: imageProcessingJob.id,
+      imageId: imageProcessingJob.imageId,
+      kind: imageProcessingJob.kind,
+      processorRevision: imageProcessingJob.processorRevision,
+      runId: imageProcessingJob.runId,
+    })
+    .from(imageProcessingJob)
+    .where(strandedImageWork())
+    .orderBy(asc(imageProcessingJob.id))
+    .limit(limit);
+  if (stranded.length) {
+    const keys = stranded.map((row) => imageProcessingJobKey(row.id));
+    await retryJobsNow(
+      db,
+      and(
+        inArray(durableJob.key, keys),
+        inArray(durableJob.state, ["failed", "cancelled"]),
+      )!,
+    );
+    // A finished or paused execution of open work restarts too.
+    await getDb(db)
+      .update(durableJob)
+      .set({
+        state: "queued",
+        attempts: 0,
+        generation: sql`${durableJob.generation} + 1`,
+        availableAt: new Date(),
+        waitReason: null,
+        waitUntil: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(durableJob.key, keys),
+          inArray(durableJob.state, ["completed", "paused"]),
+        ),
+      );
+    for (const row of stranded) await enqueueImageProcessingExecution(db, row);
+  }
+  return {
+    retired,
+    reopened: reopened.length,
+    restarted: stranded.length,
+    more:
+      retired >= limit || reopened.length >= limit || stranded.length >= limit,
+  };
+}
+
+/**
+ * A result that unblocks an image's other work (a prepared rendition) brings
+ * its waiting jobs forward. Failure backoff is left alone.
+ */
+export async function bringImageProcessingForward(
   db: Database,
   imageId: ImageId,
-): Promise<string[]> {
-  const rows = await getDb(db)
-    .select({ id: imageProcessingJob.id })
-    .from(imageProcessingJob)
+) {
+  await getDb(db)
+    .update(durableJob)
+    .set({ availableAt: new Date(), waitReason: null, waitUntil: null })
     .where(
       and(
-        eq(imageProcessingJob.imageId, imageId),
-        or(
-          eq(imageProcessingJob.state, "pending"),
-          eq(imageProcessingJob.state, "waiting_for_device"),
-        ),
+        eq(durableJob.subjectKind, "image"),
+        eq(durableJob.subjectId, imageId),
+        inArray(durableJob.kind, ["image.cloud", "image.device"]),
+        eq(durableJob.state, "queued"),
+        eq(durableJob.waitReason, "device"),
       ),
     );
-  return rows.map((row) => row.id);
 }
 
 type DescriptionAnalysisIdentity = {
@@ -987,7 +1276,7 @@ function canAdoptCompletion(
       );
   return (
     job.kind === outcome.kind &&
-    job.state === "leased" &&
+    job.state === "pending" &&
     job.attemptId === input.result.attemptId &&
     job.leaseValid &&
     job.imageHash === job.sourceContentHash &&
@@ -1006,96 +1295,81 @@ function canAdoptCompletion(
 }
 
 /**
- * One more failure since the last operator retry. A retryable failure returns
- * to `pending` with backoff until the budget is spent; then, like any terminal
- * failure, the job and its derivative fail with the last error. An executor's
- * retryable flag cannot outlast the budget: a deterministic failure reported
- * as retryable would otherwise loop forever.
+ * One more reported failure. Image work is never abandoned: every failure,
+ * including one its executor calls non-retryable, waits out capped
+ * exponential backoff and runs again, keeping its cause on the row. After
+ * `JOB_NEEDS_ATTENTION_ATTEMPTS` failures it also shows as needing attention.
  */
 async function settleImageProcessingFailure(
   tx: DrizzleTransaction,
-  job: { id: string; derivativeId: string | null },
+  job: { id: string },
   input: {
     reason: string;
-    retryable: boolean;
     set: Partial<typeof imageProcessingJob.$inferInsert>;
-    retryAt?: SQL | Date;
+    execution: JobClaim;
   },
-): Promise<boolean> {
-  const execution = await externalJobClaim(
-    tx,
-    `image-processing:${job.id}`,
-    undefined,
-    true,
+): Promise<void> {
+  await failJob(
+    databaseForTransaction(tx),
+    input.execution,
+    new Error(input.reason),
   );
-  if (!execution) return false;
-  if (!input.retryable) execution.attempts = execution.maxAttempts;
-  await failJob(databaseForTransaction(tx), execution, new Error(input.reason));
-  const retry = input.retryable && execution.attempts < execution.maxAttempts;
-  const reason = input.reason;
+  // The backoff ends while devices may idle; the wake rings them then.
+  if (input.execution.kind === "image.device")
+    await armDeviceWake(databaseForTransaction(tx));
   await tx
     .update(imageProcessingJob)
-    .set({
-      ...input.set,
-      lastError: reason,
-      state: retry ? "pending" : "failed",
-      ...(retry ? {} : { completedAt: new Date() }),
-    })
+    .set({ ...input.set, lastError: input.reason })
     .where(eq(imageProcessingJob.id, job.id));
-  if (!retry && job.derivativeId)
-    await tx
-      .update(imageDerivative)
-      .set({ status: "failed", failureReason: reason })
-      .where(eq(imageDerivative.id, job.derivativeId));
-  return retry;
 }
 
-async function adoptTerminalCompletion(
+async function adoptFailedCompletion(
   tx: DrizzleTransaction,
   job: CompletionJob,
   input: CompletionInput,
+  execution: JobClaim,
 ): Promise<boolean> {
   const outcome = input.result.outcome;
-  if (outcome.status === "completed") return false;
-  const base = {
-    attemptId: null,
-    runtime: input.runtime ?? null,
-    result: outcome,
-  };
-  if (outcome.status === "failed") {
-    const retry = await settleImageProcessingFailure(tx, job, {
-      reason: outcome.reason,
-      retryable: outcome.retryable,
-      set: base,
-    });
-    if (!retry && input.orphanOutputKey) {
-      await tx
-        .insert(imageProcessingOrphan)
-        .values({
-          key: input.orphanOutputKey,
-          attemptId: input.result.attemptId,
-          reason: outcome.reason,
-        })
-        .onConflictDoNothing();
-    }
-    return true;
-  }
-  await tx
-    .update(imageProcessingJob)
-    .set({
-      ...base,
-      state: "skipped",
-      completedAt: sql`now()`,
-      lastError: outcome.reason,
-    })
-    .where(eq(imageProcessingJob.id, job.id));
-  if (job.derivativeId) {
+  if (outcome.status !== "failed") return false;
+  // The failed attempt keeps its id on the row so the retry can prefer
+  // another device; its Job token is gone, so it can no longer adopt.
+  await settleImageProcessingFailure(tx, job, {
+    reason: outcome.reason,
+    set: { runtime: input.runtime ?? null, result: outcome },
+    execution,
+  });
+  if (input.orphanOutputKey)
     await tx
-      .update(imageDerivative)
-      .set({ status: "skipped", failureReason: outcome.reason })
-      .where(eq(imageDerivative.id, job.derivativeId));
-  }
+      .insert(imageProcessingOrphan)
+      .values({
+        key: input.orphanOutputKey,
+        attemptId: input.result.attemptId,
+        reason: outcome.reason,
+      })
+      .onConflictDoNothing();
   return true;
+}
+
+/**
+ * An executor's `skipped` (no_subject, not_suitable, unsupported_format) is
+ * its verdict on one attempt, not a moot ending: only the server ends work
+ * as moot (deletion, replacement, supersession, policy exclusion, in
+ * `retireObsoleteImageProcessingJobs`). It is recorded as a retryable
+ * failure that keeps its reason code, so the work backs off, runs again, and
+ * asks for attention after repeated failures like any other failure.
+ */
+function reportedSkipAsFailure(input: CompletionInput): CompletionInput {
+  const outcome = input.result.outcome;
+  if (outcome.status !== "skipped") return input;
+  const failed = {
+    status: "failed" as const,
+    retryable: true,
+    reason: outcome.reason,
+  };
+  return {
+    ...input,
+    result: { ...input.result, outcome: { ...failed, kind: outcome.kind } },
+  };
 }
 
 async function adoptSuccessfulCompletion(
@@ -1183,15 +1457,19 @@ async function adoptSuccessfulCompletion(
  */
 export async function completeImageProcessingJob(
   db: Database,
-  input: CompletionInput,
+  reported: CompletionInput,
 ): Promise<{ adopted: boolean; orphanKey: string | null }> {
+  const input = reportedSkipAsFailure(reported);
   let settledPhotoRunId: string | null = null;
   const completion = await withTransaction(db, async (tx) => {
+    // A result after lease expiry is still adopted while no newer attempt
+    // has claimed the Job (the token is unchanged).
     const execution = await externalJobClaim(
       tx,
-      `image-processing:${input.result.jobId}`,
+      imageProcessingJobKey(input.result.jobId),
       input.result.attemptId,
       true,
+      { lateAdoption: true },
     );
     const [job] = await tx
       .select({
@@ -1222,11 +1500,7 @@ export async function completeImageProcessingJob(
       )
       .where(eq(imageProcessingJob.id, input.result.jobId))
       .for("update", { of: [imageProcessingJob, image] });
-    if (
-      !canAdoptCompletion(job, input) ||
-      !execution ||
-      execution.leaseExpiresAt.getTime() <= Date.now()
-    ) {
+    if (!canAdoptCompletion(job, input) || !execution) {
       const attempt = await tx.query.imageProcessingAttempt.findFirst({
         where: and(
           eq(imageProcessingAttempt.id, input.result.attemptId),
@@ -1234,15 +1508,29 @@ export async function completeImageProcessingJob(
         ),
       });
       if (attempt && !["ready", "skipped", "failed"].includes(attempt.state)) {
+        const outcome = input.result.outcome;
+        // A newer attempt owns the work; a late failure still lands in this
+        // attempt's history instead of vanishing. A released attempt keeps
+        // its release, which the device itself reported.
+        if (outcome.status === "failed" && attempt.state !== "released")
+          await tx
+            .update(imageProcessingAttempt)
+            .set({
+              state: "failed",
+              completedAt: sql`now()`,
+              result: outcome,
+              error: outcome.reason,
+            })
+            .where(eq(imageProcessingAttempt.id, attempt.id));
         await recordImageProcessingEvent(tx, {
           jobId: attempt.jobId,
           eventKey: `${attempt.id}:rejected`,
           event: "completion.rejected",
           attempt: attempt.number,
-          level: "debug",
+          level: outcome.status === "failed" ? "error" : "debug",
           details: {
             reason: "Attempt, source, or lease no longer current",
-            result: input.result.outcome,
+            result: outcome,
             diagnostics: input.result.diagnostics ?? null,
           },
         });
@@ -1250,7 +1538,7 @@ export async function completeImageProcessingJob(
       return { adopted: false, orphanKey: null };
     }
     const adopted =
-      (await adoptTerminalCompletion(tx, job, input)) ||
+      (await adoptFailedCompletion(tx, job, input, execution)) ||
       (await adoptSuccessfulCompletion(tx, job, input));
     if (!adopted) return { adopted: false, orphanKey: null };
     const outcome = input.result.outcome;
@@ -1296,15 +1584,6 @@ export async function completeImageProcessingJob(
       );
       if (!published) throw new JobSupersededError();
     }
-    if (outcome.status === "failed")
-      await repositoryBeforeCommit(
-        tx,
-        async () => {
-          if (execution.leaseExpiresAt.getTime() <= Date.now())
-            throw new JobSupersededError();
-        },
-        { phase: "publication" },
-      );
     await recordChange(tx, {
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
@@ -1509,7 +1788,7 @@ export async function getImageProcessingReadProjection(
   const jobs = await getDb(db)
     .select({
       kind: imageProcessingJob.kind,
-      state: imageProcessingJob.state,
+      state: imageJobDisplayStateSql(),
       processorRevision: imageProcessingJob.processorRevision,
     })
     .from(imageProcessingJob)
@@ -1652,85 +1931,123 @@ export async function getImageProcessingReadProjection(
   };
 }
 
-/** Release only the assigned live attempt; process death is still repaired by lease expiry. */
+/** The device-assigned attempt that still owns the job, for release and renewal. */
+async function deviceAssignment(
+  tx: DrizzleTransaction,
+  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+) {
+  const [assignment] = await tx
+    .select({
+      state: imageProcessingJob.state,
+      attemptId: imageProcessingJob.attemptId,
+      executor: imageProcessingAttempt.executor,
+      assignedUserId: imageProcessingAttempt.assignedUserId,
+    })
+    .from(imageProcessingJob)
+    .leftJoin(
+      imageProcessingAttempt,
+      and(
+        eq(imageProcessingAttempt.id, input.attemptId),
+        eq(imageProcessingAttempt.jobId, imageProcessingJob.id),
+      ),
+    )
+    .where(eq(imageProcessingJob.id, input.jobId))
+    .limit(1)
+    .for("update", { of: [imageProcessingJob] });
+  if (!assignment) return { status: "obsolete" as const };
+  if (assignment.state !== "pending") return { status: "obsolete" as const };
+  return assignment.attemptId === input.attemptId &&
+    assignment.assignedUserId === input.userId &&
+    assignment.executor?.kind === "device" &&
+    assignment.executor.deviceId === input.deviceId
+    ? { status: "assigned" as const }
+    : { status: "lost" as const };
+}
+
+/**
+ * A device stopped before finishing. Release is never an attempt: the job is
+ * due again at once, and its next claim prefers another device. A release
+ * after lease expiry still counts while no newer attempt replaced it.
+ */
 export async function releaseAssignedImageProcessingJob(
   db: Database,
   input: { jobId: string; attemptId: string; deviceId: string; userId: string },
 ): Promise<boolean> {
+  const assigned = await withTransaction(db, async (tx) =>
+    deviceAssignment(tx, input),
+  );
+  if (assigned.status !== "assigned") return false;
+  return releaseImageProcessingLease(db, {
+    jobId: input.jobId,
+    attemptId: input.attemptId,
+    reason: "Background execution released",
+    event: "execution.released",
+    source: "device",
+  });
+}
+
+/** The device lease each renewal extends to. */
+const DEVICE_LEASE_RENEWAL_MS = 60_000;
+
+/**
+ * A device heartbeat: extend the attempt's Job lease by 60 s while it still
+ * owns the job. An expired lease no newer attempt replaced is renewed too,
+ * matching late completion adoption. The command deadline is this lease.
+ */
+export async function renewAssignedImageProcessingLease(
+  db: Database,
+  input: { jobId: string; attemptId: string; deviceId: string; userId: string },
+): Promise<
+  | { ok: true; leaseExpiresAt: string }
+  | { ok: false; reason: "lease_lost" | "job_obsolete" }
+> {
   return withTransaction(db, async (tx) => {
     const execution = await externalJobClaim(
-      databaseForTransaction(tx),
-      `image-processing:${input.jobId}`,
+      tx,
+      imageProcessingJobKey(input.jobId),
       input.attemptId,
       true,
+      { lateAdoption: true },
     );
-    if (!execution) return false;
-    const [assignment] = await tx
-      .select({
-        executor: imageProcessingAttempt.executor,
-        derivativeId: imageProcessingJob.derivativeId,
-      })
-      .from(imageProcessingJob)
-      .innerJoin(
-        imageProcessingAttempt,
-        eq(imageProcessingAttempt.id, imageProcessingJob.attemptId),
-      )
+    const assigned = await deviceAssignment(tx, input);
+    if (assigned.status === "obsolete")
+      return { ok: false as const, reason: "job_obsolete" as const };
+    if (!execution || assigned.status !== "assigned")
+      return { ok: false as const, reason: "lease_lost" as const };
+    const [source] = await tx
+      .select({ id: image.id })
+      .from(image)
+      .innerJoin(imageProcessingJob, eq(imageProcessingJob.imageId, image.id))
       .where(
         and(
           eq(imageProcessingJob.id, input.jobId),
-          eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
-          eq(imageProcessingAttempt.assignedUserId, input.userId),
+          notDeleted(image),
+          eq(image.status, ImageStatus.enum.UPLOADED),
+          eq(image.sha256, imageProcessingJob.sourceContentHash),
+          currentImageProcessingProcessor(),
+        ),
+      );
+    if (!source) return { ok: false as const, reason: "job_obsolete" as const };
+    const [renewed] = await tx
+      .update(durableJob)
+      .set({
+        leaseExpiresAt: new Date(Date.now() + DEVICE_LEASE_RENEWAL_MS),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(durableJob.id, execution.id),
+          eq(durableJob.state, "running"),
+          eq(durableJob.leaseToken, input.attemptId),
+          eq(durableJob.generation, execution.generation),
         ),
       )
-      .limit(1)
-      .for("update", { of: [imageProcessingJob] });
-    if (
-      assignment?.executor?.kind !== "device" ||
-      assignment.executor.deviceId !== input.deviceId
-    )
-      return false;
-    if (assignment.derivativeId) {
-      const [output] = await tx
-        .select({ key: imageDerivative.key })
-        .from(imageDerivative)
-        .where(eq(imageDerivative.id, assignment.derivativeId));
-      if (output)
-        await tx
-          .insert(imageProcessingOrphan)
-          .values({
-            key: output.key,
-            attemptId: input.attemptId,
-            reason: "Background execution released",
-          })
-          .onConflictDoNothing();
-    }
-    await tx
-      .update(imageProcessingAttempt)
-      .set({
-        state: "failed",
-        completedAt: sql`now()`,
-        error: "Background execution released",
-      })
-      .where(eq(imageProcessingAttempt.id, input.attemptId));
-    await publishJobPage(databaseForTransaction(tx), execution, {
-      done: false,
-    });
-    await tx
-      .update(imageProcessingJob)
-      .set({
-        state: "pending",
-        attemptId: null,
-        lastError: "Background execution released",
-      })
-      .where(eq(imageProcessingJob.id, input.jobId));
-    await recordImageProcessingEvent(tx, {
-      jobId: input.jobId,
-      eventKey: `${input.attemptId}:released`,
-      event: "execution.released",
-      level: "info",
-      source: "device",
-    });
-    return true;
+      .returning({ leaseExpiresAt: durableJob.leaseExpiresAt });
+    if (!renewed?.leaseExpiresAt)
+      return { ok: false as const, reason: "lease_lost" as const };
+    return {
+      ok: true as const,
+      leaseExpiresAt: renewed.leaseExpiresAt.toISOString(),
+    };
   });
 }

@@ -60,7 +60,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { quotedTable } from "~/server/db/helpers/related";
+import { outer, quotedTable, related } from "~/server/db/helpers/related";
 import {
   email,
   expense,
@@ -599,6 +599,8 @@ async function workQueueProjection(
       ...workRunReviewRead(),
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
+      // A funding-stopped predecessor whose work moved to a retry successor
+      // is no longer waiting; the successor carries the execution.
       where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
         // A running maintenance pass or Sweep is not member work; its failed
         // or stalled outcomes still surface through the failure paths.
@@ -606,7 +608,13 @@ async function workQueueProjection(
           (purpose) => !isStepRunPurpose(purpose),
         ).map((purpose) => sql`${purpose}`),
         sql`, `,
-      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit')))`,
+      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
+        runTable,
+        (successor) =>
+          sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+        // The work moved even to a deleted successor.
+        { includeDeleted: true },
+      ).exists()}))`,
       details: {
         source: "execution",
         kind: "repair",

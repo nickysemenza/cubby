@@ -7,12 +7,19 @@ import {
   type ImageJobOut,
   imageJobOut,
 } from "@cubby/schemas/image-job";
+import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
+import { describeJobWaitingOn } from "@cubby/schemas/job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  isTransaction,
+  unwrapDb,
+} from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
+import { job } from "~/server/db/retained-tables";
 import { imageProcessingJob } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -20,6 +27,8 @@ import {
   createEntityRowFetcher,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
+import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
+import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -29,20 +38,26 @@ import {
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { imageJobDisplayStateSql } from "../image-processing/repo/image-job-state";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+  imageProcessingJobKey,
 } from "../image-processing/repo/image-processing";
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
 
-const scaffold = listScaffold("imageJob", imageProcessingJob);
+const scaffold = listScaffold("imageJob", imageProcessingJob, {
+  // Built per read: the derivation compares lease expiry with the read's time.
+  derived: { state: listReadValue(() => imageJobDisplayStateSql()) },
+});
 
 type Facts = {
   chargedCost: number;
   standardCost: number;
   lastExecutor: string | null;
   deviceRan: boolean;
+  state: ImageProcessingJobState;
 };
 
 /**
@@ -60,6 +75,7 @@ const loadFacts = async (
     standard: string | number | null;
     executor: string | null;
     deviceRan: boolean;
+    state: ImageProcessingJobState;
   }>(sql`
     SELECT j.id, cost.charged, cost.standard,
       coalesce(
@@ -71,7 +87,8 @@ const loadFacts = async (
           THEN 'AI Gateway' END
       ) AS executor,
       EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
-        WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan"
+        WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan",
+      ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} AS state
     FROM "ImageProcessingJob" j
     -- Each usage source probes "AiUsage_job_idx" by its own (jobKind, jobId).
     -- An OR with an attempt-id IN list cannot, and scanned every attempt's
@@ -104,17 +121,19 @@ const loadFacts = async (
         standardCost: Number(row.standard ?? 0),
         lastExecutor: row.executor,
         deviceRan: row.deviceRan,
+        state: row.state,
       },
     ]),
   );
 };
 
 /**
- * A skipped job's stored reason is a code; the household reads what Apple
- * decided, or that an older policy skipped it. Stored diagnostics stay intact.
+ * An executor's skip reason is stored as a code: on a job that retries it
+ * (executor skips are failures now) or on one an older release ended as
+ * skipped. The household reads what Apple decided, or that an older policy
+ * skipped it. Stored diagnostics stay intact.
  */
 const issueText = (row: ImageJobRow, deviceRan: boolean) => {
-  if (row.state !== "skipped") return row.lastError;
   switch (row.lastError) {
     case "no_subject":
       return "Apple found no foreground subject.";
@@ -151,7 +170,34 @@ const imageJobRead = {
         rows.map((row) => row.id),
       ),
     );
+    const execution = bind.batch(async ({ db, rows }) => {
+      const open = rows.filter((row) => row.state === "pending");
+      if (!open.length) return new Map<string, string | null>();
+      const keyOf = new Map(
+        open.map((row) => [imageProcessingJobKey(row.id), row.id]),
+      );
+      const jobs = await unwrapDb(db)
+        .select()
+        .from(job)
+        .where(inArray(job.key, [...keyOf.keys()]));
+      const waiting = await loadJobWaitingOn(
+        isTransaction(db) ? databaseForTransaction(db) : db,
+        jobs,
+      );
+      return new Map(
+        jobs.map((entry) => [
+          keyOf.get(entry.key) ?? "",
+          describeJobWaitingOn(waiting.get(entry.id) ?? null),
+        ]),
+      );
+    });
     return [
+      execution.fields(
+        imageJobOut.pick({ waitingOn: true }),
+        (row, loaded) => ({
+          waitingOn: loaded.get(row.id) ?? null,
+        }),
+      ),
       images.fields(
         imageJobOut.pick({ imageId: true, displayName: true }),
         (row, loaded) => {
@@ -178,6 +224,7 @@ const imageJobRead = {
           standardCost: true,
           lastExecutor: true,
           lastError: true,
+          state: true,
         }),
         (row, loaded) => {
           const fact = loaded.get(row.id);
@@ -186,6 +233,7 @@ const imageJobRead = {
             standardCost: fact?.standardCost ?? 0,
             lastExecutor: fact?.lastExecutor ?? null,
             lastError: issueText(row, fact?.deviceRan ?? false),
+            state: fact?.state ?? row.state,
           };
         },
       ),

@@ -68,6 +68,7 @@ import { disposeUnrelatedOriginals } from "../repo/gmail/persistence";
 import * as gmail from "../repo/gmail/provider";
 import { GmailAuthorizationError } from "../repo/gmail/tokens";
 import { GmailApiError, type GmailProvider } from "../repo/gmail/types";
+import * as ingestModule from "../service/gmail/ingest";
 import * as routing from "../service/gmail/triage-model";
 import { readMail, resolveMail, searchMail, settleMail } from "./mail-tool";
 import {
@@ -1205,6 +1206,46 @@ describe("public mail tool", () => {
       });
       expect(await getDb(ctx.db).select().from(emailTable)).toEqual([]);
       expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
+    });
+
+    it("names the Run holding a match and skips only a message that lost a contention race", async () => {
+      const f = await fixture();
+      const ingest = ingestModule.ingestGmailMessages;
+      const contended = vi
+        .spyOn(ingestModule, "ingestGmailMessages")
+        .mockImplementation(async (db, provider, input) => {
+          // The evidence write's own retries were exhausted for this message.
+          if (input.messageIds.includes("synthetic-trash"))
+            throw Object.assign(new Error("could not serialize access"), {
+              code: "40001",
+            });
+          return ingest(db, provider, input);
+        });
+      const first = await searchMail(ctx.db, f.input, f.actor);
+      expect(first).toMatchObject({
+        status: "ok",
+        retryableMessageIds: ["synthetic-trash"],
+        messages: [{ messageId: "synthetic-first", heldBy: null }],
+      });
+      contended.mockRestore();
+      const [holder] = await getDb(ctx.db)
+        .select({ shortcode: run.shortcode, status: run.status })
+        .from(run)
+        .where(eq(run.id, f.actor.runId));
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ runId: f.actor.runId })
+        .where(eq(emailTable.messageId, "synthetic-first"));
+      const held = await searchMail(ctx.db, f.input, f.actor);
+      expect(held).toMatchObject({
+        retryableMessageIds: [],
+        messages: [
+          {
+            messageId: "synthetic-first",
+            heldBy: { run: holder?.shortcode, status: holder?.status },
+          },
+        ],
+      });
     });
 
     it("pages scoped history excluding Spam and Trash without advancing mailbox coverage", async () => {

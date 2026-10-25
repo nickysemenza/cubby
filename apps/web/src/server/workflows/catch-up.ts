@@ -49,6 +49,9 @@ export async function recoverMissedWork(
   await (
     await import("~/server/domains/run/service/derived-discovery")
   ).scheduleDerivedDiscovery(db);
+  await (
+    await import("~/server/workflows/queue-watchdog")
+  ).enrollQueueMaintenance(db);
   await (await import("~/server/workflows/jobs")).drainProductionJobs(db);
   await (
     await import("~/server/workflows/runs/lifecycle")

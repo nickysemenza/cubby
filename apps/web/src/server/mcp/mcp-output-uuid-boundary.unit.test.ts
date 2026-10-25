@@ -34,6 +34,9 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity_read.items[].unitMappings[].id",
   // Image processing jobs are internal queue handles, not Image entity links.
   "image.jobIds[]",
+  // Jobs are high-churn execution rows without shortcodes; their id is the
+  // handle job.explain and maintenance.retry_now take.
+  "maintenance_read.jobs[].id",
   // A recipe line has no shortcode; recipe_insights.patch_line takes this id.
   "recipe_insights_read.recipes[].usages[].lineId",
   // MealRecipe has no shortcode. nutrition.plan_recipe exposes the newly inserted

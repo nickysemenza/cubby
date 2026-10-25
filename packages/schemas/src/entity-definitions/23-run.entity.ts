@@ -1,4 +1,4 @@
-import type { EnumIcon } from "@cubby/shared/enum-palette";
+import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
 import {
@@ -11,6 +11,7 @@ import {
   RUN_PURPOSE_LABEL,
   VISIBLE_RUN_PURPOSES,
   runCause,
+  runDisplayStatus,
   runPurpose,
   runRetirementReason,
   runStatus,
@@ -44,6 +45,53 @@ const RUN_PURPOSE_GLYPH = {
   },
   sweep: { phosphor: "Broom", sfSymbol: "wind" },
 } satisfies Record<z.infer<typeof runPurpose>, EnumIcon>;
+
+const RUN_STATUS_OPTIONS = [
+  {
+    value: "running",
+    label: "Running",
+    color: "info",
+  },
+  {
+    value: "paused",
+    label: "Paused",
+    color: "warning",
+  },
+  {
+    value: "paused_auth",
+    label: "Agent authorization needed",
+    color: "warning",
+  },
+  {
+    value: "paused_offline",
+    label: "Paused offline (historical)",
+    color: "warning",
+  },
+  {
+    value: "needs_review",
+    label: "Needs review",
+    color: "warning",
+  },
+  {
+    value: "completed",
+    label: "Completed",
+    color: "positive",
+  },
+  {
+    value: "failed",
+    label: "Failed",
+    color: "destructive",
+  },
+  {
+    value: "dispatch_failed",
+    label: "Dispatch failed",
+    color: "destructive",
+  },
+] satisfies {
+  value: z.infer<typeof runStatus>;
+  label: string;
+  color: ColorToken;
+}[];
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   read,
@@ -98,10 +146,18 @@ export default defineEntity({
           fields: ["failureCode", "dispatchError"],
         },
         {
+          // Both directions of a retry: "Retried as" on the earlier Run,
+          // "Retry of" on its successor.
+          kind: "fields",
+          id: "retries",
+          title: "Retries",
+          fields: ["successorRunId", "predecessorRunId"],
+        },
+        {
           kind: "fields",
           id: "progress",
           title: "Processing",
-          fields: ["workProgress"],
+          fields: ["workProgress", "waitingOn", "stalled"],
         },
         {
           kind: "fields",
@@ -120,7 +176,7 @@ export default defineEntity({
           "The Changes slot's audit log lists every record the run wrote, purchases included; Purchase stores no run reference to filter by.",
       },
       hero: {
-        chip: "status",
+        chip: "displayStatus",
         // Import-only order counts stay in the `import-stats` slot.
 
         breadcrumb: "vendorAccountId",
@@ -135,6 +191,9 @@ export default defineEntity({
           fields: [
             "activityAt",
             "status",
+            "displayStatus",
+            "waitingOn",
+            "stalled",
             "purpose",
             "trigger",
             "routine",
@@ -167,6 +226,7 @@ export default defineEntity({
             "runtimeRevision",
             "decisionRevision",
             "predecessorRunId",
+            "successorRunId",
             "parentRunId",
             "cause",
             "attempt",
@@ -306,7 +366,14 @@ export default defineEntity({
       links: [{ label: "Run types", path: "/runs/types" }],
       // Display images borrow from the vendor; they load as list media.
       read: {
-        derived: ["workProgress", "activityAt"],
+        derived: [
+          "workProgress",
+          "activityAt",
+          "waitingOn",
+          "stalled",
+          "displayStatus",
+          "successorRunId",
+        ],
         media: ["displayImages"],
         quality: ["dataQuality"],
       },
@@ -423,48 +490,7 @@ export default defineEntity({
         kind: "enum",
         control: {
           kind: "select",
-          options: [
-            {
-              value: "running",
-              label: "Running",
-              color: "info",
-            },
-            {
-              value: "paused",
-              label: "Paused",
-              color: "warning",
-            },
-            {
-              value: "paused_auth",
-              label: "Agent authorization needed",
-              color: "warning",
-            },
-            {
-              value: "paused_offline",
-              label: "Paused offline (historical)",
-              color: "warning",
-            },
-            {
-              value: "needs_review",
-              label: "Needs review",
-              color: "warning",
-            },
-            {
-              value: "completed",
-              label: "Completed",
-              color: "positive",
-            },
-            {
-              value: "failed",
-              label: "Failed",
-              color: "destructive",
-            },
-            {
-              value: "dispatch_failed",
-              label: "Dispatch failed",
-              color: "destructive",
-            },
-          ],
+          options: RUN_STATUS_OPTIONS,
         },
         display: {
           columnGroup: "Execution",
@@ -473,6 +499,76 @@ export default defineEntity({
           optionColor: "neutral-status",
         },
         validation: readOnly(runStatus),
+      },
+      {
+        // The header reads this, so a Run whose open work moved to a retry
+        // successor no longer reads "Needs review"; `status` stays the
+        // stored, filterable state.
+        key: "displayStatus",
+        kind: "enum",
+        labelOverride: "State",
+        provenance: {
+          kind: "derived",
+          sources: [
+            { label: "Status" },
+            { label: "Retry successor" },
+            { label: "AI funding wait" },
+          ],
+        },
+        explanation: {
+          ruleId: "run.display-status",
+          description:
+            "The stored status, except that a Run stopped for review or failed whose open work was carried into a retry reads Retried, and a Run stopped by its AI funding window reads Waiting for AI funding.",
+        },
+        control: {
+          kind: "select",
+          options: [
+            ...RUN_STATUS_OPTIONS,
+            { value: "retried", label: "Retried", color: "neutral-status" },
+            {
+              value: "waiting_for_funding",
+              label: "Paused: waiting for AI funding",
+              color: "warning",
+            },
+          ],
+        },
+        display: {
+          list: false,
+          optionRole: "status",
+          optionColor: "neutral-status",
+        },
+        validation: readOnly(runDisplayStatus),
+      },
+      {
+        key: "waitingOn",
+        kind: "text",
+        nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "The Run's live Jobs" }],
+        },
+        explanation: {
+          ruleId: "run.waiting-on",
+          description:
+            "The Run's live Jobs counted by what each waits on (due, waiting for an Apple device, waiting for AI funding, in progress, backing off, blocked, paused).",
+        },
+        display: { columnGroup: "Execution" },
+        validation: readOnly(z.string().nullable().default(null)),
+      },
+      {
+        key: "stalled",
+        kind: "boolean",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest Job claim or completion" }],
+        },
+        explanation: {
+          ruleId: "run.stalled",
+          description:
+            "Live Jobs remain but none was claimed or finished for 15 minutes.",
+        },
+        display: { columnGroup: "Execution", width: "sm" },
+        validation: readOnly(z.boolean().default(false)),
       },
       {
         key: "purpose",
@@ -763,9 +859,25 @@ export default defineEntity({
         key: "predecessorRunId",
         kind: "identifier",
         nullable: true,
+        labelOverride: "Retry of",
         reference: { entity: "run" },
         display: { list: false },
         validation: readOnly(runShortcode.nullable()),
+      },
+      {
+        key: "successorRunId",
+        kind: "identifier",
+        nullable: true,
+        labelOverride: "Retried as",
+        // Read from the newest Run whose `predecessorRunId` names this one.
+        reference: { entity: "run" },
+        explanation: {
+          ruleId: "run.successor",
+          description:
+            "The newest retry or restart whose Retry of names this Run.",
+        },
+        display: { list: false },
+        validation: readOnly(runShortcode.nullable().default(null)),
       },
       {
         key: "parentRunId",
@@ -913,6 +1025,9 @@ export default defineEntity({
       "iconEntity",
       "displayName",
       "status",
+      "displayStatus",
+      "waitingOn",
+      "stalled",
       "purpose",
       "trigger",
       "routine",
@@ -939,6 +1054,7 @@ export default defineEntity({
       "coordinatorStartedAt",
       "auditedAt",
       "predecessorRunId",
+      "successorRunId",
       "parentRunId",
       "cause",
       "attempt",

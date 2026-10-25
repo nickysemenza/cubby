@@ -593,7 +593,8 @@ describe("durable jobs", () => {
       sweep.id,
       second.id,
     ]);
-    expect(await dueJobsAhead(ctx.db, second.id)).toBe(1);
+    // The position counts every due Job the fair drain serves first, across kinds.
+    expect(await dueJobsAhead(ctx.db, second.id)).toBe(2);
     const visited: string[] = [];
     const handler = {
       prepare: async (_db: unknown, claim: { id: string }) => {

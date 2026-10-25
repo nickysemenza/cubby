@@ -71,6 +71,12 @@ export default defineEntity({
           title: "Automatic work",
           fields: ["automaticWork"],
         },
+        {
+          kind: "fields",
+          id: "image-readiness",
+          title: "Image work readiness",
+          fields: ["updateRequired", "inactive", "appleIntelligenceAvailable"],
+        },
       ],
     },
   },
@@ -187,6 +193,57 @@ export default defineEntity({
         },
       },
       {
+        // Written by the companion hello; null until a hello reports it.
+        key: "appleIntelligenceAvailable",
+        kind: "boolean",
+        nullable: true,
+        labelOverride: "Apple Intelligence",
+        display: { columnGroup: "Background work" },
+        validation: {
+          read: z.boolean().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "updateRequired",
+        kind: "boolean",
+        display: { columnGroup: "Background work", columnLabel: "Update" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "App version" }],
+        },
+        explanation: {
+          ruleId: "device.update-required",
+          description:
+            "The install's app version is older than the oldest build Cubby accepts writes from, so it cannot process images until it updates.",
+        },
+        validation: {
+          read: z.boolean().default(false),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "inactive",
+        kind: "boolean",
+        display: { columnGroup: "Background work" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Last seen" }],
+        },
+        explanation: {
+          ruleId: "device.inactive",
+          description:
+            "Not seen for 7 days, or never. Inactive installs are left out of Apple queue device counts.",
+        },
+        validation: {
+          read: z.boolean().default(false),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
@@ -289,6 +346,7 @@ export default defineEntity({
       "lastSeenAt",
       { key: "automaticWork", defaultValue: true },
       { key: "remotePaused", defaultValue: false },
+      "appleIntelligenceAvailable",
       { key: "ledgerPartyId", reference: "ledgerParty" },
       { key: "productId", reference: "product" },
       { key: "createdAt" },
@@ -359,6 +417,9 @@ export default defineEntity({
       "lastSeenAt",
       "automaticWork",
       "remotePaused",
+      "appleIntelligenceAvailable",
+      "updateRequired",
+      "inactive",
       "ledgerPartyId",
       "productId",
       "ledgerPartyName",

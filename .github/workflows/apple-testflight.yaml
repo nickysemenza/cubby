@@ -3,7 +3,7 @@ name: Apple TestFlight
 # Publishes current main to TestFlight; ordinary merges never publish. The
 # nightly run publishes when native inputs changed since the last complete
 # upload or that upload is 30 days old; a manual run always publishes; a push
-# that changes the compatibility version publishes immediately. The `plan`
+# that changes the server minimum version publishes immediately. The `plan`
 # job decides in seconds on Linux before any macOS runner or credential is
 # used (apps/apple/tooling/apple-release.ts). Retry with a fresh dispatch, never a rerun.
 on:

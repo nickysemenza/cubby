@@ -691,8 +691,18 @@ export const mailSearchOut = z.object({
       sender: z.string().nullable(),
       subject: z.string().nullable(),
       receivedAt: z.iso.datetime().nullable(),
+      /**
+       * The Run processing this Email, if any. Another live Run's Email cannot be
+       * admitted here; name the holder instead of calling it "not admitted".
+       */
+      heldBy: z
+        .object({ run: runShortcode, status: z.string() })
+        .nullable()
+        .default(null),
     }),
   ),
+  /** Matches whose evidence write lost a contention race; search again to retry. */
+  retryableMessageIds: z.array(z.string()).default([]),
   nextPageToken: z.string().nullable(),
 });
 

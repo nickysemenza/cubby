@@ -13,7 +13,10 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "cubby/native/client-version";
+import {
+  APPLE_CLIENT_MINIMUM_VERSION,
+  APPLE_MARKETING_VERSION,
+} from "cubby/native/client-version";
 
 // Build numbers are this plus the workflow's run_number, shared by both
 // platforms. Mac build numbers must keep increasing; the offset sits above the
@@ -40,6 +43,14 @@ type Decision =
   | { action: "compare"; base: string };
 
 const versionPattern = /^\d+\.\d+\.\d+$/u;
+
+export function isOlderVersion(version: string, than: string) {
+  const left = version.split(".").map(Number);
+  const right = than.split(".").map(Number);
+  for (let index = 0; index < 3; index += 1)
+    if (left[index] !== right[index]) return left[index]! < right[index]!;
+  return false;
+}
 
 export function refuseUnsafeRun(run: { ref: string; runAttempt: number }) {
   if (run.ref !== "refs/heads/main")
@@ -68,17 +79,16 @@ export function decide(facts: {
     return { action: "publish", reason: "manual request" };
   if (facts.event === "push") {
     if (facts.previousVersion === undefined || !facts.pushedVersion)
-      throw new Error(
-        "A push requires its before and after compatibility versions.",
-      );
+      throw new Error("A push requires its before and after minimum versions.");
+    // Older builds lose writes once the minimum moves; ship a compatible one now.
     return facts.pushedVersion !== facts.previousVersion
-      ? { action: "publish", reason: "compatibility bump" }
-      : { action: "skip", reason: "compatibility version unchanged" };
+      ? { action: "publish", reason: "minimum version bump" }
+      : { action: "skip", reason: "minimum version unchanged" };
   }
   if (checkpoint === null || !facts.baselineAvailable)
     return { action: "publish", reason: "missing upload checkpoint" };
   if (facts.version !== checkpoint.version)
-    return { action: "publish", reason: "compatibility bump" };
+    return { action: "publish", reason: "marketing version change" };
   const age = facts.now.getTime() - Date.parse(checkpoint.uploadedAt);
   if (age >= REFRESH_DAYS * 86_400_000)
     return { action: "publish", reason: "30-day refresh" };
@@ -239,12 +249,12 @@ const versionAtCommit = (cwd: string, before: string): string | null => {
         ["-C", cwd, "show", `${before}:${versionPath}`],
         { encoding: "utf8" },
       );
+      // Commits before the split name the minimum APPLE_CLIENT_COMPATIBILITY_VERSION.
       const match =
-        /export const APPLE_CLIENT_COMPATIBILITY_VERSION = "(\d+\.\d+\.\d+)";/u.exec(
+        /export const APPLE_CLIENT_(?:MINIMUM|COMPATIBILITY)_VERSION = "(\d+\.\d+\.\d+)";/u.exec(
           source,
         );
-      if (!match)
-        throw new Error(`Cannot read compatibility version at ${before}`);
+      if (!match) throw new Error(`Cannot read minimum version at ${before}`);
       return match[1]!;
     }
   }
@@ -279,9 +289,17 @@ async function main(command: string | undefined) {
   }
   if (command === "guard") return;
 
-  if (!versionPattern.test(APPLE_CLIENT_COMPATIBILITY_VERSION))
+  for (const [name, value] of Object.entries({
+    APPLE_CLIENT_MINIMUM_VERSION,
+    APPLE_MARKETING_VERSION,
+  }))
+    if (!versionPattern.test(value))
+      throw new Error(
+        `${name} must have three numeric components; got ${value}.`,
+      );
+  if (isOlderVersion(APPLE_MARKETING_VERSION, APPLE_CLIENT_MINIMUM_VERSION))
     throw new Error(
-      `APPLE_CLIENT_COMPATIBILITY_VERSION must have three numeric components; got ${APPLE_CLIENT_COMPATIBILITY_VERSION}.`,
+      `APPLE_MARKETING_VERSION ${APPLE_MARKETING_VERSION} is older than APPLE_CLIENT_MINIMUM_VERSION ${APPLE_CLIENT_MINIMUM_VERSION}; the server would refuse the build's writes.`,
     );
   const cwd = process.cwd();
   const sha = execFileSync("git", ["-C", cwd, "rev-parse", "HEAD"], {
@@ -298,14 +316,14 @@ async function main(command: string | undefined) {
     previousVersion,
     pushedVersion,
     sha,
-    version: APPLE_CLIENT_COMPATIBILITY_VERSION,
+    version: APPLE_MARKETING_VERSION,
     checkpoint,
     baselineAvailable: checkpoint !== null && commitExists(cwd, checkpoint.sha),
     now: new Date(),
   });
   const outputs = {
     sha,
-    version: APPLE_CLIENT_COMPATIBILITY_VERSION,
+    version: APPLE_MARKETING_VERSION,
     build: runNumber === null ? "" : String(BUILD_NUMBER_OFFSET + runNumber),
     action: decision.action,
     reason: decision.action === "compare" ? "native changes" : decision.reason,

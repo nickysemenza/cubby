@@ -1,0 +1,632 @@
+import { eq, sql } from "drizzle-orm";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
+
+import {
+  getDb,
+  withSnapshotWriteDatabase,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
+import { job, jobInvalidation } from "~/server/db/schema";
+import {
+  claimJob,
+  dueJobs,
+  enqueueJob,
+  failJob,
+  publishJobPage,
+  recordJobInvalidation,
+  renewJob,
+} from "~/server/generic/jobs/repo/jobs";
+
+import {
+  invalidateRefreshFamily,
+  scheduleRefreshFamilies,
+  type RefreshFamily,
+} from "./families";
+
+// Production finding: a source capture and the family Job's own execution
+// wrote one tuple, so claims and renewals on another backend aborted finance
+// admission with 40001. Captures now write only `JobInvalidation`; these
+// cases pin that the separation loses no rerun.
+describe("durable family invalidation", () => {
+  const ctx = withTestDb();
+  const family = async (name: RefreshFamily) => {
+    const saved = await enqueueJob(ctx.db, {
+      key: `refresh:${name}`,
+      kind: "refresh.family",
+      input: { family: name },
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "completed" })
+      .where(eq(job.id, saved.id));
+    return saved;
+  };
+  // Refresh families no longer restart on capture; a synthetic kind keeps
+  // the restarting marker's contract pinned (image.device.wake uses it).
+  const RESTARTING = {
+    key: "synthetic:restarting",
+    kind: "synthetic.restarting",
+    input: {},
+  };
+  const restarting = async () => {
+    const saved = await enqueueJob(ctx.db, RESTARTING);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "completed" })
+      .where(eq(job.id, saved.id));
+    return saved;
+  };
+  const capture = (db: Parameters<typeof recordJobInvalidation>[0]) =>
+    recordJobInvalidation(db, { ...RESTARTING, restartsPass: true });
+  const revision = async (key: string) =>
+    (
+      await getDb(ctx.db)
+        .select({ revision: jobInvalidation.revision })
+        .from(jobInvalidation)
+        .where(eq(jobInvalidation.key, key))
+    )[0]?.revision ?? 0;
+  const row = async (id: string) =>
+    (await getDb(ctx.db).select().from(job).where(eq(job.id, id)))[0]!;
+  const due = async (id: string) =>
+    (await dueJobs(ctx.db, 100)).some((entry) => entry.id === id);
+
+  it("keeps a rolled-back capture out and never loses a committed one", async () => {
+    const marked = await restarting();
+    await expect(
+      withTransactionDatabase(ctx.db, async (tx) => {
+        await capture(tx);
+        throw new Error("Synthetic rejected save");
+      }),
+    ).rejects.toThrow("Synthetic rejected save");
+    expect(await revision(RESTARTING.key)).toBe(0);
+    expect(await due(marked.id)).toBe(false);
+    await withTransactionDatabase(ctx.db, (tx) => capture(tx));
+    expect(await revision(RESTARTING.key)).toBe(1);
+    // The completed execution row is untouched, yet the Job is due again.
+    expect(await row(marked.id)).toMatchObject({
+      state: "completed",
+      generation: marked.generation,
+    });
+    expect(await due(marked.id)).toBe(true);
+  });
+
+  it("reruns a capture that landed while a page ran even after the worker died", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    const first = await claimJob(ctx.db, marked.id);
+    if (!first) throw new Error("Expected first claim");
+    expect(first.generation).toBe(marked.generation + 1);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ cursor: { at: "synthetic-page" } })
+      .where(eq(job.id, marked.id));
+    await capture(ctx.db);
+    // The worker vanishes; its lease expires and another claim takes over.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(job.id, marked.id));
+    const reclaimed = await claimJob(ctx.db, marked.id);
+    expect(reclaimed).toMatchObject({
+      generation: first.generation + 1,
+      cursor: null,
+      observedRevision: await revision(RESTARTING.key),
+    });
+    // A pass that finishes first (quality) keeps its cursor across a capture
+    // and a reclaim, completes, and its scheduled repeat reruns it.
+    const quality = await family("quality");
+    await invalidateRefreshFamily(ctx.db, "quality");
+    const pass = await claimJob(ctx.db, quality.id);
+    if (!pass) throw new Error("Expected quality claim");
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        cursor: { at: "synthetic-quality-page" },
+        leaseExpiresAt: new Date(Date.now() - 1_000),
+      })
+      .where(eq(job.id, quality.id));
+    await invalidateRefreshFamily(ctx.db, "quality");
+    const resumed = await claimJob(ctx.db, quality.id);
+    expect(resumed).toMatchObject({
+      generation: pass.generation,
+      cursor: { at: "synthetic-quality-page" },
+    });
+    if (!resumed) throw new Error("Expected quality reclaim");
+    expect(await publishJobPage(ctx.db, resumed, { done: true })).toBe(true);
+    expect((await row(quality.id)).state).toBe("completed");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ updatedAt: new Date(Date.now() - 60 * 60_000) })
+      .where(eq(job.id, quality.id));
+    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    expect(await due(quality.id)).toBe(true);
+  });
+
+  // Production finding: every household write restarted the search pass
+  // (generation ~29k), so it never finished and new records went unindexed;
+  // connection coverage then never confirmed. Families now finish a pass in
+  // progress and rerun from the start for captures made meanwhile.
+  it("finishes a search pass that captures keep landing on", async () => {
+    const searchJob = await family("search");
+    await invalidateRefreshFamily(ctx.db, "search");
+    const first = await claimJob(ctx.db, searchJob.id);
+    if (!first) throw new Error("Expected search claim");
+    expect(
+      await publishJobPage(ctx.db, first, {
+        done: false,
+        cursor: { at: "synthetic-search-page" },
+      }),
+    ).toBe(true);
+    await invalidateRefreshFamily(ctx.db, "search");
+    const next = await claimJob(ctx.db, searchJob.id);
+    expect(next).toMatchObject({
+      generation: first.generation,
+      cursor: { at: "synthetic-search-page" },
+    });
+    await invalidateRefreshFamily(ctx.db, "search");
+    expect(await publishJobPage(ctx.db, next!, { done: true })).toBe(true);
+    expect((await row(searchJob.id)).state).toBe("completed");
+    // The next capture reruns it from the start.
+    await invalidateRefreshFamily(ctx.db, "search");
+    expect(await due(searchJob.id)).toBe(true);
+    const rerun = await claimJob(ctx.db, searchJob.id);
+    expect(rerun).toMatchObject({
+      generation: first.generation + 1,
+      cursor: null,
+    });
+  });
+
+  // A capture of a record the pass already scanned leaves the finished pass
+  // due: the next full pass starts from the first record at once, so the
+  // edit is revisited, never declared done.
+  it("revisits a record captured behind the cursor in the next full pass", async () => {
+    const searchJob = await family("search");
+    await invalidateRefreshFamily(ctx.db, "search");
+    const first = await claimJob(ctx.db, searchJob.id);
+    if (!first) throw new Error("Expected search claim");
+    await publishJobPage(ctx.db, first, {
+      done: false,
+      cursor: { at: "synthetic-later-page" },
+    });
+    // An edit to a record on the page already published.
+    await invalidateRefreshFamily(ctx.db, "search");
+    const last = await claimJob(ctx.db, searchJob.id);
+    expect(last).toMatchObject({
+      generation: first.generation,
+      cursor: { at: "synthetic-later-page" },
+    });
+    expect(await publishJobPage(ctx.db, last!, { done: true })).toBe(true);
+    expect(await row(searchJob.id)).toMatchObject({
+      state: "completed",
+      generation: first.generation,
+    });
+    expect(await due(searchJob.id)).toBe(true);
+    expect(await claimJob(ctx.db, searchJob.id)).toMatchObject({
+      generation: first.generation + 1,
+      cursor: null,
+    });
+  });
+
+  // Review finding: an unobserved capture made a non-restarting pass in
+  // progress due at once, and its claim keeps the old observed revision, so
+  // the same capture bypassed every later backoff in a tight loop.
+  it("keeps a failing pass in progress backing off through a capture", async () => {
+    const searchJob = await family("search");
+    await invalidateRefreshFamily(ctx.db, "search");
+    const first = await claimJob(ctx.db, searchJob.id);
+    if (!first) throw new Error("Expected search claim");
+    await publishJobPage(ctx.db, first, {
+      done: false,
+      cursor: { at: "synthetic-later-page" },
+    });
+    await invalidateRefreshFamily(ctx.db, "search");
+    const failing = await claimJob(ctx.db, searchJob.id);
+    if (!failing) throw new Error("Expected search claim");
+    await failJob(ctx.db, failing, new Error("Synthetic search failure"));
+    expect(await row(searchJob.id)).toMatchObject({
+      state: "retry_wait",
+      cursor: { at: "synthetic-later-page" },
+    });
+    expect(await due(searchJob.id)).toBe(false);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(Date.now() - 1_000) })
+      .where(eq(job.id, searchJob.id));
+    expect(await claimJob(ctx.db, searchJob.id)).toMatchObject({
+      generation: first.generation,
+      cursor: { at: "synthetic-later-page" },
+    });
+  });
+
+  // Review finding: an older Worker holding a family's final attempt across
+  // the policy migration writes `failed` after it; nothing woke the family,
+  // because its marker no longer restarts and repeats skip failed Jobs. The
+  // database stores that write as a backoff instead.
+  it("resumes a family an older build failed after the policy change", async () => {
+    const searchJob = await family("search");
+    await invalidateRefreshFamily(ctx.db, "search");
+    const claim = await claimJob(ctx.db, searchJob.id);
+    if (!claim) throw new Error("Expected search claim");
+    await invalidateRefreshFamily(ctx.db, "search");
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "failed",
+        cursor: { at: "synthetic-later-page" },
+        leaseToken: null,
+        leaseExpiresAt: null,
+        error: "Job exhausted attempts after interrupted execution",
+      })
+      .where(eq(job.id, searchJob.id));
+    expect(await row(searchJob.id)).toMatchObject({
+      state: "retry_wait",
+      cursor: { at: "synthetic-later-page" },
+      error: "Job exhausted attempts after interrupted execution",
+    });
+    expect(await due(searchJob.id)).toBe(false);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(Date.now() - 1_000) })
+      .where(eq(job.id, searchJob.id));
+    expect(await claimJob(ctx.db, searchJob.id)).toMatchObject({
+      state: "running",
+      cursor: { at: "synthetic-later-page" },
+    });
+  });
+
+  it.each(["paused", "cancelled"] as const)(
+    "keeps a %s family stopped across captures",
+    async (stop) => {
+      const searchJob = await family("search");
+      await getDb(ctx.db)
+        .update(job)
+        .set({ state: stop })
+        .where(eq(job.id, searchJob.id));
+      await invalidateRefreshFamily(ctx.db, "search");
+      expect(await due(searchJob.id)).toBe(false);
+    },
+  );
+
+  // Families never stop on failure: a page that keeps failing backs off,
+  // bounded by the maintenance policy, and a later claim resumes the pass.
+  it("backs a failing family off instead of failing it", async () => {
+    const searchJob = await family("search");
+    await invalidateRefreshFamily(ctx.db, "search");
+    for (let failure = 0; failure < 6; failure++) {
+      await getDb(ctx.db)
+        .update(job)
+        .set({ availableAt: new Date(Date.now() - 1_000) })
+        .where(eq(job.id, searchJob.id));
+      const claim = await claimJob(ctx.db, searchJob.id);
+      if (!claim) throw new Error("Expected search claim");
+      await failJob(ctx.db, claim, new Error("Synthetic search failure"));
+    }
+    const failed = await row(searchJob.id);
+    expect(failed.state).toBe("retry_wait");
+    expect(failed.availableAt.getTime() - Date.now()).toBeLessThanOrEqual(
+      15 * 60_000,
+    );
+  });
+
+  it("never loses a capture that commits while publication runs", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    const claim = await claimJob(ctx.db, marked.id);
+    if (!claim) throw new Error("Expected claim");
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered: () => void = () => {};
+    const inside = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const publication = publishJobPage(
+      ctx.db,
+      claim,
+      { done: true },
+      async () => {
+        entered();
+        await gate;
+      },
+    );
+    await inside;
+    await capture(ctx.db);
+    release();
+    await publication;
+    // Superseded or finished, the Job reruns for the capture.
+    expect(await due(marked.id)).toBe(true);
+  });
+
+  it("commits a serializable capture while claim, renewal and publication run on another connection", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    let attempts = 0;
+    await withSnapshotWriteDatabase(
+      ctx.db,
+      async (tx) => {
+        attempts++;
+        await getDb(tx).select().from(job).where(eq(job.id, marked.id));
+        await getDb(tx)
+          .select()
+          .from(jobInvalidation)
+          .where(eq(jobInvalidation.key, RESTARTING.key));
+        if (attempts === 1) {
+          const claim = await claimJob(ctx.db, marked.id);
+          if (!claim || !(await renewJob(ctx.db, claim)))
+            throw new Error("Expected claim and renewal");
+          if (
+            !(await publishJobPage(ctx.db, claim, {
+              done: false,
+              cursor: { at: "synthetic-page" },
+            }))
+          )
+            throw new Error("Expected publication");
+          const next = await claimJob(ctx.db, marked.id);
+          if (!next || !(await renewJob(ctx.db, next)))
+            throw new Error("Expected second claim and renewal");
+        }
+        await capture(tx);
+      },
+      { isolationLevel: "serializable" },
+    );
+    expect(attempts).toBe(1);
+    expect(await revision(RESTARTING.key)).toBe(2);
+  });
+
+  // Some family pages publish under SERIALIZABLE and read the marker while a
+  // serializable admission captures. The capture has already written the
+  // marker and stays open while publication starts, reads it and reaches its
+  // commit; the two then commit in either order. Publication only reads the
+  // marker and the capture never touches the Job row, so no serialization
+  // cycle forms and the capture's wake is never lost.
+  it.each(["capture commits first", "publication commits first"] as const)(
+    "commits a serializable capture overlapping a serializable publication (%s)",
+    async (order) => {
+      const marked = await restarting();
+      await capture(ctx.db);
+      const claim = await claimJob(ctx.db, marked.id);
+      if (!claim) throw new Error("Expected claim");
+      const before = await revision(RESTARTING.key);
+      const latch = () => {
+        let open: () => void = () => {};
+        const opened = new Promise<void>((resolve) => {
+          open = resolve;
+        });
+        return { open, opened };
+      };
+      const captureWrote = latch();
+      const releaseCapture = latch();
+      const publicationRead = latch();
+      const releasePublication = latch();
+      let captures = 0;
+      let publications = 0;
+      const capturing = withSnapshotWriteDatabase(
+        ctx.db,
+        async (tx) => {
+          captures++;
+          await capture(tx);
+          captureWrote.open();
+          await releaseCapture.opened;
+        },
+        { isolationLevel: "serializable" },
+      );
+      await captureWrote.opened;
+      const publication = publishJobPage(
+        ctx.db,
+        claim,
+        { done: true },
+        async () => {
+          publications++;
+          publicationRead.open();
+          await releasePublication.opened;
+        },
+        "serializable",
+      );
+      // Both transactions are open: the capture holds its marker write and
+      // publication has read the marker under its snapshot.
+      await publicationRead.opened;
+      if (order === "capture commits first") {
+        releaseCapture.open();
+        await capturing;
+        releasePublication.open();
+        await publication;
+      } else {
+        releasePublication.open();
+        await publication;
+        releaseCapture.open();
+        await capturing;
+      }
+      expect(captures).toBe(1);
+      expect(publications).toBeGreaterThanOrEqual(1);
+      expect(await revision(RESTARTING.key)).toBe(before + 1);
+      // The page either finished before observing the capture or was
+      // superseded by it; either way the family reruns.
+      expect(await due(marked.id)).toBe(true);
+    },
+  );
+
+  // Review finding: a page that failed after a capture landed during its
+  // pass was marked failed (or backed off) and the captured pass stranded.
+  it.each(["exhausted", "retrying"] as const)(
+    "starts a fresh pass when a page fails after a capture during its pass (%s)",
+    async (budget) => {
+      const marked = await restarting();
+      await capture(ctx.db);
+      const claim = await claimJob(ctx.db, marked.id);
+      if (!claim) throw new Error("Expected claim");
+      // The claim is on its last attempt when exhausted.
+      const attempts = budget === "exhausted" ? claim.maxAttempts : 1;
+      await getDb(ctx.db)
+        .update(job)
+        .set({ attempts, cursor: { at: "synthetic-page" } })
+        .where(eq(job.id, marked.id));
+      await capture(ctx.db);
+      await failJob(
+        ctx.db,
+        { ...claim, attempts },
+        new Error("Synthetic stale-input failure"),
+      );
+      expect(await row(marked.id)).toMatchObject({
+        state: "queued",
+        attempts: 0,
+        cursor: null,
+        error: expect.stringContaining("Synthetic stale-input failure"),
+      });
+      expect(await due(marked.id)).toBe(true);
+      const fresh = await claimJob(ctx.db, marked.id);
+      expect(fresh).toMatchObject({
+        generation: claim.generation + 1,
+        observedRevision: await revision(RESTARTING.key),
+      });
+    },
+  );
+
+  it.each(["paused", "cancelled"] as const)(
+    "keeps an explicit member stop (%s) when a capture lands during a failed pass",
+    async (stop) => {
+      const marked = await restarting();
+      await capture(ctx.db);
+      const claim = await claimJob(ctx.db, marked.id);
+      if (!claim) throw new Error("Expected claim");
+      await getDb(ctx.db)
+        .update(job)
+        .set({ state: stop })
+        .where(eq(job.id, marked.id));
+      await capture(ctx.db);
+      await failJob(ctx.db, claim, new Error("Synthetic late failure"));
+      expect((await row(marked.id)).state).toBe(stop);
+      expect(await due(marked.id)).toBe(false);
+    },
+  );
+
+  // Review finding: failJob and claimJob read the marker, then terminalized
+  // the Job as failed in a later statement. A capture committing between the
+  // two left a failed Job behind an unobserved restarting revision, and
+  // nothing claimed it again. A test-only trigger latches the terminal write
+  // so the capture commits exactly inside that window.
+  const latchTerminalWrite = async (
+    execution: () => Promise<void>,
+    between: () => Promise<void>,
+  ) => {
+    const database = getDb(ctx.db);
+    await database.execute(
+      sql.raw(`CREATE FUNCTION synthetic_hold_job_failure() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.state = 'failed' AND OLD.state <> 'failed' THEN
+          PERFORM pg_advisory_xact_lock(424242);
+        END IF;
+        RETURN NEW;
+      END $$ LANGUAGE plpgsql`),
+    );
+    await database.execute(
+      sql.raw(`CREATE TRIGGER synthetic_hold_job_failure BEFORE UPDATE ON "Job"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_hold_job_failure()`),
+    );
+    try {
+      let pending: Promise<void> | undefined;
+      await withTransactionDatabase(ctx.db, async (holder) => {
+        const lock = await getDb(holder).execute<{ pid: number }>(
+          sql`SELECT pg_advisory_xact_lock(424242), pg_backend_pid() AS pid`,
+        );
+        const holderPid = lock.rows[0]?.pid;
+        if (!holderPid) throw new Error("Expected latch holder");
+        pending = execution();
+        pending.catch(() => undefined);
+        // The execution has read the marker and now waits in its terminal write.
+        await expect
+          .poll(async () => {
+            const waiting = await database.execute<{ waiting: boolean }>(
+              sql`SELECT EXISTS (
+                SELECT 1 FROM pg_stat_activity
+                WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))
+              ) AS waiting`,
+            );
+            return waiting.rows[0]?.waiting;
+          })
+          .toBe(true);
+        await between();
+      });
+      await pending;
+    } finally {
+      await database.execute(
+        sql.raw(`DROP TRIGGER IF EXISTS synthetic_hold_job_failure ON "Job"`),
+      );
+      await database.execute(
+        sql.raw(`DROP FUNCTION IF EXISTS synthetic_hold_job_failure()`),
+      );
+    }
+  };
+
+  const expectFreshPass = async (id: string, generation: number) => {
+    expect(await due(id)).toBe(true);
+    const fresh = await claimJob(ctx.db, id);
+    expect(fresh).toMatchObject({
+      generation: generation + 1,
+      attempts: 1,
+      cursor: null,
+      observedRevision: await revision(RESTARTING.key),
+    });
+  };
+
+  it("reruns a capture that commits while failJob terminalizes an exhausted pass", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    const claim = await claimJob(ctx.db, marked.id);
+    if (!claim) throw new Error("Expected claim");
+    // The claim is on its last attempt, so this failure is terminal.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ attempts: claim.maxAttempts })
+      .where(eq(job.id, marked.id));
+    await latchTerminalWrite(
+      () =>
+        failJob(
+          ctx.db,
+          { ...claim, attempts: claim.maxAttempts },
+          new Error("Synthetic final failure"),
+        ),
+      () => capture(ctx.db),
+    );
+    // The failure is recorded as it happened; the capture still reruns.
+    expect((await row(marked.id)).state).toBe("failed");
+    await expectFreshPass(marked.id, claim.generation);
+  });
+
+  it.each(["exhausted", "stalled"] as const)(
+    "reruns a capture that commits while a claim terminalizes an %s Job",
+    async (cause) => {
+      const marked = await restarting();
+      await capture(ctx.db);
+      const claim = await claimJob(ctx.db, marked.id);
+      if (!claim) throw new Error("Expected claim");
+      // The pass was interrupted; its next claim finds it out of budget.
+      const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
+      await getDb(ctx.db)
+        .update(job)
+        .set({
+          state: "retry_wait",
+          availableAt: longAgo,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          ...(cause === "exhausted"
+            ? { attempts: claim.maxAttempts }
+            : { recoveryTimeoutMs: 60_000, lastUsefulProgressAt: longAgo }),
+        })
+        .where(eq(job.id, marked.id));
+      let terminal: Awaited<ReturnType<typeof claimJob>> | undefined;
+      await latchTerminalWrite(
+        async () => {
+          terminal = await claimJob(ctx.db, marked.id);
+        },
+        () => capture(ctx.db),
+      );
+      expect(terminal).toBeNull();
+      expect((await row(marked.id)).state).toBe("failed");
+      // The fresh pass gets a fresh budget and recovery window, so it does
+      // not fail again at once.
+      await expectFreshPass(marked.id, claim.generation);
+    },
+  );
+});

@@ -2,6 +2,7 @@ import { imageProcessingContract } from "~/contracts/image-processing.contract";
 import {
   getImageProcessingReadProjection,
   releaseAssignedImageProcessingJob,
+  renewAssignedImageProcessingLease,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
   pullCompanionImageProcessing,
@@ -40,6 +41,11 @@ export const imageProcessingHandlers = implementOperationDomain(
         userId: context.actorContext.userId,
       }),
     }),
+    renew: async (context, input) =>
+      renewAssignedImageProcessingLease(context.db, {
+        ...input,
+        userId: context.actorContext.userId,
+      }),
     status: async (context, input) =>
       getImageProcessingReadProjection(
         context.db,

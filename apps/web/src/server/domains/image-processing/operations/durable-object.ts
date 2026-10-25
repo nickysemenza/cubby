@@ -7,7 +7,7 @@ import {
   ringDoorbell,
 } from "~/server/http/doorbell-socket";
 
-import type { ImageProcessingCompanionRpc } from "../service/contracts";
+import type { ImageProcessingCompanionRpc } from "./rpc";
 
 /**
  * Owner of the `imageProcessing.work` doorbell. Postgres job state and leases
@@ -19,7 +19,11 @@ export class ImageProcessingDurableObject
   implements ImageProcessingCompanionRpc
 {
   async fetch(request: Request): Promise<Response> {
-    return acceptDoorbell(this.ctx, request);
+    // Parked device work waits for any device: a new connection pulls at once.
+    return acceptDoorbell(this.ctx, request, {
+      type: "ring",
+      topic: "imageProcessing.work",
+    });
   }
 
   async ring(): Promise<number> {

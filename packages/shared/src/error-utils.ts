@@ -58,6 +58,10 @@ export const AppErrors = {
   MEAL_RECIPE_NOT_FOUND: "NOT_FOUND",
   BACKGROUND_BATCH_NOT_FOUND: "NOT_FOUND",
   PLAYBOOK_NOT_FOUND: "NOT_FOUND",
+  // A Job id names no execution row (finished rows are pruned after retention).
+  JOB_NOT_FOUND: "NOT_FOUND",
+  // `job.explain` takes a Run, image job or Email code, or a Job id.
+  EXPLAIN_TARGET_UNSUPPORTED: "BAD_REQUEST",
 
   // Constraint violations
   LOCATION_CYCLE_DETECTED: "PRECONDITION_FAILED",

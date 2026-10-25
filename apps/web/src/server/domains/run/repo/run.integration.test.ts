@@ -1,11 +1,13 @@
+import type { RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import { job, run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readRunCatalogActivity } from "./catalog-activity";
@@ -173,5 +175,107 @@ describe("Run catalog activity", () => {
     expect(
       activity.latest.find((row) => row.purpose === "background"),
     ).toMatchObject({ status: "completed" });
+  });
+});
+
+// A review stop whose open work moved to a retry kept reading "Needs
+// review", and funding stops read as review or authorization.
+describe("Run lineage and waiting-on reads", () => {
+  const ctx = withTestDb();
+  const codeOf = async (id: RunId) =>
+    (
+      await getDb(ctx.db)
+        .select({ shortcode: runTable.shortcode })
+        .from(runTable)
+        .where(eq(runTable.id, id))
+    )[0]!.shortcode;
+
+  it("links a retry both ways and reads the predecessor as retried", async () => {
+    const earlier = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const later = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "needs_review" })
+      .where(eq(runTable.id, earlier));
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ predecessorRunId: earlier })
+      .where(eq(runTable.id, later));
+    const earlierCode = await codeOf(earlier);
+    const laterCode = await codeOf(later);
+
+    const predecessor = await getRunByShortcode(ctx.db, earlierCode);
+    const successor = await getRunByShortcode(ctx.db, laterCode);
+
+    expect(predecessor).toMatchObject({
+      status: "needs_review",
+      displayStatus: "retried",
+      successorRunId: laterCode,
+    });
+    expect(successor).toMatchObject({
+      predecessorRunId: earlierCode,
+      successorRunId: null,
+    });
+  });
+
+  it("reads a funding stop as waiting for funding and rolls up live Jobs", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "needs_review", failureCode: "execution_limit" })
+      .where(eq(runTable.id, runId));
+    for (let index = 0; index < 2; index++)
+      await enqueueJob(ctx.db, {
+        key: `synthetic.rollup.${index}`,
+        kind: "synthetic.rollup",
+        input: {},
+        runId,
+      });
+
+    const read = await getRunByShortcode(ctx.db, await codeOf(runId));
+
+    expect(read).toMatchObject({
+      displayStatus: "waiting_for_funding",
+      waitingOn: "2 due",
+      stalled: false,
+    });
+  });
+
+  // Review finding: summaries formatted only `counts`, so a Run whose only
+  // Job's executor lease lapsed read as having no live Jobs.
+  it("summarizes expired leases awaiting reclaim", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const abandoned = await enqueueJob(ctx.db, {
+      key: "synthetic.rollup.abandoned",
+      kind: "synthetic.rollup",
+      input: {},
+      runId,
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "running",
+        leaseToken: crypto.randomUUID(),
+        leaseExpiresAt: new Date(Date.now() - 60_000),
+        lastClaimedAt: new Date(Date.now() - 5 * 60_000),
+      })
+      .where(eq(job.id, abandoned.id));
+
+    const read = await getRunByShortcode(ctx.db, await codeOf(runId));
+
+    expect(read?.waitingOn).toBe("1 expired lease awaiting reclaim");
   });
 });

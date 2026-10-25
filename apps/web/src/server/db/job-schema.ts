@@ -8,11 +8,14 @@ import {
 } from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  boolean,
   check,
   index,
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -54,6 +57,8 @@ export const job = pgTable(
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
     /** Set by each claim; the fair drain serves the least recently claimed kind first. */
     lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
+    /** The `JobInvalidation` revision the current pass started from; claims own it. */
+    observedRevision: bigint("observedRevision", { mode: "number" }),
     error: text("error"),
     ...baseTimestamps(),
   },
@@ -63,6 +68,8 @@ export const job = pgTable(
     index("Job_run_idx").on(table.runId),
     index("Job_subject_idx").on(table.subjectKind, table.subjectId),
     index("Job_kind_claimed_idx").on(table.kind, table.lastClaimedAt),
+    // Device pulls, lane counts, the watchdog and retention select by kind and state.
+    index("Job_kind_state_idx").on(table.kind, table.state, table.availableAt),
     check(
       "Job_waitReason_check",
       sql`${table.waitReason} IN (${sql.join(
@@ -83,9 +90,56 @@ export const job = pgTable(
         sql`,`,
       )})`,
     ),
+    // Migration 0029 split image execution into lane kinds. Refusing the old
+    // kind makes a pre-cutover Worker's write fail rather than land as work
+    // no handler serves; it may be dropped once no such Worker can run.
+    check("Job_kind_retired_check", sql`${table.kind} <> 'image.processing'`),
     check(
       "Job_attempts_check",
       sql`${table.attempts} >= 0 AND ${table.maxAttempts} > 0`,
     ),
   ],
 );
+
+/**
+ * Durable source invalidation of a long-lived Job, kept apart from its
+ * execution row: captures bump `revision` here and never write `Job`, and
+ * claims, renewals and publication never write this row. A Job whose
+ * `observedRevision` trails it is due; `restartsPass` says whether a moved
+ * revision restarts a pass in progress or waits for it to finish.
+ */
+export const jobInvalidation = pgTable("JobInvalidation", {
+  key: text("key").primaryKey(),
+  revision: bigint("revision", { mode: "number" }).notNull().default(1),
+  restartsPass: boolean("restartsPass").notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+});
+
+/**
+ * When each `JobInvalidation` revision was captured, append-only: a capture
+ * inserts its revision here and nothing updates a row. Health dates a Job's
+ * outstanding work from its first revision past `observedRevision`, so later
+ * captures cannot reset the pending age; retention deletes observed rows.
+ */
+export const jobInvalidationCapture = pgTable(
+  "JobInvalidationCapture",
+  {
+    key: text("key").notNull(),
+    revision: bigint("revision", { mode: "number" }).notNull(),
+    capturedAt: timestamp("capturedAt", { mode: "date" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.key, table.revision] })],
+);
+
+/**
+ * Fairness state a lane's pulls serialize on. A device pull locks its lane's
+ * row, classifies the claim when it admits it, and advances or resets
+ * `ownedStreak` in the claim's transaction: concurrent pulls cannot both take
+ * Run work at backfill's turn, and a Run finishing later never reclassifies
+ * services already counted.
+ */
+export const jobLaneAdmission = pgTable("JobLaneAdmission", {
+  lane: text("lane").primaryKey(),
+  ownedStreak: integer("ownedStreak").notNull().default(0),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+});

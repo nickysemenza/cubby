@@ -11,6 +11,8 @@ import {
   completeCompanionImageProcessingOutput,
   releaseCompanionImageProcessingInput,
   releaseCompanionImageProcessingOutput,
+  renewCompanionImageProcessingInput,
+  renewCompanionImageProcessingOutput,
   evaluateAppleImageDescriptionInput,
   evaluateAppleImageDescriptionOutput,
   imageProcessingStatusInput,
@@ -44,6 +46,11 @@ export const imageProcessingContract = defineContract(
       exposure: "view",
       input: releaseCompanionImageProcessingInput,
       output: releaseCompanionImageProcessingOutput,
+    }),
+    renew: mutation({
+      exposure: "view",
+      input: renewCompanionImageProcessingInput,
+      output: renewCompanionImageProcessingOutput,
     }),
     analyses: query({
       exposure: "view",

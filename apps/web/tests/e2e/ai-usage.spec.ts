@@ -74,7 +74,7 @@ test("recent AI calls filter transport and status before limiting rows", async (
     recent.getByRole("combobox", { name: "Transport" }),
     "ChatGPT plan",
   );
-  const rows = await operationResult(
+  const { items: rows } = await operationResult(
     await filtered,
     "ai.usageRecent",
     aiUsageRecentOut,

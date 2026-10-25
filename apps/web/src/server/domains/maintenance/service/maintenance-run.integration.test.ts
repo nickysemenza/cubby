@@ -1,6 +1,6 @@
 import { imageId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepDeclaration } from "@cubby/schemas/run-fields";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -206,7 +206,7 @@ describe("maintenance Run", () => {
     const admitted = await getDb(ctx.db)
       .select()
       .from(job)
-      .where(eq(job.kind, "image.processing"));
+      .where(inArray(job.kind, ["image.cloud", "image.device"]));
     expect(admitted).toHaveLength(payloads.length);
     expect(admitted.every((execution) => execution.state === "queued")).toBe(
       true,

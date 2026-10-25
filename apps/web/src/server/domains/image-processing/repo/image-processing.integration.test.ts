@@ -5,6 +5,7 @@ import {
   IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
+import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -18,6 +19,7 @@ import {
   aiAnalysis,
   image,
   imageDerivative,
+  imageProcessingAttempt,
   imageProcessingJob,
   imageProcessingOrphan,
   searchDocument,
@@ -54,6 +56,8 @@ import {
   saveImageDescriptionAnalysis,
   createImageProcessingJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  retireObsoleteImageProcessingJobs,
 } from "./image-processing";
 import { loadImageProcessingIssues } from "./image-processing-issues";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
@@ -110,29 +114,46 @@ describe("durable image representations", () => {
   // capability or leaving the processing payload permanently pending.
   it("settles an obsolete image source as skipped under its Job fence", async () => {
     const row = await source();
+    const cloudJobId = await createImageProcessingJob(ctx.db, {
+      imageId: parseEntityId("image", row.id),
+      kind: "describe_image",
+      sourceContentHash: hash,
+      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+    });
+    if (!cloudJobId) throw new Error("Missing cloud job");
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, row.id));
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.key, `image-processing:${row.jobId}`));
-    if (!execution) throw new Error("Missing execution");
-    await advanceJob(ctx.db, execution.id, {
-      "image.processing": imageProcessingJobHandler,
+    const execution = async (jobId: string) =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(durableJob)
+          .where(eq(durableJob.key, `image-processing:${jobId}`))
+      )[0]!;
+    const payload = async (jobId: string) =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(imageProcessingJob)
+          .where(eq(imageProcessingJob.id, jobId))
+      )[0]!;
+    // Cloud work is settled by its own drain claim.
+    await advanceJob(ctx.db, (await execution(cloudJobId)).id, {
+      "image.cloud": imageProcessingJobHandler,
     });
-    const [payload] = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.id, row.jobId));
-    const [settled] = await getDb(ctx.db)
-      .select()
-      .from(durableJob)
-      .where(eq(durableJob.id, execution.id));
-    expect(payload?.state).toBe("skipped");
-    expect(settled?.state).toBe("completed");
-    expect(payload?.attemptId).toBeNull();
+    expect((await payload(cloudJobId)).state).toBe("skipped");
+    expect((await execution(cloudJobId)).state).toBe("completed");
+    // Parked device work no device would claim is settled by the watchdog.
+    expect(await retireObsoleteImageProcessingJobs(ctx.db, { limit: 10 })).toBe(
+      1,
+    );
+    expect(await payload(row.jobId)).toMatchObject({
+      state: "skipped",
+      attemptId: null,
+    });
+    expect((await execution(row.jobId)).state).toBe("completed");
   });
 
   it("does not keep a completed cutout in eligibility review because an earlier device description requested review", async () => {
@@ -242,7 +263,7 @@ describe("durable image representations", () => {
             .from(imageProcessingJob)
             .where(eq(imageProcessingJob.id, row.jobId))
         )[0],
-      ).toMatchObject({ state: "leased", attemptId: first.attemptId });
+      ).toMatchObject({ state: "pending", attemptId: first.attemptId });
       const second = await claimImageProcessingJob(ctx.db, {
         jobId: row.jobId,
         kinds: ["subject_lift"],
@@ -357,7 +378,7 @@ describe("durable image representations", () => {
       .select()
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, row.jobId));
-    expect(job?.state).toBe("leased");
+    expect(job?.state).toBe("pending");
     expect(job?.attemptId).toEqual(expect.any(String));
   });
 
@@ -785,7 +806,7 @@ describe("durable image representations", () => {
       .select()
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    expect(pending?.state).toBe("leased");
+    expect(pending?.state).toBe("pending");
     expect(
       (await completeImageProcessingJob(ctx.db, { result, appleAnalysis }))
         .adopted,
@@ -802,7 +823,12 @@ describe("durable image representations", () => {
     expect(analyses[0]?.result).toEqual(result.outcome.description);
   });
 
-  it("keeps no-subject terminal with no transparent URL and makes persisted failures queryable", async () => {
+  // Review finding: every executor `skipped` result terminalized the job,
+  // though no_subject, not_suitable and unsupported_format are executor
+  // verdicts, not moot endings (deletion, replacement, supersession, policy
+  // exclusion), which only the server decides. They now record a retryable
+  // failure that backs off and asks for attention after repeated failures.
+  it("retries an executor's no-subject skip as a recorded failure with no transparent URL and makes persisted failures queryable", async () => {
     const row = await source();
     const lease = await claimImageProcessingJob(ctx.db, {
       jobId: row.jobId,
@@ -827,6 +853,25 @@ describe("durable image representations", () => {
         row.shortcode,
       )?.transparent,
     ).toBeNull();
+    const [skipped] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, row.jobId));
+    expect(skipped).toMatchObject({
+      state: "pending",
+      lastError: "no_subject",
+    });
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${row.jobId}`));
+    expect(execution).toMatchObject({ state: "retry_wait", attempts: 1 });
+    expect(execution!.availableAt.getTime()).toBeGreaterThan(Date.now());
+    const [attempt] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingAttempt)
+      .where(eq(imageProcessingAttempt.id, lease.attemptId));
+    expect(attempt).toMatchObject({ state: "failed", error: "no_subject" });
     const failed = await source();
     const failedLease = await claimImageProcessingJob(ctx.db, {
       jobId: failed.jobId,
@@ -853,6 +898,19 @@ describe("durable image representations", () => {
       .from(imageProcessingOrphan)
       .where(eq(imageProcessingOrphan.key, failedLease.derivativeKey));
     expect(retired).toHaveLength(1);
+    // One failure only backs off; repeated failures ask for attention.
+    expect(
+      (
+        await imageList(ctx.db, { processingIssue: "failed" }, [], {
+          pageIndex: 0,
+          pageSize: 100,
+        })
+      ).data,
+    ).toEqual([]);
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ attempts: JOB_NEEDS_ATTENTION_ATTEMPTS })
+      .where(eq(durableJob.key, `image-processing:${failed.jobId}`));
     const problems = await imageList(
       ctx.db,
       { processingIssue: "failed" },

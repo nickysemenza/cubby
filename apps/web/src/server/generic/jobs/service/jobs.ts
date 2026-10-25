@@ -179,25 +179,40 @@ export async function advanceJob(
   }
 }
 
-/** Reselect after each fair batch; a wake can advance multiple bounded pages. */
+/**
+ * Reselect after each fair batch; a wake can advance multiple bounded pages.
+ * Distinct Jobs of one batch run up to `concurrency` at a time: every claim
+ * is its own row lock and lease, so pages never share execution state.
+ */
 export async function drainDueJobs(
   db: Database,
   handlers: JobHandlers,
   limit = JOB_DRAIN.pageLimit,
   timeBudgetMs = JOB_DRAIN.timeBudgetMs,
+  concurrency = JOB_DRAIN.concurrency,
 ) {
   const outcomes: string[] = [];
   const deadline = Date.now() + timeBudgetMs;
-  while (outcomes.length < limit && Date.now() < deadline) {
+  const spent = () => outcomes.length >= limit || Date.now() >= deadline;
+  while (!spent()) {
     const candidates = await dueJobs(
       db,
       Math.min(JOB_DRAIN.batch, limit - outcomes.length),
     );
     if (!candidates.length) return outcomes;
-    for (const candidate of candidates) {
-      outcomes.push(await advanceJob(db, candidate.id, handlers));
-      if (outcomes.length >= limit || Date.now() >= deadline) break;
-    }
+    let next = 0;
+    const lane = async () => {
+      while (next < candidates.length && !spent()) {
+        const candidate = candidates[next++]!;
+        outcomes.push(await advanceJob(db, candidate.id, handlers));
+      }
+    };
+    await Promise.all(
+      Array.from(
+        { length: Math.max(1, Math.min(concurrency, candidates.length)) },
+        lane,
+      ),
+    );
   }
   if ((await dueJobs(db, 1)).length) {
     await (

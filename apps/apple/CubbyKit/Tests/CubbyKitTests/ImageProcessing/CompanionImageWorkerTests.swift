@@ -1,7 +1,20 @@
 import Foundation
+import Synchronization
 import Testing
 
 @testable import CubbyKit
+
+private final class RenewalStub: URLProtocol, @unchecked Sendable {
+    static let handler = Mutex<StubNetworking.Handler?>(nil)
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        StubNetworking.startLoading(
+            request, client: client, target: self, handler: Self.handler.withLock { $0 })
+    }
+    override func stopLoading() {}
+    static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
+}
 
 @Suite("CompanionImageWorker", .timeLimit(.minutes(1)))
 struct CompanionImageWorkerTests {
@@ -53,17 +66,40 @@ struct CompanionImageWorkerTests {
         await worker.stop()
     }
 
+    /// Regression: quitting during a pull awaited only releases already registered, so it
+    /// finished before the pull's answer registered its claim's release and the claim stayed
+    /// held until its lease expired.
+    @Test func quittingDuringAPullReleasesItsClaimBeforeReturning() async throws {
+        let pullGate = Gate()
+        let stopped = Gate()
+        let transport = QueuedCompanionTransport(commands: [try describeCommand()], pullGate: pullGate)
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: transport,
+            activityObserver: { if $0.phase == .stopped { stopped.signal() } },
+            execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await pullGate.arrivals()
+        let quitting = Task { await worker.stopAndReleaseClaims() }
+        await stopped.arrivals()
+        pullGate.open()
+        await quitting.value
+        #expect(await transport.released.map(\.jobID) == ["00000000-0000-4000-8000-000000000001"])
+    }
+
     /// Regression: a drain whose delivery failed went idle, and with no more work no ring arrived,
     /// so the recorded result stayed pending and `companion --once` never settled.
     @Test func aFailedDeliveryIsRetriedWithoutAnotherRing() async throws {
-        let transport = QueuedCompanionTransport(commands: [try describeCommand()], failingCompletions: 2)
+        let transport = QueuedCompanionTransport(commands: [try describeCommand()], failingCompletions: 1)
         let worker = CompanionImageWorker(
             baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true,
             outbox: try outbox(), transport: transport, execute: { try Self.failedResult($0) })
         await worker.start()
         await worker.requestDrain()
-        // Reaching the third `complete` is the assertion; the acknowledgement follows it.
+        // Reaching the second `complete` is the assertion; the acknowledgement follows it.
         await transport.completions.arrivals()
         await worker.stop()
     }
@@ -195,9 +231,9 @@ struct CompanionImageWorkerTests {
                 execute: { try await executions.run($0) })
             let command = try describeCommand()
             async let settled = worker.pauseAcceptingIfSettled()
-            async let started: Void = worker.startCommand(command)
+            async let started = worker.startCommand(command)
             let wasSettled = try await settled
-            await started
+            _ = await started
             await worker.commandsIdle()
             if wasSettled {
                 #expect(await executions.count == 0)
@@ -241,6 +277,196 @@ struct CompanionImageWorkerTests {
         #expect(await executions.count == 0)
     }
 
+    // MARK: - Leases, release, outbox, and the version gate
+
+    /// Regression: `stop()` cancelled a running command and dropped it, so its lease stayed held
+    /// until expiry and every stop cost the job an attempt.
+    @Test func stoppingReleasesARunningCommandWithoutDeliveringIt() async throws {
+        let execution = Gate()
+        let store = try outbox()
+        let transport = QueuedCompanionTransport(commands: [try describeCommand()])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: store, transport: transport,
+            execute: { command in
+                try await execution.pass()
+                return try Self.failedResult(command)
+            })
+        await worker.start()
+        await worker.requestDrain()
+        await execution.arrivals()
+        await worker.stop()
+        await transport.releases.arrivals()
+        await worker.commandsIdle()
+        await worker.releasesIdle()
+        #expect(await transport.released.map(\.attemptID) == ["00000000-0000-4000-8000-000000000002"])
+        #expect(await transport.delivered.isEmpty)
+        #expect(try await store.pending().isEmpty)
+    }
+
+    /// Regression: one result whose delivery kept failing threw out of every drain before its
+    /// pull, so the device stopped taking work. It is set aside (kept on disk) and pulling goes on.
+    @Test func anUndeliverableResultIsSetAsideAndPullingContinues() async throws {
+        let store = try outbox()
+        let stuckJob = "00000000-0000-4000-8000-0000000000aa"
+        let stuck = try Self.failedResult(try describeCommand(job: stuckJob))
+        try await store.record(stuck, for: "\(stuckJob):stuck")
+        let activity = ActivityRecorder()
+        let transport = QueuedCompanionTransport(
+            commands: [try describeCommand()], undeliverableJobs: [stuckJob])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: store, transport: transport,
+            activityObserver: { activity.record($0) },
+            execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await transport.completions.arrivals()
+        await worker.commandsIdle()
+        #expect(await transport.delivered == ["00000000-0000-4000-8000-000000000001"])
+        #expect(try await store.pending().map(\.key) == ["\(stuckJob):stuck"])
+        #expect(activity.activity?.undeliveredResults == 1)
+        #expect(activity.activity?.deliveryError != nil)
+        await worker.stop()
+    }
+
+    /// Regression: the worker's own client had no request observer and treated a 426 like any
+    /// other failure, retrying pulls the server would always refuse and never telling anyone.
+    @Test func clientUpdateRequiredStopsPullingAndReportsIt() async throws {
+        let activity = ActivityRecorder()
+        let transport = QueuedCompanionTransport(
+            commands: [],
+            pullError: CubbyAPIError(
+                status: CubbyAPIError.clientUpdateRequiredStatus, operationID: "imageProcessing.pull",
+                detail: nil))
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: transport,
+            activityObserver: { activity.record($0) },
+            execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await worker.drainIdle()
+        #expect(await worker.isUpdateRequired)
+        #expect(await !worker.isConnecting)
+        #expect(activity.activity?.phase == .updateRequired)
+        // No further pull: neither a retry nor a new drain request runs.
+        await worker.requestDrain()
+        await worker.drainIdle()
+        #expect(await transport.pulls == 1)
+        await worker.stop()
+    }
+
+    /// A refused renewal means the server retired or reassigned the attempt: stop the command,
+    /// record nothing, deliver nothing, and do not release a lease that is no longer ours.
+    @Test func aRefusedRenewalStopsTheCommandUnrecorded() async throws {
+        let heartbeat = Gate()
+        let execution = Gate()
+        let store = try outbox()
+        let transport = QueuedCompanionTransport(
+            commands: [try describeCommand()], renewal: .refused(reason: "lease_lost"))
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: store, transport: transport,
+            execute: { command in
+                try await execution.pass()
+                return try Self.failedResult(command)
+            },
+            heartbeatPause: { try await heartbeat.pass() })
+        await worker.start()
+        await worker.requestDrain()
+        await execution.arrivals()
+        await heartbeat.arrivals()
+        heartbeat.release()
+        await transport.renewals.arrivals()
+        await worker.commandsIdle()
+        await worker.releasesIdle()
+        #expect(await transport.released.isEmpty)
+        #expect(await transport.delivered.isEmpty)
+        #expect(try await store.pending().isEmpty)
+        await worker.stop()
+    }
+
+    /// An accepted renewal moves the deadline the executor enforces.
+    @Test func anAcceptedRenewalExtendsTheLease() {
+        let lease = CompanionCommandLease(deadline: Date(timeIntervalSince1970: 100))
+        lease.extend(to: Date(timeIntervalSince1970: 160))
+        #expect(lease.deadline == Date(timeIntervalSince1970: 160))
+        // A stale answer never shortens it.
+        lease.extend(to: Date(timeIntervalSince1970: 120))
+        #expect(lease.deadline == Date(timeIntervalSince1970: 160))
+    }
+
+    /// The client renews through the generated `imageProcessing.renew` method and maps both
+    /// answers; an answer with neither shape is unsupported, never a silent renewal.
+    @Test func renewalGoesThroughTheGeneratedOperation() async throws {
+        let answers = Mutex([
+            #"{"ok":true,"data":{"ok":true,"leaseExpiresAt":"2099-01-01T00:01:00.000Z"}}"#,
+            #"{"ok":true,"data":{"ok":false,"reason":"job_obsolete"}}"#,
+            #"{"ok":true,"data":{"ok":"maybe"}}"#,
+        ])
+        let seen = Mutex<[URLRequest]>([])
+        RenewalStub.handler.withLock {
+            $0 = { request in
+                seen.withLock { $0.append(request) }
+                return (200, Data(answers.withLock { $0.removeFirst() }.utf8))
+            }
+        }
+        defer { RenewalStub.handler.withLock { $0 = nil } }
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: RenewalStub.session())
+        let claim = CompanionImageCommandClaim(jobID: "job-1", attemptID: "attempt-1")
+
+        #expect(
+            try await client.renew(deviceID: "device-1", claim: claim)
+                == .renewed(leaseExpiresAt: Date(timeIntervalSince1970: 4_070_908_860)))
+        #expect(
+            try await client.renew(deviceID: "device-1", claim: claim)
+                == .refused(reason: "job_obsolete"))
+        await #expect(throws: UnsupportedNativeResponse.self) {
+            _ = try await client.renew(deviceID: "device-1", claim: claim)
+        }
+        let first = try #require(seen.withLock { $0.first })
+        #expect(first.url?.path == "/api/operations/imageProcessing.renew")
+        #expect(
+            StubNetworking.operationFields(of: first)
+                == ["jobId": "job-1", "attemptId": "attempt-1", "deviceId": "device-1"])
+    }
+
+    /// Regression: a command this build could not parse was dropped without a release, holding
+    /// its lease, and the drain pulled again at once.
+    @Test func anUnsupportedCommandIsReleasedAndTheDrainBacksOff() async throws {
+        let unsupported = try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingCommand.self,
+            from: Data(
+                #"{"kind":"future_kind","jobId":"00000000-0000-4000-8000-0000000000bb","attemptId":"00000000-0000-4000-8000-0000000000bc","deadline":"2099-01-01T00:00:00Z"}"#
+                    .utf8))
+        let transport = QueuedCompanionTransport(commands: [unsupported, try describeCommand()])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: transport, execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await transport.releases.arrivals()
+        await worker.drainIdle()
+        #expect(await worker.isBackingOff)
+        // A ring during the backoff does not pull again.
+        await worker.requestDrain()
+        await worker.drainIdle()
+        #expect(await transport.pulls == 1)
+        #expect(await transport.released.map(\.jobID) == ["00000000-0000-4000-8000-0000000000bb"])
+        await worker.stop()
+    }
+
     fileprivate static func failedResult(_ command: ImageProcessingCommand) throws -> ImageProcessingResult {
         .init(
             jobId: try CompanionImageCommandMetadata(command).jobID,
@@ -251,10 +477,11 @@ struct CompanionImageWorkerTests {
     }
 
     private func describeCommand(
+        job: String = "00000000-0000-4000-8000-000000000001",
         attempt: String = "00000000-0000-4000-8000-000000000002"
     ) throws -> ImageProcessingCommand {
         let value = """
-            {"kind":"describe_image","jobId":"00000000-0000-4000-8000-000000000001","attemptId":"\(attempt)","deadline":"2099-01-01T00:00:00Z","source":{"url":"https://example.test/panel.jpg","sha256":"\(String(repeating: "a", count: 64))","contentType":"image/jpeg"},"promptRevision":1,"resultSchemaRevision":1}
+            {"kind":"describe_image","jobId":"\(job)","attemptId":"\(attempt)","deadline":"2099-01-01T00:00:00Z","source":{"url":"https://example.test/panel.jpg","sha256":"\(String(repeating: "a", count: 64))","contentType":"image/jpeg"},"promptRevision":1,"resultSchemaRevision":1}
             """
         return try JSONDecoder.companionImageProcessing.decode(
             ImageProcessingCommand.self, from: Data(value.utf8))
@@ -271,46 +498,80 @@ private actor ExecutionCounter {
 }
 
 /// Serves queued commands to `pull`, then none. `delivers: false` fails every `complete` (and
-/// `failingCompletions` the first few), so a result stays in the outbox as it would after a
-/// dropped connection.
+/// `failingCompletions` the first few, `undeliverableJobs` always), so a result stays in the
+/// outbox as it would after a dropped connection. `pullError` fails every pull; `renewal`
+/// answers every `imageProcessing.renew`.
 private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
     private var commands: [ImageProcessingCommand]
     private let delivers: Bool
     private var failingCompletions: Int
+    private let undeliverableJobs: Set<String>
     private let pullGate: Gate?
+    private let pullError: (any Error)?
+    private let renewal: CompanionLeaseRenewal
     private(set) var pulls = 0
+    private(set) var released: [CompanionImageCommandClaim] = []
+    private(set) var delivered: [String] = []
     nonisolated let completions = Gate()
     nonisolated let releases = Gate()
+    nonisolated let renewals = Gate()
 
     init(
         commands: [ImageProcessingCommand], delivers: Bool = true, failingCompletions: Int = 0,
-        pullGate: Gate? = nil
+        undeliverableJobs: Set<String> = [], pullGate: Gate? = nil, pullError: (any Error)? = nil,
+        renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture)
     ) {
         self.commands = commands
         self.delivers = delivers
         self.failingCompletions = failingCompletions
+        self.undeliverableJobs = undeliverableJobs
         self.pullGate = pullGate
+        self.pullError = pullError
+        self.renewal = renewal
     }
 
     func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
         -> PullCompanionImageProcessingOutput
     {
         pulls += 1
+        if let pullError { throw pullError }
         let next = commands.isEmpty ? nil : commands.removeFirst()
         try await pullGate?.pass()
         return .init(command: next, remotePaused: false)
     }
 
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
-        guard delivers else { throw URLError(.networkConnectionLost) }
+        guard delivers, !undeliverableJobs.contains(result.jobId) else {
+            throw URLError(.networkConnectionLost)
+        }
         if failingCompletions > 0 {
             failingCompletions -= 1
             throw URLError(.networkConnectionLost)
         }
+        delivered.append(result.jobId)
         completions.signal()
     }
 
-    func release(deviceID: String, command: ImageProcessingCommand) async throws {
+    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {
+        released.append(claim)
         releases.signal()
+    }
+
+    func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws
+        -> CompanionLeaseRenewal
+    {
+        renewals.signal()
+        return renewal
+    }
+}
+
+/// The latest activity a worker reported.
+private final class ActivityRecorder: Sendable {
+    private let latest = Mutex<CompanionImageWorkerActivity?>(nil)
+
+    var activity: CompanionImageWorkerActivity? { latest.withLock { $0 } }
+
+    func record(_ activity: CompanionImageWorkerActivity) {
+        latest.withLock { $0 = activity }
     }
 }

@@ -174,6 +174,7 @@ const photo = (
   deviceWorkState: text.deviceWorkState ?? null,
   deviceWorkError: null,
   deviceWorkAttempts: 0,
+  cloudDescriptionMissing: false,
 });
 
 const review: PhotoRunReview = {
@@ -185,6 +186,7 @@ const review: PhotoRunReview = {
     finalizedImageCount: 3,
     describedImageCount: 2,
     failedImageIds: [],
+    withoutCloudDescriptionCount: 0,
     skippedImageCount: 0,
     proposedGroupCount: 0,
     committedGroupCount: 0,
@@ -494,6 +496,29 @@ describe("PhotoImportRunView", () => {
     expect(screen.queryByText("Size M")).not.toBeInTheDocument();
     expect(screen.getByText("Device: Done")).toBeInTheDocument();
     expect(screen.getAllByText("Device: Not received")).toHaveLength(2);
+  });
+
+  it("notes photos grouped on an Apple description while the cloud one waits", async () => {
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: RUN_ID }),
+      {
+        ...review,
+        lifecycle: { ...review.lifecycle, withoutCloudDescriptionCount: 2 },
+        images: review.images.map((image, index) =>
+          index < 2
+            ? { ...image, describe: "ready", cloudDescriptionMissing: true }
+            : image,
+        ),
+      } satisfies PhotoRunReview,
+    );
+    render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+
+    expect(
+      await screen.findByTestId("without-cloud-description"),
+    ).toHaveTextContent("2 photos use their Apple description");
+    expect(
+      screen.getAllByText("Apple description only; cloud description waiting"),
+    ).toHaveLength(2);
   });
 
   it("does not invent a skipped result for an unqueued label photo", async () => {

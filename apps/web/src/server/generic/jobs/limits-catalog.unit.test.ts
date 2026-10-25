@@ -69,14 +69,15 @@ describe("evaluateBinding", () => {
     expect(
       evaluateBinding({
         job: job({ state: "queued", ahead: 12 }),
-        runningJobs: BACKGROUND_QUEUE_CONSUMER.maxConcurrency,
+        runningJobs:
+          BACKGROUND_QUEUE_CONSUMER.maxConcurrency * JOB_DRAIN.concurrency,
         step: null,
         now,
       }),
     ).toMatchObject({
       status: "binding",
       key: "queue.concurrency",
-      evidence: expect.stringContaining("12 same-kind Jobs ahead"),
+      evidence: expect.stringContaining("12 Jobs ahead"),
     });
   });
 

@@ -10,6 +10,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { image } from "~/server/db/schema";
 
+import { imageJobDisplayStateSql } from "./image-job-state";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -26,7 +27,7 @@ export function imageProcessingIssueExpression(
       OR (j.kind = ${imageProcessingJobKind.enum.identify_image} AND j."processorRevision" = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
       OR (j.kind = ${imageProcessingJobKind.enum.subject_lift} AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}))`;
   return sql`CASE WHEN ${source.status} <> ${ImageStatus.enum.UPLOADED} OR ${source.deletedAt} IS NOT NULL THEN NULL
-    WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND j.state = ${imageProcessingJobState.enum.failed}) THEN ${imageProcessingIssue.enum.failed}
+    WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} = ${imageProcessingJobState.enum.failed}) THEN ${imageProcessingIssue.enum.failed}
     WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND j.kind = ${imageProcessingJobKind.enum.describe_image}
       AND j.state = ${imageProcessingJobState.enum.ready} AND j.result->'description'->>'cutoutEligibility' = ${imageCutoutEligibility.enum.review})
       AND NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE j."deletedAt" IS NULL AND ${current} AND j.kind = ${imageProcessingJobKind.enum.subject_lift}

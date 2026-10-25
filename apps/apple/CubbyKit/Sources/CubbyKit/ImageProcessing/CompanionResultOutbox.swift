@@ -2,13 +2,19 @@ import Foundation
 
 /// A small durable outbox for WebSocket results. Recording completes before a send begins, so a
 /// disconnect after device work cannot make the server repeat that work on the next connection.
+/// Replay order survives relaunch: never-attempted results first, then the least recently
+/// attempted, so results the server keeps rejecting cannot take every bounded window.
 public actor CompanionResultOutbox<Result: Codable & Sendable> {
     private let fileURL: URL
+    /// Each result's last delivery attempt, as a rising sequence number, beside the results file.
+    private let attemptsURL: URL
     private var loaded = false
     private var results: [String: Result] = [:]
+    private var attempts: [String: Int] = [:]
 
     public init(fileURL: URL) {
         self.fileURL = fileURL
+        attemptsURL = fileURL.deletingPathExtension().appendingPathExtension("attempts.json")
     }
 
     /// The canonical file for `namespace` (sanitized and truncated), so anything that guards an
@@ -34,11 +40,27 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
         return Self(fileURL: fileURL)
     }
 
+    /// Recorded results in replay order.
     public func pending() throws -> [(key: String, result: Result)] {
         try loadIfNeeded()
-        return results.keys.sorted().compactMap { key in
+        return results.keys.sorted { lhs, rhs in
+            switch (attempts[lhs], attempts[rhs]) {
+            case (nil, nil): lhs < rhs
+            case (nil, _): true
+            case (_, nil): false
+            case (let left?, let right?): left < right
+            }
+        }.compactMap { key in
             results[key].map { (key, $0) }
         }
+    }
+
+    /// Moves `key` behind every other result in replay order, durably.
+    public func markAttempted(_ key: String) throws {
+        try loadIfNeeded()
+        guard results[key] != nil else { return }
+        attempts[key] = (attempts.values.max() ?? 0) + 1
+        try persistAttempts()
     }
 
     public func result(for key: String) throws -> Result? {
@@ -56,6 +78,7 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
         try loadIfNeeded()
         guard results.removeValue(forKey: key) != nil else { return }
         try persist()
+        if attempts.removeValue(forKey: key) != nil { try persistAttempts() }
     }
 
     public func removeAll() throws {
@@ -63,6 +86,8 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
         guard !results.isEmpty else { return }
         results.removeAll()
         try persist()
+        attempts.removeAll()
+        try persistAttempts()
     }
 
     private func loadIfNeeded() throws {
@@ -70,12 +95,21 @@ public actor CompanionResultOutbox<Result: Codable & Sendable> {
         let restored = try AtomicCodableReplayFile.load(
             [String: Result].self, from: fileURL, decoder: .companionImageProcessing)
         results = restored ?? [:]
+        // Order is advisory: an unreadable attempts file only resets rotation.
+        let order = try? AtomicCodableReplayFile.load(
+            [String: Int].self, from: attemptsURL, decoder: .companionImageProcessing)
+        attempts = (order ?? [:]).filter { results[$0.key] != nil }
         loaded = true
     }
 
     private func persist() throws {
         try AtomicCodableReplayFile.save(
             results, to: fileURL, encoder: .companionImageProcessing, allowLockedDevice: true)
+    }
+
+    private func persistAttempts() throws {
+        try AtomicCodableReplayFile.save(
+            attempts, to: attemptsURL, encoder: .companionImageProcessing, allowLockedDevice: true)
     }
 }
 

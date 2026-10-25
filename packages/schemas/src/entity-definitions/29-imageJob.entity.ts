@@ -56,8 +56,10 @@ const stateOptions = [
     color: "neutral-status",
   },
   {
+    // Image work never ends as failed: after repeated failures it keeps
+    // retrying with backoff and asks for attention.
     value: "failed",
-    label: "Failed",
+    label: "Needs attention (retrying)",
     color: "destructive",
   },
 ] satisfies {
@@ -101,7 +103,7 @@ export default defineEntity({
           kind: "fields",
           id: "state-reason",
           title: "State & reason",
-          fields: ["state", "lastError"],
+          fields: ["state", "waitingOn", "lastError"],
         },
         {
           kind: "records",
@@ -143,8 +145,15 @@ export default defineEntity({
         {
           id: "attention",
           label: "Needs attention",
-          description: "Image jobs waiting for an Apple device or failed",
-          filters: [{ id: "state", value: ["waiting_for_device", "failed"] }],
+          description:
+            "Image jobs that keep failing; they retry with backoff until they succeed",
+          filters: [{ id: "state", value: ["failed"] }],
+        },
+        {
+          id: "waiting-for-apple",
+          label: "Waiting for Apple",
+          description: "Image jobs parked until an Apple device pulls them",
+          filters: [{ id: "state", value: ["waiting_for_device"] }],
         },
       ],
     },
@@ -238,6 +247,22 @@ export default defineEntity({
         nullable: true,
         display: { columnGroup: "Execution", columnLabel: "Last error" },
         validation: readOnly(z.string().nullable()),
+      },
+      {
+        key: "waitingOn",
+        kind: "text",
+        nullable: true,
+        display: { columnGroup: "Execution" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "The job's execution Job" }],
+        },
+        explanation: {
+          ruleId: "image-job.waiting-on",
+          description:
+            "What the open job waits on now: a due slot, any Apple device, AI funding, a backoff, or the device holding its lease (an expired lease says so). Empty once the job settles.",
+        },
+        validation: readOnly(z.string().nullable().default(null)),
       },
       {
         key: "durationMs",
@@ -347,6 +372,7 @@ export default defineEntity({
       "displayName",
       "kind",
       "state",
+      "waitingOn",
       "imageId",
       "runId",
       "attempts",
@@ -376,6 +402,12 @@ export default defineEntity({
     derived: {
       // Every submission that scheduled or retried the job, not only its first.
       submissionId: { via: "submissions.publicId" },
+      // Displayed state derives from the universal Job that owns execution;
+      // the stored column keeps only the outcome (docs/jobs.md#image-processing).
+      state: {
+        type: "enum",
+        options: [...imageProcessingJobState.options],
+      },
     },
     sort: { fields: ["createdAt", "completedAt", "state", "kind"] },
   },
@@ -435,6 +467,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by state...",
         deriveSchema: true,
+        derived: true,
         options: stateOptions,
       },
       {

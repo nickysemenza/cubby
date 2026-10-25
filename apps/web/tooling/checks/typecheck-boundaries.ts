@@ -24,7 +24,7 @@ const sharedServerModules = new Set([
   "ai/chatgpt/rpc.ts",
   "db/freshness/rpc.ts",
   "domains/calendar/operations/rpc.ts",
-  "domains/image-processing/service/contracts.ts",
+  "domains/image-processing/operations/rpc.ts",
   "domains/purchase-agent/service/signals.ts",
   "domains/purchase-agent/service/environment.ts",
   "domains/usda-release/operations/rpc.ts",

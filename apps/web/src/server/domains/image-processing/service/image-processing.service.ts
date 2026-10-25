@@ -28,17 +28,19 @@ import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import {
   claimImageProcessingJob,
-  backOffImageProcessingLease,
+  releaseImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-  retryFailedImageProcessingJobs,
+  retryImageProcessingNow,
+  retryBackingOffDeviceWork,
   completeImageProcessingJob,
   getLeasedImageProcessingOutputKey,
   claimImageProcessingOrphans,
   finalizeImageProcessingOrphans,
   getLeasedImageProcessingJobContext,
+  withImageProcessingTransaction,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
   assignImageProcessingExecutor,
@@ -54,6 +56,7 @@ import {
 import { completeCloudImageDescription } from "~/server/domains/image-processing/service/cloud-description";
 import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
 import {
+  deferCloudAttemptForTypedWait,
   prepareCompanionImageCommand,
   reserveCompanionAnalysisOutput,
 } from "~/server/domains/image-processing/service/dispatch";
@@ -254,6 +257,10 @@ async function completeNormalizedImageInput(
       }),
     };
   } catch (error) {
+    // The verified JPEG stays retained under this attempt's input key; only
+    // the provider call waits, without spending an attempt.
+    if (await deferCloudAttemptForTypedWait(db, result, error))
+      return { adopted: false };
     const completion = await completeImageProcessingJob(db, {
       result: {
         ...result,
@@ -392,7 +399,7 @@ export async function retryImageProcessingFailures(
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
   const submission = await createImageProcessingSubmission(db);
-  const jobs = await retryFailedImageProcessingJobs(db, 100, {
+  const jobs = await retryImageProcessingNow(db, {
     imageId,
     submissionId: submission.id,
   });
@@ -452,9 +459,14 @@ export async function pullCompanionImageProcessing(
     appVersion: hello.appVersion,
     osVersion: hello.osVersion ?? null,
     automaticWork: hello.participation.automaticWork,
+    appleIntelligenceAvailable:
+      hello.capabilities.actualImageDescription.available,
   });
   const empty = { command: null, remotePaused: participation.remotePaused };
   if (!participation.automaticWork || participation.remotePaused) return empty;
+  // A newer Apple build may succeed where an older one kept failing: its
+  // first pull makes backing-off device work due again.
+  if (participation.appVersionChanged) await retryBackingOffDeviceWork(db);
   const command = await claimCompanionImageCommand(db, {
     device: hello,
     userId,
@@ -463,9 +475,24 @@ export async function pullCompanionImageProcessing(
   return command ? { command, remotePaused: false } : empty;
 }
 
+/** Candidates one pull may try when the server cannot hand a claim over. */
+const COMPANION_CLAIM_TRIES = 3;
+/** A hand-off that failed waits this long, so a persistent storage error cannot spin. */
+const HANDOFF_RETRY_MS = 60_000;
+
+/** The analysis output a command needs could not be reserved. */
+class OutputNotReserved extends Error {}
+
 /**
  * Claim and assign the next job a participating device can run, for the
- * device's `imageProcessing.pull`.
+ * device's `imageProcessing.pull`. Claim, preparation, assignment and output
+ * reservation share one transaction, which holds the device lane's admission
+ * row: only a hand-off that commits counts toward pull fairness, and
+ * concurrent pulls take their turns one at a time. A claim the server cannot
+ * hand over is released in that transaction (never an attempt): a null
+ * command means an empty queue, never an abandoned lease. A failed hand-off
+ * throws after its release commits, so the device sees an error rather than
+ * an empty queue.
  */
 export async function claimCompanionImageCommand(
   db: Database,
@@ -479,46 +506,79 @@ export async function claimCompanionImageCommand(
   const { revisions, kinds, allowAvifNormalization } =
     companionClaimCapabilities(device);
   if (!kinds.length) return null;
-  const claimed = await claimImageProcessingJob(db, {
-    kinds,
-    processorRevisions: revisions,
-    allowAvifNormalization,
-    leaseMs: input.leaseMs,
-  });
-  if (!claimed) return null;
-  try {
-    const command = await prepareCompanionImageCommand(claimed);
-    const assigned = await assignImageProcessingExecutor(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-      userId: input.userId,
-      executor: {
-        kind: "device",
+  for (let tries = 0; tries < COMPANION_CLAIM_TRIES; tries++) {
+    const handOff = await withImageProcessingTransaction(db, async (tx) => {
+      const claimed = await claimImageProcessingJob(tx, {
+        kinds,
+        processorRevisions: revisions,
+        allowAvifNormalization,
+        leaseMs: input.leaseMs,
         deviceId: device.deviceId,
-        name: device.deviceName ?? "Apple device",
-        platform: device.platform,
-        appVersion: device.appVersion,
-        osVersion: device.osVersion ?? null,
-      },
-    });
-    if (!assigned) {
-      await backOffImageProcessingLease(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        reason: "Device assignment was refused",
       });
-      return null;
-    }
-    if (!(await reserveCompanionAnalysisOutput(db, command))) return null;
-    return command;
-  } catch (error) {
-    await backOffImageProcessingLease(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-      reason: safeImageProcessingError(error),
+      if (!claimed) return { outcome: "empty" as const };
+      const release = (reason: string, delayMs?: number) =>
+        releaseImageProcessingLease(tx, {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+          reason,
+          delayMs,
+          event: "dispatch.released",
+        });
+      try {
+        const command = await prepareCompanionImageCommand(claimed);
+        // Assignment and reservation commit together or not at all, so a
+        // reservation failure never leaves a counted service behind.
+        const assigned = await withImageProcessingTransaction(
+          tx,
+          async (step) => {
+            const accepted = await assignImageProcessingExecutor(step, {
+              jobId: claimed.id,
+              attemptId: claimed.attemptId,
+              userId: input.userId,
+              executor: {
+                kind: "device",
+                deviceId: device.deviceId,
+                name: device.deviceName ?? "Apple device",
+                platform: device.platform,
+                appVersion: device.appVersion,
+                osVersion: device.osVersion ?? null,
+              },
+            });
+            if (!accepted) return false;
+            if (!(await reserveCompanionAnalysisOutput(step, command)))
+              throw new OutputNotReserved();
+            return true;
+          },
+        );
+        if (assigned) return { outcome: "handed" as const, command };
+        // Participation flipped off after hello: this device takes nothing.
+        await release("Device assignment was refused");
+        return { outcome: "refused" as const };
+      } catch (error) {
+        if (error instanceof OutputNotReserved) {
+          await release(
+            "Analysis output could not be reserved",
+            HANDOFF_RETRY_MS,
+          );
+          return { outcome: "retry" as const };
+        }
+        await release(safeImageProcessingError(error), HANDOFF_RETRY_MS);
+        return { outcome: "failed" as const, error };
+      }
     });
-    throw error;
+    switch (handOff.outcome) {
+      case "handed":
+        return handOff.command;
+      case "empty":
+      case "refused":
+        return null;
+      case "failed":
+        throw handOff.error;
+      case "retry":
+        continue;
+    }
   }
+  return null;
 }
 
 export async function completeAssignedCompanionImageProcessing(

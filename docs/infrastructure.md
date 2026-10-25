@@ -331,10 +331,12 @@ are running. Pool caps are soft limits, not interactive connection reservations.
 Keep them below database capacity and measure origin waits and query execution
 together before raising them. More connections cannot remove expensive query
 work. The background
-queue runs one message per invocation with `max_concurrency: 2`, a conservative
-starting policy to reduce competing database work, not a measured optimum or
-an interactive connection reservation. Tune it against queue backlog and oldest
-message age, origin pool waits, and interactive latency together. Telemetry
+queue consumer settings (`packages/shared/src/background-queue-consumer.json`)
+and each drain's page concurrency (`JOB_DRAIN.concurrency`) bound concurrent
+Job pages; four drains of three pages stay within the 12-connection origin
+caps while pages wait on providers. It is not a measured optimum or an
+interactive connection reservation. Tune it against queue backlog and oldest
+due age (`job.health`), origin pool waits, and interactive latency together. Telemetry
 concurrency remains 1. Purchase dispatch starts coordinator work outside Job delivery; the background
 queue cap does not bound active coordinator database work. That workload policy
 remains separate.
@@ -752,26 +754,18 @@ it. Reads never start inference, and retained results for deleted targets or
 changed source content are filtered out. AVIF sources wait, without consuming
 attempts, for the normalization job's verified JPEG snapshot.
 
-An available Apple companion claims compatible waiting image jobs immediately
-when it connects. The Job's no-device cooldown does not delay that claim;
-pending retries still honor backoff. A job the device claimed but could not
-take (refused assignment, failed command preparation) returns to `pending`
-with that backoff, so the same device cannot reclaim it on its next pull.
-Device participation and advertised image capabilities both gate execution.
-Retryable failures, failed hand-offs and expired executor leases since the last
-operator retry spend one budget (`IMAGE_PROCESSING_MAX_ATTEMPTS`); the failure
-that exhausts it leaves the job `failed` with its last error. An operator retry
-restores the full budget. The claim and retry policy belongs to
-`server/domains/image-processing/repo/image-processing.ts`.
+Device work is parked for Apple companions: a companion claims it directly
+when rung or when it connects, and the server drain never claims it. Device
+participation and advertised image capabilities both gate execution. Image
+work is never abandoned; its lanes, leases, renewal, release and retry policy
+are owned by [Durable Jobs](jobs.md#image-processing).
 
 Cloud and native image execution share one Job lease and generation fence.
-The background drain dispatches cloud work; a compatible native pull can claim
-a device-waiting Job before its cooldown. Processing attempts preserve executor
-attribution and output receipts; late completions cannot adopt after ownership
-expires. Job failures use the same retry budget as other background work.
-The background consumer remains bounded at two concurrent deliveries; provider
-admission separately bounds paid model starts. These limits do not reserve
-interactive Hyperdrive connections. JPEG analysis reads are bounded before buffering: description and
+Processing attempts preserve executor attribution and output receipts. The
+background consumer's concurrency and each drain's page concurrency are in
+`packages/shared/src/background-queue-consumer.json` and `JOB_DRAIN`;
+provider admission separately bounds paid model starts. These limits do not
+reserve interactive Hyperdrive connections. JPEG analysis reads are bounded before buffering: description and
 companion normalization at 4 MiB, identification at 2 MiB. Four overlapping
 description invocations hold at most 16 MiB of retained rendition bytes, with
 additional bounded streaming, inspection and upload copies; this is a payload

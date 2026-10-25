@@ -85,7 +85,8 @@ struct RunSnapshotTests {
             lifecycle: .init(
                 processor: .cubby, phase: .readyForReview, plannedImageCount: 0,
                 openBatchCount: 0, finalizedImageCount: 0, describedImageCount: 0,
-                failedImageIds: [], skippedImageCount: 0, proposedGroupCount: 3,
+                failedImageIds: [], withoutCloudDescriptionCount: 0, skippedImageCount: 0,
+                proposedGroupCount: 3,
                 committedGroupCount: 0, dispatchError: nil))
         let document = RunReviewDocument(runID: "RUN-2345", snapshot: try snapshot(), review: review)
         let selected = try document.photoGroups(runID: "RUN-2345", keys: ["selected"])

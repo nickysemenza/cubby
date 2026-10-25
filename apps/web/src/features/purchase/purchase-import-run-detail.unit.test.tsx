@@ -212,6 +212,7 @@ beforeEach(() => {
             finalizedImageCount: 0,
             describedImageCount: 0,
             failedImageIds: [],
+            withoutCloudDescriptionCount: 0,
             skippedImageCount: 0,
             proposedGroupCount: 0,
             committedGroupCount: 0,

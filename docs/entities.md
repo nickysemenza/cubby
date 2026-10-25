@@ -2379,8 +2379,14 @@ locks the owning Job and validates its live token and generation, rechecks the
 specific authoritative inputs, then commits output and cursor together.
 Standalone explicit refresh paths use this same Job or specific input
 validation. No global input revision or publication epoch stands in for that
-check. Failed, cancelled and manually paused Jobs require explicit retry;
-ordinary captures and periodic wakes do not revive them.
+check. Cancelled and manually paused Jobs are member stops: only explicit
+retry revives them, never a capture or periodic wake. Never-exhausted kinds,
+refresh families and image work among them, never fail: a failing page backs
+off and resumes. An exhausted kind's failed Job stays failed under periodic
+wakes, but a capture its restarting marker has not observed wakes it into a
+fresh pass, because the capture is new input the failed pass never read
+([durable invalidation](jobs.md#durable-invalidation)). Its other failures
+require explicit retry.
 
 Authoritative removal acquires the search-family Job before retiring search
 artifacts, matching search publication's Job-before-artifact lock order. Orphan
@@ -2394,7 +2400,7 @@ does not reduce an entire corpus to one page per minute. Completed families are
 eligible for another pass after roughly two minutes. This is a healthy-service
 staleness target for a quiet small household. Large imports, provider capacity,
 one expensive recipe closure or repeated cursor resets can take longer.
-Continuous edits can prevent a broad pass from finishing.
+Continuous edits no longer reset a broad pass; they wait for the next one.
 
 Pending review evidence is checked against current field, connection, Product
 or statement inputs on read and before apply. Obsolete retirement scanners and
@@ -2412,12 +2418,13 @@ cutoff (records created, or for embeddings documents updated, by then) that
 rides in the Job cursor; the COUNT and every page apply it, so later records
 wait for the next pass. Search counts its sources across every searchable
 table. The step's COUNT runs when the Run opens and starts `done` at the
-records earlier pages scanned. Invalidation restarts the pass; its first page
-ends the abandoned generation's Run with its counts, whether or not the new
-pass opens a Run. Quality is the exception: a full pass outlasts the gap
-between household writes, so invalidating a quality pass in progress (running,
-or queued with a cursor) leaves it alone, and its scheduled repeat covers the
-change. Quality pages publish the verdicts read in the publication transaction. Every Run is kept. Connection
+records earlier pages scanned. A full pass outlasts the gap between household
+writes, so invalidating a pass in progress (running, or queued with a cursor)
+lets it finish, and the capture leaves it due for a full pass
+that covers the change. A completed or not-yet-started pass restarts; its
+first page ends the abandoned generation's Run with its counts, whether or not
+the new pass opens a Run. A capture records the invalidation apart from the family's execution
+row ([durable invalidation](jobs.md#durable-invalidation)). Quality pages publish the verdicts read in the publication transaction. Every Run is kept. Connection
 discovery follows the same lazy pattern as a `connection_discovery` Run that
 owns its evaluations. Routine kinds are hidden from the Runs list by its
 declared initial filter.

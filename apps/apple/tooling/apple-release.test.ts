@@ -13,6 +13,7 @@ import { test } from "vitest";
 
 import {
   BUILD_NUMBER_OFFSET,
+  isOlderVersion,
   commitExists,
   checkpointTag,
   decide,
@@ -177,36 +178,42 @@ test("missing history rebuilds instead of skipping", () => {
   });
 });
 
-test("a compatibility bump publishes on push; a same-value edit waits for the nightly", () => {
+test("a minimum version bump publishes on push; a same-value edit waits for the nightly", () => {
   assert.deepEqual(
     decide(facts({ event: "push", version: "3.2.0", pushedVersion: "3.2.0" })),
     {
       action: "publish",
-      reason: "compatibility bump",
+      reason: "minimum version bump",
     },
   );
   assert.deepEqual(decide(facts({ event: "push" })), {
     action: "skip",
-    reason: "compatibility version unchanged",
+    reason: "minimum version unchanged",
   });
   assert.deepEqual(decide(facts({ version: "3.2.0" })), {
     action: "publish",
-    reason: "compatibility bump",
+    reason: "marketing version change",
   });
+});
+
+test("compares versions numerically, not as strings", () => {
+  assert.equal(isOlderVersion("2.9.0", "2.70.0"), true);
+  assert.equal(isOlderVersion("2.70.0", "2.70.0"), false);
+  assert.equal(isOlderVersion("3.0.0", "2.70.1"), false);
 });
 
 test("same-value pushes skip even without upload history", () => {
   for (const overrides of [{ checkpoint: null }, { baselineAvailable: false }])
     assert.deepEqual(decide(facts({ event: "push", ...overrides })), {
       action: "skip",
-      reason: "compatibility version unchanged",
+      reason: "minimum version unchanged",
     });
 });
 
 test("a later main version bump cannot turn a comment-only push into a release", () => {
   assert.deepEqual(decide(facts({ event: "push", version: "3.2.0" })), {
     action: "skip",
-    reason: "compatibility version unchanged",
+    reason: "minimum version unchanged",
   });
 });
 

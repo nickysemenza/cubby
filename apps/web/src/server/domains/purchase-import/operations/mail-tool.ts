@@ -80,6 +80,7 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -1372,7 +1373,21 @@ export async function searchMail(
     // with each retained original, so a funding stop has durable work to resume.
     if (actor.runId) ingest.runId = actor.runId;
     else ingest.searchActor = actor;
-    await ingestGmailMessages(db, provider, ingest);
+    // One message at a time: a contention failure that outlasts the write's own
+    // retries (the global Email-evidence lock, refresh Job rows) skips only that
+    // message instead of failing the whole search.
+    const retryableMessageIds: string[] = [];
+    for (const messageId of messageIds) {
+      try {
+        await ingestGmailMessages(db, provider, {
+          ...ingest,
+          messageIds: [messageId],
+        });
+      } catch (error) {
+        if (!isSerializationFailure(error)) throw error;
+        retryableMessageIds.push(messageId);
+      }
+    }
     const retained = messageIds.length
       ? await database
           .select({
@@ -1385,9 +1400,12 @@ export async function searchMail(
             sender: emailTable.sender,
             subject: emailTable.subject,
             receivedAt: emailTable.receivedAt,
+            holderRun: runTable.shortcode,
+            holderStatus: runTable.status,
           })
           .from(emailTable)
           .innerJoin(orderMail, retainedMailJoin)
+          .leftJoin(runTable, eq(runTable.id, emailTable.runId))
           .where(
             and(
               eq(emailTable.ledgerPartyId, party),
@@ -1401,11 +1419,16 @@ export async function searchMail(
     return mailSearchOut.parse({
       status: "ok",
       mailboxes: [mailboxId],
-      messages: retained.map((row) => ({
+      messages: retained.map(({ holderRun, holderStatus, ...row }) => ({
         mailboxId,
         ...row,
         receivedAt: row.receivedAt?.toISOString() ?? null,
+        heldBy:
+          holderRun && holderStatus
+            ? { run: holderRun, status: holderStatus }
+            : null,
       })),
+      retryableMessageIds,
       nextPageToken: listed.nextPageToken ?? null,
     });
   } catch (error) {
