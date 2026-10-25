@@ -8,6 +8,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import { JOB_DRAIN } from "../limits";
 import { dueJobPositions, dueJobs, enqueueJob } from "./jobs";
+import { loadJobWaitingOn } from "./waiting-on";
 
 /** Deterministic drain rounds: each selected Job is claimed, then finished. */
 async function drainRounds(
@@ -155,5 +156,28 @@ describe("fair drain under a flood", () => {
         }),
       ),
     );
+  });
+
+  // Review finding: beyond the first batch the drain re-ranks kinds by their
+  // last service, so a position there is a projection, not a promise.
+  it("flags queue positions beyond the first batch as estimates", async () => {
+    const rows = [];
+    for (let index = 0; index < JOB_DRAIN.batch + 5; index++)
+      rows.push(
+        await enqueueJob(ctx.db, {
+          key: `synthetic.estimate.${index}`,
+          kind: "synthetic.estimate",
+          input: {},
+        }),
+      );
+    const waiting = await loadJobWaitingOn(ctx.db, rows);
+    const byAhead = [...waiting.values()].flatMap((entry) =>
+      entry?.reason === "due" ? [entry] : [],
+    );
+    expect(byAhead).toHaveLength(rows.length);
+    for (const entry of byAhead)
+      expect(entry).toMatchObject({
+        aheadIsEstimate: entry.aheadCount >= JOB_DRAIN.batch,
+      });
   });
 });

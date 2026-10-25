@@ -10,6 +10,7 @@ import {
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingJob,
+  run,
 } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -193,7 +194,9 @@ describe("background companion leases", () => {
     const order: string[] = [];
     for (let pull = 0; pull < 7; pull++) {
       const lease = await claim();
-      if (lease) order.push(lease.id);
+      if (!lease) continue;
+      await assign(lease);
+      order.push(lease.id);
     }
     expect(order).toHaveLength(7);
     // The drain's share: one slot in every 1 / JOB_BACKFILL_SHARE claims.
@@ -201,6 +204,110 @@ describe("background companion leases", () => {
       Math.ceil(1 / JOB_BACKFILL_SHARE),
     );
     expect(order.filter((id) => owned.includes(id))).toHaveLength(6);
+  });
+
+  // Review finding: the backfill turn counted any Job with a runId as
+  // run-owned and reset only on runId-less claims, while selection owns work
+  // by an active, member-visible Run; and it counted rows by their last
+  // claim, so reclaims of one row counted once. Service is now one handed-over
+  // claim (an assigned attempt), owned by the same definition as selection.
+  it("resets the backfill turn when it serves an inactive Run's work", async () => {
+    const active = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const finished = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, finished));
+    const owned: string[] = [];
+    for (let index = 0; index < 6; index++)
+      owned.push(
+        await job(
+          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+          "image/jpeg",
+          active,
+        ),
+      );
+    const inactive = await job(
+      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/jpeg",
+      finished,
+    );
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const order: string[] = [];
+    for (let pull = 0; pull < 8; pull++) {
+      const lease = await claim(crypto.randomUUID());
+      if (!lease) continue;
+      await assign(lease);
+      order.push(lease.id);
+    }
+    // Four Run pulls, then backfill's turn serves the inactive Run's work,
+    // which resets the turn: the last two Run pulls precede the next backfill.
+    expect(order).toEqual([
+      ...owned.slice(0, 4),
+      inactive,
+      ...owned.slice(4),
+      backfill,
+    ]);
+  });
+
+  it("counts each handed-over reclaim of one row toward the backfill turn", async () => {
+    const active = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const owned = await job(
+      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/jpeg",
+      active,
+    );
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const order: string[] = [];
+    for (let pull = 0; pull < 5; pull++) {
+      const device = crypto.randomUUID();
+      const lease = await claim(device);
+      if (!lease) continue;
+      await assign(lease, device);
+      order.push(lease.id);
+      // The device goes silent; its lease lapses and the next pull reclaims.
+      await expire(lease.id);
+    }
+    expect(order).toEqual([owned, owned, owned, owned, backfill]);
+  });
+
+  // Review finding: device queue positions ranked by availability while
+  // device claims put active Run work first and reserve backfill a turn.
+  it("reports device queue positions in device claim order", async () => {
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const active = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const owned = await job(
+      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+      "image/jpeg",
+      active,
+    );
+    const queue = await readJobQueue(ctx.db, {
+      filter: { kinds: ["image.device"] },
+      runId: null,
+      pageIndex: 0,
+      pageSize: 10,
+    });
+    const ahead = Object.fromEntries(
+      queue.jobs.map((row) => [row.key, row.ahead]),
+    );
+    expect(ahead).toEqual({
+      [`image-processing:${owned}`]: 0,
+      [`image-processing:${backfill}`]: 1,
+    });
+    expect((await claim())?.id).toBe(owned);
+    expect((await claim())?.id).toBe(backfill);
   });
 
   it("filters processor revision and exclusively claims each device job", async () => {

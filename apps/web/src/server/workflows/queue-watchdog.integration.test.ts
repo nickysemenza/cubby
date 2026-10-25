@@ -25,6 +25,7 @@ import {
   invalidateRefreshFamily,
   scheduleRefreshFamilies,
 } from "~/server/generic/derived-refresh/repo/families";
+import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import {
   readJobQueue,
   readRunRollups,
@@ -374,6 +375,9 @@ describe("queue watchdog, explain and retention", () => {
     expect(queue.jobs.map((row) => row.key)).toEqual([
       `ai-evaluation:${shared.id}`,
     ]);
+    // job.list for the Run shows the evaluation's fan-out group too.
+    const listed = await listRunJobs(ctx.db, byId.get(requester)!.shortcode);
+    expect(listed.groups.map((group) => group.kind)).toContain("ai.evaluation");
     const explained = await explainWaiting(ctx.db, byId.get(owner)!.shortcode);
     expect(explained.steps.map((step) => step.label)).toContainEqual(
       expect.stringContaining(`ai-evaluation:${shared.id}`),

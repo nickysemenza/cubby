@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import { job, run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -248,5 +248,34 @@ describe("Run lineage and waiting-on reads", () => {
       waitingOn: "2 due",
       stalled: false,
     });
+  });
+
+  // Review finding: summaries formatted only `counts`, so a Run whose only
+  // Job's executor lease lapsed read as having no live Jobs.
+  it("summarizes expired leases awaiting reclaim", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const abandoned = await enqueueJob(ctx.db, {
+      key: "synthetic.rollup.abandoned",
+      kind: "synthetic.rollup",
+      input: {},
+      runId,
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "running",
+        leaseToken: crypto.randomUUID(),
+        leaseExpiresAt: new Date(Date.now() - 60_000),
+        lastClaimedAt: new Date(Date.now() - 5 * 60_000),
+      })
+      .where(eq(job.id, abandoned.id));
+
+    const read = await getRunByShortcode(ctx.db, await codeOf(runId));
+
+    expect(read?.waitingOn).toBe("1 expired lease awaiting reclaim");
   });
 });

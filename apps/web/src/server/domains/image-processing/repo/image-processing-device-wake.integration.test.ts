@@ -31,13 +31,19 @@ describe("parked device work wakes idle companions", () => {
   const userId = "synthetic-background-user";
   const deviceId = crypto.randomUUID();
   let rings = 0;
+  let ringFailures = 0;
   beforeEach(() => {
     rings = 0;
+    ringFailures = 0;
     setCfEnv(
       fromPartial<Env>({
         IMAGE_PROCESSING: {
           getByName: () => ({
             ring: async () => {
+              if (ringFailures > 0) {
+                ringFailures--;
+                throw new Error("Synthetic doorbell RPC failure");
+              }
               rings++;
               return 1;
             },
@@ -137,6 +143,39 @@ describe("parked device work wakes idle companions", () => {
       expect(rings).toBeGreaterThan(0);
     },
   );
+
+  // Review finding: the wake used the best-effort ring, which logs an RPC
+  // failure and reports zero companions. When the only parked work had just
+  // come due, nothing was scheduled later, so the wake completed and the
+  // idle device was never signalled. The durable wake now fails its page on
+  // an RPC failure and its retry rings again.
+  it("retries the wake after a failed doorbell RPC until it rings", async () => {
+    const lease = await parked();
+    await completeImageProcessingJob(ctx.db, {
+      result: {
+        jobId: lease.id,
+        attemptId: lease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "failed",
+          reason: "Synthetic device failure",
+          retryable: true,
+        },
+      },
+    });
+    await runScheduledServerWork();
+    await elapse();
+    ringFailures = 1;
+    rings = 0;
+    await runScheduledServerWork();
+    expect(ringFailures).toBe(0);
+    expect(rings).toBe(0);
+    // The failed page keeps the wake scheduled; its retry rings.
+    await elapse();
+    await runScheduledServerWork();
+    expect(rings).toBeGreaterThan(0);
+  });
 
   it("rings when a device releases work it cannot run", async () => {
     const lease = await parked();
