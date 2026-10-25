@@ -2,6 +2,7 @@ import { jobContract } from "~/contracts/job.contract";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
+import { readDeviceBacklog } from "../repo/device-backlog";
 import { listRunJobs, listSubjectJobs } from "../repo/job-diagnostics";
 import { readJobQueue, readRunRollups } from "../repo/job-queue";
 import { readJobLogs } from "../service/job-logs";
@@ -37,6 +38,7 @@ export const jobHandlers = implementOperationDomain(jobContract, {
       ),
     ),
   }),
+  deviceBacklog: (context) => readDeviceBacklog(context.db),
   health: async (context) => ({
     snapshot: await (
       await import("~/server/workflows/queue-watchdog")

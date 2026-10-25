@@ -210,6 +210,20 @@ const limitBinding = z.discriminatedUnion("status", [
 ]);
 export type LimitBinding = z.infer<typeof limitBinding>;
 
+/**
+ * Parked Apple-device work at a glance, for the "waiting for a device"
+ * banner. `workingDevices` counts devices that claimed work in the last
+ * ten minutes; `etaSeconds` is null when nothing waits or nothing claims.
+ */
+const deviceBacklog = z.object({
+  waiting: z.number().int().nonnegative(),
+  runsWaiting: z.number().int().nonnegative(),
+  workingDevices: z.number().int().nonnegative(),
+  claimsPerMinute: z.number().nonnegative(),
+  etaSeconds: z.number().int().nonnegative().nullable(),
+});
+export type DeviceBacklog = z.infer<typeof deviceBacklog>;
+
 /** Records whose single-item Jobs carry them as `subjectKind`/`subjectId`. */
 const jobSubjectEntity = z.enum(["image", "location"]);
 export type JobSubjectEntity = z.infer<typeof jobSubjectEntity>;
@@ -313,6 +327,13 @@ export const jobContract = defineContract(
       }),
       output: z.object({ rollups: z.array(runRollup) }),
       cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    deviceBacklog: query({
+      description:
+        "Apple-device image work waiting now: due Jobs, the Runs they hold up, devices that claimed work in the last 10 minutes, claims per minute and the ETA at that pace.",
+      input: z.strictObject({}),
+      output: deviceBacklog,
+      cache: { tags: [["run"], ["image"]], profile: "live-status" },
     }),
     health: query({
       description:
