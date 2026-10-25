@@ -138,7 +138,11 @@ const calendarKindRegistry = {
     create: (date) => taskCaptureRequest({ date }),
     icon: () => KIND_ICONS.task,
     metadata: (item) =>
-      [item.projectName, item.subjectProductName, TRADE_LABELS[item.trade]]
+      [
+        item.assignedProjectName,
+        item.subjectProductName,
+        TRADE_LABELS[item.trade],
+      ]
         .filter(Boolean)
         .join(" · "),
     richBadge: (item) => ({
@@ -168,7 +172,8 @@ const calendarKindRegistry = {
       [
         item.vendor,
         item.productName,
-        item.projectName,
+        ...(item.spendingContext?.projectNames ?? []),
+        ...(item.spendingContext?.partyNames ?? []),
         item.trade ? TRADE_LABELS[item.trade] : "Unassigned trade",
       ]
         .filter(Boolean)
@@ -218,7 +223,12 @@ const calendarKindRegistry = {
   },
   purchase: {
     icon: () => KIND_ICONS.purchase,
-    metadata: (item) => item.vendor ?? "Purchase",
+    metadata: (item) =>
+      [
+        item.vendor ?? "Purchase",
+        ...(item.spendingContext?.projectNames ?? []),
+        ...(item.spendingContext?.partyNames ?? []),
+      ].join(" · "),
     compactBadge: (item) =>
       item.occurrence === "refund"
         ? { label: "Refund", variant: "outline" }
