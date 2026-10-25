@@ -16,26 +16,6 @@ const leasedImageWork = (where: SQL | undefined) => sql`
     AND "Job".key LIKE ${"image-processing:%"}
     ${where ? sql`AND ${where}` : sql``}`;
 
-/** Live (unexpired) leases each install holds now. */
-export async function liveLeasesByInstallation(
-  db: Database | DrizzleTransaction,
-  installationIds: readonly string[],
-  now = new Date(),
-): Promise<Map<string, number>> {
-  if (!installationIds.length) return new Map();
-  const result = await repositoryQueries(db).execute<{
-    installationId: string;
-    count: number;
-  }>(sql`SELECT a.executor->>${"deviceId"} AS "installationId", count(*)::int AS count
-    ${leasedImageWork(sql`"Job"."leaseExpiresAt" > ${now.toISOString()}::timestamp
-      AND a.executor->>${"deviceId"} IN (${sql.join(
-        installationIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`)}
-    GROUP BY 1`);
-  return new Map(result.rows.map((row) => [row.installationId, row.count]));
-}
-
 /**
  * The Job set's leased image work per executor, live and expired apart, so
  * the Apple queue can show what each device holds and flag lost leases.

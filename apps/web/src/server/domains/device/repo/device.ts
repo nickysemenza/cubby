@@ -41,7 +41,6 @@ import {
   createEntityRowFetcher,
 } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { liveLeasesByInstallation } from "~/server/generic/jobs/repo/image-leases";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -97,24 +96,14 @@ const deviceInactive = (lastSeenAt: Date | null, now = new Date()) =>
 
 const deviceRead = {
   bindings: (bind) => {
-    const leases = bind.batch(async ({ db, rows }) => ({
-      byInstallation: await liveLeasesByInstallation(
-        db,
-        rows.map((row) => row.installationId),
-      ),
-      now: new Date(),
-    }));
+    // Row-local derivations; per-device leases live on the Activity queue.
+    const clock = bind.batch(async () => ({ now: new Date() }));
     return [
-      leases.fields(
-        deviceOut.pick({
-          updateRequired: true,
-          inactive: true,
-          activeLeases: true,
-        }),
-        (row, { byInstallation, now }) => ({
+      clock.fields(
+        deviceOut.pick({ updateRequired: true, inactive: true }),
+        (row, { now }) => ({
           updateRequired: appleAppVersionTooOld(row.appVersion),
           inactive: deviceInactive(row.lastSeenAt, now),
-          activeLeases: byInstallation.get(row.installationId) ?? 0,
         }),
       ),
     ];

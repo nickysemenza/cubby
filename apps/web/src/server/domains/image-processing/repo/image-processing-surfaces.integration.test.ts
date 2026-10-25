@@ -101,7 +101,6 @@ describe("image work on every surface", () => {
       .where(eq(device.installationId, installationId));
 
     expect(await getDeviceByID(ctx.db, saved!.id)).toMatchObject({
-      activeLeases: 1,
       updateRequired: false,
       inactive: false,
       appleIntelligenceAvailable: true,
@@ -125,9 +124,6 @@ describe("image work on every surface", () => {
       .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
       .where(eq(durableJob.key, `image-processing:${id}`));
 
-    expect(await getDeviceByID(ctx.db, saved!.id)).toMatchObject({
-      activeLeases: 0,
-    });
     const expired = await readJobQueue(ctx.db, {
       filter: { lanes: ["apple_device"], reasons: ["leased"] },
       runId: null,
@@ -166,7 +162,6 @@ describe("image work on every surface", () => {
     expect(await getDeviceByID(ctx.db, saved!.id)).toMatchObject({
       updateRequired: true,
       inactive: true,
-      activeLeases: 0,
       // A hello that never reported capabilities leaves it unknown.
       appleIntelligenceAvailable: null,
     });

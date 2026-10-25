@@ -69,7 +69,7 @@ export default defineEntity({
           kind: "fields",
           id: "automatic-work",
           title: "Automatic work",
-          fields: ["automaticWork", "activeLeases"],
+          fields: ["automaticWork"],
         },
         {
           kind: "fields",
@@ -239,26 +239,6 @@ export default defineEntity({
         },
         validation: {
           read: z.boolean().default(false),
-          create: null,
-          update: null,
-        },
-      },
-      {
-        key: "activeLeases",
-        kind: "number",
-        labelOverride: "Image jobs in progress",
-        display: { columnGroup: "Background work", columnLabel: "Leases" },
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Live image job leases" }],
-        },
-        explanation: {
-          ruleId: "device.active-leases",
-          description:
-            "Image jobs this install holds an unexpired lease on right now.",
-        },
-        validation: {
-          read: z.int().nonnegative().default(0),
           create: null,
           update: null,
         },
@@ -440,7 +420,6 @@ export default defineEntity({
       "appleIntelligenceAvailable",
       "updateRequired",
       "inactive",
-      "activeLeases",
       "ledgerPartyId",
       "productId",
       "ledgerPartyName",

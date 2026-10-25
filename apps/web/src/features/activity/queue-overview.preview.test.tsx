@@ -44,6 +44,8 @@ const leasedJob: JobFacts = {
     reason: "leased",
     lane: "apple_device",
     executor: "Fixture iPad",
+    executorDeviceId: null,
+    leasedAt: at(-3),
     leaseExpiresAt: at(-1),
     expired: true,
   },

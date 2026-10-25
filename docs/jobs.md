@@ -60,10 +60,11 @@ Declared entity fields carry the same facts to web, Apple and MCP:
   findings stay on its sections), and an `execution_limit` stop reads
   `waiting_for_funding`. The stored `status` stays the filter.
 - Image job: `waitingOn` for open rows.
-- Device: `updateRequired`, `inactive` (not seen for 7 days or never),
-  `activeLeases` (unexpired image leases whose attempt executor names the
-  install) and `appleIntelligenceAvailable` (the hello's actual-image
-  description availability, null until a hello reports it).
+- Device: `updateRequired`, `inactive` (not seen for 7 days or never) and
+  `appleIntelligenceAvailable` (the hello's actual-image description
+  availability, null until a hello reports it). Leases per device come from
+  `job.queue` (`leases`), keeping the device list's core read to its page
+  queries.
 
 ## Priority and fairness
 
