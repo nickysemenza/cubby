@@ -7,8 +7,7 @@ import { z } from "zod";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { cn } from "~/lib/utils";
 import { useDenseCell } from "~/ui/common/stacked-value";
-
-import { FieldExplanation } from "../fields/field-explanation";
+import { WhyValue } from "~/ui/derived/why-value";
 
 const METER_BARS = 5;
 
@@ -114,7 +113,7 @@ export function EntityQualityFact({
         quality={quality}
         scored={z.enum(scoredEntities).safeParse(entity).success}
       />
-      <FieldExplanation
+      <WhyValue
         entity={entity}
         id={id}
         field="dataQuality"

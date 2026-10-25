@@ -14,11 +14,12 @@ import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { isBrowserRoutedEntity } from "~/entity/entities";
+import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
@@ -46,20 +47,15 @@ import {
 } from "~/ui/primitives/popover";
 import JsonRenderer from "~/ui/text/json-renderer";
 
-import { ExceptionControls } from "./field-explanation-exception";
+import { DecisionChain, DerivedFreshness } from "./decision-chain";
+import { ImageChain } from "./image-chain";
 import {
-  FieldResolutionEntityActions,
-  FieldResolutionStatus,
-} from "./field-resolution";
-import {
-  ResolutionExplanation,
   ResolutionEvidence,
-  ResolutionHeadline,
   sectionLabelClassName,
-} from "./field-resolution-explanation";
+} from "./resolution-evidence";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
-export type ExplanationValue = ExplanationSource["value"];
+type ExplanationValue = ExplanationSource["value"];
 const explanationScalar = z.union([z.string(), z.number(), z.boolean()]);
 const explanationRecord = z.record(z.string(), z.json());
 
@@ -306,7 +302,7 @@ function sourceFacts(source: ExplanationSource): ExplanationValue {
 function UnassessedQualityExplanation({
   entity,
   id,
-}: Pick<FieldExplanationProps, "entity" | "id">) {
+}: Pick<WhyValueProps, "entity" | "id">) {
   const rule = entityFieldModels[entity].fields.find(
     (field) => field.key === "dataQuality",
   )?.explanation;
@@ -443,72 +439,29 @@ function QualityCalculation({
   );
 }
 
-type FieldExplanationProps = {
+type WhyValueProps = {
   entity: Entity;
   id: string;
   field: string;
   label: string;
   surface?: "list" | "detail" | "summary";
   resolution?: FieldResolution | null;
+  onSet?: () => void;
+  pendingSuggestion?: ReactNode;
+  qualityChecks?: NonNullable<
+    FieldExplanationOutput["qualityBreakdown"]
+  >["checks"];
 };
 
-function ExplanationResult({
-  entity,
-  field,
-  resolution,
-  value,
-  evidence,
-}: Pick<FieldExplanationProps, "entity" | "field" | "resolution"> & {
-  value: ExplanationValue;
-  evidence?: FieldExplanationOutput["resolutionEvidence"];
-}) {
-  return resolution ? (
-    <ResolutionHeadline
-      entity={entity}
-      field={field}
-      resolution={resolution}
-      evidence={evidence}
-    />
-  ) : (
-    <p className="text-sm leading-snug font-semibold break-words">
-      <ReadableExplanationValue value={value} />
-    </p>
-  );
-}
-
-export function FieldExplanation({
+export function WhyValue({
   entity,
   id,
   field,
   label,
   surface = "detail",
-  resolution,
-}: FieldExplanationProps) {
+  onSet,
+}: WhyValueProps) {
   const [open, setOpen] = useState(false);
-  if (surface === "detail")
-    return (
-      <div className="min-w-0">
-        <Button
-          size="icon-xs"
-          variant="ghost"
-          aria-label={`How ${label.toLowerCase()} is determined`}
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-        >
-          <InfoIcon className="size-3.5" />
-        </Button>
-        {open ? (
-          <FieldExplanationContents
-            entity={entity}
-            id={id}
-            field={field}
-            label={label}
-            surface={surface}
-            resolution={resolution}
-          />
-        ) : null}
-      </div>
-    );
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
@@ -526,11 +479,7 @@ export function FieldExplanation({
           />
         }
       >
-        {resolution ? (
-          <FieldResolutionStatus resolution={resolution} compact />
-        ) : (
-          <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
-        )}
+        <InfoIcon className={surface === "list" ? "size-3" : "size-3.5"} />
       </PopoverTrigger>
       <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(25rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain p-0">
         {open &&
@@ -538,12 +487,13 @@ export function FieldExplanation({
         !z.enum(scoredEntities).safeParse(entity).success ? (
           <UnassessedQualityExplanation entity={entity} id={id} />
         ) : open ? (
-          <FieldExplanationContents
+          <WhyValueContents
             entity={entity}
             id={id}
             field={field}
             label={label}
             surface={surface}
+            onSet={onSet}
           />
         ) : null}
       </PopoverContent>
@@ -552,13 +502,16 @@ export function FieldExplanation({
 }
 
 /** Query observers and actions mount only while the explanation is open. */
-export function FieldExplanationContents({
+export function WhyValueContents({
   entity,
   id,
   field,
   label,
   surface = "detail",
-}: FieldExplanationProps) {
+  onSet,
+  qualityChecks,
+  pendingSuggestion,
+}: WhyValueProps) {
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
       entityKind: entity,
@@ -569,18 +522,12 @@ export function FieldExplanationContents({
     staleTime: 0,
     refetchOnMount: "always",
   });
-  const subjectAction = (target: { entityKind: Entity; entityId: string }) =>
-    target.entityKind === entity && target.entityId === id;
   // Long rule identifiers must wrap inside the viewport-bounded popover.
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3">
-      {surface === "detail" ? (
-        <h3 className="text-xs font-semibold">{label}</h3>
-      ) : (
-        <PopoverTitle className="text-sm font-semibold">
-          How {label.toLowerCase()} is determined
-        </PopoverTitle>
-      )}
+      <PopoverTitle className="text-sm font-semibold">
+        Why this value · {label}
+      </PopoverTitle>
       {result.isPending ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : result.isError ? (
@@ -597,72 +544,36 @@ export function FieldExplanationContents({
         </Stack>
       ) : (
         <>
-          <section className="grid gap-2">
-            {result.data.interpretation ? (
-              <>
-                <ExplanationResult
-                  entity={entity}
-                  field={field}
-                  resolution={result.data.resolution}
-                  evidence={result.data.resolutionEvidence}
-                  value={result.data.interpretation.result}
-                />
-                <p className="text-sm leading-5">
-                  {result.data.interpretation.summary}
-                </p>
-                {(!result.data.qualityBreakdown
-                  ? result.data.interpretation.caveats
-                  : []
-                ).map((caveat) => (
-                  <p
-                    key={caveat}
-                    className="text-xs leading-5 text-muted-foreground"
-                  >
-                    {caveat}
-                  </p>
-                ))}
-                {!result.data.qualityBreakdown &&
-                result.data.interpretation.nextSteps.length > 0 ? (
-                  <div className="grid gap-1.5">
-                    <h4 className={sectionLabelClassName}>Next steps</h4>
-                    <ul className="list-disc pl-4 text-xs leading-5">
-                      {result.data.interpretation.nextSteps.map((step) => (
-                        <li key={step}>{step}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-            {result.data.resolution ? (
-              <ResolutionExplanation
-                entity={entity}
-                field={field}
-                resolution={result.data.resolution}
-                evidence={result.data.resolutionEvidence}
-                showHeadline={!result.data.interpretation}
-              />
-            ) : result.data.resolutionEvidence ? (
-              // A rollup (a Product's owners) has one chain row per record
-              // rather than a single resolution.
-              <ResolutionEvidence evidence={result.data.resolutionEvidence} />
-            ) : !result.data.interpretation &&
-              (result.data.value !== null ||
-                !result.data.sources.some(
-                  (source) =>
-                    source.label === "Project share" ||
-                    source.label === "Unassigned share",
-                )) ? (
-              <div className="text-base font-semibold break-words">
-                <ReadableExplanationValue value={result.data.value} />
-              </div>
-            ) : null}
-          </section>
+          <DecisionChain
+            data={result.data}
+            onSet={onSet}
+            pending={pendingSuggestion}
+          />
+          {result.data.interpretation ? (
+            <p className="text-xs leading-5">
+              {result.data.interpretation.summary}
+            </p>
+          ) : null}
+          <ResolutionEvidence evidence={result.data.resolutionEvidence} />
+          {result.data.imageChain ? (
+            <ImageChain chain={result.data.imageChain} />
+          ) : null}
           {result.data.qualityBreakdown ? (
             <QualityCalculation
               breakdown={result.data.qualityBreakdown}
               entityId={id}
             />
+          ) : null}
+          {!result.data.qualityBreakdown && qualityChecks?.length ? (
+            <Ledger>
+              {qualityChecks.map((check) => (
+                <QualityCheckRow
+                  key={check.check}
+                  check={check}
+                  entityId={id}
+                />
+              ))}
+            </Ledger>
           ) : null}
           {result.data.interpretation &&
           !explanationScalar.safeParse(result.data.value).success &&
@@ -710,14 +621,7 @@ export function FieldExplanationContents({
             </p>
           ) : null}
           <ExplanationTechnicalDetails data={result.data} />
-          <ExplanationFooter
-            entity={entity}
-            id={id}
-            field={field}
-            surface={surface}
-            data={result.data}
-            isSubject={subjectAction}
-          />
+          <ExplanationFooter data={result.data} />
         </>
       )}
     </div>
@@ -786,56 +690,15 @@ function ExplanationTechnicalDetails({
   );
 }
 
-/** Existing mutation and navigation actions retain their original contracts. */
-function ExplanationFooter({
-  entity,
-  id,
-  field,
-  surface,
-  data,
-  isSubject,
-}: {
-  entity: Entity;
-  id: string;
-  field: string;
-  surface: FieldExplanationProps["surface"];
-  data: FieldExplanationOutput;
-  isSubject: (target: { entityKind: Entity; entityId: string }) => boolean;
-}) {
-  const resolution = data.resolution;
-  const actions = data.actions.flatMap((action) => {
-    // On its own detail page a link back to the subject goes nowhere.
-    const self = isSubject(action.target);
-    if (self && surface === "detail") return [];
-    return [
-      <span key={action.kind} className="flex min-w-0 items-center gap-1.5">
-        <span className="text-muted-foreground">
-          {self ? "Open" : action.label}
-        </span>
-        <ExplanationEntityLink
-          entity={action.target.entityKind}
-          id={action.target.entityId}
-        />
-      </span>,
-    ];
-  });
-  const resets = resolution ? (
-    <FieldResolutionEntityActions
-      entity={entity}
-      id={id}
-      field={field}
-      resolution={resolution}
-    />
-  ) : null;
-  if (actions.length === 0 && !resolution?.canReset) return null;
+function ExplanationFooter({ data }: { data: FieldExplanationOutput }) {
+  const derived = data.derived ?? {
+    meta: { state: "fresh" as const, decidedBy: null, asOf: null },
+    stored: data.value,
+    live: data.value,
+  };
   return (
-    <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 grid grid-cols-[minmax(0,1fr)] gap-2 border-t border-border bg-popover px-3 py-2 text-xs">
-      {actions.length > 0 || resolution?.canReset ? (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          {resets}
-          {actions}
-        </div>
-      ) : null}
+    <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 border-t border-border bg-popover px-3 py-2">
+      <DerivedFreshness derived={derived} context={data} />
     </footer>
   );
 }

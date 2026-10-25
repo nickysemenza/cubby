@@ -15,15 +15,14 @@ import { Link } from "@tanstack/react-router";
 import { createContext, useContext, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { cn } from "~/lib/utils";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/common/ledger";
+import { WhyValue } from "~/ui/derived/why-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 
 import { useNeedsYouTarget } from "./needs-you";
@@ -78,25 +77,6 @@ export function QualityResult({ check }: { check: RecordQualityCheck }) {
   );
 }
 
-export function QualityCheckDetails({
-  check,
-  entityId,
-}: {
-  check: RecordQualityCheck;
-  entityId: string;
-}) {
-  return (
-    <Stack gap="xs">
-      <QualityResult check={check} />
-      {check.state === "gap" ? (
-        <p className="text-xs">{check.description}</p>
-      ) : null}
-      <p className="text-xs text-muted-foreground">{check.weightLabel}</p>
-      <ExceptionControls entityId={entityId} check={check} />
-    </Stack>
-  );
-}
-
 export function useFieldQuality(entity: Entity, id: string | undefined) {
   const context = useContext(QualityContext);
   return context?.entity === entity && context.id === id ? context : null;
@@ -124,11 +104,15 @@ function QualityCheckRows({
       {checks.map((check) => (
         <LedgerRow key={check.check} id={`${context.prefix}-${check.check}`}>
           <LedgerCell slot="group">
-            <Disclosure summary={<QualityResult check={check} />}>
-              <div className="pb-2">
-                <QualityCheckDetails check={check} entityId={context.id} />
-              </div>
-            </Disclosure>
+            <div className="flex items-center justify-between gap-2">
+              <QualityResult check={check} />
+              <WhyValue
+                entity={context.entity}
+                id={context.id}
+                field="dataQuality"
+                label={check.label}
+              />
+            </div>
           </LedgerCell>
         </LedgerRow>
       ))}
@@ -334,9 +318,12 @@ function AssessedRecordQuality({
               />
             </div>
           ) : null}
-          <Disclosure summary="Score calculation" className="mt-1">
-            <p>{breakdown.summary}</p>
-          </Disclosure>
+          <WhyValue
+            entity={entity}
+            id={id}
+            field="dataQuality"
+            label="Score calculation"
+          />
         </div>
       ) : null}
     </>

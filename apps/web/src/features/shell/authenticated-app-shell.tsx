@@ -22,6 +22,7 @@ import { MainNav } from "~/features/shell/main-nav";
 import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
+import { DerivedBacklogFooter } from "~/ui/derived/backlog";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import {
@@ -308,6 +309,7 @@ function WorkspaceSidebar({
           />
         ))}
       </nav>
+      {expanded ? <DerivedBacklogFooter /> : null}
       <div
         className={cn(
           "flex flex-col items-center gap-0.5 border-t border-border p-1.5",

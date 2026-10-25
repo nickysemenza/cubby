@@ -4,12 +4,12 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-
 import {
-  FieldResolutionBadge,
-  FieldResolutionStatus,
-  resolutionIsInformative,
-} from "./field-resolution";
+  DerivedRecordValue,
+  DerivedSidecarProvider,
+} from "~/ui/derived/sidecar-context";
+
+import { FieldResolutionEntityActions } from "./field-resolution";
 
 const sourceId = testShortcode("purchase", "fixture-purchase");
 const base: FieldResolution = {
@@ -32,20 +32,17 @@ describe("field resolution indicators", () => {
     const harness = createBrowserTestHarness();
     try {
       render(
-        <FieldResolutionBadge
+        <FieldResolutionEntityActions
+          entity="expense"
+          id={testShortcode("expense", "clear-override")}
           field="trade"
-          record={{
-            id: testShortcode("expense", "clear-override"),
-            fieldResolutions: {
-              trade: {
-                ...base,
-                mode: "explicit",
-                storedValue: "plumbing",
-                fallbackValue: null,
-                sourceEntity: null,
-                canReset: true,
-              },
-            },
+          resolution={{
+            ...base,
+            mode: "explicit",
+            storedValue: "plumbing",
+            fallbackValue: null,
+            sourceEntity: null,
+            canReset: true,
           }}
         />,
         { wrapper: harness.wrapper },
@@ -62,73 +59,53 @@ describe("field resolution indicators", () => {
       harness.dispose();
     }
   });
-  // Regression: an empty inherited value rendered "Unassigned" beside its
-  // "—", and a top-level task's own project rendered "Override · Use
-  // inherited value" although resetting would only clear it.
-  it.each<[string, Partial<FieldResolution>, boolean]>([
-    ["inherited value", {}, true],
-    ["empty inherited value", { value: null, sourceEntity: null }, false],
-    [
-      "explicit over a fallback",
-      { mode: "explicit", value: "electrical", canReset: true },
-      true,
-    ],
-    [
-      "explicit with nothing to inherit",
-      { mode: "explicit", fallbackValue: null, canReset: true },
-      false,
-    ],
-    [
-      "redundant explicit",
-      { mode: "explicit", matchesFallback: true, canReset: true },
-      true,
-    ],
-    ["explicit none over a fallback", { mode: "none", value: null }, true],
-    [
-      "explicit none with nothing to inherit",
-      { mode: "none", value: null, fallbackValue: null },
-      false,
-    ],
-    ["allocated", { mode: "allocated" }, true],
-  ])("%s → informative %s", (_name, patch, informative) => {
-    expect(resolutionIsInformative({ ...base, ...patch })).toBe(informative);
-  });
+});
 
-  it("keeps table provenance compact without losing its accessible meaning", () => {
-    render(<FieldResolutionStatus resolution={base} compact />);
-    expect(screen.getByText("purchase default")).toHaveClass("sr-only");
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-  });
-
-  it("labels an empty allocation as following its source items", () => {
-    const resolution: FieldResolution = {
-      ...base,
-      mode: "allocated",
-      value: null,
-      source: "Follows items",
-      sourceEntity: null,
-    };
-    const { rerender } = render(
-      <FieldResolutionStatus resolution={resolution} />,
-    );
-    expect(screen.getByText("Follows items")).toBeInTheDocument();
-    rerender(<FieldResolutionStatus resolution={resolution} compact />);
-    expect(screen.getByText("Follows items")).toHaveClass("sr-only");
-  });
-
-  // Regression: the source rendered as a bare shortcode link with no mark.
-  it("names the source record in detail provenance", () => {
-    const harness = createBrowserTestHarness();
-    try {
-      render(<FieldResolutionStatus resolution={base} />, {
-        wrapper: harness.wrapper,
-      });
-      expect(screen.getByText("From purchase")).toBeInTheDocument();
-      const link = screen.getByRole("link");
-      expect(link).toHaveAttribute("href", `/purchases/${sourceId}`);
-      expect(link.querySelector("svg, img")).not.toBeNull();
-    } finally {
-      harness.dispose();
-    }
-  });
+it("shows published freshness immediately and lets sidecar provenance override the transitional resolution", () => {
+  const id = testShortcode("expense", "synthetic-sidecar");
+  const record = { id, fieldResolutions: { trade: base } };
+  const view = render(
+    <DerivedSidecarProvider
+      value={{
+        [id]: {
+          trade: { state: "stale", decidedBy: { level: "own" }, asOf: null },
+        },
+      }}
+    >
+      <DerivedRecordValue record={record} field="trade">
+        Plumbing
+      </DerivedRecordValue>
+    </DerivedSidecarProvider>,
+  );
+  expect(screen.getByLabelText("Updating")).toBeVisible();
+  expect(screen.queryByLabelText("Inherited")).not.toBeInTheDocument();
+  view.rerender(
+    <DerivedRecordValue record={record} field="trade">
+      Plumbing
+    </DerivedRecordValue>,
+  );
+  expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Inherited")).toBeVisible();
+  view.rerender(
+    <DerivedSidecarProvider
+      value={{
+        [id]: {
+          trade: { state: "stale", decidedBy: { level: "own" }, asOf: null },
+        },
+      }}
+    >
+      <DerivedRecordValue
+        record={{
+          ...record,
+          derived: {
+            trade: { state: "fresh", decidedBy: { level: "own" }, asOf: null },
+          },
+        }}
+        field="trade"
+      >
+        Plumbing
+      </DerivedRecordValue>
+    </DerivedSidecarProvider>,
+  );
+  expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
 });

@@ -228,8 +228,10 @@ export function SuggestionReview({
   quiet,
   error,
   children,
+  explain,
 }: {
   children?: ReactNode;
+  explain?: (pending: ReactNode) => ReactNode;
   suggestion: FieldSuggestion | null;
   currentValue: string | null;
   currentLabel?: ReactNode;
@@ -323,6 +325,7 @@ export function SuggestionReview({
   const runnerUp = suggestion.alternatives[0];
   const body = (
     <SuggestionBody
+      explain={explain}
       compact={surface === "inline"}
       current={
         !isRemove && currentValue?.trim()

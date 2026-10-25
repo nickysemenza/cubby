@@ -44,6 +44,7 @@ import {
   RecordList,
   RecordRow,
 } from "~/ui/common/record-list";
+import { DerivedBacklogOverview } from "~/ui/derived/backlog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import {
@@ -906,6 +907,9 @@ export function QueueOverview({
         caption="Live Jobs by who runs them and what they wait on."
       >
         <QueueSummary search={search} />
+      </Section>
+      <Section headingAs="h2" title="Derived values" id="derived-values">
+        <DerivedBacklogOverview />
       </Section>
       <Section
         headingAs="h2"

@@ -412,7 +412,10 @@ describe("useAutoFieldSuggestion", () => {
       { wrapper: harness.wrapper },
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Use inherited" }));
+    fireEvent.click(screen.getByRole("button", { name: "Why this value" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Use inherited" }),
+    );
     expect(form.getValues("projectMode")).toBe("inherit");
     expect(form.getValues("projectId")).toBeNull();
 

@@ -1,6 +1,9 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import {
+  fieldExplanationInput,
+  fieldExplanationOutput,
+} from "@cubby/schemas/field-explanation";
 import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { cookbookSummary } from "@cubby/schemas/recipe";
 import { runOut } from "@cubby/schemas/run";
@@ -93,6 +96,26 @@ function recordFor<E extends GenericDetailEntity>(
 // Relation tables and timeline sections read through the transport; canned
 // empty reads keep the page's structure under test without a server.
 const operations = {
+  imageChain: fieldExplanation.explain.withTransport(async (request) => {
+    const input = fieldExplanationInput.parse(request.input);
+    return {
+      subject: { entityKind: input.entityKind, entityId: input.entityId },
+      field: "displayImages",
+      label: "Display images",
+      value: null,
+      evaluatedAt: "2026-10-25T12:00:00Z",
+      rule: {
+        id: "synthetic-display-images",
+        revision: 1,
+        description: "Synthetic image sources",
+      },
+      resolution: null,
+      sources: [],
+      actions: [],
+      truncated: false,
+      imageChain: { levels: [] },
+    };
+  }).queryOptions,
   displayImages: entityMedia.displayImages.withTransport(async () => ({}))
     .queryOptions,
   list: {
@@ -219,11 +242,7 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     expect(container.querySelector("section#import-targets")).toBeNull();
-    expect(
-      await screen.findByText(/Target outcomes · Defect/, {
-        selector: "button span",
-      }),
-    ).toBeVisible();
+    expect(await screen.findByText(/Target outcomes · Defect/)).toBeVisible();
     const jump = screen
       .getByRole("navigation", { name: "Quality issues" })
       .querySelector("a");

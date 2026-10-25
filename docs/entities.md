@@ -72,6 +72,15 @@ per-entity code as possible.
 
 ## Field resolution and overrides
 
+ADR 0021 presents provenance through the `derived` sidecar: inherited ↳, dashed
+auto suggestion, and an immediate Updating dot for stale/waiting values. One
+shared Why this value popover owns precedence, source links, assignment/reset,
+suggestion review, quality explanations and stored-versus-live comparison.
+Missing values retain the field's empty presentation; failed refreshes retain
+the stored value and raw diagnostic. Web temporarily adapts `fieldResolutions`
+only when no sidecar exists. Native rows and fields show the dot and inherited
+or auto caption; the full native chain remains follow-up work.
+
 Before adding an inherited value or override, trace an existing field through its
 stored intent, effective read, `fieldResolutions` provenance, and declared
 `resolution` actions. Reuse that contract for edits, Use inherited, and explicit

@@ -6,18 +6,16 @@ import { isValidElement, type ReactNode, useMemo } from "react";
 import { z } from "zod";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
-import { FieldExplanation } from "~/entity/fields/field-explanation";
 import {
   FieldProvenance,
   isInspectableFieldProvenance,
 } from "~/entity/fields/field-provenance";
-import {
-  FieldResolutionBadge,
-  fieldResolutionFor,
-} from "~/entity/fields/field-resolution";
+import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { extractEntityTitle } from "~/ui/data-table/entity-utils";
 import type { MobileMetaValue } from "~/ui/data-table/mobile-card";
 import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
+import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { WhyValue } from "~/ui/derived/why-value";
 import { NoneValue } from "~/ui/primitives/none-value";
 
 import type {
@@ -286,20 +284,14 @@ function collectMobileSlots<TItem extends RowData>(
       ) : (
         rendered
       );
-    const resolutionValue =
-      resolution && !explanation ? (
-        <span className="inline-flex min-w-0 items-center gap-1">
-          <span className="min-w-0 truncate">{inspectedValue}</span>
-          <FieldResolutionBadge
-            record={row.original}
-            field={colId}
-            interactive={false}
-            compact
-          />
-        </span>
-      ) : (
-        inspectedValue
-      );
+    const resolutionValue = (
+      <DerivedRecordValue
+        record={row.original}
+        field={explanation?.field ?? colId}
+      >
+        {inspectedValue}
+      </DerivedRecordValue>
+    );
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">
         <span className="min-w-0 truncate">{resolutionValue}</span>
@@ -312,7 +304,7 @@ function collectMobileSlots<TItem extends RowData>(
       explanation && rowId ? (
         <span className="inline-flex max-w-full min-w-0 items-center gap-1">
           <span className="min-w-0 truncate">{provenanceValue}</span>
-          <FieldExplanation
+          <WhyValue
             entity={explanation.entity}
             id={rowId}
             field={explanation.field}

@@ -12,6 +12,7 @@ import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import { DateDisplay } from "~/ui/common/date-display";
+import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { PageHeader } from "~/ui/layout/page-header";
 import {
   domainForEntity,
@@ -191,28 +192,21 @@ export function DetailPageHeader({
         ) : undefined
       }
       media={
-        cover && heroImages ? (
-          <Link
-            to="/images/$shortcode"
-            params={{ shortcode: cover.id }}
-            className="block overflow-hidden rounded-sm outline-1 outline-[oklch(0_0_0/0.1)]"
-          >
+        heroNo && (cover || heroDisplayImage) ? (
+          <ImageChainPopover entity={entity} id={heroNo}>
             <EntityCover
-              images={heroImages}
+              images={
+                heroImages?.length
+                  ? heroImages
+                  : heroDisplayImage
+                    ? [heroDisplayImage]
+                    : []
+              }
               entity={entity}
-              alt={cover.filename}
+              alt="Record cover"
               size={48}
             />
-          </Link>
-        ) : heroDisplayImage ? (
-          <EntityCover
-            images={[heroDisplayImage]}
-            entity={entity}
-            fit="contain"
-            size={48}
-            className="rounded-sm outline-1 outline-[oklch(0_0_0/0.1)]"
-            preview
-          />
+          </ImageChainPopover>
         ) : undefined
       }
       title={title}

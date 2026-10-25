@@ -67,6 +67,7 @@ import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { DerivedSidecarProvider } from "~/ui/derived/sidecar-context";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
 
@@ -569,9 +570,15 @@ function ServerListBody({
       }
     : null;
   const provided = listQuery ? (
-    <ListQueryProvider value={listQuery}>{body}</ListQueryProvider>
+    <ListQueryProvider value={listQuery}>
+      <DerivedSidecarProvider value={list.derived ?? EMPTY_DERIVED}>
+        {body}
+      </DerivedSidecarProvider>
+    </ListQueryProvider>
   ) : (
-    body
+    <DerivedSidecarProvider value={list.derived ?? EMPTY_DERIVED}>
+      {body}
+    </DerivedSidecarProvider>
   );
   return (
     <>
@@ -626,3 +633,5 @@ function ListTimeline({
     />
   );
 }
+
+const EMPTY_DERIVED = {};

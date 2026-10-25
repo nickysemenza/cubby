@@ -82,6 +82,7 @@ import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CellFrame } from "~/ui/data-table/cell-frame";
+import { WhyValueContents } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -1820,9 +1821,10 @@ function ResolvedFieldSuggestion({
     source,
   ]);
   const resolution = recordFieldResolutions(row.record)[field];
-  const resolutionPolicy = entityFieldModels[context.entity].fields.find(
+  const definition = entityFieldModels[context.entity].fields.find(
     (candidate) => candidate.key === field,
-  )?.resolution;
+  );
+  const resolutionPolicy = definition?.resolution;
   const usesInheritedValue =
     resolution?.canReset === true &&
     resolutionPolicy?.redundancy === "eligible" &&
@@ -1904,6 +1906,19 @@ function ResolvedFieldSuggestion({
   return (
     <RecordSuggestionScope value={row}>
       <SuggestionReview
+        explain={
+          definition?.explanation
+            ? (pending) => (
+                <WhyValueContents
+                  entity={context.entity}
+                  id={row.record.id}
+                  field={field}
+                  label={definition.label}
+                  pendingSuggestion={pending}
+                />
+              )
+            : undefined
+        }
         suggestion={suggestion}
         currentValue={current.value}
         currentLabel={current.label}
