@@ -657,6 +657,45 @@ describe("queue watchdog, explain and retention", () => {
     );
   });
 
+  // Review finding: the catch-up requeued a finished family that a capture
+  // made during its pass had already made due, and the requeued row was
+  // dated from that capture, not from the pass's completion: a false
+  // oldest_due 40 minutes after a pass that finished 3 minutes ago.
+  it("keeps a follow-up pass dated from completion through the catch-up", async () => {
+    const search = await enqueueJob(ctx.db, {
+      key: "refresh:search",
+      kind: "refresh.family",
+      input: { family: "search" },
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() - 40 * 60_000);
+      await invalidateRefreshFamily(ctx.db, "search");
+    } finally {
+      vi.useRealTimers();
+    }
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        observedRevision: 0,
+        lastClaimedAt: new Date(Date.now() - 3 * 60_000),
+        updatedAt: new Date(Date.now() - 3 * 60_000),
+      })
+      .where(eq(job.id, search.id));
+    // The catch-up also enqueues the other families, each due now.
+    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    expect(family?.oldestDueSeconds).toBeLessThan(5 * 60);
+    expect(health.alerts).not.toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+    );
+  });
+
   // A pass that ran through a capture finishes due for a full pass; it is
   // due since it finished, not since the capture it ran through.
   it("dates a follow-up pass from the finish of the pass it follows", async () => {
@@ -693,7 +732,7 @@ describe("queue watchdog, explain and retention", () => {
   // Review finding: the periodic catch-up (`repeatJob`) requeues a finished
   // family with availability "now" without serving it, which erased the
   // pending age of a capture the family had not observed yet.
-  it("keeps a woken family's pending age when the catch-up requeues it", async () => {
+  it("keeps a woken family's pending age through the catch-up", async () => {
     const search = await enqueueJob(ctx.db, {
       key: "refresh:search",
       kind: "refresh.family",
@@ -717,14 +756,12 @@ describe("queue watchdog, explain and retention", () => {
       vi.useRealTimers();
     }
     await scheduleRefreshFamilies(ctx.db, { invalidate: false });
-    const [requeued] = await getDb(ctx.db)
+    // Already due through the capture, so the catch-up leaves it as it is.
+    const [kept] = await getDb(ctx.db)
       .select()
       .from(job)
       .where(eq(job.id, search.id));
-    expect(requeued?.state).toBe("queued");
-    expect(requeued!.availableAt.getTime()).toBeGreaterThan(
-      Date.now() - 60_000,
-    );
+    expect(kept?.state).toBe("completed");
     const health = await measureQueueHealth(ctx.db, {
       previous: null,
       imageDisagreement: 0,

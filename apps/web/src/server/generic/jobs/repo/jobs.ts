@@ -14,6 +14,7 @@ import {
   gt,
   inArray,
   lte,
+  not,
   notInArray,
   or,
   type SQL,
@@ -1043,7 +1044,15 @@ export async function repeatJob(
       availableAt: input.availableAt ?? new Date(),
       updatedAt: new Date(),
     })
-    .where(and(eq(job.id, row.id), eq(job.state, "completed")))
+    .where(
+      and(
+        eq(job.id, row.id),
+        eq(job.state, "completed"),
+        // A capture already made it due; requeueing would only move its
+        // availability and redate the pending work in health.
+        not(unobservedJobInvalidation()),
+      ),
+    )
     .returning();
   return repeated ?? row;
 }

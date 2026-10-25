@@ -166,10 +166,11 @@ window. Paused and cancelled Jobs are member stops and never wake.
 
 Each capture also appends its revision and time to `JobInvalidationCapture`.
 Health dates a woken Job from its first revision past `observedRevision`, so
-repeated captures keep the original pending start, and so does a catch-up
-requeue (`repeatJob`) that resets availability to now without serving the
-capture: a woken Job is due since the earlier of its first unseen capture and
-its availability. A pass in progress that keeps its cursor is not woken by a
+repeated captures keep the original pending start. The catch-up
+(`repeatJob`) requeues only a completed Job no capture has woken; a woken one
+is already due, so its date stands. Waiting work that has not started its
+pass is due since the earlier of its first unseen capture and its
+availability. A pass in progress that keeps its cursor is not woken by a
 capture, so health dates it by its availability; once it finishes, the
 follow-up pass is due since the later of the capture and the completion. Retention deletes rows a claim has observed. Migration 0030
 recorded each marker already ahead of its Job at the cutover as a capture of
