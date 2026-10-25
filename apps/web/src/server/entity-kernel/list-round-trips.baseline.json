@@ -1,6 +1,6 @@
 {
   "provenance": {
-    "revision": "e5f88b6bd5 (origin/main before #3304)",
+    "revision": "dbbc6f7542 (#3304; the pre-#3304 numbers are in that PR's description)",
     "environment": "local IntegreSQL database on the shared dev PostgreSQL container (pg17), Node test pool",
     "workload": "seedReferenceUniverse, kernel list default page of 25, warm (minimum busy intervals over three reads)",
     "unavailable": [
