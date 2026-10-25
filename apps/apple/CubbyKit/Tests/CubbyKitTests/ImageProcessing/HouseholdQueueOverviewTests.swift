@@ -23,7 +23,7 @@ struct HouseholdQueueOverviewTests {
     }
 
     private func leased(executor: String, expiresAt: String, expired: Bool) -> String {
-        #"{"reason":"leased","lane":"apple_device","executor":"\#(executor)","leaseExpiresAt":"\#(expiresAt)","expired":\#(expired)}"#
+        #"{"reason":"leased","lane":"apple_device","executor":"\#(executor)","executorDeviceId":null,"leasedAt":"2099-01-01T00:00:00.000Z","leaseExpiresAt":"\#(expiresAt)","expired":\#(expired)}"#
     }
 
     private func overview(
