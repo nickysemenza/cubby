@@ -453,16 +453,24 @@ export const principalWithContext = (
 ): Principal => ({ ...principal, context });
 
 /**
- * A delegated Run must be the actor's own and the actor a member. Its owner
- * party may be the other member's: a photo Run records belongings for either
- * member (`run-service.ts`), and requiring the actor's own party there 401'd
- * every MCP call of such a Run's coordinator (RUN-DFBE2).
+ * A delegated Run must be the actor's own and the actor a member whose party
+ * owns it, except a photo Run: it records belongings for either member
+ * (`run-service.ts`), so it may be owned by the other member's party.
+ * Requiring the actor's party there 401'd every MCP call of such a Run's
+ * coordinator (RUN-DFBE2).
  */
 export const delegatedRunHolds = (
-  scope: { actorUserId: string | null },
+  scope: {
+    actorUserId: string | null;
+    ledgerPartyId: string | null;
+    purpose: string;
+  },
   actorUserId: string,
   party: { id: string } | null | undefined,
-) => scope.actorUserId === actorUserId && !!party;
+) =>
+  scope.actorUserId === actorUserId &&
+  !!party &&
+  (party.id === scope.ledgerPartyId || scope.purpose === "photo_inventory");
 
 export const authenticate = createAuthenticator({
   getSession: (options) => getAuth().api.getSession(options),

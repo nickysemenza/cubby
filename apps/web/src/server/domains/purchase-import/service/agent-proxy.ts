@@ -12,6 +12,7 @@ import {
   loadRunScopeByShortcode,
   recordRunControlEvent,
 } from "~/server/domains/purchase-import/repo/run-service";
+import { delegatedRunHolds } from "~/server/http/authenticate";
 import type {
   AuthenticatedRequestContext,
   CurrentParty,
@@ -28,9 +29,19 @@ export async function readPurchaseAgentConversation(input: {
   party: CurrentParty;
 }) {
   const scope = await loadRunScopeByShortcode(input.context.db, input.publicId);
-  // The member who started the Run reads it; its owner party may be the
-  // other member's (a photo Run), as for Run delegation (`delegatedRunHolds`).
-  if (scope.actorUserId !== input.context.auth.userId)
+  // The same rule as Run delegation: a photo Run may be owned by the other
+  // member's party.
+  if (
+    !delegatedRunHolds(
+      {
+        actorUserId: scope.actorUserId,
+        ledgerPartyId: scope.ledgerPartyId,
+        purpose: scope.purpose,
+      },
+      input.context.auth.userId,
+      input.party,
+    )
+  )
     throw new Error("Import Run does not belong to this member");
   const agents = getPurchaseImportRunAgentNamespace();
   if (!agents)
