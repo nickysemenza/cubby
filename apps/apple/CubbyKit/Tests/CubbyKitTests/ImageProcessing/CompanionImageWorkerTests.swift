@@ -18,6 +18,22 @@ private final class RenewalStub: URLProtocol, @unchecked Sendable {
 
 @Suite("CompanionImageWorker", .timeLimit(.minutes(1)))
 struct CompanionImageWorkerTests {
+    /// Regression (CUBBY-APPLE-7F): URLSession called a ping's handler twice, the second time
+    /// with POSIX 53 as the connection aborted, and the second resume of the checked
+    /// continuation crashed the app.
+    @Test func aPingHandlerCalledTwiceResumesOnce() async throws {
+        try await awaitPong { handler in
+            handler(nil)
+            handler(POSIXError(.ECONNABORTED))
+        }
+        await #expect(throws: POSIXError.self) {
+            try await awaitPong { handler in
+                handler(POSIXError(.ECONNABORTED))
+                handler(nil)
+            }
+        }
+    }
+
     @Test func helloUsesTheSuppliedCreationHint() {
         let hello = ImageProcessingHello.companion(
             deviceID: UUID(), deviceName: "Kitchen phone", foreground: true,
