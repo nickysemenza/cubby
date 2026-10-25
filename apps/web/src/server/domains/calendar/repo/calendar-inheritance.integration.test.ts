@@ -67,6 +67,7 @@ describe("calendar effective attribution", () => {
       kind: "purchase",
       cost: 11,
       startDate: "2026-09-19",
+      spendingContext: { projectNames: [second.name], partyNames: [] },
     });
     expect(scoped.days["2026-09-19"]).toMatchObject({
       actualSpend: 11,
@@ -128,6 +129,7 @@ describe("calendar effective attribution", () => {
     expect(result.items[0]).toMatchObject({
       title: "Calendar child",
       projectName: project.name,
+      assignedProjectName: null,
       trade: "building",
     });
   });

@@ -128,7 +128,6 @@ enum LibrarySyncBackgroundProcessing {
             Task { @MainActor in
                 model.photoLibrary.interruptMatching()
                 model.libraryMetadataSync?.endBackgroundRun()
-                model.endCompanionBackgroundRun()
                 model.interruptPhotoImports()
             }
         }

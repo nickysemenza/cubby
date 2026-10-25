@@ -200,6 +200,8 @@ targets:
         BGTaskSchedulerPermittedIdentifiers:
           - com.nickysemenza.cubby.photo-matching
           - com.nickysemenza.cubby.library-sync
+          - com.nickysemenza.cubby.image-queue
+          - com.nickysemenza.cubby.image-queue.continued.*
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - processing

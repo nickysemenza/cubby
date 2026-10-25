@@ -101,10 +101,10 @@ is its own Jobs plus the evaluation Jobs it owns or still requests (an
 uncancelled `AiEvaluationRequest`), once each, for rollups, `job.queue` with a
 Run, Retry now and explain.
 
-Device pulls apply the same two classes to one claim at a time
+Device pulls apply the same two classes to each command in a batch
 (`generic/jobs/repo/device-admission.ts`): an active, member-visible Run's
 parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / JOB_BACKFILL_SHARE -
-1`) run-owned device services in a row, the next pull serves backfill. The
+1`) run-owned device services in a row, the next command serves backfill. The
 owed class is chosen first; a device's preference for work another device
 last ran only orders candidates within it. A service is a device hand-off
 that commits (an assigned attempt of `image.device` work; each reclaim
@@ -112,9 +112,11 @@ counts), classified at assignment by selection's own `jobRunOwned`: serving
 an ended Run's work is backfill and resets the turn, and a Run ending later
 never reclassifies services already counted. The streak lives in the
 `image.device` row of `JobLaneAdmission`. A device pull
-(`claimCompanionImageCommand`) claims, prepares, assigns and reserves output
+(`claimCompanionImageCommands`) claims, prepares, assigns and reserves output
 in one transaction that locks that row before choosing a class, so
-concurrent pulls take their turns one at a time. A hand-off the server
+concurrent batches take their turns one at a time. Each committed hand-off
+updates the streak before selecting the next command, so a wide batch keeps
+backfill's reserved share rather than spending only one fairness turn. A hand-off the server
 cannot make (participation turned off, output not reserved, preparation
 failed) is released in the same transaction and counts nothing.
 
@@ -244,9 +246,22 @@ pre-cutover Worker can run; nothing reads it.
 
 Device wire contract:
 
-- `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300). A
-  null command means an empty queue: a claim the server cannot hand over is
-  released first, and a failed hand-off is an error, not an empty pull.
+- `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300) and
+  accepts optional `maxCommands` (1–16, default 1). `commands` contains up to
+  that many commands in hand-off order; the retained `command` field is its
+  first item or null. Older clients keep receiving one command without an
+  update or minimum-version change. A batch uses one transaction and one
+  admission lock. A bounded candidate page per class avoids rescanning the full
+  queue for every slot; each hand-off rechecks due times, leases and Run class
+  within that page, preserving per-command capabilities, device preference,
+  attempts, leases and presigned URLs. A prepared Job cannot re-enter the batch
+  even if its initial lease expires during later preparation. Immediately before
+  hand-off, still-owned leases are re-armed together and every returned command
+  receives the fresh deadline. An empty array/null command means no
+  hand-off: refused claims are released first. A preparation failure releases
+  and backs off that claim. An already prepared prefix is returned; if there
+  is none, the pull throws after the release commits. Neither valid commands
+  nor the failed candidate can become invisible behind a batch error.
 - `imageProcessing.renew` `{jobId, attemptId, deviceId}` extends the lease by
   60 s while the attempt still owns it, including an expired lease no newer
   claim replaced. It returns `{ok: true, leaseExpiresAt}` (the new command

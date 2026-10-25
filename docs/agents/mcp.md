@@ -36,7 +36,10 @@ shape. The `entity` and `entity_read` kernel tools keep their current
 Run-delegated mutations execute permitted writes without a separate approval.
 Reuse an operation ID only with the identical tool and arguments: a completed
 operation returns its saved result even after its Run stops. New writes remain
-fenced by the Run's current state.
+fenced by the Run's current state. A delegated write that requires `_runExecution`
+and omits it returns `BAD_REQUEST` / `INVALID_INPUT` at the input stage, with
+the same `input_schema` recovery contract as other invalid arguments. Correct
+the envelope and retry the call.
 
 Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
 member's instruction), photo uploads and a member's own

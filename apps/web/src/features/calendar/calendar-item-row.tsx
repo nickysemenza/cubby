@@ -79,6 +79,24 @@ function CalendarItemCompact({
   const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
   const span = itemSpanLabel(item, today);
+  const context = [
+    {
+      kind: "project",
+      label:
+        item.kind === "task"
+          ? item.assignedProjectName
+          : item.kind === "expense" || item.kind === "purchase"
+            ? item.spendingContext?.projectNames.join(", ")
+            : null,
+    },
+    {
+      kind: "party",
+      label:
+        item.kind === "expense" || item.kind === "purchase"
+          ? item.spendingContext?.partyNames.join(", ")
+          : null,
+    },
+  ].filter(({ label }) => Boolean(label));
   return (
     <>
       {image ? (
@@ -89,6 +107,24 @@ function CalendarItemCompact({
       <span className="min-w-0 flex-1 truncate" title={item.title}>
         {item.title}
       </span>
+      {context.length > 0 && (
+        <span
+          className={cn(
+            "flex min-w-0 gap-1 text-muted-foreground",
+            context.length > 1 ? "flex-[2]" : "flex-1",
+          )}
+        >
+          {context.map(({ kind, label }) => (
+            <span
+              key={kind}
+              className="min-w-0 flex-1 truncate"
+              title={label ?? undefined}
+            >
+              {label}
+            </span>
+          ))}
+        </span>
+      )}
       {presentation.compactBadge && (
         <Badge
           variant={presentation.compactBadge.variant}

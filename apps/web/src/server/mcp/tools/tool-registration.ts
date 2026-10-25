@@ -85,6 +85,9 @@ import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
  */
 
 const toolArgumentsSchema = z.looseObject({});
+const requiredRunExecutionSchema = z.object({
+  _runExecution: purchaseImportRunExecution,
+});
 const emptyInputSchema = z.object({});
 
 export type ToolArguments = z.output<typeof toolArgumentsSchema>;
@@ -911,7 +914,7 @@ function registerCompiledTool(
         mutation = action.kind === "mutation";
         const principal = principalFromExtra(extra);
         const { delegation } = principal;
-        const execution = purchaseImportRunExecution
+        let execution = purchaseImportRunExecution
           .optional()
           .parse(params._runExecution);
         const raw = action.prepareInput(
@@ -933,10 +936,13 @@ function registerCompiledTool(
         // delegated Run; one without it (mail.*) is bound by the actor's
         // delegated runId instead.
         if (delegation && mutation && governed && action.keepsRunExecution) {
-          if (!execution)
-            throw new Error(
-              "Purchase-agent writes require the run execution envelope",
-            );
+          if (!execution) {
+            stage = "input";
+            execution = requiredRunExecutionSchema.parse(params, {
+              error: () =>
+                "Purchase-agent writes require the run execution envelope",
+            })._runExecution;
+          }
           const [delegatedRun] = await getDb(principal.context.db)
             .select({ id: runTable.id })
             .from(runTable)
@@ -960,10 +966,13 @@ function registerCompiledTool(
         const invoke = (unit: ActionCall) => {
           if (!transactional)
             return action.invoke(input, unit, action.name, execution, raw);
-          if (!execution)
-            throw new Error(
-              "Purchase-agent writes require the run execution envelope",
-            );
+          if (!execution) {
+            stage = "input";
+            execution = requiredRunExecutionSchema.parse(params, {
+              error: () =>
+                "Purchase-agent writes require the run execution envelope",
+            })._runExecution;
+          }
           return executePurchaseAgentMutation({
             principal: unit.principal,
             delegation,

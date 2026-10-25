@@ -4,7 +4,7 @@ import Foundation
 import Observation
 
 /// Generic sustained device work uses the local activity register. Photo imports with their
-/// own per-run push activity are filtered out; companion jobs remain outside this selection.
+/// own per-run push activity are filtered out. Queue progress only reflects an active worker window.
 struct DeviceWorkLiveSelection: Equatable {
     let id: String
     let title: String
@@ -15,10 +15,12 @@ struct DeviceWorkLiveSelection: Equatable {
     static func select(_ activities: [BackgroundActivity], at now: Date) -> Self? {
         let eligible = activities.filter { activity in
             switch activity.kind {
-            case .libraryScan, .hashRepair, .classificationSweep, .metadataSync, .upload:
+            case .libraryScan, .hashRepair, .classificationSweep, .metadataSync:
                 now.timeIntervalSince(activity.startedAt) >= 30
+            case .upload:
+                activity.isUserInitiated || now.timeIntervalSince(activity.startedAt) >= 30
             case .companionJob:
-                false
+                true
             }
         }
         guard
@@ -158,7 +160,10 @@ final class DeviceWorkLiveActivityCoordinator {
             return
         }
         let state = snapshot.contentState(
-            estimatedRemaining: progressETA.remaining(at: .now).map(PhotoStageETA.format))
+            // The queue detail already carries the server's pace. Local percentage changes use
+            // a frozen waiting baseline and must not be extrapolated into a second ETA.
+            estimatedRemaining: snapshot.id == "companion-image-queue"
+                ? nil : progressETA.remaining(at: .now).map(PhotoStageETA.format))
         if let activity = activities.first {
             let changedTask = lastPublished?.localActivityID != state.localActivityID
             let due = Date.now.timeIntervalSince(lastUpdate) >= 15

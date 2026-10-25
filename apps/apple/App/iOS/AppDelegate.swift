@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> Bool {
         PhotoBackgroundProcessing.register()
         LibrarySyncBackgroundProcessing.register()
+        ImageQueueBackgroundProcessing.register()
         return true
     }
 

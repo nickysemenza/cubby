@@ -442,6 +442,7 @@ private struct ImageWorkConcurrencySection: View {
 
     var body: some View {
         Section {
+            ProcessImageQueueButton()
             Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
                 LabeledContent("Jobs at once") {
                     Text(
