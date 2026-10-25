@@ -1,8 +1,13 @@
 import { productCreateInput } from "@cubby/schemas/product";
+import {
+  recordSourceTransactionRecordsInput,
+  sourceTransactionRecordFilters,
+} from "@cubby/schemas/source-transaction-record";
 import { testUserId } from "@cubby/schemas/testing";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { wishCreateInput } from "@cubby/schemas/wish";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -10,8 +15,11 @@ import { z } from "zod";
 import { projectEntityResult } from "~/contracts/mcp-projections";
 import { mock } from "~/lib/test/mock-schema";
 import type { USDAClient } from "~/server/clients/usda";
+import { getDb } from "~/server/db/helpers";
+import { sourceTransactionRecord } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { recipeLineCoverage } from "~/server/domains/recipe/operations/recipe.server";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -92,6 +100,164 @@ const productGetResultSchema = z.object({
 
 describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
+
+  it("filters source observation identities exactly across revisions and account scopes", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const observation = (
+      providerTransactionId = "synthetic-provider-1",
+      providerAccountId = "synthetic-account-1",
+      providerAmount = -10,
+    ) => ({
+      providerTransactionId,
+      providerAccountId,
+      providerAmount,
+      accountDescriptor: `Synthetic card ${providerAccountId}`,
+      statementDate: "2026-05-04",
+      rawDescription: "SYNTHETIC IDENTITY FILTER",
+    });
+    const intake = ({
+      fingerprint,
+      rows,
+      source = "monarch",
+      observedAt = "2026-06-01T00:00:00Z",
+    }: {
+      fingerprint: string;
+      rows: ReturnType<typeof observation>[];
+      source?: string;
+      observedAt?: string;
+    }) =>
+      recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: {
+            source,
+            fingerprint,
+            observedAt,
+            label: "Synthetic identity filters",
+          },
+          rows: rows.map((row, index) => ({ ...row, rowPosition: index + 1 })),
+        }),
+        ctx.actor,
+      );
+    await intake({
+      fingerprint: "synthetic-filter-initial",
+      rows: [
+        observation(),
+        observation("synthetic-provider-1", "synthetic-account-2"),
+        observation("synthetic-provider-10"),
+        observation("synthetic-provider-1", "synthetic-account-10"),
+      ],
+    });
+    await intake({
+      fingerprint: "synthetic-filter-revision",
+      observedAt: "2026-06-02T00:00:00Z",
+      rows: [observation("synthetic-provider-1", "synthetic-account-1", -12)],
+    });
+    await intake({
+      fingerprint: "synthetic-filter-other-source",
+      source: "copilot",
+      rows: [observation()],
+    });
+    const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    const scoped = before.filter(
+      (row) =>
+        row.source === "monarch" &&
+        row.providerTransactionId === "synthetic-provider-1" &&
+        row.providerAccountId === "synthetic-account-1",
+    );
+    expect(scoped).toHaveLength(2);
+    const head = scoped.find((row) => row.current);
+    const previous = scoped.find((row) => !row.current);
+    if (!head || !previous)
+      throw new Error("Synthetic revision history missing");
+    const response = z.object({
+      items: z.array(z.object({ id: z.string(), current: z.boolean() })),
+      meta: z.object({ totalCount: z.number() }),
+    });
+    const list = async (
+      filters: z.input<typeof sourceTransactionRecordFilters>,
+    ) => {
+      const result = await callKernel(
+        {
+          action: "list",
+          entity: "sourceTransactionRecord",
+          filters,
+          fields: ["id", "current"],
+        },
+        context,
+      );
+      expect(result.isError).not.toBe(true);
+      return response.parse(result.structuredContent);
+    };
+    const identity = {
+      source: "monarch",
+      providerTransactionId: "synthetic-provider-1",
+      providerAccountId: "synthetic-account-1",
+    };
+    const history = await list(identity);
+    expect(history.meta.totalCount).toBe(2);
+    expect(history.items.map((row) => row.id).sort()).toEqual(
+      [head.shortcode, previous.shortcode].sort(),
+    );
+    expect(await list({ ...identity, current: true })).toMatchObject({
+      items: [{ id: head.shortcode, current: true }],
+      meta: { totalCount: 1 },
+    });
+    expect(await list({ ...identity, current: false })).toMatchObject({
+      items: [{ id: previous.shortcode, current: false }],
+      meta: { totalCount: 1 },
+    });
+    const otherAccount = before.find(
+      (row) => row.providerAccountId === "synthetic-account-2",
+    );
+    if (!otherAccount) throw new Error("Synthetic distinct account missing");
+    expect(
+      await list({ ...identity, providerAccountId: ["synthetic-account-2"] }),
+    ).toMatchObject({
+      items: [{ id: otherAccount.shortcode }],
+      meta: { totalCount: 1 },
+    });
+    expect(
+      await list({ source: "monarch", chargeKey: head.chargeKey }),
+    ).toMatchObject({
+      meta: { totalCount: 2 },
+    });
+    expect(
+      await list({
+        source: "monarch",
+        chargeKey: [head.chargeKey.slice(0, -1)],
+      }),
+    ).toMatchObject({ items: [], meta: { totalCount: 0 } });
+    expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
+      before,
+    );
+
+    await executeEntity(context, {
+      action: "delete",
+      entity: "sourceTransactionRecord",
+      ids: [head.shortcode],
+    });
+    expect(await list(identity)).toMatchObject({
+      items: [{ id: previous.shortcode, current: false }],
+      meta: { totalCount: 1 },
+    });
+    expect(await list({ ...identity, current: true })).toMatchObject({
+      items: [],
+      meta: { totalCount: 0 },
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(sourceTransactionRecord)
+          .where(eq(sourceTransactionRecord.id, head.id))
+      )[0],
+    ).toMatchObject({ deletedAt: expect.any(Date), current: true });
+  });
 
   it("annotates read-only tools from the registry", async () => {
     // The registry's own annotations are the invariant, in both directions:

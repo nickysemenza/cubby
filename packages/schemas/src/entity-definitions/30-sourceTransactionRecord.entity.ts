@@ -860,6 +860,27 @@ export default defineEntity({
         anyOf: ["source"],
       },
       {
+        columnId: "chargeKey",
+        kind: "multiselect",
+        deriveSchema: true,
+        stored: true,
+        placeholder: "Filter charge key...",
+      },
+      {
+        columnId: "providerTransactionId",
+        kind: "multiselect",
+        deriveSchema: true,
+        stored: true,
+        placeholder: "Filter provider transaction ID...",
+      },
+      {
+        columnId: "providerAccountId",
+        kind: "multiselect",
+        deriveSchema: true,
+        stored: true,
+        placeholder: "Filter provider account ID...",
+      },
+      {
         columnId: "accountId",
         kind: "idMulti",
         brandRef: { entity: "financialAccount" },

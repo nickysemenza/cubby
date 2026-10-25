@@ -412,6 +412,17 @@ workflow computations. `record` owns intake and `previewSuggestion` owns the
 read-only review projection. The former custom list, import roster, update and
 delete APIs have no separate replacement surface.
 
+`entity_read.list` exposes exact stored-value filters for `chargeKey`,
+`providerTransactionId` and `providerAccountId`. Each accepts one value or an
+any-of list; different filters intersect with the existing `source` filter.
+Use the provider account scope alongside a provider transaction ID when known:
+the same provider ID in distinct accounts does not establish one charge.
+The existing `current` boolean selects current (`true`) or historical (`false`)
+observations; omitting it returns both. Generic lists still exclude soft-deleted
+observations, including deleted heads; they do not promote an older revision or
+prove complete retained history. These filters select evidence and grant no
+identity-resolution or financial-admission authority.
+
 `finance_read.drift` reports possible overlap between distinct charge keys,
 not proven duplicate money. Equal source/account/date/amount fields and row
 creation order cannot establish occurrence identity or revision direction.
