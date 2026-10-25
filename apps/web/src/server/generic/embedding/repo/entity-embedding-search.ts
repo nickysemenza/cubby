@@ -5,7 +5,7 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -23,6 +23,7 @@ import type {
   PhysicalVectorMatch,
   VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
+import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 import {
   hasUnembeddedSearchDocuments,
   prepareSearchDocuments,
@@ -169,13 +170,16 @@ async function validatedScan(
     .where(
       and(
         inArray(job.key, ["refresh:search", "refresh:embeddings"]),
-        inArray(job.state, [
-          "queued",
-          "running",
-          "retry_wait",
-          "paused",
-          "failed",
-        ]),
+        or(
+          inArray(job.state, [
+            "queued",
+            "running",
+            "retry_wait",
+            "paused",
+            "failed",
+          ]),
+          unobservedJobInvalidation(),
+        ),
       ),
     )
     .limit(1);

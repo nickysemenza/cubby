@@ -4,7 +4,7 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { entityQuality, job } from "~/server/db/schema";
+import { entityQuality, job, jobInvalidation } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -183,14 +183,14 @@ describe("stored Purchase quality", () => {
     expect(published?.rulesVersion).toBe(PURCHASE_QUALITY_RULES_VERSION);
     const [before] = await unwrapDb(ctx.db)
       .select()
-      .from(job)
-      .where(eq(job.key, "refresh:quality"));
+      .from(jobInvalidation)
+      .where(eq(jobInvalidation.key, "refresh:quality"));
     await updateExpense(ctx.db, line.output.id, { cost: 7 }, ctx.actor);
     const [after] = await unwrapDb(ctx.db)
       .select()
-      .from(job)
-      .where(eq(job.key, "refresh:quality"));
-    expect(after!.generation).toBeGreaterThan(before!.generation);
+      .from(jobInvalidation)
+      .where(eq(jobInvalidation.key, "refresh:quality"));
+    expect(after!.revision).toBeGreaterThan(before!.revision);
     expect((await list()).data).toEqual([]);
     expect(await queue()).toEqual([]);
     await refresh();

@@ -2398,8 +2398,9 @@ records earlier pages scanned. Invalidation restarts the pass; its first page
 ends the abandoned generation's Run with its counts, whether or not the new
 pass opens a Run. Quality is the exception: a full pass outlasts the gap
 between household writes, so invalidating a quality pass in progress (running,
-or queued with a cursor) leaves it alone, and its scheduled repeat covers the
-change. Quality pages publish the verdicts read in the publication transaction. Every Run is kept. Connection
+or queued with a cursor) lets it finish, and its scheduled repeat covers the
+change. A capture records the invalidation apart from the family's execution
+row ([durable invalidation](jobs.md#durable-invalidation)). Quality pages publish the verdicts read in the publication transaction. Every Run is kept. Connection
 discovery follows the same lazy pattern as a `connection_discovery` Run that
 owns its evaluations. Routine kinds are hidden from the Runs list by its
 declared initial filter.

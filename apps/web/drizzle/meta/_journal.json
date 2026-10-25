@@ -190,6 +190,13 @@
       "when": 1792882071411,
       "tag": "0026_account_cardholder_inheritance",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792898188129,
+      "tag": "0027_job_invalidation",
+      "breakpoints": true
     }
   ]
 }

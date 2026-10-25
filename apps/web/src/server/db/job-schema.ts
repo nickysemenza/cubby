@@ -8,6 +8,8 @@ import {
 } from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
+  bigint,
+  boolean,
   check,
   index,
   integer,
@@ -54,6 +56,8 @@ export const job = pgTable(
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
     /** Set by each claim; the fair drain serves the least recently claimed kind first. */
     lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
+    /** The `JobInvalidation` revision the current pass started from; claims own it. */
+    observedRevision: bigint("observedRevision", { mode: "number" }),
     error: text("error"),
     ...baseTimestamps(),
   },
@@ -89,3 +93,17 @@ export const job = pgTable(
     ),
   ],
 );
+
+/**
+ * Durable source invalidation of a long-lived Job, kept apart from its
+ * execution row: captures bump `revision` here and never write `Job`, and
+ * claims, renewals and publication never write this row. A Job whose
+ * `observedRevision` trails it is due; `restartsPass` says whether a moved
+ * revision restarts a pass in progress or waits for it to finish.
+ */
+export const jobInvalidation = pgTable("JobInvalidation", {
+  key: text("key").primaryKey(),
+  revision: bigint("revision", { mode: "number" }).notNull().default(1),
+  restartsPass: boolean("restartsPass").notNull(),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+});

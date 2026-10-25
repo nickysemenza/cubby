@@ -14,6 +14,7 @@ import {
   imageProcessingJob,
   imageProcessingOrphan,
   imageProcessingSubmissionJob,
+  jobInvalidation,
 } from "~/server/db/schema";
 import {
   createDevice,
@@ -612,12 +613,15 @@ describe("image execution history conservation", () => {
       resultSchemaRevision: 1,
       inputFingerprint: "test-input",
     };
+    // Captures bump each family's invalidation revision, not its Job row.
     const familyGenerations = () =>
       getDb(ctx.db)
-        .select({ key: durableJob.key, generation: durableJob.generation })
-        .from(durableJob)
-        .where(eq(durableJob.kind, "refresh.family"))
-        .orderBy(durableJob.key);
+        .select({
+          key: jobInvalidation.key,
+          generation: jobInvalidation.revision,
+        })
+        .from(jobInvalidation)
+        .orderBy(jobInvalidation.key);
     const before = await familyGenerations();
     const outcome = {
       kind: "describe_image" as const,

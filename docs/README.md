@@ -10,6 +10,8 @@ the repository.
   deployment, and the HTTP API.
 - [Entities](entities.md) describes the compiled entity architecture,
   workflows, and relationship contracts.
+- [Durable Jobs](jobs.md) owns background execution contracts, starting with
+  durable invalidation kept apart from the execution row.
 - [Household taxonomy vocabulary](../GLOSSARY.md) defines classification terms.
 - [Inventory audit](inventory-audit.md), [Garden](garden.md), and [Photos library
   deduplication](photo-library-dedup.md) explain household workflows.

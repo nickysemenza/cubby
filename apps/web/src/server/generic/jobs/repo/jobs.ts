@@ -21,7 +21,7 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { job } from "~/server/db/retained-tables";
+import { job, jobInvalidation } from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
 import { JOB_DRAIN } from "../limits";
@@ -98,6 +98,15 @@ export async function enqueueJob(
   return row;
 }
 
+/**
+ * A durable invalidation this Job has not observed yet (`JobInvalidation`):
+ * outstanding work even while the Job row itself reads `completed`.
+ */
+export const unobservedJobInvalidation = () =>
+  // Qualified by hand: drizzle renders bare column names in some statements,
+  // which inside this subquery would compare the marker with itself.
+  sql<boolean>`EXISTS (SELECT 1 FROM "JobInvalidation" ji WHERE ji.key = "Job".key AND ji.revision > coalesce("Job"."observedRevision", 0))`;
+
 const due = (now: Date) =>
   or(
     and(
@@ -105,7 +114,38 @@ const due = (now: Date) =>
       lte(job.availableAt, now),
     ),
     and(eq(job.state, "running"), lte(job.leaseExpiresAt, now)),
+    // A captured invalidation wakes waiting or finished work at once.
+    and(
+      inArray(job.state, ["queued", "retry_wait", "completed"]),
+      unobservedJobInvalidation(),
+    ),
   );
+
+/**
+ * Record durable source invalidation of `key` in the caller's transaction.
+ * It writes only the `JobInvalidation` row, never the execution `Job` row,
+ * so a capture cannot conflict with claims, renewals or publication of that
+ * Job. `restartsPass: false` lets a pass in progress finish before it reruns.
+ * The first capture of a key creates its Job when none exists.
+ */
+export async function recordJobInvalidation(
+  db: RepositoryQueryInput,
+  input: Omit<EnqueueJobInput, "invalidate"> & { restartsPass: boolean },
+) {
+  const { restartsPass, ...enqueue } = input;
+  const [marker] = await repositoryQueries(db)
+    .insert(jobInvalidation)
+    .values({ key: enqueue.key, restartsPass })
+    .onConflictDoUpdate({
+      target: jobInvalidation.key,
+      set: {
+        revision: sql`${jobInvalidation.revision} + 1`,
+        updatedAt: new Date(),
+      },
+    })
+    .returning({ revision: jobInvalidation.revision });
+  if (marker?.revision === 1) await enqueueJob(db, enqueue);
+}
 
 /** Expiry revokes ownership; it never reclaims a live lease for another execution. */
 async function stopStalledJobs(db: Database) {
@@ -177,6 +217,27 @@ export async function claimJob(
       .where(and(eq(job.id, id), due(now)))
       .for("update", { skipLocked: true });
     if (!available) return null;
+    // Observe durable invalidation here, in the execution's own row: a moved
+    // revision starts a fresh pass (new generation, no cursor, fresh budget),
+    // except that a pass in progress that finishes first keeps going.
+    const [marker] = await getDb(tx)
+      .select()
+      .from(jobInvalidation)
+      .where(eq(jobInvalidation.key, available.key));
+    const moved =
+      marker !== undefined &&
+      marker.revision !== (available.observedRevision ?? 0);
+    const restart =
+      moved &&
+      (available.state === "completed" ||
+        available.cursor === null ||
+        marker.restartsPass);
+    if (restart) {
+      available.attempts = 0;
+      available.cursor = null;
+      available.result = null;
+      available.error = null;
+    }
     const stalled =
       available.recoveryTimeoutMs !== null &&
       now.getTime() -
@@ -216,6 +277,13 @@ export async function claimJob(
         attempts: available.attempts + 1,
         lastClaimedAt: now,
         updatedAt: now,
+        ...(restart && {
+          generation: sql`${job.generation} + 1`,
+          cursor: null,
+          result: null,
+          error: null,
+          observedRevision: marker.revision,
+        }),
       })
       .where(eq(job.id, id))
       .returning();
@@ -246,6 +314,36 @@ export async function renewJob(db: Database, claim: JobClaim) {
   return Boolean(row);
 }
 
+/**
+ * A restarting invalidation captured since this pass began supersedes the
+ * page, as a generation change does. A read only: publication never writes
+ * the invalidation row. A capture landing after this check is still seen,
+ * because the finished pass keeps the revision it started from.
+ */
+async function invalidatedDuringPass(
+  db: RepositoryQueryInput,
+  claim: Pick<JobClaim, "key" | "observedRevision">,
+) {
+  const [marker] = await repositoryQueries(db)
+    .select()
+    .from(jobInvalidation)
+    .where(eq(jobInvalidation.key, claim.key));
+  return (
+    marker !== undefined &&
+    marker.restartsPass &&
+    marker.revision !== (claim.observedRevision ?? 0)
+  );
+}
+
+/** The revision a finishing non-restarting pass absorbs; restarting kinds absorb none. */
+async function absorbedRevision(db: RepositoryQueryInput, key: string) {
+  const [marker] = await repositoryQueries(db)
+    .select()
+    .from(jobInvalidation)
+    .where(eq(jobInvalidation.key, key));
+  return marker && !marker.restartsPass ? marker.revision : undefined;
+}
+
 /** Preparation/provider work precedes this short transaction; publish is DB-only. */
 export async function publishJobPage(
   db: Database,
@@ -273,7 +371,10 @@ export async function publishJobPage(
       current.leaseExpiresAt.getTime() <= Date.now()
     )
       return false;
-    if (current.generation !== claim.generation) {
+    if (
+      current.generation !== claim.generation ||
+      (await invalidatedDuringPass(tx, claim))
+    ) {
       await getDb(tx)
         .update(job)
         .set({
@@ -309,7 +410,10 @@ export async function publishJobPage(
           latest.leaseExpiresAt.getTime() <= Date.now()
         )
           throw new JobSupersededError();
-        if (latest.generation !== claim.generation) {
+        if (
+          latest.generation !== claim.generation ||
+          (await invalidatedDuringPass(commit, claim))
+        ) {
           await commit
             .update(job)
             .set({
@@ -325,9 +429,17 @@ export async function publishJobPage(
             .where(eq(job.id, claim.id));
           return;
         }
+        // A pass that does not restart absorbs captures made while it ran,
+        // as the in-progress skip did: its own Run records invalidate it, so
+        // rerunning on them would never settle. Its scheduled repeat covers
+        // them (`scheduleRefreshFamilies`).
+        const absorbed = page.done
+          ? await absorbedRevision(commit, claim.key)
+          : undefined;
         await commit
           .update(job)
           .set({
+            ...(absorbed !== undefined && { observedRevision: absorbed }),
             state: page.done ? "completed" : "queued",
             cursor: page.cursor ?? null,
             result:

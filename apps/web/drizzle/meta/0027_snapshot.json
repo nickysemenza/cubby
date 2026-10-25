@@ -1,6 +1,6 @@
 {
-  "id": "8e95df53-3ba2-4733-bd63-7424612d6acb",
-  "prevId": "689840c5-e5a7-4208-a674-be934a15d639",
+  "id": "93d8df18-06c6-4884-9d72-41f15552a645",
+  "prevId": "8e95df53-3ba2-4733-bd63-7424612d6acb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2595,6 +2595,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "observedRevision": {
+          "name": "observedRevision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "error": {
           "name": "error",
           "type": "text",
@@ -2753,6 +2759,45 @@
           "value": "\"Job\".\"attempts\" >= 0 AND \"Job\".\"maxAttempts\" > 0"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.JobInvalidation": {
+      "name": "JobInvalidation",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "restartsPass": {
+          "name": "restartsPass",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.jwks": {

@@ -11,7 +11,7 @@ import {
   recordCommittedChanges,
   withTransactionDatabase,
 } from "~/server/db/helpers/core";
-import { job } from "~/server/db/schema";
+import { job, jobInvalidation } from "~/server/db/schema";
 import {
   createLocation,
   getLocationById,
@@ -101,15 +101,25 @@ describe("repository writes publish after their commit", () => {
     return published;
   };
 
-  it("coalesces source changes across savepoints and leaves family generations unchanged for projections", async () => {
+  it("coalesces source changes across savepoints and leaves family revisions unchanged for projections", async () => {
     await recordChange(ctx.db, { kind: "source", categories: ["task"] });
+    // Captures bump each family's invalidation revision, never its Job row.
     const generations = () =>
       getDb(ctx.db)
-        .select({ id: job.id, generation: job.generation })
+        .select({
+          key: jobInvalidation.key,
+          generation: jobInvalidation.revision,
+        })
+        .from(jobInvalidation)
+        .orderBy(jobInvalidation.key);
+    const executions = () =>
+      getDb(ctx.db)
+        .select({ id: job.id, generation: job.generation, state: job.state })
         .from(job)
         .where(eq(job.kind, "refresh.family"))
         .orderBy(job.id);
     const before = await generations();
+    const executionsBefore = await executions();
     const published = recordingQueue();
     await withTransactionDatabase(ctx.db, async (outer) => {
       // A rolled-back first registration must not consume the deduplication key.
@@ -137,6 +147,7 @@ describe("repository writes publish after their commit", () => {
     expect(await generations()).toEqual(
       before.map((row) => ({ ...row, generation: row.generation + 1 })),
     );
+    expect(await executions()).toEqual(executionsBefore);
     expect(published).toHaveLength(1);
     const afterSource = await generations();
     await recordChange(ctx.db, {
