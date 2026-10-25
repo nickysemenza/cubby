@@ -112,8 +112,15 @@ export const statementInputCharges = (
 /** Every live settlement reference must have live provider-pending evidence. */
 export const statementPendingInputTransactions = (
   accountIds: readonly string[],
-  page?: { after: string | null; limit: number },
-) => sql`
+  input?: {
+    page?: { after: string | null; limit: number };
+    scope?: StatementSuggestionScope;
+  },
+) => {
+  const { page, scope } = input ?? {};
+  // Admit whole holds after aggregation so scoped membership never discards
+  // their pending evidence from other collections or settlement references.
+  return sql`
     SELECT ft.id, ft."accountId", ft.amount, ft.status, ft."postedDate",
       ft."transactionDate", ft.merchant, ft."rawDescription",
       array_agg(DISTINCT sr.id) AS "pendingRowIds"
@@ -139,10 +146,17 @@ export const statementPendingInputTransactions = (
           )
       )
     GROUP BY ft.id
+    ${
+      scope?.importId || scope?.since
+        ? sql`HAVING bool_or((sr.source, ${chargeKeyOf("sr")}) IN (${scopedStatementChargeKeys(scope)}))`
+        : sql``
+    }
     ORDER BY ft.id
     ${page ? sql`LIMIT ${page.limit}` : sql``}
   `;
+};
 
+/** Candidate accounts only; the hold query intersects charge membership/date scope. */
 export const statementHoldAccounts = async (
   db: Database | DrizzleTransaction,
   scope?: StatementSuggestionScope,

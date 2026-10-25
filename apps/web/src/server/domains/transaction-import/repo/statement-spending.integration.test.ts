@@ -338,7 +338,9 @@ describe("statement spending review and re-import", () => {
   });
   // Categories are provider observations, never a fuzzy same-merchant join.
   it("retains conflicting category observations and scopes source evidence to charge membership", async () => {
-    const { input, account } = await fixture("synthetic-category-charge");
+    const { input, account, recorded } = await fixture(
+      "synthetic-category-charge",
+    );
     await recordSourceTransactionRecords(
       ctx.db,
       recordSourceTransactionRecordsInput.parse({
@@ -364,12 +366,17 @@ describe("statement spending review and re-import", () => {
       }),
       ctx.actor,
     );
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: null,
+      scope: { importId: recorded.batchId! },
+    });
     const states = await getDb(ctx.db).query.assessmentState.findMany();
     const suggestions = await readStatementSuggestions(
       ctx.db,
       states.map((state) => state.id),
     );
+    expect(suggestions).toHaveLength(1);
     const suggestion = suggestions.find(
       (item) => item.statementDate === "2026-05-04",
     )!;

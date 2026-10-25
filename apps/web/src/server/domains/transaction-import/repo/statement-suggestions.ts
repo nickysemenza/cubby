@@ -329,12 +329,12 @@ type PendingTransaction = {
 async function statementPendingTransactions(
   db: Database,
   accountIds: readonly string[],
-  page?: { after: string | null; limit: number },
+  input?: Parameters<typeof statementPendingInputTransactions>[1],
 ): Promise<PendingTransaction[]> {
   if (!accountIds.length) return [];
   const { rows } = await unwrapDb(db).execute<
     Record<string, string | number | Date | null | string[]>
-  >(statementPendingInputTransactions(accountIds, page));
+  >(statementPendingInputTransactions(accountIds, input));
   return rows.map((row) => ({
     id: String(row.id),
     accountId: String(row.accountId),
@@ -2646,8 +2646,11 @@ export async function countStatementPendingHolds(
   db: Database,
   scope?: StatementSuggestionScope,
 ) {
-  return (await statementPendingTransactions(db, await holdAccounts(db, scope)))
-    .length;
+  return (
+    await statementPendingTransactions(db, await holdAccounts(db, scope), {
+      scope,
+    })
+  ).length;
 }
 
 /** Vanished holds use their own bounded transaction-ID cursor, including non-voidable holds. */
@@ -2669,8 +2672,8 @@ export async function generateStatementHoldVoidPage(
   );
   const accounts = await holdAccounts(db, input.scope);
   const holds = await statementPendingTransactions(db, accounts, {
-    after: input.after,
-    limit,
+    scope: input.scope,
+    page: { after: input.after, limit },
   });
   const failed: RunStepError[] = [];
   const proposals = await buildHoldVoidProposalsForHolds(

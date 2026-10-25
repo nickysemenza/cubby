@@ -588,7 +588,12 @@ Interruption preserves reusable labels and completed publications.
 Label-page selection partitions positions by whether either original-order component
 is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
 same component-wise overrides. A statement Sweep carries its full account/date/import
-scope through label counting, selection, retries and receipt admission. Date and import
+scope through hold counting, paging and input inspection as well as label counting,
+selection, retries and receipt admission. Hold selection intersects the account filter
+with retained charge membership/date before cursor limits; it admits whole holds and
+retains every pending settlement reference's evidence. Existing explicit withdrawal
+proof is still required for a void proposal; incomplete membership supplies none.
+Date and import
 filters intersect on retained source observations using the generation identity selector,
 including withdrawal imports; the date is the source `statementDate`, not the
 Assessment timestamp. Account scope uses live generation-preview resolution in batches,
@@ -613,8 +618,20 @@ their write transactions, including zero-rule and resumed-receipt paths. Exclude
 keep `applicationPending` and their original `applicationOrder`; completion counts include
 only IDs admitted by the writer. Account/date scope remains eligible for the no-action
 shortcut with this guard.
-Account/date scope does not grant import-only automatic-rule authority: only a supplied
-import does. Default background labeling remains unscoped. Disjoint
+`run.sweep` and its estimate accept a statement family's optional `importId` as a
+TransactionImport shortcode (`TIM-…`). Both resolve the live retained collection
+to its UUID before estimation or Run/Job creation; invalid, missing and deleted
+references refuse. Account and date filters intersect its retained charge membership.
+Selected charges still use current observations from other collections sharing their
+identity; unrelated charge identities remain excluded.
+This reprocesses retained evidence under existing automatic policies, including
+enabled clean spending booking even when the measured attach switch is off.
+It changes no rule switches. Account/date scope alone does not grant import-clean
+authority. A booking pause still holds spending; non-spending attachments remain
+governed by the measured rule. Incomplete collections allow supported positive
+processing but prove no absence, withdrawal, reconciliation or completion. A Sweep
+changes neither collection coverage nor `completedAt` and records no withdrawals.
+Default background labeling remains unscoped. Disjoint
 partial work indexes exclude completed labels and keep receipt recovery separate from
 ordinary cursor access. Schema-owned family, status and label-work keys stay SQL
 literals so generic plans can admit those indexes; household values and cursors
