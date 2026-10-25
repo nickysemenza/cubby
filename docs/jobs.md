@@ -148,8 +148,11 @@ no terminal failure at all: the `Job_never_exhausted_failure` trigger (0033)
 stores any `failed` write of one, such as an older build's final attempt, as
 `retry_wait` with its error and attempts, at least a minute out; a guard test
 keeps its kind list equal to the policy. Paused and cancelled remain member
-stops. The watchdog arms the existing device wake while parked device work
-exists, so device work an older build backed off without a wake still rings. Publication of a restarting kind rereads the marker and supersedes
+stops. While parked device work exists, the watchdog arms the existing device
+wake if it is missing or completed (`armIdleDeviceWake`, one transaction with
+its first capture), so device work an older build backed off without a wake
+still rings; a waiting, backing-off or running wake keeps its schedule, retry
+deadline, attempts and error. Publication of a restarting kind rereads the marker and supersedes
 a page whose pass began before a capture, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
 dies is never lost: the finished or reclaimed Job still trails the marker.

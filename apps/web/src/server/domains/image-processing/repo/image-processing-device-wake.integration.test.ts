@@ -19,6 +19,7 @@ import {
   createImageProcessingJob,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   releaseAssignedImageProcessingJob,
+  repairImageProcessingExecution,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 
@@ -175,6 +176,51 @@ describe("parked device work wakes idle companions", () => {
     await elapse();
     await runScheduledServerWork();
     expect(rings).toBeGreaterThan(0);
+  });
+
+  // Review finding: the watchdog armed the wake on every tick while device
+  // work was parked. Arming is a restarting capture, so a tick made a
+  // backing-off wake due at once and reset its attempts and error, defeating
+  // its backoff after doorbell failures. A live wake now keeps its state.
+  it("keeps a backing-off wake's retry state across a watchdog tick", async () => {
+    const lease = await parked();
+    await completeImageProcessingJob(ctx.db, {
+      result: {
+        jobId: lease.id,
+        attemptId: lease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "failed",
+          reason: "Synthetic device failure",
+          retryable: true,
+        },
+      },
+    });
+    await runScheduledServerWork();
+    await elapse();
+    ringFailures = 1;
+    await runScheduledServerWork();
+    const wake = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(durableJob)
+          .where(eq(durableJob.key, "image.device.wake"))
+      )[0]!;
+    const backingOff = await wake();
+    expect(backingOff).toMatchObject({ state: "retry_wait" });
+    expect(backingOff.error).toContain("Synthetic doorbell RPC failure");
+    await repairImageProcessingExecution(ctx.db, 25);
+    expect(await wake()).toMatchObject({
+      state: "retry_wait",
+      availableAt: backingOff.availableAt,
+      attempts: backingOff.attempts,
+      error: backingOff.error,
+    });
+    expect(
+      (await dueJobs(ctx.db, 20)).some((row) => row.id === backingOff.id),
+    ).toBe(false);
   });
 
   it("rings when a device releases work it cannot run", async () => {

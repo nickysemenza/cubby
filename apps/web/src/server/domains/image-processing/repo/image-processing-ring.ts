@@ -1,11 +1,12 @@
 import { jobState } from "@cubby/schemas/job";
 import { createLogger } from "@cubby/worker-tracing";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { getExecutionCtx, getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
+import { job } from "~/server/db/retained-tables";
 import { recordJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 
 import type { ImageProcessingCompanionRpc } from "../operations/rpc";
@@ -85,6 +86,23 @@ export async function armDeviceWake(db: Database) {
     input: {},
     restartsPass: true,
   });
+}
+
+/**
+ * Recovery arm for the watchdog: arm the wake only when it is missing or has
+ * finished, never one that is waiting, backing off or running. Arming is a
+ * restarting capture, so arming a backing-off wake would bypass its retry
+ * deadline and reset its attempts and error; a live wake recomputes its own
+ * schedule. Callers run it in one transaction with the first capture.
+ */
+export async function armIdleDeviceWake(db: Database) {
+  const [wake] = await getDb(db)
+    .select({ state: job.state })
+    .from(job)
+    .where(eq(job.key, DEVICE_WAKE_KEY));
+  if (wake && wake.state !== jobState.enum.completed) return false;
+  await armDeviceWake(db);
+  return true;
 }
 
 /**
