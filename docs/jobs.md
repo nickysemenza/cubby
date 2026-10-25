@@ -160,7 +160,8 @@ Health dates a woken Job from its first revision past `observedRevision`, so
 repeated captures keep the original pending start, and so does a catch-up
 requeue (`repeatJob`) that resets availability to now without serving the
 capture: a woken Job is due since the earlier of its first unseen capture and
-its availability. Retention deletes rows a claim has observed. Migration 0030
+its availability. A pass in progress that keeps its cursor is not woken by a
+capture (it absorbs it), so health dates it by its availability. Retention deletes rows a claim has observed. Migration 0030
 recorded each marker already ahead of its Job at the cutover as a capture of
 its current revision, dated by the marker's last write.
 
@@ -214,9 +215,9 @@ Migration 0029 converted the pre-lane `image.processing` kind under a lock on
 `Job`, then added `Job_kind_retired_check`, which refuses that kind. A
 pre-cutover Worker's write of it waits for the migration and then fails, so
 it is never accepted as work no handler serves; a rejected scheduling is
-recreated by the image backfill. Executions an old Worker stopped (claimed
-`image.cloud` without a handler and failed) are restarted by the watchdog's
-image repair. The check retains no work and can be dropped once no
+recreated by the image backfill. An execution an old Worker failed (claimed
+`image.cloud` without a handler) needs no repair: image kinds never exhaust,
+so a failed row is due again once available, with its attempts and backoff. The check retains no work and can be dropped once no
 pre-cutover Worker can run; nothing reads it.
 
 Device wire contract:
@@ -269,7 +270,8 @@ row expands to its `job.explain` chain. The audit-log changes feed follows.
 
 The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
 first repairs image execution in bounded batches (retires moot work, reopens
-legacy leased rows, restarts stopped executions of open rows), then measures
+legacy leased rows, gives open rows without a live execution one; failed
+image executions count as live), then measures
 per-kind due count, oldest due age, claims per minute, due growth, expired
 leases and image/Job disagreement against `QUEUE_ALERT_THRESHOLDS`.
 `no_claims` fires when a drained kind with due work had no claims in the

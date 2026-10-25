@@ -44,21 +44,30 @@ export async function measureQueueHealth(
   // The drain's own predicate, so invalidation-woken Jobs count as due.
   const due = jobDue(now);
   const woken = unobservedJobInvalidation();
-  // When each due Job became due: an unobserved capture wakes it at its
-  // first revision past `observedRevision` (later captures keep that start;
-  // the marker's own write time only dates history from before the capture
-  // log), an expired lease at its expiry. A woken Job whose availability
-  // already passed takes the earlier of the two: the periodic catch-up
-  // requeues with availability "now" without serving the capture.
+  const restartingWoken = unobservedJobInvalidation({ restartsPass: true });
+  // When each due Job became due, matching how `jobDue` wakes it: an
+  // unobserved capture that wakes it dates it from its first revision past
+  // `observedRevision` (later captures keep that start; the marker's own
+  // write time only dates history from before the capture log), an expired
+  // lease at its expiry. A capture wakes a completed Job, or waiting work
+  // under a restarting marker. Waiting work that has not started its pass
+  // takes the earlier of the capture and its availability: the periodic
+  // catch-up requeues with availability "now" without serving the capture.
+  // A pass in progress that keeps its cursor is served on its availability,
+  // so an old capture it will absorb never dates it.
   const unobservedSince = sql`coalesce(
     (SELECT min(c."capturedAt") FROM "JobInvalidationCapture" c
       WHERE c.key = "Job".key AND c.revision > coalesce("Job"."observedRevision", 0)),
     (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key))`;
+  const waiting = sql`${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait})`;
   const dueSince = sql`(CASE
-    WHEN ${woken} AND (${job.state} IN (${jobState.enum.completed}, ${jobState.enum.failed}) OR ${job.availableAt} > ${at})
-      THEN ${unobservedSince}
+    WHEN ${job.state} = ${jobState.enum.completed} AND ${woken} THEN ${unobservedSince}
+    WHEN ${job.state} = ${jobState.enum.failed} AND ${restartingWoken} THEN ${unobservedSince}
     WHEN ${job.state} = ${jobState.enum.running} THEN ${job.leaseExpiresAt}
-    WHEN ${woken} THEN least(${unobservedSince}, ${job.availableAt})
+    WHEN ${waiting} AND ${restartingWoken} AND ${job.availableAt} > ${at}
+      THEN ${unobservedSince}
+    WHEN ${waiting} AND (${restartingWoken} OR (${job.cursor} IS NULL AND ${woken}))
+      THEN least(${unobservedSince}, ${job.availableAt})
     ELSE ${job.availableAt} END)`;
   const windowStart = sql`${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute'`;
   const rows = await getDb(db)

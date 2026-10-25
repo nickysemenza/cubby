@@ -1072,11 +1072,15 @@ export const retryBackingOffDeviceWork = (db: Database) =>
     )!,
   );
 
-/** Open rows whose execution is missing or stopped: work no executor would reach. */
+/**
+ * Open rows whose execution is missing or stopped: work no executor would
+ * reach. A failed image execution is not stopped: image kinds never exhaust,
+ * so it is due again once available, keeping its attempts and backoff.
+ */
 const strandedImageWork =
   () => sql<boolean>`${imageProcessingJob.state} = ${imageProcessingJobState.enum.pending}
   AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || "ImageProcessingJob".id::text
-    AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}))`;
+    AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.failed}))`;
 
 /** Open image rows without a live execution: the watchdog's disagreement count. */
 export async function countStrandedImageProcessing(db: Database) {
@@ -1131,10 +1135,7 @@ export async function repairImageProcessingExecution(
     const keys = stranded.map((row) => imageProcessingJobKey(row.id));
     await retryJobsNow(
       db,
-      and(
-        inArray(durableJob.key, keys),
-        inArray(durableJob.state, ["failed", "cancelled"]),
-      )!,
+      and(inArray(durableJob.key, keys), eq(durableJob.state, "cancelled"))!,
     );
     // A finished or paused execution of open work restarts too.
     await getDb(db)

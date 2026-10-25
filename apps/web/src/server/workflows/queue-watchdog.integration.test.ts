@@ -1,5 +1,5 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,7 +31,7 @@ import {
   readRunRollups,
   retryJobSet,
 } from "~/server/generic/jobs/repo/job-queue";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob, jobDue } from "~/server/generic/jobs/repo/jobs";
 import {
   JOB_RETENTION_MS,
   measureQueueHealth,
@@ -130,10 +130,20 @@ describe("queue watchdog, explain and retention", () => {
       .select({ id: imageProcessingJob.id, state: imageProcessingJob.state })
       .from(imageProcessingJob);
     expect(rows.every((row) => row.state === "pending")).toBe(true);
-    expect(await execution(exhausted.jobId)).toMatchObject({
-      state: "queued",
+    // Image work never ends failed: an older build's failed execution is due
+    // on its own availability, so repair leaves its attempts and backoff.
+    const failed = await execution(exhausted.jobId);
+    expect(failed).toMatchObject({
+      state: "failed",
       error: "Job exhausted attempts",
     });
+    // Due by the shared predicate; device pulls, not the drain, claim it.
+    expect(
+      await getDb(ctx.db)
+        .select({ id: job.id })
+        .from(job)
+        .where(and(eq(job.id, failed!.id), jobDue(new Date()))),
+    ).toHaveLength(1);
     // The expired lease stays with its token: the next device pull reclaims it.
     expect(await execution(expired.jobId)).toMatchObject({
       state: "running",
@@ -483,6 +493,45 @@ describe("queue watchdog, explain and retention", () => {
     );
     expect(health.alerts).toContainEqual(
       expect.objectContaining({ kind: "refresh.family", code: "no_claims" }),
+    );
+  });
+
+  // Review finding: a family pass in progress keeps its cursor through
+  // captures and is served on its availability, yet health dated it from the
+  // oldest capture it will absorb, so a family publishing pages every minute
+  // read as stalled.
+  it("dates a family pass in progress by its availability", async () => {
+    const search = await enqueueJob(ctx.db, {
+      key: "refresh:search",
+      kind: "refresh.family",
+      input: { family: "search" },
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() - 40 * 60_000);
+      await invalidateRefreshFamily(ctx.db, "search");
+    } finally {
+      vi.useRealTimers();
+    }
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "queued",
+        cursor: { at: "synthetic-later-page" },
+        observedRevision: 0,
+        lastClaimedAt: new Date(Date.now() - 30_000),
+        availableAt: new Date(Date.now() - 30_000),
+      })
+      .where(eq(job.id, search.id));
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    expect(family).toMatchObject({ due: 1 });
+    expect(family?.oldestDueSeconds).toBeLessThan(5 * 60);
+    expect(health.alerts).not.toContainEqual(
+      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
     );
   });
 
