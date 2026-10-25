@@ -76,6 +76,23 @@ describe("durable family invalidation", () => {
   const due = async (id: string) =>
     (await dueJobs(ctx.db, 100)).some((entry) => entry.id === id);
 
+  // A regressed overlap must reject before Vitest teardown so finally can
+  // release and drain the transaction deliberately held by the test.
+  const claimWithSqlTimeout = (id: string) =>
+    withTransactionDatabase(ctx.db, async (tx) => {
+      await getDb(tx).execute(sql`SET LOCAL statement_timeout = '2s'`);
+      return claimJob(tx, id);
+    });
+  const captureWithSqlTimeout = () =>
+    withSnapshotWriteDatabase(
+      ctx.db,
+      async (tx) => {
+        await getDb(tx).execute(sql`SET LOCAL statement_timeout = '2s'`);
+        await capture(tx);
+      },
+      { isolationLevel: "serializable" },
+    );
+
   it("keeps an earlier-started capture pending when it commits after a later capture was acknowledged", async () => {
     const marked = await restarting();
     await capture(ctx.db);
@@ -96,8 +113,8 @@ describe("durable family invalidation", () => {
     void earlier.catch(captured.reject);
     try {
       await captured.promise;
-      await capture(ctx.db);
-      const later = await claimJob(ctx.db, marked.id);
+      await captureWithSqlTimeout();
+      const later = await claimWithSqlTimeout(marked.id);
       if (!later) throw new Error("Expected later capture claim");
       expect(await publishJobPage(ctx.db, later, { done: true })).toBe(true);
       expect(await due(marked.id)).toBe(false);
@@ -226,6 +243,7 @@ describe("durable family invalidation", () => {
     const pruned = Promise.withResolvers<void>();
     const mayCommit = Promise.withResolvers<void>();
     const pruning = withTransactionDatabase(ctx.db, async (tx) => {
+      await getDb(tx).execute(sql`SET LOCAL statement_timeout = '2s'`);
       expect(await pruneObservedInvalidationCaptures(tx, { limit: 1 })).toBe(1);
       pruned.resolve();
       await mayCommit.promise;
@@ -233,14 +251,10 @@ describe("durable family invalidation", () => {
     void pruning.catch(pruned.reject);
     try {
       await pruned.promise;
-      await withSnapshotWriteDatabase(ctx.db, (tx) => capture(tx), {
-        isolationLevel: "serializable",
-      });
-      const fresh = await claimJob(ctx.db, marked.id);
+      await captureWithSqlTimeout();
+      const fresh = await claimWithSqlTimeout(marked.id);
       if (!fresh) throw new Error("Expected overlapping claim");
-      await withSnapshotWriteDatabase(ctx.db, (tx) => capture(tx), {
-        isolationLevel: "serializable",
-      });
+      await captureWithSqlTimeout();
       const pending = await getDb(ctx.db)
         .select()
         .from(jobInvalidationCapture)
@@ -266,6 +280,59 @@ describe("durable family invalidation", () => {
       mayCommit.resolve();
       await pruning;
     }
+  });
+
+  it("unwinds a pruning overlap when a regressed claim tries to write observed input", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    const initial = await claimJob(ctx.db, marked.id);
+    if (!initial) throw new Error("Expected initial claim");
+    await publishJobPage(ctx.db, initial, { done: true });
+    const [observed] = await getDb(ctx.db)
+      .select()
+      .from(jobInvalidationCapture)
+      .where(eq(jobInvalidationCapture.key, RESTARTING.key));
+    if (!observed) throw new Error("Expected observed input");
+    const pruned = Promise.withResolvers<void>();
+    const mayCommit = Promise.withResolvers<void>();
+    const pruning = withTransactionDatabase(ctx.db, async (tx) => {
+      expect(await pruneObservedInvalidationCaptures(tx, { limit: 100 })).toBe(
+        1,
+      );
+      pruned.resolve();
+      await mayCommit.promise;
+    });
+    void pruning.catch(pruned.reject);
+    try {
+      await pruned.promise;
+      await captureWithSqlTimeout();
+      await expect(
+        withTransactionDatabase(ctx.db, async (tx) => {
+          await getDb(tx).execute(sql`SET LOCAL statement_timeout = '2s'`);
+          const claimed = await claimJob(tx, marked.id);
+          if (!claimed) throw new Error("Expected overlapping claim");
+          // A negative control for the reviewed failure: writing an already
+          // observed row waits behind pruning until the SQL deadline rejects.
+          await getDb(tx)
+            .update(jobInvalidationCapture)
+            .set({ observed: true })
+            .where(eq(jobInvalidationCapture.id, observed.id));
+        }),
+      ).rejects.toMatchObject({ cause: { code: "57014" } });
+    } finally {
+      mayCommit.resolve();
+      await pruning;
+    }
+    expect(await row(marked.id)).toMatchObject({ state: "completed" });
+    expect(await due(marked.id)).toBe(true);
+    const pending = await getDb(ctx.db)
+      .select()
+      .from(jobInvalidationCapture)
+      .where(
+        sql`${jobInvalidationCapture.key} = ${RESTARTING.key} AND NOT ${jobInvalidationCapture.observed}`,
+      );
+    expect(pending).toHaveLength(1);
+    expect(await claimJob(ctx.db, marked.id)).not.toBeNull();
   });
 
   it("keeps a rolled-back capture out and never loses a committed one", async () => {
