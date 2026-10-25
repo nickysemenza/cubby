@@ -121,8 +121,8 @@ failed) is released in the same transaction and counts nothing.
 ## Durable invalidation
 
 A source capture appends its own UUID row to `JobInvalidationCapture` in the
-save's transaction (`recordJobInvalidation`; refresh families through
-`invalidateRefreshFamily`). It never updates another capture, a long-lived
+save's transaction (`recordJobInvalidation`; the generated derived mark
+function captures `derived:drain` once per writing transaction, ADR 0021). It never updates another capture, a long-lived
 Job's execution row or the stable `JobInvalidation` policy. Genuine concurrent
 source and image publications therefore share no mutable capture counter.
 A rolled-back save leaves no capture. First-key policy, Job and capture
@@ -136,20 +136,14 @@ locks its Job and acknowledges exactly the pending captures visible in that
 transaction, together with its new generation, empty cursor/result and fresh
 budget. There is no maximum UUID, timestamp or allocation-order frontier:
 an earlier-started capture that commits later stays pending. A refused or
-rolled-back claim acknowledges nothing. `restartsPass: false` (every refresh
-family) lets a pass in progress keep its cursor and leaves newer captures
-pending. The finished Job is then due for a full pass from the first record.
-Passes run
-back to back only while real writes keep arriving: ordinary source writes
-capture every family and Run-only source writes capture quality, while a
-`derived_refresh` Run's own create and complete register projection changes
-and capture none. The scheduled repeat (`scheduleRefreshFamilies` from
-catch-up, after `REFRESH_INTERVAL_MS`) reruns a quiet family. A pass that
-keeps its cursor also waits out its backoff after a capture; only a completed
-Job, or a restarting marker, wakes at once. Restarting on each capture kept broad passes from
-ever finishing under ordinary household writes (search reached generation
-~29k with new records unindexed); `image.device.wake` still restarts.
-Refresh families never exhaust: a failing page backs off (1 min doubling to
+rolled-back claim acknowledges nothing. `restartsPass: false` (the derived
+drain) lets a page in progress finish and leaves newer captures pending, so the
+finished Job is due again. Catch-up repeats a quiet drain each minute
+(`scheduleDerivedJobs`) so backed-off marks resume. Restarting on each capture
+kept broad passes from ever finishing under ordinary household writes (search
+reached generation ~29k with new records unindexed); `image.device.wake` still
+restarts.
+The derived drain and reconcile never exhaust: a failing page backs off (1 min doubling to
 15 min) and resumes. Never-exhausted kinds (`NEVER_EXHAUSTED_JOB_KINDS`) have
 no terminal failure at all: the `Job_never_exhausted_failure` trigger (0033)
 stores any `failed` write of one, such as an older build's final attempt, as

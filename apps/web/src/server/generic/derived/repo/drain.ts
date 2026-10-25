@@ -201,11 +201,12 @@ const propagate = async (
 
 /** Publish a sink's prepared output for the marks still current, then clear them. */
 const publishSink = async (
-  tx: Executor,
+  db: Database | DrizzleTransaction,
   declaration: StoredDerivedDeclaration,
   marks: readonly Mark[],
   { sink, prepared }: { sink: DerivedSink; prepared: unknown },
 ): Promise<string[]> => {
+  const tx = unwrapDb(db);
   const current = await tx.execute(sql`
     SELECT d.ref::text AS ref FROM "DerivedDirty" d
       JOIN jsonb_to_recordset(${JSON.stringify(
@@ -218,7 +219,8 @@ const publishSink = async (
     .array(z.object({ ref: z.string() }))
     .parse(current.rows)
     .map((row) => row.ref);
-  const changed = ids.length ? await sink.publish(tx, ids, prepared) : [];
+  // Sinks reuse repository writers, which take the Database handle.
+  const changed = ids.length ? await sink.publish(db, ids, prepared) : [];
   await clearMarks(tx, declaration.target, marks);
   return [...changed];
 };
@@ -400,7 +402,7 @@ export async function publishDerivedPage(
     }
     const sink = plan.sinks.get(target);
     const changedIds = sink
-      ? await publishSink(tx, declaration, marks, sink)
+      ? await publishSink(db, declaration, marks, sink)
       : await publishValues(
           tx,
           declaration,

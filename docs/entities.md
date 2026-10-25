@@ -2295,94 +2295,69 @@ edge and gets the toggle like any other.
 
 ### Background derived data
 
-Searchable entities use persisted `SearchDocument` rows for lexical search and
-embedding input. Authoritative mutations record broad Job intent in the same
-transaction as the save. A best-effort queue wake is sent after commit; a lost
-wake leaves the intent available to app-open and cron. Those signals wake the shared
-Job drain. Reads serve persisted projections and never initiate repairs.
+[ADR 0021](adr/0021-derived-values.md) owns the decision. A stored derived
+value is any value Cubby computes from other rows and keeps for reads:
+valuations, product price and ledger quantities, project dates, quality,
+search documents, recipe totals and conversion coverage. Each is declared once:
+`model.derived.<key>.stored` for a list field, `model.stored.<key>` for a value
+that is not a list field, a scored entity's `dataQuality` block, or a searchable
+entity's `search` setting. Declarations are generated into
+`entity-stored-derived.gen.ts`; `server/db/derived-declarations.ts` parses them.
 
-The six `refresh.family` Jobs cover quality, search, recipes, conversions, embeddings
-and direct orphan cleanup. Each family scans current sources with a resumable
-cursor. Search, conversion and embedding-admission pages contain at most 25
-sources; recipe preparation processes one recipe and its authoritative closure.
-`recordChange(tx, change)` is the shared registration owner. Source changes
-collect notification categories and enroll fixed family intent once per outer
-transaction. Successful savepoints merge their registrations; rolled-back
-savepoints discard them. Writers register inside the transaction that saves the
-source. Registering later on a pooled handle cannot make the earlier save
-atomic with Job intent. Projection publications use the same owner to notify
-readers without restarting every family. Image-description adoption explicitly
-invalidates the existing search family in its publication transaction; changed
-search documents retain their existing embedding admission owner. Family intent
-is deduplicated across source and projection registrations; the manifest is not a dependency scheduler.
+A declaration names its compute adapter and its `inputs`. An input pairs one
+column of a table with the entity column it equals: `{ id: "id" }` is the
+record's own row, `{ productId: "id" }` a child row pointing at it, and
+`{ id: "productId" }` a referenced row whose dependents the drain finds. An
+input may limit the columns that matter (`columns`), skip its own output
+columns (`except`), admit only rows holding `where` values, walk a join `path`,
+or read record ids from a JSON array (`json`). `dependsOn` names other stored
+values it reads, by column match, link table or join path. A unit test checks
+every declared table and column against the Drizzle schema: PL/pgSQL resolves
+trigger columns only when a row fires, so a misspelled column would fail saves.
 
-Ordinary writes enroll fixed family intent instead of traversing dependents.
-Inheritance-changing edits and financial settlement conflicts still validate
-their affected authoritative facts transactionally. These domain invariants do
-not authorize synchronous derived fanout.
+Generated row triggers (`server/db/derived-trigger-ddl.ts`) mark work in the
+writer's transaction. A trigger upserts `DerivedDirty` for the saved row and its
+own old and new matched values, with a fresh `DerivedTicket` sequence value; it
+never queries dependents. A save that changes no watched column marks nothing.
+A mark whose dependents are other rows is a fanout mark (`<target>@<input>`)
+the drain expands set-based. The mark function captures the `derived:drain`
+Job once per transaction, so the Job is due whenever marks exist. A writer
+whose input no column path reaches (a member's Email review, a selected image
+description, explicit recipe staleness) calls the same `derived_mark` SQL
+function in its transaction.
 
-Preparation and provider work run outside publication transactions. Publication
-locks the owning Job and validates its live token and generation, rechecks the
-specific authoritative inputs, then commits output and cursor together.
-Standalone explicit refresh paths use this same Job or specific input
-validation. No global input revision or publication epoch stands in for that
-check. Cancelled and manually paused Jobs are member stops: only explicit
-retry revives them, never a capture or periodic wake. Never-exhausted kinds,
-refresh families and image work among them, never fail: a failing page backs
-off and resumes. An exhausted kind's failed Job stays failed under periodic
-wakes, but pending input under its restarting policy wakes it into a
-fresh pass, because the capture is new input the failed pass never read
-([durable invalidation](jobs.md#durable-invalidation)). Its other failures
-require explicit retry.
+The `derived.drain` Job claims ready marks, member edits first, then
+propagation, then reconciliation. It expands fanout marks, computes each
+target's batch outside the publication transaction through its adapter
+(`workflows/derived-computes.ts`), then publishes in the Job's transaction.
+Publication writes only marks whose ticket is unchanged since the claim, so an
+edit that lands during compute keeps its record dirty, and a deleted-and-reset
+mark cannot be cleared by an older page. Only changed values propagate to
+declared dependents, so cascades stop at the first unchanged hop. A failing
+target backs off (30 seconds doubling to 15 minutes) and other targets publish.
+Value adapters write `DerivedValue`; sink adapters write their own tables
+(search documents with embedding admission, recipe totals, conversion
+coverage). Publication rings the existing reader notifications for every kind
+it touched. `derived.reconcile` marks every stored value hourly at the lowest
+priority and logs `derived.drift` when a recompute changes a value: an
+undeclared input converges instead of staying silently wrong. A deploy that
+changes a value's rules marks it in its migration.
 
-Authoritative removal acquires the search-family Job before retiring search
-artifacts, matching search publication's Job-before-artifact lock order. Orphan
-publication already owns its own Job and retires artifacts directly; it must
-not acquire the search Job in reverse family order. This orders search
-publication against removal, not all concurrent mutation paths.
+Reads never compute or repair: lists compile a stored field to one primary-key
+lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
+missing value reads as unknown, never zero. List pages and record reads carry a
+`derived` sidecar per row: state (`fresh`, `stale`, `missing`, `failed`), the
+deciding level and computation time. Field explanations add the stored value
+beside a live recompute for that one record; they never publish it.
 
-A successful page can wake another bounded drain. The drain reselects fair
-batches, up to 256 pages or 20 seconds between pages, so a lost follow-up wake
-does not reduce an entire corpus to one page per minute. Completed families are
-eligible for another pass after roughly two minutes. This is a healthy-service
-staleness target for a quiet small household. Large imports, provider capacity,
-one expensive recipe closure or repeated cursor resets can take longer.
-Continuous edits no longer reset a broad pass; they wait for the next one.
+The derived cache is disposable: truncating `DerivedValue` and marking every
+declaration rebuilds the same values. Overrides, explicit None, waivers and
+accepted Suggestions are inputs, never derived rows. Tombstoning a record
+removes its derived values.
 
-Pending review evidence is checked against current field, connection, Product
-or statement inputs on read and before apply. Obsolete retirement scanners and
-their cursors are absent. Counts may lag while background work converges; reads
-never change evidence or financial/import facts. Valid semantic matches remain
-usable while incomplete current embeddings withhold exhaustive coverage.
-
-Each family pass is a routine `derived_refresh` Run step declared in
-`RUN_KINDS` (`packages/schemas/src/activity-fields.ts`) and driven by a
-`RoutineStepDriversFor<"derived_refresh">` entry (`generic/derived-refresh/repo/process.ts`).
-The Job still owns the pass. Its Run is created by the first page with
-pending writes, in a transaction checked against the current Job, and rides in
-the Job cursor. An idle pass leaves no Run. The pass's first page fixes a
-cutoff (records created, or for embeddings documents updated, by then) that
-rides in the Job cursor; the COUNT and every page apply it, so later records
-wait for the next pass. Search counts its sources across every searchable
-table, and each search page scans `SEARCH_REFRESH_PAGE_SIZE` (200) sources,
-rebuilding only stale or missing documents. The step's COUNT runs when the Run opens and starts `done` at the
-records earlier pages scanned. A full pass outlasts the gap between household
-writes, so invalidating a pass in progress (running, or queued with a cursor)
-lets it finish, and the capture leaves it due for a full pass
-that covers the change. A completed or not-yet-started pass restarts; its
-first page ends the abandoned generation's Run with its counts, whether or not
-the new pass opens a Run. A capture records the invalidation apart from the family's execution
-row ([durable invalidation](jobs.md#durable-invalidation)). Quality pages publish the verdicts read in the publication transaction. Every Run is kept. Connection
-discovery follows the same lazy pattern as a `connection_discovery` Run that
-owns its evaluations. Routine kinds are hidden from the Runs list by its
-declared initial filter.
-
-Embedding execution retains the provider result, physical upload hash and
-mutation receipt while awaiting visibility. A stopped artifact's explicit retry
-uses a fresh physical Job ID, preserving the old diagnostic and protecting the
-replacement from delayed remote cleanup. Search repair admits these same broad
-Jobs and reports their persisted progress. The execution and migration contract
-is owned by [ADR 0015](adr/0015-unified-durable-work-coordination.md).
+Lists that need a value live instead (a one-hop lookup or an indexed rollup the
+round-trip report shows cheap) compile it inline; the Location list's direct
+value is a live sum of stored inventory valuations.
 
 ### Row sets and same-row matching
 
@@ -2587,13 +2562,14 @@ placement. The shared `data-quality-score.ts` formula owns stored scores.
 Related-row facts are loaded once per ID page; soft-deleted Recipes,
 Ingredients, Products, Purchases, attachments and Images do not count. Cookbook covers, Vendor logos and
 Location description prerequisites use the shared displayability predicate.
-Recipe total publications and Location AI-description changes enroll quality
-refresh because Meal cost completeness and Location descriptions read them.
+Meal cost completeness reads recipe totals and Location descriptions read AI
+analyses; both are declared quality inputs.
 
-`EntityQuality` stores a nullable score, rules version and computation time;
-`EntityQualityCheck` stores pass, gap, waived or not_applicable for each check.
-Both have kind-checked composite FKs to `Entity`; they are derived identity
-metadata, not graph relationships. Entity itself has no quality columns.
+Stored quality is the `dataQuality` derived value
+([background derived data](#background-derived-data)): its value holds the
+score, rules version and each check's pass, gap, waived or not_applicable
+state, and its sort projection is the score. Entity itself has no quality
+columns.
 Hydration consumes the named check states directly for both published and live
 evaluations; check order is not an intermediate row encoding.
 Quality consumers use `storedEntryFor` in `entries.ts` as the single
@@ -2606,19 +2582,16 @@ that record's quality live and reuses it for gap admission, messages and counts,
 so a record page does not wait for a household-wide refresh pass. This does not
 publish or repair the stored snapshot. Lazy explanations evaluate the same TypeScript functions
 live without publishing repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
-are indexed per-row lookups on published rows; the status predicate derives
+are primary-key lookups on the published value; the status predicate derives
 the same status as the TypeScript core from those check states.
 
-The `quality` refresh family is enrolled by the existing `recordChange` owner.
-Its identity pages contain at most 200 records and share the routine Job's
-cutoff, token and generation validation. Every pass evaluates current inputs,
-backfills missing rows and replaces outcomes when they or the entity's
-`rulesVersion` change. Page preparation calculates exact pending work to avoid idle Runs. Publication
-reevaluates current sources in its transaction, then the publisher compares stored
-outcomes once and returns the authoritative changed IDs for notifications and
-tallies, including retired tombstones and empty/no-op publications. Tombstones are scanned for cleanup; authoritative removal also
-retires both tables in its transaction under the quality Job lock. Reads never
-repair stored quality.
+Each scored entity's `dataQuality` block declares the rows its evaluator reads
+beyond its own row; its waivers, attachments and attached images' integrity are
+inputs of every scored entity. The drain re-evaluates marked records and
+publishes changed outcomes; a rules-version change marks every record of the
+kind in its migration, and hourly reconciliation catches undeclared reads.
+Tombstoning a record removes its stored quality. Reads never repair stored
+quality.
 
 A waiver (`DataException`) records entity, check, reason and note. It turns
 that check's gap into `waived` until the member clears it; input changes never
@@ -2648,16 +2621,14 @@ unstocked historical
 Products are never charged a missing-price gap. Checks perform no I/O.
 
 Product lists, dataStatus/dataGap filters, score sorts, Research saved views,
-related Purchase rollups and Work queue research branches read published
-`EntityQuality`/`EntityQualityCheck` rows. The Work queue no longer registers a
+related Purchase rollups and Work queue research branches read the published
+`dataQuality` value. The Work queue no longer registers a
 Product price CTE. Non-quality price-presence views, including optional misc
 bucket valuations, retain live pricing semantics; quality applicability cannot
-stand in for price presence. Product, Expense, inventory, brand/vendor, category, kit and
-attachment writers register source changes through the existing transactional
-`recordChange` owner (including audit logging); image integrity updates do too.
-The broad quality pass recomputes affected Products, including kit descendants,
-without mutation-time dependent traversal. Reads leave old publications intact
-until the pass completes.
+stand in for price presence. Product, Expense, inventory, brand/vendor, category, kit link and
+attachment rows are declared inputs, and image integrity reaches attached
+Products through a join path; a kit's acquisition lines reach its components.
+Reads leave old publications intact until the drain republishes.
 
 Email uses stored TypeScript checks at rules version 1. A single loader reads
 only its ID page's classification, retained-text/attachment presence, current
@@ -2725,10 +2696,9 @@ The checks perform no I/O.
 Purchase lists, quality filters, score sorts, Research and reconciliation Work
 queue branches, Problems membership and related Product rollups read published
 quality rows. Independent detail reconciliation continues to show current money
-and evidence. Purchase, Expense, settlement allocation, FinancialTransaction,
-attachment and vendor writers enroll the quality family through transactional
-`recordChange` (including audit registration). The broad pass evaluates changed
-inputs without mutation-time dependent traversal; reads never repair outcomes.
+and evidence. Purchase, Expense, vendor and attachment rows are declared inputs; settlement
+evidence that no column path reaches converges through hourly reconciliation.
+Reads never repair outcomes.
 All Purchase waivers, including paperwork, settlement amount, party and tender
 comparisons, remain durable across input changes until explicitly cleared.
 
