@@ -4,7 +4,22 @@ protocol CompanionImageBackgroundTransport: Sendable {
     func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
         -> PullCompanionImageProcessingOutput
     func complete(deviceID: String, result: ImageProcessingResult) async throws
-    func release(deviceID: String, command: ImageProcessingCommand) async throws
+    /// Hands a claim back; the server does not count a release as an attempt.
+    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws
+    /// Extends a live claim's lease through `imageProcessing.renew`.
+    func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws
+        -> CompanionLeaseRenewal
+}
+
+extension CompanionImageBackgroundTransport {
+    func release(deviceID: String, command: ImageProcessingCommand) async throws {
+        guard let claim = CompanionImageCommandClaim(command) else {
+            throw UnsupportedNativeResponse(
+                context: "image-processing command without a claim",
+                raw: try JSONValue(encoding: command))
+        }
+        try await release(deviceID: deviceID, claim: claim)
+    }
 }
 
 extension CubbyClient: CompanionImageBackgroundTransport {
@@ -18,11 +33,48 @@ extension CubbyClient: CompanionImageBackgroundTransport {
         _ = try await completeCompanionImageProcessing(.init(deviceId: deviceID, result: result))
     }
 
-    func release(deviceID: String, command: ImageProcessingCommand) async throws {
-        let metadata = try CompanionImageCommandMetadata(command)
+    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {
         _ = try await releaseCompanionImageProcessing(
+            .init(deviceId: deviceID, jobId: claim.jobID, attemptId: claim.attemptID))
+    }
+
+    // TODO(unclog integration): once `imageProcessing.renew` is in the image-processing contract,
+    // add it to `CLIENT_PASSTHROUGH_METHODS` (apps/web/generator/http-api/native-methods.ts) as
+    // `renewCompanionImageProcessing`, run `pnpm generate`, and call that generated method with its
+    // generated input/output aliases instead of these wire structs.
+    func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws
+        -> CompanionLeaseRenewal
+    {
+        let output: CompanionLeaseRenewalWire = try await request(
+            "imageProcessing.renew",
+            body: CompanionLeaseRenewalInputWire(
+                jobId: claim.jobID, attemptId: claim.attemptID, deviceId: deviceID))
+        return try output.renewal()
+    }
+}
+
+/// `imageProcessing.renew` input: `{ jobId, attemptId, deviceId }`.
+private struct CompanionLeaseRenewalInputWire: Encodable, Sendable {
+    let jobId: String
+    let attemptId: String
+    let deviceId: String
+}
+
+/// `imageProcessing.renew` output: `{ ok: true, leaseExpiresAt }` or
+/// `{ ok: false, reason: "lease_lost" | "job_obsolete" }`. An unknown refusal reason is still a
+/// refusal; a body with neither field is a decoding error, never a silent renewal.
+struct CompanionLeaseRenewalWire: Decodable, Sendable {
+    let ok: Bool
+    let leaseExpiresAt: Date?
+    let reason: String?
+
+    func renewal() throws -> CompanionLeaseRenewal {
+        if ok, let leaseExpiresAt { return .renewed(leaseExpiresAt: leaseExpiresAt) }
+        if !ok, let reason { return .refused(reason: reason) }
+        throw DecodingError.dataCorrupted(
             .init(
-                deviceId: deviceID, jobId: metadata.jobID, attemptId: metadata.attemptID))
+                codingPath: [],
+                debugDescription: "imageProcessing.renew returned neither a lease nor a reason"))
     }
 }
 
@@ -68,12 +120,22 @@ actor CompanionImageBackgroundRunner {
                 let remaining = Int(end.timeIntervalSinceNow) - 5
                 guard remaining >= 20 else { return true }
                 let pulled = try await transport.pull(hello: hello, leaseSeconds: min(90, remaining))
-                guard let command = pulled.command, !pulled.remotePaused else { return false }
-                let metadata = try CompanionImageCommandMetadata(command)
+                guard let command = pulled.command else { return false }
+                guard !pulled.remotePaused else {
+                    await releaseClaim(transport: transport, hello: hello, command: command)
+                    return false
+                }
+                let metadata: CompanionImageCommandMetadata
+                do { metadata = try CompanionImageCommandMetadata(command) } catch {
+                    // Unsupported by this build: hand it back and leave the rest for a later window.
+                    await releaseClaim(transport: transport, hello: hello, command: command)
+                    failureObserver?(error)
+                    return false
+                }
                 activeCommand = command
                 let result = try await execute(command)
                 if Task.isCancelled {
-                    await releaseAfterCancellation(transport: transport, hello: hello, command: command)
+                    await releaseClaim(transport: transport, hello: hello, command: command)
                     return true
                 }
                 let key = CompanionImageProcessingProtocol.attemptKey(
@@ -86,12 +148,12 @@ actor CompanionImageBackgroundRunner {
             return true
         } catch is CancellationError {
             if let activeCommand {
-                await releaseAfterCancellation(transport: transport, hello: hello, command: activeCommand)
+                await releaseClaim(transport: transport, hello: hello, command: activeCommand)
             }
             return true
         } catch {
             if Task.isCancelled, let activeCommand {
-                await releaseAfterCancellation(transport: transport, hello: hello, command: activeCommand)
+                await releaseClaim(transport: transport, hello: hello, command: activeCommand)
             } else if !Task.isCancelled {
                 failureObserver?(error)
             }
@@ -99,24 +161,13 @@ actor CompanionImageBackgroundRunner {
         }
     }
 
-    private func releaseAfterCancellation(
+    private func releaseClaim(
         transport: any CompanionImageBackgroundTransport,
         hello: ImageProcessingHello, command: ImageProcessingCommand
     ) async {
-        // A cleanup task must start uncancelled; its HTTP request is cancelled after three seconds
-        // if the remaining system window cannot accommodate the best-effort release.
-        let cleanup = Task {
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask { [failureObserver] in
-                    do { try await transport.release(deviceID: hello.deviceId, command: command) } catch {
-                        failureObserver?(error)
-                    }
-                }
-                group.addTask { try? await Task.sleep(for: .seconds(3)) }
-                await group.next()
-                group.cancelAll()
-            }
-        }
-        await cleanup.value
+        guard let claim = CompanionImageCommandClaim(command) else { return }
+        await CompanionClaimRelease.bestEffort(
+            transport: transport, deviceID: hello.deviceId, claim: claim,
+            failureObserver: failureObserver)
     }
 }

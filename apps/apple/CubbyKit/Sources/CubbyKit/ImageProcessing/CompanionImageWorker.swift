@@ -1,11 +1,28 @@
 import Foundation
 
+/// The companion worker's live state, for Activity's "This device" section, Settings, the iOS
+/// bar, and `cubby companion`'s log. Every phase is explicit, so a quiet device always says why.
 public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public enum Phase: Sendable, Equatable {
+        /// Not started, or signed out.
         case stopped
+        /// The master "Automatic work on this device" switch is off.
+        case automaticWorkOff
+        /// iOS outside the foreground: the subscription closes; charging windows still run.
+        case backgrounded
+        /// macOS system sleep: claims were released and pulling stops until wake.
+        case asleep
+        /// No live subscription; reconnecting with backoff (`lastError` says why when known).
         case connecting
+        /// Subscribed, nothing claimable right now.
         case idle
+        /// Subscribed and asking `imageProcessing.pull` for work.
+        case pulling
+        /// Running `processingCount` commands; `jobID`/`kind`/`startedAt` describe the oldest.
         case processing
+        /// The server's version gate refused this build (426 CLIENT_UPDATE_REQUIRED). Pulling has
+        /// stopped until the app is updated and relaunched.
+        case updateRequired
     }
 
     public let phase: Phase
@@ -15,16 +32,30 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     /// The server paused this device's participation from the web (`Device.remotePaused`), for
     /// this connection. Settings shows "Paused from the web" when this is true.
     public let remotePaused: Bool
+    /// Commands executing now.
+    public let processingCount: Int
+    /// Recorded results whose delivery failed and that are set aside for a backoff retry. They
+    /// stay on disk and never block pulling.
+    public let undeliveredResults: Int
+    /// The latest delivery failure among `undeliveredResults`, verbatim.
+    public let deliveryError: String?
+    /// The latest connection, pull, or lease failure, verbatim; cleared by a successful drain.
+    public let lastError: String?
 
     public init(
         phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil,
-        remotePaused: Bool = false
+        remotePaused: Bool = false, processingCount: Int = 0, undeliveredResults: Int = 0,
+        deliveryError: String? = nil, lastError: String? = nil
     ) {
         self.phase = phase
         self.jobID = jobID
         self.kind = kind
         self.startedAt = startedAt
         self.remotePaused = remotePaused
+        self.processingCount = processingCount
+        self.undeliveredResults = undeliveredResults
+        self.deliveryError = deliveryError
+        self.lastError = lastError
     }
 }
 
@@ -75,15 +106,49 @@ enum CompanionWorkAcceptance {
     static func acceptsCommand(remotePaused: Bool) -> Bool { !remotePaused }
 }
 
+/// The server refused to renew a running command's lease; the command was stopped unrecorded.
+struct CompanionLeaseRefused: Error, LocalizedError, Sendable {
+    let jobID: String
+    let reason: String
+
+    var errorDescription: String? { "Image job \(jobID) lease refused: \(reason)" }
+}
+
+/// A pulled command this build cannot execute. It was released (when it carried a claim) and the
+/// drain backs off before pulling again.
+struct CompanionUnsupportedCommand: Error, LocalizedError, Sendable {
+    let detail: String
+
+    var errorDescription: String? { "Unsupported image-processing command: \(detail)" }
+}
+
 /// The foreground companion. It subscribes to the `imageProcessing.work` doorbell and, when the
 /// subscription opens and on every ring, drains claimable work through `imageProcessing.pull`,
-/// executing up to `maximumConcurrentCommands` at once and finishing each with
-/// `imageProcessing.complete`. A ring carries no state; a missed one costs latency only, because
-/// every reconnect drains again.
+/// executing up to `maximumConcurrentCommands` at once, renewing each command's lease every
+/// `heartbeatInterval`, and finishing each with `imageProcessing.complete`. A ring carries no
+/// state; a missed one costs latency only, because every reconnect drains again.
+///
+/// Claims are handed back (`imageProcessing.release`) whenever this device stops working on them
+/// before recording a result: stop, sign-out, iOS backgrounding, participation off, macOS sleep,
+/// and a command this build cannot execute. A 426 CLIENT_UPDATE_REQUIRED from any image operation
+/// stops pulling for the life of this worker.
 public actor CompanionImageWorker {
     public typealias FailureObserver = @Sendable (any Error) -> Void
     public typealias ActivityObserver = @Sendable (CompanionImageWorkerActivity) -> Void
     public typealias JobObserver = @Sendable (CompanionImageJobReport) -> Void
+
+    private struct RunningCommand {
+        let jobID: String
+        let kind: String
+        let startedAt: Date
+    }
+
+    /// A recorded result whose delivery failed: set aside so later results and pulls proceed.
+    private struct SetAsideDelivery {
+        var failures: Int
+        var nextAttemptAt: ContinuousClock.Instant
+        var error: String
+    }
 
     private let baseURL: URL
     private let credentials: CredentialProvider
@@ -93,6 +158,8 @@ public actor CompanionImageWorker {
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     /// Durably records a finished command's result; tests hold this boundary open.
     private let recordResult: @Sendable (ImageProcessingResult, String) async throws -> Void
+    /// Waits between lease renewals; tests replace the clock with a gate.
+    private let heartbeatPause: @Sendable () async throws -> Void
     private let failureObserver: FailureObserver?
     private let activityObserver: ActivityObserver?
     private let jobObserver: JobObserver?
@@ -103,6 +170,11 @@ public actor CompanionImageWorker {
     /// normally but never subscribes (`platformAllowsConnection`); flipping it off mid-session
     /// closes the subscription via `reconcileConnection()`, and flipping it back on reconnects.
     private var isParticipating: Bool
+    /// macOS system sleep. Like participation off, it closes the subscription and releases
+    /// claims; waking reconnects, and the new subscription pulls immediately.
+    private var systemAsleep = false
+    /// Latched by the first 426 from an image operation. Only a new build (a relaunch) clears it.
+    private var updateRequired = false
     /// From the latest pull: the server paused this device from the web. Reset on every new
     /// subscription.
     private var remotePaused = false
@@ -114,13 +186,23 @@ public actor CompanionImageWorker {
     private var openedSocket: URLSessionWebSocketTask?
     private var backgroundTask: Task<Bool, Never>?
     private let backgroundRunner: CompanionImageBackgroundRunner
-    /// Commands run concurrently up to this bound; each command's own deadline still applies.
+    /// Commands run concurrently up to this bound; each command's own lease deadline still applies.
     static let maximumConcurrentCommands = 4
     private var commandTasks: [String: Task<Void, Never>] = [:]
+    /// Accepted commands whose result is not yet recorded: exactly the claims a stop releases.
+    /// A command leaves it when it commits to recording, or when its lease is refused.
+    private var inFlight: [String: CompanionImageCommandClaim] = [:]
+    private var releaseTasks: [UUID: Task<Void, Never>] = [:]
     private enum Acceptance { case open, paused, stopped }
     private var acceptance = Acceptance.open
     private var deferredCommands: [ImageProcessingCommand] = []
-    private var running: [String: CompanionImageWorkerActivity] = [:]
+    private var running: [String: RunningCommand] = [:]
+    private var isPulling = false
+    private var lastError: String?
+    private var setAsideDeliveries: [String: SetAsideDelivery] = [:]
+    private var latestDeliveryError: String?
+    private var deliveryRetry: Task<Void, Never>?
+    private var lastReportedActivity: CompanionImageWorkerActivity?
     private var isDraining = false
     private var drainRequested = false
     private var drainTask: Task<Void, Never>?
@@ -137,17 +219,21 @@ public actor CompanionImageWorker {
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         identity: ClientIdentity = .unknown,
         session: URLSession = .cubbyShared,
+        requestObserver: (any RequestObserver)? = nil,
         executor: CompanionImageCommandExecutor = CompanionImageCommandExecutor(),
         failureObserver: FailureObserver? = nil,
         activityObserver: ActivityObserver? = nil,
         jobObserver: JobObserver? = nil
     ) {
+        // The app's request observer latches a 426 into its update banner, the same as every
+        // other client the app builds.
         self.init(
             baseURL: baseURL, credentials: credentials, deviceID: deviceID, deviceName: deviceName,
             foreground: foreground, isParticipating: isParticipating, outbox: outbox,
             session: session,
             transport: CubbyClient(
-                baseURL: baseURL, credentials: credentials, identity: identity, session: session),
+                baseURL: baseURL, credentials: credentials, identity: identity, session: session,
+                requestObserver: requestObserver),
             failureObserver: failureObserver, activityObserver: activityObserver,
             jobObserver: jobObserver, execute: { command in try await executor.execute(command) })
     }
@@ -166,7 +252,8 @@ public actor CompanionImageWorker {
         activityObserver: ActivityObserver? = nil,
         jobObserver: JobObserver? = nil,
         execute: @escaping @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult,
-        recordResult: (@Sendable (ImageProcessingResult, String) async throws -> Void)? = nil
+        recordResult: (@Sendable (ImageProcessingResult, String) async throws -> Void)? = nil,
+        heartbeatPause: (@Sendable () async throws -> Void)? = nil
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
@@ -176,6 +263,10 @@ public actor CompanionImageWorker {
         self.isParticipating = isParticipating
         self.outbox = outbox
         self.recordResult = recordResult ?? { try await outbox.record($0, for: $1) }
+        self.heartbeatPause =
+            heartbeatPause ?? {
+                try await Task.sleep(for: CompanionImageProcessingProtocol.heartbeatInterval)
+            }
         self.session = session
         self.transport = transport
         self.execute = execute
@@ -189,15 +280,20 @@ public actor CompanionImageWorker {
     deinit {
         backgroundTask?.cancel()
         connectionTask?.cancel()
+        deliveryRetry?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
     }
 
+    private var wireDeviceID: String { deviceID.uuidString.lowercased() }
+
     public func start() {
         shouldRun = true
-        activityObserver?(.init(phase: .connecting))
         reconcileConnection()
+        reportActivity()
     }
 
+    /// Stops pulling and executing, and hands every unrecorded claim back best-effort. Recorded
+    /// results stay in the outbox for the next session.
     public func stop() {
         backgroundTask?.cancel()
         shouldRun = false
@@ -206,11 +302,19 @@ public actor CompanionImageWorker {
         connectionTask = nil
         drainRetry?.cancel()
         drainRetry = nil
+        deliveryRetry?.cancel()
+        deliveryRetry = nil
         cancelCommands()
-        deferredCommands.removeAll()
-        socket?.cancel(with: .goingAway, reason: nil)
-        socket = nil
-        activityObserver?(.init(phase: .stopped))
+        releaseDeferredCommands()
+        closeSocket(.goingAway)
+        reportActivity()
+    }
+
+    /// `stop()`, then waits (bounded per claim) for its releases, so a quitting app hands its
+    /// claims back before the process ends.
+    public func stopAndReleaseClaims() async {
+        stop()
+        await releasesIdle()
     }
 
     /// Signing out ends the authenticated principal that owns every pending attempt. Do not let
@@ -226,12 +330,24 @@ public actor CompanionImageWorker {
         // A pull in flight at stop() releases its claim rather than starting it (see drainOnce).
         await drain?.value
         for command in commands { await command.value }
+        // Releases use the outgoing credential; finish them before it is removed.
+        await releasesIdle()
         try await outbox.removeAll()
     }
 
     public func setForeground(_ foreground: Bool) {
         self.foreground = foreground
         reconcileConnection()
+        reportActivity()
+    }
+
+    /// macOS system sleep and wake. Sleep releases claims and stops pulling; wake reconnects and
+    /// the new subscription pulls immediately.
+    public func setSystemAsleep(_ asleep: Bool) {
+        guard systemAsleep != asleep else { return }
+        systemAsleep = asleep
+        reconcileConnection()
+        reportActivity()
     }
 
     /// The master "Automatic work on this device" switch. `start()` is still what arms
@@ -241,6 +357,7 @@ public actor CompanionImageWorker {
         isParticipating = participating
         if !participating { backgroundTask?.cancel() }
         reconcileConnection()
+        reportActivity()
     }
 
     /// The charging task owns this finite HTTP window; it does not reopen an iOS subscription.
@@ -251,7 +368,7 @@ public actor CompanionImageWorker {
     func runInBackground(
         transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello
     ) async -> Bool {
-        guard shouldRun, isParticipating, backgroundTask == nil else { return false }
+        guard shouldRun, isParticipating, !updateRequired, backgroundTask == nil else { return false }
         let task = Task { await backgroundRunner.run(transport: transport, hello: hello) }
         backgroundTask = task
         let resumable = await withTaskCancellationHandler {
@@ -275,8 +392,9 @@ public actor CompanionImageWorker {
     }
 
     private var platformAllowsConnection: Bool {
-        guard isParticipating else { return false }
+        guard isParticipating, !updateRequired, !systemAsleep else { return false }
         #if os(macOS)
+            // A Mac keeps working while another app is frontmost; it reports `foreground` as is.
             return true
         #else
             return foreground
@@ -289,8 +407,7 @@ public actor CompanionImageWorker {
             connectionTask?.cancel()
             connectionTask = nil
             cancelCommands()
-            socket?.cancel(with: .goingAway, reason: nil)
-            socket = nil
+            closeSocket(.goingAway)
             return
         }
         guard connectionTask == nil else { return }
@@ -299,6 +416,12 @@ public actor CompanionImageWorker {
         connectionTask = Task { [weak self] in
             await self?.runConnectionLoop(generation: generation)
         }
+    }
+
+    private func closeSocket(_ code: URLSessionWebSocketTask.CloseCode) {
+        socket?.cancel(with: code, reason: nil)
+        socket = nil
+        openedSocket = nil
     }
 
     private func runConnectionLoop(generation: Int) async {
@@ -314,12 +437,12 @@ public actor CompanionImageWorker {
             } catch {
                 guard generation == connectionGeneration else { break }
                 attempt += 1
-                socket?.cancel(with: .abnormalClosure, reason: nil)
-                socket = nil
+                closeSocket(.abnormalClosure)
+                lastError = Self.describe(error)
                 if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
                     failureObserver?(error)
                 }
-                activityObserver?(.init(phase: .connecting))
+                reportActivity()
                 do {
                     try await Task.sleep(
                         for: AuthenticatedSocketSupport.reconnectDelay(attempt: attempt))
@@ -329,8 +452,7 @@ public actor CompanionImageWorker {
             }
         }
         if generation == connectionGeneration {
-            socket?.cancel(with: .goingAway, reason: nil)
-            socket = nil
+            closeSocket(.goingAway)
             connectionTask = nil
         }
     }
@@ -344,7 +466,7 @@ public actor CompanionImageWorker {
             url: endpoint,
             bearerToken: token,
             userAgent:
-                "cubby-apple-image-worker/\(CompanionImageProcessingProtocol.version) (\(deviceID.uuidString.lowercased()))"
+                "cubby-apple-image-worker/\(CompanionImageProcessingProtocol.version) (\(wireDeviceID))"
         )
         let socket = session.webSocketTask(with: request)
         guard generation == connectionGeneration else { throw CancellationError() }
@@ -360,8 +482,12 @@ public actor CompanionImageWorker {
             }
         }
         openedSocket = socket
-        activityObserver?(.init(phase: .idle))
-        // Work already waiting is claimable now; do not wait for the first ring.
+        lastError = nil
+        reportActivity()
+        // Work already waiting is claimable now; a (re)connect pulls at once rather than waiting
+        // for the first ring or a pending drain backoff.
+        drainRetry?.cancel()
+        drainRetry = nil
         requestDrain()
         while !Task.isCancelled, generation == connectionGeneration, self.socket === socket {
             // Any frame is a ring; its content is a refetch hint this worker does not need.
@@ -372,10 +498,11 @@ public actor CompanionImageWorker {
 
     /// Coalesces rings: one drain runs at a time, and a ring during it runs one more pass. Only a
     /// live subscription drains; backgrounded iOS work belongs to the bounded background runner.
+    /// While a failed drain's backoff is pending a ring only marks the drain requested.
     func requestDrain() {
         guard shouldRun, platformAllowsConnection, connectionTask != nil else { return }
         drainRequested = true
-        guard !isDraining else { return }
+        guard !isDraining, drainRetry == nil else { return }
         isDraining = true
         drainTask = Task { await self.drainWhileRequested() }
     }
@@ -388,87 +515,183 @@ public actor CompanionImageWorker {
                 try await drainOnce(generation: connectionGeneration)
                 drainFailures = 0
             } catch {
-                failureObserver?(error)
-                scheduleDrainRetry()
+                handle(error)
+                if !updateRequired { scheduleDrainRetry() }
+                // The retry owns the next pass; a ring meanwhile must not skip the backoff.
+                return
             }
         }
     }
 
-    /// A failed drain may leave a delivered-but-unacknowledged result, or claimable work, that no
-    /// later ring will announce; retry with the socket's backoff while the subscription lives.
+    /// A failed drain may leave claimable work that no later ring will announce, and an
+    /// unsupported command must not be pulled again in a hot loop; retry with the socket's
+    /// backoff while the subscription lives.
     private func scheduleDrainRetry() {
         drainFailures += 1
         drainRetry?.cancel()
         let delay = AuthenticatedSocketSupport.reconnectDelay(attempt: drainFailures)
         drainRetry = Task { [weak self] in
             do { try await Task.sleep(for: delay) } catch { return }
-            await self?.requestDrain()
+            await self?.retryDrain()
         }
     }
 
-    /// Delivers recorded results, then pulls until no work is claimable or every slot is busy. A
-    /// finished command requests another drain to refill its slot.
+    private func retryDrain() {
+        drainRetry = nil
+        requestDrain()
+    }
+
+    /// Delivers recorded results that are due, then pulls until no work is claimable or every
+    /// slot is busy. A finished command requests another drain to refill its slot.
     private func drainOnce(generation: Int) async throws {
-        for entry in try await outbox.pending() {
-            try await transport.complete(deviceID: deviceID.uuidString.lowercased(), result: entry.result)
-            try await outbox.acknowledge(entry.key)
-        }
-        #if os(macOS)
-            let advertisedForeground = true
-        #else
-            let advertisedForeground = foreground
-        #endif
         func isCurrent() -> Bool {
             shouldRun && platformAllowsConnection && generation == connectionGeneration
         }
+        try await deliverOutbox()
         while isCurrent(), acceptance == .open,
             commandTasks.count < Self.maximumConcurrentCommands
         {
-            let pulled = try await transport.pull(
-                hello: hello(foreground: advertisedForeground),
-                leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
-            // The subscription ended during the pull (background, participation off, stop): hand
-            // the claim back instead of running it outside the window that asked for it.
+            isPulling = true
+            reportActivity()
+            let pulled: PullCompanionImageProcessingOutput
+            do {
+                defer { isPulling = false }
+                pulled = try await transport.pull(
+                    hello: hello(foreground: foreground),
+                    leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
+            }
+            reportActivity()
+            // The subscription ended during the pull (background, participation off, sleep,
+            // stop): hand the claim back instead of running it outside the window that asked.
             if let command = pulled.command, !isCurrent() {
-                try await transport.release(
-                    deviceID: deviceID.uuidString.lowercased(), command: command)
+                releaseBestEffort(command)
                 return
             }
             if pulled.remotePaused != remotePaused {
                 remotePaused = pulled.remotePaused
                 reportActivity()
             }
-            guard let command = pulled.command,
-                CompanionWorkAcceptance.acceptsCommand(remotePaused: pulled.remotePaused)
-            else { return }
-            startCommand(command)
+            guard let command = pulled.command else {
+                lastError = nil
+                reportActivity()
+                return
+            }
+            guard CompanionWorkAcceptance.acceptsCommand(remotePaused: pulled.remotePaused) else {
+                releaseBestEffort(command)
+                return
+            }
+            if case .unsupported(let detail) = startCommand(command) {
+                throw CompanionUnsupportedCommand(detail: detail)
+            }
         }
+    }
+
+    // MARK: Outbox delivery
+
+    /// Sends every recorded result that is due. A failed send sets that result aside with its own
+    /// backoff — it stays on disk — so one undeliverable result never blocks pulling.
+    private func deliverOutbox() async throws {
+        let pending = try await outbox.pending()
+        let pendingKeys = Set(pending.map(\.key))
+        // Delivered by another path (the background runner) or discarded.
+        setAsideDeliveries = setAsideDeliveries.filter { pendingKeys.contains($0.key) }
+        let now = ContinuousClock.now
+        for entry in pending {
+            guard shouldRun, !updateRequired else { break }
+            if let setAside = setAsideDeliveries[entry.key], setAside.nextAttemptAt > now { continue }
+            await deliver(entry.result, key: entry.key)
+        }
+        scheduleDeliveryRetry()
+        reportActivity()
+    }
+
+    /// One delivery attempt; never throws, so a caller's remaining work continues.
+    private func deliver(_ result: ImageProcessingResult, key: String) async {
+        do {
+            try await transport.complete(deviceID: wireDeviceID, result: result)
+            try await outbox.acknowledge(key)
+            setAsideDeliveries[key] = nil
+        } catch {
+            if Self.isClientUpdateRequired(error) {
+                // Kept on disk: the updated build delivers it.
+                enterUpdateRequired(error)
+                return
+            }
+            let failures = (setAsideDeliveries[key]?.failures ?? 0) + 1
+            let message = Self.describe(error)
+            setAsideDeliveries[key] = SetAsideDelivery(
+                failures: failures,
+                nextAttemptAt: .now + Self.deliveryRetryDelay(failures: failures), error: message)
+            latestDeliveryError = message
+            if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
+                failureObserver?(error)
+            }
+        }
+    }
+
+    /// Capped exponential backoff for one set-aside result: 2 s, 4 s, … up to 15 minutes.
+    static func deliveryRetryDelay(failures: Int) -> Duration {
+        .seconds(min(900, 1 << min(max(1, failures), 10)))
+    }
+
+    private func scheduleDeliveryRetry() {
+        deliveryRetry?.cancel()
+        deliveryRetry = nil
+        guard shouldRun, !updateRequired,
+            let next = setAsideDeliveries.values.map(\.nextAttemptAt).min()
+        else { return }
+        deliveryRetry = Task { [weak self] in
+            do { try await Task.sleep(until: next) } catch { return }
+            await self?.requestDrain()
+        }
+    }
+
+    // MARK: Commands
+
+    enum CommandStart: Equatable {
+        case started
+        /// Held for a paused acceptance, dropped for a stopped one, or already running.
+        case notStarted
+        /// This build cannot execute it; its claim (when it had one) was released.
+        case unsupported(String)
     }
 
     /// Tracks the command in `commandTasks` from acceptance until its result is durably recorded,
     /// which is what `drainState()` counts as outstanding.
-    func startCommand(_ command: ImageProcessingCommand) {
+    @discardableResult
+    func startCommand(_ command: ImageProcessingCommand) -> CommandStart {
         let metadata: CompanionImageCommandMetadata
-        do { metadata = try CompanionImageCommandMetadata(command) } catch { failureObserver?(error); return }
+        do { metadata = try CompanionImageCommandMetadata(command) } catch {
+            // Hand it back now rather than holding it for its whole lease; the caller reports
+            // it and backs off before pulling again.
+            releaseBestEffort(command)
+            return .unsupported(String(describing: error))
+        }
         guard acceptance == .open else {
-            // Held, not started: a paused check resumes it; a stopped worker drops it and the
-            // server's lease expiry offers the job again.
-            if acceptance == .paused { deferredCommands.append(command) }
-            return
+            // Held, not started: a paused check resumes it; a stopped worker hands it back.
+            if acceptance == .paused {
+                deferredCommands.append(command)
+            } else {
+                releaseBestEffort(command)
+            }
+            return .notStarted
         }
         let key = CompanionImageProcessingProtocol.attemptKey(
             jobID: metadata.jobID, attemptID: metadata.attemptID)
-        guard commandTasks[key] == nil else { return }
+        guard commandTasks[key] == nil else { return .notStarted }
+        let claim = CompanionImageCommandClaim(jobID: metadata.jobID, attemptID: metadata.attemptID)
+        inFlight[key] = claim
         commandTasks[key] = Task { [weak self] in
-            await self?.run(command, key: key)
+            await self?.run(command, metadata: metadata, claim: claim, key: key)
         }
+        return .started
     }
 
     /// Stops starting newly pulled commands for the rest of this worker's life (a standalone
     /// companion's shutdown); accepted ones keep running, recording, and delivering.
     public func stopAccepting() {
         acceptance = .stopped
-        deferredCommands.removeAll()
+        releaseDeferredCommands()
     }
 
     /// The only safe "settled → stop" check. It closes acceptance first, so no command can start
@@ -495,10 +718,28 @@ public actor CompanionImageWorker {
     /// Whether a connection loop is running, the only path that subscribes.
     var isConnecting: Bool { connectionTask != nil }
 
+    /// Whether a 426 stopped this worker.
+    var isUpdateRequired: Bool { updateRequired }
+
+    /// Whether a failed drain's backoff is pending.
+    var isBackingOff: Bool { drainRetry != nil }
+
+    /// Returns once the current drain pass, if any, has ended.
+    func drainIdle() async {
+        await drainTask?.value
+    }
+
     /// Returns once every accepted command has recorded its result or stopped.
     func commandsIdle() async {
         while !Task.isCancelled, let command = commandTasks.values.first {
             await command.waitUnlessCancelled()
+        }
+    }
+
+    /// Returns once every best-effort release has answered or timed out.
+    func releasesIdle() async {
+        while !Task.isCancelled, let release = releaseTasks.values.first {
+            await release.waitUnlessCancelled()
         }
     }
 
@@ -520,42 +761,230 @@ public actor CompanionImageWorker {
         return .init(connected: connected, outstandingCommands: outstanding, pendingResults: pending)
     }
 
-    private func run(_ command: ImageProcessingCommand, key: String) async {
+    private func run(
+        _ command: ImageProcessingCommand, metadata: CompanionImageCommandMetadata,
+        claim: CompanionImageCommandClaim, key: String
+    ) async {
         defer {
             commandTasks[key] = nil
+            inFlight[key] = nil
             requestDrain()
         }
         guard !Task.isCancelled else { return }
-        defer { running[key] = nil; reportActivity() }
-        do {
-            let metadata = try CompanionImageCommandMetadata(command)
-            running[key] = .init(
-                phase: .processing, jobID: metadata.jobID, kind: metadata.kind,
-                startedAt: .now)
-            reportActivity()
-            let started = ContinuousClock.now
-            let result = try await execute(command)
+        defer {
             running[key] = nil
             reportActivity()
-            guard !Task.isCancelled else { return }
+        }
+        running[key] = RunningCommand(jobID: metadata.jobID, kind: metadata.kind, startedAt: .now)
+        reportActivity()
+        let lease = CompanionCommandLease(deadline: metadata.deadline)
+        let heartbeat = startHeartbeat(key: key, claim: claim, lease: lease)
+        defer { heartbeat.cancel() }
+        do {
+            let started = ContinuousClock.now
+            let execute = self.execute
+            let result = try await CompanionCommandLease.$current.withValue(lease) {
+                try await execute(command)
+            }
+            heartbeat.cancel()
+            running[key] = nil
+            reportActivity()
+            // Stopped (its claim was released) or its lease was refused: the result is moot.
+            guard !Task.isCancelled, inFlight.removeValue(forKey: key) != nil else { return }
             jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
-            // A failed delivery stays in the outbox; the next drain delivers it.
-            try await transport.complete(deviceID: deviceID.uuidString.lowercased(), result: result)
-            try await outbox.acknowledge(key)
+            await deliver(result, key: key)
+            scheduleDeliveryRetry()
         } catch {
-            failureObserver?(error)
+            // Execution threw before a result existed; hand the claim back unless it is gone.
+            if inFlight.removeValue(forKey: key) != nil { releaseBestEffort(claim) }
+            handle(error)
         }
     }
 
-    private func cancelCommands() {
-        for task in commandTasks.values { task.cancel() }
-        running = [:]
+    /// Renews this command's lease every `heartbeatInterval` until it finishes. A refusal stops
+    /// the command; a failed request keeps working until the lease deadline it already has.
+    private func startHeartbeat(
+        key: String, claim: CompanionImageCommandClaim, lease: CompanionCommandLease
+    ) -> Task<Void, Never> {
+        let pause = heartbeatPause
+        return Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await pause() } catch { return }
+                guard let self, await self.renew(key: key, claim: claim, lease: lease) else {
+                    return
+                }
+            }
+        }
     }
 
+    /// `false` ends the heartbeat.
+    private func renew(
+        key: String, claim: CompanionImageCommandClaim, lease: CompanionCommandLease
+    ) async -> Bool {
+        guard inFlight[key] != nil, !Task.isCancelled else { return false }
+        do {
+            switch try await transport.renew(deviceID: wireDeviceID, claim: claim) {
+            case .renewed(let leaseExpiresAt):
+                lease.extend(to: leaseExpiresAt)
+                return true
+            case .refused(let reason):
+                // The server retired or reassigned this attempt; a result would be discarded and
+                // the work may already be running elsewhere. Stop without releasing.
+                guard inFlight.removeValue(forKey: key) != nil else { return false }
+                commandTasks[key]?.cancel()
+                let refusal = CompanionLeaseRefused(jobID: claim.jobID, reason: reason)
+                lastError = Self.describe(refusal)
+                failureObserver?(refusal)
+                reportActivity()
+                return false
+            }
+        } catch is CancellationError {
+            return false
+        } catch {
+            handle(error)
+            return !updateRequired
+        }
+    }
+
+    /// Cancels every running command and hands back the claims of those not yet recorded.
+    private func cancelCommands() {
+        for task in commandTasks.values { task.cancel() }
+        let claims = Array(inFlight.values)
+        inFlight.removeAll()
+        running = [:]
+        for claim in claims { releaseBestEffort(claim) }
+    }
+
+    private func releaseDeferredCommands() {
+        let deferred = deferredCommands
+        deferredCommands.removeAll()
+        for command in deferred { releaseBestEffort(command) }
+    }
+
+    private func releaseBestEffort(_ command: ImageProcessingCommand) {
+        guard let claim = CompanionImageCommandClaim(command) else { return }
+        releaseBestEffort(claim)
+    }
+
+    /// Starts an uncancelled release bounded by `CompanionClaimRelease.timeout`. Skipped once a
+    /// 426 latched: every write fails the same way and the lease expires on its own.
+    private func releaseBestEffort(_ claim: CompanionImageCommandClaim) {
+        guard !updateRequired else { return }
+        let id = UUID()
+        let transport = transport
+        let deviceID = wireDeviceID
+        let failureObserver = failureObserver
+        releaseTasks[id] = Task { [weak self] in
+            await CompanionClaimRelease.bestEffort(
+                transport: transport, deviceID: deviceID, claim: claim,
+                failureObserver: failureObserver)
+            await self?.releaseFinished(id)
+        }
+    }
+
+    private func releaseFinished(_ id: UUID) {
+        releaseTasks[id] = nil
+    }
+
+    // MARK: Errors and activity
+
+    private static func isClientUpdateRequired(_ error: any Error) -> Bool {
+        (error as? CubbyAPIError)?.isClientUpdateRequired == true
+    }
+
+    private static func describe(_ error: any Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? String(describing: error)
+    }
+
+    private func handle(_ error: any Error) {
+        if Self.isClientUpdateRequired(error) {
+            enterUpdateRequired(error)
+            return
+        }
+        guard !(error is CancellationError) else { return }
+        lastError = Self.describe(error)
+        failureObserver?(error)
+        reportActivity()
+    }
+
+    /// Stops pulling for good: the server will refuse every image write from this build. Recorded
+    /// results stay in the outbox for the updated build to deliver.
+    private func enterUpdateRequired(_ error: any Error) {
+        guard !updateRequired else { return }
+        updateRequired = true
+        lastError = Self.describe(error)
+        failureObserver?(error)
+        backgroundTask?.cancel()
+        drainRetry?.cancel()
+        drainRetry = nil
+        deliveryRetry?.cancel()
+        deliveryRetry = nil
+        reconcileConnection()
+        reportActivity()
+    }
+
+    private func currentActivity() -> CompanionImageWorkerActivity {
+        let phase: CompanionImageWorkerActivity.Phase
+        if !shouldRun {
+            phase = .stopped
+        } else if updateRequired {
+            phase = .updateRequired
+        } else if !isParticipating {
+            phase = .automaticWorkOff
+        } else if !running.isEmpty {
+            phase = .processing
+        } else if systemAsleep {
+            phase = .asleep
+        } else if !platformAllowsConnection {
+            phase = .backgrounded
+        } else if socket == nil || socket !== openedSocket {
+            phase = .connecting
+        } else if isPulling {
+            phase = .pulling
+        } else {
+            phase = .idle
+        }
+        let oldest = phase == .processing ? running.values.min { $0.startedAt < $1.startedAt } : nil
+        return .init(
+            phase: phase, jobID: oldest?.jobID, kind: oldest?.kind, startedAt: oldest?.startedAt,
+            remotePaused: remotePaused, processingCount: phase == .processing ? running.count : 0,
+            undeliveredResults: setAsideDeliveries.count,
+            deliveryError: setAsideDeliveries.isEmpty ? nil : latestDeliveryError,
+            lastError: phase == .stopped ? nil : lastError)
+    }
+
+    /// Reports only changes, so observers see each transition once.
     private func reportActivity() {
-        guard shouldRun else { return }
-        let oldest = running.values.min { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }
-        activityObserver?(oldest ?? .init(phase: .idle, remotePaused: remotePaused))
+        let activity = currentActivity()
+        guard activity != lastReportedActivity else { return }
+        lastReportedActivity = activity
+        activityObserver?(activity)
+    }
+}
+
+/// The one best-effort `imageProcessing.release`, shared by the resident worker and the iOS
+/// charging window. It runs in an uncancelled task so a stopping caller still sends it, and the
+/// request is cancelled after `timeout` when the remaining window cannot fit it.
+enum CompanionClaimRelease {
+    static let timeout = Duration.seconds(3)
+
+    static func bestEffort(
+        transport: any CompanionImageBackgroundTransport, deviceID: String,
+        claim: CompanionImageCommandClaim, failureObserver: CompanionImageWorker.FailureObserver?
+    ) async {
+        let cleanup = Task {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    do { try await transport.release(deviceID: deviceID, claim: claim) } catch {
+                        failureObserver?(error)
+                    }
+                }
+                group.addTask { try? await Task.sleep(for: timeout) }
+                await group.next()
+                group.cancelAll()
+            }
+        }
+        await cleanup.value
     }
 }

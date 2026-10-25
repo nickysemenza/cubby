@@ -18,20 +18,26 @@ public struct CompanionImageCommandExecutor: Sendable {
         self.describer = describer
     }
 
+    /// The command's lease deadline: the worker's heartbeated `CompanionCommandLease` when one is
+    /// bound, else the deadline the command arrived with. Running past it is a retryable expiry.
+    private static func deadline(_ commandDeadline: Date) -> Date {
+        CompanionCommandLease.current?.deadline ?? commandDeadline
+    }
+
     public func execute(_ command: ImageProcessingCommand) async throws -> ImageProcessingResult {
         let metadata = try CompanionImageCommandMetadata(command)
         let execution: Execution
         let started = ContinuousClock.now
         do {
-            guard metadata.deadline > .now else {
+            guard Self.deadline(metadata.deadline) > .now else {
                 return result(
                     for: metadata,
-                    outcome: failed(metadata.jobKind, retryable: false, reason: "deadline_exceeded"),
+                    outcome: failed(metadata.jobKind, retryable: true, reason: "deadline_exceeded"),
                     diagnostics: .init(processingMilliseconds: 0))
             }
             execution = try await executeBeforeDeadline(command)
         } catch DeadlineFailure.exceeded {
-            execution = failureExecution(metadata, "deadline_exceeded", false, started)
+            execution = failureExecution(metadata, "deadline_exceeded", true, started)
         } catch is CancellationError {
             execution = failureExecution(metadata, "cancelled", true, started)
         } catch let error as CompanionImageProcessor.Failure {
@@ -58,8 +64,9 @@ public struct CompanionImageCommandExecutor: Sendable {
         _ command: ImageProcessingCommand
     ) async throws -> Execution {
         let metadata = try CompanionImageCommandMetadata(command)
-        let interval = metadata.deadline.timeIntervalSinceNow
-        guard interval > 0 else { throw DeadlineFailure.exceeded }
+        guard Self.deadline(metadata.deadline).timeIntervalSinceNow > 0 else {
+            throw DeadlineFailure.exceeded
+        }
         return try await withThrowingTaskGroup(
             of: Execution.self
         ) { group in
@@ -72,8 +79,13 @@ public struct CompanionImageCommandExecutor: Sendable {
                 }
             }
             group.addTask {
-                try await Task.sleep(for: .seconds(interval))
-                throw DeadlineFailure.exceeded
+                // A renewal moves the lease while this sleeps; wake at the old deadline and
+                // sleep again until the current one has truly passed.
+                while true {
+                    let interval = Self.deadline(metadata.deadline).timeIntervalSinceNow
+                    guard interval > 0 else { throw DeadlineFailure.exceeded }
+                    try await Task.sleep(for: .seconds(interval))
+                }
             }
             guard let first = try await group.next() else { throw CancellationError() }
             group.cancelAll()
@@ -97,9 +109,9 @@ public struct CompanionImageCommandExecutor: Sendable {
             source: source,
             output: CompanionImageOutput(
                 uploadURL: uploadURL, contentType: command.output.contentType.rawValue))
-        guard command.deadline > .now else {
+        guard Self.deadline(command.deadline) > .now else {
             return .init(
-                outcome: failed(.subjectLift, retryable: false, reason: "deadline_exceeded"),
+                outcome: failed(.subjectLift, retryable: true, reason: "deadline_exceeded"),
                 diagnostics: .init())
         }
         switch result {
@@ -133,9 +145,9 @@ public struct CompanionImageCommandExecutor: Sendable {
                     url: sourceURL, sha256: command.source.sha256,
                     contentType: command.source.contentType.rawValue),
                 output: .init(uploadURL: uploadURL, contentType: output.contentType.rawValue))
-            guard command.deadline > .now else {
+            guard Self.deadline(command.deadline) > .now else {
                 return .init(
-                    outcome: failed(.describeImage, retryable: false, reason: "deadline_exceeded"),
+                    outcome: failed(.describeImage, retryable: true, reason: "deadline_exceeded"),
                     diagnostics: artifact.diagnostics)
             }
             return .init(
@@ -160,9 +172,9 @@ public struct CompanionImageCommandExecutor: Sendable {
         let description = try await describer.describe(decoded.image)
         var diagnostics = decoded.diagnostics
         diagnostics.processingMilliseconds = milliseconds(since: processingStarted)
-        guard command.deadline > .now else {
+        guard Self.deadline(command.deadline) > .now else {
             return .init(
-                outcome: failed(.describeImage, retryable: false, reason: "deadline_exceeded"),
+                outcome: failed(.describeImage, retryable: true, reason: "deadline_exceeded"),
                 diagnostics: diagnostics)
         }
         let eligibility: ImageCutoutEligibility =

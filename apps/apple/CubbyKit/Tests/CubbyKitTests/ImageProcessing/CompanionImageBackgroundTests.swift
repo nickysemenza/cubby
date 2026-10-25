@@ -142,7 +142,10 @@ private actor SignOutCleanupFixture: CompanionImageBackgroundTransport {
             throw CancellationError()
         }
     }
-    func release(deviceID: String, command: ImageProcessingCommand) async throws {}
+    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {}
+    func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws -> CompanionLeaseRenewal {
+        .renewed(leaseExpiresAt: .distantFuture)
+    }
     func finishCleanup() { cleanup?.resume(); cleanup = nil }
 }
 
@@ -173,7 +176,10 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         if waitDuringCompletion { try await completion.pass() }
         if failFirstCompletion { failFirstCompletion = false; throw Failure.network }
     }
-    func release(deviceID: String, command: ImageProcessingCommand) async throws { releaseCount += 1 }
+    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws { releaseCount += 1 }
+    func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws -> CompanionLeaseRenewal {
+        .renewed(leaseExpiresAt: .distantFuture)
+    }
 }
 
 private actor BackgroundExecutionFixture {

@@ -21,7 +21,7 @@ final class AppModel {
 
     private static let baseURLKey = "cubby.baseURL"
     /// Only a first-registration suggestion; Cubby's edited Device name is authoritative.
-    private static var suggestedDeviceName: String {
+    static var suggestedDeviceName: String {
         #if os(iOS)
             UIDevice.current.model
         #else
@@ -59,6 +59,7 @@ final class AppModel {
     @ObservationIgnored private var companionImageWorkerGeneration = UUID()
     private(set) var companionImageActivity = CompanionImageWorkerActivity(phase: .stopped)
     @ObservationIgnored private var companionSceneActive = false
+    @ObservationIgnored private var companionSystemAsleep = false
     @ObservationIgnored private var catchUpRequestPending = false
     @ObservationIgnored private var lastCatchUpRequestAt: Date?
     /// The SQLite cache opens away from the UI actor and attaches matching/classification once
@@ -601,6 +602,20 @@ final class AppModel {
         Task { await companionImageWorker?.setForeground(active) }
     }
 
+    /// macOS system sleep (`MacAppDelegate` observes `NSWorkspace`): the worker releases its
+    /// claims and stops pulling, then reconnects and pulls at once on wake.
+    func setCompanionSystemAsleep(_ asleep: Bool) {
+        companionSystemAsleep = asleep
+        let worker = companionImageWorker
+        Task { await worker?.setSystemAsleep(asleep) }
+    }
+
+    /// Quitting (including an app update) hands every unrecorded claim back, bounded per claim,
+    /// before the process exits. Recorded results stay in the outbox for the next launch.
+    func releaseCompanionClaimsForTermination() async {
+        await companionImageWorker?.stopAndReleaseClaims()
+    }
+
     func runCompanionJobsInBackground() async -> Bool {
         guard phase == .signedIn, participation.automaticWork else { return false }
         return await companionImageWorker?.runInBackground(client: client) ?? false
@@ -628,6 +643,8 @@ final class AppModel {
                 isParticipating: participation.automaticWork,
                 outbox: outbox,
                 identity: Self.identity,
+                // A 426 from image work latches `UpdateAvailableBanner` like any other request.
+                requestObserver: requestTrace,
                 failureObserver: { error in
                     Diagnostics.report(error, context: "imageProcessing.companion")
                 },
@@ -640,6 +657,9 @@ final class AppModel {
         } catch {
             companionImageWorker = nil
             Diagnostics.report(error, context: "imageProcessing.outbox")
+        }
+        if companionSystemAsleep, let worker = companionImageWorker {
+            Task { await worker.setSystemAsleep(true) }
         }
         if let previous { Task { await previous.stop() } }
     }

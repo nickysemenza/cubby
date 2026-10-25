@@ -402,9 +402,10 @@ private struct DeviceParticipationSection: View {
                 Text(FoundationModelsImageDescriber().unavailableReason() ?? "Available")
                     .textSelection(.enabled)
             }
-            if model.companionImageActivity.remotePaused {
+            let worker = model.companionImageActivity
+            if worker.remotePaused || worker.phase == .updateRequired {
                 LabeledContent("Status") {
-                    Text("Paused from the web")
+                    Text(worker.statusTitle)
                         .foregroundStyle(FieldGuideTokens.destructive)
                 }
                 .frame(minHeight: FieldGuideTokens.touchTarget - 12)
