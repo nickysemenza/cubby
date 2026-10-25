@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { DatabaseChanges } from "~/lib/doorbell";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -46,39 +47,46 @@ describe("repository writes publish after their commit", () => {
   afterEach(() => setCfEnv(undefined));
 
   it("publishes one outer-commit change set and drops rolled-back savepoint changes", async () => {
-    const messages: string[][] = [];
+    const messages: DatabaseChanges[] = [];
     setCfEnv(
       fromPartial<Env>({
         DB_FRESHNESS: {
           getByName: () => ({
-            publishChanges: async (categories: string[]) => {
-              messages.push(categories);
+            publishChanges: async (changes: DatabaseChanges) => {
+              messages.push(changes);
             },
           }),
         },
       }),
     );
     await withTransactionDatabase(ctx.db, async (outer) => {
-      await recordCommittedChanges(outer, ["task"]);
+      await recordCommittedChanges(outer, { task: ["TSK-A3F2"] });
       await withTransactionDatabase(outer, async (inner) => {
-        await recordCommittedChanges(inner, ["task", "project"]);
+        await recordCommittedChanges(inner, {
+          task: ["TSK-B4G3"],
+          project: null,
+        });
       });
       await expect(
         withTransactionDatabase(outer, async (inner) => {
-          await recordCommittedChanges(inner, ["product"]);
+          await recordCommittedChanges(inner, { product: null });
           throw new Error("Synthetic savepoint rollback");
         }),
       ).rejects.toThrow("Synthetic savepoint rollback");
       expect(messages).toEqual([]);
     });
-    expect(messages).toEqual([["task", "project"]]);
+    expect(messages).toEqual([
+      { task: ["TSK-A3F2", "TSK-B4G3"], project: null },
+    ]);
     await expect(
       withTransactionDatabase(ctx.db, async (outer) => {
-        await recordCommittedChanges(outer, ["product"]);
+        await recordCommittedChanges(outer, { product: null });
         throw new Error("Synthetic transaction rollback");
       }),
     ).rejects.toThrow("Synthetic transaction rollback");
-    expect(messages).toEqual([["task", "project"]]);
+    expect(messages).toEqual([
+      { task: ["TSK-A3F2", "TSK-B4G3"], project: null },
+    ]);
   });
 
   const recordingQueue = (observe: () => Promise<void> = async () => {}) => {

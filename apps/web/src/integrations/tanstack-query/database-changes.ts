@@ -1,12 +1,15 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { doorbellRing, doorbellUrl } from "~/lib/doorbell";
+import {
+  doorbellRing,
+  doorbellUrl,
+  mergeDatabaseChanges,
+  type DatabaseChanges,
+} from "~/lib/doorbell";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
-import { combineRippleTags, entityRipple } from "./cache-tags";
 import {
-  cancelQueriesByTags,
-  invalidateOperationTags,
+  invalidateDatabaseChanges,
   resyncOperationQueries,
 } from "./operation-cache";
 
@@ -18,28 +21,44 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
   let attempt = 0;
   let refreshing = false;
   let resync = false;
-  const pending = new Set<string>();
+  let fullRing = false;
+  let pending: DatabaseChanges = {};
+  let scheduled: ReturnType<typeof setTimeout> | undefined;
+  let lastRingRefresh: number | undefined;
 
   async function refresh() {
     if (refreshing || stopped) return;
+    const recovery = resync;
+    const full = recovery || fullRing;
+    if (!full && !Object.keys(pending).length) return;
+    const delay =
+      lastRingRefresh === undefined
+        ? 0
+        : Math.max(0, lastRingRefresh + 5_000 - Date.now());
+    if (!recovery && delay > 0) {
+      if (scheduled === undefined)
+        scheduled = setTimeout(() => {
+          scheduled = undefined;
+          requestRefresh();
+        }, delay);
+      return;
+    }
+    if (scheduled !== undefined) clearTimeout(scheduled);
+    scheduled = undefined;
+    const changes = pending;
+    pending = {};
+    resync = false;
+    fullRing = false;
+    // Recovery reads bypass the ring throttle; the next ring still has a leading edge.
+    lastRingRefresh = recovery ? undefined : Date.now();
     refreshing = true;
     try {
-      while (resync || pending.size) {
-        if (stopped) break;
-        const full = resync;
-        const categories = [...pending];
-        resync = false;
-        pending.clear();
-        if (full) {
-          await resyncOperationQueries(client);
-        } else {
-          const tags = combineRippleTags(...categories.map(entityRipple));
-          await cancelQueriesByTags(client, tags);
-          await invalidateOperationTags(client, tags);
-        }
-      }
+      if (full) await resyncOperationQueries(client);
+      else await invalidateDatabaseChanges(client, changes);
     } finally {
       refreshing = false;
+      if (!stopped && (resync || fullRing || Object.keys(pending).length))
+        requestRefresh();
     }
   }
 
@@ -66,8 +85,9 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     current.addEventListener("message", (event: MessageEvent<unknown>) => {
       try {
         const ring = doorbellRing.parse(JSON.parse(String(event.data)));
-        if (ring.categories === undefined) resync = true;
-        else for (const category of ring.categories) pending.add(category);
+        if (ring.topic !== "household.changed") return;
+        if (ring.changes === undefined) fullRing = true;
+        else mergeDatabaseChanges(pending, ring.changes);
         requestRefresh();
       } catch (error) {
         showErrorToast(error);
@@ -98,6 +118,7 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
   return () => {
     stopped = true;
     if (retry !== undefined) clearTimeout(retry);
+    if (scheduled !== undefined) clearTimeout(scheduled);
     socket?.close();
     window.removeEventListener("online", resume);
     document.removeEventListener("visibilitychange", resume);

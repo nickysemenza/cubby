@@ -23,11 +23,11 @@ describe("database freshness Durable Object", () => {
       ),
     );
     await evictDurableObject(stub);
-    await stub.publishChanges(["task"]);
+    await stub.publishChanges({ task: ["TSK-A3F2"] });
     expect(JSON.parse(await received)).toEqual({
       type: "ring",
       topic: "household.changed",
-      categories: ["task"],
+      changes: { task: ["TSK-A3F2"] },
     });
     const freshness = await stub.readFreshness();
     expect(

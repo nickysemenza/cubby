@@ -2,6 +2,7 @@ import { sleep } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
+import { mergeDatabaseChanges, type DatabaseChanges } from "~/lib/doorbell";
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { Database } from "~/server/db/database";
 import {
@@ -47,22 +48,22 @@ export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
  * of `withTransaction` has no commit boundary and rejects deferred effects.
  */
 const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
-const committedChanges = new WeakMap<object, Set<string>>();
+const committedChanges = new WeakMap<object, DatabaseChanges>();
 
 /** Changes follow savepoint ownership; only a successful outer commit publishes. */
 export async function recordCommittedChanges(
   db: Database | RepositoryQueryTransaction,
-  categories: readonly string[],
+  changes: DatabaseChanges,
 ): Promise<void> {
-  if (!categories.length) return;
+  if (!Object.keys(changes).length) return;
   const pending = committedChanges.get(db);
   if (pending) {
-    for (const category of categories) pending.add(category);
+    mergeDatabaseChanges(pending, changes);
     return;
   }
   if ("rollback" in db)
     throw new Error("Change notifications require withTransaction");
-  await notifyDatabaseChanges(categories);
+  await notifyDatabaseChanges(changes);
 }
 type BeforeCommitEffect = (tx: DrizzleTransaction) => Promise<void>;
 type BeforeCommitEntry = {
@@ -261,7 +262,7 @@ const withTransactionAttempts = async <T>(
       boundaryDurationMs: Math.round(performance.now() - boundaryStarted),
     });
     const pending: AfterCommitEffect[] = [];
-    const changes = new Set<string>();
+    const changes: DatabaseChanges = {};
     const before: BeforeCommitEntry[] = [];
     let result: T;
     try {
@@ -323,9 +324,9 @@ const withTransactionAttempts = async <T>(
     const parent = afterCommitQueues.get(db);
     const parentChanges = committedChanges.get(db);
     if (parentChanges) {
-      for (const category of changes) parentChanges.add(category);
-    } else if (changes.size) {
-      await notifyDatabaseChanges([...changes]);
+      mergeDatabaseChanges(parentChanges, changes);
+    } else if (Object.keys(changes).length) {
+      await notifyDatabaseChanges(changes);
     }
     if (parent) parent.push(...pending);
     else await flushAfterCommit(db, pending);

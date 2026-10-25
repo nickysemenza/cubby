@@ -10,7 +10,6 @@ import { Panel } from "~/ui/layout/panel";
 import { Button } from "~/ui/primitives/button";
 import { Image } from "~/ui/primitives/image";
 import { Skeleton } from "~/ui/primitives/skeleton";
-import { Spinner } from "~/ui/primitives/spinner";
 
 import { SectionHeader } from "../../ui/data-table/section-header";
 import {
@@ -376,12 +375,6 @@ export function ShelfGrid<T>({
             ))
           : items.map(renderCard)}
       </div>
-      {infiniteScroll?.isTransitioning && (
-        <output className="flex items-center justify-center gap-1 py-2 text-xs text-muted-foreground">
-          <Spinner size="sm" />
-          Updating…
-        </output>
-      )}
       {infiniteScroll && <div ref={sentinelRef} className="h-10" aria-hidden />}
     </div>
   );

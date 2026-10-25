@@ -30,7 +30,6 @@ import {
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
 } from "~/ui/primitives/dropdown-menu";
-import { Spinner } from "~/ui/primitives/spinner";
 
 import { isTableLayoutCustomized } from "../../ui/data-table/column-layout";
 import { DataTableViewOptions } from "../../ui/data-table/data-table-view-options";
@@ -333,7 +332,7 @@ export function GroupMenu<TData extends RowData>({
 }
 
 /**
- * The query tier: bulk slot plus the rest (problem status, spinner, filters,
+ * The query tier: bulk slot plus the rest (problem status, filters,
  * `Actions ▾`, page actions) as ONE node — so `styles.css`'s
  * `:has([data-bulk-action-bar])` rule keeps swapping the whole tier for the
  * bulk bar regardless of whether this renders in place or portaled. Split out
@@ -347,7 +346,6 @@ function QueryTierFieldset<TData extends RowData>({
   isPage,
   isMobileFilterTier,
   problemStatus,
-  spinner,
   additionalContent,
   filterOptionHints,
   showViewOptions,
@@ -362,7 +360,6 @@ function QueryTierFieldset<TData extends RowData>({
   isPage: boolean;
   isMobileFilterTier: boolean;
   problemStatus: ReactNode;
-  spinner: ReactNode;
   additionalContent?: ReactNode;
   filterOptionHints?: DataTableToolbarProps<TData>["filterOptionHints"];
   showViewOptions: boolean;
@@ -401,7 +398,6 @@ function QueryTierFieldset<TData extends RowData>({
         className={isPage ? "min-w-0 flex-1" : undefined}
       >
         {isPage && problemStatus}
-        {isPage && spinner}
         {additionalContent}
         <div className="min-w-0 flex-1">
           <LedgerFilters
@@ -448,17 +444,6 @@ export function DataTableToolbar<TData extends RowData>({
   const isPage = variant === "page";
   const shouldPortal = portalWorkbenchUtilities && workbenchTarget !== null;
 
-  const spinner = isTransitioning && (
-    <Row
-      align="center"
-      gap="xs"
-      aria-live="polite"
-      className="shrink-0 text-xs text-muted-foreground"
-    >
-      <Spinner size="sm" />
-      Updating…
-    </Row>
-  );
   const problemStatus = entity && (
     <ProblemWorklistStatus
       entity={entity}
@@ -484,7 +469,6 @@ export function DataTableToolbar<TData extends RowData>({
       isPage={isPage}
       isMobileFilterTier={isMobileFilterTier}
       problemStatus={problemStatus}
-      spinner={spinner}
       additionalContent={additionalContent}
       filterOptionHints={filterOptionHints}
       showViewOptions={showViewOptions}
@@ -522,7 +506,6 @@ export function DataTableToolbar<TData extends RowData>({
           <Row align="center" gap="xs" className="shrink-0">
             {problemStatus}
             {embeddedUtilities}
-            {spinner}
           </Row>
         )
       }

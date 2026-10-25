@@ -1,3 +1,4 @@
+import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db/database";
 import { recordCommittedChanges } from "~/server/db/helpers/core";
 import {
@@ -26,14 +27,18 @@ export async function recordAssessmentChange(
 }
 
 /** Projection publications notify readers without restarting authoritative refresh. */
-export type RepositoryChange =
+export type RepositoryChange = {
+  /** Public shortcodes for categories whose affected records are known. */
+  changes?: DatabaseChanges;
+} & (
   | { kind: "source"; categories: readonly string[] }
   | {
       kind: "projection";
       categories: readonly string[];
       /** Explicit downstream inputs; this does not infer or traverse dependencies. */
       refresh?: readonly RefreshFamily[];
-    };
+    }
+);
 
 /**
  * Register source intent and reader hints at the caller's commit boundary.
@@ -61,7 +66,15 @@ export async function recordChange(
     await repositoryTransaction(db, (tx) => recordChange(tx, change));
     return;
   }
-  await recordCommittedChanges(db, change.categories);
+  await recordCommittedChanges(
+    db,
+    Object.fromEntries(
+      change.categories.map((category) => [
+        category,
+        change.changes?.[category] ?? null,
+      ]),
+    ),
+  );
   for (const family of refreshFamily.options.filter((family) =>
     families.includes(family),
   ))
