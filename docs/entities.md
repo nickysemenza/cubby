@@ -341,9 +341,12 @@ date or timestamp field, optional `label`) for when the thing happened, shown
 through the field's own renderer ahead of the ingest `createdAt`, which it
 replaces as the leading time and falls back to when empty; hero images follow
 the gallery capability. Actions derive from capabilities: the hero gets
-`edit` with an update contract, and a list gets `bulkEdit` (bulk update),
+`edit` with an update contract and `delete` for a mutable entity with kernel-owned
+deletion. Shared and additional hero actions are deduplicated. Web always offers
+Copy code independently of the hero allowlist. Merge remains a list/selection
+workflow rather than a universal detail action. A list gets `bulkEdit` (bulk update),
 `merge` (kernel merge), and `delete` (kernel delete). `hero.extraActions` and
-`list.extraActions` add workflow verbs ahead of those.
+`list.extraActions` add workflow verbs; list extras precede the derived list actions.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 Collection verbs derive from the declared sections and `reportSlotActions`;

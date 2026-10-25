@@ -8,6 +8,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import {
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -118,6 +119,19 @@ describe("GenericEntityDetail", () => {
   afterEach(() => {
     cleanup();
     harness.dispose();
+  });
+
+  it("offers Delete in an inventory detail's More actions panel", async () => {
+    render(
+      <GenericEntityDetail
+        entity="inventory"
+        record={recordFor("inventory")}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    expect(await screen.findByRole("button", { name: "Delete" })).toBeVisible();
   });
 
   it.each(["product", "vendor"] as const)(
