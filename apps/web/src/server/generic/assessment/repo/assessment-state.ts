@@ -126,13 +126,17 @@ const columnWrites = (patch: ProjectionPatch): AssessmentStatePatch =>
 
 async function recordProjectionEvents(
   db: RepositoryQueryInput,
-  events: readonly { id: string; patch: ProjectionPatch }[],
+  events: readonly {
+    id: string;
+    patch: ProjectionPatch;
+    cause?: ProjectionCause;
+  }[],
   cause: ProjectionCause,
 ) {
   await getDb(db)
     .insert(feedback)
     .values(
-      events.map(({ id, patch }) => ({
+      events.map(({ id, patch, cause: eventCause }) => ({
         assessmentId: id,
         operationId: `projection:${crypto.randomUUID()}`,
         verdict: "ungraded" as const,
@@ -140,7 +144,7 @@ async function recordProjectionEvents(
         intent: "projection",
         authority: "system",
         actorUserId: null,
-        metadata: cause,
+        metadata: eventCause ?? cause,
         projection: patch,
         // Statement time orders several events of one transaction for replay.
         createdAt: sql`clock_timestamp()`,
@@ -165,55 +169,84 @@ export async function transitionAssessmentStates(
     | ((row: StateRow) => AssessmentStatePatch | null | undefined),
   cause: ProjectionCause,
 ): Promise<TransitionResult[]> {
-  const client = getDb(db);
-  const rows = await client
+  return transitionAssessmentStateBatch(db, where, (rows) =>
+    rows.flatMap((row) => {
+      const next = typeof patch === "function" ? patch(row) : patch;
+      return next ? [{ id: row.id, patch: next, cause }] : [];
+    }),
+  );
+}
+
+/** One locked read, one replay-event insert and one set update for differing
+ * per-row transitions. The callback is pure and sees the complete locked set,
+ * so domains can carry suppression across a publication without N rereads.
+ */
+export async function transitionAssessmentStateBatch(
+  db: RepositoryQueryInput,
+  where: SQL | undefined,
+  prepare: (rows: readonly StateRow[]) => readonly {
+    id: string;
+    patch: AssessmentStatePatch;
+    cause: ProjectionCause;
+  }[],
+): Promise<TransitionResult[]> {
+  const rows = await getDb(db)
     .select()
     .from(assessmentState)
     .where(where)
     .orderBy(assessmentState.id)
     .for("update");
-  const changes: { row: StateRow; patch: ProjectionPatch }[] = [];
-  for (const row of rows) {
-    const next = typeof patch === "function" ? patch(row) : patch;
-    if (!next) continue;
+  const rowsById = new Map(rows.map((row) => [row.id, row]));
+  const changes: {
+    row: StateRow;
+    patch: ProjectionPatch;
+    cause: ProjectionCause;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const { id, patch, cause } of prepare(rows)) {
+    if (seen.has(id)) throw new Error("Duplicate AssessmentState transition");
+    seen.add(id);
+    const row = rowsById.get(id);
+    if (!row)
+      throw new Error("AssessmentState transition requires a locked row");
     const changed = Object.fromEntries(
-      Object.entries(projectionColumns(next)).filter(
+      Object.entries(projectionColumns(patch)).filter(
         ([key, value]) =>
+          // SAFETY: projectionColumns restricts keys to AssessmentState columns.
           !isEqual(
             value,
-            // SAFETY: `projectionColumns` keeps only AssessmentState columns.
             jsonSnapshot.parse(row[key as keyof StateRow] ?? null),
           ),
       ),
     );
-    if (Object.keys(changed).length) changes.push({ row, patch: changed });
+    if (Object.keys(changed).length)
+      changes.push({ row, patch: changed, cause });
   }
   if (!changes.length) return [];
   await recordProjectionEvents(
     db,
-    changes.map(({ row, patch: changed }) => ({ id: row.id, patch: changed })),
-    cause,
+    changes.map(({ row, patch, cause }) => ({ id: row.id, patch, cause })),
+    { kind: "batch_transition" },
   );
   const updated = await updateManyAndReturn(db, assessmentState, {
     key: "id",
     returning: ["id", "entity", "active", "status"],
-    changes: changes.map(({ row, patch: changed }) => ({
+    changes: changes.map(({ row, patch }) => ({
       keyValue: row.id,
-      patch: columnWrites(changed),
+      patch: columnWrites(patch),
     })),
   });
   if (updated.length !== changes.length)
     throw new Error("Locked AssessmentState disappeared during transition");
-  if (updated.length)
-    await recordChange(db, {
-      kind: "projection",
-      categories: [
-        "ai",
-        "suggestions",
-        "problems",
-        ...updated.map((row) => row.entity),
-      ],
-    });
+  await recordChange(db, {
+    kind: "projection",
+    categories: [
+      "ai",
+      "suggestions",
+      "problems",
+      ...updated.map((row) => row.entity),
+    ],
+  });
   return updated;
 }
 

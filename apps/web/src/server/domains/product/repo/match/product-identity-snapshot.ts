@@ -4,6 +4,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
+import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
@@ -31,6 +32,7 @@ import {
   readVariantVerifications,
   variantVerification,
   productIdentitySide,
+  type ProductVariantVerification,
 } from "~/server/domains/product/repo/product-variant-evidence";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -48,7 +50,7 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
   return (await productIdentitySnapshots(db, [id])).get(id) ?? null;
 }
 
-type ProductIdentitySnapshot = {
+export type ProductIdentitySnapshot = {
   snapshot: z.infer<ReturnType<typeof z.json>>;
   fingerprint: string;
   eligible: boolean;
@@ -119,24 +121,23 @@ export async function productIdentitySnapshots(
     ...new Set(photoRows.map((row) => row.shortcode)),
   ]);
   const claims = await loadProductIdentifierClaims(db, live);
+  const identifiersByProduct = groupBy(identifierRows, (row) => row.entityId);
+  const photosByProduct = groupBy(photoRows, (row) => row.entityId);
+  const claimsByProduct = groupBy(claims, (row) => row.productId);
   for (const row of rows) {
-    const identifiers = identifierRows
-      .filter((identifier) => identifier.entityId === row.id)
-      .map(({ source, kind, value }) => ({ source, kind, value }));
-    const photos = photoRows
-      .filter((photo) => photo.entityId === row.id)
-      .map(({ id, hash, purpose, shortcode }) => ({
+    const identifiers = (identifiersByProduct[row.id] ?? []).map(
+      ({ source, kind, value }) => ({ source, kind, value }),
+    );
+    const photos = (photosByProduct[row.id] ?? []).map(
+      ({ id, hash, purpose, shortcode }) => ({
         id,
         hash,
         purpose,
         description: descriptions.get(shortcode) ?? null,
-      }));
-    const snapshot = z.json().parse({
-      ...row,
-      identifiers,
-      claims: claims.filter((claim) => claim.productId === row.id),
-      photos,
-    });
+      }),
+    );
+    const claims = claimsByProduct[row.id] ?? [];
+    const snapshot = z.json().parse({ ...row, identifiers, claims, photos });
     result.set(row.id, {
       snapshot,
       fingerprint: await sha256Hex(canonicalJson(snapshot)),
@@ -177,58 +178,22 @@ export const preparedProductIdentityPair = z.object({
   verification: variantVerification.default("unknown"),
   variantEvidence: z.json().nullable().default(null),
 });
-export async function prepareProductIdentityPair(
-  db: Database,
-  ids: readonly [ProductId, ProductId],
-  options: {
-    includeExcluded?: boolean;
-  } = {},
-) {
-  return (await prepareProductIdentityPairs(db, [ids], options))[0] ?? null;
-}
+export type ProductIdentityPairIds = readonly [ProductId, ProductId];
+export const productIdentityPairKey = (ids: ProductIdentityPairIds): string =>
+  [...ids].sort().join("|");
 
-/** One snapshot and history load for a finite catalog/decision batch. */
-export async function prepareProductIdentityPairs(
-  db: Database,
-  pairs: readonly (readonly [ProductId, ProductId])[],
+/** No database reads: all pair evidence comes from the page's frozen context. */
+async function productIdentityPairFromSnapshots(
+  ids: ProductIdentityPairIds,
+  snapshots: ReadonlyMap<ProductId, ProductIdentitySnapshot>,
+  verification: ProductVariantVerification,
   options: { includeExcluded?: boolean } = {},
 ) {
-  const snapshots = await productIdentitySnapshots(
-    db,
-    pairs.flatMap((ids) => [...ids]),
-  );
-  const sides = pairs.flatMap((ids) => {
-    const [a, b] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
-    const first = snapshots.get(a!),
-      second = snapshots.get(b!);
-    return first && second
-      ? [
-          [
-            productIdentitySide.parse(first.snapshot),
-            productIdentitySide.parse(second.snapshot),
-          ] as const,
-        ]
-      : [];
-  });
-  const guards = await readVariantVerifications(db, sides);
-  return Promise.all(
-    pairs.map((ids) =>
-      prepareProductIdentityPairFromSnapshots(ids, snapshots, guards, options),
-    ),
-  );
-}
-
-async function prepareProductIdentityPairFromSnapshots(
-  ids: readonly [ProductId, ProductId],
-  snapshots: Map<ProductId, ProductIdentitySnapshot>,
-  guards: Awaited<ReturnType<typeof readVariantVerifications>>,
-  options: { includeExcluded?: boolean },
-) {
-  const [aId, bId] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
+  const [aId, bId] = ids[0] < ids[1] ? ids : ([ids[1], ids[0]] as const);
   if (aId === bId)
     throw new Error("A Product cannot be assessed against itself");
-  const first = snapshots.get(aId!),
-    second = snapshots.get(bId!);
+  const first = snapshots.get(aId),
+    second = snapshots.get(bId);
   if (
     !first ||
     !second ||
@@ -258,16 +223,75 @@ async function prepareProductIdentityPairFromSnapshots(
         other.exactVariant,
     ),
   );
-  const guard = guards.get(`${aId}|${bId}`);
-  if (!guard) throw new Error("Missing prepared Product variant history");
   return preparedProductIdentityPair.parse({
     productIds: [aId, bId],
     first: first.snapshot,
     second: second.snapshot,
     fingerprint: await pairFingerprint([first.fingerprint, second.fingerprint]),
     exact,
-    ...guard,
+    ...verification,
   });
+}
+
+/** One bounded history load for every canonical pair in the snapshot union. */
+export async function productIdentityPairsFromSnapshots(
+  db: Database,
+  ids: readonly ProductIdentityPairIds[],
+  snapshots: ReadonlyMap<ProductId, ProductIdentitySnapshot>,
+  options: { includeExcluded?: boolean } = {},
+) {
+  const unique = new Map(
+    ids.map((pair) => [productIdentityPairKey(pair), pair]),
+  );
+  const sides = [...unique.values()].flatMap((pair) => {
+    const [aId, bId] = pair[0] < pair[1] ? pair : ([pair[1], pair[0]] as const);
+    const first = snapshots.get(aId),
+      second = snapshots.get(bId);
+    return first && second
+      ? [
+          [
+            productIdentitySide.parse(first.snapshot),
+            productIdentitySide.parse(second.snapshot),
+          ] as const,
+        ]
+      : [];
+  });
+  const history = await readVariantVerifications(db, sides);
+  const result = new Map<string, z.infer<typeof preparedProductIdentityPair>>();
+  for (const [key, pair] of unique) {
+    const verification = history.get(key);
+    if (!verification) continue;
+    const prepared = await productIdentityPairFromSnapshots(
+      pair,
+      snapshots,
+      verification,
+      options,
+    );
+    if (prepared) result.set(key, prepared);
+  }
+  return result;
+}
+export async function prepareProductIdentityPairs(
+  db: Database,
+  ids: readonly ProductIdentityPairIds[],
+  options: { includeExcluded?: boolean } = {},
+) {
+  const snapshots = await productIdentitySnapshots(
+    db,
+    ids.flatMap((pair) => [...pair]),
+  );
+  return productIdentityPairsFromSnapshots(db, ids, snapshots, options);
+}
+export async function prepareProductIdentityPair(
+  db: Database,
+  ids: ProductIdentityPairIds,
+  options: { includeExcluded?: boolean } = {},
+) {
+  return (
+    (await prepareProductIdentityPairs(db, [ids], options)).get(
+      productIdentityPairKey(ids),
+    ) ?? null
+  );
 }
 /** Canonical work identity shares actual producer lineage and frozen pair input. */
 async function enqueuePreparedProductIdentityPair(

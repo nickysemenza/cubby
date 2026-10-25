@@ -20,7 +20,6 @@ import {
   getTableColumns,
   type SQL,
 } from "drizzle-orm";
-import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import {
@@ -35,17 +34,20 @@ import {
 } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
 import {
   transitionAssessmentState,
-  transitionAssessmentStates,
+  transitionAssessmentStateBatch,
+  type AssessmentStatePatch,
 } from "~/server/generic/assessment/repo/assessment-state";
 
-import { productIdentityEvidenceFence } from "./product-identity-fence";
+import { productIdentityEvidenceFences } from "./product-identity-fence";
 import {
   pairFingerprint,
   prepareProductIdentityPair,
-  prepareFencedProductIdentityPairs,
+  prepareProductIdentityPairs,
+  preparedProductIdentityPair,
+  productIdentityPairKey,
   productIdentitySnapshots,
 } from "./product-identity-snapshot";
 
@@ -91,125 +93,181 @@ export const currentProductPairPolicy = (producer: AssessmentProducer | null) =>
 export const currentProductPairPolicySql = (producer: SQL) =>
   sql`(${producer} IS NULL OR ${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.agent} OR (${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.rule} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_RULE_REVISION}) OR (${producer}->>${assessmentProducer.keyof().enum.kind} = ${assessmentProducer.shape.kind.enum.model} AND ${producer}->>'revision' = ${PRODUCT_IDENTITY_FEATURE.promptVersion}))`;
 
-export async function publishProductPair(
-  db: Database,
-  input: {
-    productIds: readonly [ProductId, ProductId];
-    source: "agent" | "detector";
-    evidence: string | null;
-    sourceUrls: string[];
-    signals?: z.infer<typeof pairProjection>["signals"];
-    actionable?: boolean;
-    conflict?: boolean;
-    fingerprint?: string | null;
-    producer?: AssessmentProducer;
-  },
-): Promise<ProductMatchCandidateRow & { created: boolean }> {
-  return publishProductPairWithGuard(db, input, (transactionDb) => {
-    return prepareProductIdentityPair(transactionDb, input.productIds);
-  });
-}
+export type ProductPairPublicationInput = {
+  productIds: readonly [ProductId, ProductId];
+  source: "agent" | "detector";
+  evidence: string | null;
+  sourceUrls: string[];
+  signals?: z.infer<typeof pairProjection>["signals"];
+  actionable?: boolean;
+  conflict?: boolean;
+  fingerprint?: string | null;
+  producer?: AssessmentProducer;
+};
+export type PreparedProductPairPublication = {
+  key: string;
+  input: ProductPairPublicationInput;
+  pair: z.infer<typeof preparedProductIdentityPair>;
+  fence: string;
+};
+export type ProductPairPublicationResult =
+  | { key: string; valid: false; row: null }
+  | {
+      key: string;
+      valid: true;
+      row: ProductMatchCandidateRow & { created: boolean };
+    };
 
-/** Snapshot/variant work runs before the caller opens its publication transaction.
- * Publication accepts a root handle or a caller-owned SERIALIZABLE transaction;
- * savepoints inherit outer isolation and cannot upgrade it.
- */
-export async function prepareProductPairPublication(
-  db: Database,
-  input: Parameters<typeof publishProductPair>[1],
-) {
-  return (await prepareProductPairPublications(db, [input]))[0]!;
-}
-
+/** Pure preparation on a root handle; one set of snapshots/history/fences. */
 export async function prepareProductPairPublications(
   db: Database,
-  inputs: readonly Parameters<typeof publishProductPair>[1][],
-) {
-  const prepared = await prepareFencedProductIdentityPairs(db, inputs);
-  return prepared.map(({ pair: guard, fence }, index) => {
-    const input = inputs[index]!;
-    return (tx: Database) =>
-      publishProductPairWithGuard(
-        tx,
-        input,
-        async (transactionDb) => {
-          if (
-            (await productIdentityEvidenceFence(
-              transactionDb,
-              input.productIds,
-            )) !== fence
-          )
-            throw new Error("Product pair evidence changed during inference");
-          return guard;
-        },
-        { isolationLevel: "serializable" },
-      );
+  inputs: readonly { key: string; input: ProductPairPublicationInput }[],
+): Promise<PreparedProductPairPublication[]> {
+  if (isTransaction(getDb(db)))
+    throw new Error(
+      "Product pair preparation requires a database outside a transaction",
+    );
+  const targets = inputs.map(({ key, input }) => ({
+    key,
+    productIds: input.productIds,
+  }));
+  const before = await productIdentityEvidenceFences(db, targets);
+  const pairs = await prepareProductIdentityPairs(
+    db,
+    inputs.map(({ input }) => input.productIds),
+  );
+  const after = await productIdentityEvidenceFences(db, targets);
+  return inputs.flatMap(({ key, input }) => {
+    const pair = pairs.get(productIdentityPairKey(input.productIds)),
+      fence = before.get(key);
+    return pair &&
+      fence &&
+      fence === after.get(key) &&
+      (!input.fingerprint || input.fingerprint === pair.fingerprint)
+      ? [{ key, input, pair, fence }]
+      : [];
   });
 }
 
-async function publishProductPairWithGuard(
-  db: Database,
-  input: Parameters<typeof publishProductPair>[1],
-  prepare: (tx: Database) => ReturnType<typeof prepareProductIdentityPair>,
-  config?: PgTransactionConfig,
-): Promise<ProductMatchCandidateRow & { created: boolean }> {
-  const pair = canonicalProductPair(...input.productIds);
-  if (pair.productAId === pair.productBId)
-    throw new Error("Cannot assess a Product against itself");
-  const proposedData = pairProjection.parse({
-    otherId: pair.productBId,
-    ...input,
-  });
-  const publish = async (transactionDb: Database) => {
-    const client = getDb(transactionDb);
-    await client.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`product-pair-state:${pair.productAId}|${pair.productBId}`},0))`,
+/** Caller owns the short SERIALIZABLE transaction and its Job/request guards.
+ * One pair lock order, immutable publication and locked state read serve the
+ * whole chunk. Duplicate source requests retain separate keyed results.
+ */
+export async function publishProductPairPublications(
+  tx: Database,
+  outcomes: readonly PreparedProductPairPublication[],
+): Promise<ProductPairPublicationResult[]> {
+  const client = getDb(tx);
+  if (!isTransaction(client))
+    throw new Error("Product pair chunk publication requires a transaction");
+  if (outcomes.length > 25)
+    throw new Error("Product pair publication chunk exceeds 25 outcomes");
+  if (!outcomes.length) return [];
+  const lockKeys = [
+    ...new Set(
+      outcomes.map(
+        ({ input }) =>
+          `product-pair-state:${productPairKey(...input.productIds)}`,
+      ),
+    ),
+  ].sort();
+  await client.execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(key, 0)) FROM (SELECT unnest(ARRAY[${sql.join(
+      lockKeys.map((key) => sql`${key}`),
+      sql`, `,
+    )}]::text[]) AS key ORDER BY key) ordered`,
+  );
+  const fences = await productIdentityEvidenceFences(
+    tx,
+    outcomes.map(({ key, input }) => ({ key, productIds: input.productIds })),
+  );
+  const valid = outcomes.filter(
+    (outcome) =>
+      fences.get(outcome.key) === outcome.fence &&
+      (!outcome.input.fingerprint ||
+        outcome.input.fingerprint === outcome.pair.fingerprint),
+  );
+  const unique = new Map<string, PreparedProductPairPublication>();
+  for (const outcome of valid) {
+    const key = productPairKey(...outcome.input.productIds);
+    if (!unique.has(key)) unique.set(key, outcome);
+  }
+  const prepared = await Promise.all(
+    [...unique].map(async ([key, { input, pair: guard }]) => {
+      const pair = canonicalProductPair(...input.productIds);
+      if (pair.productAId === pair.productBId)
+        throw new Error("Cannot assess a Product against itself");
+      const proposed = pairProjection.parse({
+        otherId: pair.productBId,
+        ...input,
+      });
+      const suppliedSignals =
+        z.record(z.string(), z.json()).safeParse(proposed.signals).data ?? {};
+      const data = pairProjection.parse({
+        ...proposed,
+        actionable: proposed.actionable && guard.exact,
+        conflict: proposed.conflict || guard.conflict,
+        evidence:
+          guard.verification === "pending_verification"
+            ? "A historical identity conflict remains unresolved"
+            : proposed.evidence,
+        signals: {
+          ...suppliedSignals,
+          verification: guard.verification,
+          variantEvidence: guard.variantEvidence,
+          conflictLineage: guard.priorConflictIds,
+        },
+      });
+      const identityData = {
+        ...data,
+        signals: {
+          ...suppliedSignals,
+          conflictLineage: null,
+          verification: guard.verification,
+          variantEvidence: null,
+        },
+      };
+      const digest = await sha256Hex(
+        JSON.stringify([
+          pair.productAId,
+          pair.productBId,
+          identityData,
+          input.fingerprint ?? null,
+          input.producer
+            ? [
+                input.producer.kind,
+                input.producer.model,
+                input.producer.revision,
+              ]
+            : null,
+        ]),
+      );
+      return {
+        key,
+        input,
+        pair,
+        data,
+        publicationKey: `product-pair:${digest}`,
+      };
+    }),
+  );
+  if (!prepared.length)
+    return outcomes.map(({ key }) => ({ key, valid: false, row: null }));
+  const published = await client
+    .select()
+    .from(assessment)
+    .where(
+      inArray(
+        assessment.publicationKey,
+        prepared.map((entry) => entry.publicationKey),
+      ),
     );
-    const suppliedSignals =
-      z.record(z.string(), z.json()).safeParse(proposedData.signals).data ?? {};
-    const guard = await prepare(transactionDb);
-    if (!guard) throw new Error("Product identity target no longer exists");
-    let data = pairProjection.parse({
-      ...proposedData,
-      conflict: proposedData.conflict || guard.conflict,
-      evidence:
-        guard.verification === "pending_verification"
-          ? "A historical identity conflict remains unresolved"
-          : proposedData.evidence,
-      signals: {
-        ...suppliedSignals,
-        verification: guard.verification,
-        variantEvidence: guard.variantEvidence,
-        conflictLineage: guard.priorConflictIds,
-      },
-    });
-    const identityData = {
-      ...data,
-      signals: {
-        ...suppliedSignals,
-        conflictLineage: null,
-        verification: guard.verification,
-        variantEvidence: null,
-      },
-    };
-    const digest = await sha256Hex(
-      JSON.stringify([
-        pair.productAId,
-        pair.productBId,
-        identityData,
-        input.fingerprint ?? null,
-        input.producer
-          ? [input.producer.kind, input.producer.model, input.producer.revision]
-          : null,
-      ]),
-    );
-    const publicationKey = `product-pair:${digest}`;
-    const [published] = await client
-      .select({ evidence: assessment.evidence, producer: assessment.producer })
-      .from(assessment)
-      .where(eq(assessment.publicationKey, publicationKey))
-      .limit(1);
-    if (published) data = pairProjection.parse(published.evidence);
+  const publishedByKey = new Map(
+    published.map((row) => [row.publicationKey, row]),
+  );
+  const entries = prepared.map((entry) => {
+    const prior = publishedByKey.get(entry.publicationKey);
+    const data = prior ? pairProjection.parse(prior.evidence) : entry.data;
     const distinct =
       !data.actionable &&
       z
@@ -217,33 +275,12 @@ async function publishProductPairWithGuard(
           decision: z.object({ selectedIndex: z.number().nullable() }),
         })
         .safeParse(data.signals).data?.decision.selectedIndex === 1;
-    // Exact suppression lookup is independent of queue limits and served policy.
-    const [previous] = await client
-      .select()
-      .from(assessmentState)
-      .where(
-        and(
-          eq(assessmentState.family, "product_pair"),
-          eq(assessmentState.active, true),
-          eq(assessmentState.recordId, pair.productAId),
-          sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
-          or(
-            eq(assessmentState.status, "pending"),
-            sql`${assessmentState.suppression} IS NOT NULL`,
-          ),
-        ),
-      )
-      .limit(1);
-    const old = previous
-      ? {
-          state: previous.suppression
-            ? ("dismissed" as const)
-            : ("open" as const),
-        }
-      : undefined;
-    const prediction = await publishAssessment(
-      transactionDb,
-      {
+    return { ...entry, data, prior, distinct };
+  });
+  const predictions = await publishAssessments(
+    tx,
+    entries.map(({ input, pair, data, prior, distinct, publicationKey }) => ({
+      input: {
         publicationKey,
         family: "product_pair",
         subject: {
@@ -254,7 +291,7 @@ async function publishProductPairWithGuard(
         },
         judgment: { actionable: data.actionable, conflict: data.conflict },
         producer:
-          published?.producer ??
+          prior?.producer ??
           input.producer ??
           (input.source === "agent"
             ? {
@@ -268,63 +305,166 @@ async function publishProductPairWithGuard(
         evidence: data,
         fingerprint: input.fingerprint ?? null,
       },
-      { data, ...(distinct ? { status: "resolved" } : {}) },
-    );
-    // A re-proposal replaces the earlier row; leaving it pending strands it.
-    await transitionAssessmentStates(
-      transactionDb,
-      and(
-        eq(assessmentState.family, "product_pair"),
-        eq(assessmentState.recordId, pair.productAId),
-        sql`${assessmentState.data}->>'otherId' = ${pair.productBId}`,
-        sql`${assessmentState.id} <> ${prediction.id}`,
-      ),
-      (row) => ({
-        active: false,
-        ...(row.status === suggestionStatus.enum.pending && {
-          status: suggestionStatus.enum.superseded,
-        }),
-      }),
-      { kind: "superseded_by_publication" },
-    );
-    await transitionAssessmentState(
-      transactionDb,
-      prediction.id,
-      {
-        active: true,
-        ...(old?.state === "dismissed"
-          ? {
-              suppression: {
-                scope: "product_pair",
-                candidateKey: productPairKey(pair.productAId, pair.productBId),
-                fingerprint: null,
-              },
-              status: "resolved",
-            }
-          : {}),
+      projection: {
+        data,
+        ...(distinct ? { status: "resolved" as const } : {}),
       },
-      { kind: "product_pair_republished" },
-    );
+    })),
+  );
+  const byPair = new Map(
+    entries.map((entry, index) => {
+      const prediction = predictions[index];
+      if (!prediction)
+        throw new Error("Product pair publication returned no row");
+      return [entry.key, { ...entry, prediction }];
+    }),
+  );
+  const priorByPair = new Map<string, { dismissed: boolean }>();
+  await transitionAssessmentStateBatch(
+    tx,
+    and(
+      eq(assessmentState.family, "product_pair"),
+      sql`(${assessmentState.recordId}::text || '|' || (${assessmentState.data}->>'otherId')) IN (${sql.join(
+        [...byPair.keys()].map((key) => sql`${key}`),
+        sql`, `,
+      )})`,
+    ),
+    (rows) => {
+      for (const row of rows) {
+        const key = productPairKey(
+          row.recordId,
+          pairProjection.parse(row.data).otherId,
+        );
+        const current = byPair.get(key);
+        // A just-inserted state is not the earlier open projection. A replay is.
+        if (
+          current &&
+          (current.prior || row.id !== current.prediction.id) &&
+          row.active &&
+          (row.status === "pending" || row.suppression)
+        ) {
+          const previous = priorByPair.get(key);
+          priorByPair.set(key, {
+            dismissed: Boolean(previous?.dismissed || row.suppression),
+          });
+        }
+      }
+      return rows.flatMap((row) => {
+        const key = productPairKey(
+          row.recordId,
+          pairProjection.parse(row.data).otherId,
+        );
+        const current = byPair.get(key);
+        if (!current) return [];
+        const patch: AssessmentStatePatch =
+          row.id === current.prediction.id
+            ? {
+                active: true,
+                ...(priorByPair.get(key)?.dismissed
+                  ? {
+                      suppression: {
+                        scope: "product_pair",
+                        candidateKey: key,
+                        fingerprint: null,
+                      },
+                      status: "resolved",
+                    }
+                  : {}),
+              }
+            : {
+                active: false,
+                ...(row.status === suggestionStatus.enum.pending
+                  ? { status: suggestionStatus.enum.superseded }
+                  : {}),
+              };
+        return [
+          {
+            id: row.id,
+            patch,
+            cause: {
+              kind:
+                row.id === current.prediction.id
+                  ? "product_pair_republished"
+                  : "superseded_by_publication",
+            },
+          },
+        ];
+      });
+    },
+  );
+  const validKeys = new Set(valid.map((outcome) => outcome.key));
+  return outcomes.map(({ key, input }) => {
+    const entry = byPair.get(productPairKey(...input.productIds));
+    if (!validKeys.has(key) || !entry) return { key, valid: false, row: null };
+    const { data, pair, prediction } = entry;
+    const prior = priorByPair.get(entry.key);
     return {
-      ...pair,
-      id: prediction.id,
-      source: data.source,
-      state: old?.state ?? "open",
-      evidence: data.evidence,
-      sourceUrls: data.sourceUrls,
-      createdAt: prediction.createdAt,
-      updatedAt: new Date(),
-      fingerprint: input.fingerprint ?? null,
-      actionable: data.actionable,
-      conflict: data.conflict,
-      verification:
-        z
-          .object({ verification: variantVerification.optional() })
-          .safeParse(data.signals).data?.verification ?? "unknown",
-      created: !old,
+      key,
+      valid: true,
+      row: {
+        ...pair,
+        id: prediction.id,
+        source: data.source,
+        state: prior?.dismissed ? "dismissed" : "open",
+        evidence: data.evidence,
+        sourceUrls: data.sourceUrls,
+        createdAt: prediction.createdAt,
+        updatedAt: new Date(),
+        fingerprint: entry.input.fingerprint ?? null,
+        actionable: data.actionable,
+        conflict: data.conflict,
+        verification:
+          z
+            .object({ verification: variantVerification.optional() })
+            .safeParse(data.signals).data?.verification ?? "unknown",
+        created: !prior,
+      },
     };
-  };
-  return withTransactionDatabase(db, publish, config);
+  });
+}
+
+export async function publishProductPair(
+  db: Database,
+  input: ProductPairPublicationInput,
+): Promise<ProductMatchCandidateRow & { created: boolean }> {
+  return withTransactionDatabase(db, async (tx) => {
+    const pair = await prepareProductIdentityPair(tx, input.productIds);
+    if (!pair) throw new Error("Product identity target no longer exists");
+    const key = productPairKey(...input.productIds);
+    const fences = await productIdentityEvidenceFences(tx, [
+      { key, productIds: input.productIds },
+    ]);
+    const [result] = await publishProductPairPublications(tx, [
+      { key, input, pair, fence: fences.get(key) ?? "" },
+    ]);
+    if (!result?.valid)
+      throw new Error("Product pair evidence changed during inference");
+    return result.row;
+  });
+}
+export async function prepareProductPairPublication(
+  db: Database,
+  input: ProductPairPublicationInput,
+) {
+  const prepared = await prepareProductPairPublications(db, [
+    { key: "target", input },
+  ]);
+  if (!prepared.length)
+    throw new Error("Product pair evidence changed during inference");
+  return (tx: Database) =>
+    withTransactionDatabase(
+      tx,
+      async (transactionDb) => {
+        const [result] = await publishProductPairPublications(
+          transactionDb,
+          prepared,
+        );
+        if (!result?.valid)
+          throw new Error("Product pair evidence changed during inference");
+        return result.row;
+      },
+      { isolationLevel: "serializable" },
+    );
 }
 /**
  * An agent proposal claims the two records are one item, not one snapshot of
