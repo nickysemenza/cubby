@@ -17,6 +17,9 @@ import { sql, type SQL } from "drizzle-orm";
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 
+/** `email-observation:<observation id>`, the email_relevance Assessment key. */
+export const EMAIL_OBSERVATION_PUBLICATION_PREFIX = "email-observation:";
+
 /** Assessment subjects own observation lineage; caller metadata is not a second join key. */
 export const emailFeedbackObservationIdSql = (label: SQL) => sql<
   string | null
@@ -264,15 +267,22 @@ const memberClassificationWithResolutionSql = (email: SQL, reviewed: SQL) =>
 export const emailMemberClassificationSql = () =>
   memberClassificationWithResolutionSql(
     sql`"Email"`,
+    // Drive from this Email's predictions to their Assessments by the unique
+    // publication key (`publishEmailClassificationAssessment` writes it with
+    // `subject.observationId`), then Feedback by assessment. Matching Feedback
+    // to a prediction through `subject->>'observationId'` scanned all Feedback
+    // per Email (~60 ms each, 1.5 s per list page).
     sql`(
-    SELECT ${emailFeedbackClassificationSql(sql`label`)}
-    FROM "Feedback" label
-    INNER JOIN "EmailClassificationObservation" prediction ON prediction."id"::text = ${emailFeedbackObservationIdSql(sql`label`)}
+    SELECT ${emailFeedbackClassificationSql(sql`label`, sql`a`)}
+    FROM "EmailClassificationObservation" prediction
+    INNER JOIN "Assessment" a ON a."publicationKey" = ${EMAIL_OBSERVATION_PUBLICATION_PREFIX} || prediction."id"::text
+      AND a.family = ${assessmentFamily.enum.email_relevance}
+    INNER JOIN "Feedback" label ON label."assessmentId" = a."id"
     INNER JOIN "LedgerParty" owner ON owner."id" = "Email"."ledgerPartyId"
     WHERE prediction."emailId" = "Email"."id"
       AND prediction."checksum" = "Email"."checksum"
       AND label."actorUserId" = owner."userId" AND label.authority = ${feedbackAuthority.enum.member}
-      AND ${emailFeedbackHasClassificationSql(sql`label`)}
+      AND ${emailFeedbackHasClassificationSql(sql`label`, sql`a`)}
     ORDER BY label."createdAt" DESC, label."id" DESC
     LIMIT 1
   )`,
