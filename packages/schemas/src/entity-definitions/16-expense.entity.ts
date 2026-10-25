@@ -1892,6 +1892,23 @@ Rules:
     mode: "lexical",
     inputs: [
       { table: "Project", match: { id: "projectId" } },
+      // Adjustment lines inherit their principal siblings' Project text.
+      {
+        table: "Project",
+        match: { id: "id" },
+        path: [
+          { table: "Expense", from: "projectId", to: "purchaseId" },
+          { table: "Expense", from: "purchaseId", to: "id" },
+        ],
+      },
+      {
+        table: "Project",
+        match: { id: "id" },
+        path: [
+          { table: "Purchase", from: "defaultProjectId", to: "id" },
+          { table: "Expense", from: "purchaseId", to: "id" },
+        ],
+      },
       { table: "Purchase", match: { id: "purchaseId" } },
     ],
   },

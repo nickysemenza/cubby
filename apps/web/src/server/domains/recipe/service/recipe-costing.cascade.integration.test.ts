@@ -25,8 +25,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
  * Authoritative changes remain durable when wake-ups are lost. The generic
- * recipe Job recomputes the corpus in bounded pages; cyclic graphs must
- * remain truthful and terminate without relying on queue delivery.
+ * drain propagates changed totals in bounded pages; cyclic graphs must
+ * remain truthful and stop at unchanged totals without relying on queue delivery.
  */
 describe("recipe totals cascade", () => {
   const ctx = withTestDb();
@@ -61,12 +61,13 @@ describe("recipe totals cascade", () => {
       ctx.db,
       makeRecipeInput({
         name: "Child",
+        yield: { value: 1, unit: "each" },
         sections: [
           {
             instructions: [{ instruction: "Mix" }],
             ingredients: [
               ingredientRef(ingredient.shortcode, {
-                amounts: [{ value: 2, unit: "cup" }],
+                amounts: [{ value: 2, unit: "each" }],
               }),
             ],
           },
@@ -84,6 +85,7 @@ describe("recipe totals cascade", () => {
       ctx.db,
       makeRecipeInput({
         name: "Parent",
+        yield: { value: 1, unit: "each" },
         sections: [
           {
             instructions: [{ instruction: "Use child" }],
@@ -97,6 +99,7 @@ describe("recipe totals cascade", () => {
       ctx.db,
       makeRecipeInput({
         name: "Grandparent",
+        yield: { value: 1, unit: "each" },
         sections: [
           {
             instructions: [{ instruction: "Use parent" }],
@@ -146,10 +149,12 @@ describe("recipe totals cascade", () => {
     await drainRecipes();
     queue.messages.length = 0;
     const before = await getRecipeTotalsState(ctx.db, tree.grandparent);
+    expect(before?.totals).toMatchObject({ cost: { lower: 8 } });
     await changePrice(tree.product, 9);
     queue.messages.length = 0;
     await drainRecipes();
     const after = await getRecipeTotalsState(ctx.db, tree.grandparent);
+    expect(after?.totals).toMatchObject({ cost: { lower: 18 } });
     expect(after?.totalsComputedAt?.getTime()).toBeGreaterThan(
       before?.totalsComputedAt?.getTime() ?? 0,
     );

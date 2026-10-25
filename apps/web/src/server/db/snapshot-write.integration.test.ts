@@ -57,9 +57,8 @@ describe("snapshot write recovery", () => {
       .for("update");
   };
 
-  // Production finding: a family Job's claim and renewal on another backend
-  // replaced the tuple the capture wrote and aborted admission with 40001.
-  it("never aborts a capture for execution writes to the family Job", async () => {
+  // Marking source rows does not replace an execution tuple another worker owns.
+  it("allows execution writes while source marks are committed", async () => {
     const subject = await fixture();
     let attempts = 0;
     await withSnapshotWriteDatabase(

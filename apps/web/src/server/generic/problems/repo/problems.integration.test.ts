@@ -225,6 +225,7 @@ describe("Problems card read projections", () => {
       makeRecipeInput({ name: "Projection recipe" }),
       ctx.actor,
     );
+    await drainStoredDerived(ctx.db);
     await getDb(ctx.db)
       .update(recipe)
       .set({

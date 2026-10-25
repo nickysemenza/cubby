@@ -2347,7 +2347,9 @@ target's batch outside the publication transaction through its adapter
 Publication writes only marks whose ticket is unchanged since the claim, so an
 edit that lands during compute keeps its record dirty, and a deleted-and-reset
 mark cannot be cleared by an older page. Only changed values propagate to
-declared dependents, so cascades stop at the first unchanged hop. A failing
+declared dependents, so cascades stop at the first unchanged hop. Sink adapters
+return only records whose output or readiness changed; a recipe recalculation
+that only advances its computation timestamp does not propagate. A failing
 target backs off (30 seconds doubling to 15 minutes) and other targets publish.
 Value adapters write `DerivedValue`; sink adapters write their own tables
 (search documents with embedding admission, recipe totals, conversion

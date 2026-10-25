@@ -1931,6 +1931,20 @@ BEGIN
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('expense.searchDocument@3', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('expense.searchDocument@4', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('expense.searchDocument@4', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.searchDocument@4', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('expense.searchDocument@5', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('expense.searchDocument@5', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('expense.searchDocument@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint
 DROP TRIGGER IF EXISTS "Project_derived_mark" ON "Project";--> statement-breakpoint
@@ -1968,11 +1982,11 @@ BEGIN
     PERFORM derived_mark('purchase.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('expense.searchDocument@4', ARRAY[NEW."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.searchDocument@6', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('expense.searchDocument@4', ARRAY[OLD."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('expense.searchDocument@6', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('expense.searchDocument@4', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+    PERFORM derived_mark('expense.searchDocument@6', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('expense.dataQuality@4', ARRAY[NEW."id"::uuid]); END IF;

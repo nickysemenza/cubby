@@ -111,8 +111,7 @@ export async function drainRecipeRefreshJobs(
         // SAFETY: the drain passes ids of `recipe.totals` marks only.
         return value ? [{ id: id as RecipeId, totals: value }] : [];
       });
-      await commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
-      return updates.map((update) => update.id);
+      return commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
     },
   });
   return drainStoredDerived(db, maxPages, {
