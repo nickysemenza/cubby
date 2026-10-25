@@ -15,7 +15,6 @@ import {
 } from "vite";
 import wasm from "vite-plugin-wasm";
 import { createServerFunctionIdGenerator } from "./tooling/server-function-id.ts";
-import { localPreviewOrigins } from "./src/lib/local-preview-origins.ts";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { devLifecycle } from "./tooling/dev/lifecycle.ts";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
@@ -365,10 +364,9 @@ export default defineConfig(async ({ command }) => {
       // The supervisor already selected and advertised this origin.
       port: serverPort,
       strictPort: true,
-      // Vite derives wss and the external port from its browser script URL.
-      allowedHosts: localPreviewOrigins(
-        profile?.vars.CUBBY_DEV_ORIGIN_ALIASES,
-      ).map((origin) => new URL(origin).hostname),
+      allowedHosts: profile?.vars.CUBBY_DEV_PREVIEW_ORIGIN
+        ? [new URL(profile.vars.CUBBY_DEV_PREVIEW_ORIGIN).hostname]
+        : [],
     },
     plugins: [
       // Permit the JS Self-Profiling API in dev (`window.__jsProfile`, see
