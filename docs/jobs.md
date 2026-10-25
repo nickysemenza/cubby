@@ -28,8 +28,9 @@ backoff, a deferral, a lapsed lease, a delayed release) rings through the
 `image.device.wake` Job: each of those events arms it (`armDeviceWake`, a
 restarting invalidation of its own Job, so an arm during a wake page is never
 lost), and its page rings when parked work is claimable, then sleeps until
-the next parked availability or lease expiry. A release with no delay also
-rings at once.
+the next parked availability or lease expiry. A doorbell RPC failure fails
+the wake page, so its retry rings again; reaching no open socket is not a
+failure. A release with no delay also rings at once (best effort).
 
 ## Waiting on
 
@@ -40,8 +41,12 @@ waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
 - `due`: claimable now; `aheadCount` in the drain's own selection order (the
   fair order per class, interleaved per batch with backfill's reserve:
   `drainSelectionIndex`) and `etaSeconds` from claims over the last 30
-  minutes.
-- `waiting_device`: parked device work; position in device-pull order.
+  minutes. Only the next batch is exact: later batches re-rank kinds by their
+  last service, so beyond `JOB_DRAIN.batch` the position is a projection and
+  `aheadIsEstimate` is true (shown as "behind about N").
+- `waiting_device`: parked device work; position in device claim order
+  (`deviceSelectionIndex`, with backfill's turn), exact apart from a
+  device's preference for work another device last ran.
 - `waiting_funding`: an `ai_funding_window` wait until the window resets.
 - `leased`: an executor holds it, named with its device installation id
   (`executorDeviceId`, null for cloud) and `leasedAt` (the claim time);
@@ -96,9 +101,13 @@ is its own Jobs plus the evaluation Jobs it owns or still requests (an
 uncancelled `AiEvaluationRequest`), once each, for rollups, `job.queue` with a
 Run, Retry now and explain.
 
-Device pulls apply the same two classes to one claim at a time: an active
-Run's parked work leads, and after `1 / JOB_BACKFILL_SHARE - 1` run-owned
-device claims since backfill was last served, the next pull serves backfill.
+Device pulls apply the same two classes to one claim at a time
+(`generic/jobs/repo/device-admission.ts`): an active, member-visible Run's
+parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / JOB_BACKFILL_SHARE -
+1`) run-owned device services in a row, the next pull serves backfill. A
+service is a claim handed over to a device (an assigned attempt), so each
+reclaim counts; ownership is selection's own `jobRunOwned`, so serving an
+ended Run's work is backfill and resets the turn.
 
 ## Durable invalidation
 
@@ -217,9 +226,11 @@ note photos grouped while their cloud description waits (for funding, say).
   leased image work per executor (`leases`: live and expired), and a page of
   matching Jobs with their `waitingOn`.
 - `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason
-  (`leased` counts live leases; lapsed ones are `expiredLeases`), its own
-  funding wait, and `stalled` when nothing was claimed or finished for
-  `RUN_STALL_MS` and no live lease is in flight.
+  (`leased` counts live leases; lapsed ones are `expiredLeases`, summarized as
+  "N expired leases awaiting reclaim"), its own funding wait, and `stalled`
+  when nothing was claimed or finished for `RUN_STALL_MS` and no live lease is
+  in flight. `job.list {runId}` groups the Run's demand, including AI
+  evaluation Jobs it requests.
 - `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
   or a Job id, on MCP (`maintenance`) and `cubby call`.
 - `job.health`: `{snapshot}`, the queue watchdog's latest measurement, null

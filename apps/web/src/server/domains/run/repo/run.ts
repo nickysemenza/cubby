@@ -138,7 +138,9 @@ const runRead = {
             successorRunId: successor
               ? parseShortcodeFor("run", successor)
               : null,
-            waitingOn: rollup ? describeJobRollup(rollup.counts) : null,
+            waitingOn: rollup
+              ? describeJobRollup(rollup.counts, rollup.expiredLeases)
+              : null,
             stalled: rollup?.stalled ?? false,
             displayStatus: runDisplayStatusOf(row, successor !== null),
           };

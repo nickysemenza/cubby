@@ -15,7 +15,16 @@ import {
   jobKindPolicy,
   UNDRAINED_JOB_KINDS,
 } from "~/server/generic/jobs/kind-policy";
-import { dueJobPositions, type JobRow } from "~/server/generic/jobs/repo/jobs";
+import { JOB_DRAIN } from "~/server/generic/jobs/limits";
+import {
+  deviceOwnedStreak,
+  deviceSelectionIndex,
+} from "~/server/generic/jobs/repo/device-admission";
+import {
+  dueJobPositions,
+  jobRunOwned,
+  type JobRow,
+} from "~/server/generic/jobs/repo/jobs";
 
 /** Lane throughput is measured over this window. */
 export const LANE_THROUGHPUT_WINDOW_MS = 30 * 60_000;
@@ -101,6 +110,7 @@ export function deriveJobWaitingOn(
     reason: "due",
     lane,
     aheadCount: context.aheadCount ?? 0,
+    aheadIsEstimate: (context.aheadCount ?? 0) >= JOB_DRAIN.batch,
     etaSeconds: eta(context),
   };
 }
@@ -117,6 +127,7 @@ const waitingForDevice = (context: {
   reason: "waiting_device",
   lane: "apple_device",
   aheadCount: context.aheadCount ?? 0,
+  aheadIsEstimate: false,
   etaSeconds: eta(context),
 });
 
@@ -241,18 +252,40 @@ async function positions(
     ids.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
-  // Device pulls claim parked work oldest-available first.
-  const result = await repositoryQueries(db).execute<{
-    id: string;
-    ahead: number;
-  }>(sql`WITH due AS (
-      SELECT id, (row_number() OVER (ORDER BY "availableAt", key) - 1)::int AS ahead
+  // Device claim order (`claimImageProcessingJob`): an active Run's work
+  // first, oldest available, with backfill's reserved turn.
+  const [result, streak] = await Promise.all([
+    repositoryQueries(db).execute<{
+      id: string;
+      run_owned: boolean;
+      class_position: number;
+      owned_total: number;
+      backfill_total: number;
+    }>(sql`WITH due AS (
+      SELECT "Job".id, ${jobRunOwned()} AS run_owned, "Job"."availableAt", "Job".key
       FROM "Job"
-      WHERE ${inKinds(sql`kind`, UNDRAINED_JOB_KINDS)}
-        AND ((state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "availableAt" <= ${at})
-          OR (state = ${jobState.enum.running} AND "leaseExpiresAt" <= ${at}))
-    ) SELECT id, ahead FROM due WHERE id IN (${wanted})`);
-  return new Map(result.rows.map((row) => [row.id, row.ahead]));
+      WHERE ${inKinds(sql`"Job".kind`, UNDRAINED_JOB_KINDS)}
+        AND (("Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "Job"."availableAt" <= ${at})
+          OR ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" <= ${at}))
+    ), ranked AS (
+      SELECT id, run_owned,
+        row_number() OVER (PARTITION BY run_owned ORDER BY "availableAt", key)::int AS class_position,
+        (count(*) FILTER (WHERE run_owned) OVER ())::int AS owned_total,
+        (count(*) FILTER (WHERE NOT run_owned) OVER ())::int AS backfill_total
+      FROM due
+    ) SELECT * FROM ranked WHERE id IN (${wanted})`),
+    deviceOwnedStreak(db),
+  ]);
+  return new Map(
+    result.rows.map((row) => [
+      row.id,
+      deviceSelectionIndex(
+        { runOwned: row.run_owned, classPosition: row.class_position },
+        { owned: row.owned_total, backfill: row.backfill_total },
+        streak,
+      ),
+    ]),
+  );
 }
 
 /** The executor assigned to a leased image attempt (the lease token is its id). */

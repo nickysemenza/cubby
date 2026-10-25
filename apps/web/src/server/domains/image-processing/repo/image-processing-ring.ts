@@ -22,14 +22,24 @@ function companionRpc(value: ImageProcessingStub): ImageProcessingCompanionRpc {
   return value as ImageProcessingCompanionRpc;
 }
 
-/** Ring every connected companion now; a missing binding or socket reaches none. */
-export async function ringImageProcessingCompanions(): Promise<number> {
+/**
+ * Ring every connected companion now and return how many the doorbell
+ * reached; a missing binding or no open socket reaches none (0). A doorbell
+ * RPC failure throws: it is not the same as reaching nobody.
+ */
+export async function ringImageProcessingCompanionsOrThrow(): Promise<number> {
   const namespace = getImageProcessingNamespace();
   if (!namespace) return 0;
+  return companionRpc(namespace.getByName("household")).ring();
+}
+
+/** Best-effort ring for paths with another wake behind them; failures are logged. */
+export async function ringImageProcessingCompanions(): Promise<number> {
   try {
-    return await companionRpc(namespace.getByName("household")).ring();
+    return await ringImageProcessingCompanionsOrThrow();
   } catch (error) {
-    // A lost ring only delays work: a companion pulls again on connect.
+    // A lost ring only delays work: a companion pulls again on connect, and
+    // the durable device wake rings for work that comes due later.
     log.warn("companion ring failed", { error });
     return 0;
   }

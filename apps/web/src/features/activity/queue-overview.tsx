@@ -581,7 +581,8 @@ function JobExplain({ id, error }: { id: string; error: string | null }) {
       {rollup ? (
         <span className="text-muted-foreground">
           Run {rollup.runId}:{" "}
-          {describeJobRollup(rollup.counts) ?? "no live Jobs"}
+          {describeJobRollup(rollup.counts, rollup.expiredLeases) ??
+            "no live Jobs"}
           {rollup.stalled ? ` · stalled for ${rollup.stallMinutes}+ min` : ""}
         </span>
       ) : null}

@@ -30,6 +30,7 @@ import {
 import {
   jobFactsOf,
   readRunRollups,
+  runDemandWhere,
 } from "~/server/generic/jobs/repo/job-queue";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -177,7 +178,8 @@ async function readJobs(
 /** A Run's executing Job, its fan-out by kind, the limits and what binds now. */
 export async function listRunJobs(db: Database, code: string) {
   const runId = await resolveOrThrow(db, "run", code);
-  return readJobs(db, eq(job.runId, runId), RUN_EXECUTE, {
+  // A Run's demand includes the AI evaluation Jobs it requests (no runId).
+  return readJobs(db, runDemandWhere(runId), RUN_EXECUTE, {
     id: runId,
     shortcode: code,
   });

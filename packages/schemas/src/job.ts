@@ -39,6 +39,12 @@ export const jobWaitingOn = z.discriminatedUnion("reason", [
     lane: jobLane,
     /** Due Jobs the drain (or, for Apple work, the device pull) serves first. */
     aheadCount: z.number().int().nonnegative(),
+    /**
+     * Exact only within the drain's next batch: later batches re-rank kinds
+     * by their last service, so a position beyond it (and its ETA) is a
+     * projection.
+     */
+    aheadIsEstimate: z.boolean(),
     /** From the lane's measured claims over the last 30 minutes; null without throughput. */
     etaSeconds: z.number().int().nonnegative().nullable(),
   }),
@@ -46,6 +52,8 @@ export const jobWaitingOn = z.discriminatedUnion("reason", [
     reason: z.literal("waiting_device"),
     lane: jobLane,
     aheadCount: z.number().int().nonnegative(),
+    /** Device pulls take one kind in a fixed order, so the position is exact. */
+    aheadIsEstimate: z.boolean(),
     etaSeconds: z.number().int().nonnegative().nullable(),
   }),
   z.object({
@@ -184,7 +192,7 @@ export function describeJobWaitingOn(
           ? `Due on ${JOB_LANE_LABEL[waitingOn.lane]}`
           : JOB_WAITING_ON_LABEL.waiting_device;
       const ahead = waitingOn.aheadCount
-        ? `, behind ${waitingOn.aheadCount}`
+        ? `, behind ${waitingOn.aheadIsEstimate ? "about " : ""}${waitingOn.aheadCount}`
         : "";
       const eta =
         waitingOn.etaSeconds !== null
@@ -219,6 +227,8 @@ export function describeJobWaitingOn(
  */
 export function describeJobRollup(
   counts: Partial<Record<JobWaitingOnReason, number>>,
+  /** Running Jobs whose lease lapsed; they are live but in no `counts` reason. */
+  expiredLeases = 0,
 ): string | null {
   const parts = jobWaitingOnReason.options.flatMap((reason) => {
     const count = counts[reason] ?? 0;
@@ -228,5 +238,9 @@ export function describeJobRollup(
       ? [`${count} ${label.charAt(0).toLowerCase()}${label.slice(1)}`]
       : [];
   });
+  if (expiredLeases)
+    parts.push(
+      `${expiredLeases} expired ${expiredLeases === 1 ? "lease" : "leases"} awaiting reclaim`,
+    );
   return parts.length ? parts.join(" · ") : null;
 }

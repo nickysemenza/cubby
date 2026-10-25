@@ -65,6 +65,10 @@ import { readConfirmedDescription } from "~/server/generic/assessment/repo/asses
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
+  deviceBackfillTurn,
+  deviceOwnedStreak,
+} from "~/server/generic/jobs/repo/device-admission";
+import {
   enqueueJob,
   claimJob,
   externalJobClaim,
@@ -73,7 +77,6 @@ import {
   releaseJobClaim,
   retryJobsNow,
   assertJobClaim,
-  JOB_BACKFILL_SHARE,
   jobRunOwned,
   JobSupersededError,
   type JobClaim,
@@ -539,25 +542,6 @@ async function rebuildTransparentDerivative(
 }
 
 /**
- * Whether this device pull owes backfill its reserved share: as many
- * run-owned device claims as fill a drain batch's non-reserved slots
- * (`JOB_BACKFILL_SHARE`) happened since backfill was last served.
- */
-async function deviceBackfillTurn(tx: DrizzleTransaction) {
-  const streak = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
-  const [row] = await tx
-    .execute<{ owned: number }>(sql`
-    SELECT count(*)::int AS owned FROM ${durableJob} o
-    WHERE o.kind = 'image.device' AND o."runId" IS NOT NULL
-      AND o."lastClaimedAt" > coalesce(
-        (SELECT max(b."lastClaimedAt") FROM ${durableJob} b
-          WHERE b.kind = 'image.device' AND b."runId" IS NULL),
-        '-infinity'::timestamp)`)
-    .then((result) => result.rows);
-  return (row?.owned ?? 0) >= streak;
-}
-
-/**
  * Claim one job with a bounded lease. No HTTP path waits for device work.
  * Expired leases are safe to reclaim because every completion must echo
  * the Job's lease token as its attemptId; reclaiming one is not an attempt.
@@ -603,7 +587,9 @@ export async function claimImageProcessingJob(
     // leads, but backfill keeps its reserved share of pulls.
     const devicePull =
       !currentExecution && input.processorRevisions !== undefined;
-    const backfillTurn = devicePull && (await deviceBackfillTurn(tx));
+    const backfillTurn =
+      devicePull &&
+      deviceBackfillTurn(await deviceOwnedStreak(databaseForTransaction(tx)));
     // The internal policy keeps claims within the device’s supported job kinds.
     const candidates = (avoidDeviceId?: string) =>
       tx

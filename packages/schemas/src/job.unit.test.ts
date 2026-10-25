@@ -43,6 +43,7 @@ describe("describeJobWaitingOn", () => {
           reason: "waiting_device",
           lane: "apple_device",
           aheadCount: 12,
+          aheadIsEstimate: false,
           etaSeconds: 600,
         },
         now,
