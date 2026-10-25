@@ -1,4 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -15,20 +16,21 @@ import { createDevice } from "~/server/domains/device/repo/device";
 import { claimCompanionImageCommand } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
+import { imageJobDisplayStateSql } from "./image-job-state";
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   createTransparentDerivativeAndJob,
-  IMAGE_PROCESSING_MAX_ATTEMPTS,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-  retryFailedImageProcessingJobs,
+  retryImageProcessingNow,
 } from "./image-processing";
 
-// A failure an executor calls retryable must still end: the failure budget
-// spent since the last operator retry turns it terminal with its last error,
-// an operator retry restores the whole budget, and a hand-off the device
-// could not take backs off instead of being reclaimed on its next pull.
-describe("image job retry budget", () => {
+// Production finding: exhausted image Jobs failed while their rows stayed
+// leased, and deterministic device failures ended work for good. Image work
+// is never abandoned: every failure backs off and retries, repeated failure
+// only asks for attention, and a hand-off the server could not make is
+// released without spending an attempt.
+describe("image job retry policy", () => {
   const ctx = withTestDb();
 
   async function subjectLiftJob() {
@@ -56,11 +58,13 @@ describe("image job retry budget", () => {
     const [job] = await getDb(ctx.db)
       .select({
         state: imageProcessingJob.state,
+        displayed: imageJobDisplayStateSql(),
         attemptId: imageProcessingJob.attemptId,
         derivativeId: imageProcessingJob.derivativeId,
-        attemptsSinceRetry: durableJob.attempts,
+        failures: durableJob.attempts,
+        executionState: durableJob.state,
         lastError: imageProcessingJob.lastError,
-        coolingDown: sql<boolean>`${durableJob.availableAt} > now()`,
+        coolingDown: sql<boolean>`${durableJob.availableAt} > ${new Date().toISOString()}::timestamp`,
       })
       .from(imageProcessingJob)
       .innerJoin(durableJob, eq(durableJob.key, `image-processing:${jobId}`))
@@ -79,7 +83,7 @@ describe("image job retry budget", () => {
       leaseMs: 60_000,
       processorRevisions: [IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION],
     });
-  async function failOnce(jobId: string) {
+  async function failOnce(jobId: string, retryable: boolean) {
     await makeDue(jobId);
     const lease = await devicePull();
     if (lease?.id !== jobId) throw new Error("Expected the job's lease");
@@ -91,8 +95,8 @@ describe("image job retry budget", () => {
         outcome: {
           kind: "subject_lift",
           status: "failed",
-          retryable: true,
-          reason: "Synthetic transient failure",
+          retryable,
+          reason: "deadline_exceeded",
         },
       },
     });
@@ -100,99 +104,93 @@ describe("image job retry budget", () => {
     return jobOf(jobId);
   }
 
-  it("fails on the last budgeted retryable failure and restores the budget on operator retry", async () => {
+  it("retries every failure, retryable or not, and only asks for attention after repeated failures", async () => {
     const { imageId, jobId } = await subjectLiftJob();
-    for (let failure = 1; failure < IMAGE_PROCESSING_MAX_ATTEMPTS; failure++)
-      expect(await failOnce(jobId)).toMatchObject({
+    for (
+      let failure = 1;
+      failure <= JOB_NEEDS_ATTENTION_ATTEMPTS + 1;
+      failure++
+    ) {
+      const after = await failOnce(jobId, failure % 2 === 0);
+      expect(after).toMatchObject({
         state: "pending",
-        attemptsSinceRetry: failure,
-        lastError: "Synthetic transient failure",
+        executionState: "retry_wait",
+        failures: failure,
+        lastError: "deadline_exceeded",
+        coolingDown: true,
+        displayed:
+          failure >= JOB_NEEDS_ATTENTION_ATTEMPTS
+            ? "failed"
+            : "waiting_for_device",
       });
-    const exhausted = await failOnce(jobId);
-    const reason = "Synthetic transient failure";
-    expect(exhausted).toMatchObject({
-      state: "failed",
-      attemptsSinceRetry: IMAGE_PROCESSING_MAX_ATTEMPTS,
-      lastError: reason,
-    });
+    }
+    const exhausted = await jobOf(jobId);
     const [derivative] = await getDb(ctx.db)
-      .select({
-        status: imageDerivative.status,
-        failureReason: imageDerivative.failureReason,
-      })
+      .select({ status: imageDerivative.status })
       .from(imageDerivative)
       .where(eq(imageDerivative.id, exhausted.derivativeId!));
-    expect(derivative).toEqual({ status: "failed", failureReason: reason });
+    // The output stays pending for the next attempt, never failed.
+    expect(derivative?.status).toBe("pending");
 
-    expect(
-      await retryFailedImageProcessingJobs(ctx.db, 10, { imageId }),
-    ).toEqual([jobId]);
+    expect(await retryImageProcessingNow(ctx.db, { imageId })).toEqual([jobId]);
     expect(await jobOf(jobId)).toMatchObject({
       state: "pending",
-      attemptsSinceRetry: 0,
+      failures: 0,
+      coolingDown: false,
+      lastError: "deadline_exceeded",
+      displayed: "waiting_for_device",
     });
-    for (let failure = 1; failure < IMAGE_PROCESSING_MAX_ATTEMPTS; failure++)
-      expect(await failOnce(jobId)).toMatchObject({
-        state: "pending",
-        attemptsSinceRetry: failure,
-      });
   });
 
-  it("backs off a refused hand-off so the same device cannot reclaim it before the cooldown", async () => {
+  it("releases a refused hand-off without an attempt so another device can take it", async () => {
     const { jobId } = await subjectLiftJob();
-    const installationId = crypto.randomUUID();
-    await createDevice(
-      ctx.db,
-      {
-        installationId,
-        name: "Synthetic iPad",
-        platform: "ios",
-        appVersion: null,
-        osVersion: null,
-        automaticWork: false,
-        remotePaused: false,
-      },
-      TEST_ACTOR,
-    );
-    const pull = () =>
-      claimCompanionImageCommand(ctx.db, {
-        device: {
-          deviceId: installationId,
+    const device = async (automaticWork: boolean) => {
+      const installationId = crypto.randomUUID();
+      await createDevice(
+        ctx.db,
+        {
+          installationId,
+          name: "Synthetic iPad",
           platform: "ios",
-          appVersion: "1",
-          deviceName: "Synthetic iPad",
-          osVersion: "26",
-          capabilities: {
-            foreground: true,
-            visionSubjectLift: { available: true, revision: 1 },
-            actualImageDescription: { available: false },
-          },
+          appVersion: null,
+          osVersion: null,
+          automaticWork,
+          remotePaused: false,
         },
-        userId: TEST_ACTOR.userId,
-        leaseMs: 60_000,
-      });
-
-    expect(await pull()).toBeNull();
+        TEST_ACTOR,
+      );
+      return () =>
+        claimCompanionImageCommand(ctx.db, {
+          device: {
+            deviceId: installationId,
+            platform: "ios",
+            appVersion: "1",
+            deviceName: "Synthetic iPad",
+            osVersion: "26",
+            capabilities: {
+              foreground: true,
+              visionSubjectLift: { available: true, revision: 1 },
+              actualImageDescription: { available: false },
+            },
+          },
+          userId: TEST_ACTOR.userId,
+          leaseMs: 60_000,
+        });
+    };
+    const optedOut = await device(false);
+    expect(await optedOut()).toBeNull();
     expect(await jobOf(jobId)).toMatchObject({
       state: "pending",
-      attemptId: null,
-      attemptsSinceRetry: 1,
-      lastError: "Device assignment was refused",
-      coolingDown: true,
+      executionState: "queued",
+      failures: 0,
+      coolingDown: false,
     });
     const events = await getDb(ctx.db)
-      .select({
-        eventKey: imageProcessingEvent.eventKey,
-        event: imageProcessingEvent.event,
-      })
+      .select({ event: imageProcessingEvent.event })
       .from(imageProcessingEvent)
       .where(eq(imageProcessingEvent.jobId, jobId));
-    expect(events).toContainEqual({
-      eventKey: "dispatch:backoff",
-      event: "dispatch.backoff",
-    });
-    expect(await pull()).toBeNull();
-    expect(await devicePull()).toBeNull();
-    expect((await jobOf(jobId)).attemptsSinceRetry).toBe(1);
+    expect(events).toContainEqual({ event: "dispatch.released" });
+    const participating = await device(true);
+    expect(await participating()).toMatchObject({ jobId });
   });
 });

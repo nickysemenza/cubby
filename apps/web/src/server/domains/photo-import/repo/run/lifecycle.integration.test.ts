@@ -19,7 +19,10 @@ import {
   run as runTable,
   runPushRegistration,
 } from "~/server/db/schema";
-import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
+import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/image-processing";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo/run-retirement";
 import {
@@ -780,6 +783,46 @@ describe("photo run lifecycle", () => {
     const row = await readRun(run.id);
     expect(row.dispatchEventId).toBeNull();
     expect(row.dispatchError).toBeNull();
+  });
+
+  // Running out of AI money never blocks Apple work: an Apple description
+  // settles the gate while the cloud one waits, and the Run says so.
+  it("lets an Apple description settle the gate while the cloud description waits", async () => {
+    const { run, codes } = await seedRun({
+      processor: "external",
+      describe: "pending",
+    });
+    const cloudJobs = await getDb(ctx.db)
+      .select({
+        imageId: imageProcessingJob.imageId,
+        sourceContentHash: imageProcessingJob.sourceContentHash,
+      })
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.runId, run.id));
+    for (const cloud of cloudJobs)
+      await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: cloud.imageId,
+          kind: "describe_image",
+          state: "ready",
+          sourceContentHash: cloud.sourceContentHash,
+          processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+          runId: run.id,
+        },
+      ]);
+    const lifecycle = await readPhotoRunLifecycle(ctx.db, run.shortcode);
+    expect(lifecycle.phase).not.toBe("describing");
+    expect(lifecycle.withoutCloudDescriptionCount).toBe(codes.length);
+    const snapshot = await readPhotoRunSnapshot(ctx.db, run.shortcode);
+    expect(
+      snapshot.images.map((entry) => ({
+        describe: entry.describe,
+        cloudDescriptionMissing: entry.cloudDescriptionMissing,
+      })),
+    ).toEqual(
+      codes.map(() => ({ describe: "ready", cloudDescriptionMissing: true })),
+    );
   });
 
   it("never ends a freshly registered Activity from a push made with the old token", async () => {

@@ -28,12 +28,13 @@ import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import {
   claimImageProcessingJob,
-  backOffImageProcessingLease,
+  releaseImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-  retryFailedImageProcessingJobs,
+  retryImageProcessingNow,
+  retryBackingOffDeviceWork,
   completeImageProcessingJob,
   getLeasedImageProcessingOutputKey,
   claimImageProcessingOrphans,
@@ -392,7 +393,7 @@ export async function retryImageProcessingFailures(
 ) {
   const imageId = await resolveOrThrow(db, "image", input.id);
   const submission = await createImageProcessingSubmission(db);
-  const jobs = await retryFailedImageProcessingJobs(db, 100, {
+  const jobs = await retryImageProcessingNow(db, {
     imageId,
     submissionId: submission.id,
   });
@@ -455,6 +456,9 @@ export async function pullCompanionImageProcessing(
   });
   const empty = { command: null, remotePaused: participation.remotePaused };
   if (!participation.automaticWork || participation.remotePaused) return empty;
+  // A newer Apple build may succeed where an older one kept failing: its
+  // first pull makes backing-off device work due again.
+  if (participation.appVersionChanged) await retryBackingOffDeviceWork(db);
   const command = await claimCompanionImageCommand(db, {
     device: hello,
     userId,
@@ -463,9 +467,17 @@ export async function pullCompanionImageProcessing(
   return command ? { command, remotePaused: false } : empty;
 }
 
+/** Candidates one pull may try when the server cannot hand a claim over. */
+const COMPANION_CLAIM_TRIES = 3;
+/** A hand-off that failed waits this long, so a persistent storage error cannot spin. */
+const HANDOFF_RETRY_MS = 60_000;
+
 /**
  * Claim and assign the next job a participating device can run, for the
- * device's `imageProcessing.pull`.
+ * device's `imageProcessing.pull`. A claim the server cannot hand over is
+ * released (never an attempt) before anything returns: a null command means
+ * an empty queue, never an abandoned lease. A failed hand-off throws, so the
+ * device sees an error rather than an empty queue.
  */
 export async function claimCompanionImageCommand(
   db: Database,
@@ -479,15 +491,30 @@ export async function claimCompanionImageCommand(
   const { revisions, kinds, allowAvifNormalization } =
     companionClaimCapabilities(device);
   if (!kinds.length) return null;
-  const claimed = await claimImageProcessingJob(db, {
-    kinds,
-    processorRevisions: revisions,
-    allowAvifNormalization,
-    leaseMs: input.leaseMs,
-  });
-  if (!claimed) return null;
-  try {
-    const command = await prepareCompanionImageCommand(claimed);
+  for (let tries = 0; tries < COMPANION_CLAIM_TRIES; tries++) {
+    const claimed = await claimImageProcessingJob(db, {
+      kinds,
+      processorRevisions: revisions,
+      allowAvifNormalization,
+      leaseMs: input.leaseMs,
+      deviceId: device.deviceId,
+    });
+    if (!claimed) return null;
+    const release = (reason: string, delayMs?: number) =>
+      releaseImageProcessingLease(db, {
+        jobId: claimed.id,
+        attemptId: claimed.attemptId,
+        reason,
+        delayMs,
+        event: "dispatch.released",
+      });
+    let command: ImageProcessingCommand;
+    try {
+      command = await prepareCompanionImageCommand(claimed);
+    } catch (error) {
+      await release(safeImageProcessingError(error), HANDOFF_RETRY_MS);
+      throw error;
+    }
     const assigned = await assignImageProcessingExecutor(db, {
       jobId: claimed.id,
       attemptId: claimed.attemptId,
@@ -502,23 +529,14 @@ export async function claimCompanionImageCommand(
       },
     });
     if (!assigned) {
-      await backOffImageProcessingLease(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        reason: "Device assignment was refused",
-      });
+      // Participation flipped off after hello: this device takes nothing.
+      await release("Device assignment was refused");
       return null;
     }
-    if (!(await reserveCompanionAnalysisOutput(db, command))) return null;
-    return command;
-  } catch (error) {
-    await backOffImageProcessingLease(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-      reason: safeImageProcessingError(error),
-    });
-    throw error;
+    if (await reserveCompanionAnalysisOutput(db, command)) return command;
+    await release("Analysis output could not be reserved", HANDOFF_RETRY_MS);
   }
+  return null;
 }
 
 export async function completeAssignedCompanionImageProcessing(

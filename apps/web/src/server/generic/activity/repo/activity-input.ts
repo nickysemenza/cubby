@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
@@ -75,13 +75,14 @@ export async function reserveImageAnalysisInput(
             ? undefined
             : eq(imageProcessingAttempt.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
-          eq(imageProcessingJob.state, "leased"),
+          eq(imageProcessingJob.state, "pending"),
           eq(job.state, "running"),
+          // The unchanged token is the authority: an expired lease no newer
+          // claim replaced still belongs to this attempt (late adoption).
           eq(job.leaseToken, attemptId),
           currentJobExecution()
             ? eq(job.generation, currentJobExecution()!.claim.generation)
             : undefined,
-          gt(job.leaseExpiresAt, sql`now()`),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),
@@ -124,13 +125,14 @@ export async function retainImageAnalysisInput(
           eq(imageProcessingAttempt.id, attemptId),
           eq(imageProcessingAttempt.inputKey, key),
           eq(imageProcessingJob.attemptId, attemptId),
-          eq(imageProcessingJob.state, "leased"),
+          eq(imageProcessingJob.state, "pending"),
           eq(job.state, "running"),
+          // The unchanged token is the authority: an expired lease no newer
+          // claim replaced still belongs to this attempt (late adoption).
           eq(job.leaseToken, attemptId),
           currentJobExecution()
             ? eq(job.generation, currentJobExecution()!.claim.generation)
             : undefined,
-          gt(job.leaseExpiresAt, sql`now()`),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),

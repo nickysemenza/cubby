@@ -1,5 +1,5 @@
 import { imageId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -70,17 +70,21 @@ describe("backfillImageProcessing", () => {
       "identify_image",
       "subject_lift",
     ]);
+    // Cloud calls run in the server lane; subject lift and the Apple
+    // description are parked for devices.
     expect(
-      await getDb(ctx.db)
-        .select({ kind: job.kind, state: job.state })
-        .from(job)
-        .where(eq(job.kind, "image.processing")),
-    ).toEqual(
-      Array.from({ length: 4 }, () => ({
-        kind: "image.processing",
-        state: "queued",
-      })),
-    );
+      (
+        await getDb(ctx.db)
+          .select({ kind: job.kind, state: job.state })
+          .from(job)
+          .where(inArray(job.kind, ["image.cloud", "image.device"]))
+      ).sort((left, right) => left.kind.localeCompare(right.kind)),
+    ).toEqual([
+      { kind: "image.cloud", state: "queued" },
+      { kind: "image.cloud", state: "queued" },
+      { kind: "image.device", state: "queued" },
+      { kind: "image.device", state: "queued" },
+    ]);
   });
 
   it("schedules jobs without an enable or resume step", async () => {

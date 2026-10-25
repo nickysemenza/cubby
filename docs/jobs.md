@@ -7,6 +7,63 @@ the decision; this page owns the runtime contract. Derived-data families are
 in [entities](entities.md#background-derived-data); Worker and database
 capacity in [infrastructure](infrastructure.md#postgresql-and-hyperdrive).
 
+## Kinds and lanes
+
+`apps/web/src/server/generic/jobs/kind-policy.ts` is the one registry of
+per-kind policy. A kind absent there runs on the server drain and fails after
+its row's `maxAttempts`. Each kind names its lane, the executor that runs it:
+
+| Lane           | Kinds                          | Executor                         |
+| -------------- | ------------------------------ | -------------------------------- |
+| `apple_device` | `image.device`                 | an Apple device's pull           |
+| `frontier_ai`  | `image.cloud`, `ai.evaluation` | the server drain, paid providers |
+| `external`     | `purchase.dispatch`            | a coordinator outside the drain  |
+| `server`       | every other kind               | the server drain                 |
+
+`drained: false` parks a kind: the drain never claims it, so device work no
+longer churns through server claims. Enqueueing device work rings connected
+companions after commit, and a companion connecting to the doorbell is rung at
+once; there is no polling interval.
+
+## Waiting on
+
+`generic/jobs/repo/waiting-on.ts` is the single derivation of what a live Job
+waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
+`jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
+
+- `due`: claimable now; `aheadCount` in the drain's fair order and
+  `etaSeconds` from claims over the last 30 minutes.
+- `waiting_device`: parked device work; position in device-pull order.
+- `waiting_funding`: an `ai_funding_window` wait until the window resets.
+- `leased`: an executor holds it; `expired` once the lease lapsed unreclaimed.
+- `backing_off`: a failure backoff or provider wait (`cause`) until a time.
+- `blocked`: waiting on other work, such as a device preparing AVIF input.
+- `paused`: stopped by a member or its Run.
+- `update_required`: reserved for an Apple device that must update; the
+  Apple client reports it until the server tracks device versions.
+
+Terminal Jobs wait on nothing. `jobWaitingOnReasonSql` mirrors the derivation
+for aggregates; a regression keeps the two in agreement.
+
+## Priority and fairness
+
+`dueJobs` builds each batch of `JOB_DRAIN.batch` Jobs:
+
+1. Jobs whose `runId` is a running, member-visible Run lead (routine Runs such
+   as connection discovery do not).
+2. Backfill (everything else) keeps `JOB_BACKFILL_SHARE` of every batch.
+3. Within each class, a weighted round-robin across kinds: a kind's share of
+   a round is `1 + log10(backlog)`, at most `JOB_MAX_KIND_WEIGHT`, so a
+   100k flood gets more slots but never starves another kind. Within a round
+   the least recently claimed kind goes first; within a kind, priority, then
+   age.
+
+The drain runs up to `JOB_DRAIN.concurrency` pages of a batch at once, and the
+queue consumer (`packages/shared/src/background-queue-consumer.json`) runs
+several drains. Every page holds its own row lock and lease. AI evaluation Jobs
+carry no `runId` because shared evaluations serve several Runs; they compete
+as backfill.
+
 ## Durable invalidation
 
 A source capture never writes a long-lived Job's execution row. It bumps the
@@ -26,3 +83,91 @@ would never settle, because the pass's own Run records invalidate quality. Publi
 a page whose pass began before a capture, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
 dies is never lost: the finished or reclaimed Job still trails the marker.
+
+## Retries
+
+A failed page of an exhausting kind waits `1 s · 2^attempts` (at most 60 s)
+and fails after `maxAttempts`; each claim counts. A never-exhausted kind
+(`exhaust: false`: image processing, the watchdog, retention) counts only
+reported failures: a claim, a release, or reclaiming a vanished executor's
+expired lease is not an attempt. It backs off from `baseMs` doubling to
+`maxMs` (24 h for images) forever. `releaseJobClaim` hands a claim back
+without counting; typed waits (`JobDeferredError`, funding) never count.
+
+Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
+backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
+reopen with a fresh budget and generation, and running or member-paused Jobs
+are left alone. A Run cancel is one set-based statement (`cancelJobsWhere`);
+never-exhausted work belongs to its subject and survives a Run cancel.
+
+`run.funding-resume` is keyed by funding window, not Run: its one handler
+resumes every funding-paused Run. A funding-paused import stays `paused_auth`
+rather than stopping for review; a legacy review stop with
+`failureCode = execution_limit` resumes and continues with the window. Run
+control refusals are `RUN_CONTROL_REFUSED` (409), never 500.
+
+## Image processing
+
+Image processing is never abandoned. `ImageProcessingJob.state` stores only
+the outcome: `pending` while open, `ready`, or `skipped` for a moot ending
+(image deleted, upload replaced, processor superseded, type excluded). A
+stored `failed` is a legacy state of a superseded processor. The displayed
+state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
+`waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
+attention") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
+or its execution stopped; it keeps retrying. An executor's `retryable: false`
+(say `deadline_exceeded`) retries later with its cause recorded; a missing
+subject-lift derivative is rebuilt. A new processor revision is new work, and
+a newer Apple build's first pull makes backing-off device work due.
+
+`imageProcessingLane` fixes each job's lane: subject lifts, Apple descriptions
+and AVIF cloud descriptions (which need device JPEG preparation) run on
+devices; other cloud calls on the server. Device pulls claim parked work
+directly and prefer work whose last attempt ran on another device.
+
+Device wire contract:
+
+- `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300). A
+  null command means an empty queue: a claim the server cannot hand over is
+  released first, and a failed hand-off is an error, not an empty pull.
+- `imageProcessing.renew` `{jobId, attemptId, deviceId}` extends the lease by
+  60 s while the attempt still owns it, including an expired lease no newer
+  claim replaced. It returns `{ok: true, leaseExpiresAt}` (the new command
+  deadline) or `{ok: false, reason: "lease_lost" | "job_obsolete"}`; the
+  device stops either way. Devices renew every 15 s.
+- `imageProcessing.release` is never an attempt.
+- `imageProcessing.complete` after expiry is adopted while the token is
+  unchanged; after a newer claim it returns `{adopted: false}` and a late
+  failure is kept in the old attempt's history.
+
+A photo-inventory Run's description gate accepts the Apple or the cloud
+description; `cloudDescriptionMissing` and `withoutCloudDescriptionCount`
+note photos grouped while their cloud description waits (for funding, say).
+
+## Diagnostics and repair
+
+- `job.queue`: live Jobs counted by lane and waiting-on reason, with a page of
+  matching Jobs and their `waitingOn`.
+- `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason, its
+  own funding wait, and `stalled` when nothing was claimed or finished for
+  `RUN_STALL_MS`.
+- `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
+  or a Job id, on MCP (`maintenance`) and `cubby call`.
+- `job.health`: the queue watchdog's latest measurement.
+
+The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
+first repairs image execution in bounded batches (retires moot work, reopens
+legacy leased rows, restarts stopped executions of open rows), then measures
+per-kind due count, oldest due age, claims per minute, due growth, expired
+leases and image/Job disagreement against `QUEUE_ALERT_THRESHOLDS`. New
+alerts log at error level with raw numbers; Activity reads them through
+`job.health`. There is no household push channel for them: push
+registrations exist only per photo Run.
+
+The `jobs.retention` Job prunes completed and cancelled Jobs older than
+`JOB_RETENTION_MS` in bounded batches. Failed Jobs, embedding Jobs (their
+cleanup reads finished rows), and all domain evidence (image attempts, AI
+evaluations, Run history, audit) stay.
+
+`jobKindAdmission` reports the room a producer has under its kind's
+`maxQueued`; the watchdog raises `over_capacity` past it.

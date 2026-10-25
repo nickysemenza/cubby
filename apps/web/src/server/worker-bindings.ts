@@ -7,7 +7,7 @@ import type { ChatGptPlanRpc } from "./ai/chatgpt/rpc";
 import type { AiResponseCacheRpc } from "./ai/response-cache-rpc";
 import type { DatabaseFreshnessRpc } from "./db/freshness/rpc";
 import type { CalendarFeedDurableObjectRpc } from "./domains/calendar/operations/rpc";
-import type { ImageProcessingCompanionRpc } from "./domains/image-processing/service/contracts";
+import type { ImageProcessingCompanionRpc } from "./domains/image-processing/repo/companion-rpc";
 import type { PurchaseImportRunAgentRpc } from "./domains/purchase-agent/service/environment";
 import type { UsdaReleaseRpc } from "./domains/usda-release/operations/rpc";
 

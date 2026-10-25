@@ -56,8 +56,10 @@ const stateOptions = [
     color: "neutral-status",
   },
   {
+    // Image work never ends as failed: after repeated failures it keeps
+    // retrying with backoff and asks for attention.
     value: "failed",
-    label: "Failed",
+    label: "Needs attention",
     color: "destructive",
   },
 ] satisfies {
@@ -143,8 +145,15 @@ export default defineEntity({
         {
           id: "attention",
           label: "Needs attention",
-          description: "Image jobs waiting for an Apple device or failed",
-          filters: [{ id: "state", value: ["waiting_for_device", "failed"] }],
+          description:
+            "Image jobs that keep failing; they retry with backoff until they succeed",
+          filters: [{ id: "state", value: ["failed"] }],
+        },
+        {
+          id: "waiting-for-apple",
+          label: "Waiting for Apple",
+          description: "Image jobs parked until an Apple device pulls them",
+          filters: [{ id: "state", value: ["waiting_for_device"] }],
         },
       ],
     },
@@ -376,6 +385,12 @@ export default defineEntity({
     derived: {
       // Every submission that scheduled or retried the job, not only its first.
       submissionId: { via: "submissions.publicId" },
+      // Displayed state derives from the universal Job that owns execution;
+      // the stored column keeps only the outcome (docs/jobs.md#image-processing).
+      state: {
+        type: "enum",
+        options: [...imageProcessingJobState.options],
+      },
     },
     sort: { fields: ["createdAt", "completedAt", "state", "kind"] },
   },
@@ -435,6 +450,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by state...",
         deriveSchema: true,
+        derived: true,
         options: stateOptions,
       },
       {

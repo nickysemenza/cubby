@@ -105,15 +105,16 @@ export async function pauseForFunding(
     const until = new Date(
       Date.parse(error.status.windowEnd) + RESUME_MARGIN_MS,
     );
+    // One resume per funding window: its handler resumes every paused Run.
+    const key = `funding-resume:${error.status.windowEnd}`;
     await enqueueJob(tx, {
-      key: `funding-resume:${runId}:${error.status.windowEnd}`,
+      key,
       kind: "run.funding-resume",
-      runId,
-      input: { runId, until: until.toISOString() },
+      input: { until: until.toISOString() },
       availableAt: until,
     });
     await unwrapDb(tx)
       .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "waitUntil"=${until.toISOString()}::timestamp
-      WHERE key=${`funding-resume:${runId}:${error.status.windowEnd}`} AND state=${jobState.enum.queued}`);
+      WHERE key=${key} AND state=${jobState.enum.queued}`);
   });
 }

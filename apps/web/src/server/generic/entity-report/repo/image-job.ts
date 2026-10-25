@@ -24,6 +24,7 @@ const ATTEMPT_STATE = {
   skipped: { kind: "skipped", label: "Skipped" },
   failed: { kind: "failed", label: "Failed" },
   expired: { kind: "failed", label: "Lease expired" },
+  released: { kind: "skipped", label: "Released" },
   waiting: { kind: "warning", label: "Waiting for Apple" },
   leased: { kind: "running", label: "Claimed" },
   running: { kind: "running", label: "Processing" },

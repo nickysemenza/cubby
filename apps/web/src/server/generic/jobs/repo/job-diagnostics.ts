@@ -1,7 +1,6 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { runStepMeta } from "@cubby/schemas/run-step";
-import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import {
   and,
   asc,
@@ -16,7 +15,6 @@ import {
 } from "drizzle-orm";
 
 import type {
-  JobFacts,
   JobGroup,
   JobListOut,
   JobSubjectEntity,
@@ -29,43 +27,14 @@ import {
   evaluateBinding,
   limitEntries,
 } from "~/server/generic/jobs/limits-catalog";
-import { dueJobsAhead, type JobRow } from "~/server/generic/jobs/repo/jobs";
+import {
+  jobFactsOf,
+  readRunRollups,
+} from "~/server/generic/jobs/repo/job-queue";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** The Job that executes any Run; other kinds are the Run's fan-out. */
 const RUN_EXECUTE = "run.execute";
-
-const iso = (date: Date | null) => date?.toISOString() ?? null;
-
-const isDue = (row: JobRow, now: Date) =>
-  (row.state === "queued" || row.state === "retry_wait") &&
-  row.availableAt <= now;
-
-async function facts(db: Database, row: JobRow, now: Date): Promise<JobFacts> {
-  return {
-    id: row.id,
-    key: row.key,
-    kind: row.kind,
-    state: row.state,
-    generation: row.generation,
-    attempts: row.attempts,
-    maxAttempts: row.maxAttempts,
-    priority: row.priority,
-    waitReason: row.waitReason,
-    waitUntil: iso(row.waitUntil),
-    availableAt: row.availableAt.toISOString(),
-    leaseExpiresAt: iso(row.leaseExpiresAt),
-    error: row.error === null ? null : scrubErrorMessage(row.error),
-    cursor: row.cursor,
-    subject:
-      row.subjectKind && row.subjectId
-        ? { kind: row.subjectKind, id: row.subjectId }
-        : null,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    ahead: isDue(row, now) ? await dueJobsAhead(db, row.id) : null,
-  };
-}
 
 /** Per-kind counts plus each kind's most recently touched Job. */
 async function groupsOf(
@@ -92,8 +61,9 @@ async function groupsOf(
       .where(where)
       .orderBy(asc(job.kind), desc(job.updatedAt)),
   ]);
+  const latestFacts = await jobFactsOf(db, latest, now);
   return Promise.all(
-    latest.map(async (row) => {
+    latest.map(async (row, index) => {
       const states: JobGroup["states"] = {};
       const waitReasons: Partial<Record<JobWaitReason, number>> = {};
       let total = 0;
@@ -111,7 +81,7 @@ async function groupsOf(
         count: total,
         states,
         waitReasons,
-        latest: await facts(db, row, now),
+        latest: latestFacts[index]!,
       };
     }),
   );
@@ -165,8 +135,9 @@ async function readJobs(
   db: Database,
   owner: SQL,
   primaryKind: string | null,
-  runId: RunId | null,
+  run: { id: RunId; shortcode: string } | null,
 ): Promise<JobListOut> {
+  const runId = run?.id ?? null;
   const now = new Date();
   const [primaryRow] = await getDb(db)
     .select()
@@ -174,13 +145,16 @@ async function readJobs(
     .where(primaryKind ? and(owner, eq(job.kind, primaryKind)) : owner)
     .orderBy(desc(job.updatedAt))
     .limit(1);
-  const [primary, groups, running, refreshRuns, step] = await Promise.all([
-    primaryRow ? facts(db, primaryRow, now) : Promise.resolve(null),
-    groupsOf(db, owner, primaryRow?.id ?? null, now),
-    runningJobs(db, now),
-    activeAiRefreshRuns(db),
-    runId ? currentStep(db, runId) : Promise.resolve(null),
-  ]);
+  const [primaryFacts, groups, running, refreshRuns, step, rollups] =
+    await Promise.all([
+      primaryRow ? jobFactsOf(db, [primaryRow], now) : Promise.resolve([]),
+      groupsOf(db, owner, primaryRow?.id ?? null, now),
+      runningJobs(db, now),
+      activeAiRefreshRuns(db),
+      runId ? currentStep(db, runId) : Promise.resolve(null),
+      run ? readRunRollups(db, [run], now) : Promise.resolve([]),
+    ]);
+  const primary = primaryFacts[0] ?? null;
   return {
     primary,
     groups,
@@ -196,13 +170,17 @@ async function readJobs(
       step,
       now,
     }),
+    rollup: rollups[0] ?? null,
   };
 }
 
 /** A Run's executing Job, its fan-out by kind, the limits and what binds now. */
 export async function listRunJobs(db: Database, code: string) {
   const runId = await resolveOrThrow(db, "run", code);
-  return readJobs(db, eq(job.runId, runId), RUN_EXECUTE, runId);
+  return readJobs(db, eq(job.runId, runId), RUN_EXECUTE, {
+    id: runId,
+    shortcode: code,
+  });
 }
 
 /** A record's single-item Jobs (image processing, location AI). */

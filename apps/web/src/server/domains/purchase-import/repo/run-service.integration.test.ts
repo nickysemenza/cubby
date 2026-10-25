@@ -816,4 +816,70 @@ describe("purchase import run admission", () => {
       },
     );
   });
+
+  // Production finding: a funding-paused import with pending targets was
+  // stopped for review, then resume answered 500 and the funding window
+  // never continued it.
+  it("keeps a funding-paused import waiting for AI funding, resumable, and refuses with 4xx", async () => {
+    const subject = await startAgentRun(await createMember());
+    const status = async () =>
+      (
+        await getDb(ctx.db)
+          .select({
+            status: runTable.status,
+            failureCode: runTable.failureCode,
+          })
+          .from(runTable)
+          .where(eq(runTable.id, subject.id))
+      )[0];
+    const set = (values: Partial<typeof runTable.$inferInsert>) =>
+      getDb(ctx.db)
+        .update(runTable)
+        .set(values)
+        .where(eq(runTable.id, subject.id));
+    await set({ status: "paused_auth", failureCode: "execution_limit" });
+    const { stopRunForReview } =
+      await import("~/server/domains/purchase-import/operations/run-review");
+    await stopRunForReview(ctx.db, {
+      runId: subject.id,
+      operationId: "synthetic-funding-stop",
+      kind: "unresolved_targets",
+      summary: "Synthetic unresolved targets",
+    });
+    expect(await status()).toEqual({
+      status: "paused_auth",
+      failureCode: "execution_limit",
+    });
+
+    // A Run an older coordinator already fenced resumes directly.
+    await set({ status: "needs_review", failureCode: "execution_limit" });
+    expect(
+      await controlRun(ctx.db, ctx.actor, {
+        runPublicId: subject.publicId,
+        action: "resume",
+      }),
+    ).toMatchObject({ status: "running" });
+
+    // ...and the funding window continues it without a member.
+    await set({
+      status: "needs_review",
+      failureCode: "execution_limit",
+      updatedAt: new Date(Date.now() - 60_000),
+    });
+    const { redispatchBudgetPausedImports } = await import("./run-service");
+    expect(await redispatchBudgetPausedImports(ctx.db)).toBe(1);
+    expect((await status())?.status).toBe("running");
+
+    // A refused control is a conflict, never a server error.
+    await set({ status: "completed", failureCode: null });
+    await expect(
+      controlRun(ctx.db, ctx.actor, {
+        runPublicId: subject.publicId,
+        action: "resume",
+      }),
+    ).rejects.toMatchObject({
+      reason: "RUN_CONTROL_REFUSED",
+      code: "CONFLICT",
+    });
+  });
 });

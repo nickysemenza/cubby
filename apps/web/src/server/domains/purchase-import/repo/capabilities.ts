@@ -180,6 +180,7 @@ const actionCapability = {
   "maintenance.prune_orphaned_clients": "member_decision",
   "maintenance.repair_image_dimensions": "member_decision",
   "maintenance.run": "member_decision",
+  "maintenance.retry_now": "member_decision",
   "nutrition.copy_range": "member_decision",
   "nutrition.duplicate": "member_decision",
   "nutrition.remove_food": "member_decision",

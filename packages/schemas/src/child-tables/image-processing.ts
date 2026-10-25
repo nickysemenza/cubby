@@ -188,7 +188,7 @@ export const imageProcessingChildren = [
       { name: "ImageProcessingAttempt_number_check", sql: "{number} > 0" },
       {
         name: "ImageProcessingAttempt_state_check",
-        sql: "{state} IN ('leased','running','waiting','expired','ready','skipped','failed')",
+        sql: "{state} IN ('leased','running','waiting','expired','released','ready','skipped','failed')",
       },
     ],
   }),

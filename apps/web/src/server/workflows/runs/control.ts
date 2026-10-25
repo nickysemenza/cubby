@@ -15,7 +15,7 @@ import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  cancelJob,
+  cancelJobsWhere,
   cancelRunJobs,
   pauseJob,
   enqueueJob,
@@ -232,10 +232,14 @@ export async function cancelRunAiWork(
         await import("~/server/ai/repo/ai-evaluation-requests");
       sharedDemand = await cancelAiEvaluationRequests(tx, runId);
     }
-    const stopped = await database.execute<{ id: string }>(
-      sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text WHERE e.state=${aiEvaluationState.enum.cancelled} AND e."runId"=${runId}::uuid`,
+    // One statement: a per-Job loop under the caller's admission lock timed
+    // out for Runs owning tens of thousands of evaluations.
+    await cancelJobsWhere(
+      tx,
+      sql`${job.key} IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e
+        WHERE e.state=${aiEvaluationState.enum.cancelled} AND (e."runId"=${runId}::uuid
+          OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${runId}::uuid)))`,
     );
-    for (const execution of stopped.rows) await cancelJob(tx, execution.id);
     return sharedDemand;
   });
 }

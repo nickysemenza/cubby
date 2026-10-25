@@ -659,6 +659,9 @@ describe("MCP catalog schemas", () => {
       // An Image job joins image-processing submissions by their `IPS-` public
       // id; a submission is a child row, not a shortcode entity.
       "entity_read.filters.submissionId",
+      // Jobs have no shortcode: a Job set filter names execution rows by id.
+      "maintenance.retry_now.filter.ids",
+      "maintenance_read.queue.filter.ids",
       // A tree list's children scope names a parent of the listed entity's own
       // kind, so no single prefix pattern fits.
       "entity_read.nesting.parentId",

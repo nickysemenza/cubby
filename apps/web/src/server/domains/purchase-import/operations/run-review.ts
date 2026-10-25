@@ -642,12 +642,20 @@ async function stopRunForReviewOnce(
   const auditedAt = new Date();
   return withTransaction(db, async (tx) => {
     const [current] = await tx
-      .select({ generation: runTable.dispatchEventId, status: runTable.status })
+      .select({
+        generation: runTable.dispatchEventId,
+        status: runTable.status,
+        failureCode: runTable.failureCode,
+      })
       .from(runTable)
       .where(eq(runTable.id, runId))
       .for("no key update");
     if (
       !current ||
+      // A funding pause waits for the next AI window, whose resume continues
+      // its pending targets; stopping it for review fenced it from both.
+      (current.status === "paused_auth" &&
+        current.failureCode === "execution_limit") ||
       (current.status !== "needs_review" &&
         !ACTIVE_RUN_STATUSES.some((status) => status === current.status)) ||
       (input.dispatchEventId !== undefined &&

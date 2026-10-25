@@ -52,7 +52,7 @@ const selectByInstallationId = (
   installationId: string,
 ) =>
   tx
-    .select({ id: device.id })
+    .select({ id: device.id, appVersion: device.appVersion })
     .from(device)
     .where(and(eq(device.installationId, installationId), notDeleted(device)))
     .limit(1);
@@ -74,7 +74,7 @@ export async function upsertDeviceFromHello(
     osVersion: string | null;
     automaticWork: boolean;
   },
-): Promise<DeviceParticipation> {
+): Promise<DeviceParticipation & { appVersionChanged: boolean }> {
   return withTransaction(db, async (transactionDb) => {
     const tx = unwrapDb(transactionDb);
     const now = new Date();
@@ -141,7 +141,11 @@ export async function upsertDeviceFromHello(
         categories: ["device"],
       });
     // SAFETY: `id` was just found-or-created live, in the same transaction.
-    return updated!;
+    return {
+      ...updated!,
+      // A new install or app version may succeed where an older build failed.
+      appVersionChanged: existing?.appVersion !== hello.appVersion,
+    };
   });
 }
 

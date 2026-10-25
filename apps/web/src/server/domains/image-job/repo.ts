@@ -7,6 +7,7 @@ import {
   type ImageJobOut,
   imageJobOut,
 } from "@cubby/schemas/image-job";
+import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { sql } from "drizzle-orm";
 
@@ -20,6 +21,7 @@ import {
   createEntityRowFetcher,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
+import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -29,6 +31,7 @@ import {
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { imageJobDisplayStateSql } from "../image-processing/repo/image-job-state";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
@@ -36,13 +39,17 @@ import {
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
 
-const scaffold = listScaffold("imageJob", imageProcessingJob);
+const scaffold = listScaffold("imageJob", imageProcessingJob, {
+  // Built per read: the derivation compares lease expiry with the read's time.
+  derived: { state: listReadValue(() => imageJobDisplayStateSql()) },
+});
 
 type Facts = {
   chargedCost: number;
   standardCost: number;
   lastExecutor: string | null;
   deviceRan: boolean;
+  state: ImageProcessingJobState;
 };
 
 /**
@@ -60,6 +67,7 @@ const loadFacts = async (
     standard: string | number | null;
     executor: string | null;
     deviceRan: boolean;
+    state: ImageProcessingJobState;
   }>(sql`
     SELECT j.id,
       (SELECT coalesce(sum(u."chargedCost"), 0) FROM "AiUsage" u
@@ -81,7 +89,8 @@ const loadFacts = async (
           THEN 'AI Gateway' END
       ) AS executor,
       EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
-        WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan"
+        WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan",
+      ${imageJobDisplayStateSql({ id: sql`j.id`, state: sql`j.state` })} AS state
     FROM "ImageProcessingJob" j
     WHERE j.id IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
@@ -96,6 +105,7 @@ const loadFacts = async (
         standardCost: Number(row.standard ?? 0),
         lastExecutor: row.executor,
         deviceRan: row.deviceRan,
+        state: row.state,
       },
     ]),
   );
@@ -170,6 +180,7 @@ const imageJobRead = {
           standardCost: true,
           lastExecutor: true,
           lastError: true,
+          state: true,
         }),
         (row, loaded) => {
           const fact = loaded.get(row.id);
@@ -178,6 +189,7 @@ const imageJobRead = {
             standardCost: fact?.standardCost ?? 0,
             lastExecutor: fact?.lastExecutor ?? null,
             lastError: issueText(row, fact?.deviceRan ?? false),
+            state: fact?.state ?? row.state,
           };
         },
       ),

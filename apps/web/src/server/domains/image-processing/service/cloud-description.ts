@@ -8,8 +8,8 @@ import { providerFor } from "@cubby/shared/ai/models";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import {
+  bringImageProcessingForward,
   completeImageProcessingJob,
-  findImageProcessingWakeupsForImage,
 } from "~/server/domains/image-processing/repo/image-processing";
 import { describeOriginalImage } from "~/server/domains/image/service/image-description.service";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -72,11 +72,10 @@ export async function completeCloudImageDescription(
     },
   });
   if (!completion.adopted) return false;
-  const { publishImageProcessingWakeups } =
-    await import("~/server/domains/image-processing/repo/image-processing-maintenance");
-  await publishImageProcessingWakeups(
-    db,
-    await findImageProcessingWakeupsForImage(db, input.imageId),
-  );
+  // A prepared rendition unblocks the image's identification.
+  await bringImageProcessingForward(db, input.imageId);
+  const { wakeJobs } =
+    await import("~/server/workflows/background-tasks/publish");
+  await wakeJobs({ source: "image-processing" });
   return true;
 }

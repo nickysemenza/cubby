@@ -67,6 +67,8 @@ export const job = pgTable(
     index("Job_run_idx").on(table.runId),
     index("Job_subject_idx").on(table.subjectKind, table.subjectId),
     index("Job_kind_claimed_idx").on(table.kind, table.lastClaimedAt),
+    // Device pulls, lane counts, the watchdog and retention select by kind and state.
+    index("Job_kind_state_idx").on(table.kind, table.state, table.availableAt),
     check(
       "Job_waitReason_check",
       sql`${table.waitReason} IN (${sql.join(

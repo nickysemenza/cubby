@@ -27,7 +27,6 @@ import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
-  markImageProcessingWaitingForDevice,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 import { persistImageProcessingSubmission } from "./image-processing-submission";
@@ -126,27 +125,23 @@ describe("independent durable image identification", () => {
     };
   }
 
-  it("claims Clef without descriptions while repeated Apple waiting consumes no attempts", async () => {
+  it("claims Clef without descriptions while the parked Apple description consumes no attempts", async () => {
     const { identification, apple, cloud } = await setup();
     expect(identification.processorRevision).toBe(
       IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
     );
-    for (let index = 0; index < 2; index++) {
-      const claimed = await claimImageProcessingJob(ctx.db, {
-        jobId: apple.id,
-        kinds: ["describe_image"],
-        leaseMs: 60_000,
-      });
-      if (!claimed) throw new Error("Missing Apple lease");
-      await markImageProcessingWaitingForDevice(ctx.db, {
-        jobId: apple.id,
-        attemptId: claimed.attemptId,
-      });
-      await getDb(ctx.db)
-        .update(durableJob)
-        .set({ availableAt: new Date(0) })
-        .where(eq(durableJob.key, `image-processing:${apple.id}`));
-    }
+    const lanes = await getDb(ctx.db)
+      .select({ key: durableJob.key, kind: durableJob.kind })
+      .from(durableJob)
+      .where(
+        sql`${durableJob.key} IN (${`image-processing:${apple.id}`}, ${`image-processing:${identification.id}`})`,
+      );
+    expect(Object.fromEntries(lanes.map((row) => [row.key, row.kind]))).toEqual(
+      {
+        [`image-processing:${apple.id}`]: "image.device",
+        [`image-processing:${identification.id}`]: "image.cloud",
+      },
+    );
     const claimed = await lease(identification.id);
     expect(
       (
@@ -166,7 +161,7 @@ describe("independent durable image identification", () => {
         ),
       );
     expect(rows.find((job) => job.id === apple.id)).toMatchObject({
-      state: "waiting_for_device",
+      state: "pending",
       attempts: 0,
     });
     expect(rows.find((job) => job.id === cloud.id)).toMatchObject({
@@ -187,7 +182,7 @@ describe("independent durable image identification", () => {
     try {
       expect(
         await dispatchImageProcessingWakeup(ctx.db, identification.id),
-      ).toBe("waiting");
+      ).toBe("deferred");
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
@@ -196,7 +191,17 @@ describe("independent durable image identification", () => {
       .select()
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, identification.id));
-    expect(job).toMatchObject({ state: "waiting_for_device", attempts: 0 });
+    expect(job).toMatchObject({ state: "pending", attempts: 0 });
+    // A typed wait for the rendition, not a counted failure.
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${identification.id}`));
+    expect(execution).toMatchObject({
+      state: "queued",
+      attempts: 0,
+      waitReason: "device",
+    });
   });
 
   it("reuses only a verified snapshot for the current source, never staging or old source bytes", async () => {
@@ -272,7 +277,7 @@ describe("independent durable image identification", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, identification.id));
     expect(unadopted).toMatchObject({
-      state: "leased",
+      state: "pending",
       attemptId: claimed.attemptId,
     });
     await getDb(ctx.db).execute(
@@ -383,11 +388,14 @@ describe("independent durable image identification", () => {
           .update(image)
           .set({ sha256: "b".repeat(64) })
           .where(eq(image.id, row.id));
-      if (stale === "lease")
+      // An expired lease alone is still adoptable; a newer claim is stale.
+      if (stale === "lease") {
         await getDb(ctx.db)
           .update(durableJob)
-          .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
+          .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
           .where(eq(durableJob.key, `image-processing:${identification.id}`));
+        await lease(identification.id);
+      }
       if (stale === "revision")
         await getDb(ctx.db)
           .update(imageProcessingJob)

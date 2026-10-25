@@ -6,7 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { doorbellUrl } from "~/lib/doorbell";
-import { image, imageProcessingJob, job } from "~/server/db/schema";
+import { image, job } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { persistAppleImageDescriptionSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
@@ -100,14 +100,7 @@ test.describe("companion doorbell", () => {
         id: source.shortcode,
       });
       if (!jobId) throw new Error("Apple description job was not scheduled");
-      // The state an earlier dispatch leaves when no device answered.
-      await database
-        .update(imageProcessingJob)
-        .set({
-          state: "waiting_for_device",
-          attemptId: null,
-        })
-        .where(eq(imageProcessingJob.id, jobId));
+      // Parked device work: the row stays open and its Job is due for a pull.
       await database
         .update(job)
         .set({
@@ -168,7 +161,7 @@ test.describe("companion doorbell", () => {
         .body,
     );
     // Parallel tests share the household queue, so another job may be
-    // waiting; the non-retryable failure itself is never handed out again.
+    // waiting; the failed job backs off, so it is not handed out again at once.
     expect(next.command?.jobId).not.toBe(jobId);
     if (next.command)
       await startOperation(page.request, "imageProcessing.release", {

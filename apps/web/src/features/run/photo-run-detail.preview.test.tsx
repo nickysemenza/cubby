@@ -174,6 +174,7 @@ const photo = (
   deviceWorkState: text.deviceWorkState ?? null,
   deviceWorkError: null,
   deviceWorkAttempts: 0,
+  cloudDescriptionMissing: false,
 });
 
 const review: PhotoRunReview = {
@@ -185,6 +186,7 @@ const review: PhotoRunReview = {
     finalizedImageCount: 3,
     describedImageCount: 2,
     failedImageIds: [],
+    withoutCloudDescriptionCount: 0,
     skippedImageCount: 0,
     proposedGroupCount: 0,
     committedGroupCount: 0,

@@ -1,6 +1,6 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
+import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -22,7 +22,7 @@ import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
 import {
   externalJobClaim,
-  publishJobPage,
+  releaseJobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 
 export async function recordImageProcessingEvent(
@@ -113,7 +113,7 @@ export async function assignImageProcessingExecutor(
         and(
           eq(imageProcessingJob.id, input.jobId),
           eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
+          eq(imageProcessingJob.state, "pending"),
           sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
         ),
       )
@@ -200,7 +200,7 @@ export async function attachSubmissionJobs(
     for (const job of jobs) {
       const disposition = !existingIds.includes(job.id)
         ? "new"
-        : ["pending", "leased", "waiting_for_device"].includes(job.state)
+        : job.state === "pending"
           ? "running"
           : "reused";
       await tx
@@ -239,12 +239,19 @@ export async function lockImageProcessingSubmissionSource(
 }
 
 /**
- * Job deferral does not spend its failure budget. Recorded executor refusals
- * remain immutable attempt history.
+ * A typed wait (AI funding, provider capacity, a device preparing input)
+ * never spends the failure budget: the claim is released with its stored wait
+ * reason and the attempt is kept as released history.
  */
 export async function deferImageProcessingJob(
   db: Database,
-  input: { jobId: string; attemptId: string; until: Date; reason: string },
+  input: {
+    jobId: string;
+    attemptId: string;
+    until: Date;
+    reason: string;
+    waitReason: JobWaitReason;
+  },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
     const execution = await externalJobClaim(
@@ -254,42 +261,38 @@ export async function deferImageProcessingJob(
       true,
     );
     if (!execution) return false;
-    await publishJobPage(databaseForTransaction(tx), execution, {
-      done: false,
+    const rows = await tx
+      .update(imageProcessingJob)
+      .set({ lastError: input.reason })
+      .where(
+        and(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.attemptId, input.attemptId),
+          eq(imageProcessingJob.state, "pending"),
+        ),
+      )
+      .returning({ id: imageProcessingJob.id });
+    if (!rows.length) return false;
+    await releaseJobClaim(databaseForTransaction(tx), execution, {
       availableAt: input.until,
+      waitReason: input.waitReason,
     });
     await tx
       .update(imageProcessingAttempt)
-      .set({ state: "failed", completedAt: sql`now()`, error: input.reason })
+      .set({ state: "released", completedAt: sql`now()`, error: input.reason })
       .where(
         and(
           eq(imageProcessingAttempt.id, input.attemptId),
           eq(imageProcessingAttempt.jobId, input.jobId),
         ),
-      )
-      .returning({ id: imageProcessingAttempt.id });
-    const rows = await tx
-      .update(imageProcessingJob)
-      .set({
-        state: "pending",
-        attemptId: null,
-        lastError: input.reason,
-      })
-      .where(
-        and(
-          eq(imageProcessingJob.id, input.jobId),
-          eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "leased"),
-        ),
-      )
-      .returning({ id: imageProcessingJob.id });
-    if (!rows.length) return false;
+      );
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:deferred`,
       event: "dispatch.deferred",
       level: "info",
       source: "server",
+      details: { waitReason: input.waitReason, until: input.until },
     });
     return true;
   });

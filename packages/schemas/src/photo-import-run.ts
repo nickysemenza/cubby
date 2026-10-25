@@ -481,7 +481,10 @@ export const photoRunImage = z.object({
   cutoutUrl: z.string().nullable(),
   /** Current-source subject-lift and description job states; null = never queued. */
   cutout: imageProcessingJobState.nullable(),
+  /** Settled (`ready`) by either the cloud or the Apple description. */
   describe: imageProcessingJobState.nullable(),
+  /** Only an Apple description exists so far; the cloud one is still pending. */
+  cloudDescriptionMissing: z.boolean(),
   /** The current description job's dispatch-to-completion interval, if recorded. */
   describeStartedAt: z.iso.datetime().nullable(),
   describeCompletedAt: z.iso.datetime().nullable(),
@@ -710,6 +713,8 @@ export const photoRunLifecycle = z.object({
   describedImageCount: z.number().int().nonnegative(),
   /** Pending photos whose description failed; they block automatic grouping. */
   failedImageIds: z.array(imageShortcode),
+  /** Pending photos grouped on an Apple description while their cloud one waits. */
+  withoutCloudDescriptionCount: z.number().int().nonnegative(),
   /** Photos skipped with a reason (kept, never deleted). */
   skippedImageCount: z.number().int().nonnegative(),
   proposedGroupCount: z.number().int().nonnegative(),

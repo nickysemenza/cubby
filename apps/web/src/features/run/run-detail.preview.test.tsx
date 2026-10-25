@@ -198,6 +198,15 @@ const jobs: JobListOut = {
     createdAt: ago(20),
     updatedAt: ago(0),
     ahead: null,
+    lane: "server",
+    waitingOn: {
+      reason: "leased",
+      lane: "server",
+      executor: "Cubby server",
+      leaseExpiresAt: ago(-4),
+      expired: false,
+    },
+    runId: null,
   },
   groups: [],
   limits: [],
@@ -207,6 +216,7 @@ const jobs: JobListOut = {
     label: "Page work",
     evidence: "preparation 61% of page time · 106 queries/page",
   },
+  rollup: null,
 };
 
 const logs: JobLogsOut = {

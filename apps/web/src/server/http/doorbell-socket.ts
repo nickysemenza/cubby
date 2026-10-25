@@ -14,16 +14,22 @@ declare const WebSocketPair: { new (): { 0: WebSocket; 1: CfWebSocket } };
 /** A subscriber reconnects (and authenticates again) at least this often. */
 const SUBSCRIPTION_TTL_MS = 5 * 60_000;
 
-/** Accept one hibernating subscriber; it never sends anything back. */
+/**
+ * Accept one hibernating subscriber; it never sends anything back. A
+ * `greeting` rings the new subscriber at once, so work that waited for any
+ * connection is pulled on connect rather than on the next enqueue.
+ */
 export function acceptDoorbell(
   ctx: DurableObjectState,
   request: Request,
+  greeting?: DoorbellRing,
 ): Response {
   if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
     return new Response("WebSocket upgrade required", { status: 426 });
   const { 0: client, 1: server } = new WebSocketPair();
   ctx.acceptWebSocket(server);
   server.serializeAttachment(Date.now() + SUBSCRIPTION_TTL_MS);
+  if (greeting) server.send(JSON.stringify(greeting));
   // SAFETY: Cloudflare extends ResponseInit for WebSocket upgrades.
   return new Response(null, {
     status: 101,
