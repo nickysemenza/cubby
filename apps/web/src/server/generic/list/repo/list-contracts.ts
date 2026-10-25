@@ -6,10 +6,14 @@ import type {
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 
-/** Repository batch bindings retain their local preparation names. They are never deferred reads. */
-export type ListBindingGroup = "media" | "quality" | "relations" | "derived";
-
 export type { ListProjection } from "~/entity/model/list-read-fields";
+
+/**
+ * Repository batch bindings, never deferred reads. Repository tracing must not
+ * import the hydration implementation: its Worker Env consumers require
+ * globals deliberately absent from repository programs.
+ */
+export type ListBindingGroup = "media" | "quality" | "relations" | "derived";
 
 export interface ListReadPage<T = ListReadRow> {
   data: T[];
