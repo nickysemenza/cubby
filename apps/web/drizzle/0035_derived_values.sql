@@ -1754,11 +1754,18 @@ BEGIN
     PERFORM derived_mark('inventory.searchDocument@3', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('task.searchDocument@4', ARRAY[NEW."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('task.searchDocument@6', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('task.searchDocument@4', ARRAY[OLD."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('task.searchDocument@6', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('task.searchDocument@4', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+    PERFORM derived_mark('task.searchDocument@6', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('task.searchDocument@7', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('task.searchDocument@7', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.searchDocument@7', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('expense.dataQuality@5', ARRAY[NEW."id"::uuid]); END IF;
@@ -1897,11 +1904,18 @@ BEGIN
     PERFORM derived_mark('project.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('task.searchDocument@3', ARRAY[NEW."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('task.searchDocument@4', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('task.searchDocument@3', ARRAY[OLD."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('task.searchDocument@4', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('task.searchDocument@3', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+    PERFORM derived_mark('task.searchDocument@4', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('task.searchDocument@5', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('task.searchDocument@5', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.searchDocument@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('expense.searchDocument@3', ARRAY[NEW."id"::uuid]); END IF;
@@ -2158,6 +2172,13 @@ BEGIN
     IF true THEN PERFORM derived_mark('task.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
     PERFORM derived_mark('task.searchDocument', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('task.searchDocument@3', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('task.searchDocument@3', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('task.searchDocument@3', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('task.dataQuality', ARRAY[NEW."id"::uuid]); END IF;

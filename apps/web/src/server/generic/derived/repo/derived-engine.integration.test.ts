@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -210,6 +211,41 @@ describe("stored derived values", () => {
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
     expect((await valuation(entry))?.meta.state).toBe("fresh");
+  });
+
+  it("marks inheriting subtasks when their parent's subject changes", async () => {
+    const kettle = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic kettle" }),
+      TEST_ACTOR,
+    );
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Descale",
+      trade: "appliances",
+      subjectProductId: kettle.id,
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "Buy vinegar",
+      parentTaskId: parent.output.id,
+    });
+    await drain();
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic kettle mk2" })
+      .where(eq(product.id, await resolved(kettle.id, "product")));
+    // Expand fanout marks only; the direct marks they create stay pending.
+    while ((await fanoutMarks("task.searchDocument")).length > 0)
+      await publishDerivedPage(
+        ctx.db,
+        await prepareDerivedPage(
+          ctx.db,
+          derivedComputes,
+          await claimDerivedMarks(ctx.db),
+        ),
+      );
+    expect(await marks("task.searchDocument")).toEqual(
+      [parent, child].map((task) => task.entityId).sort(),
+    );
   });
 
   it("recomputes dependents when a value they read changes", async () => {

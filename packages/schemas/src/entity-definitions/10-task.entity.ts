@@ -22,6 +22,9 @@ import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
+/** A parent's subtasks; subtasks have none of their own. */
+const SUBTASKS = { table: "Task", from: "parentTaskId", to: "id" } as const;
+
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
@@ -1271,9 +1274,21 @@ export default defineEntity({
   // Related rows the search document reads (ADR 0021).
   search: {
     mode: "semantic",
+    // Subtasks (one level) inherit their parent's project and subject.
     inputs: [
+      { table: "Task", match: { id: "id" }, path: [SUBTASKS] },
       { table: "Project", match: { id: "projectId" } },
+      {
+        table: "Project",
+        match: { id: "id" },
+        path: [{ table: "Task", from: "projectId", to: "id" }, SUBTASKS],
+      },
       { table: "Product", match: { id: "subjectProductId" } },
+      {
+        table: "Product",
+        match: { id: "id" },
+        path: [{ table: "Task", from: "subjectProductId", to: "id" }, SUBTASKS],
+      },
     ],
   },
   capabilities: {
