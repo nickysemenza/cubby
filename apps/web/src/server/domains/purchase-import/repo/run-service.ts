@@ -74,11 +74,13 @@ import {
   isNotNull,
   isNull,
   lt,
+  notExists,
   notInArray,
   or,
   sql,
   type SQL,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type {
@@ -1029,16 +1031,28 @@ export async function resumeAuthorizedRuns(
   });
 }
 
-/** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
 /**
  * A funding-paused import an older coordinator stopped for review while its
  * targets were still pending. It is waiting for AI funding, not for review:
  * resume and the funding window both continue it.
+ *
+ * Retry and restart leave the predecessor in `needs_review` with its
+ * `execution_limit` code, but its unresolved targets now belong to the
+ * successor (photo targets are copied, Mail sources transferred). A
+ * predecessor with any successor is therefore never funding-resumable.
  */
 const isFundingStoppedForReview = (row: {
   status: string;
   failureCode: string | null;
-}) => row.status === "needs_review" && row.failureCode === "execution_limit";
+  hasSuccessor: boolean;
+}) =>
+  row.status === "needs_review" &&
+  row.failureCode === "execution_limit" &&
+  !row.hasSuccessor;
+
+const successorRun = alias(runTable, "successor_run");
+
+/** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
 
 export async function redispatchBudgetPausedImports(
   db: Database,
@@ -1065,6 +1079,13 @@ export async function redispatchBudgetPausedImports(
           lt(runTable.updatedAt, pausedBefore),
           notDeleted(runTable),
           isNull(runTable.retiredAt),
+          // includes-deleted: the work moved even if the successor was deleted.
+          notExists(
+            tx
+              .select({ id: successorRun.id })
+              .from(successorRun)
+              .where(eq(successorRun.predecessorRunId, runTable.id)),
+          ),
         ),
       )
       .returning({
@@ -2270,7 +2291,17 @@ export async function controlRun(
             ? ["paused", "paused_auth"]
             : ["paused", "paused_auth", "paused_offline"],
         ).has(locked.status) &&
-        !isFundingStoppedForReview(locked)
+        !isFundingStoppedForReview({
+          ...locked,
+          hasSuccessor:
+            (
+              await tx
+                .select({ id: runTable.id })
+                .from(runTable)
+                .where(eq(runTable.predecessorRunId, scope.runId))
+                .limit(1)
+            ).length > 0,
+        })
       )
         throw createAppError(
           "RUN_CONTROL_REFUSED",

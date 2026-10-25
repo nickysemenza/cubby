@@ -60,12 +60,25 @@ extension CompanionLeaseRenewal {
     }
 }
 
+/// How a charging window ended, for the worker that owns it.
+enum CompanionBackgroundOutcome: Sendable {
+    /// Nothing claimable now.
+    case settled
+    /// Work (a claim, or a recorded result) is left for another window.
+    case resumable
+    /// The server refused this build (426 CLIENT_UPDATE_REQUIRED). Execution stopped, no claim was
+    /// released (every write is refused the same way), and recorded results stay on disk.
+    case updateRequired(any Error)
+}
+
 /// Runs finite HTTP work in a granted charging window. The existing outbox is shared with the
-/// foreground socket, so results are durable before either transport tries to send them. Claims
-/// use the resident worker's 60 s lease and the same `heartbeatInterval` renewals, so a window
-/// that ends mid-command loses at most one lease rather than holding a long claim.
+/// foreground socket, so results are durable before either transport tries to send them, and
+/// both deliver through the one `CompanionResultDelivery` backoff. Claims use the resident
+/// worker's 60 s lease and the same `heartbeatInterval` renewals, so a window that ends
+/// mid-command loses at most one lease rather than holding a long claim.
 actor CompanionImageBackgroundRunner {
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
+    private let delivery: CompanionResultDelivery
     private let execute: @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult
     private let failureObserver: CompanionImageWorker.FailureObserver?
     /// Waits between lease renewals; tests replace the clock with a gate.
@@ -74,11 +87,14 @@ actor CompanionImageBackgroundRunner {
 
     init(
         outbox: CompanionResultOutbox<ImageProcessingResult>,
+        delivery: CompanionResultDelivery? = nil,
         execute: @escaping @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult,
         failureObserver: CompanionImageWorker.FailureObserver? = nil,
         heartbeatPause: (@Sendable () async throws -> Void)? = nil
     ) {
         self.outbox = outbox
+        self.delivery =
+            delivery ?? CompanionResultDelivery(outbox: outbox, failureObserver: failureObserver)
         self.execute = execute
         self.failureObserver = failureObserver
         self.heartbeatPause =
@@ -87,42 +103,47 @@ actor CompanionImageBackgroundRunner {
             }
     }
 
-    /// True means there is resumable work for another window, rather than an unbounded poll.
+    /// One bounded window: due results first (a set-aside one never blocks the rest or the pulls),
+    /// then up to `maximumJobs` claims.
+    @discardableResult
     func run(
         transport: any CompanionImageBackgroundTransport,
         hello: ImageProcessingHello, maximumJobs: Int = 4
-    ) async -> Bool {
-        guard !isRunning, hello.participation.automaticWork else { return false }
+    ) async -> CompanionBackgroundOutcome {
+        guard !isRunning, hello.participation.automaticWork else { return .settled }
         isRunning = true
         defer { isRunning = false }
         let end = Date.now.addingTimeInterval(120)
         var activeCommand: ImageProcessingCommand?
+        var resultsRemain = false
         do {
-            let pending = try await outbox.pending()
-            for entry in pending.prefix(8) {
-                try Task.checkCancellation()
-                try await transport.complete(deviceID: hello.deviceId, result: entry.result)
-                try await outbox.acknowledge(entry.key)
-                if Date.now >= end { return true }
+            switch try await delivery.deliverDue(
+                transport: transport, deviceID: hello.deviceId, limit: 8)
+            {
+            case .delivered: break
+            case .setAside: resultsRemain = true
+            case .updateRequired(let error): return .updateRequired(error)
             }
-            if pending.count > 8 { return true }
+            if Date.now >= end { return .resumable }
             for _ in 0..<maximumJobs {
                 try Task.checkCancellation()
                 let remaining = Int(end.timeIntervalSinceNow) - 5
-                guard remaining >= 20 else { return true }
+                guard remaining >= 20 else { return .resumable }
                 let pulled = try await transport.pull(
                     hello: hello, leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
-                guard let command = pulled.command else { return false }
+                guard let command = pulled.command else {
+                    return resultsRemain ? .resumable : .settled
+                }
                 guard !pulled.remotePaused else {
                     await releaseClaim(transport: transport, hello: hello, command: command)
-                    return false
+                    return .settled
                 }
                 let metadata: CompanionImageCommandMetadata
                 do { metadata = try CompanionImageCommandMetadata(command) } catch {
                     // Unsupported by this build: hand it back and leave the rest for a later window.
                     await releaseClaim(transport: transport, hello: hello, command: command)
                     failureObserver?(error)
-                    return false
+                    return .settled
                 }
                 activeCommand = command
                 guard
@@ -135,28 +156,38 @@ actor CompanionImageBackgroundRunner {
                 }
                 if Task.isCancelled {
                     await releaseClaim(transport: transport, hello: hello, command: command)
-                    return true
+                    return .resumable
                 }
                 let key = CompanionImageProcessingProtocol.attemptKey(
                     jobID: metadata.jobID, attemptID: metadata.attemptID)
                 try await outbox.record(result, for: key)
-                try await transport.complete(deviceID: hello.deviceId, result: result)
-                try await outbox.acknowledge(key)
+                let delivered = await delivery.deliver(
+                    result, key: key, transport: transport, deviceID: hello.deviceId)
+                if Task.isCancelled {
+                    await releaseClaim(transport: transport, hello: hello, command: command)
+                    return .resumable
+                }
                 activeCommand = nil
+                switch delivered {
+                case .delivered: break
+                case .setAside: resultsRemain = true
+                case .updateRequired(let error): return .updateRequired(error)
+                }
             }
-            return true
+            return .resumable
         } catch is CancellationError {
             if let activeCommand {
                 await releaseClaim(transport: transport, hello: hello, command: activeCommand)
             }
-            return true
+            return .resumable
         } catch {
+            if CompanionResultDelivery.isClientUpdateRequired(error) { return .updateRequired(error) }
             if Task.isCancelled, let activeCommand {
                 await releaseClaim(transport: transport, hello: hello, command: activeCommand)
             } else if !Task.isCancelled {
                 failureObserver?(error)
             }
-            return true
+            return .resumable
         }
     }
 
@@ -167,7 +198,8 @@ actor CompanionImageBackgroundRunner {
 
     /// Executes `command` while renewing its lease every `heartbeatInterval`; the executor's
     /// deadline moves with each renewal. `nil` means a renewal was refused and the command was
-    /// stopped. A failed renewal request keeps working until the lease deadline it already has.
+    /// stopped. A failed renewal request keeps working until the lease deadline it already has,
+    /// except a 426, which throws and cancels execution.
     private func executeRenewing(
         _ command: ImageProcessingCommand, metadata: CompanionImageCommandMetadata,
         transport: any CompanionImageBackgroundTransport, deviceID: String
@@ -196,6 +228,8 @@ actor CompanionImageBackgroundRunner {
                         }
                     } catch is CancellationError {
                         throw CancellationError()
+                    } catch let error where CompanionResultDelivery.isClientUpdateRequired(error) {
+                        throw error
                     } catch {
                         failureObserver?(error)
                     }

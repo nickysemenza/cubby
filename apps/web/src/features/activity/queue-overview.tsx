@@ -11,7 +11,7 @@ import {
   type JobState,
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
-import { VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
+import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -28,6 +28,7 @@ import type {
 } from "~/contracts/job.contract";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityListFor } from "~/entity/entity-list";
+import { viewsForEntity } from "~/entity/model/view-manifest";
 import { runHref } from "~/entity/routing/purchase-import-links";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
@@ -593,45 +594,62 @@ function JobExplain({ id, error }: { id: string; error: string | null }) {
   );
 }
 
-const ATTENTION_STATUSES = [
-  "running",
-  "paused",
-  "paused_auth",
-  "needs_review",
-] as const;
+/**
+ * The Run entity's declared "Needs attention" saved view: the one statement of
+ * which stopped Runs need the member (Apple reads the same declaration).
+ */
+const ATTENTION_FILTERS = (() => {
+  const view = viewsForEntity("run").find(({ id }) => id === "attention");
+  if (!view) throw new Error("Run declares no attention saved view");
+  return {
+    status: runStatus
+      .array()
+      .parse(view.filters.find(({ id }) => id === "status")?.value),
+  };
+})();
+
+const ATTENTION_PAGE = { pageIndex: 0, pageSize: 50 };
 
 /**
  * Member-visible Runs that are stopped, waiting or stalled, with what their
- * live Jobs wait on. A Run whose open work moved to a retry reads Retried and
- * leaves this list.
+ * live Jobs wait on: the declared attention view plus running Runs whose
+ * server-derived `stalled` flag is set. A Run whose open work moved to a
+ * retry reads Retried and leaves this list.
  */
 function RunsNeedingAttention() {
-  const runs = useQuery(
-    entityListFor("run").queryOptions({
-      filters: {
-        status: [...ATTENTION_STATUSES],
-        purpose: [...VISIBLE_RUN_PURPOSES],
-      },
-      pagination: { pageIndex: 0, pageSize: 50 },
+  const list = entityListFor("run");
+  const stopped = useQuery(
+    list.queryOptions({
+      filters: ATTENTION_FILTERS,
+      pagination: ATTENTION_PAGE,
       sort: [{ orderBy: "startedAt", direction: "desc" }],
     }),
   );
-  const rows = (runs.data?.items ?? []).filter(
-    (row) =>
-      row.displayStatus !== "retried" &&
-      (row.displayStatus !== "running" || row.stalled),
+  const running = useQuery(
+    list.queryOptions({
+      filters: { status: ["running"], purpose: [...VISIBLE_RUN_PURPOSES] },
+      pagination: ATTENTION_PAGE,
+      sort: [{ orderBy: "startedAt", direction: "desc" }],
+    }),
   );
+  const rows = [
+    ...(stopped.data?.items ?? []).filter(
+      (row) => row.displayStatus !== "retried",
+    ),
+    ...(running.data?.items ?? []).filter((row) => row.stalled),
+  ];
+  const failed = stopped.isError ? stopped : running.isError ? running : null;
   return (
     <RecordList
       state={
-        runs.isPending
+        stopped.isPending || running.isPending
           ? { status: "pending", rows: 3 }
-          : runs.isError
+          : failed
             ? {
                 status: "error",
-                error: runs.error,
+                error: failed.error,
                 title: "Couldn't load Runs",
-                onRetry: () => void runs.refetch(),
+                onRetry: () => void failed.refetch(),
               }
             : { status: "success" }
       }

@@ -85,33 +85,74 @@ const listRow = <T extends object>(record: T) => ({
   displayImages: [],
 });
 
-const runs = {
-  items: [
-    listRow(
-      mock(runOut, {
-        overrides: {
-          id: RUN_ID,
-          displayName: "Fixture member · Photo inventory",
-          status: "running",
-          displayStatus: "running",
-          stalled: true,
-          waitingOn: "41 waiting for any Apple device",
-        },
-      }),
-    ),
-    listRow(
-      mock(runOut, {
-        overrides: {
-          id: shortcode("RUN-4K7N"),
-          displayName: "Fixture member · Mail import",
-          status: "needs_review",
-          displayStatus: "retried",
-        },
-      }),
-    ),
-  ],
-  meta: { pageIndex: 0, pageSize: 50, totalCount: 2 },
-};
+const runPage = <T,>(items: T[]) => ({
+  items,
+  meta: { pageIndex: 0, pageSize: 50, totalCount: items.length },
+});
+
+// Running Runs: only the stalled one needs attention.
+const runningRuns = runPage([
+  listRow(
+    mock(runOut, {
+      overrides: {
+        id: RUN_ID,
+        displayName: "Fixture member · Photo inventory",
+        status: "running",
+        displayStatus: "running",
+        stalled: true,
+        waitingOn: "41 waiting for any Apple device",
+      },
+    }),
+  ),
+  listRow(
+    mock(runOut, {
+      overrides: {
+        id: shortcode("RUN-4K7P"),
+        displayName: "Fixture member · Account sync",
+        status: "running",
+        displayStatus: "running",
+        stalled: false,
+      },
+    }),
+  ),
+]);
+
+// The declared attention view's rows, failures included.
+const stoppedRuns = runPage([
+  listRow(
+    mock(runOut, {
+      overrides: {
+        id: shortcode("RUN-4K7N"),
+        displayName: "Fixture member · Mail import",
+        status: "needs_review",
+        displayStatus: "retried",
+      },
+    }),
+  ),
+  listRow(
+    mock(runOut, {
+      overrides: {
+        id: shortcode("RUN-4K7Q"),
+        displayName: "Fixture member · Failed import",
+        status: "failed",
+        displayStatus: "failed",
+        stalled: false,
+      },
+    }),
+  ),
+  listRow(
+    mock(runOut, {
+      overrides: {
+        id: shortcode("RUN-4K7R"),
+        displayName: "Fixture member · Undelivered import",
+        status: "dispatch_failed",
+        displayStatus: "dispatch_failed",
+        stalled: false,
+      },
+    }),
+  ),
+]);
+const runFilters: unknown[] = [];
 
 const devices = {
   items: [
@@ -153,11 +194,20 @@ beforeEach(async () => {
   await page.viewport(1440, 1200);
   harness = createBrowserTestHarness();
   retried.length = 0;
+  runFilters.length = 0;
   restore = overrideStartDispatch(async (operation, input) => {
     if (operation === "job.retryNow") retried.push(input);
     if (operation === "entity.list") {
-      const entity = (input as { entity?: string }).entity;
-      return { ok: true, data: entity === "device" ? devices : runs };
+      const { entity, filters } = input as {
+        entity?: string;
+        filters?: { status?: string[] };
+      };
+      if (entity === "device") return { ok: true, data: devices };
+      runFilters.push(filters);
+      return {
+        ok: true,
+        data: filters?.status?.join() === "running" ? runningRuns : stoppedRuns,
+      };
     }
     const data = answers.get(operation);
     if (data === undefined) throw new Error(`${operation} is not stubbed`);
@@ -197,10 +247,28 @@ it("groups the queues by lane and reason, flags expired leases and the watchdog"
     "Fixture Mac2 in progress",
   );
 
-  // A stalled running Run stays; a retried one leaves the attention list.
-  const attention = await screen.findAllByTestId("attention-run");
-  expect(attention).toHaveLength(1);
-  expect(attention[0]).toHaveTextContent("Stalled");
+  // The declared attention view (failures included) plus stalled running
+  // Runs; a retried Run and a healthy running one leave the list.
+  await expect
+    .poll(() => screen.queryAllByTestId("attention-run").length)
+    .toBe(3);
+  const attention = screen.getAllByTestId("attention-run");
+  expect(attention.map((row) => row.textContent)).toEqual([
+    expect.stringContaining("Failed import"),
+    expect.stringContaining("Undelivered import"),
+    expect.stringContaining("Stalled"),
+  ]);
+  expect(runFilters).toContainEqual(
+    expect.objectContaining({
+      status: [
+        "paused",
+        "paused_auth",
+        "needs_review",
+        "failed",
+        "dispatch_failed",
+      ],
+    }),
+  );
 
   const row = (await screen.findAllByTestId("queue-job"))[0]!;
   expect(row).toHaveTextContent("Lease expired");

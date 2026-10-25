@@ -133,7 +133,9 @@ never-exhausted work belongs to its subject and survives a Run cancel.
 `run.funding-resume` is keyed by funding window, not Run: its one handler
 resumes every funding-paused Run. A funding-paused import stays `paused_auth`
 rather than stopping for review; a legacy review stop with
-`failureCode = execution_limit` resumes and continues with the window. Run
+`failureCode = execution_limit` resumes and continues with the window unless
+a retry or restart successor names it as `predecessorRunId`: its open work moved
+to the successor, so neither the window nor direct resume redispatches it. Run
 control refusals are `RUN_CONTROL_REFUSED` (409), never 500.
 
 ## Image processing

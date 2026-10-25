@@ -599,6 +599,8 @@ async function workQueueProjection(
       ...workRunReviewRead(),
       id: sql`"Run".shortcode`,
       name: sql`"Run".purpose || ' · ' || "Run".status`,
+      // A funding-stopped predecessor whose work moved to a retry successor
+      // is no longer waiting; the successor carries the execution.
       where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
         // A running maintenance pass or Sweep is not member work; its failed
         // or stalled outcomes still surface through the failure paths.
@@ -606,7 +608,7 @@ async function workQueueProjection(
           (purpose) => !isStepRunPurpose(purpose),
         ).map((purpose) => sql`${purpose}`),
         sql`, `,
-      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit')))`,
+      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND /* includes-deleted: the work moved even to a deleted successor */ NOT EXISTS (SELECT 1 FROM "Run" successor WHERE successor."predecessorRunId" = "Run".id)))`,
       details: {
         source: "execution",
         kind: "repair",

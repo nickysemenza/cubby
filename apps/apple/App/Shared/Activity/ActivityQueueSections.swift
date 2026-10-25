@@ -87,6 +87,9 @@ struct HouseholdQueueSections: View {
     var body: some View {
         Section {
             if let queue {
+                // A failed refresh keeps the last counts; say so beside them so they are not read
+                // as current.
+                if let error { QueueRefreshFailureRow(error: error) }
                 let split = queue.leases(claimedImageJobIDs: claimedImageJobIDs)
                 ReasonCountRows(counts: queue.appleCounts, empty: "No Apple device work waiting")
                 ForEach(split.mine) { lease in
@@ -198,6 +201,21 @@ private struct ReasonCountRows: View {
     }
 }
 
+/// The latest queue refresh failed while earlier counts stay on screen: the error, verbatim.
+private struct QueueRefreshFailureRow: View {
+    let error: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label("Couldn't refresh — showing earlier counts", systemImage: "exclamationmark.triangle")
+                .font(.subheadline)
+                .foregroundStyle(FieldGuideTokens.warning)
+            Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 private struct LeaseRow: View {
     let lease: HouseholdQueueOverview.Lease
     let isThisDevice: Bool
@@ -276,6 +294,16 @@ private struct RunRollupLabel: View {
 #Preview("Worker — processing") {
     List {
         CompanionWorkerStatusRow(activity: .init(phase: .processing, processingCount: 2))
+    }
+}
+
+#Preview("Household queue — refresh failed") {
+    List {
+        HouseholdQueueSections(
+            queue: HouseholdQueueOverview(
+                appleCounts: [.init(reason: "waiting_device", count: 14)], frontierCounts: [],
+                leases: [], backingOff: [], runsNeedingAttention: 0, runs: []),
+            error: "The network connection was lost.", claimedImageJobIDs: [])
     }
 }
 

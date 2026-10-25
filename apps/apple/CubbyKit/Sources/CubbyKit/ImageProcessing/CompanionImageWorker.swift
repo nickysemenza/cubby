@@ -147,13 +147,6 @@ public actor CompanionImageWorker {
         let startedAt: Date
     }
 
-    /// A recorded result whose delivery failed: set aside so later results and pulls proceed.
-    private struct SetAsideDelivery {
-        var failures: Int
-        var nextAttemptAt: ContinuousClock.Instant
-        var error: String
-    }
-
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let session: URLSession
@@ -188,7 +181,7 @@ public actor CompanionImageWorker {
     private var socket: URLSessionWebSocketTask?
     /// The subscription that has opened; `drainState()` is connected only while it is `socket`.
     private var openedSocket: URLSessionWebSocketTask?
-    private var backgroundTask: Task<Bool, Never>?
+    private var backgroundTask: Task<CompanionBackgroundOutcome, Never>?
     private let backgroundRunner: CompanionImageBackgroundRunner
     /// Commands run concurrently up to this bound; each command's own lease deadline still applies.
     static let maximumConcurrentCommands = 4
@@ -203,8 +196,9 @@ public actor CompanionImageWorker {
     private var running: [String: RunningCommand] = [:]
     private var isPulling = false
     private var lastError: String?
-    private var setAsideDeliveries: [String: SetAsideDelivery] = [:]
-    private var latestDeliveryError: String?
+    /// Shared with the charging window, so a result set aside by either path backs off in both.
+    private let delivery: CompanionResultDelivery
+    private var deliverySnapshot = CompanionResultDelivery.Snapshot()
     private var deliveryRetry: Task<Void, Never>?
     private var lastReportedActivity: CompanionImageWorkerActivity?
     private var isDraining = false
@@ -278,8 +272,10 @@ public actor CompanionImageWorker {
         self.failureObserver = failureObserver
         self.activityObserver = activityObserver
         self.jobObserver = jobObserver
+        let delivery = CompanionResultDelivery(outbox: outbox, failureObserver: failureObserver)
+        self.delivery = delivery
         self.backgroundRunner = CompanionImageBackgroundRunner(
-            outbox: outbox, execute: execute, failureObserver: failureObserver,
+            outbox: outbox, delivery: delivery, execute: execute, failureObserver: failureObserver,
             heartbeatPause: heartbeatPause)
     }
 
@@ -319,7 +315,32 @@ public actor CompanionImageWorker {
     /// `stop()`, then waits (bounded per claim) for its releases, so a quitting app hands its
     /// claims back before the process ends.
     public func stopAndReleaseClaims() async {
+        await stopAndReleaseClaims(drainSettle: { try? await Task.sleep(for: CompanionClaimRelease.timeout) })
+    }
+
+    /// `drainSettle` bounds the wait for a drain in flight; tests replace the clock with a gate.
+    func stopAndReleaseClaims(drainSettle: @escaping @Sendable () async -> Void) async {
+        let drain = drainTask
         stop()
+        // As at sign-out: a pull in flight at stop() registers its claim's release only when it
+        // answers (see drainOnce), so settle it before awaiting releases. A pull that outlasts
+        // the bound is cancelled; its claim, if any, expires with its lease.
+        if let drain {
+            let settled = await withTaskGroup(of: Bool.self) { group in
+                group.addTask {
+                    await drain.waitUnlessCancelled()
+                    return true
+                }
+                group.addTask {
+                    await drainSettle()
+                    return false
+                }
+                let first = await group.next() ?? true
+                group.cancelAll()
+                return first
+            }
+            if !settled { drain.cancel() }
+        }
         await releasesIdle()
     }
 
@@ -377,13 +398,25 @@ public actor CompanionImageWorker {
         guard shouldRun, isParticipating, !updateRequired, backgroundTask == nil else { return false }
         let task = Task { await backgroundRunner.run(transport: transport, hello: hello) }
         backgroundTask = task
-        let resumable = await withTaskCancellationHandler {
+        let outcome = await withTaskCancellationHandler {
             await task.value
         } onCancel: {
             task.cancel()
         }
         backgroundTask = nil
-        return resumable
+        deliverySnapshot = await delivery.snapshot
+        switch outcome {
+        case .updateRequired(let error):
+            // Latches like a foreground 426: no later window starts, results stay recorded.
+            enterUpdateRequired(error)
+            return false
+        case .resumable:
+            reportActivity()
+            return true
+        case .settled:
+            reportActivity()
+            return false
+        }
     }
 
     public func endBackgroundRun() {
@@ -594,58 +627,29 @@ public actor CompanionImageWorker {
 
     // MARK: Outbox delivery
 
-    /// Sends every recorded result that is due. A failed send sets that result aside with its own
-    /// backoff — it stays on disk — so one undeliverable result never blocks pulling.
+    /// Sends every recorded result that is due under the shared `CompanionResultDelivery` policy:
+    /// a failed send sets that result aside with its own backoff, so it never blocks pulling.
     private func deliverOutbox() async throws {
-        let pending = try await outbox.pending()
-        let pendingKeys = Set(pending.map(\.key))
-        // Delivered by another path (the background runner) or discarded.
-        setAsideDeliveries = setAsideDeliveries.filter { pendingKeys.contains($0.key) }
-        let now = ContinuousClock.now
-        for entry in pending {
-            guard shouldRun, !updateRequired else { break }
-            if let setAside = setAsideDeliveries[entry.key], setAside.nextAttemptAt > now { continue }
-            await deliver(entry.result, key: entry.key)
-        }
+        guard shouldRun, !updateRequired else { return }
+        applyDelivery(
+            try await delivery.deliverDue(transport: transport, deviceID: wireDeviceID),
+            snapshot: await delivery.snapshot)
+    }
+
+    private func applyDelivery(
+        _ outcome: CompanionResultDelivery.Outcome, snapshot: CompanionResultDelivery.Snapshot
+    ) {
+        deliverySnapshot = snapshot
+        // Kept on disk: the updated build delivers it.
+        if case .updateRequired(let error) = outcome { enterUpdateRequired(error) }
         scheduleDeliveryRetry()
         reportActivity()
-    }
-
-    /// One delivery attempt; never throws, so a caller's remaining work continues.
-    private func deliver(_ result: ImageProcessingResult, key: String) async {
-        do {
-            try await transport.complete(deviceID: wireDeviceID, result: result)
-            try await outbox.acknowledge(key)
-            setAsideDeliveries[key] = nil
-        } catch {
-            if Self.isClientUpdateRequired(error) {
-                // Kept on disk: the updated build delivers it.
-                enterUpdateRequired(error)
-                return
-            }
-            let failures = (setAsideDeliveries[key]?.failures ?? 0) + 1
-            let message = Self.describe(error)
-            setAsideDeliveries[key] = SetAsideDelivery(
-                failures: failures,
-                nextAttemptAt: .now + Self.deliveryRetryDelay(failures: failures), error: message)
-            latestDeliveryError = message
-            if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
-                failureObserver?(error)
-            }
-        }
-    }
-
-    /// Capped exponential backoff for one set-aside result: 2 s, 4 s, … up to 15 minutes.
-    static func deliveryRetryDelay(failures: Int) -> Duration {
-        .seconds(min(900, 1 << min(max(1, failures), 10)))
     }
 
     private func scheduleDeliveryRetry() {
         deliveryRetry?.cancel()
         deliveryRetry = nil
-        guard shouldRun, !updateRequired,
-            let next = setAsideDeliveries.values.map(\.nextAttemptAt).min()
-        else { return }
+        guard shouldRun, !updateRequired, let next = deliverySnapshot.nextAttemptAt else { return }
         deliveryRetry = Task { [weak self] in
             do { try await Task.sleep(until: next) } catch { return }
             await self?.requestDrain()
@@ -799,8 +803,10 @@ public actor CompanionImageWorker {
             guard !Task.isCancelled, inFlight.removeValue(forKey: key) != nil else { return }
             jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
-            await deliver(result, key: key)
-            scheduleDeliveryRetry()
+            applyDelivery(
+                await delivery.deliver(
+                    result, key: key, transport: transport, deviceID: wireDeviceID),
+                snapshot: await delivery.snapshot)
         } catch {
             // Execution threw before a result existed; hand the claim back unless it is gone.
             if inFlight.removeValue(forKey: key) != nil { releaseBestEffort(claim) }
@@ -895,16 +901,12 @@ public actor CompanionImageWorker {
 
     // MARK: Errors and activity
 
-    private static func isClientUpdateRequired(_ error: any Error) -> Bool {
-        (error as? CubbyAPIError)?.isClientUpdateRequired == true
-    }
-
     private static func describe(_ error: any Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? String(describing: error)
     }
 
     private func handle(_ error: any Error) {
-        if Self.isClientUpdateRequired(error) {
+        if CompanionResultDelivery.isClientUpdateRequired(error) {
             enterUpdateRequired(error)
             return
         }
@@ -955,8 +957,8 @@ public actor CompanionImageWorker {
         return .init(
             phase: phase, jobID: oldest?.jobID, kind: oldest?.kind, startedAt: oldest?.startedAt,
             remotePaused: remotePaused, processingCount: phase == .processing ? running.count : 0,
-            undeliveredResults: setAsideDeliveries.count,
-            deliveryError: setAsideDeliveries.isEmpty ? nil : latestDeliveryError,
+            undeliveredResults: deliverySnapshot.undelivered,
+            deliveryError: deliverySnapshot.latestError,
             lastError: phase == .stopped ? nil : lastError,
             claimedJobIDs: Set(inFlight.values.map(\.jobID)))
     }

@@ -66,6 +66,29 @@ struct CompanionImageWorkerTests {
         await worker.stop()
     }
 
+    /// Regression: quitting during a pull awaited only releases already registered, so it
+    /// finished before the pull's answer registered its claim's release and the claim stayed
+    /// held until its lease expired.
+    @Test func quittingDuringAPullReleasesItsClaimBeforeReturning() async throws {
+        let pullGate = Gate()
+        let stopped = Gate()
+        let transport = QueuedCompanionTransport(commands: [try describeCommand()], pullGate: pullGate)
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: transport,
+            activityObserver: { if $0.phase == .stopped { stopped.signal() } },
+            execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await pullGate.arrivals()
+        let quitting = Task { await worker.stopAndReleaseClaims() }
+        await stopped.arrivals()
+        pullGate.open()
+        await quitting.value
+        #expect(await transport.released.map(\.jobID) == ["00000000-0000-4000-8000-000000000001"])
+    }
+
     /// Regression: a drain whose delivery failed went idle, and with no more work no ring arrived,
     /// so the recorded result stayed pending and `companion --once` never settled.
     @Test func aFailedDeliveryIsRetriedWithoutAnotherRing() async throws {
