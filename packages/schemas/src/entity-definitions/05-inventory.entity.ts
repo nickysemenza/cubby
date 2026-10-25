@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { inventoryReadSchemas } from "../inventory-fields";
 import { defineEntity } from "./definition.js";
 import { amount, positiveAmount } from "@cubby/schemas/codec";
@@ -620,6 +621,68 @@ export default defineEntity(
             compute: "inventory.valuation",
             inputs: [
               {
+                table: "Expense",
+                match: { productId: "id" },
+                columns: [
+                  "cost",
+                  "productQuantity",
+                  "lineKind",
+                  "future",
+                  "date",
+                  "deletedAt",
+                ],
+                path: [
+                  { table: "InventoryEntry", from: "productId", to: "id" },
+                ],
+              },
+              {
+                table: "EntityLink",
+                match: { toEntityId: "id" },
+                path: [
+                  { table: "InventoryEntry", from: "productId", to: "id" },
+                ],
+                where: { kind: "productComponent" },
+              },
+              {
+                table: "EntityLink",
+                match: { fromEntityId: "id" },
+                path: [
+                  { table: "InventoryEntry", from: "productId", to: "id" },
+                ],
+                where: { kind: "productComponent" },
+              },
+              {
+                table: "Expense",
+                match: { productId: "id" },
+                columns: [
+                  "cost",
+                  "productQuantity",
+                  "lineKind",
+                  "future",
+                  "date",
+                  "deletedAt",
+                ],
+                path: [
+                  {
+                    table: "EntityLink",
+                    from: "fromEntityId",
+                    to: "toEntityId",
+                    where: { kind: "productComponent" },
+                  },
+                  { table: "InventoryEntry", from: "productId", to: "id" },
+                ],
+              },
+              {
+                table: "ProductCategory",
+                match: { id: "id" },
+                columns: ["parentId", "feature", "deletedAt"],
+                path: [
+                  { table: "Product", from: "categoryId", to: "id" },
+                  { table: "InventoryEntry", from: "productId", to: "id" },
+                ],
+              },
+
+              {
                 table: "InventoryEntry",
                 match: { id: "id" },
                 columns: [
@@ -1052,6 +1115,18 @@ export default defineEntity(
     search: {
       mode: "semantic",
       inputs: [
+        ...imageDescriptionInputs("inventory"),
+
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["name", "deletedAt"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "InventoryEntry", from: "productId", to: "id" },
+          ],
+        },
+
         { table: "Product", match: { id: "productId" } },
         {
           table: "ProductCategory",
@@ -1106,7 +1181,198 @@ export default defineEntity(
       merge: false,
       dataQuality: {
         // Rows the stored evaluator reads beyond its own row (ADR 0021).
-        inputs: [{ table: "Location", match: { id: "locationId" } }],
+        inputs: [
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "InventoryEntry", from: "productId", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Product", from: "id", to: "id" },
+              { table: "InventoryEntry", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Product", from: "id", to: "id" },
+              { table: "InventoryEntry", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Location",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "InventoryEntry", from: "locationId", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Location", from: "id", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Location", from: "id", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "brandId"],
+            path: [{ table: "InventoryEntry", from: "productId", to: "id" }],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "InventoryEntry", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "InventoryEntry", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "InventoryEntry", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Location",
+            match: { id: "id" },
+            columns: ["deletedAt", "productId"],
+            path: [{ table: "InventoryEntry", from: "locationId", to: "id" }],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Product", from: "id", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Product", from: "id", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "brandId"],
+            path: [
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+              { table: "InventoryEntry", from: "locationId", to: "id" },
+            ],
+          },
+          { table: "Location", match: { id: "locationId" } },
+        ],
         checks: [
           {
             id: "inventory_unknown_location",

@@ -316,11 +316,20 @@ const publishValues = async (
   return changed;
 };
 
+/** Source JSON is evidence: malformed references must not fail a drain page. */
+const pathReference = (column: string, jsonKey: string | undefined): SQL => {
+  if (!jsonKey) return ident(column);
+  const value = sql`(${ident(column)} ->> ${jsonKey})`;
+  const uuidType = "uuid";
+  return sql`CASE WHEN pg_input_is_valid(${value}, ${uuidType}) THEN ${value}::uuid END`;
+};
+
 /** Values reached from `start` along a join path, as one nested subquery. */
 const pathSql = (path: readonly DerivedPathStep[], start: SQL): SQL =>
   path.reduce<SQL>(
-    (previous, step) =>
-      sql`SELECT ${ident(step.to)} FROM ${ident(step.table)} WHERE ${ident(step.from)} IN (${previous})${sql.join(
+    (previous, step) => sql`SELECT ${pathReference(step.to, step.jsonKey)}
+      FROM ${ident(step.table)}
+      WHERE ${pathReference(step.from, step.fromJsonKey)} IN (${previous})${sql.join(
         Object.entries(step.where ?? {}).map(
           ([column, value]) => sql` AND ${ident(column)} = ${value}`,
         ),

@@ -29,9 +29,11 @@ export type DerivedStoredInput = {
     table: string;
     from: string;
     to: string;
+    jsonKey?: string;
+    fromJsonKey?: string;
     where?: Record<string, string>;
   }[];
-  json?: { array: string[]; key: string };
+  json?: { array?: string[]; key: string };
 };
 
 export const entityFieldKinds = [
@@ -1017,6 +1019,10 @@ const buildMetadataSchemas = () => {
           table: nonEmptyString(),
           from: nonEmptyString(),
           to: nonEmptyString(),
+          /** Read a UUID from this key of the `to` JSON object. */
+          jsonKey: nonEmptyString().optional(),
+          /** Compare a UUID from this key of the `from` JSON object. */
+          fromJsonKey: nonEmptyString().optional(),
           /** Only rows holding these column values continue the path. */
           where: z.record(nonEmptyString(), nonEmptyString()).optional(),
         })
@@ -1038,12 +1044,12 @@ const buildMetadataSchemas = () => {
       /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
       path: derivedPathSchema.optional(),
       /**
-       * The matched column is JSON: its values are `key` of each element of
-       * the array at `array` (a mail-import Run's `input.sources`).
+       * The matched column is JSON: read `key` from the object, or from each
+       * element at `array` (a mail-import Run's `input.sources`).
        */
       json: z
         .object({
-          array: z.array(nonEmptyString()).min(1),
+          array: z.array(nonEmptyString()).min(1).optional(),
           key: nonEmptyString(),
         })
         .strict()

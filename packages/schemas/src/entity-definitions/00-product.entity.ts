@@ -2214,6 +2214,145 @@ Rules:
         conversionCoverage: {
           compute: "product.conversionCoverage",
           inputs: [
+            {
+              table: "Product",
+              match: { id: "id" },
+              columns: ["price", "categoryId", "deletedAt"],
+              path: [
+                {
+                  table: "EntityLink",
+                  from: "fromEntityId",
+                  to: "toEntityId",
+                  where: { kind: "productComponent" },
+                },
+              ],
+            },
+
+            {
+              table: "AiAnalysis",
+              match: { entityId: "id" },
+              path: [
+                {
+                  table: "EntityAttachment",
+                  from: "imageId",
+                  to: "entityId",
+                  where: { entityKind: "product" },
+                },
+              ],
+              where: { entityKind: "image", feature: "image-description" },
+            },
+            {
+              table: "AssessmentState",
+              match: { recordId: "id" },
+              path: [
+                {
+                  table: "EntityAttachment",
+                  from: "imageId",
+                  to: "entityId",
+                  where: { entityKind: "product" },
+                },
+              ],
+              where: { family: "image_description" },
+            },
+            {
+              table: "Assessment",
+              match: { subject: "id" },
+              path: [
+                {
+                  table: "EntityAttachment",
+                  from: "imageId",
+                  to: "entityId",
+                  where: { entityKind: "product" },
+                },
+              ],
+              where: { family: "image_description" },
+              json: { key: "recordId" },
+            },
+            {
+              table: "Feedback",
+              match: { assessmentId: "id" },
+              path: [
+                { table: "AssessmentState", from: "id", to: "recordId" },
+                {
+                  table: "EntityAttachment",
+                  from: "imageId",
+                  to: "entityId",
+                  where: { entityKind: "product" },
+                },
+              ],
+            },
+            {
+              table: "Image",
+              match: { id: "id" },
+              columns: ["sha256", "deletedAt"],
+              path: [
+                {
+                  table: "EntityAttachment",
+                  from: "imageId",
+                  to: "entityId",
+                  where: { entityKind: "product" },
+                },
+              ],
+            },
+
+            {
+              table: "Ingredient",
+              match: { id: "ingredientId" },
+              columns: ["naKinds"],
+            },
+            {
+              table: "EntityExternalId",
+              match: { entityId: "id" },
+              where: { entityKind: "product" },
+            },
+            {
+              table: "ProductCategory",
+              match: { id: "categoryId" },
+              columns: ["name", "parentId", "feature", "deletedAt"],
+            },
+            {
+              table: "Expense",
+              match: { productId: "id" },
+              columns: [
+                "cost",
+                "productQuantity",
+                "lineKind",
+                "future",
+                "date",
+                "deletedAt",
+              ],
+            },
+            {
+              table: "EntityLink",
+              match: { fromEntityId: "id" },
+              where: { kind: "productComponent" },
+            },
+            {
+              table: "EntityLink",
+              match: { toEntityId: "id" },
+              where: { kind: "productComponent" },
+            },
+            {
+              table: "Expense",
+              match: { productId: "id" },
+              columns: [
+                "cost",
+                "productQuantity",
+                "lineKind",
+                "future",
+                "date",
+                "deletedAt",
+              ],
+              path: [
+                {
+                  table: "EntityLink",
+                  from: "fromEntityId",
+                  to: "toEntityId",
+                  where: { kind: "productComponent" },
+                },
+              ],
+            },
+
             { table: "Product", match: { id: "id" } },
             { table: "ProductUnitMapping", match: { productId: "id" } },
           ],
@@ -3673,6 +3812,125 @@ Rules:
       dataQuality: {
         // Rows the stored evaluator reads beyond its own row (ADR 0021).
         inputs: [
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["price", "categoryId", "deletedAt"],
+            path: [
+              {
+                table: "EntityLink",
+                from: "fromEntityId",
+                to: "toEntityId",
+                where: { kind: "productComponent" },
+              },
+            ],
+          },
+
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "Product", from: "brandId", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+            ],
+          },
+          {
+            table: "Cookbook",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Device",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          { table: "ImportSourceProduct", match: { productId: "id" } },
+          {
+            table: "Location",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "MealFoodEntry",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Planting",
+            match: { sourceProductId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Task",
+            match: { subjectProductId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "PhotoGroupProposal",
+            match: { productId: "id" },
+            columns: ["state"],
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "projectTool" },
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "wishCandidate" },
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            columns: ["vendorId", "deletedAt"],
+            path: [{ table: "Expense", from: "purchaseId", to: "productId" }],
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            columns: ["vendorId", "deletedAt"],
+            path: [
+              {
+                table: "EntityLink",
+                from: "fromEntityId",
+                to: "toEntityId",
+                where: { kind: "purchaseProduct" },
+              },
+            ],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["name", "deletedAt"],
+            path: [
+              { table: "Purchase", from: "vendorId", to: "id" },
+              { table: "Expense", from: "purchaseId", to: "productId" },
+            ],
+          },
+
           { table: "InventoryEntry", match: { productId: "id" } },
           { table: "Expense", match: { productId: "id" } },
           // A kit's acquisition lines price its components.

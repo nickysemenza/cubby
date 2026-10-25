@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { ingredientReadSchemas } from "../ingredient-read-fields";
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode, productShortcode } from "../identifier-fields.js";
@@ -658,7 +659,10 @@ export default defineEntity(
         },
       },
     ],
-    search: "semantic",
+    search: {
+      mode: "semantic",
+      inputs: [...imageDescriptionInputs("ingredient")],
+    },
     capabilities: {
       images: {
         storage: false,
@@ -705,7 +709,111 @@ export default defineEntity(
       },
       dataQuality: {
         // Rows the stored evaluator reads beyond its own row (ADR 0021).
-        inputs: [{ table: "Product", match: { ingredientId: "id" } }],
+        inputs: [
+          {
+            table: "Product",
+            match: { ingredientId: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "Ingredient", from: "id", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Product", from: "id", to: "ingredientId" },
+              { table: "Ingredient", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Product", from: "id", to: "ingredientId" },
+              { table: "Ingredient", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { ingredientId: "id" },
+            columns: ["deletedAt", "brandId"],
+            path: [{ table: "Ingredient", from: "id", to: "id" }],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Product", from: "brandId", to: "ingredientId" },
+              { table: "Ingredient", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "ingredientId" },
+              { table: "Ingredient", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "ingredientId" },
+              { table: "Ingredient", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Recipe",
+            match: { id: "recipeId" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Recipe",
+            match: { id: "id" },
+            columns: ["cookbookId", "deletedAt"],
+            path: [
+              { table: "RecipeSection", from: "recipeId", to: "id" },
+              {
+                table: "RecipeSectionIngredient",
+                from: "recipeSectionId",
+                to: "ingredientId",
+              },
+            ],
+          },
+          {
+            table: "RecipeSection",
+            match: { id: "id" },
+            columns: ["recipeId", "deletedAt"],
+            path: [
+              {
+                table: "RecipeSectionIngredient",
+                from: "recipeSectionId",
+                to: "ingredientId",
+              },
+            ],
+          },
+          { table: "RecipeSectionIngredient", match: { ingredientId: "id" } },
+          { table: "Product", match: { ingredientId: "id" } },
+        ],
         checks: [
           {
             id: "ingredient_product",

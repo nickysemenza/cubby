@@ -2361,7 +2361,10 @@ record's own row, `{ productId: "id" }` a child row pointing at it, and
 `{ id: "productId" }` a referenced row whose dependents the drain finds. An
 input may limit the columns that matter (`columns`), skip its own output
 columns (`except`), admit only rows holding `where` values, walk a join `path`,
-or read record ids from a JSON array (`json`). `dependsOn` names other stored
+or read record ids from a JSON object (`json: { key }`) or array
+(`json: { array, key }`). A path step may select a UUID from its `to` JSON
+object with `jsonKey`, or compare its `from` object’s UUID with
+`fromJsonKey`; malformed JSON references contribute no records. `dependsOn` names other stored
 values it reads, by column match, link table or join path. A unit test checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.

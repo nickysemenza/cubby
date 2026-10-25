@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
@@ -935,7 +936,20 @@ Rules:
         },
       },
     ],
-    search: "semantic",
+    search: {
+      mode: "semantic",
+      inputs: [
+        ...imageDescriptionInputs("meal"),
+
+        { table: "MealRecipe", match: { mealId: "id" } },
+        {
+          table: "Recipe",
+          match: { id: "id" },
+          columns: ["name", "totals", "deletedAt"],
+          path: [{ table: "MealRecipe", from: "recipeId", to: "mealId" }],
+        },
+      ],
+    },
     capabilities: {
       images: {
         storage: imageAssociationStorage.shape.meal.value,
@@ -966,7 +980,62 @@ Rules:
       merge: false,
       dataQuality: {
         // Rows the stored evaluator reads beyond its own row (ADR 0021).
-        inputs: [{ table: "MealRecipe", match: { mealId: "id" } }],
+        inputs: [
+          {
+            table: "MealRecipe",
+            match: { mealId: "id" },
+            columns: ["deletedAt", "recipeId"],
+            path: [{ table: "Meal", from: "id", to: "id" }],
+          },
+          {
+            table: "Recipe",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "MealRecipe", from: "recipeId", to: "mealId" },
+              { table: "Meal", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Recipe", from: "id", to: "id" },
+              { table: "MealRecipe", from: "recipeId", to: "mealId" },
+              { table: "Meal", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Recipe", from: "id", to: "id" },
+              { table: "MealRecipe", from: "recipeId", to: "mealId" },
+              { table: "Meal", from: "id", to: "id" },
+            ],
+          },
+          { table: "MealRecipe", match: { mealId: "id" } },
+          {
+            table: "Recipe",
+            match: { id: "id" },
+            columns: ["name", "totals", "deletedAt"],
+            path: [{ table: "MealRecipe", from: "recipeId", to: "mealId" }],
+          },
+          {
+            table: "MealFoodEntry",
+            match: { mealId: "id" },
+            columns: ["deletedAt"],
+          },
+          { table: "MealRecipe", match: { mealId: "id" } },
+        ],
         checks: [
           {
             id: "meal_recipe_cost_incomplete",

@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import {
   financialAccountAuthorizedUsers,
@@ -996,7 +997,18 @@ export default defineEntity({
       },
     },
   ],
-  search: "semantic",
+  search: {
+    mode: "semantic",
+    inputs: [
+      ...imageDescriptionInputs("financialAccount"),
+
+      {
+        table: "Vendor",
+        match: { id: "providerVendorId" },
+        columns: ["name", "deletedAt"],
+      },
+    ],
+  },
   capabilities: {
     classificationPolicies: [
       {
@@ -1017,6 +1029,46 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "FinancialAccount", from: "providerVendorId", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "FinancialAccount", from: "providerVendorId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "FinancialAccount", from: "providerVendorId", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "providerVendorId" },
+          columns: ["name", "deletedAt"],
+        },
+      ],
+
       checks: [
         {
           id: "financial_account_ledger_party",

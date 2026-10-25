@@ -961,6 +961,88 @@ Rules:
       },
     ],
     dataQuality: {
+      inputs: [
+        {
+          table: "Product",
+          match: { categoryId: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "ProductCategory", from: "id", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "categoryId" },
+            { table: "ProductCategory", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "categoryId" },
+            { table: "ProductCategory", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { categoryId: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [{ table: "ProductCategory", from: "id", to: "id" }],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "categoryId" },
+            { table: "ProductCategory", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "categoryId" },
+            { table: "ProductCategory", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "categoryId" },
+            { table: "ProductCategory", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "SpendingCategory",
+          match: { id: "id" },
+          columns: ["deletedAt"],
+          path: [
+            { table: "ProductCategory", from: "spendingCategoryId", to: "id" },
+          ],
+        },
+      ],
+
       checks: [
         {
           id: "category_description",

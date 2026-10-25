@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import { purchasedCategorySummary } from "../product-category-fields";
@@ -1650,7 +1651,7 @@ export default defineEntity({
       },
     },
   ],
-  search: "semantic",
+  search: { mode: "semantic", inputs: [...imageDescriptionInputs("vendor")] },
   capabilities: {
     images: {
       storage: imageAssociationStorage.shape.vendor.value,
@@ -1680,6 +1681,14 @@ export default defineEntity({
     resolve: { match: ["name", "aliases"], createMissing: false },
     merge: true,
     dataQuality: {
+      inputs: [
+        {
+          table: "Purchase",
+          match: { vendorId: "id" },
+          columns: ["deletedAt"],
+        },
+      ],
+
       checks: [
         {
           id: "vendor_order_evidence",

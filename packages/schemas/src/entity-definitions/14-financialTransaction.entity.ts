@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
@@ -1914,7 +1915,44 @@ export default defineEntity(
     // Related rows the search document reads (ADR 0021).
     search: {
       mode: "lexical",
-      inputs: [{ table: "FinancialAccount", match: { id: "accountId" } }],
+      inputs: [
+        ...imageDescriptionInputs("financialTransaction"),
+
+        {
+          table: "FinancialTransactionAllocation",
+          match: { transactionId: "id" },
+        },
+        {
+          table: "Purchase",
+          match: { id: "id" },
+          path: [
+            {
+              table: "FinancialTransactionAllocation",
+              from: "purchaseId",
+              to: "transactionId",
+            },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["name", "deletedAt", "itemizationExpectation"],
+          path: [
+            { table: "Purchase", from: "vendorId", to: "id" },
+            {
+              table: "FinancialTransactionAllocation",
+              from: "purchaseId",
+              to: "transactionId",
+            },
+          ],
+        },
+        {
+          table: "EntityExternalId",
+          match: { entityId: "id" },
+          where: { entityKind: "financialTransaction" },
+        },
+        { table: "FinancialAccount", match: { id: "accountId" } },
+      ],
     },
     capabilities: {
       images: {
@@ -1961,6 +1999,370 @@ export default defineEntity(
       delete: { mode: "soft", bulk: true },
       merge: false,
       dataQuality: {
+        inputs: [
+          {
+            table: "FinancialTransactionAllocation",
+            match: { transactionId: "id" },
+            columns: ["deletedAt", "purchaseId"],
+            path: [{ table: "FinancialTransaction", from: "id", to: "id" }],
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Expense",
+            match: { purchaseId: "id" },
+            columns: [
+              "deletedAt",
+              "productId",
+              "purchaseId",
+              "projectId",
+              "lineKind",
+            ],
+            path: [
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Product", from: "id", to: "id" },
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Product", from: "id", to: "id" },
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            columns: ["deletedAt", "vendorId"],
+            path: [
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Purchase", from: "vendorId", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Purchase", from: "vendorId", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Purchase", from: "vendorId", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "brandId"],
+            path: [
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              { table: "Purchase", from: "id", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+              { table: "FinancialTransaction", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "FinancialTransactionAllocation",
+            match: { transactionId: "id" },
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            path: [
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["name", "deletedAt", "itemizationExpectation"],
+            path: [
+              { table: "Purchase", from: "vendorId", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "Expense",
+            match: { purchaseId: "id" },
+            path: [
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "EntityLink",
+            match: { fromEntityId: "id" },
+            path: [
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "SpendingCategory",
+            match: { id: "id" },
+            columns: ["deletedAt", "itemizationExpectation"],
+            path: [
+              { table: "Purchase", from: "spendingCategoryId", to: "id" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "SpendingCategory",
+            match: { id: "spendingCategoryId" },
+            columns: ["deletedAt", "itemizationExpectation"],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["categoryId", "deletedAt"],
+            path: [
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+          {
+            table: "ProductCategory",
+            match: { id: "id" },
+            columns: [
+              "parentId",
+              "feature",
+              "spendingCategoryId",
+              "spendingCategoryMode",
+              "deletedAt",
+            ],
+            path: [
+              { table: "Product", from: "categoryId", to: "id" },
+              { table: "Expense", from: "productId", to: "purchaseId" },
+              {
+                table: "FinancialTransactionAllocation",
+                from: "purchaseId",
+                to: "transactionId",
+              },
+            ],
+          },
+        ],
+
         exceptions: true,
         checks: [
           {

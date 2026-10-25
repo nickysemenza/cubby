@@ -27,7 +27,7 @@ type TriggerInput = {
   columns: readonly string[] | null;
   where: Readonly<Record<string, string>> | null;
   except: readonly string[];
-  json: { readonly array: readonly string[]; readonly key: string } | null;
+  json: { readonly array?: readonly string[]; readonly key: string } | null;
 };
 
 /** `row` holds every declared `where` value. */
@@ -38,12 +38,15 @@ const whereSql = (row: "OLD" | "NEW", where: TriggerInput["where"]) =>
         .join(" AND ")
     : "true";
 
-/** The uuid values a row contributes: its column, or `key` of a JSON array's elements. */
+/** The UUIDs a row contributes: its column, a JSON object's key, or array elements' keys. */
 // A malformed JSON value contributes nothing rather than failing the save:
-// a non-array is treated as empty and non-uuid elements are skipped.
+// a non-array at an array path is empty and non-UUID references are skipped.
 const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
   if (!input.json) return `ARRAY[${row}.${ident(input.tableColumn)}::uuid]`;
-  const array = `${row}.${ident(input.tableColumn)} #> '{${input.json.array.join(",")}}'`;
+  const column = `${row}.${ident(input.tableColumn)}`;
+  const array = input.json.array
+    ? `${column} #> '{${input.json.array.join(",")}}'`
+    : `jsonb_build_array(${column})`;
   const key = literal(input.json.key);
   return `ARRAY(SELECT (e->>${key})::uuid FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) AS e WHERE e->>${key} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')`;
 };

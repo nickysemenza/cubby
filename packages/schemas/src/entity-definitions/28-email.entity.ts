@@ -870,6 +870,111 @@ export default defineEntity({
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).
       inputs: [
+        {
+          table: "Purchase",
+          match: { id: "id" },
+          columns: ["vendorAccountId", "deletedAt"],
+          path: [
+            {
+              table: "AssessmentState",
+              from: "data",
+              to: "data",
+              where: { family: "email_link" },
+              fromJsonKey: "purchaseId",
+              jsonKey: "eventId",
+            },
+            { table: "OrderMailEvent", from: "id", to: "orderMailId" },
+            { table: "Email", from: "orderMailId", to: "id" },
+          ],
+        },
+        {
+          table: "VendorAccount",
+          match: { id: "id" },
+          columns: ["ledgerPartyId", "deletedAt"],
+          path: [
+            { table: "Purchase", from: "vendorAccountId", to: "id" },
+            {
+              table: "AssessmentState",
+              from: "data",
+              to: "data",
+              where: { family: "email_link" },
+              fromJsonKey: "purchaseId",
+              jsonKey: "eventId",
+            },
+            { table: "OrderMailEvent", from: "id", to: "orderMailId" },
+            { table: "Email", from: "orderMailId", to: "id" },
+          ],
+        },
+
+        {
+          table: "AssessmentState",
+          match: { data: "orderMailId" },
+          path: [{ table: "OrderMailEvent", from: "id", to: "orderMailId" }],
+          where: { family: "email_link" },
+          json: { key: "eventId" },
+        },
+
+        {
+          table: "ImportSourceClaim",
+          match: { ledgerPartyId: "ledgerPartyId" },
+        },
+        { table: "LedgerParty", match: { id: "ledgerPartyId" } },
+        {
+          table: "ImportSourceOrder",
+          match: { sourceClaimId: "id" },
+          path: [
+            { table: "ImportSourceClaim", from: "id", to: "ledgerPartyId" },
+            { table: "Email", from: "ledgerPartyId", to: "id" },
+          ],
+        },
+        { table: "OrderMailEvent", match: { orderMailId: "orderMailId" } },
+        {
+          table: "Purchase",
+          match: { id: "id" },
+          path: [
+            {
+              table: "ImportSourceOrder",
+              from: "purchaseId",
+              to: "sourceClaimId",
+            },
+            { table: "ImportSourceClaim", from: "id", to: "ledgerPartyId" },
+            { table: "Email", from: "ledgerPartyId", to: "id" },
+          ],
+        },
+        {
+          table: "VendorAccount",
+          match: { id: "id" },
+          path: [
+            { table: "Purchase", from: "vendorAccountId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "purchaseId",
+              to: "sourceClaimId",
+            },
+            { table: "ImportSourceClaim", from: "id", to: "ledgerPartyId" },
+            { table: "Email", from: "ledgerPartyId", to: "id" },
+          ],
+        },
+        {
+          table: "Assessment",
+          match: { subject: "id" },
+          json: { key: "recordId" },
+          where: { family: "email_relevance" },
+        },
+        {
+          table: "Feedback",
+          match: { assessmentId: "id" },
+          path: [
+            {
+              table: "Assessment",
+              from: "id",
+              to: "subject",
+              jsonKey: "recordId",
+              where: { family: "email_relevance" },
+            },
+          ],
+        },
+
         { table: "OrderMail", match: { id: "orderMailId" } },
         { table: "OrderMailAttachment", match: { orderMailId: "orderMailId" } },
         { table: "EmailCandidateObservation", match: { emailId: "id" } },

@@ -524,7 +524,14 @@ export default defineEntity({
     timeline: "default",
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).
-      inputs: [{ table: "ShipmentObservation", match: { shipmentId: "id" } }],
+      inputs: [
+        {
+          table: "Purchase",
+          match: { id: "purchaseId" },
+          columns: ["deletedAt"],
+        },
+        { table: "ShipmentObservation", match: { shipmentId: "id" } },
+      ],
       displayImage: false,
       checks: [
         {

@@ -488,6 +488,14 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: true,
     dataQuality: {
+      inputs: [
+        {
+          table: "FinancialAccount",
+          match: { ledgerPartyId: "id" },
+          columns: ["deletedAt"],
+        },
+      ],
+
       checks: [
         {
           id: "ledger_party_financial_account",

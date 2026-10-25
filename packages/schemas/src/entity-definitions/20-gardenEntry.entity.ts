@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -535,6 +536,36 @@ export default defineEntity({
   search: {
     mode: "semantic",
     inputs: [
+      ...imageDescriptionInputs("gardenEntry"),
+
+      {
+        table: "Planting",
+        match: { id: "id" },
+        columns: ["plantId", "deletedAt"],
+        path: [
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "gardenEntryPlanting" },
+          },
+        ],
+      },
+      {
+        table: "Plant",
+        match: { id: "id" },
+        columns: ["name", "gardenGuideKey", "deletedAt"],
+        path: [
+          { table: "Planting", from: "plantId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "gardenEntryPlanting" },
+          },
+        ],
+      },
+
       { table: "Location", match: { id: "locationId" } },
       {
         table: "EntityLink",

@@ -515,6 +515,14 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "FinancialTransaction",
+          match: { ledgerTransferId: "id" },
+          columns: ["deletedAt", "status"],
+        },
+      ],
+
       // A cash transfer with no statement records why, instead of staying open.
       exceptions: true,
       checks: [

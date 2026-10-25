@@ -23,7 +23,7 @@ export interface DerivedInput {
   readonly path: readonly DerivedPathStep[] | null;
   /** The matched column is JSON; values are `key` of the array at `array`. */
   readonly json: {
-    readonly array: readonly string[];
+    readonly array?: readonly string[];
     readonly key: string;
   } | null;
 }
@@ -33,6 +33,8 @@ export interface DerivedPathStep {
   readonly table: string;
   readonly from: string;
   readonly to: string;
+  readonly jsonKey?: string;
+  readonly fromJsonKey?: string;
   readonly where?: Readonly<Record<string, string>>;
 }
 
@@ -81,6 +83,8 @@ const pathStep = z.object({
   table: z.string(),
   from: z.string(),
   to: z.string(),
+  jsonKey: z.string().optional(),
+  fromJsonKey: z.string().optional(),
   where: z.record(z.string(), z.string()).optional(),
 });
 
@@ -102,7 +106,7 @@ const storedEntry = z.object({
         except: z.array(z.string()).optional(),
         path: z.array(pathStep).optional(),
         json: z
-          .object({ array: z.array(z.string()), key: z.string() })
+          .object({ array: z.array(z.string()).optional(), key: z.string() })
           .optional(),
       }),
     ),

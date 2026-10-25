@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { cookbookReadSchemas } from "../cookbook-fields";
 import { defineEntity } from "./definition.js";
@@ -437,7 +438,10 @@ export default defineEntity(
         },
       },
     ],
-    search: "semantic",
+    search: {
+      mode: "semantic",
+      inputs: [...imageDescriptionInputs("cookbook")],
+    },
     capabilities: {
       images: {
         storage: imageAssociationStorage.shape.cookbook.value,
@@ -475,6 +479,85 @@ export default defineEntity(
       // Born only from an EPUB import and deleted with its recipes by that
       // import workflow; the kernel serves reads and title/author/subject edits.
       dataQuality: {
+        inputs: [
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "Cookbook", from: "productId", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Product", from: "id", to: "id" },
+              { table: "Cookbook", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Product", from: "id", to: "id" },
+              { table: "Cookbook", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "brandId"],
+            path: [{ table: "Cookbook", from: "productId", to: "id" }],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Cookbook", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Cookbook", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Cookbook", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Recipe",
+            match: { cookbookId: "id" },
+            columns: ["deletedAt"],
+          },
+        ],
+
         checks: [
           {
             id: "cookbook_import_incomplete",

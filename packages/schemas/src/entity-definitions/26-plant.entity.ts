@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { defineEntity } from "./definition.js";
 import { ingredientShortcode, plantShortcode } from "../identifier-fields.js";
 import { plantBreeding, plantVerdict } from "@cubby/schemas/garden-fields";
@@ -516,7 +517,7 @@ export default defineEntity({
       },
     },
   ],
-  search: "semantic",
+  search: { mode: "semantic", inputs: [...imageDescriptionInputs("plant")] },
   capabilities: {
     images: {
       storage: false,
@@ -534,6 +535,149 @@ export default defineEntity({
     merge: true,
     resolve: { match: ["name"], createMissing: true },
     dataQuality: {
+      inputs: [
+        {
+          table: "Product",
+          match: { growsPlantId: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Plant", from: "id", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "growsPlantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "growsPlantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Planting",
+          match: { plantId: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Plant", from: "id", to: "id" }],
+        },
+        {
+          table: "EntityLink",
+          match: { toEntityId: "id" },
+          columns: ["deletedAt", "fromEntityId"],
+          path: [
+            { table: "Planting", from: "id", to: "plantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+          where: { kind: "gardenEntryPlanting" },
+        },
+        {
+          table: "GardenEntry",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "fromEntityId",
+              to: "toEntityId",
+              where: { kind: "gardenEntryPlanting" },
+            },
+            { table: "Planting", from: "id", to: "plantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "GardenEntry", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "fromEntityId",
+              to: "toEntityId",
+              where: { kind: "gardenEntryPlanting" },
+            },
+            { table: "Planting", from: "id", to: "plantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "GardenEntry", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "fromEntityId",
+              to: "toEntityId",
+              where: { kind: "gardenEntryPlanting" },
+            },
+            { table: "Planting", from: "id", to: "plantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { growsPlantId: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [{ table: "Plant", from: "id", to: "id" }],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "growsPlantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "growsPlantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "growsPlantId" },
+            { table: "Plant", from: "id", to: "id" },
+          ],
+        },
+      ],
+
       // An off-guide crop records why it has no guide key.
       exceptions: true,
       checks: [

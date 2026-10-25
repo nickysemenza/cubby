@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { locationReadSchemas } from "../location-fields";
 import { labelField } from "./label-field.js";
@@ -667,6 +668,25 @@ Rules:
             compute: "location.valuationRollup",
             inputs: [
               {
+                table: "Product",
+                match: { id: "id" },
+                columns: ["name", "deletedAt"],
+                path: [
+                  {
+                    table: "InventoryEntry",
+                    from: "productId",
+                    to: "locationId",
+                  },
+                ],
+              },
+              {
+                table: "Product",
+                match: { id: "id" },
+                columns: ["price", "deletedAt"],
+                path: [{ table: "Location", from: "productId", to: "id" }],
+              },
+
+              {
                 table: "Location",
                 match: { id: "id" },
                 columns: ["parentId", "productId", "deletedAt"],
@@ -1161,7 +1181,18 @@ Rules:
         },
       },
     ],
-    search: "semantic",
+    search: {
+      mode: "semantic",
+      inputs: [
+        ...imageDescriptionInputs("location"),
+
+        {
+          table: "AiAnalysis",
+          match: { entityId: "id" },
+          where: { entityKind: "location", feature: "location-description" },
+        },
+      ],
+    },
     capabilities: {
       images: {
         storage: imageAssociationStorage.shape.location.value,
@@ -1221,6 +1252,90 @@ Rules:
         },
       ],
       dataQuality: {
+        inputs: [
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "Location", from: "productId", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Product", from: "id", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Product", from: "id", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["deletedAt", "brandId"],
+            path: [{ table: "Location", from: "productId", to: "id" }],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+              { table: "Location", from: "productId", to: "id" },
+            ],
+          },
+          {
+            table: "AiAnalysis",
+            match: { entityId: "id" },
+            where: { entityKind: "location", feature: "location-description" },
+          },
+          {
+            table: "InventoryEntry",
+            match: { productId: "productId" },
+            columns: ["deletedAt"],
+          },
+        ],
+
         checks: [
           {
             id: "location_ai_description",

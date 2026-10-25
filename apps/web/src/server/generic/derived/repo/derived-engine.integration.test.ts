@@ -6,18 +6,24 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   inventoryEntry,
+  email as emailTable,
   product,
   productUnitMappings,
 } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
+import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
+import {
+  publishAssessment,
+  recordFeedback,
+} from "~/server/generic/assessment/repo/assessment";
 import {
   claimDerivedMarks,
   markAllStoredDerived,
@@ -25,6 +31,7 @@ import {
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   makeLocationInput,
@@ -296,7 +303,9 @@ describe("stored derived values", () => {
         await prepareDerivedPage(
           ctx.db,
           derivedComputes,
-          await claimDerivedMarks(ctx.db),
+          (await claimDerivedMarks(ctx.db, 10_000)).filter((mark) =>
+            mark.target.startsWith("task.searchDocument@"),
+          ),
         ),
       );
     expect(await marks("task.searchDocument")).toEqual(
@@ -307,6 +316,112 @@ describe("stored derived values", () => {
       sql`SELECT DISTINCT priority FROM "DerivedDirty" WHERE target = 'task.searchDocument'`,
     );
     expect(priorities.rows).toEqual([{ priority: 0 }]);
+  });
+
+  it("marks JSON subject references and follows Feedback to its Email", async () => {
+    const owner = await createRepoEntity(ctx, "ledgerParty");
+    const original = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: parseEntityId("ledgerParty", owner.entityId),
+      rawChecksum: "a".repeat(64),
+      mailboxId: "synthetic-derived",
+      messageId: "synthetic-review",
+    });
+    const [email] = await getDb(ctx.db)
+      .select({ id: emailTable.id })
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, original.id));
+    if (!email) throw new Error("Synthetic Email was not created");
+    const emailId = email.id;
+    await drain();
+    const assessment = await publishAssessment(ctx.db, {
+      publicationKey: `synthetic-review:${crypto.randomUUID()}`,
+      family: "email_relevance",
+      subject: {
+        kind: "email_relevance",
+        entity: "email",
+        recordId: emailId,
+        checksum: null,
+        observationId: null,
+      },
+      judgment: { classification: "related", stage: "model" },
+      fingerprint: null,
+      producer: null,
+      evidence: null,
+    });
+    expect(
+      (await fanoutMarks("email.dataQuality")).map((mark) => mark.ref),
+    ).toContain(emailId);
+    await drain();
+    await recordFeedback(ctx.db, {
+      assessmentId: assessment.id,
+      operationId: "synthetic-review",
+      verdict: "correct",
+      correction: { present: false },
+      authority: "member",
+      actorUserId: TEST_ACTOR.userId,
+      intent: "history",
+    });
+    expect(
+      (await fanoutMarks("email.dataQuality")).map((mark) => mark.ref),
+    ).toContain(assessment.id);
+    const claimed = (await claimDerivedMarks(ctx.db)).filter((mark) =>
+      mark.target.startsWith("email.dataQuality@"),
+    );
+    await publishDerivedPage(
+      ctx.db,
+      await prepareDerivedPage(ctx.db, derivedComputes, claimed),
+    );
+    expect(await marks("email.dataQuality")).toContain(emailId);
+
+    // Historical evidence can be malformed; extraction must skip it without
+    // failing the member save or the rest of a fanout page.
+    await drain();
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Assessment" SET subject = '{"recordId":"invalid"}'::jsonb
+      WHERE id = ${assessment.id}
+    `);
+    await getDb(ctx.db).execute(sql`
+      UPDATE "Feedback" SET reason = 'Synthetic historical evidence'
+      WHERE "assessmentId" = ${assessment.id}
+    `);
+    await drain();
+    expect(await marks("email.dataQuality")).toEqual([]);
+  });
+
+  it("refreshes Wish text when a candidate changes, then detaches it", async () => {
+    const candidate = await makeProduct("Synthetic hand plane", 40);
+    const wish = await seedEntity(ctx.db, "wish", { name: "Synthetic tools" });
+    const wishId = await resolveLiveShortcode(ctx.db, wish.id, "wish");
+    if (!wishId) throw new Error("Synthetic Wish was not created");
+    await withTransaction(ctx.db, (tx) =>
+      attachLinks(tx, "wishCandidate", [{ from: wishId, to: candidate }]),
+    );
+    await drain();
+    const body = async () =>
+      (
+        await getDb(ctx.db).execute(sql`
+      SELECT body FROM "SearchDocument" WHERE "entityId" = ${wishId}
+    `)
+      ).rows
+        .map((row) => String(row.body))
+        .join(" ");
+    expect(await body()).toContain("hand plane");
+    await getDb(ctx.db)
+      .update(product)
+      .set({ name: "Synthetic block plane" })
+      .where(eq(product.id, candidate));
+    expect(
+      (await fanoutMarks("wish.searchDocument")).map((mark) => mark.ref),
+    ).toContain(candidate);
+    await drain();
+    expect(await body()).toContain("block plane");
+    expect(await body()).not.toContain("hand plane");
+    await getDb(ctx.db).execute(sql`
+      UPDATE "EntityLink" SET "deletedAt" = now()
+      WHERE kind = 'wishCandidate' AND "fromEntityId" = ${wishId}
+    `);
+    await drain();
+    expect(await body()).not.toContain("block plane");
   });
 
   it("recomputes dependents when a value they read changes", async () => {

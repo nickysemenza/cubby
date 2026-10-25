@@ -37,6 +37,33 @@ import { derivedComputes } from "~/server/workflows/derived-computes";
  */
 const UNDECLARED_READS = new Set(["Entity", "DerivedValue"]);
 
+/** Full read models also load presentation fields these sinks never publish. */
+const INCIDENTAL_READS = {
+  "recipe.totals": new Set([
+    // getRecipesByIDs loads cookbook metadata; recipeWasmInput uses only yield and rows.
+    "Cookbook",
+    // getRecipesByIDs resolves display images; neither costing nor its fingerprint uses media.
+    "EntityAttachment",
+    // The same display-image projection loads image integrity and representations only.
+    "Image",
+    // Transparent representations are discarded before recipeWasmInput.
+    "ImageDerivative",
+    // Meals supply borrowed recipe images, never costing inputs.
+    "Meal",
+    // Meal membership is traversed only for those borrowed images.
+    "MealRecipe",
+  ]),
+  "product.conversionCoverage": new Set([
+    // loadProductsForCoverage loads brandName/brandCode for problem captions;
+    // the published coverage projection uses neither.
+    "Vendor",
+  ]),
+  "project.completionYear": new Set([
+    // loadProjectTree loads assignee labels; the date-window fold uses no assignee fields.
+    "LedgerParty",
+  ]),
+};
+
 /** USDA is a Worker binding; the tracer needs only the database reads. */
 const offlineUsda = new USDAClient(
   fromPartial<UsdaReleaseRpc>({
@@ -191,11 +218,15 @@ describe("stored derived read sets", () => {
           "through" in dependency ? [dependency.through.table] : [],
         ),
       ]);
+      const incidental = Object.entries(INCIDENTAL_READS).find(
+        ([target]) => target === declaration.target,
+      )?.[1];
       for (const table of tables)
         if (
           tableNames.has(table) &&
           !declared.has(table) &&
-          !UNDECLARED_READS.has(table)
+          !UNDECLARED_READS.has(table) &&
+          !incidental?.has(table)
         )
           undeclared.push(`${declaration.target} reads ${table}`);
     }
