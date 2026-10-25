@@ -919,12 +919,19 @@ const provenanceClassificationCandidateWhere = and(
   sql`${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.capturedAt} IS NULL AND ${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.camera} IS NULL AND ${image.embeddedMetadata}->>${storedImageEmbeddedMetadataSchema.keyof().enum.location} IS NULL`,
   sql`COALESCE(${image.provenanceEvidence}->>'basis', '') NOT IN (${imageProvenanceEvidence.shape.basis.enum.manual}, ${imageProvenanceEvidence.shape.basis.enum.sighting}, ${imageProvenanceEvidence.shape.basis.enum["import-url"]}, ${imageProvenanceEvidence.shape.basis.enum.exif})`,
   // Keep this authority boundary aligned with isStrongSighting in image-capture-derivation.ts.
-  sql`NOT EXISTS (SELECT 1 FROM "ImageSighting" s WHERE s."imageId" = ${image.id} AND s."deletedAt" IS NULL
-    AND (${imageSourceEvidence.shape.value.enum.screenshot} = ANY(s."mediaSubtypes")
-      OR (s."sourceType" = ${imageSightingSourceType.enum.userLibrary}
-        AND (s."matchKind" = ${imageSightingMatchKind.enum.import}
-          OR (s."hashDistance" >= 0 AND s."hashDistance" <= 2)
-          OR (s."hashDistance" > 2 AND s."hashDistance" <= 6 AND s."aspectGate" IS TRUE)))))`,
+  not(
+    related(imageSighting, (s) => sql`${s.imageId} = ${outer(image.id)}`)
+      .where(
+        (
+          s,
+        ) => sql`${s.mediaSubtypes} @> ARRAY[${imageSourceEvidence.shape.value.enum.screenshot}]::text[]
+      OR (${s.sourceType} = ${imageSightingSourceType.enum.userLibrary}
+        AND (${s.matchKind} = ${imageSightingMatchKind.enum.import}
+          OR (${s.hashDistance} >= 0 AND ${s.hashDistance} <= 2)
+          OR (${s.hashDistance} > 2 AND ${s.hashDistance} <= 6 AND ${s.aspectGate} IS TRUE)))`,
+      )
+      .exists(),
+  ),
 );
 
 export async function selectImagesForProvenanceClassification(
