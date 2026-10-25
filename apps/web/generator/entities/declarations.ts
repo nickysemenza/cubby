@@ -222,6 +222,12 @@ export type EntityStorageField = Readonly<{
   defaultValue: DeclarationValue;
   reference: string | null;
   referenceOptions?: Readonly<{
+    onDelete?:
+      | "cascade"
+      | "restrict"
+      | "no action"
+      | "set null"
+      | "set default";
     column: string;
     onUpdate?:
       | "cascade"

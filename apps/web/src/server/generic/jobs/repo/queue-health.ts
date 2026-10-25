@@ -3,7 +3,8 @@ import { and, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 
 import type { QueueHealthSnapshot } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
@@ -201,24 +202,41 @@ export async function pruneFinishedJobs(
   { limit, now = new Date() }: { limit: number; now?: Date },
 ): Promise<number> {
   const before = new Date(now.getTime() - JOB_RETENTION_MS);
-  const doomed = getDb(db)
-    .select({ id: job.id })
-    .from(job)
-    .where(
-      and(
-        inArray(job.state, [jobState.enum.completed, jobState.enum.cancelled]),
-        lt(job.updatedAt, before),
-        notInArray(job.kind, RETAINED_KINDS),
-        // An invalidated long-lived Job is woken through its own row.
-        sql`NOT EXISTS (SELECT 1 FROM "JobInvalidation" m WHERE m.key = "Job".key)`,
-      ),
-    )
-    .limit(limit);
-  const deleted = await getDb(db)
-    .delete(job)
-    .where(inArray(job.id, doomed))
-    .returning({ id: job.id });
-  return deleted.length;
+  return withTransaction(db, async (tx) => {
+    const doomed = tx
+      .select({ id: job.id })
+      .from(job)
+      .where(
+        and(
+          inArray(job.state, [
+            jobState.enum.completed,
+            jobState.enum.cancelled,
+          ]),
+          lt(job.updatedAt, before),
+          notInArray(job.kind, RETAINED_KINDS),
+          // An invalidated long-lived Job is woken through its own row.
+          sql`NOT EXISTS (SELECT 1 FROM "JobInvalidation" m WHERE m.key = "Job".key)`,
+        ),
+      )
+      .limit(limit)
+      .for("update", { skipLocked: true });
+    const deleted = await tx
+      .delete(job)
+      .where(inArray(job.id, doomed))
+      .returning({ id: job.id });
+    // Job is the sole expiring entity: pruning execution also releases its code.
+    if (deleted.length)
+      await tx.delete(entityIdentity).where(
+        and(
+          eq(entityIdentity.kind, "job"),
+          inArray(
+            entityIdentity.id,
+            deleted.map((row) => row.id),
+          ),
+        ),
+      );
+    return deleted.length;
+  });
 }
 
 /**
@@ -238,5 +256,23 @@ export async function pruneObservedInvalidationCaptures(
     .delete(jobInvalidationCapture)
     .where(inArray(jobInvalidationCapture.id, doomed))
     .returning({ id: jobInvalidationCapture.id });
+  return deleted.length;
+}
+
+/** Old retention during cutover could prune a backfilled Job without its new identity. */
+export async function pruneOrphanJobIdentities(
+  db: Database,
+  { limit }: { limit: number },
+): Promise<number> {
+  const orphan = sql`NOT ${related(job, (row) => sql`${row.id} = ${outer(entityIdentity.id)}`).exists()}`;
+  const doomed = getDb(db)
+    .select({ id: entityIdentity.id })
+    .from(entityIdentity)
+    .where(and(eq(entityIdentity.kind, "job"), orphan))
+    .limit(limit);
+  const deleted = await getDb(db)
+    .delete(entityIdentity)
+    .where(inArray(entityIdentity.id, doomed))
+    .returning({ id: entityIdentity.id });
   return deleted.length;
 }

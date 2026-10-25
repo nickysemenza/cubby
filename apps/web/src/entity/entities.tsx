@@ -427,6 +427,7 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.run,
     color: INK.slate,
   },
+  job: { ...generatedBrowserRoutes.job, color: INK.slate },
   imageJob: {
     ...generatedBrowserRoutes.imageJob,
     color: INK.slate,

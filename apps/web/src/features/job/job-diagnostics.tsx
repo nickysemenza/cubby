@@ -279,7 +279,7 @@ function LogState({
  * Workers Observability query API: a level filter, search and the dashboard
  * link. Missing credentials, expired retention and query failures are states.
  */
-function JobLogPanel({ jobId }: { jobId: string }) {
+export function JobLogPanel({ jobId }: { jobId: string }) {
   const logs = useQuery({ ...job.logs.queryOptions({ jobId }) });
   const [level, setLevel] = useState<Level>("all");
   const [search, setSearch] = useState("");

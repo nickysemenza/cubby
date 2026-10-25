@@ -1,3 +1,4 @@
+import type { JobId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -26,9 +27,9 @@ import {
 // flood of one kind starved run-owned and other work.
 describe("job runtime policy", () => {
   const ctx = withTestDb();
-  const read = async (id: string) =>
+  const read = async (id: JobId) =>
     (await getDb(ctx.db).select().from(job).where(eq(job.id, id)))[0]!;
-  const makeDue = (id: string) =>
+  const makeDue = (id: JobId) =>
     getDb(ctx.db)
       .update(job)
       .set({ availableAt: new Date(0) })
@@ -176,9 +177,10 @@ describe("job runtime policy", () => {
 
   it("cancels a large set in one statement", async () => {
     await getDb(ctx.db).execute(sql`
-      INSERT INTO "Job" (key, kind, input)
-      SELECT 'synthetic.bulk-cancel:' || n, 'synthetic.bulk-cancel', '{}'::jsonb
-      FROM generate_series(1, 5000) n`);
+      WITH seeds AS MATERIALIZED (SELECT n, gen_random_uuid() AS id FROM generate_series(1,5000) n), identities AS (
+        INSERT INTO "Entity" (id, kind, shortcode) SELECT id, 'job', 'JOB-' || lpad(translate(to_hex(n), '0123456789abcdef', '23456789ABCDEFGH'),10,'2') FROM seeds RETURNING id,shortcode
+      ) INSERT INTO "Job" (id,shortcode,key,kind,input)
+      SELECT i.id,i.shortcode,'synthetic.bulk-cancel:' || s.n,'synthetic.bulk-cancel','{}'::jsonb FROM identities i JOIN seeds s ON s.id=i.id`);
     const cancelled = await cancelJobsWhere(
       ctx.db,
       eq(job.kind, "synthetic.bulk-cancel"),
@@ -216,18 +218,22 @@ describe("job runtime policy", () => {
       { key: "paused", kind: "synthetic.wait", state: "paused" },
       { key: "done", kind: "synthetic.wait", state: "completed" },
     ] as const;
-    for (const row of rows)
+    for (const row of rows) {
+      const created = await enqueueJob(ctx.db, {
+        key: `synthetic.waiting.${row.key}`,
+        kind: row.kind,
+        input: {},
+        availableAt: "availableAt" in row ? row.availableAt : now,
+      });
       await getDb(ctx.db)
-        .insert(job)
-        .values({
-          key: `synthetic.waiting.${row.key}`,
-          kind: row.kind,
+        .update(job)
+        .set({
           state: row.state,
-          input: {},
-          availableAt: "availableAt" in row ? row.availableAt : now,
           waitReason: "waitReason" in row ? row.waitReason : null,
           waitUntil: "waitUntil" in row ? row.waitUntil : null,
-        });
+        })
+        .where(eq(job.id, created.id));
+    }
     const saved = await getDb(ctx.db)
       .select({ row: job, reason: jobWaitingOnReasonSql() })
       .from(job)

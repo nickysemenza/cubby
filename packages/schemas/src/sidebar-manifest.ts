@@ -345,6 +345,7 @@ export const SIDEBAR_SECTIONS = [
         route: "/runs",
         entity: "run",
       },
+      { label: "Jobs", route: "/jobs", entity: "job" },
       {
         label: "Run types",
         route: "/runs/types",

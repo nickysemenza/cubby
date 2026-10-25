@@ -67,6 +67,9 @@ import {
 /** A table a `mode: "soft"` cascade can write `deletedAt` on. */
 type SoftDeletableTable = PgTable & { deletedAt: PgColumn };
 
+const supportsSoftRemoval = (table: PgTable): table is SoftDeletableTable =>
+  "deletedAt" in table;
+
 /**
  * The columns on a child table that point at the parent. Non-empty by type, so
  * the OR below always has at least one clause.
@@ -164,9 +167,9 @@ const removeRows = async (
           .where(removal.where)
           .returning({ id: identityTable.id })
       : await tx
-          .update(identityTable)
+          .update(removal.table)
           .set({ deletedAt: at })
-          .where(and(removal.where, notDeleted(identityTable)))
+          .where(and(removal.where, notDeleted(removal.table)))
           .returning({ id: identityTable.id });
   await tombstoneEntityIdentities(
     tx,
@@ -321,6 +324,8 @@ export const removeEntity = async <E extends RemovableEntity>(
     if (removal === "hard") {
       await removeRows(tx, { table, where, mode: "hard" }, now);
     } else {
+      if (!supportsSoftRemoval(table))
+        throw new Error(`${entity} does not support soft removal`);
       await removeRows(tx, { table, where, mode: "soft" }, now);
     }
 

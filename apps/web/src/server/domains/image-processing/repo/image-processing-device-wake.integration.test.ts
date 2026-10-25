@@ -1,11 +1,12 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { jobState } from "@cubby/schemas/job";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   job as durableJob,
   jobInvalidationCapture,
@@ -255,8 +256,9 @@ describe("parked device work wakes idle companions", () => {
 
   // Review finding: recovery read a completed wake, then armed it; a claim or
   // doorbell failure committing in between left a fresh retry that the
-  // restarting arm bypassed. A trigger plays that concurrent writer at the
-  // point recovery writes (its marker capture or its wake insert).
+  // restarting arm bypassed. A concurrent writer holds the wake's row while
+  // recovery runs, then commits the failure: enqueue locks that row, so
+  // recovery waits and must keep the retry it then sees.
   it("keeps a retry a concurrent failure writes while recovery runs", async () => {
     await parked();
     await runScheduledServerWork();
@@ -264,46 +266,26 @@ describe("parked device work wakes idle companions", () => {
       .update(durableJob)
       .set({ state: "completed" })
       .where(eq(durableJob.key, "image.device.wake"));
-    const database = getDb(ctx.db);
-    await database.execute(
-      sql.raw(`CREATE FUNCTION synthetic_concurrent_wake_retry() RETURNS trigger AS $$
-      BEGIN
-        UPDATE "Job" SET state = 'retry_wait', attempts = 3,
+    let locked!: () => void;
+    const rowLocked = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const writer = withTransactionDatabase(ctx.db, async (tx) => {
+      await getDb(tx).execute(
+        sql`SELECT 1 FROM "Job" WHERE key = 'image.device.wake' FOR UPDATE`,
+      );
+      locked();
+      // Give recovery time to reach the wake's row lock and wait on it.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await getDb(tx).execute(
+        sql`UPDATE "Job" SET state = ${jobState.enum.retry_wait}, attempts = 3,
           error = 'Synthetic concurrent doorbell failure',
           "availableAt" = now() + interval '7 minutes'
-        WHERE key = 'image.device.wake' AND state = 'completed';
-        RETURN NEW;
-      END $$ LANGUAGE plpgsql`),
-    );
-    await database.execute(
-      sql.raw(`CREATE TRIGGER synthetic_concurrent_wake_retry_marker
-      BEFORE INSERT ON "JobInvalidation" FOR EACH ROW
-      WHEN (NEW.key = 'image.device.wake')
-      EXECUTE FUNCTION synthetic_concurrent_wake_retry()`),
-    );
-    await database.execute(
-      sql.raw(`CREATE TRIGGER synthetic_concurrent_wake_retry_job
-      BEFORE INSERT ON "Job" FOR EACH ROW
-      WHEN (NEW.key = 'image.device.wake')
-      EXECUTE FUNCTION synthetic_concurrent_wake_retry()`),
-    );
-    try {
-      await repairImageProcessingExecution(ctx.db, 25);
-    } finally {
-      await database.execute(
-        sql.raw(
-          `DROP TRIGGER IF EXISTS synthetic_concurrent_wake_retry_marker ON "JobInvalidation"`,
-        ),
+        WHERE key = 'image.device.wake' AND state = ${jobState.enum.completed}`,
       );
-      await database.execute(
-        sql.raw(
-          `DROP TRIGGER IF EXISTS synthetic_concurrent_wake_retry_job ON "Job"`,
-        ),
-      );
-      await database.execute(
-        sql.raw(`DROP FUNCTION IF EXISTS synthetic_concurrent_wake_retry()`),
-      );
-    }
+    });
+    await rowLocked;
+    await Promise.all([writer, repairImageProcessingExecution(ctx.db, 25)]);
     const [wake] = await getDb(ctx.db)
       .select()
       .from(durableJob)

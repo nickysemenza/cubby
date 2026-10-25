@@ -218,6 +218,7 @@ const privateProblemEntry = (
 };
 
 const privateOwnerRelation = (ref: ParsedShortcode): SQL | null => {
+  if (ref.type === "job") return null;
   const table = SHORTCODE_TABLE[ref.type];
   const id = sql`${table.id}`;
   const scope = sql`${table.shortcode} = ${ref.shortcode} AND ${table.deletedAt} IS NULL`;

@@ -1,4 +1,8 @@
-import { runShortcode } from "@cubby/schemas/identifiers";
+import {
+  runShortcode,
+  jobShortcode,
+  anyShortcodeSchema,
+} from "@cubby/schemas/identifiers";
 import {
   jobLane,
   jobState,
@@ -6,21 +10,21 @@ import {
   jobWaitingOnReason,
   jobWaitReason,
 } from "@cubby/schemas/job";
-import { SHORTCODE_BODY_PATTERN, SHORTCODE_PREFIX } from "@cubby/shared";
+import { jobFilters } from "@cubby/schemas/job-entity";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-/** `job.explain` names a Run, image job or Email by code, or a Job by id. */
+/** One self-describing pattern retains legacy Job UUIDs alongside public codes. */
+const explainPatterns = [
+  anyShortcodeSchema(["run", "imageJob", "email", "job"]),
+  z.uuid(),
+].map((schema) => z.string().parse(z.toJSONSchema(schema).pattern));
 const explainTarget = z
   .string()
-  .trim()
-  .regex(
-    new RegExp(
-      `^(?:(?:${[SHORTCODE_PREFIX.run, SHORTCODE_PREFIX.imageJob, SHORTCODE_PREFIX.email].join("|")})${SHORTCODE_BODY_PATTERN}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$`,
-      "i",
-    ),
-    "Expected a RUN-, IPR- or EML- code or a Job id",
+  .regex(new RegExp(explainPatterns.join("|")))
+  .describe(
+    "A Run (RUN-), image job (IPR-), Email (EML-), Job (JOB-), or legacy Job UUID.",
   );
 
 /** One Job as diagnostics read it: execution facts only, never domain state. */
@@ -75,6 +79,8 @@ export type RunRollup = z.infer<typeof runRollup>;
 
 /** A filtered Job set: every key narrows; an empty filter is every live Job. */
 const jobSetFilter = z.strictObject({
+  codes: z.array(jobShortcode).min(1).optional(),
+  entityFilters: jobFilters.optional(),
   lanes: z.array(jobLane).min(1).optional(),
   kinds: z.array(z.string().min(1)).min(1).max(50).optional(),
   reasons: z.array(jobWaitingOnReason).min(1).optional(),
@@ -315,7 +321,7 @@ export const jobContract = defineContract(
     }),
     explain: query({
       description:
-        "Explain what a Run (RUN-), image job (IPR-), Email (EML-) or Job (uuid) is waiting on, as a chain from the record to the Jobs that block it.",
+        "Explain what a Run (RUN-), image job (IPR-), Email (EML-) or Job (JOB- or legacy uuid) is waiting on, as a chain from the record to the Jobs that block it.",
       input: z.strictObject({ id: explainTarget }),
       output: explainOut,
       cache: { tags: [["run"], ["image"]], profile: "live-status" },
@@ -347,7 +353,7 @@ export const jobContract = defineContract(
       note: "Raw Worker log lines for one Job; agents read Run state instead",
       description:
         "Read raw Worker log lines for one Job and a bounded time range. Use Run status for workflow progress; logs are lower-level diagnostics.",
-      input: z.strictObject({ jobId: z.uuid() }),
+      input: z.strictObject({ jobId: z.union([z.uuid(), jobShortcode]) }),
       output: jobLogsOut,
       cache: { tags: [] },
     }),

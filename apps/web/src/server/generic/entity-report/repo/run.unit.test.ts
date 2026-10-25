@@ -1,5 +1,9 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
-import { productShortcode, shortcode } from "@cubby/schemas/identifiers";
+import {
+  productShortcode,
+  shortcode,
+  parseEntityId,
+} from "@cubby/schemas/identifiers";
 import { describe, expect, it } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
@@ -773,7 +777,7 @@ describe("liveProgressBlocks", () => {
     workflow: {
       purpose: "mail_discovery" as const,
       attempt: 2,
-      instanceId: "00000000-0000-4000-8000-000000000002",
+      instanceId: parseEntityId("job", "00000000-0000-4000-8000-000000000002"),
       instance: { state: "running" as const, error: null },
     },
   };

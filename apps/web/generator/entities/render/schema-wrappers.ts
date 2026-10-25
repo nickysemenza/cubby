@@ -40,6 +40,7 @@ const WRAPPERS = {
   financialAccount: "create+ update+ updateInput+ out+ filtersBase",
   financialTransaction: "filtersBase",
   imageJob: "out+ filtersBase",
+  job: "out+ filtersBase",
   gardenEntry: "create update updateInput out+ listItem filtersBase",
   ingredient: "create+ update updateInput+ filtersBase",
   ledgerParty: "create+ update+ updateInput+ out+ filters+",

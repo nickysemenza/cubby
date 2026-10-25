@@ -101,7 +101,7 @@
   "apps/web/src/server/domains/vendor/repo/vendor.ts": 9,
   "apps/web/src/server/domains/wish/repo.ts": 3,
   "apps/web/src/server/entity-kernel/repo/entity-display-image.ts": 11,
-  "apps/web/src/server/entity-kernel/repo/entity-records.ts": 2,
+  "apps/web/src/server/entity-kernel/repo/entity-records.ts": 1,
   "apps/web/src/server/entity-kernel/repo/mutation-receipt.ts": 1,
   "apps/web/src/server/entity-kernel/repo/mutation-scalar.ts": 6,
   "apps/web/src/server/entity-kernel/resolve.ts": 2,

@@ -1,4 +1,8 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  type RunId,
+  type JobId,
+} from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { runStepMeta } from "@cubby/schemas/run-step";
 import {
@@ -41,7 +45,7 @@ const RUN_EXECUTE = "run.execute";
 async function groupsOf(
   db: Database,
   owner: SQL,
-  exclude: string | null,
+  exclude: JobId | null,
   now: Date,
 ): Promise<JobGroup[]> {
   const where = exclude ? and(owner, ne(job.id, exclude)) : owner;
@@ -210,6 +214,10 @@ export async function readJobWindow(db: Database, id: string) {
       state: job.state,
     })
     .from(job)
-    .where(eq(job.id, id));
+    .where(
+      id.toUpperCase().startsWith("JOB-")
+        ? eq(job.shortcode, id.toUpperCase())
+        : eq(job.id, parseEntityId("job", id)),
+    );
   return row ?? null;
 }

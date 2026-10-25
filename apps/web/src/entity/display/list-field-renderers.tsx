@@ -291,6 +291,7 @@ const buildListRendererCoverage = () => {
       "run-activity": implemented(runListRenderers["run-activity"]),
     },
     imageJob: scoredCoverage<"imageJob">(),
+    job: unscoredCoverage<"job">(),
     sourceTransactionRecord: unscoredCoverage<"sourceTransactionRecord">(),
     transactionImport: unscoredCoverage<"transactionImport">(),
     shipment: scoredCoverage<"shipment">(),

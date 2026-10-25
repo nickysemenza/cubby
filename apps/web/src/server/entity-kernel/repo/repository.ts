@@ -104,10 +104,11 @@ type ReaderDb = Database | DrizzleTransaction;
 
 /** A full-row entity read and audited update share the same live-row selection. */
 type LiveEntityTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
+type ReadEntityTable = PgTable & { id: AnyColumn; deletedAt?: AnyColumn };
 
 /** Full stored rows only; relation-loaded and custom projections keep their own fetcher. */
 export const createEntityRowFetcher =
-  <T extends LiveEntityTable>(table: T) =>
+  <T extends ReadEntityTable>(table: T) =>
   async (
     db: ReaderDb,
     id: string,

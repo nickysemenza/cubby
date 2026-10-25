@@ -193,6 +193,11 @@ type BindListFields<Row> = {
 };
 export type ListReadOptions<Row> = {
   media?: boolean;
+  /** A page's media may belong to a polymorphic subject rather than its row. */
+  displayImages?: (
+    db: Database | DrizzleTransaction,
+    ids: readonly string[],
+  ) => Promise<Map<string, DisplayImageSummary[]>>;
   references?: Record<
     string,
     | { kind: "public" }
@@ -449,10 +454,12 @@ export function listReadPlan<Row>(
       images:
         resolvesDisplayImages(projection) && ids.length
           ? settled(
-              resolveEntityDisplayImageLists(
-                db,
-                ids.map((id) => ({ entityKind: entity, entityId: id })),
-              ),
+              options.displayImages
+                ? options.displayImages(db, ids)
+                : resolveEntityDisplayImageLists(
+                    db,
+                    ids.map((id) => ({ entityKind: entity, entityId: id })),
+                  ),
             )
           : undefined,
     };

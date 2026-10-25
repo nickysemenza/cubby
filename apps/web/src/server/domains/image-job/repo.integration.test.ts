@@ -1,5 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +16,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { readDeviceBacklog } from "~/server/generic/jobs/repo/device-backlog";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -151,25 +153,25 @@ describe("image job cost", () => {
         },
       });
     const leaseExpiresAt = new Date(Date.now() + 60_000);
+    const heldExecution = await enqueueJob(ctx.db, {
+      key: `image-processing:${held.id}`,
+      kind: "image.device",
+      input: {},
+    });
     await getDb(ctx.db)
-      .insert(durableJob)
-      .values([
-        {
-          key: `image-processing:${held.id}`,
-          kind: "image.device",
-          state: "running",
-          input: {},
-          leaseToken: attemptId,
-          leaseExpiresAt,
-          lastClaimedAt: new Date(),
-        },
-        {
-          key: `image-processing:${parked.id}`,
-          kind: "image.device",
-          state: "queued",
-          input: {},
-        },
-      ]);
+      .update(durableJob)
+      .set({
+        state: "running",
+        leaseToken: attemptId,
+        leaseExpiresAt,
+        lastClaimedAt: new Date(),
+      })
+      .where(eq(durableJob.id, heldExecution.id));
+    await enqueueJob(ctx.db, {
+      key: `image-processing:${parked.id}`,
+      kind: "image.device",
+      input: {},
+    });
     const read = async (shortcode: string) =>
       executeEntity(
         kernelCtx(ctx),
