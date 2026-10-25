@@ -163,6 +163,20 @@ only after a check that first closes command acceptance, so no job can start bet
 and stop. Results that are
 still unacknowledged stay in the outbox and replay on the next connection.
 
+## Activity
+
+While the companion processes images, one **Processing image queue** activity feeds
+Activity, the macOS sidebar and the iOS bottom accessory through the shared activity
+summary and aggregate progress. It shows **N running · M done**, plus **about X at this
+pace** when `job.deviceBacklog` supplies an ETA. Tapping opens Activity. User-started
+work keeps first priority.
+
+On iOS the same queue activity appears on the Lock Screen and Dynamic Island, with
+its counts, progress and server ETA. It ends when processing stops. A Live Activity
+only displays progress; it grants no background execution. Image processing requires
+the foreground, a granted **Process queue now** continued-processing task, or the
+opportunistic overnight charging window described below.
+
 ### Companion worker lifecycle (app and CLI)
 
 Describe-image and subject-lift commands share one pool of slots
@@ -170,6 +184,17 @@ Describe-image and subject-lift commands share one pool of slots
 per-device limit. Automatic is 8 on Mac and 4 on iPhone/iPad. Settings › Image work sets an
 explicit 1–16 per device (UserDefaults `imageWork.concurrentJobs`, 0 = Automatic), applied on the
 next pull without a restart; `cubby companion --jobs N` sets it for the CLI.
+
+A queue session starts with the first accepted command after idle and lasts through
+slot refills and result recording until the drain settles or processing stops.
+Completed commands count once their results are durable, including recorded failure
+results; released or cancelled claims do not count. At session start the worker
+requests `job.deviceBacklog`, then refreshes it every 45 seconds while processing.
+The first successful response freezes the waiting baseline; later responses refresh
+only the ETA, so newly queued images do not move the baseline. Until the first
+response arrives, progress is indeterminate. Progress is completed this session ÷
+(completed this session + initial waiting), with zero for an empty denominator.
+A restart clears both the completion count and waiting baseline.
 
 The resident worker and iOS background windows both claim with a 60 s lease and renew each
 running command every 15 s through `imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal
@@ -209,7 +234,7 @@ reclaim.
 On iOS 26+, **Process queue now** in Activity and Settings › Image work submits
 an immediate `BGContinuedProcessingTaskRequest`. The companion drains inside the
 system-granted window after locking the screen or backgrounding, reports its
-processed/discovered command counts to the system progress UI, and releases
+same session completion count and progress denominator to the system progress UI, and releases
 unrecorded claims before completing after expiration or system cancellation.
 A separate `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
 requires external power and network connectivity for opportunistic overnight

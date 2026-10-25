@@ -1,3 +1,4 @@
+import CubbyKit
 import Foundation
 import Testing
 
@@ -16,14 +17,13 @@ struct DeviceWorkLiveActivitySelectionTests {
             link: .localActivity(id), isUserInitiated: userInitiated, isCancellable: false)
     }
 
-    @Test func ignoresBriefAndServerLinkedWork() {
+    @Test func ignoresBriefWork() {
         let now = Date.now
         #expect(DeviceWorkLiveSelection.select([], at: now) == nil)
         #expect(
             DeviceWorkLiveSelection.select(
                 [
-                    activity(id: "short", kind: .upload, age: 5),
-                    activity(id: "server", kind: .companionJob, age: 120),
+                    activity(id: "short", kind: .upload, age: 5)
                 ], at: now) == nil)
     }
 
@@ -33,13 +33,29 @@ struct DeviceWorkLiveActivitySelectionTests {
             DeviceWorkLiveSelection.select(
                 [
                     activity(id: "scan", kind: .libraryScan, age: 120, progress: 0.4),
-                    activity(id: "upload", kind: .upload, age: 45, userInitiated: true, progress: 0.2),
-                    activity(id: "server", kind: .companionJob, age: 120),
+                    activity(id: "companion-image-queue", kind: .companionJob, age: 120, progress: 0.5),
+                    activity(id: "upload", kind: .upload, age: 5, userInitiated: true, progress: 0.2),
                 ], at: now))
         #expect(selected.id == "upload")
-        #expect(selected.additionalCount == 1)
+        #expect(selected.additionalCount == 2)
         #expect(selected.progress == 0.2)
         #expect(selected.contentState().localActivityID == "upload")
+        #expect(DeviceWorkLiveSelection.select([], at: now) == nil)
+    }
+
+    @Test func queueProcessingIsEligibleImmediatelyAndEndsWithItsSource() throws {
+        let now = Date.now
+        let queue = BackgroundActivity(
+            id: "companion-image-queue", kind: .companionJob, title: "Processing image queue",
+            phase: .running, progress: 0.25,
+            detail: "4 running · 20 done · about 3 minutes at this pace",
+            startedAt: now, link: .activity, isUserInitiated: false, isCancellable: false)
+        let selection = try #require(DeviceWorkLiveSelection.select([queue], at: now))
+        let state = selection.contentState()
+        #expect(state.title == queue.title)
+        #expect(state.detail == queue.detail)
+        #expect(state.progress == 0.25)
+        #expect(state.estimatedRemaining == nil)
         #expect(DeviceWorkLiveSelection.select([], at: now) == nil)
     }
 

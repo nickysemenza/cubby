@@ -106,6 +106,7 @@ struct CompanionImageWorkerTests {
 
     /// A single round trip fills the configured pool, even while all executions are blocked.
     @Test func aBatchRequestsFreeSlotsAndStartsEveryReturnedCommand() async throws {
+        let activity = ActivityRecorder()
         let execution = Gate()
         let transport = QueuedCompanionTransport(commands: [
             try describeCommand(),
@@ -116,6 +117,7 @@ struct CompanionImageWorkerTests {
             baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Synthetic phone", foreground: true,
             maximumConcurrentCommands: 3, outbox: try outbox(), transport: transport,
+            activityObserver: { activity.record($0) },
             execute: { command in
                 try await execution.pass()
                 return try Self.failedResult(command)
@@ -125,11 +127,24 @@ struct CompanionImageWorkerTests {
         await execution.arrivals(3)
         await worker.drainIdle()
         #expect(await transport.requestedSlots == [3])
+        #expect(activity.activity?.queueProgress?.completedCount == 0)
+        #expect(activity.activity?.processingCount == 3)
+        let firstSession = try #require(activity.activity?.queueProgress?.id)
         #expect(try await worker.drainState().outstandingCommands == 3)
         await worker.stopAndReleaseClaims()
         #expect(await transport.released.count == 3)
-        execution.open()
+        #expect(activity.activity?.queueProgress == nil)
         await worker.commandsIdle()
+        await worker.drainIdle()
+        // Restart the same worker with another command; the old completion count cannot leak.
+        await worker.start()
+        await worker.startCommand(try describeCommand())
+        await execution.arrivals(4)
+        #expect(activity.activity?.queueProgress?.id != firstSession)
+        #expect(activity.activity?.queueProgress?.completedCount == 0)
+        await worker.stopAndReleaseClaims()
+        await worker.commandsIdle()
+        await worker.stop()
     }
 
     /// One slot pool: with every slot busy the worker does not pull, and widening the pool (the

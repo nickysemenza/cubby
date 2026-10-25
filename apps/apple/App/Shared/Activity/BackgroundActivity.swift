@@ -27,6 +27,7 @@ struct BackgroundActivity: Identifiable, Hashable, Sendable {
         case serverRun(String)
         case localActivity(String)
         case photos
+        case activity
     }
 
     let id: String

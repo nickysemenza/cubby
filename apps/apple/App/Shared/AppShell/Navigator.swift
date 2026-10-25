@@ -231,7 +231,7 @@ final class Navigator {
             #endif
         case .photos:
             open(.photos)
-        case nil:
+        case nil, .activity:
             section = .activity
             selectedActivity = nil
             #if os(iOS)

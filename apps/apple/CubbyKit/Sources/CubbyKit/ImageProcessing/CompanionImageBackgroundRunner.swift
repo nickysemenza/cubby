@@ -1,6 +1,7 @@
 import Foundation
 
 protocol CompanionImageBackgroundTransport: Sendable {
+    func deviceBacklog() async throws -> DeviceBacklogBanner?
     func pull(hello: ImageProcessingHello, leaseSeconds: Int, maxCommands: Int) async throws
         -> PullCompanionImageProcessingOutput
     func complete(deviceID: String, result: ImageProcessingResult) async throws
@@ -12,6 +13,8 @@ protocol CompanionImageBackgroundTransport: Sendable {
 }
 
 extension CompanionImageBackgroundTransport {
+    func deviceBacklog() async throws -> DeviceBacklogBanner? { nil }
+
     func release(deviceID: String, command: ImageProcessingCommand) async throws {
         guard let claim = CompanionImageCommandClaim(command) else {
             throw UnsupportedNativeResponse(
@@ -23,6 +26,10 @@ extension CompanionImageBackgroundTransport {
 }
 
 extension CubbyClient: CompanionImageBackgroundTransport {
+    func deviceBacklog() async throws -> DeviceBacklogBanner? {
+        try await DeviceBacklogBanner.load(client: self)
+    }
+
     func pull(hello: ImageProcessingHello, leaseSeconds: Int, maxCommands: Int) async throws
         -> PullCompanionImageProcessingOutput
     {
@@ -111,12 +118,12 @@ actor CompanionImageBackgroundRunner {
         transport: any CompanionImageBackgroundTransport,
         hello: ImageProcessingHello, maximumJobs: Int = .max,
         maximumConcurrentCommands: @escaping @Sendable () async -> Int = { 1 },
-        progress: (@MainActor @Sendable (_ processed: Int, _ total: Int) -> Void)? = nil
+        activity: (@Sendable (_ processed: Int, _ running: Int) async -> Void)? = nil
     ) async -> CompanionBackgroundOutcome {
         guard !isRunning, hello.participation.automaticWork else { return .settled }
         isRunning = true
         defer { isRunning = false }
-        return await withTaskGroup(of: (CompanionBackgroundOutcome, Bool).self) { group in
+        return await withTaskGroup(of: (CompanionBackgroundOutcome, Bool, Bool).self) { group in
             var active = 0
             var accepted = 0
             var processed = 0
@@ -155,25 +162,25 @@ actor CompanionImageBackgroundRunner {
                                 await self.process(command, transport: transport, hello: hello)
                             }
                         }
-                        await progress?(processed, accepted)
+                        await activity?(processed, active)
                         if Task.isCancelled { throw CancellationError() }
                         if pulled.remotePaused { stopped = true }
                     }
-                    if active > 0, let (outcome, stopPulling) = await group.next() {
+                    if active > 0, let (outcome, stopPulling, recorded) = await group.next() {
                         stopped = stopped || stopPulling
                         active -= 1
+                        if recorded { processed += 1 }
                         switch outcome {
                         case .settled:
-                            processed += 1
+                            break
                         case .resumable:
-                            if !stopPulling { processed += 1 }
                             resultsRemain = true
                         case .updateRequired(let error):
                             updateError = error
                             stopped = true
                             group.cancelAll()
                         }
-                        await progress?(processed, accepted)
+                        await activity?(processed, active)
                         // A completion frees a slot; probe again even if the previous pull was empty.
                         if !stopped { exhausted = false }
                     }
@@ -188,7 +195,7 @@ actor CompanionImageBackgroundRunner {
                 }
             }
             // Cancellation-aware executions release before this system task reports completion.
-            for await (outcome, _) in group {
+            for await (outcome, _, _) in group {
                 if case .updateRequired(let error) = outcome { updateError = error }
             }
             if let updateError { return .updateRequired(updateError) }
@@ -199,31 +206,38 @@ actor CompanionImageBackgroundRunner {
     private func process(
         _ command: ImageProcessingCommand, transport: any CompanionImageBackgroundTransport,
         hello: ImageProcessingHello
-    ) async -> (CompanionBackgroundOutcome, Bool) {
+    ) async -> (CompanionBackgroundOutcome, Bool, Bool) {
+        // A released or refused lease is not a completed image. Count only durable results.
+        var recorded = false
         do {
             try Task.checkCancellation()
             let metadata = try CompanionImageCommandMetadata(command)
             guard
                 let result = try await executeRenewing(
                     command, metadata: metadata, transport: transport, deviceID: hello.deviceId)
-            else { return (.settled, false) }
+            else { return (.settled, false, false) }
             try Task.checkCancellation()
             let key = CompanionImageProcessingProtocol.attemptKey(
                 jobID: metadata.jobID, attemptID: metadata.attemptID)
             try await outbox.record(result, for: key)
+            recorded = true
             let delivered = await delivery.deliver(
                 result, key: key, transport: transport, deviceID: hello.deviceId)
-            if case .updateRequired(let error) = delivered { return (.updateRequired(error), true) }
+            if case .updateRequired(let error) = delivered { return (.updateRequired(error), true, recorded) }
             try Task.checkCancellation()
             switch delivered {
-            case .delivered: return (.settled, false)
-            case .setAside: return (.resumable, false)
-            case .updateRequired(let error): return (.updateRequired(error), true)
+            case .delivered: return (.settled, false, recorded)
+            case .setAside: return (.resumable, false, recorded)
+            case .updateRequired(let error): return (.updateRequired(error), true, recorded)
             }
         } catch {
-            if CompanionResultDelivery.isClientUpdateRequired(error) { return (.updateRequired(error), true) }
+            if CompanionResultDelivery.isClientUpdateRequired(error) {
+                return (.updateRequired(error), true, recorded)
+            }
             if !(error is CancellationError) { failureObserver?(error) }
-            return (await released(command, transport: transport, hello: hello, or: .resumable), true)
+            return (
+                await released(command, transport: transport, hello: hello, or: .resumable), true, recorded
+            )
         }
     }
 
