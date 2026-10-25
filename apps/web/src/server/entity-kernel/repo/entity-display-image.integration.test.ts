@@ -69,6 +69,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   entityDisplayImagePresenceSql,
+  loadDisplayImageSources,
+  resolveEntityDisplayImageChain,
   resolvePublicEntityDisplayImages,
   resolveEntityDisplayImages,
   resolveEntityAttachments,
@@ -417,6 +419,23 @@ describe("entity display image resolver", () => {
       (row) => ({ id: row.id }),
     );
     expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
+
+    const chain = await resolveEntityDisplayImageChain(ctx.db, {
+      entityKind: "device",
+      entityId: device.entityId,
+    });
+    expect(chain).toEqual([
+      {
+        image: expectedDisplayImage(photo),
+        priority: expect.any(Number),
+        sourceId: hardware.entityId,
+      },
+    ]);
+    expect(await loadDisplayImageSources(ctx.db, chain)).toEqual(
+      new Map([
+        [hardware.entityId, { entityKind: "product", entityId: hardware.id }],
+      ]),
+    );
   });
 
   describe("product", () => {

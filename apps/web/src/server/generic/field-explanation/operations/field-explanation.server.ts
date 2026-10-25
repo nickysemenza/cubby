@@ -3,12 +3,13 @@ import {
   dataQuality,
   scoredEntities,
 } from "@cubby/schemas/data-quality";
-import type { Entity } from "@cubby/schemas/entity";
+import { type Entity, entityRefSchema } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   fieldExplanationInput,
   fieldExplanationOutput,
+  imageChainExplanation,
 } from "@cubby/schemas/field-explanation";
 import {
   fieldResolutionSchema,
@@ -29,6 +30,10 @@ import {
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
+import {
+  loadDisplayImageSources,
+  resolveEntityDisplayImageChain,
+} from "~/server/entity-kernel/repo/entity-display-image";
 import { loadQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
 import { explainStoredDerived } from "~/server/generic/derived/repo/explain";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
@@ -855,9 +860,50 @@ export async function explainField(
   });
 }
 
+/** Display images grouped into precedence levels, the chosen cover first. */
+async function explainImageChain(
+  context: Parameters<typeof explainField>[0],
+  input: z.infer<typeof entityRefSchema>,
+): Promise<z.infer<typeof imageChainExplanation>> {
+  const shortcodeEntity = shortcodeEntities.find(
+    (candidate) => candidate === input.entityKind,
+  );
+  const internalId = shortcodeEntity
+    ? await resolveLiveShortcode(context.db, input.entityId, shortcodeEntity)
+    : null;
+  if (!internalId) return { levels: [] };
+  const ranked = await resolveEntityDisplayImageChain(context.db, {
+    entityKind: input.entityKind,
+    entityId: internalId,
+  });
+  const sources = await loadDisplayImageSources(context.db, ranked);
+  const levels: z.infer<typeof imageChainExplanation>["levels"] = [];
+  let previous: string | undefined;
+  for (const [index, entry] of ranked.entries()) {
+    const key = `${entry.priority}:${entry.sourceId ?? ""}`;
+    const source = entry.sourceId
+      ? (sources.get(entry.sourceId) ?? null)
+      : null;
+    if (key !== previous)
+      levels.push({
+        label: source ? `From ${source.entityKind} ${source.entityId}` : "Own",
+        source,
+        images: [],
+      });
+    previous = key;
+    levels.at(-1)!.images.push({
+      id: entry.image.id,
+      url: entry.image.url,
+      chosen: index === 0,
+    });
+  }
+  return { levels };
+}
+
 export const fieldExplanationHandlers = implementOperationDomain(
   fieldExplanationContract,
   {
     explain: explainField,
+    imageChain: explainImageChain,
   },
 );

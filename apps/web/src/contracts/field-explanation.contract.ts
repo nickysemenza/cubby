@@ -1,6 +1,8 @@
+import { entityRefSchema } from "@cubby/schemas/entity";
 import {
   fieldExplanationInput,
   fieldExplanationOutput,
+  imageChainExplanation,
 } from "@cubby/schemas/field-explanation";
 
 import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
@@ -15,6 +17,13 @@ export const fieldExplanationContract = defineContract(
       modelBacked: true,
       input: fieldExplanationInput,
       output: fieldExplanationOutput,
+      cache: { tags: ENTITY_ROOT_TAGS, profile: "live-status" },
+    }),
+    imageChain: query({
+      description:
+        "A record's display images by precedence level: its own, then each borrowed source in declared order.",
+      input: entityRefSchema,
+      output: imageChainExplanation,
       cache: { tags: ENTITY_ROOT_TAGS, profile: "live-status" },
     }),
   },
