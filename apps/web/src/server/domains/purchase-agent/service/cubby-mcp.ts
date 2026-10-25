@@ -158,15 +158,19 @@ export function cubbyMcpExtension(
 /**
  * Overwrite any model-written `_runExecution.generation` with the host's own
  * record of the issuing request's generation; the bearer minted for the call
- * signs it, and the server fences superseded generations by it.
+ * signs it, and the server fences superseded generations by it. A model that
+ * also names its Run's public `run` code beside `runId` is dropped to `runId`:
+ * the envelope refuses both, and the delegation already binds the Run.
  */
-async function stampGeneration(
+export async function stampGeneration(
   args: JsonObject,
   generation: () => Promise<string | undefined> | undefined,
 ): Promise<JsonObject> {
   const envelope = args._runExecution;
   if (!isJsonObject(envelope)) return args;
-  const { generation: _claimed, ...rest } = envelope;
+  const { generation: _claimed, ...claimed } = envelope;
+  const { run: _publicRun, ...withoutRun } = claimed;
+  const rest = claimed.runId === undefined ? claimed : withoutRun;
   const stamped = await generation();
   return {
     ...args,

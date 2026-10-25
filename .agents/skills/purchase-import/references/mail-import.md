@@ -119,6 +119,10 @@ Claude or Codex session researches it later through the Research queue.
    the order number bridges them. Each Email on the path is judged against the
    one before it and joins the Run, so resolve it too. Every path must reach an
    Email already admitted to this Run; cyclic `via` paths are refused.
+   A `mail_search` row's `heldBy` names the Run already processing that Email;
+   another live Run's Email cannot join yours, so say "held by RUN-…" in the
+   unresolved reason, never "not admitted". `retryableMessageIds` lost a
+   contention race: search again before treating them as missing.
 5. Claim the next Email. Stop with `stop_import_run_for_review` only for
    ambiguity that blocks every remaining Email. Once every admitted Email is
    imported, linked, excluded or resolved, the Run completes; any `unresolved`

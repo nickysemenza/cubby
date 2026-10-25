@@ -9,7 +9,7 @@ import {
   mailReadContent,
 } from "~/server/domains/purchase-import/repo/gmail/read-content";
 
-import { cubbyToolResult } from "./cubby-mcp";
+import { cubbyToolResult, stampGeneration } from "./cubby-mcp";
 
 describe("cubbyToolResult Email reads", () => {
   it("keeps an attachment read's agent text under the cap", () => {
@@ -48,5 +48,41 @@ describe("cubbyToolResult Email reads", () => {
     ).length;
     expect(bytes).toBeGreaterThan(MAIL_READ_RESPONSE_MAX_BYTES - 10_000);
     expect(bytes).toBeLessThanOrEqual(MAIL_READ_RESPONSE_MAX_BYTES);
+  });
+});
+
+describe("stampGeneration", () => {
+  it("keeps runId when the model also names its Run's public code", async () => {
+    // A coordinator wrote both, and the envelope refused the call at input
+    // validation, so purchase_import.prepare never ran.
+    const stamped = await stampGeneration(
+      {
+        _runExecution: {
+          runId: "00000000-0000-4000-8000-000000000001",
+          run: "RUN-SYNTH",
+          operationId: "synthetic-operation",
+          generation: "model-claimed",
+        },
+      },
+      async () => "host-generation",
+    );
+    expect(stamped._runExecution).toEqual({
+      runId: "00000000-0000-4000-8000-000000000001",
+      operationId: "synthetic-operation",
+      generation: "host-generation",
+    });
+  });
+
+  it("leaves a member's public run code alone", async () => {
+    const stamped = await stampGeneration(
+      {
+        _runExecution: { run: "RUN-SYNTH", operationId: "synthetic-operation" },
+      },
+      async () => undefined,
+    );
+    expect(stamped._runExecution).toEqual({
+      run: "RUN-SYNTH",
+      operationId: "synthetic-operation",
+    });
   });
 });
