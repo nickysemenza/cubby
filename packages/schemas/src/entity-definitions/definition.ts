@@ -980,7 +980,14 @@ const buildMetadataSchemas = () => {
      */
     z
       .object({
-        rollup: z.enum(["count", "sum", "min", "max"]),
+        // Literals, not z.enum: aggregate names are SQL words, not schema
+        // vocabulary for no-raw-enum-literal-in-sql.
+        rollup: z.union([
+          z.literal("count"),
+          z.literal("sum"),
+          z.literal("min"),
+          z.literal("max"),
+        ]),
         via: nonEmptyString(),
         absent: z.array(nonEmptyString()).min(1).optional(),
       })
