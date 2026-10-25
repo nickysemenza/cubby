@@ -210,6 +210,7 @@
     "./assessment-review-family": "./src/assessment-review-family.ts",
     "./wish": "./src/wish.ts",
     "./wish-fields": "./src/wish-fields.ts",
+    "./derived-backlog": "./src/derived-backlog.ts",
     "./derived-value": "./src/derived-value.ts",
     "./entity-fields": "./src/entity-fields.ts",
     "./entity-stored-derived": "./src/entity-stored-derived.ts",

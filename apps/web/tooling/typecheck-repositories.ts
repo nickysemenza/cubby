@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/generic/derived/repo/backlog.ts",
   "src/server/lib/purchase-spending.ts",
   "src/server/domains/purchase/repo/purchase-spending.ts",
   "src/server/domains/purchase/repo/settlement-predicates.ts",
