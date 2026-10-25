@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
+  existsSync,
+  readdirSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -8,9 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, vi } from "vitest";
-import fs from "node:fs";
-import { syncBuiltinESMExports } from "node:module";
+import { test } from "vitest";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
@@ -125,14 +126,7 @@ test("Mac installation reports retained backups without failing a successful rep
   mkdirSync(destination);
   writeFileSync(join(source, "binary"), "new");
   writeFileSync(join(destination, "binary"), "old");
-  // Root bypasses chmod restrictions on CI; fail only the external cleanup call.
-  const remove = fs.rmSync;
-  const cleanup = vi.spyOn(fs, "rmSync").mockImplementation((path, options) => {
-    if (typeof path === "string" && path.endsWith(".previous.app"))
-      throw Object.assign(new Error("permission denied"), { code: "EACCES" });
-    return remove(path, options);
-  });
-  syncBuiltinESMExports();
+  chmodSync(destination, 0o555);
   let backup: string | undefined;
   try {
     backup = await installMacApp(
@@ -145,8 +139,13 @@ test("Mac installation reports retained backups without failing a successful rep
     assert.equal(readFileSync(join(destination, "binary"), "utf8"), "new");
     assert.equal(readFileSync(join(backup, "binary"), "utf8"), "old");
   } finally {
-    cleanup.mockRestore();
-    syncBuiltinESMExports();
+    if (backup) chmodSync(backup, 0o755);
+    if (existsSync(destination)) chmodSync(destination, 0o755);
+    for (const directory of readdirSync(root)) {
+      const old = join(root, directory);
+      if (directory.endsWith(".previous.app") && existsSync(old))
+        chmodSync(old, 0o755);
+    }
     rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });

@@ -16,21 +16,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Ensure Linux file descriptor paths
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        # Minimal runner images can omit the path Bash process substitution
-        # uses; install-action needs it before installing wasm-pack.
-        if [[ ! -e /dev/fd ]]; then
-          test -d /proc/self/fd
-          if [[ "$EUID" == 0 ]]; then
-            ln -s /proc/self/fd /dev/fd
-          else
-            sudo ln -s /proc/self/fd /dev/fd
-          fi
-        fi
-
     # The one remote-cache seam (docs/ci.md): the workflow exposes the
     # NX_CACHE_URL/NX_CACHE_TOKEN secrets, and Nx reads them under its own
     # names. A fork PR receives no secrets, so both stay unset and Nx uses
@@ -55,13 +40,6 @@ runs:
         else
           echo "No shared Nx cache credentials; using the local cache only."
         fi
-
-    # Celesto does not provide GitHub's preinstalled Rust toolchain.
-    - name: Setup Rust for WASM builds
-      if: inputs.wasm == 'restore' && runner.environment == 'self-hosted'
-      uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
-      with:
-        cache: false
 
     # The version comes from package.json's packageManager.
     - name: Setup pnpm

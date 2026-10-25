@@ -11,11 +11,6 @@ runs:
     - name: Use workspace-local browser binaries
       shell: bash
       run: echo "PLAYWRIGHT_BROWSERS_PATH=$GITHUB_WORKSPACE/playwright/.cache/ms-playwright" >> "$GITHUB_ENV"
-    # Browser archives do not contain the operating system libraries.
-    - name: Install Chromium system dependencies
-      if: runner.environment == 'self-hosted'
-      shell: bash
-      run: pnpm --filter @cubby/web exec playwright install-deps chromium
     - name: Resolve installed Playwright version
       id: playwright
       shell: bash

@@ -24,57 +24,31 @@ failures without paying a fresh install for every static check. One status
 context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
-The required test matrix uses Celesto XL for one browser shard and one Vitest
-shard; the remaining shards use GitHub Ubuntu. Four concurrent XL requests
-left a shard queued for nearly six minutes in the fresh-run experiment, so
-the workflow limits Celesto demand to two jobs per run. The workflow owns
-exact assignments and counts. GitHub browser shards use two workers;
-Celesto XL browser shards trial four workers against their eight vCPUs.
-Each shard restores or builds its own web output through Nx before testing;
-there is no shared-build producer or artifact dependency. The existing build
-ensure verifies provenance and supports standalone tests. Cold shards may build
-in parallel; a compatible completed build can replay from the remote cache.
+The required test matrix runs entirely on GitHub-hosted runners: four browser
+shards and four Vitest shards use `ubuntu-latest`. Browser shards use two workers
+each. Every shard restores or builds its own web output through Nx before
+testing; the build ensure verifies provenance and supports standalone tests.
+There is no shared-build producer or artifact prerequisite between shards.
 
-Plan, reporting and the final gate use GitHub's `ubuntu-slim`. Validation,
-optional jobs and Apple jobs also stay on GitHub; Rust retains its ARM runner.
-Deployment and other workflows retain their existing runners. This limits a
-normal PR to two heavy Celesto jobs, spreading demand across both providers
-without making native lane selection wait for Celesto admission. Celesto
-browser shards trial XL with additional workers to use the larger machine;
-full-run speed still depends on admission, setup and the slowest required lane.
+Plan, reporting and the final gate use `ubuntu-slim`. Validation and optional
+jobs use GitHub Ubuntu; Rust retains its ARM runner, and Apple checks retain
+their macOS runners. Deployment and other workflows retain their runners.
 
-Celesto hosts its machines; `self-hosted` is GitHub's label for runners outside
-its hosted fleet. Enable the repository in the Celesto GitHub App and link it
-to a workspace with paid credit for Large/XL and enough concurrent sandbox
-capacity. The Micro-only trial cannot run these jobs. A queued runner is not
-bounded by its execution timeout; insufficient credit or capacity can still
-block the merge gate. Moving some jobs off GitHub frees its runner slots, but
-does not guarantee Celesto capacity.
+`.github/actions/setup-playwright` shares an exact-version Chromium headless
+shell cache between Vitest's component-browser tests and E2E. It stores browser
+binaries under the ignored workspace-local `playwright/.cache/ms-playwright`
+directory. A hit reuses binaries; a miss installs only headless shell and its
+required helpers. Required suites run headlessly without branded channels;
+local headed browser installation remains separate. GitHub's Ubuntu image
+supplies the browser's operating-system libraries. Reporting merges blobs
+without building the app or installing browsers, outside `CI passed`.
 
-Self-hosted WASM consumers explicitly install Rust. Celesto browser jobs install
-Chromium system dependencies even when its browser archive is cached.
-`.github/actions/setup-playwright` owns browser installation and caching for
-both Vitest's component-browser tests and E2E. It sets `PLAYWRIGHT_BROWSERS_PATH`
-to the ignored workspace-local `playwright/.cache/ms-playwright` directory and
-uses a new cache namespace: archives must not contain home-directory paths from
-a different runner user. A hit reuses binaries; a miss installs only Chromium headless shell and its
-required helpers, since both required browser suites run headlessly without a
-branded browser channel. Local headed browser installation remains separate.
-Setup
-also restores `/dev/fd` when absent on Linux: Bash process substitution in the
-WASM installer requires that link to `/proc/self/fd` on minimal images.
-Self-hosted images can run as root, so filesystem permission regressions inject
-the failing syscall rather than rely on chmod restrictions that root bypasses. Celesto test
-lanes set their own image identity for Nx result keys; GitHub lanes retain their
-hosted image identity. Increment the Celesto identity when changing its runner
-image contract. Reporting still merges blobs without building the app or
-installing browsers and remains outside `CI passed`.
-
-Standard GitHub-hosted runners are free for this public repository. Evaluate
-push-to-result time, queueing, setup, uncached execution, report publication and
-billed runtime before claiming a benefit. Larger runners do not automatically
-increase configured test worker counts. Revert runner labels to GitHub's hosted
-labels to end the experiment.
+Standard GitHub-hosted runners are free for this public repository. Account
+capacity still affects readiness: GitHub Pro permits 40 concurrent hosted
+jobs, with a separate maximum of five macOS jobs. Compare full push-to-gate
+time, queueing, setup and actual test execution; a cached test replay measures
+different work from executing changed-code tests. The preceding Celesto trial
+and account upgrade do not establish that Celesto is necessary for a speedup.
 
 ## Journeys
 
@@ -105,8 +79,7 @@ include Node, platform/architecture, the hosted image version, CI mode, locale
 and timezone, each as a plain Nx `env` or `runtime` input. A runtime input's
 command must print only deterministic stdout: Nx hashes stdout and stderr. Web targets add ignored env files, generated WASM and the
 selectors in `apps/web/project.json`; shard selection is keyed per target and
-browser worker count (`CUBBY_E2E_WORKERS`, default two) is an explicit Nx input
-as well as a command argument. The Worker bundles all
+browser worker count is fixed at two in the target command. The Worker bundles all
 `docs/**/*.md`, so those bytes participate in runtime keys. Native App source
 is excluded only from web-specific passes; root tooling keeps broad coverage.
 Rust checks include their actual compiler, platform and Cargo warning policy.
@@ -435,12 +408,12 @@ Generated output is never committed; web and Apple jobs generate it during
 including the direct native contract and Swift codecs.
 
 The `lanes` job is one static matrix with browser and Vitest sharding.
-The workflow owns shard counts and provider-specific browser worker counts.
+The workflow owns shard counts; browser workers are fixed by the e2e target.
 Browser shards run alone, so no companion check waits behind one. Every
 failure still fails the job and `CI passed`, and each Nx target retains its own
 cache key.
 
-Each entry uses one runner from its assigned provider with PostgreSQL and IntegreSQL service
+Each entry uses one GitHub runner with PostgreSQL and IntegreSQL service
 containers.
 Each Vitest shard runs the `vitest-ci` target: one Vitest run of every merge-gate
 project (`unit`, `mcp-contract`, `ui`, `capability`, `scripts`,
@@ -599,11 +572,10 @@ The `main` ruleset requires only `CI passed`, from GitHub Actions. Keep `strict`
 a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
-Optimize readiness across concurrent PRs within both providers' available slots.
+Optimize readiness across concurrent PRs within the account's available slots.
 The Linux `lanes` matrix sets no `max-parallel`, so all entries can run
 concurrently when capacity permits; validation and short control jobs are additional demand, and
-optional work has repository-level limits. Browser and Vitest tiers each use
-one Celesto job, leaving most shards on GitHub to limit admission pressure.
+optional work has repository-level limits. Both test tiers use GitHub runners.
 Standalone shards pay setup on every runner; this does not reserve
 account-wide capacity or guarantee fairness against unrelated repositories.
 
@@ -653,7 +625,7 @@ links remain in Git history.
   critical path. Browser and workerd checks prepare their own Worker, reusing
   compatible completed Nx builds. The shared producer experiment added a
   prerequisite and artifact transfer without demonstrating faster readiness;
-  the hybrid experiment restores independent builds.
+  independent builds avoid that prerequisite.
 - HTTP/2 proxying and WASM preloading did not improve end-to-end hydration.
   `context.route` asset caching disabled Chromium's HTTP/code cache and made
   navigation slower. Catch-all chunk grouping caused module initialization

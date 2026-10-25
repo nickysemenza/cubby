@@ -162,10 +162,10 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Spread test demand across GitHub and Celesto; each owns fresh services.
+  # Each GitHub test shard owns fresh database services.
   lanes:
     name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -175,38 +175,29 @@ jobs:
           # serializes the slowest lane's wall time.
           - name: E2E tests (desktop 1/4)
             browser: desktop-1
-            runner: [ubuntu-latest]
             run: CUBBY_E2E_SHARD=1/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 2/4)
             browser: desktop-2
-            runner: [ubuntu-latest]
             run: CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 3/4)
             browser: desktop-3
-            browser-workers: "4"
-            runner: [self-hosted, celesto-xl]
             run: CUBBY_E2E_SHARD=3/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 4/4)
             browser: desktop-4
-            runner: [ubuntu-latest]
             run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           # Every Vitest project is split by file; all blobs feed the report.
           - name: Vitest (1/4)
             vitest: "1"
-            runner: [ubuntu-latest]
             run: CUBBY_VITEST_SHARD=1/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
           - name: Vitest (2/4)
             vitest: "2"
-            runner: [ubuntu-latest]
             run: CUBBY_VITEST_SHARD=2/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
             db-check: true
           - name: Vitest (3/4)
             vitest: "3"
-            runner: [ubuntu-latest]
             run: CUBBY_VITEST_SHARD=3/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
           - name: Vitest (4/4)
             vitest: "4"
-            runner: [self-hosted, celesto-xl]
             run: CUBBY_VITEST_SHARD=4/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
     services: &test-databases
       postgres:
@@ -245,9 +236,6 @@ jobs:
       CUBBY_SOURCE_COMMIT: ${{ github.sha }}
       CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
     steps:
-      - name: Set Celesto execution identity
-        if: runner.environment == 'self-hosted'
-        run: echo "ImageVersion=celesto-ubuntu-24.04-x64-v1" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: setup
         uses: ./.github/actions/setup-node-with-deps
@@ -278,7 +266,6 @@ jobs:
       - name: Run Playwright shard
         if: ${{ matrix.browser }}
         env:
-          CUBBY_E2E_WORKERS: ${{ matrix.browser-workers || '2' }}
           NX_SKIP_REMOTE_CACHE: ${{ (inputs.fresh || inputs.fresh-tests) && 'true' || 'false' }}
         uses: ./.github/actions/playwright
         with:
@@ -297,12 +284,12 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
-        with:
-          cache: false
       - uses: ./.github/actions/setup-node-with-deps
         with:
           workspace-filter: cubby
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
+        with:
+          cache: false
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         id: rust-cache
         with:
