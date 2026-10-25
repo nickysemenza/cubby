@@ -2383,7 +2383,7 @@ check. Cancelled and manually paused Jobs are member stops: only explicit
 retry revives them, never a capture or periodic wake. Never-exhausted kinds,
 refresh families and image work among them, never fail: a failing page backs
 off and resumes. An exhausted kind's failed Job stays failed under periodic
-wakes, but a capture its restarting marker has not observed wakes it into a
+wakes, but pending input under its restarting policy wakes it into a
 fresh pass, because the capture is new input the failed pass never read
 ([durable invalidation](jobs.md#durable-invalidation)). Its other failures
 require explicit retry.

@@ -7,7 +7,11 @@ import {
   withSnapshotWriteDatabase,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { job, jobInvalidation } from "~/server/db/schema";
+import {
+  job,
+  jobInvalidation,
+  jobInvalidationCapture,
+} from "~/server/db/schema";
 import {
   claimJob,
   dueJobs,
@@ -26,7 +30,7 @@ import {
 
 // Production finding: a source capture and the family Job's own execution
 // wrote one tuple, so claims and renewals on another backend aborted finance
-// admission with 40001. Captures now write only `JobInvalidation`; these
+// admission with 40001. Captures now append independent rows; these
 // cases pin that the separation loses no rerun.
 describe("durable family invalidation", () => {
   const ctx = withTestDb();
@@ -59,17 +63,95 @@ describe("durable family invalidation", () => {
   };
   const capture = (db: Parameters<typeof recordJobInvalidation>[0]) =>
     recordJobInvalidation(db, { ...RESTARTING, restartsPass: true });
-  const revision = async (key: string) =>
+  const captureCount = async (key: string) =>
     (
       await getDb(ctx.db)
-        .select({ revision: jobInvalidation.revision })
-        .from(jobInvalidation)
-        .where(eq(jobInvalidation.key, key))
-    )[0]?.revision ?? 0;
+        .select({ count: sql<number>`count(*)::int` })
+        .from(jobInvalidationCapture)
+        .where(eq(jobInvalidationCapture.key, key))
+    )[0]?.count ?? 0;
   const row = async (id: string) =>
     (await getDb(ctx.db).select().from(job).where(eq(job.id, id)))[0]!;
   const due = async (id: string) =>
     (await dueJobs(ctx.db, 100)).some((entry) => entry.id === id);
+
+  it("keeps an earlier-started capture pending when it commits after a later capture was acknowledged", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    const initial = await claimJob(ctx.db, marked.id);
+    if (!initial) throw new Error("Expected initial claim");
+    await publishJobPage(ctx.db, initial, { done: true });
+    let ready = () => {};
+    let release = () => {};
+    const captured = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const mayCommit = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const earlier = withSnapshotWriteDatabase(
+      ctx.db,
+      async (tx) => {
+        await capture(tx);
+        ready();
+        await mayCommit;
+      },
+      { isolationLevel: "serializable" },
+    );
+    let earlierError: unknown;
+    void earlier.catch((error) => {
+      earlierError = error;
+      ready();
+    });
+    try {
+      await captured;
+      if (earlierError) throw earlierError;
+      await capture(ctx.db);
+      const later = await claimJob(ctx.db, marked.id);
+      if (!later) throw new Error("Expected later capture claim");
+      expect(await publishJobPage(ctx.db, later, { done: true })).toBe(true);
+      expect(await due(marked.id)).toBe(false);
+      release();
+      await earlier;
+      expect(await due(marked.id)).toBe(true);
+      const pending = await getDb(ctx.db)
+        .select()
+        .from(jobInvalidationCapture)
+        .where(
+          sql`${jobInvalidationCapture.key} = ${RESTARTING.key} AND NOT ${jobInvalidationCapture.observed}`,
+        );
+      expect(pending).toHaveLength(1);
+      const fresh = await claimJob(ctx.db, marked.id);
+      expect(fresh?.generation).toBe(later.generation + 1);
+    } finally {
+      release();
+      await earlier;
+    }
+  });
+
+  it("rolls capture acknowledgement back with an abandoned claim", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    await expect(
+      withTransactionDatabase(ctx.db, async (tx) => {
+        const claim = await claimJob(tx, marked.id);
+        if (!claim) throw new Error("Expected transactional claim");
+        throw new Error("Synthetic abandoned claim");
+      }),
+    ).rejects.toThrow("Synthetic abandoned claim");
+    expect(await row(marked.id)).toMatchObject({
+      state: "completed",
+      generation: marked.generation,
+    });
+    expect(await due(marked.id)).toBe(true);
+    const pending = await getDb(ctx.db)
+      .select()
+      .from(jobInvalidationCapture)
+      .where(
+        sql`${jobInvalidationCapture.key} = ${RESTARTING.key} AND NOT ${jobInvalidationCapture.observed}`,
+      );
+    expect(pending).toHaveLength(1);
+  });
 
   it("keeps a rolled-back capture out and never loses a committed one", async () => {
     const marked = await restarting();
@@ -79,10 +161,10 @@ describe("durable family invalidation", () => {
         throw new Error("Synthetic rejected save");
       }),
     ).rejects.toThrow("Synthetic rejected save");
-    expect(await revision(RESTARTING.key)).toBe(0);
+    expect(await captureCount(RESTARTING.key)).toBe(0);
     expect(await due(marked.id)).toBe(false);
     await withTransactionDatabase(ctx.db, (tx) => capture(tx));
-    expect(await revision(RESTARTING.key)).toBe(1);
+    expect(await captureCount(RESTARTING.key)).toBe(1);
     // The completed execution row is untouched, yet the Job is due again.
     expect(await row(marked.id)).toMatchObject({
       state: "completed",
@@ -111,7 +193,6 @@ describe("durable family invalidation", () => {
     expect(reclaimed).toMatchObject({
       generation: first.generation + 1,
       cursor: null,
-      observedRevision: await revision(RESTARTING.key),
     });
     // A pass that finishes first (quality) keeps its cursor across a capture
     // and a reclaim, completes, and its scheduled repeat reruns it.
@@ -209,7 +290,7 @@ describe("durable family invalidation", () => {
   });
 
   // Review finding: an unobserved capture made a non-restarting pass in
-  // progress due at once, and its claim keeps the old observed revision, so
+  // progress due at once, and its claim keeps the new pending input, so
   // the same capture bypassed every later backoff in a tight loop.
   it("keeps a failing pass in progress backing off through a capture", async () => {
     const searchJob = await family("search");
@@ -372,7 +453,7 @@ describe("durable family invalidation", () => {
       { isolationLevel: "serializable" },
     );
     expect(attempts).toBe(1);
-    expect(await revision(RESTARTING.key)).toBe(2);
+    expect(await captureCount(RESTARTING.key)).toBe(2);
   });
 
   // Some family pages publish under SERIALIZABLE and read the marker while a
@@ -388,7 +469,7 @@ describe("durable family invalidation", () => {
       await capture(ctx.db);
       const claim = await claimJob(ctx.db, marked.id);
       if (!claim) throw new Error("Expected claim");
-      const before = await revision(RESTARTING.key);
+      const before = await captureCount(RESTARTING.key);
       const latch = () => {
         let open: () => void = () => {};
         const opened = new Promise<void>((resolve) => {
@@ -440,7 +521,7 @@ describe("durable family invalidation", () => {
       }
       expect(captures).toBe(1);
       expect(publications).toBeGreaterThanOrEqual(1);
-      expect(await revision(RESTARTING.key)).toBe(before + 1);
+      expect(await captureCount(RESTARTING.key)).toBe(before + 1);
       // The page either finished before observing the capture or was
       // superseded by it; either way the family reruns.
       expect(await due(marked.id)).toBe(true);
@@ -478,7 +559,6 @@ describe("durable family invalidation", () => {
       const fresh = await claimJob(ctx.db, marked.id);
       expect(fresh).toMatchObject({
         generation: claim.generation + 1,
-        observedRevision: await revision(RESTARTING.key),
       });
     },
   );
@@ -503,7 +583,7 @@ describe("durable family invalidation", () => {
 
   // Review finding: failJob and claimJob read the marker, then terminalized
   // the Job as failed in a later statement. A capture committing between the
-  // two left a failed Job behind an unobserved restarting revision, and
+  // two left a failed Job behind unobserved restarting input, and
   // nothing claimed it again. A test-only trigger latches the terminal write
   // so the capture commits exactly inside that window.
   const latchTerminalWrite = async (
@@ -566,7 +646,6 @@ describe("durable family invalidation", () => {
       generation: generation + 1,
       attempts: 1,
       cursor: null,
-      observedRevision: await revision(RESTARTING.key),
     });
   };
 

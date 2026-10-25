@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,7 +17,7 @@ import {
   imageProcessingJob,
   imageProcessingOrphan,
   imageProcessingSubmissionJob,
-  jobInvalidation,
+  jobInvalidationCapture,
 } from "~/server/db/schema";
 import {
   createDevice,
@@ -718,11 +718,12 @@ describe("image execution history conservation", () => {
     const familyGenerations = () =>
       getDb(ctx.db)
         .select({
-          key: jobInvalidation.key,
-          generation: jobInvalidation.revision,
+          key: jobInvalidationCapture.key,
+          generation: sql<number>`count(*)::int`,
         })
-        .from(jobInvalidation)
-        .orderBy(jobInvalidation.key);
+        .from(jobInvalidationCapture)
+        .groupBy(jobInvalidationCapture.key)
+        .orderBy(jobInvalidationCapture.key);
     const before = await familyGenerations();
     const outcome = {
       kind: "describe_image" as const,

@@ -1,5 +1,5 @@
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
@@ -9,7 +9,14 @@ import { z } from "zod";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { ledgerParty } from "~/server/db/schema";
+import { image, imageProcessingAttempt, ledgerParty } from "~/server/db/schema";
+import {
+  claimImageProcessingJob,
+  completeImageProcessingJob,
+} from "~/server/domains/image-processing/repo/image-processing";
+import { assignImageProcessingExecutor } from "~/server/domains/image-processing/repo/image-processing-history";
+import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
+import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
   readEmail,
   saveMailboxMetadata,
@@ -71,12 +78,52 @@ const abortedAttempt = z.object({
 // execution Job tuple, which the capture never writes, so admission succeeds.
 describe("finance.record source and Job lifecycle contention", () => {
   const ctx = withTestDb();
+  async function prepareCloudCompletion() {
+    const source = await createUploadedImageRecord(ctx.db, {
+      key: `tests/${crypto.randomUUID()}.jpg`,
+      filename: "synthetic-capture.jpg",
+      contentType: "image/jpeg",
+      size: 128,
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "a".repeat(64) })
+      .where(eq(image.id, source.id));
+    const scheduled = await scheduleImageProcessingJobs(ctx.db, {
+      id: source.shortcode,
+      kinds: ["describe_image"],
+      publish: false,
+    });
+    const jobId = scheduled.jobIds[0];
+    if (!jobId) throw new Error("Missing synthetic image job");
+    const lease = await claimImageProcessingJob(ctx.db, {
+      jobId,
+      kinds: ["describe_image"],
+      leaseMs: 60_000,
+    });
+    if (!lease) throw new Error("Missing synthetic image claim");
+    expect(
+      await assignImageProcessingExecutor(ctx.db, {
+        jobId,
+        attemptId: lease.attemptId,
+        executor: {
+          kind: "cloud",
+          deviceId: null,
+          name: "test",
+          platform: "cloud",
+          appVersion: null,
+          osVersion: null,
+        },
+      }),
+    ).toBe(true);
+    return { jobId, attemptId: lease.attemptId };
+  }
   it("rolls back captured intent with rejected operation admission without an external writer", async () => {
     const before = await getDb(ctx.db).execute(
       sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
     );
     const invalidationsBefore = await getDb(ctx.db).execute(
-      sql`SELECT key, revision::int, xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
+      sql`SELECT key, "restartsPass", xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
     );
     const invalidate = refreshFamilies.invalidateRefreshFamily;
     const capture = vi
@@ -111,7 +158,7 @@ describe("finance.record source and Job lifecycle contention", () => {
       expect(
         (
           await getDb(ctx.db).execute(
-            sql`SELECT key, revision::int, xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
+            sql`SELECT key, "restartsPass", xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
           )
         ).rows,
       ).toEqual(invalidationsBefore.rows);
@@ -143,13 +190,15 @@ describe("finance.record source and Job lifecycle contention", () => {
     { conflicts: 1, change: "claim" },
     { conflicts: 1, change: "renew" },
     { conflicts: 3, change: "renew" },
+    { conflicts: 1, change: "cloud_completion" },
+    { conflicts: 3, change: "cloud_completion" },
   ])(
     "preserves admission and exact replay after $conflicts competing writes (change: $change)",
     async ({ conflicts, change }) => {
       const lifecycle = change === "claim" || change === "renew";
-      // Only a genuine source capture on the second client conflicts.
-      const expectedConflicts = change === "none" || lifecycle ? 0 : conflicts;
-      const invalidations = expectedConflicts;
+      // Genuine source captures and execution work use independent write rows.
+      const expectedConflicts = 0;
+      const invalidations = change === "none" || lifecycle ? 0 : conflicts;
       const member = await createRepoEntity(ctx, "ledgerParty", {
         name: "Synthetic intake member",
         kind: "member",
@@ -192,6 +241,14 @@ describe("finance.record source and Job lifecycle contention", () => {
         kind: "refresh.family",
         input: { family: "search" },
       });
+      const cloudCompletions: Awaited<
+        ReturnType<typeof prepareCloudCompletion>
+      >[] = [];
+      if (change === "cloud_completion") {
+        for (let index = 0; index < conflicts; index++) {
+          cloudCompletions.push(await prepareCloudCompletion());
+        }
+      }
       const input = syntheticIntake();
       const record = () =>
         sourceTransactionRecordHandlers.operations.record({
@@ -213,7 +270,7 @@ describe("finance.record source and Job lifecycle contention", () => {
       (SELECT count(*)::int FROM "Run" WHERE purpose = 'sweep') AS sweeps,
       (SELECT count(*)::int FROM "Job" WHERE kind = 'run.execute') AS "sweepJobs",
       (SELECT count(*)::int FROM "Expense") AS expenses,
-      (SELECT revision::int FROM "JobInvalidation" WHERE key = 'refresh:search') AS revision`)
+      (SELECT count(*)::int FROM "JobInvalidationCapture" WHERE key = 'refresh:search') AS revision`)
         ).rows[0];
       let attempts = 0;
       const invalidate = refreshFamilies.invalidateRefreshFamily;
@@ -241,7 +298,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           .parse(
             (
               await getDb(ctx.db).execute(
-                sql`SELECT j.generation, j.xmin::text AS xmin, m.revision::int AS revision, m.xmin::text AS "markerXmin"
+                sql`SELECT j.generation, j.xmin::text AS xmin, (SELECT count(*)::int FROM "JobInvalidationCapture" c WHERE c.key = j.key) AS revision, m.xmin::text AS "markerXmin"
                   FROM "Job" j JOIN "JobInvalidation" m ON m.key = j.key WHERE j.key = 'refresh:search'`,
               )
             ).rows[0],
@@ -262,54 +319,109 @@ describe("finance.record source and Job lifecycle contention", () => {
             ).rows[0],
           ).pid;
       const originalTuple = await searchTuple();
+      const qualityCaptures = async () =>
+        z
+          .object({ count: z.number() })
+          .parse(
+            (
+              await getDb(ctx.db).execute(
+                sql`SELECT count(*)::int AS count FROM "JobInvalidationCapture" WHERE key = 'refresh:quality'`,
+              )
+            ).rows[0],
+          ).count;
+      const originalQualityCaptures = await qualityCaptures();
       const racing = vi
         .spyOn(refreshFamilies, "invalidateRefreshFamily")
         .mockImplementation(async (db, family) => {
-          if (!savingEmail && family === "search" && ++attempts <= conflicts) {
+          if (!savingEmail && family === "search" && ++attempts === 1) {
             // A pooled handle leases a second client after the intake snapshot.
             // The real source or lifecycle owner commits before capture resumes.
             savingEmail = true;
             const startedAt = Date.now();
             const started = performance.now();
             try {
-              await withDatabaseOperationMetrics(async () => {
-                // Lifecycle owners commit through a second pooled client and
-                // replace the execution tuple, never the invalidation row.
-                if (lifecycle) {
-                  const financePid = await backendPid(db);
-                  await withTransactionDatabase(ctx.db, async (writerDb) => {
-                    const writerPid = await backendPid(writerDb);
-                    clients.push({ financePid, writerPid });
-                    const written =
-                      change === "claim"
-                        ? (await claimJob(writerDb, search.id)) !== null
-                        : claim !== null && (await renewJob(writerDb, claim));
-                    if (!written)
-                      throw new Error(`Synthetic search ${change} refused`);
-                  });
-                  return;
-                }
-                await saveMailboxMetadata(ctx.db, {
-                  ...metadata,
-                  mail: {
-                    ...metadata.mail,
-                    headers: {
-                      ...metadata.mail.headers,
-                      subject:
-                        change === "subject"
-                          ? `Synthetic revised receipt ${attempts}`
-                          : metadata.mail.headers.subject,
+              for (
+                let writeIndex = 0;
+                writeIndex < (change === "cloud_completion" ? 1 : conflicts);
+                writeIndex++
+              ) {
+                await withDatabaseOperationMetrics(async () => {
+                  // Lifecycle owners commit through a second pooled client and
+                  // replace the execution tuple, never the invalidation row.
+                  if (lifecycle) {
+                    const financePid = await backendPid(db);
+                    await withTransactionDatabase(ctx.db, async (writerDb) => {
+                      const writerPid = await backendPid(writerDb);
+                      clients.push({ financePid, writerPid });
+                      const written =
+                        change === "claim"
+                          ? (await claimJob(writerDb, search.id)) !== null
+                          : claim !== null && (await renewJob(writerDb, claim));
+                      if (!written)
+                        throw new Error(`Synthetic search ${change} refused`);
+                    });
+                    return;
+                  }
+                  if (change === "cloud_completion") {
+                    for (const completion of cloudCompletions) {
+                      // Finish a real, independently claimed image after intake's
+                      // SERIALIZABLE snapshot; its required projection capture commits first.
+                      const completed = await completeImageProcessingJob(
+                        ctx.db,
+                        {
+                          result: {
+                            ...completion,
+                            completedAt: new Date().toISOString(),
+                            outcome: {
+                              kind: "describe_image",
+                              status: "completed",
+                              description: {
+                                description: "A synthetic orchard",
+                                claims: [],
+                                cutoutEligibility: "eligible",
+                              },
+                              runtime: {
+                                platform: "cloud",
+                                model: "synthetic-vision",
+                              },
+                            },
+                          },
+                          cloudAnalysis: {
+                            provider: "test",
+                            model: "synthetic-vision",
+                            promptRevision: 1,
+                            resultSchemaRevision: 1,
+                            inputFingerprint: "synthetic-input",
+                          },
+                        },
+                      );
+                      if (!completed.adopted)
+                        throw new Error("Synthetic cloud completion refused");
+                    }
+                    return;
+                  }
+                  await saveMailboxMetadata(ctx.db, {
+                    ...metadata,
+                    mail: {
+                      ...metadata.mail,
+                      headers: {
+                        ...metadata.mail.headers,
+                        subject:
+                          change === "subject"
+                            ? `Synthetic revised receipt ${writeIndex + 1}`
+                            : metadata.mail.headers.subject,
+                      },
                     },
-                  },
-                  memberSearch: change === "member_search",
+                    memberSearch: change === "member_search",
+                  });
+                }, "fedcba9876543210-SJC");
+                writerCommits.push({
+                  startedAt,
+                  committedAt: Date.now(),
+                  durationMs: performance.now() - started,
+                  ...(await searchTuple()),
                 });
-              }, "fedcba9876543210-SJC");
-              writerCommits.push({
-                startedAt,
-                committedAt: Date.now(),
-                durationMs: performance.now() - started,
-                ...(await searchTuple()),
-              });
+              }
             } finally {
               savingEmail = false;
             }
@@ -317,7 +429,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           return invalidate(db, family);
         });
       try {
-        let result = await record();
+        const result = await record();
         const diagnostics = warnings.mock.calls.flatMap(([entry]) => {
           const parsed = abortedAttempt.safeParse(entry);
           return parsed.success ? [parsed.data] : [];
@@ -336,6 +448,31 @@ describe("finance.record source and Job lifecycle contention", () => {
           attemptDurationsMs: diagnostics.map((attempt) => attempt.durationMs),
         });
         expect(diagnostics).toHaveLength(expectedConflicts);
+        const completedCloudAttempts = await getDb(ctx.db)
+          .select({
+            state: imageProcessingAttempt.state,
+            result: imageProcessingAttempt.result,
+          })
+          .from(imageProcessingAttempt)
+          .where(
+            inArray(
+              imageProcessingAttempt.id,
+              cloudCompletions.map((c) => c.attemptId),
+            ),
+          );
+        expect(completedCloudAttempts).toHaveLength(cloudCompletions.length);
+        for (const completed of completedCloudAttempts)
+          expect(completed).toMatchObject({
+            state: "ready",
+            result: {
+              kind: "describe_image",
+              status: "completed",
+              description: { description: "A synthetic orchard" },
+            },
+          });
+        expect(await qualityCaptures()).toBe(
+          originalQualityCaptures + invalidations + 1,
+        );
         for (const [index, diagnostic] of diagnostics.entries()) {
           expect(diagnostic).toMatchObject({
             boundaryId: diagnostics[0]!.boundaryId,
@@ -353,18 +490,21 @@ describe("finance.record source and Job lifecycle contention", () => {
           });
         }
         expect(writerCommits).toHaveLength(
-          expectedConflicts === 0 ? 1 : conflicts,
+          change === "cloud_completion" ? 1 : conflicts,
         );
         let previousXmin = originalTuple.xmin;
         let previousMarker = originalTuple.markerXmin;
         for (const [index, writer] of writerCommits.entries()) {
-          // A source capture moves the invalidation row, never the Job row.
+          // Captures append input without replacing policy or the execution row.
           expect(writer.revision).toBe(
-            originalTuple.revision + (expectedConflicts === 0 ? 0 : index + 1),
+            originalTuple.revision +
+              (change === "cloud_completion"
+                ? conflicts
+                : invalidations === 0
+                  ? 0
+                  : index + 1),
           );
-          expect(writer.markerXmin === previousMarker).toBe(
-            expectedConflicts === 0,
-          );
+          expect(writer.markerXmin).toBe(previousMarker);
           // Claims and renewals replace the execution tuple.
           expect(writer.xmin === previousXmin).toBe(!lifecycle);
           // A renewal changes no generation; a claim may observe a capture.
@@ -405,21 +545,8 @@ describe("finance.record source and Job lifecycle contention", () => {
               : originalEmail,
         );
         expect(attempts).toBe(Math.min(expectedConflicts + 1, 3));
-        const failed = {
-          ok: false,
-          error: {
-            message: expect.stringContaining(
-              "could not serialize access due to concurrent update",
-            ),
-            requestId: "0123456789abcdef-SJC",
-          },
-        };
-        expect(result).toMatchObject(
-          expectedConflicts === 3
-            ? failed
-            : { ok: true, data: { inserted: 1 } },
-        );
-        const admitted = expectedConflicts === 3 ? 0 : 1;
+        expect(result).toMatchObject({ ok: true, data: { inserted: 1 } });
+        const admitted = 1;
         expect(await read()).toEqual({
           imports: admitted,
           memberships: admitted,
@@ -430,7 +557,6 @@ describe("finance.record source and Job lifecycle contention", () => {
           revision: originalTuple.revision + invalidations + admitted,
         });
         racing.mockRestore();
-        if (!result.ok) result = await record();
         expect(result).toMatchObject({ ok: true, data: { inserted: 1 } });
         expect(await read()).toEqual({
           imports: 1,

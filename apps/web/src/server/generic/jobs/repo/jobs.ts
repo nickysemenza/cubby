@@ -32,6 +32,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import {
   repositoryBeforeCommit,
+  repositoryTransactionOn,
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
@@ -153,10 +154,21 @@ export async function enqueueJob(
  */
 export const unobservedJobInvalidation = (
   options: { restartsPass?: true } = {},
-) =>
-  // Qualified by hand: drizzle renders bare column names in some statements,
-  // which inside this subquery would compare the marker with itself.
-  sql<boolean>`EXISTS (SELECT 1 FROM "JobInvalidation" ji WHERE ji.key = "Job".key AND ji.revision > coalesce("Job"."observedRevision", 0)${options.restartsPass ? sql` AND ji."restartsPass"` : sql``})`;
+) => {
+  const pending = related(
+    jobInvalidationCapture,
+    (c) => sql`${c.key} = ${outer(job.key)} AND NOT ${c.observed}`,
+  );
+  return options.restartsPass
+    ? pending
+        .join(
+          jobInvalidation,
+          (policy, c) =>
+            sql`${policy.key} = ${c.key} AND ${policy.restartsPass}`,
+        )
+        .exists()
+    : pending.exists();
+};
 
 /** Whether a Job is claimable now: the one predicate the drain, claims and health share. */
 export const jobDue = (now: Date) => due(now);
@@ -177,7 +189,7 @@ const due = (now: Date) =>
       inArray(job.state, ["queued", "retry_wait"]),
       unobservedJobInvalidation({ restartsPass: true }),
     ),
-    // Failure is no stop for new input: execution reads the marker before a
+    // Failure is no stop for new input: execution checks pending captures before a
     // terminal write, so a capture can commit in between, and no transaction
     // shape closes that window without the capture touching the Job row.
     // Waking failed Jobs the restarting capture did not see makes the order
@@ -190,38 +202,45 @@ const due = (now: Date) =>
   );
 
 /**
- * Record durable source invalidation of `key` in the caller's transaction.
- * It writes only the `JobInvalidation` row, never the execution `Job` row,
- * so a capture cannot conflict with claims, renewals or publication of that
- * Job. `restartsPass: false` lets a pass in progress finish before it reruns.
- * The first capture of a key creates its Job when none exists.
+ * Append durable input in the source transaction. Existing keys read only
+ * stable policy and insert an independent capture: source writers never
+ * update each other's capture or the execution Job. Initialization and its
+ * first capture/Job commit together, including calls on a pooled handle.
  */
 export async function recordJobInvalidation(
   db: RepositoryQueryInput,
   input: Omit<EnqueueJobInput, "invalidate"> & { restartsPass: boolean },
 ) {
   const { restartsPass, ...enqueue } = input;
-  const capturedAt = sql`${new Date().toISOString()}::timestamp`;
-  // One round trip: bump the marker and append its capture row (append-only,
-  // so health can date the first revision a claim has not observed without
-  // either side reading the other's row). Captures sit on hot save paths.
-  const result = await repositoryQueries(db).execute<{ revision: number }>(sql`
-    WITH marker AS (
-      INSERT INTO ${jobInvalidation} (key, "restartsPass", "updatedAt")
-      VALUES (${enqueue.key}, ${restartsPass}, ${capturedAt})
-      ON CONFLICT (key) DO UPDATE SET
-        revision = ${jobInvalidation}.revision + 1,
-        "updatedAt" = EXCLUDED."updatedAt"
-      RETURNING key, revision, "updatedAt"
-    ), capture AS (
-      INSERT INTO ${jobInvalidationCapture} (key, revision, "capturedAt")
-      SELECT key, revision, "updatedAt" FROM marker
-      ON CONFLICT DO NOTHING
-    )
-    SELECT revision::int AS revision FROM marker`);
-  const marker = result.rows[0];
-  if (!marker) throw new Error(`Invalidation of ${enqueue.key} not recorded`);
-  if (marker.revision === 1) await enqueueJob(db, enqueue);
+  await repositoryTransactionOn(db, async (tx) => {
+    const result = await repositoryQueries(tx).execute<{
+      initialized: boolean;
+      captured: boolean;
+      restartsPass: boolean;
+    }>(sql`
+      WITH policy AS (
+        SELECT key, "restartsPass" FROM ${jobInvalidation} WHERE key = ${enqueue.key}
+      ), initialized AS (
+        INSERT INTO ${jobInvalidation} (key, "restartsPass")
+        SELECT ${enqueue.key}, ${restartsPass} WHERE NOT EXISTS (SELECT 1 FROM policy)
+        ON CONFLICT (key) DO NOTHING RETURNING key, "restartsPass"
+      ), capture AS (
+        INSERT INTO ${jobInvalidationCapture} (key, "capturedAt")
+        SELECT key, ${new Date().toISOString()}::timestamp FROM (
+          SELECT key FROM policy UNION ALL SELECT key FROM initialized
+        ) owner RETURNING id
+      )
+      SELECT EXISTS (SELECT 1 FROM initialized) AS initialized,
+        EXISTS (SELECT 1 FROM capture) AS captured,
+        (SELECT "restartsPass" FROM policy UNION ALL SELECT "restartsPass" FROM initialized) AS "restartsPass"`);
+    const recorded = result.rows[0];
+    if (!recorded?.captured)
+      throw new Error(`Invalidation of ${enqueue.key} not recorded`);
+    if (recorded.restartsPass !== restartsPass)
+      throw new Error(`Invalidation policy of ${enqueue.key} changed`);
+    // Never probe an existing execution row on the ordinary capture path.
+    if (recorded.initialized) await enqueueJob(tx, enqueue);
+  });
 }
 
 /** Expiry revokes ownership; it never reclaims a live lease for another execution. */
@@ -435,15 +454,12 @@ export async function claimJob(
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();
   return withTransactionDatabase(db, async (tx) => {
-    // Observe durable invalidation here, in the execution's own row: a moved
-    // revision starts a fresh pass (new generation, no cursor, fresh budget),
-    // except that a pass in progress that finishes first keeps going. The
-    // marker is read in the claim's own statement and never locked: only the
-    // Job row is the claim's, so a concurrent capture is never blocked.
+    // A fresh claim observes pending input in its own transaction. Only the
+    // execution row is locked; source writers append independent captures.
     const [candidate] = await getDb(tx)
       .select({
         row: job,
-        markerRevision: jobInvalidation.revision,
+        pendingCapture: unobservedJobInvalidation(),
         markerRestartsPass: jobInvalidation.restartsPass,
       })
       .from(job)
@@ -452,21 +468,12 @@ export async function claimJob(
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
-    const marker =
-      candidate.markerRevision === null
-        ? undefined
-        : {
-            revision: candidate.markerRevision,
-            restartsPass: candidate.markerRestartsPass === true,
-          };
-    const moved =
-      marker !== undefined &&
-      marker.revision !== (available.observedRevision ?? 0);
+    const moved = candidate.pendingCapture;
     const restart =
       moved &&
       (available.state === "completed" ||
         available.cursor === null ||
-        marker.restartsPass);
+        candidate.markerRestartsPass === true);
     if (restart) {
       available.attempts = 0;
       available.cursor = null;
@@ -526,12 +533,24 @@ export async function claimJob(
           cursor: null,
           result: null,
           error: null,
-          observedRevision: marker.revision,
           lastUsefulProgressAt: available.lastUsefulProgressAt,
         }),
       })
       .where(eq(job.id, id))
       .returning();
+    if (claimed && restart) {
+      // This exact visible set, not a maximum UUID/time/revision, is observed.
+      // A rolled-back/refused claim leaves every capture pending.
+      await getDb(tx)
+        .update(jobInvalidationCapture)
+        .set({ observed: true })
+        .where(
+          and(
+            eq(jobInvalidationCapture.key, claimed.key),
+            eq(jobInvalidationCapture.observed, false),
+          ),
+        );
+    }
     return claimed
       ? { ...claimed, leaseToken: token, leaseExpiresAt: expires }
       : null;
@@ -602,21 +621,28 @@ export async function releaseJobClaim(
  * A restarting invalidation captured since this pass began supersedes the
  * page, as a generation change does. A read only: publication never writes
  * the invalidation row. A capture landing after this check is still seen,
- * because the finished pass keeps the revision it started from.
+ * because the new capture remains unobserved.
  */
 async function invalidatedDuringPass(
   db: RepositoryQueryInput,
-  claim: Pick<JobClaim, "key" | "observedRevision">,
+  claim: Pick<JobClaim, "key">,
 ) {
-  const [marker] = await repositoryQueries(db)
-    .select()
-    .from(jobInvalidation)
-    .where(eq(jobInvalidation.key, claim.key));
-  return (
-    marker !== undefined &&
-    marker.restartsPass &&
-    marker.revision !== (claim.observedRevision ?? 0)
-  );
+  const [pending] = await repositoryQueries(db)
+    .select({ id: jobInvalidationCapture.id })
+    .from(jobInvalidationCapture)
+    .innerJoin(
+      jobInvalidation,
+      eq(jobInvalidation.key, jobInvalidationCapture.key),
+    )
+    .where(
+      and(
+        eq(jobInvalidationCapture.key, claim.key),
+        eq(jobInvalidationCapture.observed, false),
+        eq(jobInvalidation.restartsPass, true),
+      ),
+    )
+    .limit(1);
+  return pending !== undefined;
 }
 
 /** Preparation/provider work precedes this short transaction; publish is DB-only. */
@@ -691,7 +717,7 @@ export async function publishJobPage(
             .where(eq(job.id, claim.id));
           return;
         }
-        // A pass that does not restart keeps the revision it started from:
+        // A pass that does not restart leaves newer captures unobserved:
         // captures made while it ran (an edit behind its cursor, a record
         // created after its cutoff) leave the finished Job due, so the next
         // full pass covers them at once rather than at the next repeat.
