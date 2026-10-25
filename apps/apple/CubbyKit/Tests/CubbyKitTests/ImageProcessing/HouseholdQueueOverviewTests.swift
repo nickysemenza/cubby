@@ -31,7 +31,7 @@ struct HouseholdQueueOverviewTests {
     ) throws -> HouseholdQueueOverview {
         let counts = try queue(
             #"""
-            {"total":64,"jobs":[],"counts":[
+            {"total":64,"leases":[],"jobs":[],"counts":[
               {"lane":"frontier_ai","reason":"waiting_funding","count":40},
               {"lane":"apple_device","reason":"leased","count":3},
               {"lane":"apple_device","reason":"waiting_device","count":14},
@@ -59,7 +59,7 @@ struct HouseholdQueueOverviewTests {
                     executor: "Hall phone", expiresAt: "2099-01-01T00:01:00.000Z", expired: false)),
         ]
         let leased = try queue(
-            #"{"total":3,"counts":[],"jobs":[\#(leasedJobs.joined(separator: ","))]}"#)
+            #"{"total":3,"leases":[],"counts":[],"jobs":[\#(leasedJobs.joined(separator: ","))]}"#)
         let waitingJobs = [
             job(
                 id: "00000000-0000-4000-8000-000000000004", key: "ai:evaluation:1", kind: "ai.evaluation",
@@ -74,7 +74,7 @@ struct HouseholdQueueOverviewTests {
             ),
         ]
         let waiting = try queue(
-            #"{"total":2,"counts":[],"jobs":[\#(waitingJobs.joined(separator: ","))]}"#)
+            #"{"total":2,"leases":[],"counts":[],"jobs":[\#(waitingJobs.joined(separator: ","))]}"#)
         return HouseholdQueueOverview.make(
             counts: counts, leased: leased, waiting: waiting, runRows: runRows,
             runsNeedingAttention: runRows.count, rollups: rollups)
