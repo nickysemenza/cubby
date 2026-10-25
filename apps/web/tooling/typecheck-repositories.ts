@@ -51,6 +51,7 @@ export const repositoryOwners = [
   "src/server/db/schema-primitives.ts",
   "src/server/db/entity-identity-schema.ts",
   "src/server/db/helpers/predicates.ts",
+  "src/server/db/helpers/related.ts",
   "src/server/db/generated/entity-table-definitions.gen.ts",
   "src/server/db/retained-tables.ts",
   "src/server/db/helpers/query.ts",

@@ -19,12 +19,11 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
-import { notDeleted } from "~/server/db/helpers/predicates";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase as withTransactionDatabase,
@@ -274,21 +273,20 @@ const drainedDue = (now: Date) =>
  * enqueues leave `lastClaimedAt`. Within a kind, priority then age.
  */
 /** A running, member-visible Run that owns the outer `"Job"` row. */
-const runOwningJob = new QueryBuilder()
-  .select({ one: sql`1` })
-  .from(run)
-  .where(
-    and(
-      eq(run.id, sql`"Job"."runId"`),
-      eq(run.status, runStatus.enum.running),
-      notDeleted(run),
-      inArray(run.purpose, [...VISIBLE_RUN_PURPOSES]),
-    ),
-  );
+const runOwningJob = () =>
+  related(run, (r) => sql`${r.id} = ${outer(job.runId)}`)
+    .where(
+      (r) =>
+        sql`${r.status} = ${runStatus.enum.running} AND ${r.purpose} IN (${sql.join(
+          VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+          sql`, `,
+        )})`,
+    )
+    .exists();
 
 /** Whether the outer `"Job"` row belongs to a running, member-visible Run. */
 export const jobRunOwned = () =>
-  sql<boolean>`("Job"."runId" IS NOT NULL AND EXISTS (${runOwningJob}))`;
+  sql<boolean>`("Job"."runId" IS NOT NULL AND ${runOwningJob()})`;
 
 const fairlyOrderedDueJobs = (now: Date, perKind?: number) => sql`
   WITH due AS (
