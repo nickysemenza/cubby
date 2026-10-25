@@ -128,9 +128,32 @@ selected kind's batch width when a batch handler is present):
    the least recently claimed kind goes first; within a kind, priority, then
    age.
 
-The drain runs up to `JOB_DRAIN.concurrency` pages of a batch at once, and the
+`JOB_KIND_POLICY.maxInFlight` optionally caps background claims across all
+drains. Selection admits only the remaining capacity; claim-time admission
+uses a nonblocking transaction advisory lock per kind and rechecks live leases
+before committing a claim. Only `running` Jobs with `leaseExpiresAt > now`
+count. Expired leases free capacity and remain reclaimable through the ordinary
+due/claim path; completion and release also free it. `run.execute` and work
+whose `runId` names any active Run bypass the cap and its accounting, including
+routine Runs that do not receive member-visible priority. Shared evaluations
+with no `runId` remain backfill.
+
+`ai.evaluation` defaults to **one live background claim globally**. This is
+deliberately stricter than one page per Worker: a blocked evaluation must not
+multiply across queue consumers. It leaves two of a Worker's three lanes for
+other kinds, including due embedding batches and image work. Embeddings retain
+their existing weighted share and batch width; no separate scheduler or
+refresh-family behavior changes. Queue positions are exact for the admitted
+selection; work deferred by a cap is projected beyond that selection as an
+estimate.
+
+The drain runs up to `JOB_DRAIN.concurrency` pages at once, and the
 queue consumer (`packages/shared/src/background-queue-consumer.json`) runs
-several drains. Every Job holds its own row lock and lease. AI evaluation Jobs
+several drains. Free lanes refill fair selections while sibling pages are
+still running, so a blocked page cannot hold the next selection behind a
+batch-wide wait. Selected groups are reserved within the invocation until
+execution finishes, including the unclaimed members of a batch. Page and time
+budgets still bound new starts. Every Job holds its own row lock and lease. AI evaluation Jobs
 carry no `runId` because shared evaluations serve several Runs; they compete
 as backfill. Run views still attribute them: a Run's demand (`runDemandPairs`)
 is its own Jobs plus the evaluation Jobs it owns or still requests (an

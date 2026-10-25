@@ -50,6 +50,7 @@ import {
   neverExhaustedRetryDelayMs,
   NEVER_EXHAUSTED_JOB_KINDS,
   UNDRAINED_JOB_KINDS,
+  JOB_KIND_POLICY,
 } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 
@@ -337,27 +338,76 @@ const runOwningJob = () =>
 export const jobRunOwned = () =>
   sql<boolean>`("Job"."runId" IS NOT NULL AND ${runOwningJob()})`;
 
-const fairlyOrderedDueJobs = (now: Date, perKind?: number) => sql`
+/** Run execution and work of any active Run bypass background admission. */
+const jobCapExempt = () =>
+  sql<boolean>`(${job.kind} = 'run.execute' OR ${related(
+    run,
+    (r) =>
+      sql`${r.id} = ${outer(job.runId)} AND ${r.status} = ${runStatus.enum.running}`,
+  ).exists()})`;
+
+const cappedKinds = Object.keys(JOB_KIND_POLICY).flatMap((kind) => {
+  const cap = jobKindPolicy(kind).maxInFlight;
+  return cap === undefined ? [] : [{ kind, cap }];
+});
+
+const fairlyOrderedDueJobs = (
+  now: Date,
+  perKind?: number,
+  excludeIds: readonly string[] = [],
+) => sql`
   WITH due AS (
     SELECT "Job".id, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."availableAt",
-      ${jobRunOwned()} AS run_owned
+      ${jobRunOwned()} AS run_owned, ${jobCapExempt()} AS cap_exempt
     FROM "Job" WHERE ${drainedDue(now)}
+      ${
+        excludeIds.length
+          ? sql`AND ${notInArray(
+              job.id,
+              excludeIds.map((id) => parseEntityId("job", id)),
+            )}`
+          : sql``
+      }
+  ), capacity AS MATERIALIZED (
+    -- Count live leases once, before joining capacity to a potentially large backlog.
+    SELECT policy.kind, greatest(0, policy.cap - count("Job".id)) AS remaining
+    FROM (${
+      cappedKinds.length
+        ? sql`VALUES ${sql.join(
+            cappedKinds.map(
+              ({ kind, cap }) => sql`(${kind}::text, ${cap}::int)`,
+            ),
+            sql`, `,
+          )}`
+        : sql`SELECT NULL::text, 0::int WHERE false`
+    }) policy(kind, cap)
+    LEFT JOIN "Job" ON "Job".kind = policy.kind AND "Job".state = ${jobState.enum.running}
+      AND "Job"."leaseExpiresAt" > ${now.toISOString()}::timestamp AND NOT ${jobCapExempt()}
+    GROUP BY policy.kind, policy.cap
   ), backlog AS (
     SELECT kind, count(*) AS size FROM due GROUP BY kind
   ), served AS (
     SELECT kind, max("lastClaimedAt") AS last_served FROM "Job"
     WHERE kind IN (SELECT kind FROM backlog) GROUP BY kind
   ), ranked AS (
-    SELECT due.id, due.kind, due.run_owned, served.last_served,
+    SELECT due.*, served.last_served,
       row_number() OVER (
-        PARTITION BY due.run_owned, due.kind
-        ORDER BY due.priority DESC, due."updatedAt", due."availableAt", due.id
-      ) AS position,
+        PARTITION BY due.cap_exempt, due.kind
+        ORDER BY due.run_owned DESC, due.priority DESC, due."updatedAt", due."availableAt", due.id
+      ) AS kind_position,
       least(${JOB_MAX_KIND_WEIGHT}, 1 + floor(log(backlog.size::numeric))) AS weight
     FROM due JOIN backlog USING (kind) JOIN served USING (kind)
+  ), eligible AS (
+    SELECT ranked.*, row_number() OVER (
+      PARTITION BY run_owned, kind
+      ORDER BY priority DESC, "updatedAt", "availableAt", id
+    ) AS position
+    FROM ranked LEFT JOIN capacity USING (kind)
+    ${perKind === undefined ? sql`` : sql`WHERE cap_exempt OR remaining IS NULL OR kind_position <= remaining`}
   ), candidates AS (
-    -- A batch never needs more than its size from one kind and class.
-    SELECT * FROM ranked ${perKind === undefined ? sql`` : sql`WHERE position <= ${perKind}`}
+    -- Apply admission before the per-kind window so capped backfill cannot
+    -- hide an exempt routine Run's work behind the candidate cutoff.
+    SELECT * FROM eligible ${perKind === undefined ? sql`` : sql`WHERE position <= ${perKind}`}
   ), ordered AS (
     SELECT id, kind, run_owned,
       row_number() OVER (
@@ -409,17 +459,25 @@ export function drainSelectionIndex(
  * One fair batch: run-owned Jobs first, but backfill keeps
  * `JOB_BACKFILL_SHARE` of the batch whenever it has due work.
  */
-export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
+export async function dueJobs(
+  db: Database,
+  limit = JOB_DRAIN.batch,
+  excludeIds: readonly string[] = [],
+) {
   await stopStalledJobs(db);
-  return selectFairDueJobs(db, limit);
+  return selectFairDueJobs(db, limit, excludeIds);
 }
 
-async function selectFairDueJobs(db: Database, limit: number) {
+async function selectFairDueJobs(
+  db: Database,
+  limit: number,
+  excludeIds: readonly string[] = [],
+) {
   const result = await getDb(db).execute<{
     id: string;
     kind: string;
     run_owned: boolean;
-  }>(sql`${fairlyOrderedDueJobs(new Date(), limit)}
+  }>(sql`${fairlyOrderedDueJobs(new Date(), limit, excludeIds)}
     SELECT id, kind, run_owned FROM ordered
     WHERE class_position <= ${limit} ORDER BY overall`);
   const owned = result.rows.filter((row) => row.run_owned);
@@ -452,6 +510,13 @@ export async function dueJobPositions(
     JOB_DRAIN.batch,
     ...first.map((row) => jobKindPolicy(row.kind).batchSize ?? 1),
   );
+  const admitted =
+    batchSize === JOB_DRAIN.batch
+      ? first
+      : await selectFairDueJobs(db, batchSize);
+  const admittedPositions = new Map(
+    admitted.map((row, index) => [row.id, index]),
+  );
   const result = await getDb(db).execute<{
     id: string;
     run_owned: boolean;
@@ -472,11 +537,15 @@ export async function dueJobPositions(
   return new Map(
     result.rows.map((row) => [
       row.id,
-      drainSelectionIndex(
-        { runOwned: row.run_owned, classPosition: row.class_position },
-        { owned: row.owned_total, backfill: row.backfill_total },
-        batchSize,
-      ),
+      admittedPositions.get(parseEntityId("job", row.id)) ??
+        Math.max(
+          batchSize,
+          drainSelectionIndex(
+            { runOwned: row.run_owned, classPosition: row.class_position },
+            { owned: row.owned_total, backfill: row.backfill_total },
+            batchSize,
+          ),
+        ),
     ]),
   );
 }
@@ -503,6 +572,7 @@ export async function claimJob(
         row: job,
         pendingCapture: unobservedJobInvalidation(),
         markerRestartsPass: jobInvalidation.restartsPass,
+        capExempt: jobCapExempt(),
       })
       .from(job)
       .leftJoin(jobInvalidation, eq(jobInvalidation.key, job.key))
@@ -510,6 +580,27 @@ export async function claimJob(
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
+    const maxInFlight = jobKindPolicy(available.kind).maxInFlight;
+    if (maxInFlight !== undefined && !candidate.capExempt) {
+      // Selection is advisory. Serialize admission across Worker invocations,
+      // then count in a fresh READ COMMITTED statement before issuing a lease.
+      // Never wait here while holding a Job row another executor may need.
+      const admission = await getDb(tx).execute<{ locked: boolean }>(sql`
+        SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${available.kind}`}, 0)) AS locked`);
+      if (!admission.rows[0]?.locked) return null;
+      const live = await getDb(tx)
+        .select({ count: sql<number>`count(*)::int` })
+        .from(job)
+        .where(
+          and(
+            eq(job.kind, available.kind),
+            eq(job.state, "running"),
+            gt(job.leaseExpiresAt, now),
+            not(jobCapExempt()),
+          ),
+        );
+      if ((live[0]?.count ?? 0) >= maxInFlight) return null;
+    }
     const moved = candidate.pendingCapture;
     const restart =
       moved &&
