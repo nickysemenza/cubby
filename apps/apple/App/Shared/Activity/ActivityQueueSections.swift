@@ -48,9 +48,17 @@ struct CompanionWorkerStatusRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label(activity.statusTitle, systemImage: activity.statusSymbol)
-                .font(.headline)
-                .foregroundStyle(activity.statusNeedsAttention ? FieldGuideTokens.warning : .primary)
+            HStack(spacing: 8) {
+                Label(activity.statusTitle, systemImage: activity.statusSymbol)
+                    .font(.headline)
+                    .foregroundStyle(activity.statusNeedsAttention ? FieldGuideTokens.warning : .primary)
+                if activity.phase == .connecting || activity.phase == .pulling {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            if activity.phase == .connecting {
+                CompanionConnectionProgress(activity: activity)
+            }
             if activity.phase == .updateRequired {
                 Text("Update Cubby from TestFlight. Other devices keep processing images meanwhile.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -72,6 +80,28 @@ struct CompanionWorkerStatusRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// While reconnecting: which attempt this is and when the next one starts, so a device that
+/// cannot subscribe shows that it is still trying and how often.
+private struct CompanionConnectionProgress: View {
+    let activity: CompanionImageWorkerActivity
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(detail(now: context.date))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func detail(now: Date) -> String {
+        guard activity.connectionAttempt > 0 else { return "Opening the image-work connection…" }
+        let attempt = "Attempt \(activity.connectionAttempt) failed"
+        guard let next = activity.nextConnectAt else { return "\(attempt) · trying again now" }
+        let seconds = max(0, Int(next.timeIntervalSince(now).rounded(.up)))
+        return "\(attempt) · next try in \(seconds)s"
     }
 }
 

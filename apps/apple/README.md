@@ -178,7 +178,7 @@ on every reconnect. A result whose delivery fails is set aside on disk with its 
 (2 s doubling to 15 min), shared by the resident worker and the charging window. Replay sends never-attempted results first,
 then the least recently attempted, in an order stored beside the outbox so it survives relaunch, so
 rejected results cannot starve a bounded window; deliveries and
-pulls continue and Activity shows "N results waiting to deliver" with the latest error. A 426
+pulls continue and Activity shows "N results waiting to deliver" with the latest error. While reconnecting, Activity shows a spinner, the failed attempt number, a live countdown to the next try, and the error with the step that failed (sign-in, open, ping, receive); the first failure of a streak and every tenth also reach diagnostics, even when the reconnect loop treats it as expected. A 426
 CLIENT_UPDATE_REQUIRED from any image operation, including a charging window's pull, renewal,
 delivery or claim release, cancels execution, keeps recorded results, ends background windows, stops pulling for the
 worker's life, latches the app's update banner (the worker's client shares the app's request

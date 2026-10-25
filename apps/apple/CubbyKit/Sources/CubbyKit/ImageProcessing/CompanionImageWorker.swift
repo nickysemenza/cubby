@@ -45,11 +45,18 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     /// Image job ids of the claims this worker holds now (accepted, not yet recorded). Activity
     /// marks this device's leases by these, not by the device's display name.
     public let claimedJobIDs: Set<String>
+    /// Failed subscription attempts in a row; 0 once a subscription opens.
+    public let connectionAttempt: Int
+    /// When the next subscription attempt starts, while one is waiting out its backoff.
+    public let nextConnectAt: Date?
+    /// When the current or last subscription opened.
+    public let connectedAt: Date?
 
     public init(
         phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil,
         remotePaused: Bool = false, processingCount: Int = 0, undeliveredResults: Int = 0,
-        deliveryError: String? = nil, lastError: String? = nil, claimedJobIDs: Set<String> = []
+        deliveryError: String? = nil, lastError: String? = nil, claimedJobIDs: Set<String> = [],
+        connectionAttempt: Int = 0, nextConnectAt: Date? = nil, connectedAt: Date? = nil
     ) {
         self.phase = phase
         self.jobID = jobID
@@ -61,6 +68,9 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
         self.deliveryError = deliveryError
         self.lastError = lastError
         self.claimedJobIDs = claimedJobIDs
+        self.connectionAttempt = connectionAttempt
+        self.nextConnectAt = nextConnectAt
+        self.connectedAt = connectedAt
     }
 }
 
@@ -197,6 +207,12 @@ public actor CompanionImageWorker {
     private var running: [String: RunningCommand] = [:]
     private var isPulling = false
     private var lastError: String?
+    /// Subscription diagnostics for Activity; see `CompanionImageWorkerActivity`.
+    private var connectionAttempt = 0
+    private var nextConnectAt: Date?
+    private var connectedAt: Date?
+    /// The subscription step in progress, named in a failure.
+    private var connectionStep = "sign-in"
     /// Shared with the charging window, so a result set aside by either path backs off in both.
     private let delivery: CompanionResultDelivery
     private var deliverySnapshot = CompanionResultDelivery.Snapshot()
@@ -478,17 +494,29 @@ public actor CompanionImageWorker {
                 guard generation == connectionGeneration else { break }
                 attempt += 1
                 closeSocket(.abnormalClosure)
-                lastError = Self.describe(error)
-                if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
-                    failureObserver?(error)
+                let failure = CompanionConnectionFailure(
+                    step: connectionStep, attempt: attempt, underlying: error)
+                lastError = failure.errorDescription
+                // Expected reconnect failures still reach diagnostics, rate-limited: the first of
+                // a streak and every tenth, so a device that can never subscribe is visible.
+                if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error)
+                    || attempt == 1 || attempt % 10 == 0
+                {
+                    failureObserver?(failure)
                 }
+                let delay = AuthenticatedSocketSupport.reconnectDelay(attempt: attempt)
+                connectionAttempt = attempt
+                nextConnectAt = Date.now.addingTimeInterval(
+                    Double(delay.components.seconds)
+                        + Double(delay.components.attoseconds) / 1e18)
                 reportActivity()
                 do {
-                    try await Task.sleep(
-                        for: AuthenticatedSocketSupport.reconnectDelay(attempt: attempt))
+                    try await Task.sleep(for: delay)
                 } catch {
                     break
                 }
+                nextConnectAt = nil
+                reportActivity()
             }
         }
         if generation == connectionGeneration {
@@ -498,7 +526,9 @@ public actor CompanionImageWorker {
     }
 
     private func runOneConnection(generation: Int) async throws {
+        connectionStep = "sign-in"
         let token = try await credentials.bearerToken()
+        connectionStep = "open"
         let endpoint = try AuthenticatedSocketSupport.socketURL(
             baseURL: baseURL, path: CompanionImageProcessingProtocol.doorbellPath,
             queryItems: [CompanionImageProcessingProtocol.doorbellTopic])
@@ -516,8 +546,13 @@ public actor CompanionImageWorker {
         // otherwise.
         remotePaused = false
         // A protocol ping confirms the subscription opened; an application frame would end it.
+        connectionStep = "ping"
         try await awaitPong { socket.sendPing(pongReceiveHandler: $0) }
+        connectionStep = "receive"
         openedSocket = socket
+        connectionAttempt = 0
+        nextConnectAt = nil
+        connectedAt = .now
         lastError = nil
         reportActivity()
         // Work already waiting is claimable now; a (re)connect pulls at once rather than waiting
@@ -958,7 +993,10 @@ public actor CompanionImageWorker {
             undeliveredResults: deliverySnapshot.undelivered,
             deliveryError: deliverySnapshot.latestError,
             lastError: phase == .stopped ? nil : lastError,
-            claimedJobIDs: Set(inFlight.values.map(\.jobID)))
+            claimedJobIDs: Set(inFlight.values.map(\.jobID)),
+            connectionAttempt: phase == .connecting ? connectionAttempt : 0,
+            nextConnectAt: phase == .connecting ? nextConnectAt : nil,
+            connectedAt: phase == .connecting ? nil : connectedAt)
     }
 
     /// Reports only changes, so observers see each transition once.
@@ -1028,5 +1066,29 @@ private final class PongResumption: Sendable {
             defer { done = true }
             return !done
         }
+    }
+}
+
+/// One failed subscription attempt: which step failed and why, for Activity and diagnostics.
+struct CompanionConnectionFailure: LocalizedError, CustomNSError {
+    let step: String
+    let attempt: Int
+    let underlying: any Error
+
+    var errorDescription: String? {
+        let nsError = underlying as NSError
+        let reason = (underlying as? LocalizedError)?.errorDescription ?? String(describing: underlying)
+        return "\(step) failed (\(nsError.domain) \(nsError.code)): \(reason)"
+    }
+
+    static var errorDomain: String { "CompanionConnection" }
+    var errorCode: Int { (underlying as NSError).code }
+    var errorUserInfo: [String: Any] {
+        [
+            NSLocalizedDescriptionKey: errorDescription ?? "",
+            NSUnderlyingErrorKey: underlying as NSError,
+            "step": step,
+            "attempt": attempt,
+        ]
     }
 }
