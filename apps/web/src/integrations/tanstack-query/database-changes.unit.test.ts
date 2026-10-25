@@ -105,7 +105,17 @@ describe("household change invalidation", () => {
       [detailA, detailB, reportB, reportsB, connectedB, list, counts].map(
         narrowed,
       ),
-    ).toEqual([true, false, false, false, false, true, true]);
+    ).toEqual([true, false, false, false, true, true, true]);
+    // A whole-category change coalesced into the same ring still reaches B;
+    // an id-scoped one does not.
+    expect(
+      matchesDatabaseChanges({ imageJob: ["IPR-A3F2"], image: null })(reportB),
+    ).toBe(true);
+    expect(
+      matchesDatabaseChanges({ imageJob: ["IPR-A3F2"], image: ["IMG-A3F2"] })(
+        reportB,
+      ),
+    ).toBe(false);
     expect(
       [detailA, detailB].map(matchesDatabaseChanges({ imageJob: null })),
     ).toEqual([true, true]);

@@ -834,19 +834,17 @@ export async function claimImageProcessingJob(
       .update(imageProcessingJob)
       .set({ attemptId, dispatchedAt: new Date() })
       .where(eq(imageProcessingJob.id, candidate.id));
-    await recordChange(tx, {
-      kind: "projection",
-      categories:
-        candidate.kind === "subject_lift" && derivativeId
-          ? ["image", "imageJob"]
-          : ["imageJob"],
-      changes: await imageProcessingRecordChanges(
-        tx,
-        [candidate.id],
-        [parseEntityId("image", candidate.imageId)],
-      ),
-      refresh: ["quality"],
-    });
+    if (candidate.kind === "subject_lift" && derivativeId)
+      await recordChange(tx, {
+        kind: "projection",
+        categories: ["image", "imageJob"],
+        changes: await imageProcessingRecordChanges(
+          tx,
+          [candidate.id],
+          [parseEntityId("image", candidate.imageId)],
+        ),
+        refresh: ["quality"],
+      });
     const {
       previousAttemptId: _previousAttemptId,
       executionId: _executionId,

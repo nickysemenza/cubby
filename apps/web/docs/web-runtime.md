@@ -193,15 +193,18 @@ rollback discards them.
 After the outer commit, one best-effort hint advances the strong-read window
 before broadcasting. Audit writes cover ordinary entity edits across transports;
 non-audited recipe totals, conversion coverage, assessments, saved AI analyses and search/embedding
-publication enroll at their saved projection owners. Image-processing claims publish record-scoped hints; ordinary Job heartbeats and
+publication enroll at their saved projection owners. Image-processing completion, retry, retirement and subject-lift claims publish record-scoped hints; other claims, ordinary Job heartbeats and
 cursor-only advances do not publish hints. Unchanged periodic projections do not
 trigger refreshes merely to update a computation timestamp.
 
 Hints invalidate the existing cache ripples. Within an explicitly record-scoped
-category, `entity.detail`, record-scoped `entityReport.get`/`getMany`, and
-`entityGraph.connectedRecords` invalidate only matching record shortcodes.
-Dependent categories and category-wide reads (including lists and dashboard/nav
-counts) retain their ripples; a `null` category keeps full invalidation. Hints
+category, `entity.detail` and record-scoped `entityReport.get`/`getMany`
+invalidate only matching record shortcodes, or when another category in the same
+coalesced hint is `null`. Id-scoped dependent categories do not reach them: an
+`image` ripple covers every displaying entity, so it would refetch every open
+Image job. `entityGraph.connectedRecords` lists other records and keeps its
+ripple, as do lists and dashboard/nav counts; a `null` category keeps full
+invalidation. Hints
 never carry record values or
 replace receipt reconciliation. Reads already in flight are retired and loaded
 views retain their ordinary refresh/error UI. Notification invalidation retains

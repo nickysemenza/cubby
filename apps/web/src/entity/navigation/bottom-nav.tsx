@@ -113,7 +113,7 @@ export function BottomNav() {
       aria-label="Main navigation"
     >
       {authed && (
-        <span className="absolute top-1 right-1">
+        <span className="pointer-events-none absolute top-1 right-1">
           <BackgroundRefreshStatus compact />
         </span>
       )}

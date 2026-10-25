@@ -1,4 +1,3 @@
-import { connectedRecordsInputSchema } from "@cubby/schemas/connected-records";
 import {
   entityReportInput,
   entityReportManyInput,
@@ -96,27 +95,39 @@ function queryRecord(query: Query) {
       if (parsed.success) id = parsed.data.id;
       break;
     }
-    case "entityGraph.connectedRecords": {
-      const parsed = connectedRecordsInputSchema.safeParse(input);
-      if (parsed.success) id = parsed.data.source.entityId;
-      break;
-    }
   }
   return id ? parseShortcode(id) : null;
 }
 
-/** Narrow only the changed record's category; dependent categories retain their ripple. */
+/**
+ * Narrow only the changed record's category. On an id miss, a whole-category
+ * change (`null`) elsewhere in the same coalesced ring still ripples to the
+ * record; id-scoped categories do not, because their ripples reach every
+ * record that displays them (an `image` ring would refetch every Image job).
+ */
 export function matchesDatabaseChanges(changes: DatabaseChanges) {
+  const categories = Object.keys(changes);
   const matches = matchesTags(
-    combineRippleTags(...Object.keys(changes).map(entityRipple)),
+    combineRippleTags(...categories.map(entityRipple)),
+  );
+  const matchesWholeCategory = matchesTags(
+    combineRippleTags(
+      ...categories
+        .filter((category) => changes[category] === null)
+        .map(entityRipple),
+    ),
   );
   return (query: Query): boolean => {
     const record = queryRecord(query);
     if (record) {
       const ids = changes[record.type];
-      // Record reports share broad dependency tags; their own identity is authoritative.
+      // Record reads share broad dependency tags; their own identity is authoritative.
       if (ids !== undefined)
-        return ids === null || ids.includes(record.shortcode);
+        return (
+          ids === null ||
+          ids.includes(record.shortcode) ||
+          matchesWholeCategory(query)
+        );
     }
     return matches(query);
   };
