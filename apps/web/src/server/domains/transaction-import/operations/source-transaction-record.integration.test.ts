@@ -37,17 +37,19 @@ const abortedAttempt = z.object({
   retry: z.boolean(),
 });
 // The second client commits real Email source invalidation after intake's
-// snapshot, before its search upsert. Unchanged metadata must be distinguished
-// from a member search, which renews acquisition expiry even for the same mail.
+// snapshot, before its search upsert. A metadata replay must leave Job tuples
+// untouched; genuine subject changes and renewed member-search expiry invalidate.
 describe("finance.record Email persistence contention", () => {
   const ctx = withTestDb();
   it.each([
-    { conflicts: 1, memberSearch: false },
-    { conflicts: 3, memberSearch: false },
-    { conflicts: 1, memberSearch: true },
+    { conflicts: 1, change: "none" },
+    { conflicts: 1, change: "subject" },
+    { conflicts: 3, change: "subject" },
+    { conflicts: 1, change: "member_search" },
   ])(
-    "preserves admission and exact replay after $conflicts Email saves (member search: $memberSearch)",
-    async ({ conflicts, memberSearch }) => {
+    "preserves admission and exact replay after $conflicts Email saves (change: $change)",
+    async ({ conflicts, change }) => {
+      const expectedConflicts = change === "none" ? 0 : conflicts;
       const member = await createRepoEntity(ctx, "ledgerParty", {
         name: "Synthetic intake member",
         kind: "member",
@@ -169,7 +171,20 @@ describe("finance.record Email persistence contention", () => {
             try {
               await withDatabaseOperationMetrics(
                 () =>
-                  saveMailboxMetadata(ctx.db, { ...metadata, memberSearch }),
+                  saveMailboxMetadata(ctx.db, {
+                    ...metadata,
+                    mail: {
+                      ...metadata.mail,
+                      headers: {
+                        ...metadata.mail.headers,
+                        subject:
+                          change === "subject"
+                            ? `Synthetic revised receipt ${attempts}`
+                            : metadata.mail.headers.subject,
+                      },
+                    },
+                    memberSearch: change === "member_search",
+                  }),
                 "fedcba9876543210-SJC",
               );
               writerCommits.push({
@@ -193,11 +208,11 @@ describe("finance.record Email persistence contention", () => {
         console.info({
           scope: "synthetic-email-contention",
           conflicts,
-          memberSearch,
+          change,
           writerDurationsMs: writerCommits.map((writer) => writer.durationMs),
           attemptDurationsMs: diagnostics.map((attempt) => attempt.durationMs),
         });
-        expect(diagnostics).toHaveLength(conflicts);
+        expect(diagnostics).toHaveLength(expectedConflicts);
         for (const [index, diagnostic] of diagnostics.entries()) {
           expect(diagnostic).toMatchObject({
             boundaryId: diagnostics[0]!.boundaryId,
@@ -214,13 +229,17 @@ describe("finance.record Email persistence contention", () => {
             retry: index < 2,
           });
         }
-        expect(writerCommits).toHaveLength(conflicts);
+        expect(writerCommits).toHaveLength(change === "none" ? 1 : conflicts);
         let previousXmin = originalTuple.xmin;
         for (const [index, writer] of writerCommits.entries()) {
-          expect(writer.generation).toBe(search.generation + index + 1);
-          expect(writer.xmin).not.toBe(previousXmin);
+          expect(writer.generation).toBe(
+            search.generation + (change === "none" ? 0 : index + 1),
+          );
+          expect(writer.xmin === previousXmin).toBe(change === "none");
           previousXmin = writer.xmin;
-          const attempt = diagnostics[index]!;
+        }
+        for (const [index, attempt] of diagnostics.entries()) {
+          const writer = writerCommits[index]!;
           expect(writer.startedAt).toBeGreaterThanOrEqual(attempt.startedAt);
           expect(writer.committedAt).toBeLessThanOrEqual(
             attempt.startedAt + attempt.durationMs + 1,
@@ -229,19 +248,26 @@ describe("finance.record Email persistence contention", () => {
         const savedEmail = await readEmail(ctx.db, emailIdentity);
         expect(savedEmail).not.toBeNull();
         if (!savedEmail || !originalEmail) return;
+        const updatedAt = expect.any(Date);
         const renewedAcquisition = {
-          updatedAt: expect.any(Date),
+          updatedAt,
           searchOrigin: "member_search",
           searchExpiresAt: expect.any(Date),
         };
         // Routine unchanged metadata leaves every Email column untouched;
         // member search deliberately renews its acquisition metadata.
         expect(savedEmail).toEqual(
-          memberSearch
+          change === "member_search"
             ? { ...originalEmail, ...renewedAcquisition }
-            : originalEmail,
+            : change === "subject"
+              ? {
+                  ...originalEmail,
+                  subject: `Synthetic revised receipt ${conflicts}`,
+                  updatedAt,
+                }
+              : originalEmail,
         );
-        expect(attempts).toBe(Math.min(conflicts + 1, 3));
+        expect(attempts).toBe(Math.min(expectedConflicts + 1, 3));
         const failed = {
           ok: false,
           error: {
@@ -252,9 +278,11 @@ describe("finance.record Email persistence contention", () => {
           },
         };
         expect(result).toMatchObject(
-          conflicts === 3 ? failed : { ok: true, data: { inserted: 1 } },
+          expectedConflicts === 3
+            ? failed
+            : { ok: true, data: { inserted: 1 } },
         );
-        const admitted = conflicts === 3 ? 0 : 1;
+        const admitted = expectedConflicts === 3 ? 0 : 1;
         expect(await read()).toEqual({
           imports: admitted,
           memberships: admitted,
@@ -262,7 +290,7 @@ describe("finance.record Email persistence contention", () => {
           sweeps: admitted,
           sweepJobs: admitted,
           expenses: 0,
-          generation: search.generation + conflicts + admitted,
+          generation: search.generation + expectedConflicts + admitted,
         });
         racing.mockRestore();
         if (!result.ok) result = await record();
@@ -274,7 +302,7 @@ describe("finance.record Email persistence contention", () => {
           sweeps: 1,
           sweepJobs: 1,
           expenses: 0,
-          generation: search.generation + conflicts + 1,
+          generation: search.generation + expectedConflicts + 1,
         });
         const stored = await read();
         expect(await record()).toMatchObject({

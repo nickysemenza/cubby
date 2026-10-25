@@ -4,7 +4,7 @@
  * legacy mailbox again. Only a pending, ownership-resolved legacy copy of the
  * same message settles; reviewed history and other messages are untouched.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,10 +16,65 @@ import {
   retainedMailFixture,
 } from "../../operations/order-import.fixtures";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "../mail-source-identity";
-import { saveEmail } from "./persistence";
+import { readEmail, saveEmail, saveMailboxMetadata } from "./persistence";
 
 describe("legacy mailbox Email supersession", () => {
   const ctx = withTestDb();
+
+  it("invalidates legacy supersession even when current metadata is unchanged", async () => {
+    const { party } = await memberImportWorld(ctx.db, ctx.actor);
+    const metadata = {
+      ledgerPartyId: party.id,
+      checksum: "d".repeat(64),
+      executionPolicy: "classification_only",
+      mail: {
+        sourceKey: "synthetic-legacy-metadata-source",
+        mailboxId: "synthetic-current-mailbox",
+        messageId: "synthetic-metadata-duplicate",
+        threadId: null,
+        historyId: null,
+        internalDate: null,
+        labelIds: [],
+        headers: {
+          from: "receipts@example.test",
+          subject: "Synthetic legacy receipt",
+        },
+        snippet: null,
+        bodyText: null,
+        bodyHtml: null,
+      },
+    } satisfies Parameters<typeof saveMailboxMetadata>[1];
+    await saveMailboxMetadata(ctx.db, metadata);
+    const identity = {
+      ledgerPartyId: party.id,
+      mailboxId: metadata.mail.mailboxId,
+      messageId: metadata.mail.messageId,
+    };
+    const current = await readEmail(ctx.db, identity);
+    const legacy = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId: `legacy:${party.id}`,
+      messageId: metadata.mail.messageId,
+      checksum: "e".repeat(64),
+    });
+    const search = async () =>
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'refresh:search'`,
+        )
+      ).rows[0];
+    const originalJob = await search();
+    await saveMailboxMetadata(ctx.db, metadata);
+    expect(await readEmail(ctx.db, identity)).toEqual(current);
+    expect(
+      await readEmail(ctx.db, { ...identity, mailboxId: `legacy:${party.id}` }),
+    ).toMatchObject({ orderMailId: legacy.id, status: "excluded" });
+    const supersededJob = await search();
+    expect(supersededJob?.generation).toBe(Number(originalJob?.generation) + 1);
+    expect(supersededJob?.xmin).not.toBe(originalJob?.xmin);
+    await saveMailboxMetadata(ctx.db, metadata);
+    expect(await search()).toEqual(supersededJob);
+  });
 
   it("excludes a pending legacy copy once the current mailbox holds the message", async () => {
     const { party } = await memberImportWorld(ctx.db, ctx.actor);

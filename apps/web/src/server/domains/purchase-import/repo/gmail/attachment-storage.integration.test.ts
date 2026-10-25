@@ -16,9 +16,9 @@
  *
  * Gmail, model verdicts and object storage are synthetic; retention writers are real.
  */
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
@@ -43,6 +43,7 @@ import {
   advanceMailboxCursor,
   loadGmailCursor,
   persistGmailEvents,
+  readEmail,
   saveMailboxMetadata,
 } from "./persistence";
 import {
@@ -203,6 +204,99 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(puts).toBe(1);
     expect(objects.size).toBe(1);
     expect(await attachments()).toHaveLength(1);
+  });
+
+  it("invalidates created and changed metadata but leaves replayed Email and Job tuples unchanged", async () => {
+    const party = await seedParty();
+    const { mail } = normalizeMessage(
+      "synthetic-google-subject",
+      message("msg-metadata", 0),
+    );
+    const metadata = {
+      ledgerPartyId: party.id,
+      mail,
+      checksum: "a".repeat(64),
+      executionPolicy: "classification_only",
+    } satisfies Parameters<typeof saveMailboxMetadata>[1];
+    const identity = {
+      ledgerPartyId: party.id,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+    };
+    const jobs = async () =>
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'refresh.family' ORDER BY key`,
+        )
+      ).rows;
+    const searchGeneration = async () =>
+      (
+        await getDb(ctx.db).execute(
+          sql`SELECT generation FROM "Job" WHERE key = 'refresh:search'`,
+        )
+      ).rows[0]?.generation;
+    expect(await searchGeneration()).toBeUndefined();
+    await saveMailboxMetadata(ctx.db, metadata);
+    expect(await searchGeneration()).toBe(1);
+    const originalEmail = await readEmail(ctx.db, identity);
+    expect(originalEmail).not.toBeNull();
+    const originalJobs = await jobs();
+    await saveMailboxMetadata(ctx.db, metadata);
+    expect(await readEmail(ctx.db, identity)).toEqual(originalEmail);
+    expect(await jobs()).toEqual(originalJobs);
+
+    await saveMailboxMetadata(ctx.db, {
+      ...metadata,
+      mail: {
+        ...mail,
+        headers: { ...mail.headers, subject: "Synthetic changed receipt" },
+      },
+    });
+    const changedEmail = await readEmail(ctx.db, identity);
+    expect(changedEmail).toEqual({
+      ...originalEmail,
+      subject: "Synthetic changed receipt",
+      updatedAt: expect.any(Date),
+    });
+    expect(await searchGeneration()).toBe(2);
+    await saveMailboxMetadata(ctx.db, {
+      ...metadata,
+      mail: {
+        ...mail,
+        headers: { ...mail.headers, subject: "Synthetic changed receipt" },
+      },
+      memberSearch: true,
+    });
+    expect(await readEmail(ctx.db, identity)).toEqual({
+      ...changedEmail,
+      updatedAt: expect.any(Date),
+      searchOrigin: "member_search",
+      searchExpiresAt: expect.any(Date),
+    });
+    expect(await searchGeneration()).toBe(3);
+
+    // A later search changes only expiry; that remains source metadata and
+    // must retain refresh intent even after the search origin is established.
+    const expiresAt = new Date(Date.now() + 60_000 + 7 * 86_400_000);
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(expiresAt.getTime() - 7 * 86_400_000);
+    try {
+      await saveMailboxMetadata(ctx.db, {
+        ...metadata,
+        mail: {
+          ...mail,
+          headers: { ...mail.headers, subject: "Synthetic changed receipt" },
+        },
+        memberSearch: true,
+      });
+      expect((await readEmail(ctx.db, identity))?.searchExpiresAt).toEqual(
+        expiresAt,
+      );
+      expect(await searchGeneration()).toBe(4);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("cleans uploaded reservations when newer metadata refuses publication", async () => {

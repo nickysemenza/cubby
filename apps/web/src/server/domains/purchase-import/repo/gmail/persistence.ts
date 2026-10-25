@@ -185,8 +185,8 @@ async function supersedeLegacyEmail(
   tx: DrizzleTransaction,
   input: { ledgerPartyId: string; mailboxId: string; messageId: string },
 ) {
-  if (input.mailboxId.startsWith(LEGACY_MAILBOX_PREFIX)) return;
-  await tx
+  if (input.mailboxId.startsWith(LEGACY_MAILBOX_PREFIX)) return false;
+  const superseded = await tx
     .update(emailTable)
     .set({ status: "excluded", updatedAt: new Date() })
     .where(
@@ -213,7 +213,9 @@ async function supersedeLegacyEmail(
           ),
         ),
       ),
-    );
+    )
+    .returning({ id: emailTable.id });
+  return superseded.length > 0;
 }
 
 export async function readEmail(
@@ -332,7 +334,7 @@ export async function saveMailboxMetadata(
     messageId: input.mail.messageId,
   };
   await withTransaction(db, async (tx) => {
-    const { row } = await findOrCreateWithShortcode(tx, "email", {
+    const { row, created } = await findOrCreateWithShortcode(tx, "email", {
       where: messageWhere(identity),
       values: () => ({
         ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
@@ -343,8 +345,7 @@ export async function saveMailboxMetadata(
         status: "pending",
       }),
     });
-    await supersedeLegacyEmail(tx, identity);
-    await recordChange(tx, { kind: "source", categories: ["email"] });
+    const superseded = await supersedeLegacyEmail(tx, identity);
     const fields = mailboxMetadataFields(input, row);
     const changed =
       (
@@ -365,6 +366,10 @@ export async function saveMailboxMetadata(
         .update(emailTable)
         .set({ ...fields, updatedAt: new Date() })
         .where(eq(emailTable.id, row.id));
+    // A metadata replay saves no source. Legacy supersession still changes a
+    // source row even when this mailbox's metadata is already current.
+    if (created || changed || superseded)
+      await recordChange(tx, { kind: "source", categories: ["email"] });
   });
 }
 
