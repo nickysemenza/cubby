@@ -3,7 +3,7 @@ import { test } from "vitest";
 import {
   isLocalPreviewOrigin,
   localPreviewOrigins,
-} from "../../src/lib/local-preview-origins";
+} from "../../src/lib/local-preview-origins.ts";
 import { resolveDevProfile } from "./dev-profile.ts";
 
 // Failure modes: inherited production targets, cross-checkout state collisions,
