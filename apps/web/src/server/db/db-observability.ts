@@ -28,6 +28,7 @@ type ActivityState = {
 };
 
 type StoredDatabaseOperationMetrics = DatabaseOperationMetrics & {
+  requestId?: string;
   acquireStartedCount: number;
   /** Operations the request ran, for `Server-Timing`; request collector only. */
   operations: string[];
@@ -78,11 +79,18 @@ const emptyMetrics = (): StoredDatabaseOperationMetrics => {
  */
 export const withDatabaseOperationMetrics = async <T>(
   fn: (metrics: DatabaseOperationMetrics) => Promise<T>,
+  requestId?: string,
 ): Promise<T> => {
   const metrics = emptyMetrics();
+  metrics.requestId =
+    requestId ?? operationMetricsStore.getStore()?.at(-1)?.requestId;
   const collectors = [...(operationMetricsStore.getStore() ?? []), metrics];
   return operationMetricsStore.run(collectors, () => fn(metrics));
 };
+
+/** Request correlation survives nested page/phase collectors without SQL values. */
+export const databaseRequestId = (): string | undefined =>
+  operationMetricsStore.getStore()?.at(-1)?.requestId;
 
 type ActivityKind = "query" | "acquire" | "clientQueue";
 type FinishActivity = (endedAt?: number) => void;

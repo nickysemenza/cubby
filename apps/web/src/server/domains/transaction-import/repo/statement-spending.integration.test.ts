@@ -2,15 +2,20 @@ import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
-import { isNull, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { vendor as vendorTable } from "~/server/db/schema";
+import { getDb, runAfterCommit } from "~/server/db/helpers";
+import {
+  assessmentState,
+  job,
+  vendor as vendorTable,
+} from "~/server/db/schema";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
@@ -19,10 +24,12 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import * as refreshFamilies from "~/server/generic/derived-refresh/repo/families";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
 import { answering } from "./statement-decision-port.fixtures";
+import * as statementApplication from "./statement-suggestion-application";
 import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import { readStatementSuggestions } from "./statement-suggestion-read";
 import { generateStatementSuggestionPage } from "./statement-suggestions";
@@ -32,10 +39,13 @@ import { generateStatementSuggestionPage } from "./statement-suggestions";
 // work; the automatic sample/optional switch withholds clean import spending.
 describe("statement spending review and re-import", () => {
   const ctx = withTestDb();
-  async function fixture(providerTransactionId: string | null = null) {
+  async function fixture(
+    providerTransactionId: string | null = null,
+    ownerKind: "member" | "household" = "member",
+  ) {
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       name: "Synthetic statement member",
-      kind: "member",
+      kind: ownerKind,
     });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic statement card",
@@ -129,6 +139,194 @@ describe("statement spending review and re-import", () => {
     );
     return suggestion!;
   };
+  it.each(["once", "exhausted", "stale", "committed"] as const)(
+    "preserves shared-card application and replay after %s contention",
+    async (mode) => {
+      const { advice, account } = await fixture(null, "household");
+      await label(advice);
+      const page = await listSuggestionPage(ctx.db, {
+        family: "statement_transaction",
+        limit: 20,
+      });
+      const suggestion = page.items[0]!;
+      const command = {
+        assessmentId: suggestion.id,
+        operationId: "synthetic-shared-card-contention",
+        verdict: "correct" as const,
+        correction: { present: false as const },
+        intent: "apply" as const,
+        expectedFingerprint: suggestion.fingerprint!,
+        application: statementTransactionApplication.parse({
+          kind: "statement_transaction",
+          action: "create",
+        }),
+      };
+      await expect(
+        previewStatementSuggestion(ctx.db, {
+          assessmentId: command.assessmentId,
+          expectedFingerprint: command.expectedFingerprint,
+          application: command.application,
+        }),
+      ).resolves.toMatchObject({
+        spending: { status: "ready", purchaserId: null },
+      });
+      const read = async () =>
+        (
+          await getDb(ctx.db).execute<{
+            transactions: number;
+            allocations: number;
+            purchases: number;
+            expenses: number;
+            feedback: number;
+            totalFeedback: number;
+          }>(sql`SELECT
+      (SELECT count(*)::int FROM "FinancialTransaction") AS transactions,
+      (SELECT count(*)::int FROM "FinancialTransactionAllocation") AS allocations,
+      (SELECT count(*)::int FROM "Purchase") AS purchases,
+      (SELECT count(*)::int FROM "Expense") AS expenses,
+      (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid) AS "totalFeedback",
+      (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid AND "operationId" IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
+        ).rows[0]!;
+      const before = await read();
+      const invalidate = refreshFamilies.invalidateRefreshFamily;
+      let calls = 0;
+      let external = false;
+      const current = statementApplication.currentStatementApplication;
+      let builds = 0;
+      const rebuilding = vi
+        .spyOn(statementApplication, "currentStatementApplication")
+        .mockImplementation(async (...args) => {
+          builds++;
+          const proposal = await current(...args);
+          if (mode === "stale" && builds === 1) {
+            external = true;
+            try {
+              await updateFinancialAccount(
+                ctx.db,
+                account.output.id,
+                { ledgerPartyId: null },
+                ctx.actor,
+              );
+            } finally {
+              external = false;
+            }
+          }
+          return proposal;
+        });
+      const racing = vi
+        .spyOn(refreshFamilies, "invalidateRefreshFamily")
+        .mockImplementation(async (db, family) => {
+          if (family === "search" && !external) {
+            calls++;
+            if (mode === "exhausted" || (mode !== "committed" && calls === 1)) {
+              await getDb(ctx.db)
+                .update(job)
+                .set({ generation: sql`${job.generation} + 1` })
+                .where(eq(job.key, "refresh:search"));
+            }
+            if (mode === "committed" && calls === 1) {
+              await runAfterCommit(db, async () => {
+                throw new Error("Synthetic post-commit failure", {
+                  cause: { code: "40001" },
+                });
+              });
+            }
+          }
+          return invalidate(db, family);
+        });
+      try {
+        const scenarios = {
+          once: async () => {
+            const result = await reviewAssessment(
+              ctx.db,
+              kernelCtx(ctx),
+              command,
+            );
+            expect(calls).toBe(2);
+            expect(builds).toBe(2);
+            return result;
+          },
+          exhausted: async () => {
+            await expect(
+              reviewAssessment(ctx.db, kernelCtx(ctx), command),
+            ).rejects.toMatchObject({ cause: { code: "40001" } });
+            expect(calls).toBe(3);
+            expect(builds).toBe(3);
+            expect(await read()).toEqual({
+              ...before,
+              feedback: before.feedback + 1,
+              totalFeedback: before.totalFeedback + 1,
+            });
+            expect(
+              await getDb(ctx.db).query.assessmentState.findFirst({
+                where: eq(assessmentState.id, suggestion.id),
+              }),
+            ).toMatchObject({ active: true, status: "pending" });
+            racing.mockRestore();
+            return reviewAssessment(ctx.db, kernelCtx(ctx), command);
+          },
+          stale: async () => {
+            await expect(
+              reviewAssessment(ctx.db, kernelCtx(ctx), command),
+            ).rejects.toThrow(/statement or transaction evidence changed/i);
+            expect(builds).toBe(2);
+            expect(await read()).toEqual({
+              ...before,
+              feedback: before.feedback + 1,
+              totalFeedback: before.totalFeedback + 1,
+            });
+            expect(
+              await getDb(ctx.db).query.assessmentState.findFirst({
+                where: eq(assessmentState.id, suggestion.id),
+              }),
+            ).toMatchObject({ active: true, status: "pending" });
+            return;
+          },
+          committed: async () => {
+            await expect(
+              reviewAssessment(ctx.db, kernelCtx(ctx), command),
+            ).rejects.toThrow(
+              /Transaction committed, but an after-commit effect failed/,
+            );
+            expect(calls).toBe(1);
+            expect(builds).toBe(1);
+            racing.mockRestore();
+            const result = await reviewAssessment(
+              ctx.db,
+              kernelCtx(ctx),
+              command,
+            );
+            expect(builds).toBe(1);
+            return result;
+          },
+        };
+        const result = await scenarios[mode]();
+        if (!result) return;
+        expect(result).toMatchObject({ applied: true });
+        expect(await read()).toEqual({
+          transactions: before.transactions + 1,
+          allocations: before.allocations + 1,
+          purchases: before.purchases + 1,
+          expenses: before.expenses + 1,
+          feedback: before.feedback + 2,
+          totalFeedback: before.totalFeedback + 3,
+        });
+        expect(
+          await getDb(ctx.db).query.assessmentState.findFirst({
+            where: eq(assessmentState.id, suggestion.id),
+          }),
+        ).toMatchObject({ status: "applied" });
+        const stored = await read();
+        expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+          result,
+        );
+        expect(await read()).toEqual(stored);
+      } finally {
+        racing.mockRestore();
+        rebuilding.mockRestore();
+      }
+    },
+  );
   // Preview must fence missing/stale assessments and invalid drafts before
   // planning, replan the selected draft, and never publish or mutate evidence.
   it("fences missing fingerprints, replaced assessments, and changed statement evidence in preview", async () => {

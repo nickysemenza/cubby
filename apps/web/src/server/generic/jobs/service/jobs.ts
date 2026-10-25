@@ -54,11 +54,16 @@ export async function advanceJob(
   const claimed = await claimJob(db, id);
   if (!claimed) return "skipped";
   const details: JobExecutionDetails = { stepKey: null };
+  let publicationStartedAt: number | undefined;
+  let publicationDurationMs: number | undefined;
   const entry = () =>
     log.child({
       runId: claimed.runId,
       jobId: id,
       kind: claimed.kind,
+      jobKey: claimed.key,
+      publicationStartedAt,
+      publicationDurationMs,
       stepKey: details.stepKey,
       phase: details.phase ?? null,
       phaseElapsedMs: details.phaseStartedAt
@@ -105,6 +110,8 @@ export async function advanceJob(
       waitReason: prepared.page.waitReason ?? null,
     });
     if (prepared.awaitExternal) return "dispatched";
+    publicationStartedAt = Date.now();
+    const publicationStarted = performance.now();
     const published = await withJobExecution(
       db,
       claimed,
@@ -117,7 +124,11 @@ export async function advanceJob(
           prepared.isolationLevel,
         ),
       details,
-    );
+    ).finally(() => {
+      publicationDurationMs = Math.round(
+        performance.now() - publicationStarted,
+      );
+    });
     entry().info("publish", {
       published,
       done: prepared.page.done,

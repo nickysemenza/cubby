@@ -669,6 +669,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             {
               origin: channel.origin,
               workload,
+              requestId,
               inspectResult: (result) => {
                 const inspection: StartOperationInspection = {
                   workload,
