@@ -1,14 +1,14 @@
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
 import { unwrapDb } from "~/server/db/helpers";
-import { entityQuality, job, jobInvalidation } from "~/server/db/schema";
+import { entityQuality, job, jobInvalidationCapture } from "~/server/db/schema";
 import {
   createExpense,
   updateExpense,
@@ -66,12 +66,12 @@ describe("stored Product quality", () => {
     }
     throw new Error("Synthetic Product quality pass exceeded page budget");
   };
-  // A capture bumps the family's invalidation revision, not its Job row.
+  // A source write appends capture input without replacing the Job row.
   const generation = async () => {
     const [intent] = await unwrapDb(ctx.db)
-      .select()
-      .from(jobInvalidation)
-      .where(eq(jobInvalidation.key, "refresh:quality"));
+      .select({ revision: sql<number>`count(*)::int` })
+      .from(jobInvalidationCapture)
+      .where(eq(jobInvalidationCapture.key, "refresh:quality"));
     if (!intent) throw new Error("Missing quality invalidation");
     return intent.revision;
   };

@@ -1,7 +1,7 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -11,7 +11,7 @@ import {
   recordCommittedChanges,
   withTransactionDatabase,
 } from "~/server/db/helpers/core";
-import { job, jobInvalidation } from "~/server/db/schema";
+import { job, jobInvalidationCapture } from "~/server/db/schema";
 import {
   createLocation,
   getLocationById,
@@ -103,15 +103,16 @@ describe("repository writes publish after their commit", () => {
 
   it("coalesces source changes across savepoints and leaves family revisions unchanged for projections", async () => {
     await recordChange(ctx.db, { kind: "source", categories: ["task"] });
-    // Captures bump each family's invalidation revision, never its Job row.
+    // Captures append input without changing the execution Job.
     const generations = () =>
       getDb(ctx.db)
         .select({
-          key: jobInvalidation.key,
-          generation: jobInvalidation.revision,
+          key: jobInvalidationCapture.key,
+          generation: sql<number>`count(*)::int`,
         })
-        .from(jobInvalidation)
-        .orderBy(jobInvalidation.key);
+        .from(jobInvalidationCapture)
+        .groupBy(jobInvalidationCapture.key)
+        .orderBy(jobInvalidationCapture.key);
     const executions = () =>
       getDb(ctx.db)
         .select({ id: job.id, generation: job.generation, state: job.state })

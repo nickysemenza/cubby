@@ -35,7 +35,7 @@ import {
   readRunRollups,
   retryJobSet,
 } from "~/server/generic/jobs/repo/job-queue";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { claimJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   JOB_RETENTION_MS,
   measureQueueHealth,
@@ -524,7 +524,6 @@ describe("queue watchdog, explain and retention", () => {
       .update(job)
       .set({
         state: "completed",
-        observedRevision: 10,
         lastClaimedAt: longAgo,
         availableAt: longAgo,
         updatedAt: longAgo,
@@ -532,15 +531,13 @@ describe("queue watchdog, explain and retention", () => {
       .where(eq(job.id, search.id));
     await getDb(ctx.db)
       .insert(jobInvalidation)
+      .values({ key: "refresh:search", restartsPass: true })
+      .onConflictDoNothing();
+    await getDb(ctx.db)
+      .insert(jobInvalidationCapture)
       .values({
         key: "refresh:search",
-        revision: 11,
-        restartsPass: true,
-        updatedAt: new Date(Date.now() - 40 * 60_000),
-      })
-      .onConflictDoUpdate({
-        target: jobInvalidation.key,
-        set: { revision: 11, updatedAt: new Date(Date.now() - 40 * 60_000) },
+        capturedAt: new Date(Date.now() - 40 * 60_000),
       });
     const health = await measureQueueHealth(ctx.db, {
       previous: null,
@@ -640,7 +637,6 @@ describe("queue watchdog, explain and retention", () => {
       .set({
         state: "queued",
         cursor: { at: "synthetic-later-page" },
-        observedRevision: 0,
         lastClaimedAt: new Date(Date.now() - 30_000),
         availableAt: new Date(Date.now() - 30_000),
       })
@@ -678,7 +674,6 @@ describe("queue watchdog, explain and retention", () => {
       .update(job)
       .set({
         state: "completed",
-        observedRevision: 0,
         lastClaimedAt: new Date(Date.now() - 3 * 60_000),
         updatedAt: new Date(Date.now() - 3 * 60_000),
       })
@@ -715,7 +710,6 @@ describe("queue watchdog, explain and retention", () => {
       .update(job)
       .set({
         state: "completed",
-        observedRevision: 0,
         lastClaimedAt: new Date(Date.now() - 60_000),
         updatedAt: new Date(Date.now() - 60_000),
       })
@@ -794,21 +788,31 @@ describe("queue watchdog, explain and retention", () => {
     ).toContain("synthetic.old-failed");
   });
 
-  it("prunes only capture times every claim of their Job observed", async () => {
-    for (let capture = 0; capture < 3; capture++)
+  it("prunes acknowledged captures while preserving later pending input", async () => {
+    for (let capture = 0; capture < 2; capture++)
       await invalidateRefreshFamily(ctx.db, "search");
-    await getDb(ctx.db)
-      .update(job)
-      .set({ observedRevision: 2 })
+    const [search] = await getDb(ctx.db)
+      .select()
+      .from(job)
       .where(eq(job.key, "refresh:search"));
+    if (!search) throw new Error("Expected search Job");
+    expect(await claimJob(ctx.db, search.id)).not.toBeNull();
+    await invalidateRefreshFamily(ctx.db, "search");
+    const pending = await getDb(ctx.db)
+      .select()
+      .from(jobInvalidationCapture)
+      .where(
+        sql`${jobInvalidationCapture.key} = 'refresh:search' AND NOT ${jobInvalidationCapture.observed}`,
+      );
+    expect(pending).toHaveLength(1);
     expect(
       await pruneObservedInvalidationCaptures(ctx.db, { limit: 100 }),
     ).toBe(2);
     expect(
       await getDb(ctx.db)
-        .select({ revision: jobInvalidationCapture.revision })
+        .select()
         .from(jobInvalidationCapture)
         .where(eq(jobInvalidationCapture.key, "refresh:search")),
-    ).toEqual([{ revision: 3 }]);
+    ).toEqual(pending);
   });
 });

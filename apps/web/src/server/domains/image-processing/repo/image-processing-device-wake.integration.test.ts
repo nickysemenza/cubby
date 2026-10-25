@@ -8,7 +8,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import {
   job as durableJob,
-  jobInvalidation,
+  jobInvalidationCapture,
 } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -234,9 +234,9 @@ describe("parked device work wakes idle companions", () => {
       .set({ state: "completed" })
       .where(eq(durableJob.key, "image.device.wake"));
     const [before] = await getDb(ctx.db)
-      .select({ revision: jobInvalidation.revision })
-      .from(jobInvalidation)
-      .where(eq(jobInvalidation.key, "image.device.wake"));
+      .select({ revision: sql<number>`count(*)::int` })
+      .from(jobInvalidationCapture)
+      .where(eq(jobInvalidationCapture.key, "image.device.wake"));
     await repairImageProcessingExecution(ctx.db, 25);
     const [wake] = await getDb(ctx.db)
       .select()
@@ -247,9 +247,9 @@ describe("parked device work wakes idle companions", () => {
       true,
     );
     const [after] = await getDb(ctx.db)
-      .select({ revision: jobInvalidation.revision })
-      .from(jobInvalidation)
-      .where(eq(jobInvalidation.key, "image.device.wake"));
+      .select({ revision: sql<number>`count(*)::int` })
+      .from(jobInvalidationCapture)
+      .where(eq(jobInvalidationCapture.key, "image.device.wake"));
     expect(after?.revision).toBe(before?.revision);
   });
 

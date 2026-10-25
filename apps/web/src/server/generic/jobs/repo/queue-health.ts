@@ -1,9 +1,10 @@
 import { jobState } from "@cubby/schemas/job";
-import { and, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 
 import type { QueueHealthSnapshot } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import { job, jobInvalidationCapture } from "~/server/db/retained-tables";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import {
@@ -46,9 +47,8 @@ export async function measureQueueHealth(
   const woken = unobservedJobInvalidation();
   const restartingWoken = unobservedJobInvalidation({ restartsPass: true });
   // When each due Job became due, matching how `jobDue` wakes it: an
-  // unobserved capture that wakes it dates it from its first revision past
-  // `observedRevision` (later captures keep that start; the marker's own
-  // write time only dates history from before the capture log), an expired
+  // unobserved capture dates it from the first pending input (later
+  // captures keep that start), an expired
   // lease at its expiry. A capture wakes a completed Job, or waiting work
   // under a restarting marker. Waiting work that has not started its pass
   // takes the earlier of the capture and its availability: the periodic
@@ -56,10 +56,10 @@ export async function measureQueueHealth(
   // A pass in progress that keeps its cursor is served on its availability,
   // and a capture it ran through dates its follow-up pass from completion
   // (a finished Job is due since the later of the two).
-  const unobservedSince = sql`coalesce(
-    (SELECT min(c."capturedAt") FROM "JobInvalidationCapture" c
-      WHERE c.key = "Job".key AND c.revision > coalesce("Job"."observedRevision", 0)),
-    (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key))`;
+  const unobservedSince = related(
+    jobInvalidationCapture,
+    (c) => sql`${c.key} = ${outer(job.key)} AND NOT ${c.observed}`,
+  ).min<Date>((c) => c.capturedAt);
   const waiting = sql`${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait})`;
   const dueSince = sql`(CASE
     WHEN ${job.state} = ${jobState.enum.completed} AND ${woken}
@@ -222,22 +222,21 @@ export async function pruneFinishedJobs(
 }
 
 /**
- * Delete one bounded batch of capture times every claim of their Job has
- * observed. Captures only insert newer revisions, so this never races one.
+ * Delete one bounded batch of acknowledged captures. New input is a distinct
+ * UUID row and is never selected; the admitted Job retains recovery ownership.
  */
 export async function pruneObservedInvalidationCaptures(
   db: Database,
   { limit }: { limit: number },
 ): Promise<number> {
-  const doomed = sql`SELECT c.key, c.revision FROM "JobInvalidationCapture" c
-    JOIN "Job" j ON j.key = c.key
-    WHERE c.revision <= coalesce(j."observedRevision", 0) LIMIT ${limit}`;
+  const doomed = getDb(db)
+    .select({ id: jobInvalidationCapture.id })
+    .from(jobInvalidationCapture)
+    .where(eq(jobInvalidationCapture.observed, true))
+    .limit(limit);
   const deleted = await getDb(db)
     .delete(jobInvalidationCapture)
-    // Qualified by hand: drizzle renders bare column names in some statements.
-    .where(
-      sql`("JobInvalidationCapture".key, "JobInvalidationCapture".revision) IN (${doomed})`,
-    )
-    .returning({ key: jobInvalidationCapture.key });
+    .where(inArray(jobInvalidationCapture.id, doomed))
+    .returning({ id: jobInvalidationCapture.id });
   return deleted.length;
 }

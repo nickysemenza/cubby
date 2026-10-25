@@ -120,21 +120,26 @@ failed) is released in the same transaction and counts nothing.
 
 ## Durable invalidation
 
-A source capture never writes a long-lived Job's execution row. It bumps the
-Job's `JobInvalidation` revision in the save's transaction
-(`recordJobInvalidation`; refresh families through `invalidateRefreshFamily`).
-Claims, renewals and publication never write that row, so execution on
-another connection cannot abort a capture's serializable transaction, and a
-rolled-back save leaves no invalidation.
+A source capture appends its own UUID row to `JobInvalidationCapture` in the
+save's transaction (`recordJobInvalidation`; refresh families through
+`invalidateRefreshFamily`). It never updates another capture, a long-lived
+Job's execution row or the stable `JobInvalidation` policy. Genuine concurrent
+source and image publications therefore share no mutable capture counter.
+A rolled-back save leaves no capture. First-key policy, Job and capture
+initialization commit atomically; ordinary captures never probe the Job. A
+read-committed writer that loses concurrent first-key insertion reads the
+committed policy in a fresh statement and appends its own capture. Serializable
+initialization retains the owning transaction's existing conflict retry.
 
-The Job observes the revision itself. A Job whose `observedRevision` trails
-the marker is due, even when completed. The claim that observes it starts a
-fresh pass: a new generation, no cursor or result, a fresh attempt budget, and
-the revision recorded as observed. `restartsPass: false` (every refresh
-family) lets a pass in progress keep its cursor through captures. The pass
-keeps the revision it started from, so captures made meanwhile (an edit
-behind its cursor, a record created after its cutoff) leave the finished Job
-due, and the next full pass starts from the first record at once. Passes run
+A Job with an unobserved capture is due, even when completed. A fresh claim
+locks its Job and acknowledges exactly the pending captures visible in that
+transaction, together with its new generation, empty cursor/result and fresh
+budget. There is no maximum UUID, timestamp or allocation-order frontier:
+an earlier-started capture that commits later stays pending. A refused or
+rolled-back claim acknowledges nothing. `restartsPass: false` (every refresh
+family) lets a pass in progress keep its cursor and leaves newer captures
+pending. The finished Job is then due for a full pass from the first record.
+Passes run
 back to back only while real writes keep arriving: ordinary source writes
 capture every family and Run-only source writes capture quality, while a
 `derived_refresh` Run's own create and complete register projection changes
@@ -155,26 +160,31 @@ wake or requeues a completed one through `repeatJob` (`repeatDeviceWake`: an
 insert that ignores conflicts and an atomic requeue of `completed` only, with
 no capture), so device work an older build backed off without a wake still
 rings; a waiting, backing-off or running wake keeps its schedule, retry
-deadline, attempts and error. Publication of a restarting kind rereads the marker and supersedes
-a page whose pass began before a capture, as a generation change does. For
+deadline, attempts and error. Publication of a restarting kind checks pending captures and supersedes
+a page whose pass began before that input, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
-dies is never lost: the finished or reclaimed Job still trails the marker.
-Failure does not end a restarting family either: execution reads the marker
+dies is never lost: the new capture remains unobserved.
+Failure does not end a restarting family either: execution checks pending captures
 before its terminal write, so a capture can commit in between, and a failed
-Job trailing a restarting marker is due again with a fresh pass and recovery
+Job with pending restarting input is due again with a fresh pass and recovery
 window. Paused and cancelled Jobs are member stops and never wake.
 
-Each capture also appends its revision and time to `JobInvalidationCapture`.
-Health dates a woken Job from its first revision past `observedRevision`, so
-repeated captures keep the original pending start. The catch-up
-(`repeatJob`) requeues only a completed Job no capture has woken; a woken one
-is already due, so its date stands. Waiting work that has not started its
-pass is due since the earlier of its first unseen capture and its
-availability. A pass in progress that keeps its cursor is not woken by a
-capture, so health dates it by its availability; once it finishes, the
-follow-up pass is due since the later of the capture and the completion. Retention deletes rows a claim has observed. Migration 0030
-recorded each marker already ahead of its Job at the cutover as a capture of
-its current revision, dated by the marker's last write.
+Health dates a woken Job from its first unobserved capture, so repeated
+captures keep the original pending start. Catch-up (`repeatJob`) requeues only
+a completed Job no capture has woken; a woken one is already due, so its date
+stands. Waiting work that has not started its pass is due since the earlier
+of its first unseen capture and availability. An in-progress non-restarting
+pass is dated by availability; its follow-up pass is dated by the later of
+capture and completion. Retention deletes only acknowledged captures: the
+admitted Job retains recovery ownership if its worker disappears.
+
+Migration 0034 locks Job, invalidation policy and captures before conversion.
+It preserves each old capture and maps its observed state from the predecessor
+Job revision. A pending marker without retained capture history gains a
+capture at its old pending timestamp. Execution state, tokens, cursors,
+availability, attempts, diagnostics and member stops stay unchanged. The
+migration refuses orphan policy rather than silently dropping its work; old
+revision writers fail atomically after this preserving direct cutover.
 
 ## Retries
 

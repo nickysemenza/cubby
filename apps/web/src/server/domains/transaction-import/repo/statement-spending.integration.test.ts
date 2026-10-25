@@ -13,9 +13,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   assessmentState,
-  jobInvalidation,
+  job,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
@@ -228,17 +229,17 @@ describe("statement spending review and re-import", () => {
           if (family === "search" && !external) {
             calls++;
             if (mode === "exhausted" || (mode !== "committed" && calls === 1)) {
-              // A genuine competing capture on another connection: it moves
-              // the search family's invalidation row the application's own
-              // capture writes next. Execution writes to the Job row no
-              // longer conflict with a capture.
+              // A synthetic stale-row fence keeps real PostgreSQL retry and
+              // money/receipt rollback coverage without a mutable capture counter.
               await getDb(ctx.db)
-                .insert(jobInvalidation)
-                .values({ key: "refresh:search", restartsPass: true })
-                .onConflictDoUpdate({
-                  target: jobInvalidation.key,
-                  set: { revision: sql`${jobInvalidation.revision} + 1` },
-                });
+                .update(job)
+                .set({ generation: sql`${job.generation} + 1` })
+                .where(eq(job.key, "refresh:search"));
+              await repositoryQueries(db)
+                .select()
+                .from(job)
+                .where(eq(job.key, "refresh:search"))
+                .for("update");
             }
             if (mode === "committed" && calls === 1) {
               await runAfterCommit(db, async () => {

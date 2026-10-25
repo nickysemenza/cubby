@@ -15,7 +15,7 @@ import {
   orderMail,
   orderMailAttachment,
   run as runTable,
-  jobInvalidation,
+  jobInvalidationCapture,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
@@ -345,13 +345,13 @@ describe("Email data quality", () => {
       .from(entityQuality)
       .where(eq(entityQuality.entityId, message.id));
     expect(stored?.rulesVersion).toBe(EMAIL_QUALITY_RULES_VERSION);
-    // A capture bumps the family's invalidation revision, not its Job row.
+    // A source write appends capture input without replacing the Job row.
     const generation = async () =>
       (
         await getDb(ctx.db)
-          .select()
-          .from(jobInvalidation)
-          .where(eq(jobInvalidation.key, "refresh:quality"))
+          .select({ revision: sql<number>`count(*)::int` })
+          .from(jobInvalidationCapture)
+          .where(eq(jobInvalidationCapture.key, "refresh:quality"))
       )[0]!.revision;
     const enrolled = async <T>(write: () => Promise<T>) => {
       const before = await generation();

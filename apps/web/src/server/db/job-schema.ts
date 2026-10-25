@@ -8,14 +8,12 @@ import {
 } from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
-  bigint,
   boolean,
   check,
   index,
   integer,
   jsonb,
   pgTable,
-  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -57,8 +55,6 @@ export const job = pgTable(
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
     /** Set by each claim; the fair drain serves the least recently claimed kind first. */
     lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
-    /** The `JobInvalidation` revision the current pass started from; claims own it. */
-    observedRevision: bigint("observedRevision", { mode: "number" }),
     error: text("error"),
     ...baseTimestamps(),
   },
@@ -101,34 +97,30 @@ export const job = pgTable(
   ],
 );
 
-/**
- * Durable source invalidation of a long-lived Job, kept apart from its
- * execution row: captures bump `revision` here and never write `Job`, and
- * claims, renewals and publication never write this row. A Job whose
- * `observedRevision` trails it is due; `restartsPass` says whether a moved
- * revision restarts a pass in progress or waits for it to finish.
- */
+/** Stable invalidation policy; capture writers never update this row. */
 export const jobInvalidation = pgTable("JobInvalidation", {
   key: text("key").primaryKey(),
-  revision: bigint("revision", { mode: "number" }).notNull().default(1),
   restartsPass: boolean("restartsPass").notNull(),
-  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 });
 
 /**
- * When each `JobInvalidation` revision was captured, append-only: a capture
- * inserts its revision here and nothing updates a row. Health dates a Job's
- * outstanding work from its first revision past `observedRevision`, so later
- * captures cannot reset the pending age; retention deletes observed rows.
+ * A source transaction appends its own input, without a shared mutable revision.
+ * A fresh claim acknowledges only captures visible in that transaction; a
+ * capture committed later remains pending even if it started earlier.
  */
 export const jobInvalidationCapture = pgTable(
   "JobInvalidationCapture",
   {
+    id: uuid("id").defaultRandom().primaryKey(),
     key: text("key").notNull(),
-    revision: bigint("revision", { mode: "number" }).notNull(),
     capturedAt: timestamp("capturedAt", { mode: "date" }).notNull(),
+    observed: boolean("observed").notNull().default(false),
   },
-  (table) => [primaryKey({ columns: [table.key, table.revision] })],
+  (table) => [
+    index("JobInvalidationCapture_pending_idx")
+      .on(table.key, table.capturedAt)
+      .where(sql`NOT ${table.observed}`),
+  ],
 );
 
 /**

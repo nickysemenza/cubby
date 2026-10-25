@@ -223,8 +223,7 @@ describe("Gmail ingestion and attachment storage", () => {
       mailboxId: mail.mailboxId,
       messageId: mail.messageId,
     };
-    // Captures move each family's JobInvalidation row; the execution Job
-    // rows are never written by a capture.
+    // Capture inputs append independently; existing execution rows are untouched.
     const jobs = async () =>
       (
         await getDb(ctx.db).execute(
@@ -234,16 +233,16 @@ describe("Gmail ingestion and attachment storage", () => {
     const invalidations = async () =>
       (
         await getDb(ctx.db).execute(
-          sql`SELECT key, revision::int, xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
+          sql`SELECT key, id, observed, "capturedAt" FROM "JobInvalidationCapture" ORDER BY key, id`,
         )
       ).rows;
     const searchGeneration = async () =>
       (
         await getDb(ctx.db).execute(
-          sql`SELECT revision::int FROM "JobInvalidation" WHERE key = 'refresh:search'`,
+          sql`SELECT count(*)::int AS revision FROM "JobInvalidationCapture" WHERE key = 'refresh:search'`,
         )
       ).rows[0]?.revision;
-    expect(await searchGeneration()).toBeUndefined();
+    expect(await searchGeneration()).toBe(0);
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await searchGeneration()).toBe(1);
     const originalEmail = await readEmail(ctx.db, identity);

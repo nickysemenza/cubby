@@ -8,7 +8,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { job, jobInvalidation, product } from "~/server/db/schema";
+import { job, product } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -16,10 +16,9 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-// A concurrent capture on a second connection replaces the family's
-// invalidation tuple after snapshot creation. Recovery must replay only
-// aborted DB work and retain submitted review evidence. Execution writes to
-// the family Job (claim, renew, publish) never conflict with a capture.
+// A coordinated stale-row lock exercises retry ownership without relying on
+// the removed mutable invalidation counter. Aborted DB work alone is replayed;
+// submitted evidence and committed-effect exclusions remain authoritative.
 describe("snapshot write recovery", () => {
   const ctx = withTestDb();
   let queue: ReturnType<typeof captureBackgroundQueue>;
@@ -33,16 +32,22 @@ describe("snapshot write recovery", () => {
       makeProductInput({ name, notes: "Synthetic original note" }),
       ctx.actor,
     );
-  const replaceInvalidation = () =>
-    getDb(ctx.db)
-      .update(jobInvalidation)
-      .set({ revision: sql`${jobInvalidation.revision} + 1` })
-      .where(eq(jobInvalidation.key, "refresh:search"));
   const replaceJobGeneration = () =>
     getDb(ctx.db)
       .update(job)
       .set({ generation: sql`${job.generation} + 1` })
       .where(eq(job.key, "refresh:search"));
+
+  // Force a real stale-row lock error independently of capture storage. This
+  // synthetic fence tests snapshot retry ownership, not a production writer.
+  const conflictOnExecutionGuard = async (tx: Parameters<typeof getDb>[0]) => {
+    await replaceJobGeneration();
+    await getDb(tx)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:search"))
+      .for("update");
+  };
 
   // Production finding: a family Job's claim and renewal on another backend
   // replaced the tuple the capture wrote and aborted admission with 40001.
@@ -66,7 +71,7 @@ describe("snapshot write recovery", () => {
     expect(attempts).toBe(1);
   });
 
-  it("commits one business result and one publication after late capture contention", async () => {
+  it("commits one business result and one publication after coordinated snapshot contention", async () => {
     const subject = await fixture();
     let attempts = 0;
     const publications: number[] = [];
@@ -74,10 +79,7 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         const attempt = ++attempts;
-        await getDb(tx)
-          .select()
-          .from(jobInvalidation)
-          .where(eq(jobInvalidation.key, "refresh:search"));
+        await getDb(tx).select().from(job).where(eq(job.key, "refresh:search"));
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
@@ -85,7 +87,7 @@ describe("snapshot write recovery", () => {
         await runAfterCommit(tx, async () => {
           publications.push(attempt);
         });
-        if (attempt === 1) await replaceInvalidation();
+        if (attempt === 1) await conflictOnExecutionGuard(tx);
         await recordChange(tx, { kind: "source", categories: ["product"] });
       },
       { isolationLevel: "serializable" },
@@ -127,7 +129,7 @@ describe("snapshot write recovery", () => {
               .update(product)
               .set({ notes: "Synthetic changed evidence" })
               .where(eq(product.id, evidence.entityId));
-            await replaceInvalidation();
+            await conflictOnExecutionGuard(tx);
           }
           await recordChange(tx, { kind: "source", categories: ["product"] });
         },
@@ -153,12 +155,12 @@ describe("snapshot write recovery", () => {
           const attempt = ++attempts;
           await getDb(tx)
             .select()
-            .from(jobInvalidation)
-            .where(eq(jobInvalidation.key, "refresh:search"));
+            .from(job)
+            .where(eq(job.key, "refresh:search"));
           await runAfterCommit(tx, async () => {
             publications.push(attempt);
           });
-          await replaceInvalidation();
+          await conflictOnExecutionGuard(tx);
           await recordChange(tx, { kind: "source", categories: ["product"] });
         },
         { isolationLevel: "repeatable read" },
@@ -181,9 +183,9 @@ describe("snapshot write recovery", () => {
               attempts++;
               await getDb(tx)
                 .select()
-                .from(jobInvalidation)
-                .where(eq(jobInvalidation.key, "refresh:search"));
-              await replaceInvalidation();
+                .from(job)
+                .where(eq(job.key, "refresh:search"));
+              await conflictOnExecutionGuard(tx);
               await recordChange(tx, {
                 kind: "source",
                 categories: ["product"],
