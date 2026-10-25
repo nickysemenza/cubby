@@ -149,12 +149,16 @@ async function workKeyTip(
  * A changed record's new fingerprint replaces its older queued evaluation:
  * that one can only end obsolete, and keeping it doubles the backlog.
  */
-async function supersedeQueuedConnectionWork(
+async function supersedeQueuedRecordWork(
   db: Database,
+  feature: string,
   target: EvaluationTargetInput["target"],
   keepId: string,
 ) {
-  if (target.kind !== "connection") return;
+  // Record-scoped work only: a newer connection or product-identity
+  // evaluation of a record replaces the older one. Field and mailbox
+  // evaluations key on more than the record.
+  if (target.kind !== "connection" && target.kind !== "product") return;
   const stale = await getDb(db)
     .update(aiEvaluation)
     .set({
@@ -165,7 +169,7 @@ async function supersedeQueuedConnectionWork(
     })
     .where(
       and(
-        eq(aiEvaluation.feature, "entity-connections"),
+        eq(aiEvaluation.feature, feature),
         inArray(aiEvaluation.state, ["queued", "retry_wait"]),
         sql`${aiEvaluation.id} <> ${keepId}::uuid`,
         sql`${aiEvaluation.target}->>'entity' = ${target.entity}`,
@@ -212,20 +216,21 @@ async function insertTarget(
 ) {
   const { target, provenance, blockedReason } = item;
   const workKey = await targetWorkKey(item);
+  const feature =
+    target.kind === "connection"
+      ? "entity-connections"
+      : target.kind === "field"
+        ? "field-suggestion"
+        : target.kind === "product"
+          ? "product-identity"
+          : "mailbox-triage";
   const insert = (key: string, client: Database) =>
     withTransactionDatabase(client, async (tx) => {
       const rows = await getDb(tx)
         .insert(aiEvaluation)
         .values({
           runId: runEntityId.parse(runId),
-          feature:
-            target.kind === "connection"
-              ? "entity-connections"
-              : target.kind === "field"
-                ? "field-suggestion"
-                : target.kind === "product"
-                  ? "product-identity"
-                  : "mailbox-triage",
+          feature,
           workKey: key,
           target,
           provenance,
@@ -247,8 +252,7 @@ async function insertTarget(
             kind: "ai.evaluation",
             input: { evaluationId: row.id },
           });
-          if (target.kind === "connection")
-            await supersedeQueuedConnectionWork(tx, target, row.id);
+          await supersedeQueuedRecordWork(tx, feature, target, row.id);
         }
       return rows;
     });

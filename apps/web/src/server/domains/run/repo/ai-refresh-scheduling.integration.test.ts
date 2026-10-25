@@ -234,6 +234,57 @@ describe("AI refresh scheduling admission", () => {
     }
   });
 
+  // Production finding: each photo description that landed changed a
+  // Product's identity fingerprint, and the ai_refresh pass queued another
+  // evaluation each time beside the older ones (7,812 queued for 3,373
+  // Products, up to 24 for one). A newer fingerprint now replaces the older
+  // queued evaluation, as connection evaluations already did.
+  it("replaces a Product's older queued identity evaluation", async () => {
+    const recordId = crypto.randomUUID();
+    const productTarget = (inputFingerprint: string) => ({
+      target: aiEvaluationTarget.parse({
+        kind: "product",
+        entity: "product",
+        recordId,
+        field: null,
+        assessmentIds: [],
+      }),
+      provenance: aiProvenance.parse({
+        dependencies: [],
+        inputFingerprint,
+        optionFingerprint: "",
+        model: null,
+      }),
+      snapshot: {},
+    });
+    const request = {
+      ...input("product-identity"),
+      input: aiRefreshRunInput.parse({
+        ...input("product-identity").input,
+        mailboxId: undefined,
+      }),
+    };
+    for (const fingerprint of ["synthetic-a", "synthetic-b", "synthetic-c"])
+      await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+        productTarget(fingerprint),
+      ]);
+    const rows = await getDb(ctx.db)
+      .select({
+        state: aiEvaluation.state,
+        provenance: aiEvaluation.provenance,
+      })
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.feature, "product-identity"));
+    expect(rows.filter((row) => row.state === "queued")).toEqual([
+      expect.objectContaining({
+        provenance: expect.objectContaining({
+          inputFingerprint: "synthetic-c",
+        }),
+      }),
+    ]);
+    expect(rows.filter((row) => row.state === "cancelled")).toHaveLength(2);
+  });
+
   it("does not join a new activation's work to an older policy Run", async () => {
     const request = (revision: number) => ({
       ...input(`policy-${revision}`),
