@@ -180,6 +180,8 @@ describe("declared entity displays", () => {
   it("keeps allocated category links when the scalar resolution is null", () => {
     const harness = createBrowserTestHarness();
     const record = {
+      id: "EXP-4K7M",
+      lineKind: "shipping",
       spendingCategoryId: null,
       spendingCategoryName: null,
       fieldResolutions: {
@@ -209,7 +211,7 @@ describe("declared entity displays", () => {
         },
       ],
     };
-    render(
+    const view = render(
       <>
         {renderDetailFieldValue(
           "expense",
@@ -227,6 +229,26 @@ describe("declared entity displays", () => {
       "href",
       "/spending-categories/SPC-4K7M",
     );
+    view.unmount();
+    const save = vi.fn();
+    const columns = createEntityDisplayColumns(
+      "expense",
+      createCubbyColumnHelper<typeof record>(),
+      undefined,
+      { only: ["spendingCategoryId"], onSaveField: save },
+    );
+    const [projection] = columns.visit((column) => ({
+      value: renderRowCell(column.cell, record),
+      writable: column.meta?.cellData?.canWrite?.(record),
+    }));
+    if (!projection) throw new Error("Missing allocated category column");
+    render(<>{projection.value}</>, { wrapper: harness.wrapper });
+    expect(screen.getByRole("link", { name: "Supplies" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Edit spending category" }),
+    ).toBeNull();
+    expect(projection.writable).toBe(false);
+    expect(save).not.toHaveBeenCalled();
     harness.dispose();
   });
   it("links shortcodes in editable product notes beside a working edit control", async () => {
@@ -295,6 +317,7 @@ describe("declared entity displays", () => {
         {renderDetailFieldValue(
           "financialAccount",
           {
+            identity: { kind: "credit_card" },
             authorizedUserItems: [
               {
                 entity: "ledgerParty",
@@ -1383,3 +1406,72 @@ it("edits the effective inherited checkbox and restores the nullable override", 
   expect(screen.getByText("Undecided")).toBeVisible();
   harness.dispose();
 });
+
+it.each(["network", "primaryCardholderId"])(
+  "makes an inapplicable account %s read-only on list and detail",
+  async (key) => {
+    const record = {
+      id: "synthetic-account",
+      identity: { kind: "bank_account" },
+      network: null,
+      primaryCardholderId: null,
+    };
+    const field = fieldOf("financialAccount", key);
+    const view = render(
+      <>{renderDetailFieldValue("financialAccount", record, field)}</>,
+    );
+    const dash = screen.getByRole("note", {
+      name: "Not applicable. Only applies to credit-card accounts.",
+    });
+    expect(dash).toHaveTextContent("—");
+    expect(dash).toHaveAttribute("tabindex", "0");
+    expect(screen.queryByRole("button")).toBeNull();
+    view.unmount();
+    const save = vi.fn();
+    const helper = createCubbyColumnHelper<typeof record>();
+    const overrides = createCubbyColumnCollection<typeof record>((add) =>
+      add(
+        helper.display({
+          id: key,
+          cell: () => <button>Edit</button>,
+          meta: {
+            cellData: {
+              kind: "text",
+              getCopyPayload: () => null,
+              applyPaste: save,
+              preparePaste: () => "visa",
+              rowWrite: { field: key, save },
+            },
+          },
+        }),
+      ),
+    );
+    const columns = createEntityDisplayColumns(
+      "financialAccount",
+      helper,
+      overrides,
+      { only: [key] },
+    );
+    const [projection] = columns.visit((column) => ({
+      value: renderRowCell(column.cell, record),
+      data: column.meta?.cellData,
+    }));
+    if (!projection) throw new Error("Expected account field column");
+    render(<>{projection.value}</>);
+    expect(screen.getByRole("note")).toBeVisible();
+    expect(screen.queryByRole("button")).toBeNull();
+    await runPastePlan({
+      ops: [
+        {
+          row: 0,
+          col: 0,
+          source: { kind: "text", json: "visa", text: "visa" },
+        },
+      ],
+      rows: [record],
+      columnCellData: [projection.data ?? null],
+      formatError: String,
+    });
+    expect(save).not.toHaveBeenCalled();
+  },
+);

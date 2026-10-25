@@ -73,7 +73,6 @@ describe("Gmail sync targets", () => {
       name: "Synthetic card",
       identity: { kind: "cash" },
       ledgerPartyId: party.shortcode,
-      provisional: false,
     });
     for (const [index, [merchant, rawDescription]] of [
       ["Synthetic Market", "SQ *SYNTHETIC MARKET 0042"],

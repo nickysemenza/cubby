@@ -278,7 +278,7 @@ describe("financial repositories — critical invariants", () => {
     ]);
 
     // Busy leads on count; `quiet` and the zero-transaction accounts fall back to
-    // name order. An account with no transactions still appears — a provisional
+    // name order. An account with no transactions still appears — an ordinary
     // account minted by a statement import is exactly the one you want to filter
     // for before anything is linked to it.
     const accountRoster = async () =>
@@ -380,7 +380,7 @@ describe("financial repositories — critical invariants", () => {
     expect(first.rows[0]).toMatchObject({
       status: "ready_to_create",
       accountId: createdAccount.id,
-      provisionalAccount: null,
+      newAccount: null,
       proposed: {
         amount: 54.29,
         kind: "purchase",
@@ -692,9 +692,9 @@ describe("financial repositories — critical invariants", () => {
     expect(unresolved.rows[0]).toMatchObject({
       status: "unresolved_account",
       accountId: null,
-      provisionalAccount: {
+      newAccount: {
         name: "Unmapped Visa (...9998)",
-        provisional: true,
+
         identity: { kind: "credit_card", network: "visa" },
         cardNumbers: [{ last4: "9998", kind: "primary" }],
       },

@@ -12,11 +12,8 @@ const DEFAULT_BOOLEAN_COLORS = {
  * same field.
  *
  * Tones are a parameter, not a constant, because "true" is not always the good
- * outcome. `FinancialAccount.provisional` is the counter-example that proves it:
- * a provisional account is the *unresolved* one, so it reads amber and `Known`
- * reads green — the inverse of the default. Hardcoding positive/slate inside the
- * column factory made the list disagree with the detail page on that field, which
- * is the drift this whole change exists to remove.
+ * outcome. A planned expense can use amber for true and green for false.
+ * The roster keeps table and detail tones consistent.
  */
 export function booleanCellOptions(
   labels: { true: string; false: string },

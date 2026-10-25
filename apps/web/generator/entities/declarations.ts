@@ -206,7 +206,10 @@ type EntityFieldInherit = Readonly<{
   from: readonly (
     | "hierarchy"
     | Readonly<{ hierarchy: Readonly<{ whileSame: string }> }>
-    | Readonly<{ path: string }>
+    | Readonly<{
+        path: string;
+        when?: Readonly<{ field: string; value: string }>;
+      }>
   )[];
 }>;
 

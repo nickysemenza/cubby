@@ -483,11 +483,10 @@ const financialTransactionImportProposedTransaction = z.object({
   notes: z.string().nullable(),
 });
 
-const financialStatementProvisionalAccount = z.object({
+const financialStatementNewAccount = z.object({
   name: z.string().min(1),
   identity: financialAccountIdentity,
   cardNumbers: financialAccountCardNumbers,
-  provisional: z.literal(true),
   sourceAliases: financialAccountSourceAliases,
 });
 
@@ -496,7 +495,7 @@ export const financialTransactionImportPreviewRow = z.object({
   status: financialTransactionImportPreviewStatus,
   accountId: financialAccountShortcode.nullable(),
   accountName: z.string().nullable(),
-  provisionalAccount: financialStatementProvisionalAccount.nullable(),
+  newAccount: financialStatementNewAccount.nullable(),
   proposed: financialTransactionImportProposedTransaction,
   existingTransactionIds: z.array(financialTransactionShortcode),
   existingTransactions: z

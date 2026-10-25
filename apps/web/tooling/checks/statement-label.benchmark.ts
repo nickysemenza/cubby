@@ -115,7 +115,7 @@ it.each(sizes)(
       const account = await createRepoIdentity(ctx, "financialAccount", {
         name: "Synthetic benchmark card",
         ledgerPartyId: owner.output.id,
-        provisional: false,
+
         identity: { kind: "credit_card", network: "visa" },
         sourceAliases: [
           {

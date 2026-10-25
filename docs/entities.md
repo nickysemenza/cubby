@@ -75,7 +75,9 @@ per-entity code as possible.
 Before adding an inherited value or override, trace an existing field through its
 stored intent, effective read, `fieldResolutions` provenance, and declared
 `resolution` actions. Reuse that contract for edits, Use inherited, and explicit
-None where supported. Domain rules supply the fallback; the generic framework
+None where supported. Reference candidate filters and dependent scopes apply in capture forms, inline detail editors, and table cells through the same picker provider; an inline editor must not widen a declared member-only roster.
+
+Domain rules supply the fallback; the generic framework
 owns its presentation and assignment intent. Generic form controls alone do not
 establish reuse of the resolution framework.
 
@@ -89,7 +91,9 @@ nearest live ancestor along `model.hierarchy` whose own value decides
 (cycle-guarded, capped at `maxDepth`); `{ hierarchy: { whileSame } }` is that
 walk stopped at the first ancestor whose effective `whileSame` field differs
 from the row's; and `{ path }` the effective value of the field a to-one path
-ends at. Project assignee, locations and default trade, product category
+ends at. A path may declare `when: { field, value }` to admit only related records of the required kind; for example a credit card inherits its member ledger party as primary cardholder. Same-record `not_allowed` classification policies gate effective values and suppress table/detail editing and suggestions on web and Apple clients. Render a quiet dash with an accessible explanation; do not label an inapplicable field as unassessed. Server-resolved allocated values remain visible with their evidence even when manual assignment is refused; they expose no editor, suggestion, reset or clipboard write. Applicable empty values retain normal controls. Classifier read dependencies travel with the field.
+
+Project assignee, locations and default trade, product category
 feature, spending mapping and stock tracking, and task project, subject
 product and assignee walk their hierarchy; the task assignee then falls back
 to its effective project's default, and a Product's stock tracking reads its

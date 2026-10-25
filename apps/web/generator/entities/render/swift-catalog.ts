@@ -361,6 +361,7 @@ const fieldDisplayJSON = (display: Field["display"]) => ({
 const fieldJSON = (
   field: Field,
   fieldModel: CompiledEntity["fieldModel"],
+  classificationPolicies: CompiledEntity["classificationPolicies"],
   entityKey: EntityKeyLookup,
   entityForPrefix: EntityForPrefix,
   context: string,
@@ -377,6 +378,30 @@ const fieldJSON = (
     dateRangeSemantics: field.dateRange?.semantics ?? null,
     nullable: field.nullable,
     reference: referenceJSON(field.reference, entityKey, where),
+    applicability: classificationPolicies.flatMap((policy) => {
+      if (policy.target !== undefined) return [];
+      const subject = policy.fields.find(
+        (candidate) => candidate.field === field.key && !candidate.relation,
+      );
+      if (!subject) return [];
+      const classifier = fieldModel.fields.find(
+        (candidate) => candidate.key === policy.classifier,
+      );
+      return [
+        {
+          readPath: classifier?.display.readPath ?? policy.classifier,
+          byValue: Object.fromEntries(
+            Object.entries(subject.byValue).map(([value, status]) => [
+              value,
+              status !== "not_allowed",
+            ]),
+          ),
+          otherwise: subject.otherwise !== "not_allowed",
+          reason:
+            subject.refusal ?? "This field does not apply to this record.",
+        },
+      ];
+    }),
     explanation: explanationJSON(field.explanation),
     resolution: resolutionJSON(field.resolution),
     ...fieldControlJSON(field.control),
@@ -740,7 +765,14 @@ const entityJSON = (
     primarySearch,
     timeline: entity.timeline,
     fields: entity.fieldModel.fields.map((field) =>
-      fieldJSON(field, entity.fieldModel, entityKey, entityForPrefix, context),
+      fieldJSON(
+        field,
+        entity.fieldModel,
+        entity.classificationPolicies,
+        entityKey,
+        entityForPrefix,
+        context,
+      ),
     ),
     filters: entity.filterDescriptors.map((filter) =>
       filterJSON(filter, entityKey, context),

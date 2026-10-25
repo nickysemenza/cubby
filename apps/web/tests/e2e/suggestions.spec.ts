@@ -477,7 +477,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
       const account = await create("financialAccount", {
         name: alias,
         ledgerPartyId: owner.shortcode,
-        provisional: false,
+
         identity: { kind: "credit_card", network: "visa" },
         sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
       });

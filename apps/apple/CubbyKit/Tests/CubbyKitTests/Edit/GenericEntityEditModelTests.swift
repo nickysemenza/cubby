@@ -22,6 +22,55 @@ private final class EditStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityEditModel", .serialized)
 @MainActor
 struct GenericEntityEditModelTests {
+    @Test func refusedAccountFieldsHaveNoEditorAndBecomeEditableForCreditCards() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.financialAccount], mode: .update(id: "FAC-2345"),
+            client: try makeClient(), original: ["identity": ["kind": "bank_account"]])
+        let refused: Set<String> = ["network", "primaryCardholderId", "authorizedUsers"]
+        #expect(Set(model.visibleFields.map(\.key)).isDisjoint(with: refused))
+        model.draft["identity"] = ["kind": "credit_card"]
+        #expect(refused.isSubset(of: Set(model.visibleFields.map(\.key))))
+        model.draft["identity"] = .null
+        #expect(Set(model.visibleFields.map(\.key)).isDisjoint(with: refused))
+    }
+
+    @Test func reloadingUsesTheIncomingClassifierInsteadOfThePreviousDraft() async throws {
+        defer { EditStub.handler.withLock { $0 = nil } }
+        let incoming: JSONValue = [
+            "id": "EXP-2345", "lineKind": "principal", "spendingCategoryId": "SPC-2345",
+        ]
+        let data = try JSONEncoder.cubby().encode(incoming)
+        EditStub.handler.withLock { handler in handler = { _ in (200, data) } }
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-2345"), client: try makeClient(),
+            original: ["id": "EXP-2345", "lineKind": "unclassified"])
+        model.draft["lineKind"] = "fee"
+        await model.load()
+        #expect(model.loadError == nil)
+        #expect(model.draft["lineKind"] == "principal")
+        #expect(model.draft["spendingCategoryId"] == "SPC-2345")
+        #expect(try model.patch().isEmpty)
+    }
+
+    @Test func reclassificationOmitsNewlyRefusedDraftEditsFromWrites() throws {
+        let update = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-2345"), client: try makeClient(),
+            original: ["id": "EXP-2345", "lineKind": "principal", "productId": .null])
+        update.draft["productId"] = "PRD-2345"
+        update.draft["lineKind"] = "fee"
+        #expect(!update.visibleFields.contains { $0.key == "productId" })
+        let patch = try update.patch()
+        #expect(patch.values["productId"] == nil)
+        #expect(!patch.cleared.contains("productId"))
+        #expect(patch.values["lineKind"] == "fee")
+        let create = GenericEntityEditModel(
+            descriptor: EntityCatalog[.expense], mode: .create(prefill: ["lineKind": "principal"]),
+            client: try makeClient())
+        create.draft["productId"] = "PRD-2345"
+        create.draft["lineKind"] = "fee"
+        #expect(create.createBody()["productId"] == nil)
+    }
+
     @Test func dateRangePatchReplacesClearsAndRejectsReversedDates() async throws {
         let original: JSONValue = [
             "id": "PRJ-2345", "dates": ["start": "2039-05-10", "end": "2039-05-20"],
@@ -172,7 +221,8 @@ struct GenericEntityEditModelTests {
     @Test func acknowledgingSavedCategoryPreservesNewerDraftAndSiblingChanges() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
-            client: try makeClient(), original: ["spendingCategoryId": .null, "notes": "Saved note"])
+            client: try makeClient(),
+            original: ["lineKind": "principal", "spendingCategoryId": .null, "notes": "Saved note"])
         model.draft["notes"] = .string("Unsaved sibling")
         model.draft["spendingCategoryId"] = .string("SPC-8K7M")
         model.acknowledgeSavedField(
@@ -186,7 +236,8 @@ struct GenericEntityEditModelTests {
     @Test func acknowledgedCategoryDoesNotReplayOnLaterSiblingSave() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
-            client: try makeClient(), original: ["spendingCategoryId": .null, "notes": "Saved note"])
+            client: try makeClient(),
+            original: ["lineKind": "principal", "spendingCategoryId": .null, "notes": "Saved note"])
         model.draft["notes"] = .string("Unsaved sibling")
         model.acknowledgeSavedField(
             "spendingCategoryId", value: .string("SPC-4K7M"), reviewedDraftValue: .null)
@@ -197,6 +248,7 @@ struct GenericEntityEditModelTests {
 
     @Test func inheritedReadDoesNotBecomeStoredDraftOrUnchangedPatch() throws {
         let original: JSONValue = [
+            "lineKind": "principal",
             "spendingCategoryId": "SPC-4K7M",
             "fieldResolutions": [
                 "spendingCategoryId": [
@@ -216,7 +268,7 @@ struct GenericEntityEditModelTests {
     @Test func resolutionResetStagesDeclaredPatchOnlyWhenServerAllowsIt() throws {
         func original(_ canReset: Bool) -> JSONValue {
             [
-                "spendingCategoryId": "SPC-8K7M", "notes": "Keep this",
+                "lineKind": "principal", "spendingCategoryId": "SPC-8K7M", "notes": "Keep this",
                 "fieldResolutions": [
                     "spendingCategoryId": [
                         "mode": "explicit", "storedValue": "SPC-8K7M", "value": "SPC-8K7M",

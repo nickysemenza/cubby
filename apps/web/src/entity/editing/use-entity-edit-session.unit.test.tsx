@@ -17,7 +17,7 @@ function financialAccountMutationPort() {
     overrides: {
       id: "FAC-4K7M",
       name: "Renamed card",
-      provisional: false,
+
       sourceAliases: [
         { source: "statement", alias: "Primary card", externalAccountId: null },
       ],
@@ -150,7 +150,7 @@ describe("useEntityEditSession", () => {
               authorizedUsers: [],
               fundingPeriods: [],
               providerVendorId: null,
-              provisional: false,
+
               inventoryOwnerDefaultEnabled: false,
               sourceAliases,
               notes: null,
@@ -201,7 +201,7 @@ describe("useEntityEditSession", () => {
               network: null,
               cardNumbers: [],
               providerVendorId: null,
-              provisional: false,
+
               inventoryOwnerDefaultEnabled: false,
               sourceAliases: [],
               notes: null,

@@ -145,7 +145,7 @@ const endpoint = (end: "source" | "target") =>
 const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialAccount}`, sql`a.judgment->${end}->>'accountId'`)},
   ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${end}->>'transactionId'`)},
-  ${ref(sql`'ledgerParty'`, sql`a.judgment->${end}->'owner'->>'id'`)})`;
+  ${ref(sql`${entities.ledgerParty}`, sql`a.judgment->${end}->'owner'->>'id'`)})`;
 
 const recommendationScopes = {
   connection: sql`a.subject->>'scope' LIKE 'connection.%'`,

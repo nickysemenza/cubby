@@ -24,7 +24,12 @@ export function resolveCellClearTarget<TRow>({
 
   const row = rows[rect.top];
   const cellData = columnCellData[rect.left];
-  if (!row || !cellData?.applyClear || cellData.getCopyPayload(row) == null) {
+  if (
+    !row ||
+    !cellData?.applyClear ||
+    cellData.canWrite?.(row) === false ||
+    cellData.getCopyPayload(row) == null
+  ) {
     return null;
   }
 

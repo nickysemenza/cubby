@@ -3,15 +3,13 @@ import { z } from "zod";
 
 import type { EntitySearchScope } from "~/entity/picker/entity-search-hooks";
 
-import type { EntityEditValue, EntityEditValueBag } from "./value-schema";
-
 type ReferenceWithScope = NonNullable<
   EntityFieldModel["fields"][number]["reference"]
 >;
 
 const scopeValueSchema = z.union([z.string(), z.array(z.string())]);
 
-const stringValue = (value: EntityEditValue): string | string[] | null => {
+const stringValue = (value: unknown): string | string[] | null => {
   const parsed = scopeValueSchema.safeParse(value);
   if (!parsed.success) return null;
   if (!Array.isArray(parsed.data)) return parsed.data.trim() || null;
@@ -24,9 +22,9 @@ const stringValue = (value: EntityEditValue): string | string[] | null => {
  * editor values. `undefined` means no scope was declared; `null` means the
  * declared scope is incomplete and the picker must remain empty.
  */
-export function referenceScopeFor(
+export function referenceScopeFor<TRecord extends object>(
   reference: ReferenceWithScope | null | undefined,
-  values: EntityEditValueBag,
+  values: TRecord,
 ): EntitySearchScope | null | undefined {
   const mappings = reference?.scope ?? [];
   const fixed = reference?.filters ?? [];
@@ -34,7 +32,9 @@ export function referenceScopeFor(
   const filters: Record<string, string | readonly string[]> = {};
   for (const filter of fixed) filters[filter.field] = filter.values;
   for (const mapping of mappings) {
-    const value = stringValue(values[mapping.sourceField]);
+    const value = stringValue(
+      Object.entries(values).find(([key]) => key === mapping.sourceField)?.[1],
+    );
     if (value === null) return null;
     const allowed = filters[mapping.targetField];
     if (allowed !== undefined) {

@@ -19,13 +19,8 @@ import {
 
 it.each([
   {
-    check: dataChecksByEntity.financialAccount.enum.financial_account_unclaimed,
-    summary: "carries no weight but caps this record's score below 100",
-    score: 99,
-    noWeightedChecks: true,
-  },
-  {
-    check: dataChecksByEntity.financialAccount.enum.financial_account_confirmed,
+    check:
+      dataChecksByEntity.financialAccount.enum.financial_account_ledger_party,
     summary: "reduces this record's score",
     score: 0,
     noWeightedChecks: false,
@@ -38,7 +33,7 @@ it.each([
     );
     if (!field) throw new Error("Declared quality field is missing");
     const breakdown = buildQualityBreakdown([check], [check], []);
-    const status = dataCheckKind[check] === "defect" ? "defect" : "needs_data";
+    const status = "needs_data" as const;
     const result = explainInterpretation(
       field,
       status,
@@ -53,7 +48,7 @@ it.each([
               facet: "identity",
               kind: dataCheckKind[check],
               targetType: "financialAccount",
-              targetId: testShortcode("financialAccount", "unclaimed-account"),
+              targetId: testShortcode("financialAccount", "unlinked-account"),
               message: dataCheckMessage[check],
             },
           ],

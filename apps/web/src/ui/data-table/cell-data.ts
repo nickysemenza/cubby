@@ -56,6 +56,8 @@ export interface ColumnCellData<
   TSaved = CellJsonValue | null | void,
 > {
   kind: CellKind;
+  /** Row applicability is checked by every clipboard write path. */
+  canWrite?: (row: TData) => boolean;
   /**
    * Typed numeric projection for read-only selection statistics. This is
    * deliberately separate from clipboard text: formatted currency, localized
@@ -123,9 +125,10 @@ export function specFromCellData<TData, TSaved>(
   return {
     kindKey: kind,
     getCopyPayload: () => getCopyPayload(row),
-    onPasteValue: applyPaste
-      ? (payload) => applyPaste(row, payload)
-      : undefined,
+    onPasteValue:
+      applyPaste && cellData.canWrite?.(row) !== false
+        ? (payload) => applyPaste(row, payload)
+        : undefined,
   };
 }
 

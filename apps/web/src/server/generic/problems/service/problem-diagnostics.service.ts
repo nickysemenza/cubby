@@ -409,18 +409,6 @@ export const diagnosticAdapters = {
       );
     },
   },
-  "provisional-financial-accounts": {
-    sample: async (db, _options, limit) => {
-      const { findProvisionalFinancialAccounts } =
-        await loadFinancialDetectors();
-      return healthySample(findProvisionalFinancialAccounts(db), limit);
-    },
-    count: async (db) => {
-      const { findProvisionalFinancialAccounts } =
-        await loadFinancialDetectors();
-      return healthyCount((await findProvisionalFinancialAccounts(db)).length);
-    },
-  },
   "invalid-financial-json": {
     sample: async (db, _options, limit) => {
       const { findInvalidFinancialJson } = await loadFinancialDetectors();

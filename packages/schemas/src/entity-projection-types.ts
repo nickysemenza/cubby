@@ -256,6 +256,10 @@ export type GeneratedInherit<E extends string = Entity> = {
       }
     | {
         readonly kind: "effective";
+        readonly when?: {
+          readonly column: string;
+          readonly value: string;
+        } | null;
         readonly hops: readonly InheritHop<E>[];
         readonly field: string;
         readonly column: string;

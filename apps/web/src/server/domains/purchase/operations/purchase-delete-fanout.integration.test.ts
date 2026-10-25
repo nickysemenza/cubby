@@ -78,7 +78,7 @@ describe("purchase deletion embedding fanout", () => {
     const { output: account } = await createFinancialAccount(
       ctx.db,
       mock(financialAccountCreateInput, {
-        overrides: { name: "Detach Card", provisional: false },
+        overrides: { name: "Detach Card" },
       }),
       ctx.actor,
     );

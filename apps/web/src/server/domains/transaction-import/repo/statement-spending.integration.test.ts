@@ -41,7 +41,7 @@ describe("statement spending review and re-import", () => {
       name: "Synthetic statement card",
       identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: owner.output.id,
-      provisional: false,
+
       sourceAliases: [
         {
           source: "monarch",

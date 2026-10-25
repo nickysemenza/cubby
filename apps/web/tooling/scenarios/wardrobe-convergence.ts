@@ -498,7 +498,6 @@ async function recordSyntheticStatement(
         externalAccountId: null,
       },
     ],
-    provisional: false,
   });
   const input = recordSourceTransactionRecordsInput.parse({
     import: {

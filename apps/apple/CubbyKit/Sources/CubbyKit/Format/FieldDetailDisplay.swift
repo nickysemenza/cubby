@@ -26,6 +26,21 @@ public struct DetailDisplayRow: Decodable, Sendable, Hashable {
 /// How a detail row reads its field: from what the declaration names, not from the shape of the
 /// structured value. A client prints the server's words and rows; it never re-derives them.
 extension FieldDescriptor {
+    /// Same-record classification policies are projected by the manifest, never owned by native.
+    public func applicabilityRefusal(in raw: JSONValue) -> String? {
+        for policy in applicability ?? [] {
+            let allowed = raw.pathText(policy.readPath).flatMap { policy.byValue[$0] } ?? policy.otherwise
+            if !allowed { return policy.reason }
+        }
+        return nil
+    }
+
+    /// A derived allocation is meaningful even when this field cannot be assigned manually.
+    public func displayApplicabilityRefusal(in raw: JSONValue) -> String? {
+        if raw["fieldResolutions"]?[key]?["mode"]?.stringValue == "allocated" { return nil }
+        return applicabilityRefusal(in: raw)
+    }
+
     /// The text the detail record carries for this field (`display.detailLabelPath`): a
     /// server-composed sentence, possibly spanning lines. `nil` when the field declares none or the
     /// record has nothing to say.

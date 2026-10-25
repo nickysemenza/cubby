@@ -12,6 +12,7 @@ export const fieldResolutionSourceSchema = z.object({
     "expense",
     "vendorAccount",
     "financialAccount",
+    "ledgerParty",
   ]),
   entityId: z.string(),
   name: z.string().nullable(),

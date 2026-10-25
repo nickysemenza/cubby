@@ -147,7 +147,7 @@ export async function runPastePlan<TRow>(params: {
       if (row === undefined) return;
       const attempts = rowOps.filter((op) => {
         const data = columnCellData[op.col];
-        if (!data?.applyPaste) return false;
+        if (!data?.applyPaste || data.canWrite?.(row) === false) return false;
         if (isOpUnchanged(op.source, data.getCopyPayload(row)?.json ?? null)) {
           unchanged++;
           return false;

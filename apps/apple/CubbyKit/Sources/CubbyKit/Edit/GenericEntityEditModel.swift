@@ -96,10 +96,23 @@ public final class GenericEntityEditModel {
 
     // MARK: - Fields and sections
 
+    /// Draft classifier changes immediately update editor and suggestion eligibility.
+    public var applicabilityRecord: JSONValue {
+        var values: [String: JSONValue] = [:]
+        if case .object(let saved) = original { values = saved }
+        values.merge(draft) { _, draftValue in draftValue }
+        return .object(values)
+    }
+
     /// The fields the editor shows: in the mode's payload roster and with a control.
     public var visibleFields: [FieldDescriptor] {
+        editableFields(in: applicabilityRecord)
+    }
+
+    private func editableFields(in record: JSONValue) -> [FieldDescriptor] {
         let fields = descriptor.fields.filter { field in
             field.controlKind != nil && (isCreate ? field.inCreate : field.inUpdate)
+                && field.applicabilityRefusal(in: record) == nil
         }
         let hasCollectionControl = fields.contains { $0.collection?.primary != nil }
         return fields.filter {
@@ -274,6 +287,7 @@ public final class GenericEntityEditModel {
     /// optional text left out), every other field as drafted.
     private func wireDraft() -> [String: JSONValue] {
         draft.reduce(into: [:]) { wire, entry in
+            if descriptor.field(entry.key)?.applicabilityRefusal(in: applicabilityRecord) != nil { return }
             if let state = CollectionEdit.decode(entry.value), let field = descriptor.field(entry.key),
                 let collection = field.collection
             {
@@ -439,7 +453,8 @@ public final class GenericEntityEditModel {
 
     private func seed(original: JSONValue) {
         var stored = original.objectValue ?? [:]
-        for field in visibleFields {
+        // Resolve stored intent against the incoming row before the editor has a draft baseline.
+        for field in editableFields(in: original) {
             if let resolution = FieldResolutionPresentation(raw: original, field: field) {
                 stored[field.key] = resolution.storedValue
             }
@@ -454,7 +469,7 @@ public final class GenericEntityEditModel {
         let original = JSONValue.object(stored)
         self.original = original
         var seeded: [String: JSONValue] = [:]
-        for field in visibleFields {
+        for field in editableFields(in: original) {
             if let value = original[field.key] {
                 seeded[field.key] =
                     field.collection?.primary != nil && value.arrayValue != nil

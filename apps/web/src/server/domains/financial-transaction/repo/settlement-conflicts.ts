@@ -42,6 +42,7 @@ import { paymentTender } from "@cubby/schemas/purchase-import";
 import { eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { financialTransaction, purchase } from "~/server/db/schema";
 import { purchaseMailPartiesSql } from "~/server/domains/email/repo/email-sql";
 import { createAppError } from "~/server/errors/app-error";
@@ -69,7 +70,7 @@ const periodPartiesSql = (periods: SQL, date: SQL) => sql`(
  */
 const accountPeopleSql = (account: SQL, date: SQL) => sql`(
   SELECT ${account}."ledgerPartyId"
-  UNION ALL SELECT ${account}."primaryCardholderId"
+  UNION ALL SELECT ${effectiveFieldSql("financialAccount", "primaryCardholderId", { id: sql`${account}.id` })}
   UNION ALL SELECT party_id FROM ${periodPartiesSql(sql`${account}."fundingPeriods"`, date)} funded(party_id)
   UNION ALL SELECT party_id FROM ${periodPartiesSql(sql`${account}."authorizedUsers"`, date)} authorized(party_id)
 )`;

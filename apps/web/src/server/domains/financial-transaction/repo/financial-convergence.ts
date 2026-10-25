@@ -19,6 +19,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   databaseForTransaction,
   getDb,
@@ -122,7 +123,6 @@ export async function acceptedAutomaticFacts(
       ? {
           ledgerPartyId: account.ledgerPartyId,
           fundingPeriods: account.fundingPeriods,
-          provisional: account.provisional,
           deletedAt: account.deletedAt,
         }
       : null,
@@ -405,12 +405,12 @@ async function runFinancialConvergence(
         JOIN "LedgerParty" funder ON funder.id = ${paymentFundingPartySql(sql`a`, sql`payment`)} AND funder."deletedAt" IS NULL
         LEFT JOIN "LedgerParty" owner ON owner.id = a."ledgerPartyId" AND owner."deletedAt" IS NULL
         LEFT JOIN "LedgerParty" member ON member."userId" = ${actor.userId} AND member.kind = ${ledgerPartyKind.enum.member} AND member."deletedAt" IS NULL
-        WHERE a.id = ${row.accountId} AND a."deletedAt" IS NULL AND NOT a.provisional
+        WHERE a.id = ${row.accountId} AND a."deletedAt" IS NULL
           AND (funder.kind = ${ledgerPartyKind.enum.household} OR funder.id = member.id)
           AND (
             owner.kind = ${ledgerPartyKind.enum.household}
             OR owner.id = member.id
-            OR a."primaryCardholderId" = member.id
+            OR ${effectiveFieldSql("financialAccount", "primaryCardholderId", "a")} = member.id
             OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(a."authorizedUsers") period
               WHERE period->>'ledgerPartyId' = member.shortcode
@@ -421,7 +421,7 @@ async function runFinancialConvergence(
       ) AS authorized`);
       if (!accountAuthority.rows[0]?.authorized)
         return review(
-          "The payment needs a dated, confirmed funding account available to this member: the household or the member funds it on the charge date, and the member owns the account, is its primary cardholder, or is an authorized user then.",
+          "The payment needs a dated funding account available to this member: the household or the member funds it on the charge date, and the member owns the account, is its primary cardholder, or is an authorized user then.",
         );
       const refs = (await settlementRefsFor(tx, [row.id])).get(row.id) ?? [];
       if (!refs.length)

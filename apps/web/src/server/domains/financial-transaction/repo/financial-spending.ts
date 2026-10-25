@@ -36,7 +36,7 @@ import {
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
-  confirmedHouseholdCard,
+  liveHouseholdCard,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -92,7 +92,7 @@ function spendingBlocker(input: {
   categoryHistoryReviewed?: boolean;
 }) {
   const { facts, advice, category, history } = input;
-  if (!facts.purchaser && !confirmedHouseholdCard(facts.account))
+  if (!facts.purchaser && !liveHouseholdCard(facts.account))
     return "A confirmed member-owned account or household credit card is required before booking spending.";
   if (
     !(facts.source.transactionDate ?? facts.source.postedDate) ||

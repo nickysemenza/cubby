@@ -41,7 +41,6 @@ describe("generated booking evidence corrections", () => {
       name: "Synthetic correction account",
       identity: { kind: "cash" },
       ledgerPartyId: owner.output.id,
-      provisional: false,
     });
     const vendor = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic correction store",

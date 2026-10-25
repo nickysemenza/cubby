@@ -1,4 +1,8 @@
 import {
+  classificationValue,
+  classificationFieldRefusal,
+} from "@cubby/schemas/classification-field-policy";
+import {
   type ClassifiedField,
   columnClassificationPolicy,
   classificationReference,
@@ -116,7 +120,7 @@ export async function classificationRefusesField(
       if (
         !isFieldAllowed(
           id,
-          basis[declaredClassificationPolicies[id].classifier] ?? null,
+          classificationValue(declaredClassificationPolicies[id], basis),
           field,
         )
       )
@@ -149,7 +153,7 @@ export function assertClassificationPolicies(
       policy.target.reference !== null
     )
       continue;
-    const classifier = row[policy.classifier];
+    const classifier = classificationValue(policy, row);
     for (const declaration of policy.fields) {
       const value = row[declaration.field];
       const status =
@@ -192,7 +196,7 @@ export function classificationFieldsToClear(
       policy.target.reference !== null
     )
       continue;
-    const classifier = update[policy.classifier] ?? current[policy.classifier];
+    const classifier = classificationValue(policy, { ...current, ...update });
     for (const declaration of policy.fields) {
       if (
         update[declaration.field] !== undefined ||
@@ -217,20 +221,5 @@ export function classificationAllowsField(
   basis: Readonly<Record<string, unknown>>,
   field: string,
 ): boolean {
-  return Object.values(declaredClassificationPolicies).every((policy) => {
-    if (
-      policy.target.entity !== entity ||
-      policy.target.reference !== null ||
-      !policy.fields.some((item) => item.field === field)
-    )
-      return true;
-    const classifier = basis[policy.classifier];
-    const declaration = policy.fields.find((item) => item.field === field)!;
-    const byValue: Readonly<Record<string, FieldPolicyValue>> =
-      declaration.byValue;
-    return (
-      ((classifier == null ? undefined : byValue[String(classifier)]) ??
-        declaration.otherwise) !== "not_allowed"
-    );
-  });
+  return classificationFieldRefusal(entity, basis, field) === null;
 }

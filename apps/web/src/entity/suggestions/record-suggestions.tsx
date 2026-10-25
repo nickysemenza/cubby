@@ -14,6 +14,10 @@ import type {
   AssessmentReviewOut,
 } from "@cubby/schemas/assessment";
 import type { BatchOut } from "@cubby/schemas/batch";
+import {
+  classificationFieldRefusal,
+  classificationFieldDisplayRefusal,
+} from "@cubby/schemas/classification-field-policy";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -66,6 +70,7 @@ import type { EntityEditValueBag } from "~/entity/editing/value-schema";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { readReferenceField } from "~/entity/entity-references";
+import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
@@ -1983,6 +1988,23 @@ type RecordFieldSuggestionProps = {
 
 export function RecordFieldSuggestion(props: RecordFieldSuggestionProps) {
   const scope = useContext(RecordSuggestionFieldsContext);
+  const refusal =
+    scope && props.record !== null && typeof props.record === "object"
+      ? classificationFieldRefusal(scope.entity, props.record, props.field)
+      : null;
+  if (refusal)
+    return scope &&
+      props.record !== null &&
+      typeof props.record === "object" &&
+      classificationFieldDisplayRefusal(
+        scope.entity,
+        props.record,
+        props.field,
+      ) === null ? (
+      props.children
+    ) : (
+      <NotApplicableField reason={refusal} />
+    );
   const field = scope
     ? findEntityField(scope.entity, props.field)?.key
     : undefined;

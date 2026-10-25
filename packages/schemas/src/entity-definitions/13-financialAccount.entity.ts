@@ -1,3 +1,4 @@
+import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import {
   financialAccountAuthorizedUsers,
   financialAccountFundingPeriods,
@@ -34,7 +35,7 @@ export default defineEntity({
         {
           id: "details",
           title: "Details",
-          fields: ["provisional", "inventoryOwnerDefaultEnabled"],
+          fields: ["inventoryOwnerDefaultEnabled"],
         },
       ],
     },
@@ -228,7 +229,7 @@ export default defineEntity({
             // Financial identity controls statement/account matching.
             reviewRequired: true,
             rules: [
-              "Choose a payment network only from explicit network evidence in the account name, identity, saved notes or statement evidence. An issuer name or card tier does not establish a network. Choose none for missing, conflicting or ambiguous evidence; never use Other to mean unknown. Preserve the saved identity until reviewed and applied; never change the account kind or Provisional status.",
+              "Choose a payment network only from explicit network evidence in the account name, identity, saved notes or statement evidence. An issuer name or card tier does not establish a network. Choose none for missing, conflicting or ambiguous evidence; never use Other to mean unknown. Preserve the saved identity until reviewed and applied; never change the account kind.",
             ],
           },
         },
@@ -243,19 +244,6 @@ export default defineEntity({
           read: financialAccountNetwork.nullable(),
           create: financialAccountNetwork.nullable().optional(),
           update: financialAccountNetwork.nullable().optional(),
-        },
-      },
-      {
-        key: "provisional",
-        kind: "boolean",
-        description:
-          "Imported or unconfirmed account identity. Clear only after a household member confirms this account's identity.",
-        control: { kind: "checkbox" },
-        display: { columnGroup: "Account" },
-        validation: {
-          read: z.boolean(),
-          create: z.boolean().default(false),
-          update: z.boolean().optional(),
         },
       },
       {
@@ -319,7 +307,34 @@ export default defineEntity({
         nullable: true,
         description:
           "The member who alone makes purchases outside authorized-user periods. Independent of funding and inventory ownership.",
-        reference: { entity: "ledgerParty" },
+        resolution: {
+          reset: {
+            primaryCardholderId: null,
+            primaryCardholderMode: "inherit",
+          },
+          none: {
+            primaryCardholderId: null,
+            primaryCardholderMode: "explicit",
+          },
+          inherit: {
+            mode: {
+              field: "primaryCardholderMode",
+              inherit: "inherit",
+              explicitIfSet: true,
+            },
+            from: [
+              {
+                path: "ledger-party.id",
+                when: { field: "kind", value: "member" },
+              },
+            ],
+          },
+          labels: { unresolved: "No member cardholder", none: "None" },
+        },
+        reference: {
+          entity: "ledgerParty",
+          filters: [{ field: "kind", values: ["member"] }],
+        },
         control: {
           kind: "specialized",
           renderer: "entity-select",
@@ -340,6 +355,25 @@ export default defineEntity({
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
           update: ledgerPartyShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "primaryCardholderMode",
+        kind: "enum",
+        validation: {
+          read: null,
+          create: z.enum(["inherit", "explicit"]).default("inherit"),
+          update: z.enum(["inherit", "explicit"]).optional(),
+        },
+      },
+      {
+        key: "fieldResolutions",
+        kind: "json",
+        display: { list: false, detail: false },
+        validation: {
+          read: optionalFieldResolutionsSchema,
+          create: null,
+          update: null,
         },
       },
       {
@@ -500,7 +534,6 @@ export default defineEntity({
       { key: "shortcode", specialized: "shortcode" },
       "name",
       { key: "identity", specialized: "json:identity" },
-      { key: "provisional", defaultValue: false },
       {
         key: "sourceAliases",
         defaultValue: "'[]'::jsonb",
@@ -514,6 +547,11 @@ export default defineEntity({
       { key: "providerVendorId", reference: "vendor" },
       { key: "ledgerPartyId", reference: "ledgerParty" },
       { key: "primaryCardholderId", reference: "ledgerParty" },
+      {
+        key: "primaryCardholderMode",
+        defaultValue: "'inherit'",
+        specialized: "enum:inheritance-mode",
+      },
       {
         key: "authorizedUsers",
         defaultValue: "'[]'::jsonb",
@@ -536,11 +574,11 @@ export default defineEntity({
     create: [
       "network",
       "primaryCardholderId",
+      "primaryCardholderMode",
       "authorizedUsers",
       "fundingPeriods",
       "name",
       "identity",
-      "provisional",
       "sourceAliases",
       "cardNumbers",
       "providerVendorId",
@@ -551,11 +589,11 @@ export default defineEntity({
     update: [
       "network",
       "primaryCardholderId",
+      "primaryCardholderMode",
       "authorizedUsers",
       "fundingPeriods",
       "name",
       "identity",
-      "provisional",
       "sourceAliases",
       "cardNumbers",
       "providerVendorId",
@@ -565,11 +603,11 @@ export default defineEntity({
     ],
     audit: [
       "primaryCardholderId",
+      "primaryCardholderMode",
       "authorizedUsers",
       "fundingPeriods",
       "name",
       "identity",
-      "provisional",
       "sourceAliases",
       "cardNumbers",
       "notes",
@@ -602,13 +640,7 @@ export default defineEntity({
       externalAccountId: { via: "aliases.externalAccountId" },
     },
     sort: {
-      fields: [
-        "name",
-        "provisional",
-        "transactionCount",
-        "createdAt",
-        "updatedAt",
-      ],
+      fields: ["name", "transactionCount", "createdAt", "updatedAt"],
       // A name roster reads A→Z; the table's blanket descending default was
       // opening the account list backwards.
     },
@@ -620,30 +652,30 @@ export default defineEntity({
           "identity",
           "cardNumbers",
           "providerVendorId",
-          "provisional",
           "sourceAliases",
           "notes",
         ],
         full: [
           "network",
           "primaryCardholderId",
+          "primaryCardholderMode",
           "authorizedUsers",
           "fundingPeriods",
           "name",
           "identity",
           "cardNumbers",
           "providerVendorId",
-          "provisional",
           "sourceAliases",
           "inventoryOwnerDefaultEnabled",
           "notes",
         ],
-        identity: ["name", "provisional", "sourceAliases", "notes"],
+        identity: ["name", "sourceAliases", "notes"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
     },
     output: [
+      "fieldResolutions",
       "network",
       "authorizedUserItems",
       "fundingPeriodItems",
@@ -653,7 +685,6 @@ export default defineEntity({
       "id",
       "name",
       "identity",
-      "provisional",
       "sourceAliases",
       "sourceAliasesLabel",
       "cardNumbers",
@@ -684,11 +715,7 @@ export default defineEntity({
     },
   },
   storage: {
-    indexes: [
-      { on: ["name"] },
-      { on: ["provisional"] },
-      { on: ["providerVendorId", "ledgerPartyId"] },
-    ],
+    indexes: [{ on: ["name"] }, { on: ["providerVendorId", "ledgerPartyId"] }],
     checks: [
       {
         name: "FinancialAccount_provider_non_cash_check",
@@ -752,16 +779,6 @@ export default defineEntity({
           { value: "stored_value", label: "Stored value" },
           { value: "cash", label: "Cash" },
           { value: "other", label: "Other" },
-        ],
-      },
-      {
-        columnId: "provisional",
-        kind: "boolean",
-        placeholder: "Filter by status...",
-        deriveSchema: true,
-        options: [
-          { value: "false", label: "Known" },
-          { value: "true", label: "Provisional" },
         ],
       },
       {
@@ -993,6 +1010,19 @@ export default defineEntity({
   ],
   search: "semantic",
   capabilities: {
+    classificationPolicies: [
+      {
+        classifier: "identity",
+        fields: ["network", "primaryCardholderId", "authorizedUsers"].map(
+          (field) => ({
+            field,
+            byValue: { credit_card: "unknown" as const },
+            otherwise: "not_allowed" as const,
+            refusal: "Only applies to credit-card accounts.",
+          }),
+        ),
+      },
+    ],
     images: {
       storage: false,
     },
@@ -1008,27 +1038,6 @@ export default defineEntity({
           weight: 2,
           label: "Ledger party",
           message: "No ledger party is linked to this account.",
-        },
-        {
-          id: "financial_account_unclaimed",
-          satisfiedLabel: "Account claimed",
-          placement: { field: "ledgerPartyId" },
-          facet: "identity",
-          kind: "defect",
-          scoring: "unscored",
-          exceptions: "forbidden",
-          label: "Unclaimed account",
-          message:
-            "This provisional non-cash account has no provider evidence.",
-        },
-        {
-          id: "financial_account_confirmed",
-          satisfiedLabel: "Account confirmed",
-          placement: { field: "provisional" },
-          facet: "identity",
-          weight: 2,
-          label: "Confirmed",
-          message: "This account is still provisional.",
         },
       ],
     },

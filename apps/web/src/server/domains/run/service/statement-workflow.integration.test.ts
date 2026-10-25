@@ -48,7 +48,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
     name: "Synthetic workflow card",
     identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: owner.output.id,
-    provisional: false,
+
     sourceAliases: [
       {
         source: "monarch",

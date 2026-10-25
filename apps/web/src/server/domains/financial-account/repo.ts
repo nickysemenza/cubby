@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import {
   type FinancialAccountCreateInput,
   type FinancialAccountFilters,
@@ -25,6 +26,10 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  effectiveFieldSql,
+  inheritedFieldSql,
+} from "~/server/db/computed/effective-field";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
@@ -110,7 +115,62 @@ export const financialAccountTransactionCount = sql<number>`(
   WHERE ft."accountId" = "FinancialAccount"."id" AND ft."deletedAt" IS NULL
 )`;
 
+const cardholderCode = (expression: ReturnType<typeof effectiveFieldSql>) =>
+  sql<
+    string | null
+  >`(SELECT shortcode FROM "LedgerParty" WHERE id = ${expression} AND "deletedAt" IS NULL)`;
+const cardholderExtras = {
+  primaryCardholderMode: financialAccount.primaryCardholderMode,
+  storedCardholder: cardholderCode(
+    sql`${financialAccount.primaryCardholderId}`,
+  ),
+  fallbackCardholder: cardholderCode(
+    inheritedFieldSql("financialAccount", "primaryCardholderId"),
+  ),
+};
+const cardholderResolution = (row: {
+  primaryCardholderMode: string;
+  storedCardholder: string | null;
+  fallbackCardholder: string | null;
+  primaryCardholderShortcode: string | null;
+  ledgerPartyShortcode: string | null;
+  ledgerPartyName: string | null;
+}): FieldResolutions => {
+  const explicit =
+    row.primaryCardholderMode === "explicit" || row.storedCardholder !== null;
+  return {
+    primaryCardholderId: {
+      mode: explicit
+        ? row.storedCardholder === null
+          ? "none"
+          : "explicit"
+        : "inherit",
+      storedValue: row.storedCardholder,
+      value: row.primaryCardholderShortcode,
+      fallbackValue: row.fallbackCardholder,
+      source: explicit
+        ? "Account override"
+        : row.fallbackCardholder
+          ? "Account member"
+          : "No member cardholder",
+      sourceEntity:
+        !explicit && row.fallbackCardholder && row.ledgerPartyShortcode
+          ? {
+              entityKind: "ledgerParty",
+              entityId: row.ledgerPartyShortcode,
+              name: row.ledgerPartyName,
+            }
+          : null,
+      matchesFallback:
+        explicit &&
+        row.storedCardholder !== null &&
+        row.storedCardholder === row.fallbackCardholder,
+      canReset: explicit,
+    },
+  };
+};
 const columns = {
+  ...cardholderExtras,
   authorizedUserItems: accountPartyPeriodItemsSql(
     sql`"FinancialAccount"."authorizedUsers"`,
   ),
@@ -119,9 +179,9 @@ const columns = {
   ),
   authorizedUsers: financialAccount.authorizedUsers,
   fundingPeriods: financialAccount.fundingPeriods,
-  primaryCardholderShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "FinancialAccount"."primaryCardholderId")`,
+  primaryCardholderShortcode: cardholderCode(
+    effectiveFieldSql("financialAccount", "primaryCardholderId"),
+  ),
   id: financialAccount.id,
   shortcode: financialAccount.shortcode,
   name: financialAccount.name,
@@ -129,7 +189,6 @@ const columns = {
     string | null
   >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'network' END`,
   identity: financialAccount.identity,
-  provisional: financialAccount.provisional,
   sourceAliases: financialAccount.sourceAliases,
   cardNumbers: financialAccount.cardNumbers,
   inventoryOwnerDefaultEnabled: financialAccount.inventoryOwnerDefaultEnabled,
@@ -182,9 +241,9 @@ const toOut = (
     authorizedUsers: row.authorizedUsers,
     fundingPeriods: row.fundingPeriods,
     primaryCardholderId: row.primaryCardholderShortcode,
+    fieldResolutions: cardholderResolution(row),
     network: row.network,
     identity: financialAccountIdentity.parse(row.identity),
-    provisional: row.provisional,
     sourceAliases,
     sourceAliasesLabel: sourceAliasesLabel(sourceAliases),
     cardNumbers,
@@ -221,18 +280,19 @@ const selectAccountsRead = (
   return unwrapDb(db)
     .select({
       ...core,
-      ...listGroupFields(projection, "relations", () => ({
-        ledgerPartyShortcode,
-        ledgerPartyName,
-        providerVendorShortcode,
-        providerVendorName,
-      })),
+      ledgerPartyShortcode,
+      ledgerPartyName,
+      providerVendorShortcode,
+      providerVendorName,
       ...listGroupFields(projection, "derived", () => ({ transactionCount })),
     })
     .from(financialAccount);
 };
 const accountRead = {
   bindings: (bind) => [
+    bind(financialAccountOut.pick({ fieldResolutions: true }), (row) => ({
+      fieldResolutions: cardholderResolution(row),
+    })),
     bind(financialAccountOut.pick({ primaryCardholderId: true }), (row) => ({
       primaryCardholderId: row.primaryCardholderShortcode
         ? parseShortcodeFor("ledgerParty", row.primaryCardholderShortcode)
@@ -359,6 +419,28 @@ async function assertAliasesAvailable(
       );
     }
   }
+}
+
+async function draftCardholder(
+  db: Database | DrizzleTransaction,
+  identity: FinancialAccountCreateInput["identity"],
+  owner: string | null,
+  primary: string | null,
+  mode: string,
+) {
+  if (primary !== null && identity.kind !== "credit_card")
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Card users require a credit-card account.",
+    );
+  const expression = cardholderCode(
+    effectiveFieldSql("financialAccount", "primaryCardholderId", "candidate"),
+  );
+  const result = await unwrapDb(db).execute<{ code: string | null }>(
+    sql`WITH candidate AS (SELECT ${JSON.stringify(identity)}::jsonb AS identity, ${owner}::uuid AS "ledgerPartyId", ${primary}::uuid AS "primaryCardholderId", ${mode}::text AS "primaryCardholderMode") SELECT ${expression} AS code FROM candidate`,
+  );
+  const code = result.rows[0]?.code;
+  return code ? parseShortcodeFor("ledgerParty", code) : null;
 }
 
 async function validateAccountHistory(
@@ -510,7 +592,6 @@ export const createFinancialAccount = defineMutationWriter({
         ),
       );
       await assertAliasesAvailable(tx, data.sourceAliases);
-      await validateAccountHistory(tx, { ...data, identity });
       const {
         ledgerPartyId,
         providerVendorId,
@@ -530,6 +611,17 @@ export const createFinancialAccount = defineMutationWriter({
         tx,
         providerVendorId,
       );
+      await validateAccountHistory(tx, {
+        ...data,
+        identity,
+        primaryCardholderId: await draftCardholder(
+          tx,
+          identity,
+          resolvedLedgerPartyId,
+          resolvedCardholderId ?? null,
+          data.primaryCardholderMode,
+        ),
+      });
       assertProviderMatchesKind(identity, resolvedProviderVendorId);
       if (data.inventoryOwnerDefaultEnabled) {
         if (!resolvedLedgerPartyId) {
@@ -605,23 +697,6 @@ export const updateFinancialAccount = defineMutationWriter({
         tx,
         data.primaryCardholderId,
       );
-      const [currentCardholder] = before.primaryCardholderId
-        ? await tx
-            .select({ shortcode: ledgerParty.shortcode })
-            .from(ledgerParty)
-            .where(eq(ledgerParty.id, before.primaryCardholderId))
-        : [];
-      await validateAccountHistory(tx, {
-        identity: financialAccountIdentity.parse(before.identity),
-        primaryCardholderId:
-          data.primaryCardholderId === undefined
-            ? currentCardholder
-              ? parseShortcodeFor("ledgerParty", currentCardholder.shortcode)
-              : null
-            : data.primaryCardholderId,
-        authorizedUsers: data.authorizedUsers ?? before.authorizedUsers,
-        fundingPeriods: data.fundingPeriods ?? before.fundingPeriods,
-      });
       if (data.sourceAliases !== undefined) {
         await lockFinancialEvidenceKeys(
           tx,
@@ -657,6 +732,23 @@ export const updateFinancialAccount = defineMutationWriter({
         data.identity ?? beforeIdentity,
         data,
       );
+      await validateAccountHistory(tx, {
+        identity,
+        primaryCardholderId: await draftCardholder(
+          tx,
+          identity,
+          ledgerPartyId === undefined ? before.ledgerPartyId : ledgerPartyId,
+          primaryCardholderId === undefined
+            ? before.primaryCardholderId
+            : primaryCardholderId,
+          data.primaryCardholderMode ??
+            (data.primaryCardholderId === undefined
+              ? before.primaryCardholderMode
+              : "explicit"),
+        ),
+        authorizedUsers: data.authorizedUsers ?? before.authorizedUsers,
+        fundingPeriods: data.fundingPeriods ?? before.fundingPeriods,
+      });
       assertProviderMatchesKind(
         identity,
         providerVendorId === undefined
@@ -721,6 +813,11 @@ export const updateFinancialAccount = defineMutationWriter({
       };
       if (primaryCardholderId !== undefined)
         updateData.primaryCardholderId = primaryCardholderId;
+      if (
+        data.primaryCardholderId !== undefined &&
+        data.primaryCardholderMode === undefined
+      )
+        updateData.primaryCardholderMode = "explicit";
       if (ledgerPartyId !== undefined) updateData.ledgerPartyId = ledgerPartyId;
       if (providerVendorId !== undefined)
         updateData.providerVendorId = providerVendorId;

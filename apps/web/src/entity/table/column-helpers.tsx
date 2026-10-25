@@ -1606,8 +1606,8 @@ export function createBooleanColumn<
      * — build it with `booleanCellOptions` (~/lib/select-options).
      *
      * A roster rather than a `labels` pair plus built-in tones, because "true" is
-     * not always the good outcome: `FinancialAccount.provisional` is amber when
-     * true and green when false, the inverse of the obvious default. Hardcoding
+     * not always the good outcome: a planned Expense is amber rather than
+     * green. Hardcoding
      * positive/slate here made that column's list cell disagree with its own
      * detail page, and silently turned a deliberately-amber "Planned" expense
      * green. Passing the roster means the column and every other surface that

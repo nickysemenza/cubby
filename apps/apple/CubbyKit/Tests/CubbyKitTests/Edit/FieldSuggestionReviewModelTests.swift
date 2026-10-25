@@ -18,12 +18,16 @@ struct FieldSuggestionReviewModelTests {
         entity: .expense, entityId: "EXP-4K7M", spendingCategoryId: "SPC-4K7M", sideEffects: .init())
 
     private func editor(_ key: EntityKey = .expense) -> GenericEntityEditModel {
-        GenericEntityEditModel(
+        var original: [String: JSONValue] = [
+            "spendingCategoryId": .null, "itemizationExpectation": .null, "notes": "Saved note",
+        ]
+        if key == .expense { original["lineKind"] = "principal" }
+        return GenericEntityEditModel(
             descriptor: EntityCatalog[key], mode: .update(id: key == .expense ? "EXP-4K7M" : "PUR-4K7M"),
             client: CubbyClient(
                 baseURL: URL(string: "http://localhost:3000")!,
                 credentials: CredentialProvider(host: "localhost:3000", store: InMemorySessionTokenStore())),
-            original: ["spendingCategoryId": .null, "itemizationExpectation": .null, "notes": "Saved note"])
+            original: .object(original))
     }
 
     private func response(finance: Bool = true) throws -> FieldSuggestionsReviewOut {
@@ -78,6 +82,7 @@ struct FieldSuggestionReviewModelTests {
                 reviews.append(input); return try self.reviewOut()
             })
         try await review.request()
+        _ = try #require(review.proposal("spendingCategoryId"))
         let apply = Task { try await review.apply("spendingCategoryId") }
         await gate.arrivals(1)
         editor.draft["notes"] = .string("Unsaved sibling")
@@ -103,6 +108,7 @@ struct FieldSuggestionReviewModelTests {
                 return Self.applied
             }, reviewAssessment: { _ in try self.reviewOut() })
         try await review.request()
+        _ = try #require(review.proposal("spendingCategoryId"))
         let apply = Task { try await review.apply("spendingCategoryId") }
         await gate.arrivals(1)
         review.invalidate()

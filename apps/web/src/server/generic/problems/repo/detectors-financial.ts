@@ -10,14 +10,11 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import { sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { financialAccount } from "~/server/db/schema";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
  * must produce a defect, never make the complete Problems scan unavailable. */
@@ -237,35 +234,6 @@ export async function findDuplicateFinancialAccountSourceAliases(
     accountIds: row.accountIds.map((id) =>
       parseShortcodeFor("financialAccount", id),
     ),
-  }));
-}
-
-/**
- * A provisional account that no provider export has claimed: minted from a
- * receipt, with no `sourceAliases` and no live transaction carrying a
- * settlement reference. The fix is linking it to the real statement account,
- * so it is coverage — new receipts keep minting these.
- */
-export async function findProvisionalFinancialAccounts(
-  db: Database,
-): Promise<ProblemItem<"provisionalFinancialAccounts">[]> {
-  const result = await getDb(db).execute<{
-    id: string;
-    name: string;
-    transactionCount: number;
-  }>(sql`
-    SELECT fa.shortcode AS id, fa.name AS name,
-      (SELECT count(*)::int FROM "FinancialTransaction" ft
-        WHERE ft."accountId" = fa.id AND ft."deletedAt" IS NULL) AS "transactionCount"
-    FROM "FinancialAccount" fa
-    WHERE fa."deletedAt" IS NULL
-      AND ${gapCondition("financialAccount", "financial_account_unclaimed", alias(financialAccount, "fa"))}
-    ORDER BY fa.name, fa.shortcode
-  `);
-  return result.rows.map((row) => ({
-    id: parseShortcodeFor("financialAccount", row.id),
-    name: row.name,
-    transactionCount: Number(row.transactionCount),
   }));
 }
 

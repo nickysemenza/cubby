@@ -103,7 +103,6 @@ describe("Account scalar suggestion acceptance", () => {
   it("keeps high-confidence card sweep additions pending until member review", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       identity: { kind: "credit_card", network: null },
-      provisional: true,
     });
     const started = await startSuggestionSweep(
       ctx.db,
@@ -134,13 +133,11 @@ describe("Account scalar suggestion acceptance", () => {
     const [stored] = await getDb(ctx.db)
       .select({
         identity: financialAccount.identity,
-        provisional: financialAccount.provisional,
       })
       .from(financialAccount)
       .where(eq(financialAccount.shortcode, account.output.id));
     expect(stored).toEqual({
       identity: { kind: "credit_card", network: null },
-      provisional: true,
     });
   });
 
@@ -155,7 +152,6 @@ describe("Account scalar suggestion acceptance", () => {
       identity: { kind: "credit_card", network: null },
       notes:
         "Issuer: Harbor Example Bank\nPrimary cardholder: Avery Example\nNetwork: Visa",
-      provisional: true,
     });
     const decisionPort = vi.fn<DecisionPort>(async (input) => {
       expect(input.state).toContain("credit_card");
@@ -206,14 +202,12 @@ describe("Account scalar suggestion acceptance", () => {
       .select({
         identity: financialAccount.identity,
         primaryCardholderId: financialAccount.primaryCardholderId,
-        provisional: financialAccount.provisional,
       })
       .from(financialAccount)
       .where(eq(financialAccount.shortcode, account.output.id));
     expect(stored).toEqual({
       identity: { kind: "credit_card", network: null },
       primaryCardholderId: null,
-      provisional: true,
     });
   });
 
@@ -313,7 +307,7 @@ describe("Account scalar suggestion acceptance", () => {
     });
   });
 
-  it("accepts provider, network and primary holder through the kernel without changing histories or provisional status", async () => {
+  it("accepts provider, network and primary holder through the kernel without changing histories", async () => {
     const provider = await createRepoEntity(ctx, "vendor", {
       name: "Harbor Example Bank",
     });
@@ -357,7 +351,7 @@ describe("Account scalar suggestion acceptance", () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic card",
       identity: { kind: "credit_card", network: "visa" },
-      provisional: true,
+
       primaryCardholderId: originalHolder.output.id,
       ...histories,
       notes:
@@ -396,7 +390,7 @@ describe("Account scalar suggestion acceptance", () => {
           network: "mastercard",
         },
         primaryCardholderId: member.output.id,
-        provisional: true,
+
         ...histories,
       },
     });

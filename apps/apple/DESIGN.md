@@ -106,6 +106,17 @@ iOS launch uses a static Cubby title on the system grouped background, matching 
 
 Review iPhone and Mac, narrow Mac windows, iPad resizing, light/dark, accessibility text, VoiceOver, keyboard-only operation, Reduce Motion, and the actual photo and workbench journeys. Use synthetic fixtures and screenshots.
 
+## Field applicability
+
+Native table and detail fields refused by an existing same-record classification policy show a
+quiet dash with the manifest's reason available to accessibility and hover help. They expose no
+edit, suggestion or resolution action. The manifest projects these rules from classification
+policies, including nested classifier read paths; native does not own account-kind exceptions.
+Server-resolved allocations remain visible with their evidence when manual assignment is refused; assignment controls remain unavailable.
+Applicable empty fields remain editable, and inherited values retain their override actions.
+A reclassification omits newly refused draft fields from outgoing writes; the server owns
+clearing incompatible stored values. Reload seeding uses the incoming classifier throughout.
+
 ## Continuous record detail
 
 Full record routes show every declared section in one continuous native list, including sections formerly selected as another record view. Section bodies remain open; pagination and explicit show-more controls still bound collections. Empty relations and connections are hidden; their creation actions stay reachable from the toolbar ••• menu. Raw record details remain available in a collapsed disclosure.

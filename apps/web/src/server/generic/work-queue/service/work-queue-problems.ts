@@ -131,7 +131,6 @@ const sharedProblemBuilders = {
 /** Only automatic maintenance or external inference is outside the interactive queue. */
 const excludedDiagnostics = new Set([
   "import-findings", // The queue owns the read-only open/unexpired relation.
-  "provisional-financial-accounts", // Uses its canonical gap SQL in the queue.
   "products-with-better-upc-data",
   "image-metadata-outcomes", // Re-admitted by the maintenance step's retry.
   "referential-liveness-violations",

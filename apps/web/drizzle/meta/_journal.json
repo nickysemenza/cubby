@@ -183,6 +183,13 @@
       "when": 1792878044107,
       "tag": "0025_financial_account_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792882071411,
+      "tag": "0026_account_cardholder_inheritance",
+      "breakpoints": true
     }
   ]
 }

@@ -352,12 +352,11 @@ describe("data quality: finance and project entities", () => {
     const gap = await createRepoEntity(ctx, "financialAccount", {
       name: "DQ account gap",
       identity: { kind: "cash" },
-      provisional: true,
     });
     const complete = await createRepoEntity(ctx, "financialAccount", {
       name: "DQ account complete",
       identity: { kind: "cash" },
-      provisional: false,
+
       ledgerPartyId: member.output.id,
     });
 
@@ -370,7 +369,6 @@ describe("data quality: finance and project entities", () => {
     );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("financial_account_ledger_party");
-    expect(gapChecks).toContain("financial_account_confirmed");
     expect(hydrated.get(complete.entityId)).toMatchObject({
       status: "needs_data",
       gaps: [{ check: "financialaccount_display_image" }],
@@ -381,7 +379,6 @@ describe("data quality: finance and project entities", () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "DQ transaction account",
       identity: { kind: "cash" },
-      provisional: false,
     });
     const gap = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
@@ -659,7 +656,7 @@ describe("data quality: finance and project entities", () => {
     await createRepoEntity(ctx, "financialAccount", {
       name: "DQ member account",
       identity: { kind: "cash" },
-      provisional: false,
+
       ledgerPartyId: complete.output.id,
     });
 

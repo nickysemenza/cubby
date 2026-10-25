@@ -779,7 +779,15 @@ const buildMetadataSchemas = () => {
                         whileSame: nonEmptyString(),
                       }),
                     }),
-                    z.strictObject({ path: nonEmptyString() }),
+                    z.strictObject({
+                      path: nonEmptyString(),
+                      when: z
+                        .strictObject({
+                          field: nonEmptyString(),
+                          value: nonEmptyString(),
+                        })
+                        .optional(),
+                    }),
                   ]),
                 )
                 .min(1),

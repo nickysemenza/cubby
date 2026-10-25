@@ -2,6 +2,7 @@ import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { eq, sql, type SQL } from "drizzle-orm";
 
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
@@ -65,7 +66,10 @@ export async function loadAccountPurchaserProofs(
         )
         .leftJoin(
           ledgerParty,
-          eq(ledgerParty.id, financialAccount.primaryCardholderId),
+          eq(
+            ledgerParty.id,
+            effectiveFieldSql("financialAccount", "primaryCardholderId"),
+          ),
         )
         .where(notDeleted(financialAccount))
     : [];
@@ -75,14 +79,13 @@ export async function loadAccountPurchaserProofs(
 }
 
 /** Household-card authority does not identify an individual purchaser. */
-export function confirmedHouseholdCard(
+export function liveHouseholdCard(
   account: typeof financialAccount.$inferSelect & {
     ledgerParty: typeof ledgerParty.$inferSelect | null;
   },
 ): boolean {
   return (
     !account.deletedAt &&
-    !account.provisional &&
     account.identity.kind === financialAccountIdentityKind.enum.credit_card &&
     account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
     !account.ledgerParty.deletedAt
@@ -98,14 +101,14 @@ export function financialAccountPurchaser(
     Awaited<ReturnType<typeof loadAccountPurchaserProofs>>["get"]
   >,
 ) {
-  if (account.deletedAt || account.provisional) return null;
+  if (account.deletedAt) return null;
   if (
     account.ledgerParty?.kind === ledgerPartyKind.enum.member &&
     !account.ledgerParty.deletedAt
   )
     return account.ledgerParty;
   if (
-    confirmedHouseholdCard(account) &&
+    liveHouseholdCard(account) &&
     proof?.soleAccess &&
     proof.primaryCardholder?.kind === ledgerPartyKind.enum.member &&
     !proof.primaryCardholder.deletedAt

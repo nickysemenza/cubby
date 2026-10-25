@@ -163,7 +163,6 @@ const financialAccountEditRequest = (
   record: account,
   seed: {
     name: account.name,
-    provisional: account.provisional,
     sourceAliases: account.sourceAliases,
     notes: account.notes ?? null,
   },
