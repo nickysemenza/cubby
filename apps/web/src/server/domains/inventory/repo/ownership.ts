@@ -14,7 +14,7 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, not, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -23,7 +23,7 @@ import {
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { quotedTable } from "~/server/db/helpers/related";
+import { outer, quotedTable, related } from "~/server/db/helpers/related";
 import {
   entityLink,
   expense,
@@ -1214,7 +1214,12 @@ export async function loadProductOwnerMembership(
       .where(
         and(
           notDeleted(product),
-          sql`NOT EXISTS (SELECT 1 FROM "InventoryEntry" ie WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL)`,
+          not(
+            related(
+              inventoryEntry,
+              (ie) => sql`${ie.productId} = ${outer(product.id)}`,
+            ).exists(),
+          ),
         ),
       ),
   ]);

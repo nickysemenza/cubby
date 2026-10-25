@@ -9,13 +9,14 @@ import type { Database } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { quotedTable } from "~/server/db/helpers/related";
+import { outer, quotedTable, related } from "~/server/db/helpers/related";
 import {
   entityLink,
   expense,
   product,
   purchase,
   financialTransaction,
+  financialTransactionAllocation,
 } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
@@ -247,7 +248,10 @@ async function settlementCandidates(
     const [transaction] = await getDb(db)
       .select({
         kind: financialTransaction.kind,
-        allocated: sql<boolean>`EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a WHERE a."transactionId"="FinancialTransaction".id AND a."deletedAt" IS NULL)`,
+        allocated: related(
+          financialTransactionAllocation,
+          (a) => sql`${a.transactionId} = ${outer(financialTransaction.id)}`,
+        ).exists(),
       })
       .from(financialTransaction)
       .where(

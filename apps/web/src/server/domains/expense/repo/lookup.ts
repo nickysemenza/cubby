@@ -12,7 +12,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/db/helpers";
-import { quotedTable } from "~/server/db/helpers/related";
+import { quotedTable, related } from "~/server/db/helpers/related";
 import { expense, project, spendingCategory } from "~/server/db/schema";
 import {
   expenseDerivedValueSql,
@@ -134,9 +134,10 @@ const rowDerived = {
     "spendingCategoryNames",
     sql`${expense.id}`,
   ),
-  projectId: sql`(SELECT p."name" FROM "Project" p
-    WHERE p."id" = ${effectiveExpenseProjectSql(quotedTable(expense))}
-      AND p."deletedAt" IS NULL)`,
+  projectId: related(
+    project,
+    (p) => sql`${p.id} = ${effectiveExpenseProjectSql(quotedTable(expense))}`,
+  ).value<string>((p) => p.name),
   costSign: sql`CASE WHEN ${expense.cost} < 0 THEN ${expenseCostSign.enum.negative}::text
     WHEN ${expense.cost} > 0 THEN ${expenseCostSign.enum.positive}::text END`,
   disposalPurchase: inArray(expense.purchaseId, disposalPurchaseIds()),
