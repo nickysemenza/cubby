@@ -10,7 +10,7 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
-import { currentJobExecution } from "~/server/generic/jobs/context";
+import { inJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
@@ -335,7 +335,7 @@ export async function withAiResponseCache<T>(args: {
     if (claim.kind === "busy") {
       args.onWait?.();
       // A job page republishes its cursor instead of polling inside its page.
-      if (currentJobExecution())
+      if (inJobExecution())
         throw deferred(
           "Another request is computing this AI answer; no duplicate model call was placed.",
         );

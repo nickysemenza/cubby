@@ -4,6 +4,7 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   withJobExecution,
+  withJobBatchExecution,
   type JobExecutionDetails,
 } from "~/server/generic/jobs/context";
 import {
@@ -19,6 +20,7 @@ import {
   pauseClaimedJob,
   publishJobPage,
   renewJob,
+  releaseJobClaim,
   type JobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 
@@ -53,6 +55,22 @@ export async function advanceJob(
 ) {
   const claimed = await claimJob(db, id);
   if (!claimed) return "skipped";
+  return executeClaim(db, claimed, () => {
+    const handler = handlers[claimed.kind];
+    if (!handler)
+      throw new Error(`No job handler registered for ${claimed.kind}`);
+    return handler.prepare(db, claimed);
+  });
+}
+
+/** The same publication, diagnostics and failure policy serves single and batch pages. */
+async function executeClaim(
+  db: Database,
+  claimed: JobClaim,
+  prepare: () => Promise<PreparedJobPage>,
+  { renewLease = true }: { renewLease?: boolean } = {},
+) {
+  const id = claimed.id;
   const details: JobExecutionDetails = { stepKey: null };
   let publicationStartedAt: number | undefined;
   let publicationDurationMs: number | undefined;
@@ -77,34 +95,28 @@ export async function advanceJob(
       waitReason: null,
     });
   entry().info("claim");
-  const handler = handlers[claimed.kind];
   let renewing: Promise<boolean> | undefined;
-  const heartbeat = setInterval(() => {
-    if (!renewing) {
-      renewing = renewJob(db, claimed)
-        .then((renewed) => {
-          if (!renewed) entry().warn("lease renewal refused");
-          else entry().info("lease renewed");
-          return renewed;
-        })
-        .catch((error: unknown) => {
-          entry().error("lease renewal failed", { error });
-          return false;
-        })
-        .finally(() => {
-          renewing = undefined;
-        });
-    }
-  }, JOB_HEARTBEAT_MS);
+  const heartbeat = renewLease
+    ? setInterval(() => {
+        if (!renewing) {
+          renewing = renewJob(db, claimed)
+            .then((renewed) => {
+              if (!renewed) entry().warn("lease renewal refused");
+              else entry().info("lease renewed");
+              return renewed;
+            })
+            .catch((error: unknown) => {
+              entry().error("lease renewal failed", { error });
+              return false;
+            })
+            .finally(() => {
+              renewing = undefined;
+            });
+        }
+      }, JOB_HEARTBEAT_MS)
+    : undefined;
   try {
-    if (!handler)
-      throw new Error(`No job handler registered for ${claimed.kind}`);
-    const prepared = await withJobExecution(
-      db,
-      claimed,
-      () => handler.prepare(db, claimed),
-      details,
-    );
+    const prepared = await withJobExecution(db, claimed, prepare, details);
     entry().info("page", {
       awaitExternal: Boolean(prepared.awaitExternal),
       waitReason: prepared.page.waitReason ?? null,
@@ -174,9 +186,89 @@ export async function advanceJob(
     entry().error("fail", { error });
     return "failed";
   } finally {
-    clearInterval(heartbeat);
+    if (heartbeat !== undefined) clearInterval(heartbeat);
     await renewing;
   }
+}
+
+/** Claim and settle serially inside one lane: batch width never multiplies DB sockets. */
+async function advanceBatch(
+  db: Database,
+  ids: readonly string[],
+  batch: NonNullable<JobHandler["batch"]>,
+  deadline: number,
+) {
+  const pending = new Map<string, JobClaim>();
+  const outcomes: string[] = [];
+  let renewing: Promise<void> | undefined;
+  const heartbeat = setInterval(() => {
+    renewing ??= (async () => {
+      for (const claim of pending.values()) {
+        try {
+          const renewed = await renewJob(db, claim, { skipLocked: true });
+          if (!renewed)
+            log.warn("batch lease renewal refused", { jobId: claim.id });
+        } catch (error) {
+          // A failed or contended Job must not consume its siblings' renewal turn.
+          log.error("batch lease renewal failed", { jobId: claim.id, error });
+        }
+      }
+    })().finally(() => {
+      renewing = undefined;
+    });
+  }, JOB_HEARTBEAT_MS);
+  const checkpoint: Parameters<
+    NonNullable<JobHandler["batch"]>["execute"]
+  >[2]["checkpoint"] = async (results) => {
+    for (const [id, result] of results) {
+      const claim = pending.get(id);
+      if (!claim) throw new Error("Batch checkpoint included an unclaimed Job");
+      outcomes.push(
+        await executeClaim(
+          db,
+          claim,
+          async () => {
+            if (result.status === "rejected") throw result.reason;
+            return result.value;
+          },
+          { renewLease: false },
+        ),
+      );
+      pending.delete(id);
+    }
+  };
+  try {
+    for (const id of ids) {
+      if (Date.now() >= deadline) break;
+      const claim = await claimJob(db, id);
+      if (claim) pending.set(claim.id, claim);
+      else outcomes.push("skipped");
+    }
+    if (!pending.size || Date.now() >= deadline) return outcomes;
+    try {
+      await withJobBatchExecution(() =>
+        batch.execute(db, [...pending.values()], { deadline, checkpoint }),
+      );
+      if (pending.size && Date.now() < deadline)
+        throw new Error("Batch handler omitted a Job result");
+    } catch (reason) {
+      await checkpoint(
+        new Map(
+          [...pending.keys()].map((id) => [id, { status: "rejected", reason }]),
+        ),
+      );
+    }
+  } finally {
+    clearInterval(heartbeat);
+    await renewing;
+    // Never leave unstarted work leased across a drain yield, or charge its
+    // claim against the retry budget. Completed chunks have already committed.
+    for (const claim of pending.values())
+      outcomes.push(
+        (await releaseJobClaim(db, claim)) ? "released" : "superseded",
+      );
+  }
+  return outcomes;
 }
 
 /**
@@ -195,21 +287,59 @@ export async function drainDueJobs(
   const deadline = Date.now() + timeBudgetMs;
   const spent = () => outcomes.length >= limit || Date.now() >= deadline;
   while (!spent()) {
-    const candidates = await dueJobs(
+    let candidates = await dueJobs(
       db,
       Math.min(JOB_DRAIN.batch, limit - outcomes.length),
     );
     if (!candidates.length) return outcomes;
+    const batchSize = Math.max(
+      JOB_DRAIN.batch,
+      ...candidates.map(
+        (candidate) => handlers[candidate.kind]?.batch?.size ?? 1,
+      ),
+    );
+    if (batchSize > JOB_DRAIN.batch)
+      candidates = await dueJobs(
+        db,
+        Math.min(batchSize, limit - outcomes.length),
+      );
+    // Keep the fair selector's first service for each kind. A kind batch owns
+    // one of the same three lanes; it never fans out publication transactions.
+    const groups: (typeof candidates)[] = [];
+    const batches = new Map<string, typeof candidates>();
+    for (const candidate of candidates) {
+      const batch = handlers[candidate.kind]?.batch;
+      const key = `${candidate.kind}:${candidate.runOwned}`;
+      const existing = batches.get(key);
+      if (batch && existing && existing.length < batch.size)
+        existing.push(candidate);
+      else {
+        const group = [candidate];
+        groups.push(group);
+        if (batch) batches.set(key, group);
+      }
+    }
     let next = 0;
     const lane = async () => {
-      while (next < candidates.length && !spent()) {
-        const candidate = candidates[next++]!;
-        outcomes.push(await advanceJob(db, candidate.id, handlers));
+      while (next < groups.length && !spent()) {
+        const group = groups[next++]!;
+        const candidate = group[0]!;
+        const batch = handlers[candidate.kind]?.batch;
+        if (batch)
+          outcomes.push(
+            ...(await advanceBatch(
+              db,
+              group.map((entry) => entry.id),
+              batch,
+              deadline,
+            )),
+          );
+        else outcomes.push(await advanceJob(db, candidate.id, handlers));
       }
     };
     await Promise.all(
       Array.from(
-        { length: Math.max(1, Math.min(concurrency, candidates.length)) },
+        { length: Math.max(1, Math.min(concurrency, groups.length)) },
         lane,
       ),
     );

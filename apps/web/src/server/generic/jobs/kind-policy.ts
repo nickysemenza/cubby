@@ -22,6 +22,8 @@ export type JobKindPolicy = {
   readonly retry: JobRetryPolicy;
   /** Queued Jobs a kind should keep at most; the watchdog alerts above it. */
   readonly maxQueued: number | null;
+  /** Jobs one kind handler can prepare together inside a single drain lane. */
+  readonly batchSize?: number;
 };
 
 const IMAGE_RETRY = {
@@ -76,6 +78,7 @@ export const JOB_KIND_POLICY = {
   "derived.reconcile": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   "ai.evaluation": { ...SERVER, lane: "frontier_ai", maxQueued: 2_000 },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
+  "embedding.refresh": { ...SERVER, batchSize: 64 },
   "purchase.dispatch": { ...SERVER, lane: "external" },
 } as const satisfies Record<string, JobKindPolicy>;
 

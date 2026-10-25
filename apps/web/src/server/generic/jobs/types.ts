@@ -14,5 +14,20 @@ export type PreparedJobPage = {
 };
 export type JobHandler = {
   prepare(db: Database, job: JobClaim): Promise<PreparedJobPage>;
+  /** One lane executes a bounded kind batch; every checkpoint publishes separately. */
+  batch?: {
+    size: number;
+    execute(
+      db: Database,
+      claims: readonly JobClaim[],
+      context: {
+        deadline: number;
+        /** Await publication of this completed chunk before starting more work. */
+        checkpoint(
+          results: ReadonlyMap<string, PromiseSettledResult<PreparedJobPage>>,
+        ): Promise<void>;
+      },
+    ): Promise<void>;
+  };
 };
 export type JobHandlers = Readonly<Record<string, JobHandler>>;

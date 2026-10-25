@@ -23,6 +23,7 @@ import {
 import { MAX_ACTIVE_AI_REFRESH_RUNS } from "~/server/domains/run/repo/ai-refresh-admission";
 import { STATEMENT_SPENDING_PREPARATION_CONCURRENCY } from "~/server/domains/transaction-import/repo/statement-spending";
 import { STATEMENT_PUBLISH_CONCURRENCY } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
   DEFAULT_JOB_MAX_ATTEMPTS,
@@ -87,6 +88,15 @@ export const LIMITS_CATALOG = [
     value: JOB_DRAIN.batch,
     unit: "Jobs",
     source: `${JOBS_LIMITS} JOB_DRAIN.batch`,
+  },
+  {
+    key: "embedding.batch",
+    label: "Embedding Jobs per batch",
+    scope: "drain",
+    value: jobKindPolicy("embedding.refresh").batchSize ?? 1,
+    unit: "Jobs",
+    source:
+      "apps/web/src/server/generic/jobs/kind-policy.ts embedding.refresh.batchSize",
   },
   {
     key: "drain.concurrency",
