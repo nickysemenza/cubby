@@ -6,10 +6,10 @@
  * "4 roll" of a four-pack worth one pack rather than four. Nothing stores the
  * result: a price or mapping change is reflected on the next read, so there is
  * no recompute fan-out to forget and no stale figure to disagree with the
- * product page. {@link loadInventoryValuations} prices specific rows;
- * {@link loadLiveInventoryValuations} prices every live row for the list's
- * sort, filter and footer total, which SQL cannot compute (the graph is WASM),
- * and {@link inventoryValuationSql} hands that map back to SQL.
+ * product page. {@link loadInventoryValuations} prices specific rows (the
+ * stored `inventory.valuation` compute and reports); lists read the stored
+ * value (ADR 0021). {@link inventoryValuationSql} hands a computed map back to
+ * SQL for reports that price on read.
  *
  * A repo helper rather than a service on purpose — it is data access plus a
  * call into lib compute, and a `*.service.ts` here would be the empty
@@ -175,27 +175,6 @@ export const enrichProductRowsWithInventoryValuations = async <
     ),
   }));
 };
-
-/**
- * Every live inventory row's valuation. Used where SQL has to sort, filter or
- * sum by valuation over the whole population (the population is the household's
- * inventory — about a thousand rows — so one pass per list request is cheap).
- */
-export const loadLiveInventoryValuations = async (
-  db: Database | DrizzleTransaction,
-): Promise<InventoryValuations> =>
-  loadInventoryValuations(
-    db,
-    await unwrapDb(db)
-      .select({
-        id: inventoryEntry.id,
-        productId: inventoryEntry.productId,
-        amountValue: inventoryEntry.amountValue,
-        amountUnit: inventoryEntry.amountUnit,
-      })
-      .from(inventoryEntry)
-      .where(notDeleted(inventoryEntry)),
-  );
 
 /**
  * A computed valuation map as a SQL scalar for `idColumn`'s row, so the list's
