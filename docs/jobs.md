@@ -171,3 +171,37 @@ evaluations, Run history, audit) stay.
 
 `jobKindAdmission` reports the room a producer has under its kind's
 `maxQueued`; the watchdog raises `over_capacity` past it.
+
+## Producers
+
+A producer must not enqueue faster than the drain can serve. One unbounded
+connection-discovery pass once enqueued an evaluation for every household
+record (~55k), which starved every other kind for days.
+
+- Routine connection discovery (`discovery.connections`) holds its cursor while
+  `CONNECTION_DISCOVERY_PENDING_CAP` connection evaluations wait (`rate_limit`),
+  walks the newest records first, and never appends to a stopped Run. A changed
+  record's new evaluation cancels its older queued one. Cancelled work whose Run
+  failed with `failureCode = "superseded"` (a cleared backlog, not a member's
+  decision) is re-admitted at that pace; a member's cancel stays final.
+- Publication correction work is one `assessment.correction` Job per
+  publication commit (`targetAssessmentIds`), not one per assessment; sources are
+  still resolved after commit under serializable isolation.
+- `run.funding-resume` is one Job per funding window; its handler resumes every
+  paused Run.
+
+## Planned: batch evaluation
+
+Measured on 2026-10-25: one entity-connections evaluation page took ~4.7 s and
+each backlogged kind drained ~140 Jobs/h, while the Jev decision model allows
+80 requests/s and batches many records per request. The planned redesign runs
+many records per claim, executes them concurrently, packs decision calls into
+Jev batch requests, and decouples product identity from per-record `ai_suggest`
+Runs. Until then the producer caps above keep evaluation backlogs bounded.
+
+## Apple version gate
+
+Device work stops when the server refuses an older build's writes (HTTP 426):
+the worker stops pulling and shows "Update required to process images". Raise
+the minimum only for unsafe writes; see
+[breaking changes](agents/domain-rules.md#breaking-changes).
