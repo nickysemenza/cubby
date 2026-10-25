@@ -133,6 +133,23 @@ describe("image job cost", () => {
           osVersion: "26",
         },
       });
+    // A reclaim within the window is a second claim of the same Job.
+    await getDb(ctx.db)
+      .insert(imageProcessingAttempt)
+      .values({
+        id: crypto.randomUUID(),
+        jobId: held.id,
+        number: 2,
+        state: "expired",
+        executor: {
+          kind: "device",
+          deviceId: installationId,
+          name: "Synthetic Mac",
+          platform: "macos",
+          appVersion: "1",
+          osVersion: "26",
+        },
+      });
     const leaseExpiresAt = new Date(Date.now() + 60_000);
     await getDb(ctx.db)
       .insert(durableJob)
@@ -175,8 +192,8 @@ describe("image job cost", () => {
     expect(await readDeviceBacklog(ctx.db)).toMatchObject({
       waiting: 1,
       workingDevices: 1,
-      claimsPerMinute: 0.1,
-      etaSeconds: 600,
+      claimsPerMinute: 0.2,
+      etaSeconds: 300,
     });
   });
 });

@@ -287,15 +287,18 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
 - `job.health`: `{snapshot}`, the queue watchdog's latest measurement, null
   before its first page.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
-  that claimed an attempt in the last ten minutes (`Device.lastSeenAt` moves
-  only on hello), claims per minute and the ETA at that pace.
+  that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
+  only on hello), device attempt starts per minute (reclaims included) and the
+  ETA at that pace.
 
 The web Activity page is the overview: the watchdog's red badge with raw
 alert evidence when unhealthy, the device backlog notice (loud when work waits
 and no device is pulling), the queue counts by lane and reason (the Apple
 lane also counts active installs, those needing an update, and leases per
 device with expired ones flagged), the image jobs each Apple device is
-processing (generic imageJob rows with their lease countdown), Runs needing
+processing, cloud leases grouped apart (generic imageJob rows with their
+lease countdown, polled every 15 s while work is in flight because renewals
+publish no change), Runs needing
 attention with their rollup and stall flag, then the filtered Job list. Runs
 needing attention is the Run entity's `attention` view: stopped Runs of
 `ATTENTION_RUN_PURPOSES`; system passes (AI refresh, background) retry on

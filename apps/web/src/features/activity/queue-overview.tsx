@@ -11,11 +11,7 @@ import {
   type JobState,
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
-import {
-  runPurpose,
-  runStatus,
-  VISIBLE_RUN_PURPOSES,
-} from "@cubby/schemas/run-fields";
+import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -640,7 +636,7 @@ function RunsNeedingAttention() {
   );
   const running = useQuery(
     list.queryOptions({
-      filters: { status: ["running"], purpose: [...VISIBLE_RUN_PURPOSES] },
+      filters: { status: ["running"], purpose: ATTENTION_FILTERS.purpose },
       pagination: ATTENTION_PAGE,
       sort: [{ orderBy: "startedAt", direction: "desc" }],
     }),
@@ -744,6 +740,8 @@ function DeviceBacklogNotice() {
 }
 
 const PROCESSING_PAGE = { pageIndex: 0, pageSize: 50 };
+/** Devices renew a lease this often (docs/jobs.md, device wire contract). */
+const LEASE_RENEW_MS = 15_000;
 
 /** A per-second clock for lease countdowns (leases last 60 s). */
 function useSecondClock() {
@@ -761,13 +759,18 @@ function useSecondClock() {
  * Expired leases of old installs stay counted per executor in Queues.
  */
 function ImageJobsProcessing() {
-  const processing = useQuery(
-    entityListFor("imageJob").queryOptions({
+  const processing = useQuery({
+    ...entityListFor("imageJob").queryOptions({
       filters: { state: ["leased"] },
       pagination: PROCESSING_PAGE,
       sort: [{ orderBy: "createdAt", direction: "asc" }],
     }),
-  );
+    // Renewals move each lease every 15 s without a change notification, so
+    // poll while work is in flight; the countdown would otherwise run out.
+    refetchInterval: (query) =>
+      query.state.data?.items.length ? LEASE_RENEW_MS : false,
+    refetchIntervalInBackground: false,
+  });
   const devices = useQuery(
     entityListFor("device").queryOptions({
       filters: {},
@@ -798,7 +801,7 @@ function ImageJobsProcessing() {
               }
             : { status: "success" }
       }
-      empty={<span>No Apple device is processing image work right now.</span>}
+      empty={<span>No image work is processing right now.</span>}
       footer={
         (processing.data?.meta.totalCount ?? 0) > rows.length ? (
           <Link
@@ -822,7 +825,7 @@ function ImageJobsProcessing() {
                 name={deviceName.get(device) ?? device}
               />
             ) : (
-              "Unregistered device"
+              "AI Gateway and unregistered devices"
             )
           }
           count={jobs.length}
@@ -907,8 +910,8 @@ export function QueueOverview({
       </Section>
       <Section
         headingAs="h2"
-        title="Apple devices processing"
-        caption="Image jobs a device holds a lease on; it renews every 15 seconds, and a lapsed lease lets any device take the job."
+        title="Image work processing"
+        caption="Image jobs with a live lease, by the Apple device or cloud worker holding it. Devices renew every 15 seconds; a lapsed lease lets any device take the job."
       >
         <ImageJobsProcessing />
       </Section>

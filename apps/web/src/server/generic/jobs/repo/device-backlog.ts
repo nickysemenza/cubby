@@ -14,7 +14,9 @@ const WINDOW_MINUTES = 10;
 /**
  * Parked Apple-device work at a glance: how many Jobs wait, how many Runs
  * they hold up, which devices worked the lane recently and the ETA at that
- * pace. A device counts as working when it claimed an attempt in the window;
+ * pace. Every device attempt started in the window is a claim, reclaims
+ * included (`Job.lastClaimedAt` keeps only the latest), and a device counts
+ * as working when it started one;
  * `Device.lastSeenAt` only moves on hello, so it cannot say who is pulling.
  */
 export async function readDeviceBacklog(
@@ -37,12 +39,12 @@ export async function readDeviceBacklog(
         WHERE "Job".kind = ${DEVICE_LANE}
           AND "Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running})
           AND p."runId" IS NOT NULL) AS runs,
-      (SELECT count(*)::int FROM "Job"
-        WHERE kind = ${DEVICE_LANE} AND "lastClaimedAt" > ${windowStart}) AS claims,
-      (SELECT count(DISTINCT a.executor->>${"deviceId"})::int
-        FROM "ImageProcessingAttempt" a
-        WHERE a.executor->>${"kind"} = ${"device"}
-          AND a."startedAt" > ${windowStart}) AS devices`);
+      device_attempts.claims, device_attempts.devices
+    FROM (SELECT count(*)::int AS claims,
+        count(DISTINCT a.executor->>${"deviceId"})::int AS devices
+      FROM "ImageProcessingAttempt" a
+      WHERE a.executor->>${"kind"} = ${"device"}
+        AND a."startedAt" > ${windowStart}) device_attempts`);
   const row = result.rows[0] ?? { waiting: 0, runs: 0, claims: 0, devices: 0 };
   const claimsPerMinute = row.claims / WINDOW_MINUTES;
   return {

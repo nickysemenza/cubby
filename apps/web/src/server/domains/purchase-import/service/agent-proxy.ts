@@ -28,10 +28,9 @@ export async function readPurchaseAgentConversation(input: {
   party: CurrentParty;
 }) {
   const scope = await loadRunScopeByShortcode(input.context.db, input.publicId);
-  if (
-    scope.actorUserId !== input.context.auth.userId ||
-    scope.ledgerPartyId !== input.party.id
-  )
+  // The member who started the Run reads it; its owner party may be the
+  // other member's (a photo Run), as for Run delegation (`delegatedRunHolds`).
+  if (scope.actorUserId !== input.context.auth.userId)
     throw new Error("Import Run does not belong to this member");
   const agents = getPurchaseImportRunAgentNamespace();
   if (!agents)
