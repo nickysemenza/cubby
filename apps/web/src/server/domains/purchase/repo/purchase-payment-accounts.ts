@@ -19,6 +19,7 @@ import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import { entityLink, financialAccount, purchase } from "~/server/db/schema";
 import { purchasePayingAccountIdsSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
@@ -74,7 +75,7 @@ export async function listPurchasePaymentAccounts(
     .from(financialAccount)
     .innerJoin(purchase, and(eq(purchase.id, purchaseId), notDeleted(purchase)))
     .where(
-      sql`${financialAccount.id} = ANY((${purchasePayingAccountIdsSql('"Purchase"')})::uuid[])`,
+      sql`${financialAccount.id} = ANY((${purchasePayingAccountIdsSql(quotedTable(purchase))})::uuid[])`,
     )
     .orderBy(asc(financialAccount.name), asc(financialAccount.id));
   return derived.map((row) => ({

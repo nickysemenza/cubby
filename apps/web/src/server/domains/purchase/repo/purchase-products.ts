@@ -31,6 +31,7 @@ import {
 } from "~/server/db/computed/expense-aggregate-sql";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   entityLink,
   expense,
@@ -71,7 +72,7 @@ export const expenseAcquisitionPairPredicate = (scope: SQL) =>
     scope,
     notDeleted(expense),
     actualExpense(),
-    sql.raw(expenseAcquisitionSql('"Expense"')),
+    sql.raw(expenseAcquisitionSql(quotedTable(expense))),
   );
 
 /** A live Expense establishes identity even when it records an exit or a plan. */

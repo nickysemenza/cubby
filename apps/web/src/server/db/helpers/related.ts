@@ -18,6 +18,14 @@ import {
 } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+/**
+ * A table's quoted name, from its Drizzle declaration, for the remaining
+ * string-built fragments that correlate with an outer select by table name.
+ * Call sites never spell the name by hand, so a rename is a compile error.
+ */
+export const quotedTable = (table: PgTable): string =>
+  `"${getTableName(table).replaceAll('"', '""')}"`;
+
 /** The outer list row's column, always table-qualified. */
 export const outer = (column: AnyColumn): SQL =>
   sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;

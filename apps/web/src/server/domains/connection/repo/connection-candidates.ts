@@ -9,6 +9,7 @@ import type { Database } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   entityLink,
   expense,
@@ -90,7 +91,7 @@ export async function retrieveConnectionCandidates(
           actualExpense(),
           eq(expense.lineKind, "principal"),
           expenseAcquisitionPairPredicate(sql`true`),
-          sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql('"Expense"'))}`,
+          sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql(quotedTable(expense)))}`,
           sql`${item.name.trim().length >= 4} AND position(lower(${item.name.trim()}) in lower(${expense.name})) > 0`,
         ),
       )
@@ -299,7 +300,7 @@ export async function eligibleConnectionExpenses(
         isNull(expense.productId),
         eq(expense.lineKind, "principal"),
         expenseAcquisitionPairPredicate(sql`true`),
-        sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql('"Expense"'))}`,
+        sql`NOT ${classificationPolicySql("spendingCategory.productExpectation", "productId", "not_allowed", effectiveExpenseSpendingCategorySql(quotedTable(expense)))}`,
       ),
     );
   return new Set(

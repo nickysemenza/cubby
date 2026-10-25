@@ -20,6 +20,7 @@ import {
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   entityAttachment,
   entityExternalId,
@@ -228,7 +229,7 @@ export async function loadProductMatchSides(
           inArray(product.id, ids),
           notDeleted(expense),
           actualExpense(),
-          sql.raw(expenseAcquisitionSql('"Expense"')),
+          sql.raw(expenseAcquisitionSql(quotedTable(expense))),
         ),
       )
       .orderBy(product.id, sql`${purchase.date} desc nulls last`, purchase.id),
@@ -245,7 +246,7 @@ export async function loadProductMatchSides(
           isNotNull(expense.purchaseId),
           notDeleted(expense),
           actualExpense(),
-          sql.raw(expenseAcquisitionSql('"Expense"')),
+          sql.raw(expenseAcquisitionSql(quotedTable(expense))),
         ),
       ),
     client

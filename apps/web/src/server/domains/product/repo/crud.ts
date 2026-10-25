@@ -94,6 +94,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   cookbook,
   device,
@@ -334,7 +335,7 @@ const productScaffold = listScaffold("product", product, {
     ),
     brandId: productBrandNameSql(product.brandId),
     categoryId: sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path'`,
-    price: sql.raw(displayProductCostSql('"Product"')),
+    price: sql.raw(displayProductCostSql(quotedTable(product))),
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
         `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
@@ -348,10 +349,10 @@ const productScaffold = listScaffold("product", product, {
     // The range filter reads the catalog's one shared kit walk; the row value
     // walks each product's kits.
     ledgerExpectedQuantity: {
-      value: sql.raw(expectedQuantitySql('"Product"')),
+      value: sql.raw(expectedQuantitySql(quotedTable(product))),
       set: expectedQuantityReadSql(),
     },
-    quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
+    quantityVariance: sql.raw(quantityVarianceSql(quotedTable(product))),
     // Variance only means reconciliation when both physical stock and ledger
     // evidence exist. Locations count as on-hand here because the compared SQL
     // projection counts them too.

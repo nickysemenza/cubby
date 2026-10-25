@@ -22,6 +22,7 @@ import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   expense,
   financialAccount,
@@ -353,8 +354,8 @@ async function settleableCharges(
         .select({
           ids: sql<string[] | null>`${
             input.payments.every((payment) => payment.amount < 0)
-              ? purchaseRefundAccountIdsSql('"Purchase"')
-              : purchasePayingAccountIdsSql('"Purchase"')
+              ? purchaseRefundAccountIdsSql(quotedTable(purchase))
+              : purchasePayingAccountIdsSql(quotedTable(purchase))
           }`,
         })
         .from(purchase)
