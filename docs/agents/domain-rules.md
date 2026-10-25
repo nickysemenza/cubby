@@ -247,7 +247,10 @@ renders every reference qualified, filters each step to live rows unless the
 step passes `includeDeleted`, and takes the outer row through `outer(column)`
 (`"Run"."id"`). Interpolating `${run.id}` directly can become the inner
 table's unqualified `"id"`. Do not add raw-string correlated fragments or
-helpers that take a quoted table name.
+helpers that take a quoted table name. `cubby/no-raw-deleted-at-predicate`
+holds each server file's hand-written `"deletedAt" IS NULL` count to a
+shrink-only baseline (`tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json`);
+lower it when a change removes one.
 Verify a correlated count with nonzero rows and another owner's rows, rather
 than an empty population that hides a broken correlation.
 Keep a `PgTable` object when passing a plain table to `.from()`: raw SQL

@@ -50,6 +50,7 @@ import {
 } from "./connection-candidates";
 import {
   captureConnectionBasis,
+  captureConnectionEvidence,
   connectionReadEvidence,
   connectionReadEvidenceSql,
   forEachConnectionBasis,
@@ -121,7 +122,11 @@ async function publishPreparedEntityConnection(
 ): Promise<ConnectionProposal> {
   const { candidate } = prepared;
   return withTransactionDatabase(db, async (db) => {
-    const basis = await captureConnectionBasis(db, candidate, true);
+    const { basis, sourceId } = await captureConnectionEvidence(
+      db,
+      candidate,
+      true,
+    );
     if (canonicalJson(basis) !== canonicalJson(prepared.basis))
       throw new Error(
         "Connection evidence changed after candidate retrieval; discover again before publishing",
@@ -145,11 +150,9 @@ async function publishPreparedEntityConnection(
     const candidateKey = await keyFor(candidate);
     const scope = scopeFor(candidate);
     const entity = z.enum(shortcodeEntities).parse(candidate.source.entityKind);
-    const recordId = await resolveOrThrow(
-      db,
-      entity,
-      candidate.source.entityId,
-    );
+    // The locked basis already read the live source row.
+    const recordId =
+      sourceId ?? (await resolveOrThrow(db, entity, candidate.source.entityId));
     const prediction = await publishAssessment(
       db,
       {

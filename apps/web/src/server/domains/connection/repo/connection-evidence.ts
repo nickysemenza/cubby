@@ -458,9 +458,28 @@ export async function captureConnectionBasis(
   lock = false,
   prepared?: PreparedConnectionBases,
 ) {
+  return (await captureConnectionEvidence(db, raw, lock, prepared)).basis;
+}
+
+/**
+ * The basis plus the source record id it read (null for Email evidence,
+ * whose source is not a payload row), so a locked publication need not
+ * resolve the source again.
+ */
+export async function captureConnectionEvidence(
+  db: Database,
+  raw: ConnectionCandidate,
+  lock = false,
+  prepared?: PreparedConnectionBases,
+): Promise<{ basis: ConnectionJson; sourceId: string | null }> {
   const candidate = connectionCandidate.parse(raw);
   if (candidate.relation === "email-purchase")
-    return snapshotJson(await captureEmailConnectionBasis(db, candidate, lock));
+    return {
+      basis: snapshotJson(
+        await captureEmailConnectionBasis(db, candidate, lock),
+      ),
+      sourceId: null,
+    };
   // Domain parent locks precede dependent payloads: Purchase before financial
   // rows, Project before Product, and Location before moving Inventory.
   const targetFirst =
@@ -584,11 +603,14 @@ export async function captureConnectionBasis(
     default:
       break;
   }
-  return snapshotJson({
-    source: source.row,
-    target: target.row,
-    dependencies: relevantDependencyEvidence(dependencies),
-  });
+  return {
+    basis: snapshotJson({
+      source: source.row,
+      target: target.row,
+      dependencies: relevantDependencyEvidence(dependencies),
+    }),
+    sourceId: source.id,
+  };
 }
 
 function relevantDependencyEvidence(value: ConnectionJson): ConnectionJson {
