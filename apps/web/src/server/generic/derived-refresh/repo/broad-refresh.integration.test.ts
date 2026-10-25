@@ -1,4 +1,4 @@
-import { count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -20,7 +20,9 @@ import {
   prepareQualityPublications,
   publishQualityRows,
 } from "~/server/generic/data-quality/repo/stored";
+import { jobDue } from "~/server/generic/jobs/repo/jobs";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   createImageFixture,
@@ -33,11 +35,7 @@ import {
   refreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-import {
-  invalidateRefreshFamily,
-  REFRESH_INTERVAL_MS,
-  scheduleRefreshFamilies,
-} from "./families";
+import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
 
 // Broad pages must discover writes without endpoint capture, retain later
 // invalidation during preparation, and never publish stale output after it.
@@ -49,8 +47,8 @@ describe("broad refresh jobs", () => {
   const ctx = withTestDb();
   // Production finding: every write restarted the search pass, so it never
   // finished. Passes now keep their cursor across captures; an edit to a
-  // record an earlier page already published is absorbed by that pass and
-  // revisited by the next full pass the scheduled repeat starts.
+  // record an earlier page already published leaves the finished family due,
+  // and the next full pass revisits it at once.
   it("reindexes a record edited behind the cursor in the next full pass", async () => {
     const saved = await insertEntityFixtures(
       ctx.db,
@@ -126,23 +124,68 @@ describe("broad refresh jobs", () => {
     // Those records change again while the pass continues.
     await rename(behind, "v3");
     await invalidateRefreshFamily(ctx.db, "search");
-    expect((await page()).generation).toBe(first.generation);
-    await finish();
-    const absorbed = await titles();
-    expect(behind.map((index) => absorbed.get(ids[index]!))).toEqual(
+    // The same pass runs to its end through the capture.
+    for (let pages = 0; ; pages++) {
+      if (pages >= 20) throw new Error("Expected the first pass to finish");
+      const current = await page();
+      expect(current.generation).toBe(first.generation);
+      if (current.state === "completed") break;
+    }
+    const afterFirstPass = await titles();
+    expect(behind.map((index) => afterFirstPass.get(ids[index]!))).toEqual(
       behind.map((index) => named(index, "v2")),
     );
-    // The scheduled repeat starts a full pass, which revisits them.
-    await getDb(ctx.db)
-      .update(job)
-      .set({ updatedAt: new Date(Date.now() - REFRESH_INTERVAL_MS - 1_000) })
-      .where(eq(job.key, "refresh:search"));
-    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    // The capture left the finished family due: the next full pass, with no
+    // scheduled repeat, revisits them.
+    const finished = await searchJob();
+    expect(finished.state).toBe("completed");
+    expect(
+      await getDb(ctx.db)
+        .select({ id: job.id })
+        .from(job)
+        .where(and(eq(job.id, finished.id), jobDue(new Date()))),
+    ).toHaveLength(1);
     await finish();
     const revisited = await titles();
     expect(behind.map((index) => revisited.get(ids[index]!))).toEqual(
       behind.map((index) => named(index, "v3")),
     );
+  });
+
+  // CI finding: a fixture created a vendor while another test's search pass
+  // ran, then settled the frontier; the pass finished on its old cutoff and
+  // absorbed the capture, so search never returned the new record. A capture
+  // during a pass now leaves the family due, and settling runs the next pass.
+  it("indexes a record created while a pass runs once the frontier settles", async () => {
+    await insertEntityFixtures(
+      ctx.db,
+      location,
+      "location",
+      Array.from({ length: 30 }, (_, index) => ({
+        shortcode: `LOC-${4000 + index}`,
+        name: `Synthetic bin ${index}`,
+        type: "room" as const,
+      })),
+    );
+    await invalidateRefreshFamily(ctx.db, "search");
+    const [pending] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:search"));
+    if (!pending) throw new Error("Expected search intent");
+    await advanceJob(ctx.db, pending.id, {
+      "refresh.family": refreshFamilyHandler,
+    });
+    const [late] = await insertEntityFixtures(ctx.db, location, "location", [
+      { shortcode: "LOC-4999", name: "Synthetic late bin", type: "room" },
+    ]);
+    await invalidateRefreshFamily(ctx.db, "search");
+    await drainDerivedRefreshFrontier(ctx.db);
+    const [document] = await getDb(ctx.db)
+      .select({ title: searchDocument.title })
+      .from(searchDocument)
+      .where(eq(searchDocument.entityId, late!.id));
+    expect(document?.title).toBe("Synthetic late bin");
   });
 
   it("returns authoritative publication changes for changed, unchanged and retired outcomes", async () => {

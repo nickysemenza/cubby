@@ -618,15 +618,6 @@ async function invalidatedDuringPass(
   );
 }
 
-/** The revision a finishing non-restarting pass absorbs; restarting kinds absorb none. */
-async function absorbedRevision(db: RepositoryQueryInput, key: string) {
-  const [marker] = await repositoryQueries(db)
-    .select()
-    .from(jobInvalidation)
-    .where(eq(jobInvalidation.key, key));
-  return marker && !marker.restartsPass ? marker.revision : undefined;
-}
-
 /** Preparation/provider work precedes this short transaction; publish is DB-only. */
 export async function publishJobPage(
   db: Database,
@@ -699,18 +690,13 @@ export async function publishJobPage(
             .where(eq(job.id, claim.id));
           return;
         }
-        // A pass that does not restart absorbs captures made while it ran:
-        // ordinary household writes capture every family, so rerunning on
-        // each would chain passes back to back. Its scheduled repeat, or the
-        // next capture after it finishes, starts a full pass that covers them
-        // (`scheduleRefreshFamilies`).
-        const absorbed = page.done
-          ? await absorbedRevision(commit, claim.key)
-          : undefined;
+        // A pass that does not restart keeps the revision it started from:
+        // captures made while it ran (an edit behind its cursor, a record
+        // created after its cutoff) leave the finished Job due, so the next
+        // full pass covers them at once rather than at the next repeat.
         await commit
           .update(job)
           .set({
-            ...(absorbed !== undefined && { observedRevision: absorbed }),
             state: page.done ? "completed" : "queued",
             cursor: page.cursor ?? null,
             result:

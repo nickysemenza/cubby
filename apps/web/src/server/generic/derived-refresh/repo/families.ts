@@ -53,8 +53,9 @@ export async function invalidateRefreshFamily(
     // A broad pass outlasts the gap between household writes. Restarting it
     // on each write superseded every page, so production never published:
     // quality first, then search (generation ~29k with new records left
-    // unindexed). A pass in progress finishes; the next capture or repeat
-    // reruns it from the start, so an edit behind its cursor is not lost.
+    // unindexed). A pass in progress finishes, then a capture made while it
+    // ran leaves it due for a full pass, so an edit behind its cursor or a
+    // record created after its cutoff is not lost.
     restartsPass: false,
   });
 }

@@ -20,7 +20,6 @@ import {
 
 import {
   invalidateRefreshFamily,
-  REFRESH_INTERVAL_MS,
   scheduleRefreshFamilies,
   type RefreshFamily,
 } from "./families";
@@ -178,10 +177,9 @@ describe("durable family invalidation", () => {
     });
   });
 
-  // A capture of a record the pass already scanned is absorbed when the pass
-  // finishes (ordinary writes capture every family, so rerunning on each
-  // would chain passes back to back); the scheduled repeat then starts a full
-  // pass from the first record, so the edit is revisited, never declared done.
+  // A capture of a record the pass already scanned leaves the finished pass
+  // due: the next full pass starts from the first record at once, so the
+  // edit is revisited, never declared done.
   it("revisits a record captured behind the cursor in the next full pass", async () => {
     const searchJob = await family("search");
     await invalidateRefreshFamily(ctx.db, "search");
@@ -203,11 +201,6 @@ describe("durable family invalidation", () => {
       state: "completed",
       generation: first.generation,
     });
-    await getDb(ctx.db)
-      .update(job)
-      .set({ updatedAt: new Date(Date.now() - REFRESH_INTERVAL_MS - 1_000) })
-      .where(eq(job.id, searchJob.id));
-    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
     expect(await due(searchJob.id)).toBe(true);
     expect(await claimJob(ctx.db, searchJob.id)).toMatchObject({
       generation: first.generation + 1,

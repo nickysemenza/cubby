@@ -54,14 +54,16 @@ export async function measureQueueHealth(
   // takes the earlier of the capture and its availability: the periodic
   // catch-up requeues with availability "now" without serving the capture.
   // A pass in progress that keeps its cursor is served on its availability,
-  // so an old capture it will absorb never dates it.
+  // and a capture it ran through dates its follow-up pass from completion
+  // (a finished Job is due since the later of the two).
   const unobservedSince = sql`coalesce(
     (SELECT min(c."capturedAt") FROM "JobInvalidationCapture" c
       WHERE c.key = "Job".key AND c.revision > coalesce("Job"."observedRevision", 0)),
     (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key))`;
   const waiting = sql`${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait})`;
   const dueSince = sql`(CASE
-    WHEN ${job.state} = ${jobState.enum.completed} AND ${woken} THEN ${unobservedSince}
+    WHEN ${job.state} = ${jobState.enum.completed} AND ${woken}
+      THEN greatest(${unobservedSince}, ${job.updatedAt})
     WHEN ${job.state} = ${jobState.enum.failed} AND ${restartingWoken} THEN ${unobservedSince}
     WHEN ${job.state} = ${jobState.enum.running} THEN ${job.leaseExpiresAt}
     WHEN ${waiting} AND ${restartingWoken} AND ${job.availableAt} > ${at}

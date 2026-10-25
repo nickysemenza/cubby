@@ -131,15 +131,17 @@ The Job observes the revision itself. A Job whose `observedRevision` trails
 the marker is due, even when completed. The claim that observes it starts a
 fresh pass: a new generation, no cursor or result, a fresh attempt budget, and
 the revision recorded as observed. `restartsPass: false` (every refresh
-family) lets a pass in progress keep its cursor, and the finishing page
-absorbs captures made meanwhile; the scheduled repeat (`scheduleRefreshFamilies`
-from catch-up, after `REFRESH_INTERVAL_MS`) or the next capture then starts a
-full pass from the first record, so an edit behind the cursor is revisited.
-Absorbing keeps passes from chaining back to back: ordinary source writes
+family) lets a pass in progress keep its cursor through captures. The pass
+keeps the revision it started from, so captures made meanwhile (an edit
+behind its cursor, a record created after its cutoff) leave the finished Job
+due, and the next full pass starts from the first record at once. Passes run
+back to back only while real writes keep arriving: ordinary source writes
 capture every family and Run-only source writes capture quality, while a
 `derived_refresh` Run's own create and complete register projection changes
-and capture none. A pass that keeps its cursor also waits out its backoff
-after a capture; only a completed Job, or a restarting marker, wakes at once. Restarting on each capture kept broad passes from
+and capture none. The scheduled repeat (`scheduleRefreshFamilies` from
+catch-up, after `REFRESH_INTERVAL_MS`) reruns a quiet family. A pass that
+keeps its cursor also waits out its backoff after a capture; only a completed
+Job, or a restarting marker, wakes at once. Restarting on each capture kept broad passes from
 ever finishing under ordinary household writes (search reached generation
 ~29k with new records unindexed); `image.device.wake` still restarts.
 Refresh families never exhaust: a failing page backs off (1 min doubling to
@@ -168,7 +170,8 @@ repeated captures keep the original pending start, and so does a catch-up
 requeue (`repeatJob`) that resets availability to now without serving the
 capture: a woken Job is due since the earlier of its first unseen capture and
 its availability. A pass in progress that keeps its cursor is not woken by a
-capture (it absorbs it), so health dates it by its availability. Retention deletes rows a claim has observed. Migration 0030
+capture, so health dates it by its availability; once it finishes, the
+follow-up pass is due since the later of the capture and the completion. Retention deletes rows a claim has observed. Migration 0030
 recorded each marker already ahead of its Job at the cutover as a capture of
 its current revision, dated by the marker's last write.
 

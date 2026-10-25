@@ -527,6 +527,7 @@ describe("queue watchdog, explain and retention", () => {
         observedRevision: 10,
         lastClaimedAt: longAgo,
         availableAt: longAgo,
+        updatedAt: longAgo,
       })
       .where(eq(job.id, search.id));
     await getDb(ctx.db)
@@ -576,7 +577,12 @@ describe("queue watchdog, explain and retention", () => {
     const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
     await getDb(ctx.db)
       .update(job)
-      .set({ state: "completed", lastClaimedAt: longAgo, availableAt: longAgo })
+      .set({
+        state: "completed",
+        lastClaimedAt: longAgo,
+        availableAt: longAgo,
+        updatedAt: longAgo,
+      })
       .where(eq(job.id, search.id));
     // Another family of the kind was claimed a minute ago.
     await getDb(ctx.db)
@@ -649,6 +655,39 @@ describe("queue watchdog, explain and retention", () => {
     expect(health.alerts).not.toContainEqual(
       expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
     );
+  });
+
+  // A pass that ran through a capture finishes due for a full pass; it is
+  // due since it finished, not since the capture it ran through.
+  it("dates a follow-up pass from the finish of the pass it follows", async () => {
+    const search = await enqueueJob(ctx.db, {
+      key: "refresh:search",
+      kind: "refresh.family",
+      input: { family: "search" },
+    });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() - 40 * 60_000);
+      await invalidateRefreshFamily(ctx.db, "search");
+    } finally {
+      vi.useRealTimers();
+    }
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        observedRevision: 0,
+        lastClaimedAt: new Date(Date.now() - 60_000),
+        updatedAt: new Date(Date.now() - 60_000),
+      })
+      .where(eq(job.id, search.id));
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    expect(family).toMatchObject({ due: 1 });
+    expect(family?.oldestDueSeconds).toBeLessThan(5 * 60);
   });
 
   // Review finding: the periodic catch-up (`repeatJob`) requeues a finished

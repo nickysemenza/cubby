@@ -2420,7 +2420,7 @@ wait for the next pass. Search counts its sources across every searchable
 table. The step's COUNT runs when the Run opens and starts `done` at the
 records earlier pages scanned. A full pass outlasts the gap between household
 writes, so invalidating a pass in progress (running, or queued with a cursor)
-lets it finish, and the scheduled repeat or next capture starts a full pass
+lets it finish, and the capture leaves it due for a full pass
 that covers the change. A completed or not-yet-started pass restarts; its
 first page ends the abandoned generation's Run with its counts, whether or not
 the new pass opens a Run. A capture records the invalidation apart from the family's execution
