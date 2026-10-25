@@ -20,6 +20,12 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   it until the client reconnects. A client that cached an older closed schema
   must reconnect once to load the open schema. Input schemas stay closed.
 - Household data is real: carry it through a migration that transforms it.
+- Queued work stores frozen snapshots (`AiEvaluation.snapshot`, provenance
+  fingerprints). Changing a fingerprinted snapshot's shape makes every queued
+  row fail its evidence check at execution, one full page each. In the same
+  change, mark those rows `obsolete` in a custom migration so discovery
+  re-admits them under the new shape. After #3000 renamed `manufacturer`, about
+  6,000 product-identity rows drained this way and delayed other evaluations.
 
 ## Production changes
 
