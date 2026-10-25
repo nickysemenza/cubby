@@ -1165,8 +1165,16 @@ share lock only at its final commit fence, after business work and requester
 wakeups. A deactivation or generation change during publication refuses or
 rolls back the write. Product catalog preparation holds no transaction: each
 pair publishes or registers demand in its own guarded transaction, and the
-catalog completes afterward. Connection refresh likewise commits one prepared
-connection or identity pair per guarded transaction. Interrupted catalogs may retain already committed
+catalog completes afterward. Connection refresh commits at most two prepared
+units (connections, identity pairs or field proposals) per guarded transaction:
+each transaction's guards and fences cost about ten statements, and the pair
+stays within the publication statement bound. A refusal in either unit rolls
+back both; the retry rediscovers and republishes them. Each stage captures its
+candidates' evidence before the next stage awaits a provider, and every unit
+rechecks that evidence under its locks, so drift during inference refuses the
+unit rather than being captured as current. The source fingerprint is read once
+per transaction at commit, against the fingerprint the evaluation was claimed
+with. Interrupted catalogs may retain already committed
 pairs; retries reuse their publication/work identities. Pair publication checks
 a transient MVCC row-set fence in one statement instead of repeating snapshots:
 preparation brackets the complete Product, identifier, source, photo/description,

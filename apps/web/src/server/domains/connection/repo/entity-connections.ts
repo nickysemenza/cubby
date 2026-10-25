@@ -82,6 +82,7 @@ export async function prepareEntityConnections(
   db: Database,
   raws: readonly ConnectionCandidate[],
 ) {
+  if (raws.length === 0) return [];
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
   const publishers: ((
     transactionDb: Database,

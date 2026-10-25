@@ -60,19 +60,31 @@ export async function prepareEntityConnections(
 ) {
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
-  // Candidates from every stage prepare together, in stage order, so their
-  // records, dependencies and eligibility load once per kind.
-  const captured = new Map<string, ConnectionCandidate>();
-  const captureCandidates = (candidates: readonly ConnectionCandidate[]) => {
-    for (const candidate of candidates) {
-      const key = `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
-      if (!captured.has(key)) captured.set(key, candidate);
-    }
-  };
   const stage = <T>(name: string, fn: () => Promise<T>) =>
     withTrace(TraceNames.service("connections", name), fn, {
       "connection.source": source.entityKind,
     });
+  // Each stage's new candidates prepare together, before the next stage can
+  // await a provider: evidence is captured as retrieved, so a change made
+  // while an embedding waits fails the locked basis comparison at publish
+  // instead of being captured as if it had been retrieved.
+  const captured = new Set<string>();
+  const captureCandidates = async (
+    candidates: readonly ConnectionCandidate[],
+  ) => {
+    const fresh = candidates.filter((candidate) => {
+      const key = `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
+      if (captured.has(key)) return false;
+      captured.add(key);
+      return true;
+    });
+    for (const publish of await stage("prepare", () =>
+      prepareConnectionCandidates(db, fresh),
+    ))
+      publishers.push(async (transactionDb) => {
+        await publish(transactionDb);
+      });
+  };
   await stage("retrieve", async () =>
     captureCandidates(await retrieveConnectionCandidates(db, source)),
   );
@@ -82,7 +94,7 @@ export async function prepareEntityConnections(
     const scan = await discoverAcquisitionCandidateScan(db, source, {
       runId: context.actorContext.runId ?? undefined,
     });
-    captureCandidates(scan.candidates);
+    await captureCandidates(scan.candidates);
     return scan;
   });
   const candidates: ConnectionCandidate[] = [];
@@ -123,16 +135,7 @@ export async function prepareEntityConnections(
           });
     }
   }
-  captureCandidates(candidates);
-  publishers.push(
-    ...(
-      await stage("prepare", () =>
-        prepareConnectionCandidates(db, [...captured.values()]),
-      )
-    ).map((publish) => async (transactionDb: Database) => {
-      await publish(transactionDb);
-    }),
-  );
+  await captureCandidates(candidates);
   if (source.entityKind === "product") {
     publishers.push(
       ...(
