@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// The companion worker's live state, for Activity's "This device" section, Settings, the iOS
 /// bar, and `cubby companion`'s log. Every phase is explicit, so a quiet device always says why.
@@ -515,11 +516,7 @@ public actor CompanionImageWorker {
         // otherwise.
         remotePaused = false
         // A protocol ping confirms the subscription opened; an application frame would end it.
-        try await withCheckedThrowingContinuation { (opened: CheckedContinuation<Void, Error>) in
-            socket.sendPing { error in
-                if let error { opened.resume(throwing: error) } else { opened.resume() }
-            }
-        }
+        try await awaitPong { socket.sendPing(pongReceiveHandler: $0) }
         openedSocket = socket
         lastError = nil
         reportActivity()
@@ -1007,5 +1004,29 @@ enum CompanionClaimRelease {
             }
         }
         return await cleanup.value
+    }
+}
+
+/// Waits for the first pong (or ping failure) from `send`. URLSession can call a ping's handler
+/// more than once, again with an error when the connection aborts (POSIX 53); a checked
+/// continuation resumes exactly once, so later calls are ignored.
+func awaitPong(_ send: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
+    let resumed = PongResumption()
+    try await withCheckedThrowingContinuation { (opened: CheckedContinuation<Void, Error>) in
+        send { error in
+            guard resumed.claim() else { return }
+            if let error { opened.resume(throwing: error) } else { opened.resume() }
+        }
+    }
+}
+
+private final class PongResumption: Sendable {
+    private let done = Mutex(false)
+    /// True for the first caller only.
+    func claim() -> Bool {
+        done.withLock { done in
+            defer { done = true }
+            return !done
+        }
     }
 }
