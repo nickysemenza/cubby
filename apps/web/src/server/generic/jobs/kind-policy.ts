@@ -69,6 +69,9 @@ export const JOB_KIND_POLICY = {
   // Derived refresh passes never restart on capture, so no capture can wake
   // a failed one; they back off instead of failing.
   "refresh.family": { ...SERVER, retry: MAINTENANCE_RETRY },
+  // The derived drain and reconcile never fail: a failing page backs off (ADR 0021).
+  "derived.drain": { ...SERVER, retry: MAINTENANCE_RETRY },
+  "derived.reconcile": { ...SERVER, retry: MAINTENANCE_RETRY },
   "ai.evaluation": { ...SERVER, lane: "frontier_ai", maxQueued: 2_000 },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
   "purchase.dispatch": { ...SERVER, lane: "external" },

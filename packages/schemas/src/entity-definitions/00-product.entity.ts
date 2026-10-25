@@ -42,6 +42,83 @@ import { fdcId, foodSummary } from "@cubby/usda";
 import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
+
+/** A stored derived value's input row (`model.derived.<key>.stored.inputs`). */
+type StoredInput = {
+  table: string;
+  match: Record<string, string>;
+  columns?: string[];
+  where?: Record<string, string>;
+};
+
+/** Kit links: a component's price and quantities read its kits' lines. */
+const KIT_LINK_INPUTS: StoredInput[] = [
+  {
+    table: "EntityLink",
+    match: { fromEntityId: "id" },
+    where: { kind: "productComponent" },
+  },
+  {
+    table: "EntityLink",
+    match: { toEntityId: "id" },
+    where: { kind: "productComponent" },
+  },
+];
+
+/** Rows the effective price reads (stored derived inputs, ADR 0021). */
+const PRICING_INPUTS: StoredInput[] = [
+  {
+    table: "Product",
+    match: { id: "id" },
+    columns: ["price", "categoryId", "deletedAt"],
+  },
+  {
+    table: "Expense",
+    match: { productId: "id" },
+    columns: [
+      "cost",
+      "productQuantity",
+      "lineKind",
+      "future",
+      "date",
+      "deletedAt",
+    ],
+  },
+  ...KIT_LINK_INPUTS,
+  { table: "ProductCategory", match: { id: "categoryId" } },
+];
+
+/** Rows the ledger quantities read: acquisition lines, stock and locations. */
+const QUANTITY_INPUTS: StoredInput[] = [
+  {
+    table: "Product",
+    match: { id: "id" },
+    columns: ["categoryId", "expectedQuantity", "deletedAt"],
+  },
+  {
+    table: "Expense",
+    match: { productId: "id" },
+    columns: ["productQuantity", "lineKind", "future", "deletedAt"],
+  },
+  {
+    table: "InventoryEntry",
+    match: { productId: "id" },
+    columns: [
+      "amountValue",
+      "amountUnit",
+      "placement",
+      "locationId",
+      "deletedAt",
+    ],
+  },
+  {
+    table: "Location",
+    match: { productId: "id" },
+    columns: ["deletedAt"],
+  },
+  ...KIT_LINK_INPUTS,
+  { table: "ProductCategory", match: { id: "categoryId" } },
+];
 import { productKindSchema } from "../product-fields";
 import { labelField, displayItemsField } from "./label-field";
 import { selectControlOptions } from "./select-control-options";
@@ -2189,14 +2266,30 @@ Rules:
         ingredient: { via: "ingredient" },
         // Orders by the category's full path, as its section headers read.
         categoryId: { type: "text" },
-        // The effective price: the stored price, else the derived one.
-        price: { type: "number" },
+        // The effective price: the stored price, else the derived one. Stored
+        // (ADR 0021): the kit walk is too slow to sort a page by.
+        price: {
+          type: "number",
+          stored: { compute: "product.price", inputs: PRICING_INPUTS },
+        },
         // The primary live GTIN, else the oldest.
         primaryGtin: { type: "text" },
         expenseTotal: { type: "number" },
         expenseCount: { type: "number" },
-        ledgerExpectedQuantity: { type: "number" },
-        quantityVariance: { type: "number" },
+        ledgerExpectedQuantity: {
+          type: "number",
+          stored: {
+            compute: "product.ledgerExpectedQuantity",
+            inputs: QUANTITY_INPUTS,
+          },
+        },
+        quantityVariance: {
+          type: "number",
+          stored: {
+            compute: "product.quantityVariance",
+            inputs: QUANTITY_INPUTS,
+          },
+        },
         // Shelf against ledger, only where stock and comparable ledger history
         // both exist; no value otherwise.
         quantityVarianceState: {

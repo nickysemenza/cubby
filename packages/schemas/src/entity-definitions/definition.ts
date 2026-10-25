@@ -969,6 +969,50 @@ const buildMetadataSchemas = () => {
    * `negatable` declares that its SQL reads only the values it receives, so
    * a value filter's generated Exclude key is its negation.
    */
+  /**
+   * A stored derived value (ADR 0021): the drain recomputes it through the
+   * server compute adapter `compute` and lists read it from `DerivedValue`.
+   * `inputs` are the rows whose changes mark it dirty: `match` pairs one
+   * column of `table` with the entity column it equals (`{ id: "id" }` is
+   * the entity's own row; `{ productId: "id" }` marks the referenced record;
+   * `{ id: "productId" }` marks every record whose `productId` is the changed
+   * row, expanded by the drain, never inside the save). `columns` limits the
+   * columns that matter; absent, any change except `updatedAt` does.
+   * `dependsOn` names other stored values it reads, matched the same way.
+   */
+  const derivedMatchSchema = z
+    .record(nonEmptyString(), nonEmptyString())
+    .refine((match) => Object.keys(match).length === 1, "one column pair");
+  const derivedStoreSchema = z
+    .object({
+      compute: nonEmptyString(),
+      inputs: z
+        .array(
+          z
+            .object({
+              table: nonEmptyString(),
+              match: derivedMatchSchema,
+              columns: z.array(nonEmptyString()).min(1).optional(),
+              /** Only rows whose column holds this value count (a link kind). */
+              where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+            })
+            .strict(),
+        )
+        .min(1),
+      dependsOn: z
+        .array(
+          z
+            .object({
+              entity: nonEmptyString(),
+              key: derivedKey,
+              match: derivedMatchSchema,
+            })
+            .strict(),
+        )
+        .optional()
+        .default([]),
+    })
+    .strict();
   const entityDerivedFieldMetadataSchema = z.union([
     z.object({ via: nonEmptyString() }).strict(),
     /**
@@ -990,6 +1034,7 @@ const buildMetadataSchemas = () => {
         ]),
         via: nonEmptyString(),
         absent: z.array(nonEmptyString()).min(1).optional(),
+        stored: derivedStoreSchema.optional(),
       })
       .strict(),
     z
@@ -1003,6 +1048,7 @@ const buildMetadataSchemas = () => {
           "enum",
         ]),
         options: z.array(nonEmptyString()).min(1).optional(),
+        stored: derivedStoreSchema.optional(),
       })
       .strict(),
     z

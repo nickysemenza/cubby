@@ -388,6 +388,36 @@ export const renderEntityMetadataArtifacts = (
         "} as const;\n",
     },
     {
+      relativePath:
+        "packages/schemas/src/generated/entity-stored-derived.gen.ts",
+      source:
+        generatedHeader +
+        "/**\n" +
+        " * Every stored derived value (ADR 0021): `model.derived.<key>.stored`\n" +
+        " * with its entity, table and value type, for the server drain,\n" +
+        " * generated triggers and list reads.\n" +
+        " */\n" +
+        `export const generatedStoredDerived = ${JSON.stringify(
+          entities.flatMap((entity) =>
+            Object.entries(entity.fieldModel.derived).flatMap(([key, entry]) =>
+              "stored" in entry && entry.stored
+                ? [
+                    {
+                      entity: entity.key,
+                      key,
+                      table: entity.descriptor.dbTable ?? null,
+                      type: "type" in entry ? entry.type : "number",
+                      stored: entry.stored,
+                    },
+                  ]
+                : [],
+            ),
+          ),
+          null,
+          2,
+        )} as const;\n`,
+    },
+    {
       relativePath: "packages/schemas/src/generated/entity-list-fields.gen.ts",
       source:
         generatedHeader +

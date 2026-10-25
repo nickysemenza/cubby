@@ -580,7 +580,38 @@ export default defineEntity(
         location: { via: "location" },
         category: { via: "product.category" },
         brandName: { via: "product.brand.name" },
-        valuation: { type: "number" },
+        // Stored (ADR 0021): the WASM unit-mapping graph cannot run in SQL,
+        // so lists read the published figure instead of valuing every row.
+        valuation: {
+          type: "number",
+          stored: {
+            compute: "inventory.valuation",
+            inputs: [
+              {
+                table: "InventoryEntry",
+                match: { id: "id" },
+                columns: [
+                  "productId",
+                  "amountValue",
+                  "amountUnit",
+                  "deletedAt",
+                ],
+              },
+              {
+                table: "Product",
+                match: { id: "productId" },
+                columns: ["price", "deletedAt"],
+              },
+              {
+                table: "ProductUnitMapping",
+                match: { productId: "productId" },
+              },
+            ],
+            dependsOn: [
+              { entity: "product", key: "price", match: { id: "productId" } },
+            ],
+          },
+        },
         // The unit, then the size within it.
         amount: { type: "number" },
         valuationStatus: {
