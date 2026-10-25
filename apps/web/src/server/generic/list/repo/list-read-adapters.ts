@@ -39,7 +39,7 @@ const displayImagesRowSchema = z.object({
  * output schema may not declare them; carry them so the kernel's media pass
  * finds them and skips its own shortcode-then-images round trips.
  */
-const withDisplayImages = <Row>(
+export const withDisplayImages = <Row>(
   parsed: readonly Row[],
   source: readonly unknown[],
 ): Row[] =>
