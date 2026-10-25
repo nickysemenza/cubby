@@ -18,6 +18,7 @@ export const KIND_ICONS = {
   meal: CookingPotIcon,
   task: CheckSquareIcon,
   expense: CurrencyCircleDollarIcon,
+  purchase: CurrencyCircleDollarIcon,
   project: CalendarBlankIcon,
   planting: PlantIcon,
 } satisfies Record<CalendarItemKind, Icon>;

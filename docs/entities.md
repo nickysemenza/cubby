@@ -2036,24 +2036,40 @@ staged SQL population rather than inventing a storage entity.
 ### Calendar list presentations
 
 `calendarSources` in `packages/schemas/src/calendar.ts` declares the combined
-calendar's five sources and date projections: Meal and Expense dates, Task due
-ranges, subtree-folded Project windows, and Planting lifecycle milestones.
-Each has a Calendar list slot filled by the same `entityCalendar` renderer.
-Switching between table and calendar retains ordinary entity filter URL state;
-calendar navigation uses `period` and `calendarDate`. Undated matches remain in
-the table and produce no calendar entries. Existing move permissions apply in
-both entry points: Meals and Tasks can move, only planned Expenses can move,
-and Projects and Planting milestones are read-only.
+calendar's sources: Meals, Tasks, Spending, Projects, and Planting lifecycle
+milestones. Source identity is separate from canonical entity identity: Spending
+projects Purchases plus standalone and planned Expenses. Entity links, covers,
+and edits still use canonical entity kinds and ids; occurrence keys distinguish
+Purchase originals, dated refunds, and Planting milestones in layout and day
+membership. Garden feed UIDs are unchanged.
 
-The combined Calendar namespaces each entity's declared filters by source
-(`task.status`, `expense.future`, and so on). Every active filter narrows the
-whole population, so a Task-only filter excludes the other sources; filters
-from two different sources have no matches. There is no implicit shared status
-or date meaning across entities. The source's scaffold selects membership before
-calendar hydration and layout. Project date windows still fold over the whole
-tree before only matching projects are emitted. Expense membership uses the
-ordinary allocation-aware list predicates; displayed amounts and daily sums use
-whole Expense costs, as the table does, rather than allocation-scoped shares.
+Spending is computed from existing relationships, not stored. Batched Purchase
+evidence loaders feed pure TypeScript calculation functions; the calendar consumes
+the resulting events. Relationship metadata remains declarative and continues to
+own traversal for all clients. One original Purchase event uses its order date,
+falling back to original Expense dates and then allocated payment dates. Its
+shown amount uses the receipt total, then original Expense costs, then allocated
+purchase payments. Later card posting never creates another event. Negative
+principal lines and refund allocations produce separate refund-day events,
+coalescing evidence rather than counting it twice. Negative receipt adjustments
+remain part of the original event. Missing refund dates use source evidence or
+an unambiguous matching allocation before the stored date; no historical records
+are rewritten. The inspector shows the contributing line breakdown and full record.
+Daily recorded-spend summaries remain Expense-based; receipt and settlement cues
+do not redefine ledger spending. Purchase events group those ledger costs onto
+the event date, so the calendar is an activity view rather than a posting ledger.
+
+Each source has a Calendar list slot. Switching between table and calendar retains
+ordinary entity filter state; calendar navigation uses `period` and `calendarDate`.
+The combined Calendar namespaces declared filters by source (`task.status`,
+`spending.future`, and so on). Every active source filter narrows the whole
+population; filters from two different sources have no matches. Spending filters
+reuse ordinary Expense list predicates, including allocation membership. A
+Purchase matches when a related Expense matches; its displayed event and breakdown
+remain whole rather than filtered subtotals. Fully undated records produce no
+events. Projects still fold dates over the whole tree before matching rows emit.
+Meals and Tasks can move, planned Expenses can move, and Purchase events,
+actual Expenses, Projects and Planting milestones are read-only.
 
 Calendar layout is already arranged by date; table grouping stays in URL state
 and is unavailable with a reason in calendar mode. The existing Schedule mode

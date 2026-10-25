@@ -140,7 +140,7 @@ describe("undated Purchase readers", () => {
       date: null,
       orderId: "CALENDAR",
     });
-    const dated = await createExpense(
+    await createExpense(
       ctx.db,
       makeExpenseInput({
         name: "Known ledger date",
@@ -164,12 +164,14 @@ describe("undated Purchase readers", () => {
       calendarRangeInput.parse({
         startDate: "2026-03-01",
         endDateExclusive: "2026-03-08",
-        kinds: ["expense"],
+        kinds: ["spending"],
       }),
     );
-    expect(calendar.days["2026-03-04"]?.itemIds).toContain(dated.output.id);
+    expect(calendar.days["2026-03-04"]?.itemIds).toContain(
+      `purchase:${parent.shortcode}:original:2026-03-04`,
+    );
     expect(
       Object.values(calendar.days).flatMap((day) => day.itemIds),
-    ).not.toContain(undated.output.id);
+    ).not.toContain(`expense:${undated.output.id}`);
   });
 });

@@ -32,7 +32,7 @@ describe("calendar day membership", () => {
       vendorId: seller.output.id,
       date,
     });
-    const expense = await createRepoEntity(ctx, "expense", {
+    await createRepoEntity(ctx, "expense", {
       name: "Synthetic calendar charge",
       trade: "other",
       purchaseId: purchase.output.id,
@@ -64,7 +64,7 @@ describe("calendar day membership", () => {
       calendarRangeInput.parse({
         startDate: date,
         endDateExclusive: "2026-09-22",
-        kinds: ["meal", "task", "expense", "project"],
+        kinds: ["meal", "task", "spending", "project"],
       }),
     );
     const covers = new Map(
@@ -72,8 +72,95 @@ describe("calendar day membership", () => {
     );
     expect(covers.get(project.output.id)).toBe(expected.get(project.output.id));
     expect(covers.get(task.output.id)).toBe(expected.get(project.output.id));
-    expect(covers.get(expense.output.id)).toBe(expected.get(seller.output.id));
+    expect(covers.get(purchase.output.id)).toBe(expected.get(seller.output.id));
     expect(covers.get(meal.id)).toBe(expected.get(meal.id));
+  });
+
+  it("coalesces purchase lines and keeps later refunds, standalone charges and plans", async () => {
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic rollup seller",
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      date: "2026-09-19",
+      statedTotal: 11,
+    });
+    for (const line of [
+      { name: "Synthetic item", cost: 10, lineKind: "principal" as const },
+      { name: "Synthetic tax", cost: 2, lineKind: "tax" as const },
+      { name: "Synthetic discount", cost: -1, lineKind: "discount" as const },
+    ]) {
+      await createRepoEntity(ctx, "expense", {
+        ...line,
+        purchaseId: purchase.output.id,
+        date: "2026-09-19",
+        trade: "other",
+      });
+    }
+    const refund = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic return",
+      cost: -4,
+      lineKind: "principal",
+      purchaseId: purchase.output.id,
+      date: "2026-09-21",
+      trade: "other",
+    });
+    const plan = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic planned charge",
+      cost: 3,
+      future: true,
+      purchaseId: purchase.output.id,
+      date: "2026-09-21",
+      trade: "other",
+    });
+    const standalone = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic standalone charge",
+      cost: 5,
+      date: "2026-09-21",
+      trade: "other",
+    });
+    const range = await getCalendarRange(
+      ctx.db,
+      calendarRangeInput.parse({
+        startDate: "2026-09-19",
+        endDateExclusive: "2026-09-22",
+        kinds: ["spending"],
+      }),
+    );
+    const originals = range.items.filter(
+      (item) => item.kind === "purchase" && item.occurrence === "original",
+    );
+    expect(originals).toHaveLength(1);
+    expect(originals[0]).toMatchObject({
+      id: purchase.output.id,
+      cost: 11,
+      ledgerAmount: 11,
+      startDate: "2026-09-19",
+    });
+    const later = await getCalendarRange(
+      ctx.db,
+      calendarRangeInput.parse({
+        startDate: "2026-09-21",
+        endDateExclusive: "2026-09-22",
+        kinds: ["spending"],
+      }),
+    );
+    expect(later.items).toHaveLength(3);
+    expect(later.items.find((item) => item.kind === "purchase")).toMatchObject({
+      occurrence: "refund",
+      cost: -4,
+      lines: [{ id: refund.output.id }],
+    });
+    expect(
+      later.items
+        .filter((item) => item.kind === "expense")
+        .map((item) => item.id)
+        .sort(),
+    ).toEqual([plan.output.id, standalone.output.id].sort());
+    expect(later.days["2026-09-21"]).toMatchObject({
+      actualSpend: 1,
+      plannedSpend: 3,
+    });
   });
 
   // Native and web both bucket items by day; the server owns the rule so a
@@ -102,11 +189,15 @@ describe("calendar day membership", () => {
 
     expect(Object.keys(range.days)).toHaveLength(5);
     expect(range.days["2026-09-19"]?.itemIds).toEqual([]);
-    expect(range.days["2026-09-20"]?.itemIds).toEqual([task.shortcode]);
+    expect(range.days["2026-09-20"]?.itemIds).toEqual([
+      `task:${task.shortcode}`,
+    ]);
     expect([...(range.days["2026-09-21"]?.itemIds ?? [])].sort()).toEqual(
-      [meal.id, task.shortcode].sort(),
+      [`meal:${meal.id}`, `task:${task.shortcode}`].sort(),
     );
-    expect(range.days["2026-09-22"]?.itemIds).toEqual([task.shortcode]);
+    expect(range.days["2026-09-22"]?.itemIds).toEqual([
+      `task:${task.shortcode}`,
+    ]);
     // The end date is inclusive for a task, so the day after is empty.
     expect(range.days["2026-09-23"]?.itemIds).toEqual([]);
     expect(range.days["2026-09-21"]?.mealCount).toBe(1);

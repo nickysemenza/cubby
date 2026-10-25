@@ -16,7 +16,10 @@ import { entityExternalIdKind } from "@cubby/schemas/external-id";
 import { financialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { mailboxClassificationStage } from "@cubby/schemas/mailbox-research";
-import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import {
+  statementTransactionAction,
+  statementTransactionJudgment,
+} from "@cubby/schemas/statement-suggestion";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
@@ -183,11 +186,11 @@ function statementRecords(requested?: readonly string[]) {
   add(entities.financialTransaction, sql`a.judgment->>'matchedTransactionId'`);
   add(
     entities.vendor,
-    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=a.judgment->'spending'->>'vendorId' AND v."deletedAt" IS NULL)`,
+    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'vendorId' AND v."deletedAt" IS NULL)`,
   );
   add(
     entities.spendingCategory,
-    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->'spending'->>'spendingCategoryId' AND category."deletedAt" IS NULL)`,
+    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->${statementTransactionJudgment.keyof().enum.spending}->>'spendingCategoryId' AND category."deletedAt" IS NULL)`,
   );
   const related = [
     { entity: entities.financialTransaction, id: sql`settled.id::text` },
@@ -214,7 +217,7 @@ function statementRecords(requested?: readonly string[]) {
           AND related.id IS NOT NULL), '[]'::jsonb)`);
   if (includes(entities.purchase))
     parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
-        FROM jsonb_array_elements(COALESCE(a.judgment->'spending'->'candidates','[]'::jsonb)) candidate
+        FROM jsonb_array_elements(COALESCE(a.judgment->${statementTransactionJudgment.keyof().enum.spending}->'candidates','[]'::jsonb)) candidate
         JOIN "Purchase" p ON p.shortcode=candidate->>'purchaseId' AND p."deletedAt" IS NULL), '[]'::jsonb)`);
   if (includes(entities.financialTransaction))
     parts.push(

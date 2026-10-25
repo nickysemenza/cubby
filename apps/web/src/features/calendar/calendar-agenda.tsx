@@ -1,4 +1,4 @@
-import type { CalendarItem } from "@cubby/schemas/calendar";
+import { calendarItemKey, type CalendarItem } from "@cubby/schemas/calendar";
 import { addDays, format, parseISO } from "date-fns";
 import { Fragment } from "react";
 
@@ -129,7 +129,7 @@ export function CalendarAgenda({
                 </div>
               ) : (
                 group.items.map((item) => (
-                  <Fragment key={`${item.kind}:${item.id}`}>
+                  <Fragment key={calendarItemKey(item)}>
                     {renderItem(item)}
                   </Fragment>
                 ))

@@ -64,7 +64,7 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   // Optional: a kind with no calendar-originated creation flow (`planting`,
   // whose records only ever start from the generic plantings pages, not the
   // calendar) omits it entirely rather than supplying a throwing stub.
-  // `ALL_KINDS` in unified-calendar.tsx is the day-sheet's own creatable-kind
+  // `CREATE_KINDS` in unified-calendar.tsx is the day-sheet's own creatable-kind
   // list and never includes such a kind, so `calendarItemCreateRequest` is
   // never called with one in practice.
   create?: (date?: string) => EntityEditDialogRequest;
@@ -216,6 +216,25 @@ const calendarKindRegistry = {
       priority: 10,
     }),
   },
+  purchase: {
+    icon: () => KIND_ICONS.purchase,
+    metadata: (item) => item.vendor ?? "Purchase",
+    compactBadge: (item) =>
+      item.occurrence === "refund"
+        ? { label: "Refund", variant: "outline" }
+        : undefined,
+    richBadge: (item) =>
+      item.occurrence === "refund"
+        ? { label: "Refund", variant: "outline" }
+        : undefined,
+    edit: (_item) => ({
+      mode: "read-only",
+      entity: "purchase",
+      reason:
+        "Open the full purchase to review its evidence and edit its spending lines.",
+    }),
+    event: () => ({ color: entities.purchase.color.accent, priority: 10 }),
+  },
   project: {
     create: (date) => projectCaptureRequest({ date }),
     icon: (_item) => KIND_ICONS.project,
@@ -305,6 +324,12 @@ function calendarItemPresentation(item: CalendarItem, today = "") {
         calendarKindRegistry.expense,
         today,
       );
+    case "purchase":
+      return calendarItemPresentationFor(
+        item,
+        calendarKindRegistry.purchase,
+        today,
+      );
     case "project":
       return calendarItemPresentationFor(
         item,
@@ -330,6 +355,8 @@ function calendarItemEditDescriptor(
       return calendarKindRegistry.task.edit(item);
     case "expense":
       return calendarKindRegistry.expense.edit(item);
+    case "purchase":
+      return calendarKindRegistry.purchase.edit(item);
     case "project":
       return calendarKindRegistry.project.edit(item);
     case "planting":
@@ -346,7 +373,7 @@ function calendarItemCreateRequest(kind: CalendarItemKind, date?: string) {
   };
   if (!create) {
     // Callers only ever pass a kind from a creatable-kind list (e.g.
-    // `ALL_KINDS` in unified-calendar.tsx) — reaching here is a caller bug,
+    // `CREATE_KINDS` in unified-calendar.tsx) — reaching here is a caller bug,
     // not a state a user action can trigger.
     throw new Error(`Calendar kind "${kind}" has no creation flow.`);
   }

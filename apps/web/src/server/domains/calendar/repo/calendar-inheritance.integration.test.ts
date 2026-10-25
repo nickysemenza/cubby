@@ -8,7 +8,7 @@ import { getCalendarRange, getCalendarSchedule } from "./calendar";
 
 describe("calendar effective attribution", () => {
   const ctx = withTestDb();
-  it("selects expenses through allocation membership and shows whole-record amounts", async () => {
+  it("selects purchases through expense allocation membership and shows the whole purchase", async () => {
     const first = await insertWithShortcode(ctx.db, "project", {
       name: "Calendar first project",
       defaultTrade: "building",
@@ -56,16 +56,20 @@ describe("calendar effective attribution", () => {
     const scoped = await getCalendarRange(
       ctx.db,
       calendarRangeInput.parse({
-        startDate: "2026-09-20",
+        startDate: "2026-09-19",
         endDateExclusive: "2026-09-21",
-        kinds: ["expense"],
-        filters: { expense: { projectId: [first.shortcode] } },
+        kinds: ["spending"],
+        filters: { spending: { projectId: [first.shortcode] } },
       }),
     );
     expect(scoped.items).toHaveLength(1);
-    expect(scoped.items[0]).toMatchObject({ title: "Shared tax", cost: 1 });
-    expect(scoped.days["2026-09-20"]).toMatchObject({
-      actualSpend: 1,
+    expect(scoped.items[0]).toMatchObject({
+      kind: "purchase",
+      cost: 11,
+      startDate: "2026-09-19",
+    });
+    expect(scoped.days["2026-09-19"]).toMatchObject({
+      actualSpend: 11,
       expenseCount: 1,
     });
     const all = await getCalendarRange(
@@ -73,10 +77,10 @@ describe("calendar effective attribution", () => {
       calendarRangeInput.parse({
         startDate: "2026-09-19",
         endDateExclusive: "2026-09-21",
-        kinds: ["expense"],
+        kinds: ["spending"],
       }),
     );
-    expect(all.items).toHaveLength(3);
+    expect(all.items).toHaveLength(1);
     expect(
       Object.values(all.days).reduce((sum, day) => sum + day.actualSpend, 0),
     ).toBe(11);
@@ -116,7 +120,7 @@ describe("calendar effective attribution", () => {
       calendarRangeInput.parse({
         startDate: "2026-09-20",
         endDateExclusive: "2026-09-21",
-        filters: { task: { trade: ["building"] }, expense: { future: false } },
+        filters: { task: { trade: ["building"] }, spending: { future: false } },
       }),
     );
     expect(conflicting.items).toEqual([]);
