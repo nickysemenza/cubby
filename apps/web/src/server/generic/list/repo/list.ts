@@ -1657,9 +1657,12 @@ export function listScaffold<
         );
       return [{ via: scope.via, nested, value }];
     });
+  const fieldModel = fieldModelFor(entity);
+  // Internal filter-only rows can require tokens absent from an ordinary page.
   const projects = (key: string, projection: ListProjection): boolean =>
-    projection.kind === "full" ||
-    (projection.kind === "selected" && projection.fields.includes(key));
+    fieldModel?.fields.some((field) => field.key === key) === true &&
+    (projection.kind === "full" ||
+      (projection.kind === "selected" && projection.fields.includes(key)));
   const searchable = isSearchableEntity(entity);
   // A scored entity's `dataStatus`/`dataGap` filters and `dataQualityScore`
   // sort are declared by the manifest block, so they bind here for every
