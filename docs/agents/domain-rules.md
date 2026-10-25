@@ -7,13 +7,15 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
 
 - Change an API, RPC, MCP tool, manifest, or stored shape directly, update
   every client in the same change, and delete the old shape. Old clients can
-  break when a wire contract changes. When a change requires rejecting writes
-  from older Apple builds, bump APPLE_CLIENT_COMPATIBILITY_VERSION; the shared
-  operation route returns 426 for those writes; reads are not gated and an
-  old client may fail to decode a changed shape.
-  This gate covers future write incompatibilities; it does not preserve old
-  wire behavior. Choose a version newer than current main; concurrent breaking
-  PRs must not reuse a published version.
+  break when a wire contract changes. Raise APPLE_CLIENT_MINIMUM_VERSION only
+  when an older Apple build's writes would be unsafe (they would store a wrong
+  or rejected shape); the shared operation route returns 426 for those writes
+  and the device stops its background work until updated. A changed read or
+  output shape alone does not justify it: reads are not gated and an old client
+  may fail to decode until it updates. Every raise cuts off every older build's
+  writes, including background device work, so batch it with the change that
+  needs it. Set the minimum and APPLE_MARKETING_VERSION to a version newer than
+  current main; concurrent breaking PRs must not reuse a published version.
 - MCP clients cache `tools/list` across deploys and validate results against
   it, so published output schemas are open objects: an added output field is
   safe for an open session, while removing, renaming or retyping one breaks

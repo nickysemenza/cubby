@@ -494,11 +494,13 @@ were removed; production is the only deployed environment.
 Normal merges to `main` wait for the nightly check at 10:17 UTC. It publishes
 current `main` when files that can reach the app changed since the last complete
 upload (the workflow's inline `full`/`apple` path filters),
-or that upload is at least 30 days old. A changed
-`APPLE_CLIENT_COMPATIBILITY_VERSION` in `packages/shared/src/apple-client-version.ts`
-publishes promptly; comment-only edits do not. The shared value supplies both
-the generated `MARKETING_VERSION` and server minimum. Bump it for wire-breaking
-changes; compatible changes need only a new CI build number.
+or that upload is at least 30 days old. `packages/shared/src/apple-client-version.ts`
+holds two separate values. `APPLE_CLIENT_MINIMUM_VERSION` is the server's write
+gate; changing it publishes promptly (comment-only edits do not) so a compatible
+build exists. `APPLE_MARKETING_VERSION` supplies the generated
+`MARKETING_VERSION` and must not be older than the minimum; releases need no
+change to it because every upload gets a new build number. Never bump either
+value to get a build out sooner: dispatch the workflow instead.
 
 For an immediate build or retry, dispatch a fresh run:
 

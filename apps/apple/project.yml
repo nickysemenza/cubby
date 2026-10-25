@@ -36,7 +36,7 @@ options:
     mkdir -p "$swiftpm_dir"
     ln -sfn ../../../../Package.resolved "$swiftpm_dir/Package.resolved"
 
-# MARKETING_VERSION comes from the shared compatibility version (`pnpm generate`).
+# MARKETING_VERSION comes from APPLE_MARKETING_VERSION (`pnpm generate`).
 configFiles:
   Debug: Generated/AppleVersion.xcconfig
   Release: Generated/AppleVersion.xcconfig

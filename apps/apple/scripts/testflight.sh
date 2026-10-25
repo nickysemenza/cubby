@@ -164,8 +164,8 @@ verify_archive() {
   local check_macos_category="${6:-false}"
 
   [[ -d "$app" ]]
-  # The generated MARKETING_VERSION must be the version the server's minimum
-  # was set from, or the server would refuse (HTTP 426) the build it ships.
+  # The archive must carry the planned APPLE_MARKETING_VERSION, which the plan
+  # checked is not older than the server minimum (else HTTP 426 on writes).
   [[ "$(plutil -extract CFBundleShortVersionString raw -o - "$info")" == "$RELEASE_VERSION" ]] || {
     echo "error: $info does not carry the planned version $RELEASE_VERSION" >&2
     exit 1

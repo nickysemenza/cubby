@@ -1,4 +1,4 @@
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_CLIENT_MINIMUM_VERSION } from "@cubby/shared/apple-client-version";
 import { describe, expect, it } from "vitest";
 
 import { appleClientUpdateRequired } from "./apple-client-gate";
@@ -12,7 +12,7 @@ describe("appleClientUpdateRequired", () => {
   it("blocks the native app below the minimum, numerically not lexically", () => {
     expect(appleClientUpdateRequired(headers(appUserAgent("1.0")))).toEqual({
       current: "1.0",
-      minimum: APPLE_CLIENT_COMPATIBILITY_VERSION,
+      minimum: APPLE_CLIENT_MINIMUM_VERSION,
     });
     expect(appleClientUpdateRequired(headers(appUserAgent("1.9.12")))).not.toBe(
       null,
@@ -24,14 +24,14 @@ describe("appleClientUpdateRequired", () => {
   it("admits the minimum and anything newer", () => {
     expect(
       appleClientUpdateRequired(
-        headers(appUserAgent(APPLE_CLIENT_COMPATIBILITY_VERSION)),
+        headers(appUserAgent(APPLE_CLIENT_MINIMUM_VERSION)),
       ),
     ).toBe(null);
     expect(
       appleClientUpdateRequired(
         headers(
           appUserAgent(
-            APPLE_CLIENT_COMPATIBILITY_VERSION.replace(/\d+$/u, (patch) =>
+            APPLE_CLIENT_MINIMUM_VERSION.replace(/\d+$/u, (patch) =>
               String(Number(patch) + 1),
             ),
           ),

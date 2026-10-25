@@ -1,4 +1,4 @@
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_CLIENT_MINIMUM_VERSION } from "@cubby/shared/apple-client-version";
 
 // Old builds can break when the shared operation wire changes. The compatibility
 // gate keeps those builds from submitting writes with an obsolete input shape.
@@ -36,10 +36,10 @@ export function appleClientUpdateRequired(
   if (
     current === undefined ||
     !dottedVersion.test(current) ||
-    !isOlder(current, APPLE_CLIENT_COMPATIBILITY_VERSION)
+    !isOlder(current, APPLE_CLIENT_MINIMUM_VERSION)
   )
     return null;
-  return { current, minimum: APPLE_CLIENT_COMPATIBILITY_VERSION };
+  return { current, minimum: APPLE_CLIENT_MINIMUM_VERSION };
 }
 
 /** The shared operation route's actionable response for an obsolete Apple write. */

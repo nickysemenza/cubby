@@ -13,7 +13,7 @@ import {
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "@cubby/shared/client-constants";
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_MARKETING_VERSION } from "@cubby/shared/apple-client-version";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { IMPORT_REPORT_RUN_PURPOSES } from "@cubby/schemas/compiler/activity-fields";
 import { identifierKindPresentation } from "@cubby/schemas/external-id";
@@ -108,8 +108,8 @@ ${Object.entries(APPLE_APP_IDENTITIES)
       relativePath: "apps/apple/Generated/AppleVersion.xcconfig",
       source:
         generatedHeader +
-        "// APPLE_CLIENT_COMPATIBILITY_VERSION (packages/shared/src/apple-client-version.ts).\n" +
-        `MARKETING_VERSION = ${APPLE_CLIENT_COMPATIBILITY_VERSION}\n` +
+        "// APPLE_MARKETING_VERSION (packages/shared/src/apple-client-version.ts).\n" +
+        `MARKETING_VERSION = ${APPLE_MARKETING_VERSION}\n` +
         `CUBBY_APP_BUNDLE_IDENTIFIER = ${APPLE_APP_IDENTITIES.production.bundleIdentifier}\n` +
         `CUBBY_APP_PRODUCT_NAME = ${APPLE_APP_IDENTITIES.production.productName}\n` +
         `CUBBY_CALLBACK_SCHEME = ${APPLE_APP_IDENTITIES.production.callbackScheme}\n`,
