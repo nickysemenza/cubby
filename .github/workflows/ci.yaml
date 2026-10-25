@@ -280,7 +280,7 @@ jobs:
     name: Rust - recipebridge, cookbook-wasm and cubby-ffi
     needs: plan
     if: needs.plan.outputs.rust == 'true'
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
