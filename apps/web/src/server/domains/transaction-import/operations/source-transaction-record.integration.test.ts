@@ -197,7 +197,6 @@ describe("finance.record source and Job lifecycle contention", () => {
     async ({ conflicts, change }) => {
       const lifecycle = change === "claim" || change === "renew";
       // Genuine source captures and execution work use independent write rows.
-      const expectedConflicts = 0;
       const invalidations = change === "none" || lifecycle ? 0 : conflicts;
       const member = await createRepoEntity(ctx, "ledgerParty", {
         name: "Synthetic intake member",
@@ -279,8 +278,6 @@ describe("finance.record source and Job lifecycle contention", () => {
         .mockImplementation(() => undefined);
       let savingEmail = false;
       const writerCommits: {
-        startedAt: number;
-        committedAt: number;
         durationMs: number;
         generation: number;
         xmin: string;
@@ -337,7 +334,6 @@ describe("finance.record source and Job lifecycle contention", () => {
             // A pooled handle leases a second client after the intake snapshot.
             // The real source or lifecycle owner commits before capture resumes.
             savingEmail = true;
-            const startedAt = Date.now();
             const started = performance.now();
             try {
               for (
@@ -416,8 +412,6 @@ describe("finance.record source and Job lifecycle contention", () => {
                   });
                 }, "fedcba9876543210-SJC");
                 writerCommits.push({
-                  startedAt,
-                  committedAt: Date.now(),
                   durationMs: performance.now() - started,
                   ...(await searchTuple()),
                 });
@@ -447,7 +441,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           writerDurationsMs: writerCommits.map((writer) => writer.durationMs),
           attemptDurationsMs: diagnostics.map((attempt) => attempt.durationMs),
         });
-        expect(diagnostics).toHaveLength(expectedConflicts);
+        expect(diagnostics).toHaveLength(0);
         const completedCloudAttempts = await getDb(ctx.db)
           .select({
             state: imageProcessingAttempt.state,
@@ -473,22 +467,6 @@ describe("finance.record source and Job lifecycle contention", () => {
         expect(await qualityCaptures()).toBe(
           originalQualityCaptures + invalidations + 1,
         );
-        for (const [index, diagnostic] of diagnostics.entries()) {
-          expect(diagnostic).toMatchObject({
-            boundaryId: diagnostics[0]!.boundaryId,
-            rootBoundaryId: diagnostics[0]!.boundaryId,
-            rootAttempt: index + 1,
-            requestId: "0123456789abcdef-SJC",
-            callerOwned: false,
-            caller: "start.mutation.sourceTransactionRecord.record",
-            isolationLevel: "serializable",
-            attempt: index + 1,
-            limit: 3,
-            phase: "before-commit:capture",
-            beforeCommitKey: "refresh:search",
-            retry: index < 2,
-          });
-        }
         expect(writerCommits).toHaveLength(
           change === "cloud_completion" ? 1 : conflicts,
         );
@@ -515,13 +493,6 @@ describe("finance.record source and Job lifecycle contention", () => {
           previousXmin = writer.xmin;
           previousMarker = writer.markerXmin;
         }
-        for (const [index, attempt] of diagnostics.entries()) {
-          const writer = writerCommits[index]!;
-          expect(writer.startedAt).toBeGreaterThanOrEqual(attempt.startedAt);
-          expect(writer.committedAt).toBeLessThanOrEqual(
-            attempt.startedAt + attempt.durationMs + 1,
-          );
-        }
         const savedEmail = await readEmail(ctx.db, emailIdentity);
         expect(savedEmail).not.toBeNull();
         if (!savedEmail || !originalEmail) return;
@@ -544,7 +515,7 @@ describe("finance.record source and Job lifecycle contention", () => {
                 }
               : originalEmail,
         );
-        expect(attempts).toBe(Math.min(expectedConflicts + 1, 3));
+        expect(attempts).toBe(1);
         expect(result).toMatchObject({ ok: true, data: { inserted: 1 } });
         const admitted = 1;
         expect(await read()).toEqual({

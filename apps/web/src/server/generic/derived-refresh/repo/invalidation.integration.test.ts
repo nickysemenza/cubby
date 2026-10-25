@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   getDb,
@@ -21,6 +21,7 @@ import {
   recordJobInvalidation,
   renewJob,
 } from "~/server/generic/jobs/repo/jobs";
+import { pruneObservedInvalidationCaptures } from "~/server/generic/jobs/repo/queue-health";
 
 import {
   invalidateRefreshFamily,
@@ -81,37 +82,26 @@ describe("durable family invalidation", () => {
     const initial = await claimJob(ctx.db, marked.id);
     if (!initial) throw new Error("Expected initial claim");
     await publishJobPage(ctx.db, initial, { done: true });
-    let ready = () => {};
-    let release = () => {};
-    const captured = new Promise<void>((resolve) => {
-      ready = resolve;
-    });
-    const mayCommit = new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    const captured = Promise.withResolvers<void>();
+    const mayCommit = Promise.withResolvers<void>();
     const earlier = withSnapshotWriteDatabase(
       ctx.db,
       async (tx) => {
         await capture(tx);
-        ready();
-        await mayCommit;
+        captured.resolve();
+        await mayCommit.promise;
       },
       { isolationLevel: "serializable" },
     );
-    let earlierError: unknown;
-    void earlier.catch((error) => {
-      earlierError = error;
-      ready();
-    });
+    void earlier.catch(captured.reject);
     try {
-      await captured;
-      if (earlierError) throw earlierError;
+      await captured.promise;
       await capture(ctx.db);
       const later = await claimJob(ctx.db, marked.id);
       if (!later) throw new Error("Expected later capture claim");
       expect(await publishJobPage(ctx.db, later, { done: true })).toBe(true);
       expect(await due(marked.id)).toBe(false);
-      release();
+      mayCommit.resolve();
       await earlier;
       expect(await due(marked.id)).toBe(true);
       const pending = await getDb(ctx.db)
@@ -124,7 +114,7 @@ describe("durable family invalidation", () => {
       const fresh = await claimJob(ctx.db, marked.id);
       expect(fresh?.generation).toBe(later.generation + 1);
     } finally {
-      release();
+      mayCommit.resolve();
       await earlier;
     }
   });
@@ -151,6 +141,131 @@ describe("durable family invalidation", () => {
         sql`${jobInvalidationCapture.key} = ${RESTARTING.key} AND NOT ${jobInvalidationCapture.observed}`,
       );
     expect(pending).toHaveLength(1);
+  });
+
+  it("retries simultaneous first-key initialization without losing either source capture", async () => {
+    const input = {
+      key: "synthetic:first-capture",
+      kind: "synthetic.first-capture",
+      input: {},
+      restartsPass: true,
+    };
+    const prepared = Promise.withResolvers<void>();
+    const mayCommit = Promise.withResolvers<void>();
+    const first = withSnapshotWriteDatabase(
+      ctx.db,
+      async (tx) => {
+        await recordJobInvalidation(tx, input);
+        prepared.resolve();
+        await mayCommit.promise;
+      },
+      { isolationLevel: "serializable" },
+    );
+    void first.catch(prepared.reject);
+    await prepared.promise;
+    const backend = Promise.withResolvers<number>();
+    let attempts = 0;
+    const second = withSnapshotWriteDatabase(
+      ctx.db,
+      async (tx) => {
+        attempts++;
+        const result = await getDb(tx).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        const pid = result.rows[0]?.pid;
+        if (!pid) throw new Error("Missing second capture backend");
+        backend.resolve(pid);
+        await recordJobInvalidation(tx, input);
+      },
+      { isolationLevel: "serializable" },
+    );
+    void second.catch(backend.reject);
+    try {
+      const pid = await backend.promise;
+      await vi.waitFor(
+        async () => {
+          const result = await getDb(ctx.db).execute<{ waiting: boolean }>(
+            sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
+          );
+          expect(result.rows[0]?.waiting).toBe(true);
+        },
+        { timeout: 5000 },
+      );
+      mayCommit.resolve();
+      await Promise.all([first, second]);
+      expect(attempts).toBe(2);
+      expect(
+        await getDb(ctx.db).select().from(job).where(eq(job.key, input.key)),
+      ).toHaveLength(1);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(jobInvalidation)
+          .where(eq(jobInvalidation.key, input.key)),
+      ).toEqual([{ key: input.key, restartsPass: true }]);
+      const captures = await getDb(ctx.db)
+        .select()
+        .from(jobInvalidationCapture)
+        .where(eq(jobInvalidationCapture.key, input.key));
+      expect(captures).toHaveLength(2);
+      expect(new Set(captures.map((c) => c.id)).size).toBe(2);
+      expect(captures.every((c) => !c.observed)).toBe(true);
+    } finally {
+      mayCommit.resolve();
+      await Promise.allSettled([first, second]);
+    }
+  });
+
+  it("prunes observed input while new capture and claim commit on other connections", async () => {
+    const marked = await restarting();
+    await capture(ctx.db);
+    await capture(ctx.db);
+    const initial = await claimJob(ctx.db, marked.id);
+    if (!initial) throw new Error("Expected initial claim");
+    await publishJobPage(ctx.db, initial, { done: true });
+    const pruned = Promise.withResolvers<void>();
+    const mayCommit = Promise.withResolvers<void>();
+    const pruning = withTransactionDatabase(ctx.db, async (tx) => {
+      expect(await pruneObservedInvalidationCaptures(tx, { limit: 1 })).toBe(1);
+      pruned.resolve();
+      await mayCommit.promise;
+    });
+    void pruning.catch(pruned.reject);
+    try {
+      await pruned.promise;
+      await withSnapshotWriteDatabase(ctx.db, (tx) => capture(tx), {
+        isolationLevel: "serializable",
+      });
+      const fresh = await claimJob(ctx.db, marked.id);
+      if (!fresh) throw new Error("Expected overlapping claim");
+      await withSnapshotWriteDatabase(ctx.db, (tx) => capture(tx), {
+        isolationLevel: "serializable",
+      });
+      const pending = await getDb(ctx.db)
+        .select()
+        .from(jobInvalidationCapture)
+        .where(
+          sql`${jobInvalidationCapture.key} = ${RESTARTING.key} AND NOT ${jobInvalidationCapture.observed}`,
+        );
+      expect(pending).toHaveLength(1);
+      mayCommit.resolve();
+      await pruning;
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(jobInvalidationCapture)
+          .where(
+            sql`${jobInvalidationCapture.key} = ${RESTARTING.key} AND NOT ${jobInvalidationCapture.observed}`,
+          ),
+      ).toEqual(pending);
+      expect(await captureCount(RESTARTING.key)).toBe(3);
+      expect(await publishJobPage(ctx.db, fresh, { done: true })).toBe(false);
+      const next = await claimJob(ctx.db, marked.id);
+      expect(next?.generation).toBe(fresh.generation + 1);
+    } finally {
+      mayCommit.resolve();
+      await pruning;
+    }
   });
 
   it("keeps a rolled-back capture out and never loses a committed one", async () => {
