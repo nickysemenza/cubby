@@ -16,7 +16,10 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
-import type { ListReadRow } from "~/entity/model/list-read-fields";
+import {
+  isListMediaField,
+  type ListReadRow,
+} from "~/entity/model/list-read-fields";
 import {
   listReadSchema,
   projectListRows,
@@ -43,10 +46,7 @@ export const wantsListGroup = (
 ): boolean => {
   if (projection.kind === "base") return false;
   if (projection.kind === "full") return true;
-  if (group === "media")
-    return projection.fields.some(
-      (key) => key === "displayImages" || key === "images",
-    );
+  if (group === "media") return projection.fields.some(isListMediaField);
   if (group === "quality") return projection.fields.includes("dataQuality");
   return true;
 };

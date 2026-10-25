@@ -21,3 +21,16 @@ export function compileListReadSchema(schema: z.ZodObject) {
     ),
   };
 }
+
+/** Canonical media payloads and counters, independent of the page loading strategy. */
+const mediaReadFields = new Set([
+  "displayImages",
+  "images",
+  "labelImages",
+  "itemImageCount",
+  "labelImageCount",
+  "logo",
+  "vendorLogo",
+]);
+export const isListMediaField = (key: string): boolean =>
+  mediaReadFields.has(key);

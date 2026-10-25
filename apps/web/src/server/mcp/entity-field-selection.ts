@@ -12,6 +12,7 @@ import {
 } from "~/entity/generated/entity-lists.gen";
 import {
   listReadRowSchema,
+  isListMediaField,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
 import { listReadSchema } from "~/entity/model/list-read-schema";
@@ -196,7 +197,7 @@ function compactKeys(entity: string): string[] {
   // Media URLs and image rows are the bulk of a list row; compact omits them.
   const declared = listEntity
     ? Object.keys(listReadSchema(listEntity).shape).filter(
-        (key) => key !== "displayImages" && key !== "images",
+        (key) => !isListMediaField(key),
       )
     : list
       ? schemaKeys(list)

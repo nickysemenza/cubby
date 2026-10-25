@@ -1829,7 +1829,7 @@ loading only bindings needed by their projection where supported, plus the
 complete-population summary. Unknown fields fail before reading an empty page;
 required selected fields must actually be loaded before schema defaults run.
 Optional keys that the complete list omits can stay absent. Compact output omits
-media, long text and nested collections; full reads return the complete page.
+media payloads and their counters, long text and nested collections; full reads return the complete page.
 Problems and other narrow consumers retain explicit field projections over the
 same repository readers. External USDA data remains a bounded batch inside the
 Product page read; no list declares a separate lazy column request.
