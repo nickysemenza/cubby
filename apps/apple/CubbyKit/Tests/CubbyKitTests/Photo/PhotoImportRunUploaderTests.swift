@@ -112,7 +112,7 @@ private final class RunUploaderScript: @unchecked Sendable {
                 return (
                     200,
                     Data(
-                        #"{"runId":"RUN-TEST","clientBatchId":"00000000-0000-0000-0000-000000000001","positionOffset":\#(admissionOffset),"lifecycle":{"processor":"cubby","phase":"waiting_for_upload","plannedImageCount":1,"openBatchCount":0,"finalizedImageCount":0,"describedImageCount":0,"failedImageIds":[],"skippedImageCount":0,"proposedGroupCount":0,"committedGroupCount":0,"dispatchError":null}}"#
+                        #"{"runId":"RUN-TEST","clientBatchId":"00000000-0000-0000-0000-000000000001","positionOffset":\#(admissionOffset),"lifecycle":{"processor":"cubby","phase":"waiting_for_upload","plannedImageCount":1,"openBatchCount":0,"finalizedImageCount":0,"describedImageCount":0,"failedImageIds":[],"withoutCloudDescriptionCount":0,"skippedImageCount":0,"proposedGroupCount":0,"committedGroupCount":0,"dispatchError":null}}"#
                             .utf8)
                 )
             }

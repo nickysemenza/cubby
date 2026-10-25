@@ -38,62 +38,53 @@ extension CubbyClient: CompanionImageBackgroundTransport {
             .init(deviceId: deviceID, jobId: claim.jobID, attemptId: claim.attemptID))
     }
 
-    // TODO(unclog integration): once `imageProcessing.renew` is in the image-processing contract,
-    // add it to `CLIENT_PASSTHROUGH_METHODS` (apps/web/generator/http-api/native-methods.ts) as
-    // `renewCompanionImageProcessing`, run `pnpm generate`, and call that generated method with its
-    // generated input/output aliases instead of these wire structs.
     func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws
         -> CompanionLeaseRenewal
     {
-        let output: CompanionLeaseRenewalWire = try await request(
-            "imageProcessing.renew",
-            body: CompanionLeaseRenewalInputWire(
-                jobId: claim.jobID, attemptId: claim.attemptID, deviceId: deviceID))
-        return try output.renewal()
+        try CompanionLeaseRenewal(
+            await renewCompanionImageProcessing(
+                .init(deviceId: deviceID, jobId: claim.jobID, attemptId: claim.attemptID)))
     }
 }
 
-/// `imageProcessing.renew` input: `{ jobId, attemptId, deviceId }`.
-private struct CompanionLeaseRenewalInputWire: Encodable, Sendable {
-    let jobId: String
-    let attemptId: String
-    let deviceId: String
-}
-
-/// `imageProcessing.renew` output: `{ ok: true, leaseExpiresAt }` or
-/// `{ ok: false, reason: "lease_lost" | "job_obsolete" }`. An unknown refusal reason is still a
-/// refusal; a body with neither field is a decoding error, never a silent renewal.
-struct CompanionLeaseRenewalWire: Decodable, Sendable {
-    let ok: Bool
-    let leaseExpiresAt: Date?
-    let reason: String?
-
-    func renewal() throws -> CompanionLeaseRenewal {
-        if ok, let leaseExpiresAt { return .renewed(leaseExpiresAt: leaseExpiresAt) }
-        if !ok, let reason { return .refused(reason: reason) }
-        throw DecodingError.dataCorrupted(
-            .init(
-                codingPath: [],
-                debugDescription: "imageProcessing.renew returned neither a lease nor a reason"))
+extension CompanionLeaseRenewal {
+    /// An unknown refusal reason is still a refusal; an answer with neither shape is unsupported,
+    /// never a silent renewal.
+    init(_ output: RenewCompanionImageProcessingOutput) throws {
+        switch output {
+        case .value1(let renewed): self = .renewed(leaseExpiresAt: renewed.leaseExpiresAt)
+        case .value2(let refused): self = .refused(reason: refused.reason.rawValue)
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "imageProcessing.renew answer", raw: raw)
+        }
     }
 }
 
 /// Runs finite HTTP work in a granted charging window. The existing outbox is shared with the
-/// foreground socket, so results are durable before either transport tries to send them.
+/// foreground socket, so results are durable before either transport tries to send them. Claims
+/// use the resident worker's 60 s lease and the same `heartbeatInterval` renewals, so a window
+/// that ends mid-command loses at most one lease rather than holding a long claim.
 actor CompanionImageBackgroundRunner {
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let execute: @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult
     private let failureObserver: CompanionImageWorker.FailureObserver?
+    /// Waits between lease renewals; tests replace the clock with a gate.
+    private let heartbeatPause: @Sendable () async throws -> Void
     private var isRunning = false
 
     init(
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         execute: @escaping @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult,
-        failureObserver: CompanionImageWorker.FailureObserver? = nil
+        failureObserver: CompanionImageWorker.FailureObserver? = nil,
+        heartbeatPause: (@Sendable () async throws -> Void)? = nil
     ) {
         self.outbox = outbox
         self.execute = execute
         self.failureObserver = failureObserver
+        self.heartbeatPause =
+            heartbeatPause ?? {
+                try await Task.sleep(for: CompanionImageProcessingProtocol.heartbeatInterval)
+            }
     }
 
     /// True means there is resumable work for another window, rather than an unbounded poll.
@@ -119,7 +110,8 @@ actor CompanionImageBackgroundRunner {
                 try Task.checkCancellation()
                 let remaining = Int(end.timeIntervalSinceNow) - 5
                 guard remaining >= 20 else { return true }
-                let pulled = try await transport.pull(hello: hello, leaseSeconds: min(90, remaining))
+                let pulled = try await transport.pull(
+                    hello: hello, leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
                 guard let command = pulled.command else { return false }
                 guard !pulled.remotePaused else {
                     await releaseClaim(transport: transport, hello: hello, command: command)
@@ -133,7 +125,14 @@ actor CompanionImageBackgroundRunner {
                     return false
                 }
                 activeCommand = command
-                let result = try await execute(command)
+                guard
+                    let result = try await executeRenewing(
+                        command, metadata: metadata, transport: transport, deviceID: hello.deviceId)
+                else {
+                    // The server retired or reassigned this attempt: nothing to record or release.
+                    activeCommand = nil
+                    continue
+                }
                 if Task.isCancelled {
                     await releaseClaim(transport: transport, hello: hello, command: command)
                     return true
@@ -158,6 +157,56 @@ actor CompanionImageBackgroundRunner {
                 failureObserver?(error)
             }
             return true
+        }
+    }
+
+    private enum Finished: Sendable {
+        case executed(ImageProcessingResult)
+        case refused
+    }
+
+    /// Executes `command` while renewing its lease every `heartbeatInterval`; the executor's
+    /// deadline moves with each renewal. `nil` means a renewal was refused and the command was
+    /// stopped. A failed renewal request keeps working until the lease deadline it already has.
+    private func executeRenewing(
+        _ command: ImageProcessingCommand, metadata: CompanionImageCommandMetadata,
+        transport: any CompanionImageBackgroundTransport, deviceID: String
+    ) async throws -> ImageProcessingResult? {
+        let lease = CompanionCommandLease(deadline: metadata.deadline)
+        let claim = CompanionImageCommandClaim(jobID: metadata.jobID, attemptID: metadata.attemptID)
+        let execute = self.execute
+        let pause = heartbeatPause
+        let failureObserver = self.failureObserver
+        return try await withThrowingTaskGroup(of: Finished.self) { group in
+            group.addTask {
+                .executed(
+                    try await CompanionCommandLease.$current.withValue(lease) {
+                        try await execute(command)
+                    })
+            }
+            group.addTask {
+                while true {
+                    try await pause()
+                    do {
+                        switch try await transport.renew(deviceID: deviceID, claim: claim) {
+                        case .renewed(let leaseExpiresAt): lease.extend(to: leaseExpiresAt)
+                        case .refused(let reason):
+                            failureObserver?(CompanionLeaseRefused(jobID: claim.jobID, reason: reason))
+                            return .refused
+                        }
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        failureObserver?(error)
+                    }
+                }
+            }
+            // The first child to finish decides; the other is cancelled and its outcome ignored.
+            defer { group.cancelAll() }
+            switch try await group.next() {
+            case .executed(let result): return result
+            case .refused, nil: return nil
+            }
         }
     }
 

@@ -50,6 +50,68 @@ struct CompanionImageBackgroundTests {
         #expect(await executions.count == 1)
         #expect(await transport.completionCount == 2)
     }
+    /// Regression: a charging-window claim asked for up to 90 s and was never renewed, so a slow
+    /// command outlived its lease. It now claims the resident 60 s lease and heartbeats, and the
+    /// executor's deadline moves with each accepted renewal.
+    @Test func aBackgroundClaimUsesTheResidentLeaseAndRenews() async throws {
+        let renewedUntil = Date(timeIntervalSince1970: 4_070_908_860)
+        let transport = BackgroundTransportFixture(
+            commands: [try command()], renewal: .renewed(leaseExpiresAt: renewedUntil))
+        let fileURL = try outboxFile()
+        let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+        let heartbeat = Gate()
+        let execution = Gate()
+        let observed = LeaseDeadlineFixture()
+        let runner = CompanionImageBackgroundRunner(
+            outbox: outbox,
+            execute: { command in
+                try await execution.pass()
+                await observed.record(CompanionCommandLease.current?.deadline)
+                return try await BackgroundExecutionFixture().complete(command)
+            },
+            heartbeatPause: { try await heartbeat.pass() })
+        let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
+        await execution.arrivals(1)
+        await heartbeat.arrivals(1)
+        heartbeat.release()
+        // The second pause starts only after the first renewal was applied.
+        await heartbeat.arrivals(2)
+        execution.release()
+        _ = await task.value
+        #expect(await transport.leaseSeconds == [CompanionImageProcessingProtocol.residentLeaseSeconds])
+        #expect(await transport.renewCount == 1)
+        #expect(await observed.deadline == renewedUntil)
+        #expect(await transport.completionCount == 1)
+    }
+
+    /// A refused renewal stops the command: nothing is recorded, delivered, or released.
+    @Test func aRefusedBackgroundRenewalStopsTheCommandUnrecorded() async throws {
+        let transport = BackgroundTransportFixture(
+            commands: [try command()], renewal: .refused(reason: "lease_lost"))
+        let fileURL = try outboxFile()
+        let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+        let heartbeat = Gate()
+        let execution = Gate()
+        let runner = CompanionImageBackgroundRunner(
+            outbox: outbox,
+            execute: { command in
+                try await execution.pass()
+                return try await BackgroundExecutionFixture().complete(command)
+            },
+            heartbeatPause: { try await heartbeat.pass() })
+        let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
+        await execution.arrivals(1)
+        await heartbeat.arrivals(1)
+        heartbeat.release()
+        _ = await task.value
+        #expect(await transport.renewCount == 1)
+        #expect(await transport.releaseCount == 0)
+        #expect(await transport.completionCount == 0)
+        #expect(try await outbox.pending().isEmpty)
+    }
+
     @Test func cancellationReleasesAndKeepsTheOutboxEmpty() async throws {
         let command = try command()
         let transport = BackgroundTransportFixture(commands: [command])
@@ -154,22 +216,28 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     var commands: [ImageProcessingCommand]
     var failFirstCompletion: Bool
     var waitDuringCompletion: Bool
+    let renewal: CompanionLeaseRenewal
     private(set) var completionCount = 0
     private(set) var releaseCount = 0
+    private(set) var renewCount = 0
+    private(set) var leaseSeconds: [Int] = []
     /// Holds a completion while `waitDuringCompletion`; it ends only by cancellation.
     let completion = Gate()
     init(
         commands: [ImageProcessingCommand], failFirstCompletion: Bool = false,
-        waitDuringCompletion: Bool = false
+        waitDuringCompletion: Bool = false,
+        renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture)
     ) {
         self.commands = commands
         self.failFirstCompletion = failFirstCompletion
         self.waitDuringCompletion = waitDuringCompletion
+        self.renewal = renewal
     }
     func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
         -> PullCompanionImageProcessingOutput
     {
-        .init(command: commands.isEmpty ? nil : commands.removeFirst(), remotePaused: false)
+        self.leaseSeconds.append(leaseSeconds)
+        return .init(command: commands.isEmpty ? nil : commands.removeFirst(), remotePaused: false)
     }
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
         completionCount += 1
@@ -178,8 +246,14 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     }
     func release(deviceID: String, claim: CompanionImageCommandClaim) async throws { releaseCount += 1 }
     func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws -> CompanionLeaseRenewal {
-        .renewed(leaseExpiresAt: .distantFuture)
+        renewCount += 1
+        return renewal
     }
+}
+
+private actor LeaseDeadlineFixture {
+    private(set) var deadline: Date?
+    func record(_ deadline: Date?) { self.deadline = deadline }
 }
 
 private actor BackgroundExecutionFixture {

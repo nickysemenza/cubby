@@ -165,8 +165,8 @@ still unacknowledged stay in the outbox and replay on the next connection.
 
 ### Companion worker lifecycle (app and CLI)
 
-The resident worker claims with a 60 s lease and renews each running command every 15 s through
-`imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal
+The resident worker and the iOS charging window both claim with a 60 s lease and renew each
+running command every 15 s through `imageProcessing.renew`; the executor's deadline moves with each renewal, and a refusal
 (`lease_lost`, `job_obsolete`) stops that command without recording or releasing it. Every claim
 the device stops working on before recording a result is released best-effort (bounded at 3 s):
 stop, sign-out, quit (macOS waits for the releases), iOS backgrounding, participation off, macOS
@@ -179,7 +179,11 @@ the latest error. A 426 CLIENT_UPDATE_REQUIRED from any image operation stops pu
 worker's life, latches the app's update banner (the worker's client shares the app's request
 observer), and Activity shows "Update required to process images". Activity's "This device" row
 always names the worker phase (idle, connected, pulling, processing N, update required, paused
-from the web, automatic work off, asleep, disconnected with the last error).
+from the web, automatic work off, asleep, disconnected with the last error). Below it, the household
+queue reads `job.queue`: Apple-device and cloud-AI counts by waiting-on reason (funding waits with
+their reopening time), leases split into this device's (matched by the worker's live claims, never
+by device name) and other devices' with lease expiry and the server's `expired` flag, and Jobs
+backing off; Runs needing attention carry their `job.runRollups` counts and stall flag.
 
 The worker subscribes to the `imageProcessing.work` doorbell (`/api/doorbell`). The ring carries
 no job: on subscribe, on every ring and after each result the worker drains, calling

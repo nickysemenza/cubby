@@ -75,25 +75,24 @@ struct CompanionWorkerStatusRow: View {
     }
 }
 
-/// Activity's household queue: the Apple device lane and the frontier AI lane, from server
-/// counts (`HouseholdQueueOverview`). Each count opens the matching filtered Image job list.
+/// Activity's household queue from `job.queue`: the Apple device lane (this device's leases,
+/// other devices' leases, work waiting for any Apple device) and the frontier AI lane, each as
+/// server counts by what the work waits on, then Jobs backing off with when they are due again.
 struct HouseholdQueueSections: View {
     let queue: HouseholdQueueOverview?
     let error: String?
+    /// This device's live claims (`CompanionImageWorkerActivity.claimedJobIDs`).
+    let claimedImageJobIDs: Set<String>
 
     var body: some View {
         Section {
             if let queue {
-                countLink(
-                    "Waiting for any Apple device", systemImage: "iphone.and.arrow.forward",
-                    count: queue.waitingForAppleDevice, state: .waitingForDevice)
-                countLink(
-                    "Leased by Apple devices", systemImage: "hourglass", count: queue.leasedCount,
-                    state: .leased)
-                ForEach(queue.myLeases) { lease in
+                let split = queue.leases(claimedImageJobIDs: claimedImageJobIDs)
+                ReasonCountRows(counts: queue.appleCounts, empty: "No Apple device work waiting")
+                ForEach(split.mine) { lease in
                     LeaseRow(lease: lease, isThisDevice: true)
                 }
-                ForEach(queue.otherLeases) { lease in
+                ForEach(split.others) { lease in
                     LeaseRow(lease: lease, isThisDevice: false)
                 }
             } else if let error {
@@ -106,23 +105,94 @@ struct HouseholdQueueSections: View {
         }
         if let queue {
             Section("Cloud AI queue") {
-                countLink(
-                    "Queued for cloud processing", systemImage: "cloud", count: queue.frontierQueued,
-                    state: .pending)
+                ReasonCountRows(counts: queue.frontierCounts, empty: "No cloud AI work waiting")
+            }
+            if !queue.backingOff.isEmpty {
+                Section("Backing off") {
+                    ForEach(queue.backingOff) { job in
+                        BackingOffRow(job: job)
+                    }
+                }
             }
         }
     }
+}
 
-    private func countLink(
-        _ title: String, systemImage: String, count: Int, state: HouseholdQueueOverview.ImageJobState
-    ) -> some View {
-        NavigationLink(
-            value: Route.entityList(.imageJob, filters: HouseholdQueueOverview.imageJobFilter(state))
-        ) {
+/// Activity's Runs needing attention: the saved view's server count, then each listed Run with
+/// its `job.runRollups` counts and stall flag.
+struct RunsNeedingAttentionRows: View {
+    let queue: HouseholdQueueOverview?
+
+    var body: some View {
+        NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
             LabeledContent {
-                Text(count, format: .number)
+                if let count = queue?.runsNeedingAttention { Text(count, format: .number) }
             } label: {
-                Label(title, systemImage: systemImage)
+                Label("Runs needing attention", systemImage: "exclamationmark.circle")
+            }
+        }
+        ForEach(queue?.runs ?? []) { run in
+            NavigationLink(value: Route.entityDetail(.run, id: run.id)) {
+                RunRollupLabel(run: run)
+            }
+        }
+    }
+}
+
+extension HouseholdQueueOverview.ReasonCount {
+    /// Activity's wording for a waiting-on reason; an unknown reason shows verbatim.
+    var title: String {
+        switch reason {
+        case "due": "Due now"
+        case "waiting_device": "Waiting for any Apple device"
+        case "waiting_funding": "Waiting for AI funding"
+        case "leased": "Leased by a device"
+        case "backing_off": "Backing off after failures"
+        case "blocked": "Blocked"
+        case "paused": "Paused"
+        case "update_required": "Waiting for an app update"
+        default: reason
+        }
+    }
+
+    var systemImage: String {
+        switch reason {
+        case "due": "play.circle"
+        case "waiting_device": "iphone.and.arrow.forward"
+        case "waiting_funding": "creditcard"
+        case "leased": "hourglass"
+        case "backing_off": "clock.arrow.circlepath"
+        case "blocked": "nosign"
+        case "paused": "pause.circle"
+        case "update_required": "arrow.down.app"
+        default: "questionmark.circle"
+        }
+    }
+}
+
+private struct ReasonCountRows: View {
+    let counts: [HouseholdQueueOverview.ReasonCount]
+    let empty: String
+
+    var body: some View {
+        if counts.isEmpty {
+            Label(empty, systemImage: "checkmark.circle").foregroundStyle(.secondary)
+        }
+        ForEach(counts) { count in
+            LabeledContent {
+                Text(count.count, format: .number)
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(count.title)
+                        if let until = count.until {
+                            Text("until \(until, format: .dateTime.month().day().hour().minute())")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: count.systemImage)
+                }
             }
         }
     }
@@ -133,22 +203,65 @@ private struct LeaseRow: View {
     let isThisDevice: Bool
 
     var body: some View {
-        NavigationLink(value: Route.entityDetail(.imageJob, id: lease.id)) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(lease.title).font(.subheadline)
-                HStack(spacing: 4) {
-                    Text(isThisDevice ? "This device" : (lease.executor ?? "Unknown device"))
-                    if let leasedAt = lease.leasedAt {
-                        Text("· leased")
-                        Text(leasedAt, style: .relative)
-                    }
-                    if lease.expired == true {
-                        Text("· lease expired").foregroundStyle(FieldGuideTokens.destructive)
-                    }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(isThisDevice ? "This device" : (lease.executor ?? "Unknown device"))
+                .font(.subheadline)
+            HStack(spacing: 4) {
+                Text(lease.kind)
+                if lease.expired {
+                    Text("· lease expired")
+                    Text(lease.leaseExpiresAt, style: .relative)
+                    Text("ago")
+                } else {
+                    Text("· lease ends in")
+                    Text(lease.leaseExpiresAt, style: .relative)
                 }
-                .font(.caption).foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .foregroundStyle(lease.expired ? FieldGuideTokens.destructive : .secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct BackingOffRow: View {
+    let job: HouseholdQueueOverview.BackingOff
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(job.kind).font(.subheadline)
+            Text(
+                "\(job.attempts) attempts · retries \(job.until, format: .dateTime.month().day().hour().minute())"
+            )
+            .font(.caption).foregroundStyle(.secondary)
+            if let error = job.lastError {
+                Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    .lineLimit(3)
             }
         }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct RunRollupLabel: View {
+    let run: HouseholdQueueOverview.RunRollupRow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(run.title).font(.subheadline)
+            if run.stalled {
+                Text("No progress for \(run.stallMinutes) min")
+                    .font(.caption).foregroundStyle(FieldGuideTokens.warning)
+            }
+            if run.waitingForFunding {
+                Text("Paused: waiting for AI funding").font(.caption).foregroundStyle(.secondary)
+            }
+            if !run.counts.isEmpty {
+                Text(run.counts.map { "\($0.count) \($0.title.lowercased())" }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -171,17 +284,49 @@ private struct LeaseRow: View {
         List {
             HouseholdQueueSections(
                 queue: HouseholdQueueOverview(
-                    myLeases: [
-                        .init(id: "IPR-1", title: "Synthetic job", executor: "Mac", leasedAt: .now)
+                    appleCounts: [
+                        .init(reason: "waiting_device", count: 14), .init(reason: "leased", count: 2),
                     ],
-                    otherLeases: [
+                    frontierCounts: [
+                        .init(reason: "due", count: 3),
                         .init(
-                            id: "IPR-2", title: "Synthetic job 2", executor: "Hall phone",
-                            leasedAt: .now.addingTimeInterval(-600))
+                            reason: "waiting_funding", count: 40, until: .now.addingTimeInterval(3_600)),
                     ],
-                    leasedCount: 2, waitingForAppleDevice: 14, frontierQueued: 3,
-                    runsNeedingAttention: 1),
-                error: nil)
+                    leases: [
+                        .init(
+                            id: "job-1", kind: "image.device", imageJobID: "image-job-1",
+                            executor: "Synthetic Mac", leaseExpiresAt: .now.addingTimeInterval(45),
+                            expired: false),
+                        .init(
+                            id: "job-2", kind: "image.device", imageJobID: "image-job-2",
+                            executor: "Synthetic phone", leaseExpiresAt: .now.addingTimeInterval(-600),
+                            expired: true),
+                    ],
+                    backingOff: [
+                        .init(
+                            id: "job-3", kind: "image.cloud", lane: "frontier_ai",
+                            until: .now.addingTimeInterval(900), attempts: 6,
+                            lastError: "Synthetic provider error")
+                    ],
+                    runsNeedingAttention: 1,
+                    runs: [
+                        .init(
+                            id: "RUN-SYN1", title: "Synthetic photo batch",
+                            counts: [.init(reason: "waiting_funding", count: 12)],
+                            waitingForFunding: true, stalled: true, stallMinutes: 15)
+                    ]),
+                error: nil, claimedImageJobIDs: ["image-job-1"])
+            Section("Household work") {
+                RunsNeedingAttentionRows(
+                    queue: HouseholdQueueOverview(
+                        appleCounts: [], frontierCounts: [], leases: [], backingOff: [],
+                        runsNeedingAttention: 1,
+                        runs: [
+                            .init(
+                                id: "RUN-SYN1", title: "Synthetic photo batch", stalled: true,
+                                stallMinutes: 15)
+                        ]))
+            }
         }
     }
 }

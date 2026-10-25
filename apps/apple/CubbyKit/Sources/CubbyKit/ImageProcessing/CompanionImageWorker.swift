@@ -41,11 +41,14 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public let deliveryError: String?
     /// The latest connection, pull, or lease failure, verbatim; cleared by a successful drain.
     public let lastError: String?
+    /// Image job ids of the claims this worker holds now (accepted, not yet recorded). Activity
+    /// marks this device's leases by these, not by the device's display name.
+    public let claimedJobIDs: Set<String>
 
     public init(
         phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil,
         remotePaused: Bool = false, processingCount: Int = 0, undeliveredResults: Int = 0,
-        deliveryError: String? = nil, lastError: String? = nil
+        deliveryError: String? = nil, lastError: String? = nil, claimedJobIDs: Set<String> = []
     ) {
         self.phase = phase
         self.jobID = jobID
@@ -56,6 +59,7 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
         self.undeliveredResults = undeliveredResults
         self.deliveryError = deliveryError
         self.lastError = lastError
+        self.claimedJobIDs = claimedJobIDs
     }
 }
 
@@ -263,10 +267,11 @@ public actor CompanionImageWorker {
         self.isParticipating = isParticipating
         self.outbox = outbox
         self.recordResult = recordResult ?? { try await outbox.record($0, for: $1) }
-        self.heartbeatPause =
+        let heartbeatPause =
             heartbeatPause ?? {
                 try await Task.sleep(for: CompanionImageProcessingProtocol.heartbeatInterval)
             }
+        self.heartbeatPause = heartbeatPause
         self.session = session
         self.transport = transport
         self.execute = execute
@@ -274,7 +279,8 @@ public actor CompanionImageWorker {
         self.activityObserver = activityObserver
         self.jobObserver = jobObserver
         self.backgroundRunner = CompanionImageBackgroundRunner(
-            outbox: outbox, execute: execute, failureObserver: failureObserver)
+            outbox: outbox, execute: execute, failureObserver: failureObserver,
+            heartbeatPause: heartbeatPause)
     }
 
     deinit {
@@ -951,7 +957,8 @@ public actor CompanionImageWorker {
             remotePaused: remotePaused, processingCount: phase == .processing ? running.count : 0,
             undeliveredResults: setAsideDeliveries.count,
             deliveryError: setAsideDeliveries.isEmpty ? nil : latestDeliveryError,
-            lastError: phase == .stopped ? nil : lastError)
+            lastError: phase == .stopped ? nil : lastError,
+            claimedJobIDs: Set(inFlight.values.map(\.jobID)))
     }
 
     /// Reports only changes, so observers see each transition once.

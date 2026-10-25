@@ -13,7 +13,8 @@ struct PhotoImportFlowTests {
         let readyImage = PhotoRunImage(
             id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
-            cutoutUrl: nil, cutout: nil, describe: .ready, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .ready, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
@@ -52,14 +53,16 @@ struct PhotoImportFlowTests {
         let pending = PhotoRunImage(
             id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
-            cutoutUrl: nil, cutout: nil, describe: .pending, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .pending, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: false, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
         let working = PhotoRunImage(
             id: ImageCode("IMG-2346"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://label",
-            cutoutUrl: nil, cutout: nil, describe: .leased, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .leased, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: false, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
@@ -76,7 +79,8 @@ struct PhotoImportFlowTests {
         let queued = PhotoRunImage(
             id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
-            cutoutUrl: nil, cutout: nil, describe: .pending, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .pending, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
@@ -90,14 +94,16 @@ struct PhotoImportFlowTests {
         let ready = PhotoRunImage(
             id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
-            cutoutUrl: nil, cutout: nil, describe: .ready, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .ready, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
         let skipped = PhotoRunImage(
             id: ImageCode("IMG-2346"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://label",
-            cutoutUrl: nil, cutout: nil, describe: .skipped, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .skipped, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
@@ -115,7 +121,8 @@ struct PhotoImportFlowTests {
         let ready = PhotoRunImage(
             id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
             targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
-            cutoutUrl: nil, cutout: nil, describe: .ready, describeStartedAt: nil, describeCompletedAt: nil,
+            cutoutUrl: nil, cutout: nil, describe: .ready, cloudDescriptionMissing: false,
+            describeStartedAt: nil, describeCompletedAt: nil,
             describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)

@@ -4,6 +4,18 @@ import Testing
 
 @testable import CubbyKit
 
+private final class RenewalStub: URLProtocol, @unchecked Sendable {
+    static let handler = Mutex<StubNetworking.Handler?>(nil)
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        StubNetworking.startLoading(
+            request, client: client, target: self, handler: Self.handler.withLock { $0 })
+    }
+    override func stopLoading() {}
+    static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
+}
+
 @Suite("CompanionImageWorker", .timeLimit(.minutes(1)))
 struct CompanionImageWorkerTests {
     @Test func helloUsesTheSuppliedCreationHint() {
@@ -366,18 +378,44 @@ struct CompanionImageWorkerTests {
         #expect(lease.deadline == Date(timeIntervalSince1970: 160))
     }
 
-    @Test func renewalWireDecodesBothAnswers() throws {
-        let decoder = JSONDecoder.cubby()
-        let renewed = try decoder.decode(
-            CompanionLeaseRenewalWire.self,
-            from: Data(#"{"ok":true,"leaseExpiresAt":"2099-01-01T00:01:00.000Z"}"#.utf8))
+    /// The client renews through the generated `imageProcessing.renew` method and maps both
+    /// answers; an answer with neither shape is unsupported, never a silent renewal.
+    @Test func renewalGoesThroughTheGeneratedOperation() async throws {
+        let answers = Mutex([
+            #"{"ok":true,"data":{"ok":true,"leaseExpiresAt":"2099-01-01T00:01:00.000Z"}}"#,
+            #"{"ok":true,"data":{"ok":false,"reason":"job_obsolete"}}"#,
+            #"{"ok":true,"data":{"ok":"maybe"}}"#,
+        ])
+        let seen = Mutex<[URLRequest]>([])
+        RenewalStub.handler.withLock {
+            $0 = { request in
+                seen.withLock { $0.append(request) }
+                return (200, Data(answers.withLock { $0.removeFirst() }.utf8))
+            }
+        }
+        defer { RenewalStub.handler.withLock { $0 = nil } }
+        let store = InMemorySessionTokenStore()
+        try store.save(.bearer("tok"), for: "localhost:3000")
+        let client = CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!,
+            credentials: CredentialProvider(host: "localhost:3000", store: store),
+            session: RenewalStub.session())
+        let claim = CompanionImageCommandClaim(jobID: "job-1", attemptID: "attempt-1")
+
         #expect(
-            try renewed.renewal() == .renewed(leaseExpiresAt: Date(timeIntervalSince1970: 4_070_908_860)))
-        let refused = try decoder.decode(
-            CompanionLeaseRenewalWire.self, from: Data(#"{"ok":false,"reason":"job_obsolete"}"#.utf8))
-        #expect(try refused.renewal() == .refused(reason: "job_obsolete"))
-        let empty = try decoder.decode(CompanionLeaseRenewalWire.self, from: Data(#"{"ok":true}"#.utf8))
-        #expect(throws: DecodingError.self) { try empty.renewal() }
+            try await client.renew(deviceID: "device-1", claim: claim)
+                == .renewed(leaseExpiresAt: Date(timeIntervalSince1970: 4_070_908_860)))
+        #expect(
+            try await client.renew(deviceID: "device-1", claim: claim)
+                == .refused(reason: "job_obsolete"))
+        await #expect(throws: UnsupportedNativeResponse.self) {
+            _ = try await client.renew(deviceID: "device-1", claim: claim)
+        }
+        let first = try #require(seen.withLock { $0.first })
+        #expect(first.url?.path == "/api/operations/imageProcessing.renew")
+        #expect(
+            StubNetworking.operationFields(of: first)
+                == ["jobId": "job-1", "attemptId": "attempt-1", "deviceId": "device-1"])
     }
 
     /// Regression: a command this build could not parse was dropped without a release, holding

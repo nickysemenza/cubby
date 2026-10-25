@@ -13,18 +13,14 @@ struct ActivityView: View {
     var body: some View {
         List {
             localExecution
-            HouseholdQueueSections(queue: queue, error: queueError)
+            HouseholdQueueSections(
+                queue: queue, error: queueError,
+                claimedImageJobIDs: appModel.companionImageActivity.claimedJobIDs)
             Section("Household work") {
                 NavigationLink(value: Route.entityList(.run)) {
                     Label("Runs", systemImage: "arrow.triangle.2.circlepath")
                 }
-                NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
-                    LabeledContent {
-                        if let count = queue?.runsNeedingAttention { Text(count, format: .number) }
-                    } label: {
-                        Label("Runs needing attention", systemImage: "exclamationmark.circle")
-                    }
-                }
+                RunsNeedingAttentionRows(queue: queue)
                 NavigationLink(value: Route.entityList(.imageJob)) {
                     Label("Image jobs", systemImage: "photo.badge.checkmark")
                 }
@@ -53,8 +49,7 @@ struct ActivityView: View {
     private func loadQueue() async {
         guard appModel.phase == .signedIn else { return }
         do {
-            queue = try await HouseholdQueueOverview.load(
-                client: appModel.client, thisDeviceName: AppModel.suggestedDeviceName)
+            queue = try await HouseholdQueueOverview.load(client: appModel.client)
             queueError = nil
         } catch is CancellationError {
         } catch {
