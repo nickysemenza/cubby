@@ -9,7 +9,7 @@ import {
   runBeforeCommitDatabase,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { aiEvaluation, job } from "~/server/db/schema";
+import { aiEvaluation, job, entityIdentity } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   createProductIdentityFixture,
@@ -42,6 +42,34 @@ import {
 // interrupted or superseded workers from acknowledging somebody else's work.
 describe("durable jobs", () => {
   const ctx = withTestDb();
+  it("mints one long public identity for an idempotent enqueue and preserves it on invalidation", async () => {
+    const input = {
+      key: "synthetic:job-identity",
+      kind: "synthetic.identity",
+      input: {},
+    };
+    const first = await enqueueJob(ctx.db, input);
+    const again = await enqueueJob(ctx.db, input);
+    const invalidated = await enqueueJob(ctx.db, {
+      ...input,
+      invalidate: true,
+    });
+    expect(first.shortcode).toMatch(
+      /^JOB-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{10}$/,
+    );
+    expect([again.id, invalidated.id]).toEqual([first.id, first.id]);
+    expect([again.shortcode, invalidated.shortcode]).toEqual([
+      first.shortcode,
+      first.shortcode,
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityIdentity)
+        .where(eq(entityIdentity.id, first.id)),
+    ).toMatchObject([{ kind: "job", shortcode: first.shortcode }]);
+  });
+
   it("opens serializable isolation before a snapshot-dependent Job publication", async () => {
     const work = await enqueueJob(ctx.db, {
       key: "synthetic-snapshot-publication",

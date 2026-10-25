@@ -51,7 +51,7 @@ import {
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 export function buildSearchConditions(
-  table: { deletedAt: AnyColumn },
+  table: PgTable | { deletedAt: AnyColumn },
   searchFilters: Array<{ column: AnyColumn; term: string | undefined }>,
   extraConditions?: Array<SQL | undefined>,
 ): SQL | undefined {

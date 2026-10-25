@@ -1,14 +1,19 @@
 import { z } from "zod";
 import { mapRecord, recordKeys } from "./record";
 import { capitalize } from "./text-case";
-import { SHORTCODE_BODY_PATTERN } from "./shortcode-alphabet";
+import { SHORTCODE_BODY_PATTERN, SHORTCODE_CHARS } from "./shortcode-alphabet";
 import {
   SHORTCODE_PREFIX,
+  SHORTCODE_LENGTH,
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
+export const shortcodeBodyPattern = (type: ShortcodeType) =>
+  SHORTCODE_LENGTH[type] === undefined
+    ? SHORTCODE_BODY_PATTERN
+    : `[${SHORTCODE_CHARS}]{${SHORTCODE_LENGTH[type]}}`;
 const shortcodeRegex = (type: ShortcodeType) =>
-  new RegExp(`^${SHORTCODE_PREFIX[type]}${SHORTCODE_BODY_PATTERN}$`);
+  new RegExp(`^${SHORTCODE_PREFIX[type]}${shortcodeBodyPattern(type)}$`);
 
 /**
  * The one schema per entity: it normalizes, validates, brands, AND publishes a
@@ -36,9 +41,11 @@ const makeShortcodeSchema = <T extends ShortcodeType, B extends string>(
       // label or an agent copied from an earlier response, so "which code was
       // wrong" is the whole useful content of the failure.
       error: (issue) =>
-        `Invalid ${type} shortcode: ${String(issue.input)} (expected ${SHORTCODE_PREFIX[type]}XXXX or ${SHORTCODE_PREFIX[type]}XXXXX)`,
+        `Invalid ${type} shortcode: ${String(issue.input)} (expected ${SHORTCODE_PREFIX[type]}${SHORTCODE_LENGTH[type] ? "X".repeat(SHORTCODE_LENGTH[type]) : "XXXX or " + SHORTCODE_PREFIX[type] + "XXXXX"})`,
     })
-    .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7MN`)
+    .describe(
+      `${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}${"4K7MN4K7MN".slice(0, SHORTCODE_LENGTH[type] ?? 5)}`,
+    )
     .brand<B>(brand);
 
 /** Every shortcode entity, in generated-registry order. */

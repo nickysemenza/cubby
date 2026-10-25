@@ -189,7 +189,7 @@ export function describeJobWaitingOn(
     case "waiting_device": {
       const label =
         waitingOn.reason === "due"
-          ? `Due on ${JOB_LANE_LABEL[waitingOn.lane]}`
+          ? "Due now"
           : JOB_WAITING_ON_LABEL.waiting_device;
       const ahead = waitingOn.aheadCount
         ? `, behind ${waitingOn.aheadIsEstimate ? "about " : ""}${waitingOn.aheadCount}`
@@ -211,6 +211,9 @@ export function describeJobWaitingOn(
         : `In progress on ${who}`;
     }
     case "backing_off":
+      if (Date.parse(waitingOn.until) <= now.getTime()) return "Due now";
+      if (waitingOn.attempts === 0)
+        return `Due in ${jobSpanText((Date.parse(waitingOn.until) - now.getTime()) / 1000)}`;
       return `Backing off ${untilText(waitingOn.until, now)} after ${waitingOn.attempts} ${waitingOn.attempts === 1 ? "failure" : "failures"}`;
     case "blocked":
       return `Blocked by ${waitingOn.by}`;

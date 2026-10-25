@@ -1,8 +1,10 @@
 /**
  * Shortcode minting — the write half of the public-id layer.
  *
- * A shortcode is non-null, immutable, and never reused. Payload indexes and
- * the permanent Entity identity index enforce that, including tombstones.
+ * A shortcode is non-null and immutable. Entity identities reserve codes,
+ * including tombstones; Job retention alone releases pruned identities and codes
+ * (docs/jobs.md#job-entity-and-identity-retention). Payload indexes and the
+ * Entity identity index reject collisions while those identities exist.
  * Inserts mint a candidate directly and retry a rejected collision inside a
  * savepoint. An advisory preflight SELECT costs a round trip without closing
  * the race; only callers that need a free code before inserting use it.
@@ -22,9 +24,10 @@ import {
   sql,
 } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
-import { entityIdentity } from "~/server/db/schema";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import { repositorySavepoint } from "~/server/db/repository-access.boundary";
 import {
   insertPayloadWithIdentity,
   isEntityShortcodeCollision,
@@ -70,7 +73,7 @@ const parseShortcodeRow = <T extends ShortcodeType>(
  * payload's code survives only there.
  */
 const shortcodeTaken = async (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   code: string,
 ): Promise<boolean> => {
   const existing = await unwrapDb(db)
@@ -90,7 +93,7 @@ const shortcodeTaken = async (
  * @throws if no free code is found after MAX_RETRIES attempts.
  */
 export async function generateUniqueShortcode<T extends ShortcodeType>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: T,
   generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<ShortcodeFor<T>> {
@@ -112,7 +115,7 @@ export async function generateUniqueShortcode<T extends ShortcodeType>(
  * their original diagnostics.
  */
 export async function findOrCreateWithShortcode<T extends ShortcodeType>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: T,
   opts: {
     where: SQL | undefined;
@@ -162,7 +165,7 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
  * existing create/admission fixtures over a direct insert.
  */
 export async function insertWithShortcode<T extends ShortcodeType>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: T,
   values: Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">,
   generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
@@ -187,7 +190,7 @@ export async function insertWithShortcode<T extends ShortcodeType>(
     try {
       // Standalone writes also need a transaction: a rejected payload must
       // release its identity. Nested transactions isolate retries in savepoints.
-      const created = await unwrapDb(db).transaction((tx) =>
+      const created = await repositorySavepoint(db, (tx) =>
         insertPayloadWithIdentity(tx, table, entity, row),
       );
       // SAFETY: The insert used SHORTCODE_TABLE[entity], so the selected

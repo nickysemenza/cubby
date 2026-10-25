@@ -5,7 +5,10 @@ import {
   type BrowserRoutedEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   createContext,
   lazy,
@@ -27,6 +30,8 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityListBaseFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
+import { getEntityFilters } from "~/entity/filter-manifest";
+import { compileFilterCodec, sortToParam } from "~/entity/filters";
 import {
   type ListEntity,
   listEntities,
@@ -51,6 +56,7 @@ import {
   type ListOverrideContext,
   type ListOverrideWorkbenchProps,
 } from "~/entity/list-columns/types";
+import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageCount } from "~/entity/page/page";
 import { FindSuggestionsAction } from "~/entity/suggestions/find-suggestions-dialog";
 import {
@@ -63,6 +69,7 @@ import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListQueryProvider } from "~/entity/table/list-query-context";
 import { ListWorkbench } from "~/entity/table/list-workbench";
 import { getAppErrorDetails } from "~/lib/error-utils";
+import { formatCount } from "~/lib/number-format";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
 import {
   createCubbyColumnCollection,
@@ -163,6 +170,7 @@ export function useListSearch(): ListSlotProps {
 /* -------------------------------------------------------------------------- */
 
 const NO_OVERRIDE: AnyEntityListOverride = { use: () => ({}) };
+const EMBEDDED_CONTEXT = { search: {}, navigate: () => {} };
 const DEFAULT_PREVIEW = { responsiveInspector: true } as const;
 const useNoWorkbenchProps = (
   _list: UseEntityListReturn<BaseListRow>,
@@ -265,6 +273,177 @@ export interface GenericEntityListProps {
   /** Test seam: replaces the entity's generic list read. */
   operations?: { list?: ListQueryOptionsFn<object, BaseListRow> };
   override?: AnyEntityListOverride;
+}
+
+/** A scoped roster uses the same columns, reads, selection and workbench as a page. */
+export function EmbeddedEntityList({
+  entity,
+  filters,
+  savedViewId,
+  pageSize,
+  columns: visibleColumns,
+  sort,
+  allLink = false,
+  detail,
+  actions,
+  operations,
+  refreshIntervalMs,
+}: {
+  entity: ListEntity & BrowserRoutedEntity;
+  filters?: object;
+  savedViewId?: string;
+  pageSize: number;
+  columns?: readonly string[];
+  sort?: { id: string; desc: boolean }[];
+  allLink?: boolean;
+  detail?: {
+    label: string;
+    readFields?: readonly string[];
+    render: (row: BaseListRow) => ReactNode;
+  };
+  actions?: (list: UseEntityListReturn<BaseListRow>) => ReactNode;
+  operations?: GenericEntityListProps["operations"];
+  refreshIntervalMs?: number;
+}) {
+  const view = viewsForEntity(entity).find(
+    (candidate) => candidate.id === savedViewId,
+  );
+  if (savedViewId && !view)
+    throw new Error(`Unknown saved view: ${entity}.${savedViewId}`);
+  const parts = NO_OVERRIDE.use(EMBEDDED_CONTEXT);
+  const { columns: declared } = useListColumns(entity, parts, false);
+  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
+  const helper = useMemo(() => createCubbyColumnHelper<BaseListRow>(), []);
+  const columns = useMemo(
+    () =>
+      createCubbyColumnCollection<BaseListRow>((add) => {
+        if (detail)
+          add(
+            helper.display({
+              id: "disclosure",
+              header: "",
+              size: 32,
+              minSize: 32,
+              maxSize: 32,
+              meta: { provenance: null },
+              cell: ({ row }) => (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`${detail.label} ${row.original.id}`}
+                  aria-expanded={openIds.has(row.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setOpenIds((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(row.id)) next.delete(row.id);
+                      else next.add(row.id);
+                      return next;
+                    });
+                  }}
+                >
+                  {openIds.has(row.id) ? (
+                    <CaretDownIcon aria-hidden />
+                  ) : (
+                    <CaretRightIcon aria-hidden />
+                  )}
+                </Button>
+              ),
+            }),
+          );
+        declared
+          .filter(
+            (column) =>
+              !visibleColumns ||
+              visibleColumns.includes(String(column.id)) ||
+              isImageColumnId(column.id),
+          )
+          .visit(add);
+      }),
+    [declared, detail, helper, openIds, visibleColumns],
+  );
+  const tableStateOptions = useMemo(
+    () => ({
+      readUrlState: false,
+      urlSync: false,
+      syncPaginationToUrl: false,
+      initialPagination: { pageIndex: 0, pageSize },
+      initialFilter: view?.filters,
+      initialSorting: sort ?? view?.sort,
+      initialSort: (sort ?? view?.sort)?.[0]?.id,
+      initialSortDesc: (sort ?? view?.sort)?.[0]?.desc,
+    }),
+    [pageSize, sort, view],
+  );
+  const list = useEntityList<BaseListRow, object>({
+    entity,
+    queryOptions: operations?.list ?? entityListBaseFor(entity).listQueryPlan,
+    columns,
+    scopeFilters: filters,
+    tableStateOptions,
+    additionalReadFields: detail?.readFields,
+    preview: DEFAULT_PREVIEW,
+    selectable: Boolean(actions),
+  });
+  const codec = compileFilterCodec(getEntityFilters(entity));
+  const refresh = list.workbench.refreshControls.onRefresh;
+  useEffect(() => {
+    if (!refreshIntervalMs) return;
+    const timer = setInterval(() => {
+      if (!document.hidden) void refresh();
+    }, refreshIntervalMs);
+    return () => clearInterval(timer);
+  }, [refresh, refreshIntervalMs]);
+  const currentFilters = z
+    .record(z.string(), z.json().optional())
+    .parse(list.currentFilters);
+  const search = codec.encode((key) => {
+    const value =
+      currentFilters[key] ??
+      list.workbench.table.state.columnFilters.find(
+        (filter) => filter.id === key,
+      )?.value;
+    return Array.isArray(value) &&
+      value.every((entry) => typeof entry === "string")
+      ? value
+      : typeof value === "string"
+        ? value
+        : typeof value === "boolean"
+          ? String(value)
+          : undefined;
+  });
+  return (
+    <Stack gap="sm">
+      {actions?.(list)}
+      <ListWorkbench
+        model={{ ...list.workbench, infiniteScroll: undefined }}
+        mode="embedded"
+        ariaLabel={`${entities[entity].pluralLabel} table`}
+        rowDetail={
+          detail
+            ? { openIds, render: (row) => detail.render(row.original) }
+            : undefined
+        }
+        onRowClick={list.inspection.onRowClick}
+        emptyState={
+          <TableEmptyState entity={entity} table={list.workbench.table} />
+        }
+      />
+      {allLink && list.totalCount !== undefined ? (
+        <Link
+          to={`/${entities[entity].basePath}`}
+          search={{
+            ...search,
+            sort: sortToParam(list.workbench.table.state.sorting),
+          }}
+          className="text-xs text-link hover:underline"
+        >
+          All {formatCount(list.totalCount)}
+        </Link>
+      ) : null}
+      <list.inspection.PreviewSheet />
+    </Stack>
+  );
 }
 
 /**

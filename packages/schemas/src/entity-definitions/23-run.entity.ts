@@ -195,6 +195,7 @@ export default defineEntity({
             "displayStatus",
             "waitingOn",
             "stalled",
+            "chargedCost",
             "purpose",
             "trigger",
             "routine",
@@ -407,16 +408,11 @@ export default defineEntity({
             "Paused Runs, Runs needing review, and failed Runs a member started or reviews; AI refresh and background passes retry on their own",
           filters: [
             { id: "purpose", value: [...ATTENTION_RUN_PURPOSES] },
-            {
-              id: "status",
-              value: [
-                "paused",
-                "paused_auth",
-                "needs_review",
-                "failed",
-                "dispatch_failed",
-              ],
-            },
+            { id: "needsAttention", value: "true" },
+          ],
+          sort: [
+            { id: "stalled", desc: true },
+            { id: "startedAt", desc: true },
           ],
         },
         {
@@ -572,6 +568,13 @@ export default defineEntity({
         },
         display: { columnGroup: "Execution", width: "sm" },
         validation: readOnly(z.boolean().default(false)),
+      },
+      {
+        key: "chargedCost",
+        kind: "number",
+        display: { columnLabel: "AI cost", format: "currency" },
+        provenance: { kind: "derived", sources: [{ label: "Run AI usage" }] },
+        validation: readOnly(z.number().default(0)),
       },
       {
         key: "purpose",
@@ -1031,6 +1034,7 @@ export default defineEntity({
       "displayStatus",
       "waitingOn",
       "stalled",
+      "chargedCost",
       "purpose",
       "trigger",
       "routine",
@@ -1068,8 +1072,13 @@ export default defineEntity({
       "updatedAt",
     ],
     audit: [],
+    derived: {
+      stalled: { type: "boolean" },
+      needsAttention: { type: "boolean" },
+    },
     sort: {
       fields: [
+        "stalled",
         "startedAt",
         "endedAt",
         "status",
@@ -1308,6 +1317,28 @@ export default defineEntity({
         placeholder: "Filter by trigger...",
         deriveSchema: true,
         schemaFromRead: true,
+      },
+      {
+        columnId: "needsAttention",
+        kind: "boolean",
+        placeholder: "Needs attention",
+        deriveSchema: true,
+        derived: true,
+        options: [
+          { value: "true", label: "Needs attention" },
+          { value: "false", label: "No attention needed" },
+        ],
+      },
+      {
+        columnId: "stalled",
+        kind: "boolean",
+        placeholder: "Stalled",
+        deriveSchema: true,
+        derived: true,
+        options: [
+          { value: "true", label: "Stalled" },
+          { value: "false", label: "Not stalled" },
+        ],
       },
       {
         columnId: "routine",

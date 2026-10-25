@@ -279,3 +279,46 @@ describe("Run lineage and waiting-on reads", () => {
     expect(read?.waitingOn).toBe("1 expired lease awaiting reclaim");
   });
 });
+
+describe("Run attention entity view", () => {
+  const ctx = withTestDb();
+  it("filters and sorts stalled Runs ahead of newer stopped Runs", async () => {
+    const stalled = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const stopped = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const old = new Date(Date.now() - 60 * 60_000);
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ startedAt: old })
+      .where(eq(runTable.id, stalled));
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed" })
+      .where(eq(runTable.id, stopped));
+    await enqueueJob(ctx.db, {
+      key: "synthetic:attention-stall",
+      kind: "image.device",
+      runId: stalled,
+      input: {},
+    });
+    const page = await listRuns(
+      ctx.db,
+      { purpose: ["ai_suggest"], needsAttention: true },
+      [
+        { orderBy: "stalled", direction: "desc" },
+        { orderBy: "startedAt", direction: "desc" },
+      ],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(page.data).toHaveLength(2);
+    expect(page.data.map((row) => row.stalled)).toEqual([true, false]);
+    expect(page.data.map((row) => row.status)).toEqual(["running", "failed"]);
+  });
+});

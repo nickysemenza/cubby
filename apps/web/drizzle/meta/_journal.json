@@ -253,6 +253,13 @@
       "when": 1792960582925,
       "tag": "0035_music_category_family",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792961541160,
+      "tag": "0036_job_entity_identity",
+      "breakpoints": true
     }
   ]
 }

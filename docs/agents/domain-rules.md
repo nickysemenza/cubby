@@ -225,7 +225,8 @@ addresses use shortcodes. An explicitly declared child read may expose an
 opaque UUID handle for stable row identity; that handle grants no entity route,
 general lookup, or mutation selector. Keep the child workflow's existing
 addressing and authority checks. Resolve entity codes through `shortcode-resolver`, mint through
-`insertWithShortcode`, never reuse them, and keep `shortcodeSchema` a
+`insertWithShortcode`, never reuse them (except pruned Job codes under
+[Job retention](../jobs.md#job-entity-and-identity-retention)), and keep `shortcodeSchema` a
 `ZodString`.
 
 For a standalone code, `shortcode("RUN-4K7M")` validates it and infers its

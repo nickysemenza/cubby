@@ -169,9 +169,44 @@ export async function migrateDatabase(
   // SAFETY: PgDialect implements this same NodePgSession at runtime; its
   // default PgQueryResultHKT signature loses the concrete driver variance.
   const session = db._.session as Parameters<PgDialect["migrate"]>[1];
-  await new PgDialect().migrate(journal.slice(0, boundary + 1), session, {
-    migrationsFolder,
-  });
+  const pending = journal.slice(appliedCount, boundary + 1);
+  if (
+    !pending.some((migration) =>
+      migration.sql[0]?.includes("-- cubby:transaction-per-statement"),
+    )
+  ) {
+    await new PgDialect().migrate(journal.slice(0, boundary + 1), session, {
+      migrationsFolder,
+    });
+    return;
+  }
+  for (const migration of pending) {
+    if (!migration.sql[0]?.includes("-- cubby:transaction-per-statement")) {
+      await new PgDialect().migrate([migration], session, { migrationsFolder });
+      continue;
+    }
+    // Opt-in backfills must be restartable: a crash leaves committed batches
+    // but no journal receipt. Each statement therefore has to be idempotent.
+    for (const statement of migration.sql) {
+      if (statement.includes("-- cubby:outside-transaction")) {
+        await db.execute(sql.raw(statement));
+        continue;
+      }
+      let remaining: boolean;
+      do {
+        remaining = await db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+          const result = await tx.execute(sql.raw(statement));
+          return statement.includes("-- cubby:repeat-batch")
+            ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
+                .remaining
+            : false;
+        });
+      } while (remaining);
+    }
+    await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+      VALUES (${migration.hash}, ${migration.folderMillis})`);
+  }
 }
 
 const PRODUCTION_URL_ENV = "PRODUCTION_DIRECT_DATABASE_URL";

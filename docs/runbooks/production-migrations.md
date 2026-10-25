@@ -75,6 +75,49 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Job entity identity backfill
+
+`0036_job_entity_identity` uses the migration runner's explicit
+`-- cubby:transaction-per-statement` opt-in. Ordinary migrations retain Drizzle's
+transaction behavior. Every opted-in statement must be idempotent: committed
+statements/batches can replay after a failure before the final journal receipt.
+`-- cubby:repeat-batch` repeats a statement whose result is `{ remaining: boolean }`;
+`-- cubby:outside-transaction` is reserved here for concurrent index creation/drop.
+The same journal hash/prefix checks and deployment serialization still apply.
+
+The Job migration widens identity checks without scanning under an exclusive
+lock, adds a nullable shortcode and a not-valid not-null check, and builds
+indexes concurrently. The check immediately refuses new code-less Jobs, so old
+Worker writes may fail during this preserving non-graceful cutover. No queued
+work, capture, lease, cursor, result or diagnostic is discarded. Each backfill
+transaction locks at most 1,000 Jobs, creates their identities and assigns their
+codes, then commits. Colliding code candidates retry in another batch; an
+existing conflicting identity refuses the migration. Execution fields and
+original timestamps are unchanged. A partial index keeps successive batches
+bounded. Final check/FK validation allows ordinary writes; SET NOT NULL reuses
+the validated check, and the temporary index/check are removed. Transactional
+DDL and batches use a two-second lock acquisition timeout, failing safely for
+replay instead of waiting indefinitely behind a writer. Concurrent indexes run
+outside transactions and may be rebuilt on replay.
+
+For approximately 196,000 Jobs, budget 196 nonempty batch commits plus an empty
+probe and the index/check steps. Rehearse against a seeded synthetic database
+and a retained production copy to measure actual SQL and network time. A
+planning allowance of a few minutes is appropriate; local timings are not a
+production runtime guarantee. Do not overlap Actions or another migration
+operator. Deploy matching code immediately after the migration; no writer hold
+is required.
+
+After deployment, verify every Job has exactly its matching live `Entity` row
+of kind `job`, codes match `JOB-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{10}`, no
+unreferenced Job identities remain, and the pending-capture population and
+execution payloads match the retained pre-deploy evidence. Verify enqueue
+replay preserves the code, Job reads on web/Apple/MCP, Retry now with one selected
+Job and with a filter, a new queue claim, and retention removing only eligible
+Jobs and their identities atomically. Verify the temporary backfill index is
+absent and both permanent identity constraints are validated. Report any checks
+not performed; migration success alone is not deployment verification.
+
 ## Unified Job cutover
 
 This migration replaces the old job tables and removes business triggers. Use

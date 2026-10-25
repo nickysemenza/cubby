@@ -328,6 +328,7 @@
         "packages/schemas/src/ai-evaluation.ts",
         "packages/schemas/src/assessment-reference.ts",
         "packages/schemas/src/workflow-runs.ts",
+        "packages/schemas/src/job.ts",
         "packages/schemas/src/mailbox-research.ts",
         "packages/schemas/src/shipment-evidence.ts",
         "packages/schemas/src/email-actions.ts",

@@ -873,6 +873,15 @@ const buildMetadataSchemas = () => {
         referenceOptions: z
           .object({
             column: nonEmptyString(),
+            onDelete: z
+              .enum([
+                "cascade",
+                "restrict",
+                "no action",
+                "set null",
+                "set default",
+              ])
+              .optional(),
             onUpdate: z
               .enum([
                 "cascade",
@@ -1179,6 +1188,7 @@ const buildMetadataSchemas = () => {
     .object({
       brand: nonEmptyString().nullable(),
       shortcode: nonEmptyString().nullable(),
+      shortcodeLength: z.int().min(5).max(32).optional(),
     })
     .strict();
 

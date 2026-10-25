@@ -1,11 +1,11 @@
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
+import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
 import {
-  SHORTCODE_BODY_LENGTH,
-  SHORTCODE_BODY_PATTERN,
-  SHORTCODE_CHARS,
-} from "./shortcode-alphabet";
-import { SHORTCODE_SCHEMA, type ShortcodeFor } from "./shortcode-schema";
+  SHORTCODE_SCHEMA,
+  shortcodeBodyPattern,
+  type ShortcodeFor,
+} from "./shortcode-schema";
 
 export {
   LEGACY_SHORTCODE_BODY_LENGTH,
@@ -15,11 +15,13 @@ export {
 } from "./shortcode-alphabet";
 import {
   SHORTCODE_PREFIX,
+  SHORTCODE_LENGTH,
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
 export {
   SHORTCODE_PREFIX,
+  SHORTCODE_LENGTH,
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
@@ -75,7 +77,7 @@ export const anyShortcodeSchema = <T extends ShortcodeType>(
     .toUpperCase()
     .regex(
       new RegExp(
-        `^(?:${types.map((t) => SHORTCODE_PREFIX[t]).join("|")})${SHORTCODE_BODY_PATTERN}$`,
+        `^(?:${types.map((t) => `${SHORTCODE_PREFIX[t]}${shortcodeBodyPattern(t)}`).join("|")})$`,
       ),
       `Expected one of: ${types.map((t) => `${SHORTCODE_PREFIX[t]}…`).join(", ")}`,
     );
@@ -161,7 +163,7 @@ export function generateShortcode<T extends ShortcodeType>(
 ): ShortcodeFor<T>;
 export function generateShortcode(type: ShortcodeType): AnyShortcode {
   return SHORTCODE_SCHEMA[type].parse(
-    `${SHORTCODE_PREFIX[type]}${shortcodeBody()}`,
+    `${SHORTCODE_PREFIX[type]}${shortcodeBody(SHORTCODE_LENGTH[type] ?? SHORTCODE_BODY_LENGTH)}`,
   );
 }
 
@@ -213,6 +215,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   shipment: shortcodeParser("shipment"),
   email: shortcodeParser("email"),
   imageJob: shortcodeParser("imageJob"),
+  job: shortcodeParser("job"),
   spendingCategory: shortcodeParser("spendingCategory"),
   cookbook: shortcodeParser("cookbook"),
   expense: shortcodeParser("expense"),

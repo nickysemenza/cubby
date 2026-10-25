@@ -5,6 +5,30 @@ import { describeJobRollup, describeJobWaitingOn } from "./job";
 const now = new Date("2026-10-24T12:00:00.000Z");
 
 describe("describeJobWaitingOn", () => {
+  it("words due-now and zero-failure scheduled work without a failure backoff", () => {
+    const waiting = {
+      reason: "backing_off",
+      lane: "server",
+      attempts: 0,
+      lastError: null,
+      cause: null,
+    } as const;
+    expect(
+      describeJobWaitingOn({ ...waiting, until: now.toISOString() }, now),
+    ).toBe("Due now");
+    expect(
+      describeJobWaitingOn(
+        { ...waiting, until: "2026-10-24T12:00:01.000Z" },
+        now,
+      ),
+    ).toBe("Due in 1 s");
+    expect(
+      describeJobWaitingOn(
+        { ...waiting, attempts: 5, until: now.toISOString() },
+        now,
+      ),
+    ).toBe("Due now");
+  });
   it("names an expired lease instead of reading as in progress", () => {
     expect(
       describeJobWaitingOn(

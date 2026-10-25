@@ -42,6 +42,7 @@ import {
   jobInvalidationCapture,
   run,
 } from "~/server/db/retained-tables";
+import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { JobSupersededError } from "../errors";
 import {
@@ -90,7 +91,6 @@ export async function enqueueJob(
   submitted: EnqueueJobInput,
 ): Promise<JobRow> {
   const input = enqueueJobInput.parse(submitted);
-  const client = repositoryQueries(db);
   const values = {
     key: input.key,
     kind: input.kind,
@@ -104,27 +104,33 @@ export async function enqueueJob(
     lastUsefulProgressAt: input.recoveryTimeoutMs ? new Date() : null,
     availableAt: input.availableAt ?? new Date(),
   };
-  const insertion = client.insert(job).values(values);
-  const [created] = input.invalidate
-    ? await insertion
-        .onConflictDoUpdate({
-          target: job.key,
-          set: {
-            ...values,
-            recoveryTimeoutMs:
-              input.recoveryTimeoutMs ?? sql`${job.recoveryTimeoutMs}`,
-            lastUsefulProgressAt: sql`CASE WHEN coalesce(${input.recoveryTimeoutMs ?? null}, ${job.recoveryTimeoutMs}) IS NOT NULL THEN ${new Date().toISOString()}::timestamp ELSE NULL END`,
-            generation: sql`${job.generation} + 1`,
-            state: sql`CASE WHEN ${job.state}=${jobState.enum.running} THEN ${jobState.enum.running} ELSE ${jobState.enum.queued} END`,
-            cursor: null,
-            result: null,
-            attempts: 0,
-            error: null,
-            waitReason: null,
-            waitUntil: null,
-            updatedAt: new Date(),
-          },
-          setWhere: and(
+  return repositoryTransactionOn(db, async (tx) => {
+    const found = await findOrCreateWithShortcode(tx, "job", {
+      where: eq(job.key, input.key),
+      values: () => values,
+    });
+    let row = found.row;
+    if (!found.created && input.invalidate) {
+      const [updated] = await tx
+        .update(job)
+        .set({
+          ...values,
+          recoveryTimeoutMs:
+            input.recoveryTimeoutMs ?? sql`${job.recoveryTimeoutMs}`,
+          lastUsefulProgressAt: sql`CASE WHEN coalesce(${input.recoveryTimeoutMs ?? null}, ${job.recoveryTimeoutMs}) IS NOT NULL THEN ${new Date().toISOString()}::timestamp ELSE NULL END`,
+          generation: sql`${job.generation} + 1`,
+          state: sql`CASE WHEN ${job.state}=${jobState.enum.running} THEN ${jobState.enum.running} ELSE ${jobState.enum.queued} END`,
+          cursor: null,
+          result: null,
+          attempts: 0,
+          error: null,
+          waitReason: null,
+          waitUntil: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(job.key, input.key),
             eq(job.kind, input.kind),
             inArray(job.state, [
               "queued",
@@ -133,18 +139,16 @@ export async function enqueueJob(
               "completed",
             ]),
           ),
-        })
-        .returning()
-    : await insertion.onConflictDoNothing().returning();
-  const row =
-    created ??
-    (await client.select().from(job).where(eq(job.key, input.key)))[0];
-  if (!row) throw new Error(`Job disappeared while enqueuing ${input.key}`);
-  if (row.kind !== input.kind)
-    throw new Error(
-      `Job key ${input.key} belongs to ${row.kind}, not ${input.kind}`,
-    );
-  return row;
+        )
+        .returning();
+      if (updated) row = { ...updated, shortcode: row.shortcode };
+    }
+    if (row.kind !== input.kind)
+      throw new Error(
+        `Job key ${input.key} belongs to ${row.kind}, not ${input.kind}`,
+      );
+    return row;
+  });
 }
 
 /**
@@ -418,7 +422,7 @@ export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
   const reserved = backfillReserve(limit, backfill.length);
   const leading = owned.slice(0, Math.max(0, limit - reserved));
   return [...leading, ...backfill.slice(0, limit - leading.length)].map(
-    ({ id, kind }) => ({ id, kind }),
+    ({ id, kind }) => ({ id: parseEntityId("job", id), kind }),
   );
 }
 
@@ -470,6 +474,7 @@ export async function claimJob(
   id: string,
   leaseMs = JOB_LEASE_MS,
 ): Promise<JobClaim | null> {
+  const recordId = parseEntityId("job", id);
   if (!Number.isFinite(leaseMs) || leaseMs <= 0)
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();
@@ -484,7 +489,7 @@ export async function claimJob(
       })
       .from(job)
       .leftJoin(jobInvalidation, eq(jobInvalidation.key, job.key))
-      .where(and(eq(job.id, id), due(now)))
+      .where(and(eq(job.id, recordId), due(now)))
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
@@ -530,7 +535,7 @@ export async function claimJob(
             : "Job exhausted attempts after interrupted execution",
           updatedAt: now,
         })
-        .where(eq(job.id, id));
+        .where(eq(job.id, recordId));
       return null;
     }
     const token = crypto.randomUUID();
@@ -556,7 +561,7 @@ export async function claimJob(
           lastUsefulProgressAt: available.lastUsefulProgressAt,
         }),
       })
-      .where(eq(job.id, id))
+      .where(eq(job.id, recordId))
       .returning();
     if (claimed && restart) {
       // This exact visible set, not a maximum UUID/time/revision, is observed.
@@ -870,13 +875,14 @@ export async function retryJob(
   id: string,
   recoveryTimeoutMs?: number,
 ) {
+  const recordId = parseEntityId("job", id);
   return withTransactionDatabase(db, async (tx) => {
     const [previous] = await getDb(tx)
       .select()
       .from(job)
       .where(
         and(
-          eq(job.id, id),
+          eq(job.id, recordId),
           inArray(job.state, ["failed", "paused", "cancelled"]),
         ),
       )
@@ -887,7 +893,7 @@ export async function retryJob(
       await getDb(tx)
         .update(job)
         .set({ key: `${previous.key}:retired:${previous.id}` })
-        .where(eq(job.id, id));
+        .where(eq(job.id, recordId));
       return enqueueJob(tx, {
         key: previous.key,
         kind: previous.kind,
@@ -915,7 +921,7 @@ export async function retryJob(
         availableAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(job.id, id))
+      .where(eq(job.id, recordId))
       .returning();
     return row ?? null;
   });
@@ -1043,6 +1049,7 @@ async function controlJob(
   id: string,
   state: "paused" | "cancelled",
 ) {
+  const recordId = parseEntityId("job", id);
   const [row] = await repositoryQueries(db)
     .update(job)
     .set({
@@ -1056,7 +1063,7 @@ async function controlJob(
     })
     .where(
       and(
-        eq(job.id, id),
+        eq(job.id, recordId),
         inArray(job.state, ["queued", "running", "retry_wait", "paused"]),
       ),
     )

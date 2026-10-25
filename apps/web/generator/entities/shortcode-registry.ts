@@ -48,6 +48,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
     .filter((name) => name.endsWith(".entity.ts"))
     .sort((left, right) => left.localeCompare(right));
   const prefixes: Record<string, string> = {};
+  const lengths: Record<string, number> = {};
   for (const name of files) {
     const path = resolve(SPEC_DIRECTORY, name);
     const program = parseSync(path, await readFile(path, "utf8")).program;
@@ -75,6 +76,14 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
       `${name} identifiers.shortcode`,
     );
     if (shortcode !== null) prefixes[key] = shortcode;
+    const length = valueOf(identifiers, "shortcodeLength");
+    if (length !== undefined) {
+      lengths[key] = z
+        .int()
+        .min(5)
+        .max(32)
+        .parse(length.type === "Literal" ? length.value : undefined);
+    }
   }
   // The stable per-entity import surface (`productShortcode` /
   // `ProductShortcode`, >150 sites): each is the schema-map entry, never a
@@ -96,7 +105,8 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
           entries: prefixes,
           comment: "// Generated shortcode registry stays one entity per line.",
         }) +
-        "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n",
+        "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n" +
+        `export const SHORTCODE_LENGTH: Partial<Record<ShortcodeType, number>> = ${JSON.stringify(lengths)};\n`,
     },
     {
       relativePath: "packages/shared/src/generated/shortcode-named.gen.ts",

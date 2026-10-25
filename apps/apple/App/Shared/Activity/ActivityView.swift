@@ -1,52 +1,113 @@
 import CubbyKit
 import SwiftUI
 
-/// Activity: what this device is doing now, and the way into the household's Runs and Image
-/// jobs. Server work lists through the generic Run and Image job lists; only device-local
-/// progress (with Stop) and the automatic-work switch are this screen's own.
+/// Household Activity uses generic Run and Job lists alongside this device's local work.
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 
-    @State private var queue: HouseholdQueueOverview?
-    @State private var queueError: String?
     @State private var backlog: DeviceBacklogBanner?
     @State private var backlogError: String?
-    @State private var devices = HouseholdDevices(names: [:], thisDevice: nil)
-    @State private var deviceError: String?
-    /// The imageJob `processing` saved view (live leases), grouped by `leaseDeviceId`.
-    @State private var processingList: GenericEntityListModel?
+    @State private var overview: HouseholdQueueOverview?
+    @State private var selectedJobs: Set<String> = []
 
     /// Leases renew every 15 s; reloading at that pace keeps the countdowns and groups current
     /// while Activity is on screen.
     private static let refreshInterval = Duration.seconds(15)
 
-    private var processing: ProcessingImageJobs {
-        ProcessingImageJobs(rows: processingList?.rows ?? [], devices: devices)
-    }
-
     var body: some View {
-        let processing = processing
         List {
+            if let overview, let health = overview.health, !health.alerts.isEmpty {
+                Section("Queue unhealthy") {
+                    ForEach(Array(health.alerts.enumerated()), id: \.offset) { _, alert in
+                        Label(alert.evidence, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(FieldGuideTokens.warning)
+                    }
+                }
+            }
             DeviceBacklogBannerSection(
                 backlog: backlog, error: backlogError,
                 thisDeviceProcessing: appModel.companionImageActivity.phase == .processing)
-            localExecution(processing.thisDevice)
-            OtherDevicesSection(
-                processing: processing, expiredLeaseHolders: queue?.expiredLeaseHolders ?? [],
-                error: [processingError, deviceError].compactMap { $0 }.first,
-                unloadedCount: max(0, (processingList?.meta?.totalCount ?? 0) - processing.loadedCount))
-            HouseholdQueueSections(queue: queue, error: queueError)
-            Section("Household work") {
-                NavigationLink(value: Route.entityList(.run)) {
-                    Label("Runs", systemImage: "arrow.triangle.2.circlepath")
+            localExecution()
+            ImageWorkConcurrencySection()
+            if let overview {
+                Section {
+                    ScrollView(.horizontal) {
+                        HStack {
+                            ForEach(Array(overview.counts.enumerated()), id: \.offset) { _, chip in
+                                Button {
+                                    selectedJobs.removeAll()
+                                    Task {
+                                        await overview.filter(
+                                            lane: chip.lane.rawValue, reason: chip.reason.rawValue)
+                                    }
+                                } label: {
+                                    Text(
+                                        "\(queueLabel("lane", chip.lane.rawValue)) · \(queueLabel("reason", chip.reason.rawValue)) \(chip.count)"
+                                    )
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                    }
                 }
-                RunsNeedingAttentionRows(queue: queue)
-                NavigationLink(value: Route.entityList(.imageJob)) {
-                    Label("Image jobs", systemImage: "photo.badge.checkmark")
+                Section("Runs needing attention") {
+                    entityRows(
+                        overview.runs, key: .run,
+                        columns: ["purpose", "status", "waitingOn", "stalled", "startedAt", "chargedCost"])
+                    NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
+                        Text("All \(overview.runs.meta?.totalCount ?? 0)")
+                    }
                 }
-                NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
-                    Label("Image jobs needing attention", systemImage: "exclamationmark.circle")
+                Section("Jobs") {
+                    Menu("Job view") {
+                        ForEach(EntityCatalog[.job].presentation.savedViews, id: \.id) { view in
+                            Button(view.label) {
+                                selectedJobs.removeAll()
+                                Task { await overview.applyJobView(view) }
+                            }
+                        }
+                    }
+                    Button(selectedJobs.isEmpty ? "Retry matching Jobs now" : "Retry selected Jobs now") {
+                        Task { await overview.retry(codes: Array(selectedJobs)) }
+                    }
+                    .disabled(overview.isRetrying)
+                    .buttonStyle(.borderless)
+                    if let error = overview.error {
+                        Text(error.localizedDescription).foregroundStyle(FieldGuideTokens.warning)
+                            .task { Diagnostics.report(error, context: "activity.queue") }
+                    }
+                    ForEach(overview.jobs.rows) { row in
+                        HStack(alignment: .top) {
+                            Button {
+                                if !selectedJobs.insert(row.id).inserted { selectedJobs.remove(row.id) }
+                            } label: {
+                                Image(
+                                    systemName: selectedJobs.contains(row.id)
+                                        ? "checkmark.circle.fill" : "circle")
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Select \(row.id)")
+                            DisclosureGroup {
+                                ActivityJobExplainPanel(code: row.id, overview: overview)
+                            } label: {
+                                NavigationLink(value: Route.entityDetail(.job, id: row.id)) {
+                                    EntityRowView(
+                                        key: .job, row: row,
+                                        columns: [
+                                            "kind", "lane", "state", "waitingOn", "runId", "attempts",
+                                            "leaseExpiresAt",
+                                        ])
+                                }
+                            }
+                        }
+                    }
+                    listState(overview.jobs)
+                    NavigationLink(value: Route.entityList(.job, filters: overview.jobs.filters)) {
+                        Text("All \(overview.jobs.meta?.totalCount ?? 0)")
+                    }
                 }
+            } else {
+                ProgressView()
             }
         }
         .navigationTitle("Activity")
@@ -72,52 +133,41 @@ struct ActivityView: View {
         }
     }
 
-    /// A failed refresh keeps the last rows, so it must say so beside them.
-    private var processingError: String? {
-        guard let processingList else { return nil }
-        switch processingList.phase {
-        case .failed(let message), .unavailable(let message): return message
-        default: return processingList.refreshError ?? processingList.enrichment.errors.first
-        }
-    }
-
-    /// The queue counts, the device backlog, the Device directory and the processing rows load
-    /// side by side; each keeps its last value and reports its own failure.
     private func load() async {
         guard appModel.phase == .signedIn else { return }
-        let client = appModel.client
-        async let queueLoad = Self.attempt { try await HouseholdQueueOverview.load(client: client) }
-        async let backlogLoad = Self.attempt { try await DeviceBacklogBanner.load(client: client) }
-        async let devicesLoad = Self.attempt {
-            try await HouseholdDevices.load(client: client, installationID: AppInstallationID.current)
-        }
-        await loadProcessing(client: client)
-        switch await queueLoad {
-        case .success(let value): (queue, queueError) = (value, nil)
-        case .failure(let error): queueError = report(error, context: "activity.householdQueue")
-        }
+        if overview == nil { overview = HouseholdQueueOverview(client: appModel.client) }
+        async let backlogLoad = Self.attempt { try await DeviceBacklogBanner.load(client: appModel.client) }
+        await overview?.refresh()
         switch await backlogLoad {
         case .success(let value): (backlog, backlogError) = (value, nil)
         case .failure(let error): backlogError = report(error, context: "activity.deviceBacklog")
         }
-        switch await devicesLoad {
-        case .success(let value): (devices, deviceError) = (value, nil)
-        case .failure(let error): deviceError = report(error, context: "activity.devices")
-        }
     }
 
-    private func loadProcessing(client: CubbyClient) async {
-        if let processingList {
-            await processingList.refresh()
-            return
+    private func queueLabel(_ field: String, _ value: String) -> String {
+        EntityCatalog[.job].filter(field)?.options?.first { $0.value == value }?.label ?? value
+    }
+
+    @ViewBuilder private func entityRows(_ model: GenericEntityListModel, key: EntityKey, columns: [String])
+        -> some View
+    {
+        ForEach(model.rows) { row in
+            NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                EntityRowView(key: key, row: row, columns: columns)
+            }
         }
-        let descriptor = EntityCatalog[.imageJob]
-        let view = descriptor.presentation.savedViews.first { $0.id == "processing" }
-        let list = GenericEntityListModel(
-            descriptor: descriptor, client: client, pageSize: 50,
-            filters: view?.filterState ?? EntityFilterState())
-        processingList = list
-        await list.loadInitial()
+        listState(model)
+    }
+
+    @ViewBuilder private func listState(_ model: GenericEntityListModel) -> some View {
+        switch model.phase {
+        case .idle, .loading: ProgressView()
+        case .failed(let message), .unavailable(let message):
+            Text(message).foregroundStyle(FieldGuideTokens.warning)
+        case .loaded:
+            if model.rows.isEmpty { Text("No matching records").foregroundStyle(.secondary) }
+            if let error = model.refreshError { Text(error).foregroundStyle(FieldGuideTokens.warning) }
+        }
     }
 
     private func report(_ error: any Error, context: String) -> String? {
@@ -132,11 +182,10 @@ struct ActivityView: View {
         do { return .success(try await operation()) } catch { return .failure(error) }
     }
 
-    @ViewBuilder private func localExecution(_ thisDevice: [EntityRow]) -> some View {
+    @ViewBuilder private func localExecution() -> some View {
         let activities = appModel.backgroundActivity.visibleActivities
         Section {
             CompanionWorkerStatusRow(activity: appModel.companionImageActivity)
-            ForEach(thisDevice) { row in ProcessingImageJobRow(row: row) }
             if !activities.isEmpty {
                 ForEach(activities) { activity in
                     let row = LocalActivityRow(activity: activity) {

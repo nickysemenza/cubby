@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -31,4 +32,12 @@ export const scheduleSearchRepair = (db: Database) =>
   });
 
 export const readSearchRepairJobs = (db: Database, ids: string[]) =>
-  getDb(db).select().from(job).where(inArray(job.id, ids));
+  getDb(db)
+    .select()
+    .from(job)
+    .where(
+      inArray(
+        job.id,
+        ids.map((id) => parseEntityId("job", id)),
+      ),
+    );

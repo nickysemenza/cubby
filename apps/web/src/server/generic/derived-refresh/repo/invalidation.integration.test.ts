@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -72,7 +73,12 @@ describe("durable family invalidation", () => {
         .where(eq(jobInvalidationCapture.key, key))
     )[0]?.count ?? 0;
   const row = async (id: string) =>
-    (await getDb(ctx.db).select().from(job).where(eq(job.id, id)))[0]!;
+    (
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.id, parseEntityId("job", id)))
+    )[0]!;
   const due = async (id: string) =>
     (await dueJobs(ctx.db, 100)).some((entry) => entry.id === id);
 

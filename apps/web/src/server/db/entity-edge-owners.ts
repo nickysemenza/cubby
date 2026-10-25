@@ -124,7 +124,6 @@ export const ENTITY_EDGE_OWNERS = {
   ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
   ImageProcessingSubmissionJob: { owner: imageProcessingSubmissionJob.jobId },
   ImageSighting: { owner: imageSighting.imageId },
-  Job: { excluded: "Execution history independent of Run provenance." },
   AiEvaluation: { excluded: "Durable inference and publication history." },
   AiEvaluationRequest: {
     excluded: "Per-Run work membership and publication receipts.",

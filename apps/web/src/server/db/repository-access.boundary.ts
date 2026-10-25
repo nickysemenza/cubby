@@ -67,6 +67,22 @@ export function repositoryQueries(
   return "rollback" in db ? db : getDb(db);
 }
 
+/** A collision retry needs a native savepoint even inside a caller-owned transaction. */
+export function repositorySavepoint<T>(
+  db: RepositoryQueryInput,
+  run: (tx: RepositoryQueryTransaction) => Promise<T>,
+): Promise<T> {
+  // SAFETY: repositoryQueries projects the native pool/transaction without
+  // replacing it. Its native transaction method is deliberately erased from
+  // RepositoryQueryClient so schema-specific transaction types cannot escape.
+  const client = repositoryQueries(db) as RepositoryQueryClient & {
+    transaction<R>(
+      run: (tx: RepositoryQueryTransaction) => Promise<R>,
+    ): Promise<R>;
+  };
+  return client.transaction(run);
+}
+
 /** Reuse the request/transaction runtime; projection never owns another client. */
 export function repositoryTransaction<T>(
   db: Database,

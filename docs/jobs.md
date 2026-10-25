@@ -7,6 +7,35 @@ the decision; this page owns the runtime contract. Derived-data families are
 in [entities](entities.md#background-derived-data); Worker and database
 capacity in [infrastructure](infrastructure.md#postgresql-and-hyperdrive).
 
+## Job entity and identity retention
+
+Job is a read-only generic entity over the existing durable `Job` table. Web,
+Apple and MCP use the entity kernel for list/detail reads. Its `JOB-` shortcode
+has a ten-character body from the shared shortcode alphabet. Enqueue creates
+its `Entity` identity and execution row atomically through the shared identity
+writer; a repeat enqueue by key preserves both identities. Kind policy supplies
+the lane and internal-kind flag. Subject Images supply thumbnails, and Run
+references arrive with their labels in the row read.
+
+The entity exposes execution state, lane, waiting-on text, subject, Run,
+attempts, raw error, lease end and timestamps. Filters cover lane, waiting-on
+reason, state, kind, Run, attention and internal kinds. Internal work is hidden
+by default (`image.device.wake`, `queue.watchdog`, `jobs.retention`,
+`ai-refresh.activate`, plus anything policy marks internal). Saved views are
+In progress, Due, Waiting for Apple, Backing off and Needs attention. Retry now
+uses `job.retryNow` over checked codes or the exact current entity filter.
+
+Job is the sole exception to permanent `Entity` identities: retention deletes
+its identity in the same transaction as its pruned execution row. Queue work
+churns at roughly 175,000 Jobs a week; retaining those identities forever would
+make the identity index unbounded. A pruned `JOB-` code may be recycled and no
+longer resolves; every other entity retains its identity and code forever.
+Domain evidence, retained Jobs, failed work and invalidation ownership survive.
+
+Migration `0036_job_entity_identity` adds and backfills codes and identities in
+1,000-row committed batches, preserving every execution field and timestamp.
+See the [production migration procedure](runbooks/production-migrations.md#job-entity-identity-backfill).
+
 ## Kinds and lanes
 
 `apps/web/src/server/generic/jobs/kind-policy.ts` is the one registry of
@@ -307,21 +336,19 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
   only on hello), device attempt starts per minute (reclaims included) and the
   ETA at that pace.
 
-The web Activity page is the overview: the watchdog's red badge with raw
-alert evidence when unhealthy, the device backlog notice (loud when work waits
-and no device is pulling), the queue counts by lane and reason (the Apple
-lane also counts active installs, those needing an update, and leases per
-device with expired ones flagged), the image jobs each Apple device is
-processing, cloud leases grouped apart (generic imageJob rows with their
-lease countdown, polled every 15 s while work is in flight because renewals
-publish no change), Runs needing
-attention with their rollup and stall flag, then the filtered Job list. Runs
-needing attention is the Run entity's `attention` view: stopped Runs of
-`ATTENTION_RUN_PURPOSES`; system passes (AI refresh, background) retry on
-their own and stay under AI work. Every count links to that list
-(`/activity?lane=…&reason=…`, also `state`, `kind`, `runId`, `attention`);
-Retry now confirms and applies `job.retryNow` to the list's filter, and each
-row expands to its `job.explain` chain. The audit-log changes feed follows.
+Activity on web and Apple presents the unhealthy-only health notice, device
+backlog banner, compact lane/reason counts, Runs needing attention, then Jobs.
+Count chips scope the Job table; web records that scope in Activity's URL.
+Runs use the generic `attention` saved view: member-visible stopped Runs that
+have no successor, plus stalled Runs, ordered stalled first then newest.
+The embed shows ten rows and links to all matching Runs. AI cost is the Run's
+recorded charged usage. Jobs use the generic In progress view, including image
+subject thumbnails, and a chevron expands Explain, that Job's Worker logs and
+Retry now underneath its row. Closed web rows remain 32 px. There is one
+shared table renderer; the separate image-processing roster and hand-written
+queue rows, pickers and pager are removed. Apple keeps its This device status,
+local work, automatic-work toggle and the shared concurrency setting.
+The web audit-log changes feed follows the queue.
 
 The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
 first repairs image execution in bounded batches (retires moot work, reopens

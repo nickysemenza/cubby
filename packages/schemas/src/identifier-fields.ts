@@ -95,6 +95,8 @@ export const deviceId = ENTITY_ID_SCHEMA.device;
 export const plantId = ENTITY_ID_SCHEMA.plant;
 export const emailId = ENTITY_ID_SCHEMA.email;
 export const imageJobId = ENTITY_ID_SCHEMA.imageJob;
+export const jobId = ENTITY_ID_SCHEMA.job;
+export type JobId = EntityId<"job">;
 
 export type RecipeId = EntityId<"recipe">;
 export type ImageId = EntityId<"image">;
@@ -180,6 +182,7 @@ const entityRefParser =
 const PARSE_ENTITY_REF = {
   email: entityRefParser("email"),
   imageJob: entityRefParser("imageJob"),
+  job: entityRefParser("job"),
   spendingCategory: entityRefParser("spendingCategory"),
   cookbook: entityRefParser("cookbook"),
   expense: entityRefParser("expense"),
@@ -262,6 +265,7 @@ export {
   plantShortcode,
   emailShortcode,
   imageJobShortcode,
+  jobShortcode,
 } from "@cubby/shared";
 export type {
   CookbookShortcode,
@@ -294,6 +298,7 @@ export type {
   PlantShortcode,
   EmailShortcode,
   ImageJobShortcode,
+  JobShortcode,
 } from "@cubby/shared";
 
 export type SpendingCategoryId = EntityId<"spendingCategory">;

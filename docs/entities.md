@@ -40,6 +40,31 @@ trade. No-value groups without a declared no-value filter remain readable but ca
 
 Web boards use pointer/touch dragging; keyboard users use the Earlier/Later buttons and Move picker. Drag grips are excluded from keyboard focus and the accessibility tree.
 
+## Fixed-filter list embeds and shortcode lengths
+
+`EmbeddedEntityList` in `entity/entity-list/generic-entity-list.tsx` embeds an
+entity's ordinary columns, list read, progressive enrichment and ListWorkbench.
+Callers supply an entity, fixed filters or a saved view id, a page size, optional
+columns/sort and an All N link. Each embed owns local table state and does not
+consume or write its host's URL filters/sort. The host may derive fixed filters
+from its URL. Saved-view filters and fixed scope are composed through the
+manifest; links encode the same effective filter. Embeds stop at their bounded
+first page, and the full list owns further browsing. Optional row disclosure
+uses the shared table's inline detail rows, rather than another table system.
+
+A retention-managed read-only entity may omit `deletedAt`; generic readers apply
+liveness only where the table declares it. `listScaffold.population` receives the
+same request filters for rows, facets and selection. `populationFilters` names
+request options consumed by that predicate instead of compared with each row;
+Job uses it for its internal-kinds toggle.
+
+`identifiers.shortcodeLength` optionally overrides the minted and accepted body
+length for an entity. The bootstrap registry carries that declaration to shared
+schema validation and `generateShortcode`; omitted lengths keep the existing
+four/five-character validation and five-character generation. Job declares ten.
+Job retention alone may delete `Entity` identities and recycle pruned codes;
+[Jobs](jobs.md#job-entity-and-identity-retention) owns that bounded lifecycle.
+
 ## Generic by default
 
 Cubby's entities share one declaration spine, and every client — web, iOS and
@@ -3289,7 +3314,8 @@ identity before payload insertion and retain tombstones on soft and hard deletes
 path-compressed `mergedIntoId` redirects. A read through a merged-away code
 returns the survivor with `redirectedFrom`, and detail reads list
 `previousShortcodes`; a write through one refuses with the survivor's code, and
-a deleted code refuses with the deletion date. Codes are never reused, even a
+a deleted code refuses with the deletion date. Except for [pruned Job identities](jobs.md#job-entity-and-identity-retention),
+codes are never reused, even a
 hard-deleted payload's.
 
 Direct files are `EntityAttachment` rows: gallery photos and purchase documents

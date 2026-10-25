@@ -43,10 +43,11 @@ describe("fair drain under a flood", () => {
     { timeout: 180_000 },
     async () => {
       await getDb(ctx.db).execute(sql`
-      INSERT INTO "Job" (key, kind, input, "availableAt")
-      SELECT 'synthetic.flood:' || n, 'synthetic.flood', '{}'::jsonb,
-        now() - interval '1 hour' + n * interval '1 millisecond'
-      FROM generate_series(1, 100000) n`);
+      WITH seeds AS MATERIALIZED (SELECT n, gen_random_uuid() AS id FROM generate_series(1,100000) n), identities AS (
+        INSERT INTO "Entity" (id,kind,shortcode) SELECT id,'job','JOB-' || lpad(translate(to_hex(n), '0123456789abcdef', '23456789ABCDEFGH'),10,'2') FROM seeds RETURNING id,shortcode
+      ) INSERT INTO "Job" (id,shortcode,key,kind,input,"availableAt")
+      SELECT i.id,i.shortcode,'synthetic.flood:' || s.n,'synthetic.flood','{}'::jsonb,
+        now() - interval '1 hour' + s.n * interval '1 millisecond' FROM identities i JOIN seeds s ON s.id=i.id`);
       const others: string[] = [];
       for (const kind of ["a.mail", "b.search", "c.image", "d.calendar"])
         for (let index = 0; index < 10; index++)

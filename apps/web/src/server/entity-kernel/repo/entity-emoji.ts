@@ -43,7 +43,7 @@ export async function writeRecordEmoji(
   const value = recordEmojiInput.parse(data[field]);
   const table = SHORTCODE_TABLE[entity];
   await unwrapDb(db).execute(
-    sql`UPDATE ${table} SET ${sql.identifier(field)} = ${value} WHERE ${table.id} = ${id} AND ${table.deletedAt} IS NULL`,
+    sql`UPDATE ${table} SET ${sql.identifier(field)} = ${value} WHERE ${table.id} = ${id} AND ${notDeleted(table)}`,
   );
 }
 

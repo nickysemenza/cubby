@@ -1545,7 +1545,9 @@ type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
     ? { scopes?: ScopesArg<E> }
     : { scopes: ScopesArg<E> }) & {
     /** Join-implied population constraints shared by rows, facets, and identity reads. */
-    population?: () => SQL;
+    population?: <Filters extends object>(filters: Filters) => SQL;
+    /** Request options consumed by population rather than tested against each row. */
+    populationFilters?: readonly (keyof DerivedSqlArg<E>)[];
   };
 
 /** `options` is required exactly when the entity declares SQL it reads. */
@@ -1617,7 +1619,7 @@ export function listScaffold<
   E extends SortableEntity,
   T extends PgTable & {
     id: AnyColumn;
-    deletedAt: AnyColumn;
+    deletedAt?: AnyColumn;
     createdAt: AnyColumn;
     updatedAt: AnyColumn;
     shortcode: AnyColumn;
@@ -1879,7 +1881,7 @@ export function listScaffold<
         table,
         [],
         [
-          options?.population?.(),
+          options?.population?.(filters),
           // Only a caller's own read context reaches derived SQL.
           ...scaffold.filterPredicates(filters, context.withRead(readContext)),
           ...(scored
@@ -1934,7 +1936,15 @@ export function listScaffold<
       filters: Filters,
       context: ListContext = ListContext.empty,
     ): Array<SQL | undefined> {
-      return declaredFilterPredicates(entity, table, filters, {
+      const values = options?.populationFilters
+        ? Object.fromEntries(
+            Object.entries(filters).filter(
+              ([key]) =>
+                !options.populationFilters?.some((field) => field === key),
+            ),
+          )
+        : filters;
+      return declaredFilterPredicates(entity, table, values, {
         derived: derivedSql,
         rows: rowsSql,
         context,
