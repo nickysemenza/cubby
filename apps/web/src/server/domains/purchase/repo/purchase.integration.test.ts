@@ -93,11 +93,7 @@ describe("purchase list totals", () => {
     });
     expect(page.result.data[0]).not.toHaveProperty("vendorId");
     expect(page.result.data[0]).not.toHaveProperty("orderUrl");
-    expect(
-      page.statements.filter((statement) =>
-        statement.includes('"DerivedValue"'),
-      ),
-    ).toHaveLength(1);
+    expect(page.tables).toContain("DerivedValue");
     expect(page.queryCount).toBe(3);
   });
   it("sums live ledger rows across pages and respects the purchase filter", async () => {

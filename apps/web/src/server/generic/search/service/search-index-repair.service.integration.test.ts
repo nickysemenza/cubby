@@ -27,7 +27,7 @@ describe("search repair admission", () => {
     const stream = repairSearchIndex(ctx.db);
     const first = await stream.next();
     if (first.done) throw new Error("Expected repair progress");
-    expect(first.value.type).toBe("progress");
+    expect(first.value).toMatchObject({ type: "progress", phase: "sources" });
     for (let page = 0; page < 100; page++) {
       const executions = await getDb(ctx.db)
         .select()
