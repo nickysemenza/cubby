@@ -1,5 +1,4 @@
 import Foundation
-import Synchronization
 
 /// The companion worker's live state, for Activity's "This device" section, Settings, the iOS
 /// bar, and `cubby companion`'s log. Every phase is explicit, so a quiet device always says why.
@@ -545,9 +544,15 @@ public actor CompanionImageWorker {
         // Per-subscription: a stale pause must not survive a reconnect whose first pull reports
         // otherwise.
         remotePaused = false
-        // A protocol ping confirms the subscription opened; an application frame would end it.
-        connectionStep = "ping"
-        try await awaitPong { socket.sendPing(pongReceiveHandler: $0) }
+        // The server greets every new subscriber with a ring, so the first frame confirms the
+        // subscription opened. A protocol ping did not: its pong never arrived from the hibernating
+        // doorbell, and the worker waited on it forever without an error. The deadline cancels a
+        // socket that opens but never greets, so the attempt fails, is reported and backs off.
+        connectionStep = "greeting"
+        try await awaitFirstFrame(
+            within: CompanionImageProcessingProtocol.openDeadline,
+            receive: { _ = try await socket.receive() },
+            cancel: { socket.cancel(with: .goingAway, reason: nil) })
         connectionStep = "receive"
         openedSocket = socket
         connectionAttempt = 0
@@ -1045,27 +1050,36 @@ enum CompanionClaimRelease {
     }
 }
 
-/// Waits for the first pong (or ping failure) from `send`. URLSession can call a ping's handler
-/// more than once, again with an error when the connection aborts (POSIX 53); a checked
-/// continuation resumes exactly once, so later calls are ignored.
-func awaitPong(_ send: (@escaping @Sendable (Error?) -> Void) -> Void) async throws {
-    let resumed = PongResumption()
-    try await withCheckedThrowingContinuation { (opened: CheckedContinuation<Void, Error>) in
-        send { error in
-            guard resumed.claim() else { return }
-            if let error { opened.resume(throwing: error) } else { opened.resume() }
+/// Waits for `receive` to deliver the subscription's first frame, or fails after `limit`. On a
+/// timeout `cancel` closes the socket, which ends the pending receive, so the wait cannot hang.
+func awaitFirstFrame(
+    within limit: Duration,
+    receive: @escaping @Sendable () async throws -> Void,
+    cancel: @escaping @Sendable () -> Void
+) async throws {
+    try await withThrowingTaskGroup(of: Bool.self) { group in
+        group.addTask {
+            try await receive()
+            return true
+        }
+        group.addTask {
+            try await Task.sleep(for: limit)
+            return false
+        }
+        defer { group.cancelAll() }
+        let greeted = try await group.next() ?? false
+        if !greeted {
+            cancel()
+            throw CompanionOpenTimeout(limit: limit)
         }
     }
 }
 
-private final class PongResumption: Sendable {
-    private let done = Mutex(false)
-    /// True for the first caller only.
-    func claim() -> Bool {
-        done.withLock { done in
-            defer { done = true }
-            return !done
-        }
+/// The subscription opened but no greeting arrived within the deadline.
+struct CompanionOpenTimeout: LocalizedError {
+    let limit: Duration
+    var errorDescription: String? {
+        "No greeting from the image-work doorbell within \(limit.components.seconds) s"
     }
 }
 
