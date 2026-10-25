@@ -1,3 +1,4 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import {
   listChildCountSchema,
   type PaginationParams,
@@ -30,6 +31,25 @@ export const withChildCounts = <Row>(
       : Object.assign({}, row, { childCount });
   });
 
+const displayImagesRowSchema = z.object({
+  displayImages: displayImagesField.optional(),
+});
+/**
+ * The plan resolves `displayImages` for every list row, but an entity's
+ * output schema may not declare them; carry them so the kernel's media pass
+ * finds them and skips its own shortcode-then-images round trips.
+ */
+export const withDisplayImages = <Row>(
+  parsed: readonly Row[],
+  source: readonly unknown[],
+): Row[] =>
+  parsed.map((row, index) => {
+    const { displayImages } = displayImagesRowSchema.parse(source[index] ?? {});
+    return displayImages === undefined
+      ? row
+      : Object.assign({}, row, { displayImages });
+  });
+
 /** Complete readers validate canonical rows while preserving count, totals, and grouping metadata. */
 export async function parseCompleteListRead<
   S extends z.ZodType,
@@ -41,8 +61,11 @@ export async function parseCompleteListRead<
   const { data, ...page } = await read;
   return {
     ...page,
-    data: withChildCounts(
-      data.map((row): z.output<S> => schema.parse(row)),
+    data: withDisplayImages(
+      withChildCounts(
+        data.map((row): z.output<S> => schema.parse(row)),
+        data,
+      ),
       data,
     ),
   };

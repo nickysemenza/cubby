@@ -794,16 +794,16 @@ export async function withUniversalEntityMedia<
     }
   >
 > {
-  const publicRows = await withRecordEmoji(
-    db,
-    entityKind,
-    rows.map((row) => publicEntityRowSchema.parse(row)),
-  );
-  const resolved = await resolveLiveShortcodes(
-    db,
-    publicRows.map((row) => row.id),
-    entityKind,
-  );
+  const parsed = rows.map((row) => publicEntityRowSchema.parse(row));
+  // Independent reads: the emoji and the shortcode resolution share a round trip.
+  const [publicRows, resolved] = await Promise.all([
+    withRecordEmoji(db, entityKind, parsed),
+    resolveLiveShortcodes(
+      db,
+      parsed.map((row) => row.id),
+      entityKind,
+    ),
+  ]);
   const refs = publicRows.flatMap((row) => {
     const entityId = resolved.get(row.id);
     return entityId === undefined ? [] : [{ entityKind, entityId }];

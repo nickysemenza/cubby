@@ -140,6 +140,12 @@ export function expandListGroups(
   return ordered;
 }
 
+/** Id-only page loads started before the rows arrive; see `prefetch`. */
+export type ListPagePrefetch = {
+  qualities?: ReturnType<typeof loadDataQualities>;
+  images?: Promise<Map<string, DisplayImageSummary[]>>;
+};
+
 export type ListReadValueContext = {
   projection: ListProjection;
   context: ListContext;
@@ -384,14 +390,83 @@ export function listReadPlan<Row>(
     if (projection.kind === "selected")
       selectedListProjection(entity, projection.fields);
   };
+  /**
+   * The page loads that need only row ids. The scaffold starts them as soon
+   * as the page's ids are known, so they share a round trip with the row
+   * load instead of waiting for it.
+   */
+  // Entities without bespoke media still publish `displayImages`; resolving
+  // them here from internal ids spares the kernel's shortcode-then-images
+  // pass two sequential round trips per page.
+  const resolvesDisplayImages = (projection: ListProjection) =>
+    wantsListGroup(projection, "media") &&
+    (options.media === true ||
+      (Object.hasOwn(schema.shape, "displayImages") &&
+        wanted(projection, "displayImages")));
+  /** Non-media entities take the plan-resolved images; media bindings own theirs. */
+  const attachDisplayImages = (
+    result: ListReadRow,
+    images: Map<string, DisplayImageSummary[]> | undefined,
+    id: string,
+    projection: ListProjection,
+  ) => {
+    if (
+      options.media ||
+      !images ||
+      !wanted(projection, "displayImages") ||
+      result.displayImages !== undefined
+    )
+      return;
+    result.displayImages = schema.shape.displayImages.parse(
+      images.get(entityRefKey(entity, id)) ?? [],
+    );
+  };
+  const prefetch = (
+    db: Database | DrizzleTransaction,
+    ids: readonly string[],
+    projection: ListProjection,
+    qualitySource: "stored" | "live" = "stored",
+  ): ListPagePrefetch => {
+    const settled = <V>(promise: Promise<V>) => {
+      promise.catch(() => {
+        // SILENT: `read` awaits and surfaces this rejection; only a page
+        // abandoned before hydration (its row load failed) drops it.
+      });
+      return promise;
+    };
+    return {
+      qualities:
+        isScored(entity) && wantsListGroup(projection, "quality") && ids.length
+          ? settled(
+              loadDataQualities(
+                db,
+                entity,
+                ids.map((id) => parseEntityId(entity, id)),
+                qualitySource,
+              ),
+            )
+          : undefined,
+      images:
+        resolvesDisplayImages(projection) && ids.length
+          ? settled(
+              resolveEntityDisplayImageLists(
+                db,
+                ids.map((id) => ({ entityKind: entity, entityId: id })),
+              ),
+            )
+          : undefined,
+    };
+  };
   return {
     validate,
+    prefetch,
     async read(
       db: Database | DrizzleTransaction,
       rows: readonly Row[],
       projection: ListProjection,
       context = ListContext.empty,
       qualitySource: "stored" | "live" = "stored",
+      prefetched?: ListPagePrefetch,
     ): Promise<ListReadRow[]> {
       validate(projection);
       if (!rows.length) return [];
@@ -454,24 +529,17 @@ export function listReadPlan<Row>(
           }
         }),
       );
+      const early =
+        prefetched ??
+        prefetch(
+          db,
+          sources.map(({ identity }) => identity.id),
+          projection,
+          qualitySource,
+        );
       const [qualities, images, links] = await Promise.all([
-        isScored(entity) && wantsListGroup(projection, "quality")
-          ? loadDataQualities(
-              db,
-              entity,
-              sources.map(({ identity }) => parseEntityId(entity, identity.id)),
-              qualitySource,
-            )
-          : undefined,
-        options.media && wantsListGroup(projection, "media")
-          ? resolveEntityDisplayImageLists(
-              db,
-              sources.map(({ identity }) => ({
-                entityKind: entity,
-                entityId: identity.id,
-              })),
-            )
-          : undefined,
+        early.qualities,
+        early.images,
         Promise.all(
           references.map(async (reference) => {
             const { instruction, key, target } = reference;
@@ -620,6 +688,7 @@ export function listReadPlan<Row>(
               if (wanted(projection, key))
                 result[key] = schema.shape[key].parse(field);
           }
+          attachDisplayImages(result, images, identity.id, projection);
           // Required requested outputs must exist before any schema defaults run.
           const requested =
             projection.kind === "selected"

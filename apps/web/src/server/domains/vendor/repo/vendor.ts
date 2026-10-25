@@ -124,6 +124,7 @@ import {
   listGroupFields,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
+import { withDisplayImages } from "~/server/generic/list/repo/list-read-adapters";
 import { planSlotCollisions } from "~/server/generic/merge/repo/collisions";
 import {
   finalizeMerge,
@@ -867,7 +868,10 @@ export const vendorList = async (
   ]);
   const result = {
     ...page,
-    data: page.data.map((row) => vendorOut.parse(row)),
+    data: withDisplayImages(
+      page.data.map((row) => vendorOut.parse(row)),
+      page.data,
+    ),
   };
   if (sums) Object.assign(result, { sums });
   return result;

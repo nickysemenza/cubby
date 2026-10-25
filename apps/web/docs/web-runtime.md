@@ -300,7 +300,7 @@ their ordinary content when another field's review state changes.
 Canonical repository lists use `listScaffold.read` with schema-picked output
 bindings in `list-projection.ts`. The assembler selects and validates present
 canonical scalars, converts root identity, excludes private foreign keys, and
-owns quality/media completion. Generic browser list schemas include `displayImages`; declare it in `presentation.list.read.media` and enable `media` in the repository read plan, including entities with no images. This keeps the field out of the base response until its media loader runs. Reference instructions distinguish stored UUID
+owns quality/media completion. Generic browser list schemas include `displayImages`; declare it in `presentation.list.read.media`. The read plan resolves it from internal ids for every entity that declares it, so the kernel's media pass only re-resolves rows that arrive without it; enable `media` only for bespoke media bindings. This keeps the field out of the base response until its media loader runs. Reference instructions distinguish stored UUID
 lookups from already projected public IDs. Domain bindings retain their typed
 computations and page-batch inputs; their output schema determines admission
 from the canonical partition. Stored reference names derive from declared label
@@ -315,6 +315,21 @@ Any requested output admits its entire binding. Split outputs whose inputs have
 different readiness: a core identity must not share a binding that requires a
 deferred relation column. Selected-field regressions should omit that relation
 and verify both the public patch and the work it avoids.
+
+A list page costs one network round trip per sequential statement in
+production (about 50-75 ms through Hyperdrive), so `listScaffold.list` keeps
+the chain short: the id-and-count query starts the page's id-only loads
+(quality, display images) beside the row load, and prepares a page only
+displays load beside both queries, awaited at hydration. A repository that
+builds its own context keeps every prepare ahead of its query, because its
+select or footer reads the prepared data.
+For before/after evidence, `CUBBY_LIST_EVIDENCE=<file>` runs
+`entity-kernel/list-round-trips.integration.test.ts`: every entity's default
+page with its statements and query busy intervals beside
+`list-round-trips.baseline.json`. It is a non-blocking report, not a CI gate.
+Production list spans report `db.query.busy_intervals`, a lower bound on
+sequential round trips (a dependent query that starts while another still
+runs joins that interval).
 
 Narrow pickers and internal target readers use `listScaffold.raw` and keep their
 own output contract. Both methods share authoritative filtering, sorting,

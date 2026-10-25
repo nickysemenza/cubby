@@ -321,10 +321,23 @@ describe("progressive list readers", () => {
       id: created.shortcode,
       dataQuality: full.data[0]?.dataQuality,
     });
+    // A device declares no bespoke media, yet its full read publishes the
+    // plan-resolved `displayImages`; the media patch carries the same value.
+    const media = await countTestDbQueries(() =>
+      listDevicesRead(ctx.db, {}, [], pagination, {
+        kind: "enrichment",
+        groups: ["media"],
+      }),
+    );
+    expect(media.result.data[0]).toEqual({
+      id: created.shortcode,
+      displayImages: [],
+    });
     expect({
       ...core.result.data[0],
       ...references.result.data[0],
       ...quality.result.data[0],
+      ...media.result.data[0],
     }).toEqual(full.data[0]);
   });
 

@@ -56,6 +56,10 @@ export async function withRecordEmoji<Row>(
 ): Promise<Row[]> {
   const field = entityInspectorMetadata[entity].recordEmojiField;
   if (!field || !rows.length) return [...rows];
+  // A list read that projects the stored emoji already carries it; re-reading
+  // it by shortcode cost every such page a round trip.
+  const carried = z.object({ [field]: z.string().nullable() });
+  if (rows.every((row) => carried.safeParse(row).success)) return [...rows];
   const codes = rows.map((row) => identity.parse(row).id);
   const table = SHORTCODE_TABLE[entity];
   const columns: Record<string, PgColumn> = getTableColumns(table);
