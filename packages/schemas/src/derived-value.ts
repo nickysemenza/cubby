@@ -64,3 +64,9 @@ export const liveDerivedMeta = (decided: DecidedBy | null): DerivedMeta => ({
   decidedBy: decided,
   asOf: null,
 });
+
+/** Fields whose current values are still owned by an Automatic rule application. */
+export const automaticFieldValues = z.record(
+  z.string(),
+  z.object({ confidence: z.number().min(0).max(1) }),
+);

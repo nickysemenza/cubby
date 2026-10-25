@@ -17,6 +17,7 @@ import { projectDerivedComputes } from "~/server/domains/project/repo/derived";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import { prepareRecipeRefresh } from "~/server/domains/run/service/derived-refresh";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
+import { automaticFieldsComputes } from "~/server/generic/assessment/repo/automatic-fields";
 import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
 import {
   type DerivedAdapter,
@@ -101,6 +102,7 @@ const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(
 );
 
 export const derivedComputes: DerivedComputes = {
+  ...automaticFieldsComputes,
   ...productDerivedComputes,
   ...inventoryDerivedComputes,
   ...locationDerivedComputes,

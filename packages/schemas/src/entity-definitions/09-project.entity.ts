@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
@@ -331,6 +332,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("project", "Project") },
     hierarchy: {
       parentField: "parentProjectId",
       maxDepth: MAX_PROJECT_TREE_DEPTH,

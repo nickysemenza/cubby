@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
@@ -253,6 +254,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("purchase", "Purchase") },
     research: { fillFields: ["spendingCategoryId"] },
     fields: [
       {

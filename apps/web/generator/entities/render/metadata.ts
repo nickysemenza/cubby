@@ -421,8 +421,8 @@ export const renderEntityMetadataArtifacts = (
                 key,
                 table: entity.descriptor.dbTable ?? null,
                 type: "text",
-                // Non-list stored values publish to their own tables.
-                publishes: "sink",
+                // Non-list values may publish to the cache without a list column.
+                publishes: stored.publishes,
                 stored,
               }),
             ),

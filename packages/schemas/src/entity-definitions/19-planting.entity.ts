@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -161,6 +162,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("planting", "Planting") },
     fields: [
       {
         key: "plantId",

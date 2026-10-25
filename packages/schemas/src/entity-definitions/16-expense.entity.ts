@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { expenseChildren } from "../child-tables/expense.js";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
@@ -341,6 +342,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("expense", "Expense") },
     fields: [
       {
         display: { detail: false, list: false },

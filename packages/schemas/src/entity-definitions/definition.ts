@@ -1241,9 +1241,17 @@ const buildMetadataSchemas = () => {
         .default({}),
       /**
        * Stored derived values that are not list fields (ADR 0021): outputs a
-       * sink adapter writes to its own table, such as recipe totals.
+       * sink adapter writes to its own table, or a published value without a column.
        */
-      stored: z.record(derivedKey, derivedStoreSchema).optional().default({}),
+      stored: z
+        .record(
+          derivedKey,
+          derivedStoreSchema.extend({
+            publishes: z.enum(["value", "sink"]).optional().default("sink"),
+          }),
+        )
+        .optional()
+        .default({}),
       rows: z
         .record(derivedKey, entityRowSetMetadataSchema)
         .optional()

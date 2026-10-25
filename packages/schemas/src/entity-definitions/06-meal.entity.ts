@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { mealReadSchemas } from "../meal-fields";
 import { mealChildren } from "../child-tables/meal.js";
@@ -163,6 +164,7 @@ export default defineEntity(
       },
     },
     model: {
+      stored: { automaticFields: automaticFields("meal", "Meal") },
       fields: [
         {
           key: "date",

@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { vendorSpendingProfile } from "../spending-classification.js";
 import { purchasedCategorySummary } from "../product-category-fields";
@@ -177,6 +178,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("vendor", "Vendor") },
     fields: [
       {
         key: "systemKey",

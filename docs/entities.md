@@ -107,6 +107,9 @@ Missing values retain the field's empty presentation; failed refreshes retain
 the stored value and raw diagnostic. Web temporarily adapts `fieldResolutions`
 only when no sidecar exists. Native rows and fields show the dot and inherited
 or auto caption; the full native chain remains follow-up work.
+The `automaticFields` stored value contributes provenance to its listed fields,
+with its refresh state and timestamp; it never creates its own list column.
+Fields absent from that value retain their own or inherited provenance.
 
 Before adding an inherited value or override, trace an existing field through its
 stored intent, effective read, `fieldResolutions` provenance, and declared
@@ -2352,7 +2355,9 @@ valuations, product price and ledger quantities, project dates, quality,
 search documents, recipe totals and conversion coverage. Each is declared once:
 `model.derived.<key>.stored` for a list field, `model.stored.<key>` for a value
 that is not a list field, a scored entity's `dataQuality` block, or a searchable
-entity's `search` setting. Declarations are generated into
+entity's `search` setting. Non-list `model.stored` entries default to
+`publishes: "sink"`; `publishes: "value"` stores their output in `DerivedValue`
+without exposing a list column. Declarations are generated into
 `entity-stored-derived.gen.ts`; `server/db/derived-declarations.ts` parses them.
 
 A declaration names its compute adapter and its `inputs`. An input pairs one
@@ -3892,6 +3897,13 @@ checks. Only declared fill fields qualify; review-required fields and populated
 member values remain protected. Preview and persisted application share that
 threshold. Propagated corrections use receipt authority, never invented model
 confidence. This field policy does not change financial acceptance rules.
+Each entity with eligible fill fields declares one non-list `automaticFields`
+value, containing `{ [fieldKey]: { confidence } }`. It reads Automatic rule
+receipts, Assessment state, the current record and field audit history. Only
+receipt-bound current values carry `decidedBy: { level: "suggested", auto: true,
+confidence }`; a later member edit (including a changed-and-restored value) or
+confirmation clears that provenance. Rebuilding the cache never applies a rule
+or writes a field.
 
 Image correction authority is text-only and scoped to identical retained content
 hashes. Its provider-free resolver admits only successful command-bound member

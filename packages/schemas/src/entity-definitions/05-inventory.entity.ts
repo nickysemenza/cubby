@@ -1,5 +1,6 @@
 import { productPricingInputsFor } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { inventoryReadSchemas } from "../inventory-fields";
 import { defineEntity } from "./definition.js";
 import { amount, positiveAmount } from "@cubby/schemas/codec";
@@ -255,6 +256,9 @@ export default defineEntity(
       },
     },
     model: {
+      stored: {
+        automaticFields: automaticFields("inventory", "InventoryEntry"),
+      },
       fields: [
         {
           key: "productId",

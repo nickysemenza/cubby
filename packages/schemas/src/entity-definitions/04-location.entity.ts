@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { locationReadSchemas } from "../location-fields";
 import { labelField } from "./label-field.js";
@@ -237,6 +238,7 @@ export default defineEntity(
       },
     },
     model: {
+      stored: { automaticFields: automaticFields("location", "Location") },
       hierarchy: { parentField: "parentId", maxDepth: 10 },
       fields: [
         {

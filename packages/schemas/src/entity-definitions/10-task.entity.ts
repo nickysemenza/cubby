@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
@@ -238,6 +239,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("task", "Task") },
     hierarchy: {
       parentField: "parentTaskId",
       maxDepth: MAX_PROJECT_TREE_DEPTH,

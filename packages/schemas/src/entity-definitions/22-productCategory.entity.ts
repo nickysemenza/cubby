@@ -1,3 +1,4 @@
+import { automaticFields } from "./automatic-fields";
 import { categoryMappingSchema } from "../spending-classification";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -89,6 +90,9 @@ export default defineEntity({
     },
   },
   model: {
+    stored: {
+      automaticFields: automaticFields("productCategory", "ProductCategory"),
+    },
     hierarchy: {
       parentField: "parentId",
       // A three-level tree: at most two levels below any category.

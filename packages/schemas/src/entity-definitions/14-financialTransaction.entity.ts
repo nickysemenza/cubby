@@ -1,4 +1,5 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { financialTransactionReadSchemas } from "../financial-transaction-fields";
 import { financialTransactionChildren } from "../child-tables/financialTransaction.js";
 import { spendingCategorySummarySchema } from "../spending-classification";
@@ -178,6 +179,12 @@ export default defineEntity(
       },
     },
     model: {
+      stored: {
+        automaticFields: automaticFields(
+          "financialTransaction",
+          "FinancialTransaction",
+        ),
+      },
       fields: [
         { key: "bookingDecisionFingerprint", kind: "text", nullable: true },
         { key: "bookingExpenseFingerprint", kind: "text", nullable: true },

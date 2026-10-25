@@ -1,3 +1,4 @@
+import { automaticFieldValues } from "@cubby/schemas/derived-value";
 /**
  * The `derived` sidecar a list page or record read returns (ADR 0021): per
  * row, each stored derived field's state, deciding level and computation time,
@@ -86,8 +87,17 @@ export function derivedSidecarOf(
         decidedBy: resolutionDecidedBy(resolution),
         asOf: null,
       };
-    for (const [key, read] of stored.get(row.internalId) ?? [])
-      sidecar[key] = read.meta;
+    for (const [key, read] of stored.get(row.internalId) ?? []) {
+      if (key === "automaticFields") {
+        for (const [field, { confidence }] of Object.entries(
+          automaticFieldValues.parse(read.value ?? {}),
+        ))
+          sidecar[field] = {
+            ...read.meta,
+            decidedBy: { level: "suggested", auto: true, confidence },
+          };
+      } else sidecar[key] = read.meta;
+    }
     if (Object.keys(sidecar).length > 0) out[row.id] = sidecar;
   }
   return out;

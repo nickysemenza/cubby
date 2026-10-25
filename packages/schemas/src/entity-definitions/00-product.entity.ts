@@ -1,5 +1,6 @@
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { productReadSchemas } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
@@ -2190,6 +2191,7 @@ Rules:
       },
       // Stored derived values that are not list fields (ADR 0021).
       stored: {
+        automaticFields: automaticFields("product", "Product"),
         conversionCoverage: {
           compute: "product.conversionCoverage",
           inputs: [
