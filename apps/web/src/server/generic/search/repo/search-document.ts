@@ -642,10 +642,11 @@ async function markSearchDocumentMissing(
 
 /**
  * PostgreSQL rejects a tsvector over 1 MB, which a record carrying a large
- * encoded payload (an import's coverage digest) can exceed; the full-text
- * index reads a bounded prefix while the stored body stays complete.
+ * encoded payload (an import's coverage digest, in its keywords or body) can
+ * exceed; the full-text index reads a bounded prefix of each weighted part
+ * (three parts stay under the limit together) while stored text stays complete.
  */
-const SEARCH_VECTOR_BODY_CHARS = 250_000;
+const SEARCH_VECTOR_PART_CHARS = 100_000;
 
 async function upsertSearchDocumentBatch(
   db: Database | DrizzleTransaction,
@@ -674,9 +675,9 @@ async function upsertSearchDocumentBatch(
     SELECT input."entityKind", input."entityId", input.title,
       input.subtitle, input."typeHint", input.aliases, input.keywords,
       input.body, input.body, input."normalizedText",
-      setweight(to_tsvector('simple', input.title), 'A') ||
-      setweight(to_tsvector('simple', concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' '))), 'B') ||
-      setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_BODY_CHARS})), 'D'), input."sourceHash"
+      setweight(to_tsvector('simple', left(input.title, ${SEARCH_VECTOR_PART_CHARS})), 'A') ||
+      setweight(to_tsvector('simple', left(concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' ')), ${SEARCH_VECTOR_PART_CHARS})), 'B') ||
+      setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_PART_CHARS})), 'D'), input."sourceHash"
     FROM (VALUES ${sql.join(rows, sql`, `)}) AS input(
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "normalizedText", "sourceHash"
