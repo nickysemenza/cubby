@@ -771,6 +771,14 @@ description invocations hold at most 16 MiB of retained rendition bytes, with
 additional bounded streaming, inspection and upload copies; this is a payload
 bound, not a measurement of total isolate memory. Originals remain unchanged
 when an oversized rendition fails with its raw size diagnostic.
+Identification requests a server-only edge JPEG bounded to 1024 on both axes;
+UI width rungs bound only the width, and a tall portrait at the 2048 rung
+exceeded the 2 MiB budget on every retry. The source and every candidate
+reference share this rendition. When the edge answers 422 because it cannot
+decode a PNG (its decoder rejects a damaged ancillary chunk around intact
+pixels), the Worker reads the original, at most 16 MiB, and the Rust
+`prepare_analysis_png` streams its rows into the same bounded JPEG. Other
+refused formats keep the raw edge diagnostic.
 
 The background consumer logs `queue_wait_ms` from Cloudflare's transport
 enqueue timestamp at consumer entry, with the queue name. Local delivery

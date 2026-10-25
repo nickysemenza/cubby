@@ -46,6 +46,21 @@ type TransformOptions = {
 };
 
 /**
+ * A server-only analysis JPEG bounded on both axes. UI rungs bound only the
+ * width, so a tall portrait at the 2048 rung outgrows a model byte budget.
+ */
+export const analysisImageUrl = (url: string, maxEdge: number): string => {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  if (!isTransformable(parsed, true)) return url;
+  return `${parsed.origin}/cdn-cgi/image/width=${maxEdge},height=${maxEdge},fit=scale-down,format=jpeg${parsed.pathname}${parsed.search}`;
+};
+
+/**
  * Rewrite an R2 image URL to request a width-bounded, auto-format variant via
  * Cloudflare Image Transformations. Returns the input unchanged for non-bucket
  * URLs, already-transformed URLs, or anything that doesn't parse as a URL.

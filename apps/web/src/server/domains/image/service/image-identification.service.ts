@@ -8,7 +8,7 @@ import {
 import { selectImageDescription } from "@cubby/schemas/image-processing";
 import { encodeBase64 } from "@cubby/shared/base64";
 
-import { transformedImageUrl } from "~/lib/image-url";
+import { analysisImageUrl } from "~/lib/image-url";
 import {
   runDecisionChoice,
   runDecisionChoices,
@@ -30,7 +30,10 @@ import {
   getImageProcessingReadProjection,
   getUploadedImageProcessingSource,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { MAX_IDENTIFICATION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
+import {
+  IDENTIFICATION_RENDITION_EDGE,
+  MAX_IDENTIFICATION_RENDITION_BYTES,
+} from "~/server/domains/image-processing/service/cloud-limits";
 import {
   imageIdentificationCandidates,
   imageIdentificationCategories,
@@ -48,13 +51,21 @@ import { findLexicalSearchCandidates } from "~/server/generic/search/service/sea
 
 import { evaluateVisualProductCandidates } from "./image-identification-ranking";
 
-/** Clef accepts embedded images only; bounded renditions keep four-image requests small. */
-export async function readImageIdentificationRendition(url: string) {
-  const bytes = await fetchAnalysisRendition(
-    transformedImageUrl(url, 1024, { format: "jpeg", anyOrigin: true }),
-    undefined,
-    MAX_IDENTIFICATION_RENDITION_BYTES,
-  );
+/**
+ * Clef accepts embedded images only; bounded renditions keep four-image
+ * requests small. Used for the subject and every candidate reference image.
+ */
+export async function readImageIdentificationRendition(
+  url: string,
+  fetcher?: typeof fetch,
+) {
+  const bytes = await fetchAnalysisRendition({
+    sourceUrl: url,
+    renditionUrl: analysisImageUrl(url, IDENTIFICATION_RENDITION_EDGE),
+    maxEdge: IDENTIFICATION_RENDITION_EDGE,
+    maxBytes: MAX_IDENTIFICATION_RENDITION_BYTES,
+    fetcher,
+  });
   const inspected = await inspectImageFile(bytes, "image/jpeg");
   if (inspected.detectedContentType !== "image/jpeg")
     throw new Error("Visual identification requires a JPEG rendition");
