@@ -693,8 +693,14 @@ export async function claimImageProcessingJob(
                     ? eq(durableJob.kind, "image.device")
                     : undefined,
                   or(
+                    // Image work never ends failed; an older build's failed
+                    // row is claimable once its time comes.
                     and(
-                      inArray(durableJob.state, ["queued", "retry_wait"]),
+                      inArray(durableJob.state, [
+                        "queued",
+                        "retry_wait",
+                        "failed",
+                      ]),
                       lte(durableJob.availableAt, now),
                     ),
                     and(

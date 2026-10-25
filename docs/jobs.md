@@ -135,13 +135,18 @@ family) lets a pass in progress keep its cursor, and the finishing page
 absorbs captures made meanwhile; the scheduled repeat (`scheduleRefreshFamilies`
 from catch-up, after `REFRESH_INTERVAL_MS`) or the next capture then starts a
 full pass from the first record, so an edit behind the cursor is revisited.
-Rerunning on absorbed captures would never settle, because a pass's own Run
-records capture its family. Restarting on each capture kept broad passes from
+Absorbing keeps passes from chaining back to back: ordinary source writes
+capture every family and Run-only source writes capture quality, while a
+`derived_refresh` Run's own create and complete register projection changes
+and capture none. A pass that keeps its cursor also waits out its backoff
+after a capture; only a completed Job, or a restarting marker, wakes at once. Restarting on each capture kept broad passes from
 ever finishing under ordinary household writes (search reached generation
 ~29k with new records unindexed); `image.device.wake` still restarts.
 Refresh families never exhaust: a failing page backs off (1 min doubling to
-15 min) and resumes, so no capture is needed to wake a failed family; paused
-and cancelled remain member stops. Publication of a restarting kind rereads the marker and supersedes
+15 min) and resumes. A never-exhausted kind has no terminal failure, so a
+`failed` row (an older build's final attempt, written even after the policy
+migration) is due again once available; paused and cancelled remain member
+stops. Publication of a restarting kind rereads the marker and supersedes
 a page whose pass began before a capture, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
 dies is never lost: the finished or reclaimed Job still trails the marker.

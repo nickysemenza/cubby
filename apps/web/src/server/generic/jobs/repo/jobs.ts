@@ -167,11 +167,24 @@ const due = (now: Date) =>
       lte(job.availableAt, now),
     ),
     and(eq(job.state, "running"), lte(job.leaseExpiresAt, now)),
-    // A captured invalidation wakes waiting or finished work at once.
+    // A captured invalidation wakes finished work at once, and waiting work
+    // whose capture restarts its pass. A pass that keeps its cursor across
+    // captures waits out its availability: its claim does not observe the
+    // capture, so the same capture would otherwise bypass every backoff.
+    and(eq(job.state, "completed"), unobservedJobInvalidation()),
     and(
-      inArray(job.state, ["queued", "retry_wait", "completed"]),
-      unobservedJobInvalidation(),
+      inArray(job.state, ["queued", "retry_wait"]),
+      unobservedJobInvalidation({ restartsPass: true }),
     ),
+    // A never-exhausted kind has no terminal failure; a failed row (written
+    // by an older build's final attempt) is due like any waiting one.
+    NEVER_EXHAUSTED_JOB_KINDS.length
+      ? and(
+          eq(job.state, "failed"),
+          inArray(job.kind, [...NEVER_EXHAUSTED_JOB_KINDS]),
+          lte(job.availableAt, now),
+        )
+      : undefined,
     // Failure is no stop for new input: execution reads the marker before a
     // terminal write, so a capture can commit in between, and no transaction
     // shape closes that window without the capture touching the Job row.
@@ -695,10 +708,11 @@ export async function publishJobPage(
             .where(eq(job.id, claim.id));
           return;
         }
-        // A pass that does not restart absorbs captures made while it ran,
-        // as the in-progress skip did: its own Run records invalidate it, so
-        // rerunning on them would never settle. Its scheduled repeat covers
-        // them (`scheduleRefreshFamilies`).
+        // A pass that does not restart absorbs captures made while it ran:
+        // ordinary household writes capture every family, so rerunning on
+        // each would chain passes back to back. Its scheduled repeat, or the
+        // next capture after it finishes, starts a full pass that covers them
+        // (`scheduleRefreshFamilies`).
         const absorbed = page.done
           ? await absorbedRevision(commit, claim.key)
           : undefined;

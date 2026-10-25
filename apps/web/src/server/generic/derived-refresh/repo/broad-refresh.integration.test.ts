@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { count, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -33,7 +33,11 @@ import {
   refreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
+import {
+  invalidateRefreshFamily,
+  REFRESH_INTERVAL_MS,
+  scheduleRefreshFamilies,
+} from "./families";
 
 // Broad pages must discover writes without endpoint capture, retain later
 // invalidation during preparation, and never publish stale output after it.
@@ -43,6 +47,104 @@ import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
 // the Run opened count as done, not as records that left the population.
 describe("broad refresh jobs", () => {
   const ctx = withTestDb();
+  // Production finding: every write restarted the search pass, so it never
+  // finished. Passes now keep their cursor across captures; an edit to a
+  // record an earlier page already published is absorbed by that pass and
+  // revisited by the next full pass the scheduled repeat starts.
+  it("reindexes a record edited behind the cursor in the next full pass", async () => {
+    const saved = await insertEntityFixtures(
+      ctx.db,
+      location,
+      "location",
+      Array.from({ length: 30 }, (_, index) => ({
+        shortcode: `LOC-${3000 + index}`,
+        name: `Synthetic shelf ${index} v1`,
+        type: "room" as const,
+      })),
+    );
+    const ids: readonly string[] = saved.map((row) => row.id);
+    const every = saved.map((_, index) => index);
+    const searchJob = async () => {
+      const [row] = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, "refresh:search"));
+      if (!row) throw new Error("Expected search intent");
+      return row;
+    };
+    const page = async () => {
+      const row = await searchJob();
+      await getDb(ctx.db)
+        .update(job)
+        .set({ availableAt: new Date(0) })
+        .where(eq(job.id, row.id));
+      await advanceJob(ctx.db, row.id, {
+        "refresh.family": refreshFamilyHandler,
+      });
+      return searchJob();
+    };
+    const finish = async () => {
+      for (let pages = 0; pages < 20; pages++)
+        if ((await page()).state === "completed") return;
+      throw new Error("Expected the search pass to finish");
+    };
+    const titles = async () =>
+      new Map(
+        (
+          await getDb(ctx.db)
+            .select({
+              id: searchDocument.entityId,
+              title: searchDocument.title,
+            })
+            .from(searchDocument)
+            .where(inArray(searchDocument.entityId, ids))
+        ).map((row) => [row.id, row.title]),
+      );
+    const named = (index: number, version: string) =>
+      `Synthetic shelf ${index} ${version}`;
+    const rename = (indices: readonly number[], version: string) =>
+      Promise.all(
+        indices.map((index) =>
+          getDb(ctx.db)
+            .update(location)
+            .set({ name: named(index, version) })
+            .where(eq(location.id, saved[index]!.id)),
+        ),
+      );
+    await invalidateRefreshFamily(ctx.db, "search");
+    await finish();
+    // A new pass publishes its first page.
+    await rename(every, "v2");
+    await invalidateRefreshFamily(ctx.db, "search");
+    const first = await page();
+    expect(first.cursor).not.toBeNull();
+    const published = await titles();
+    const behind = every.filter(
+      (index) => published.get(ids[index]!) === named(index, "v2"),
+    );
+    expect(behind.length).toBeGreaterThan(0);
+    // Those records change again while the pass continues.
+    await rename(behind, "v3");
+    await invalidateRefreshFamily(ctx.db, "search");
+    expect((await page()).generation).toBe(first.generation);
+    await finish();
+    const absorbed = await titles();
+    expect(behind.map((index) => absorbed.get(ids[index]!))).toEqual(
+      behind.map((index) => named(index, "v2")),
+    );
+    // The scheduled repeat starts a full pass, which revisits them.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ updatedAt: new Date(Date.now() - REFRESH_INTERVAL_MS - 1_000) })
+      .where(eq(job.key, "refresh:search"));
+    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    await finish();
+    const revisited = await titles();
+    expect(behind.map((index) => revisited.get(ids[index]!))).toEqual(
+      behind.map((index) => named(index, "v3")),
+    );
+  });
+
   it("returns authoritative publication changes for changed, unchanged and retired outcomes", async () => {
     const [saved] = await insertEntityFixtures(ctx.db, location, "location", [
       { shortcode: "LOC-2345", name: "Synthetic publication", type: "room" },
