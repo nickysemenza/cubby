@@ -1,7 +1,6 @@
 CREATE TABLE "JobLaneAdmission" (
 	"lane" text PRIMARY KEY NOT NULL,
 	"ownedStreak" integer DEFAULT 0 NOT NULL,
-	"backfillAdmissions" bigint DEFAULT 0 NOT NULL,
 	"updatedAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

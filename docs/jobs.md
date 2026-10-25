@@ -106,18 +106,17 @@ Device pulls apply the same two classes to one claim at a time
 parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / JOB_BACKFILL_SHARE -
 1`) run-owned device services in a row, the next pull serves backfill. The
 owed class is chosen first; a device's preference for work another device
-last ran only orders candidates within it. A service is one device claim
-(each reclaim counts), classified when admitted by selection's own
-`jobRunOwned`: serving an ended Run's work is backfill and resets the turn,
-and a Run ending later never reclassifies services already counted. The
-streak lives in the `image.device` row of `JobLaneAdmission`, which each
-device claim locks and updates in its transaction, so concurrent pulls take
-their turns one at a time. A claim the server cannot hand over (preparation
-fails, participation turned off, output reservation fails) is undone in its
-release's transaction as if never admitted: a refused Run claim gives back its
-slot, and a refused backfill restores the streak it reset plus Run claims
-admitted since, unless another backfill was admitted meanwhile
-(`backfillAdmissions` moved), which already spent the turn.
+last ran only orders candidates within it. A service is a device hand-off
+that commits (an assigned attempt of `image.device` work; each reclaim
+counts), classified at assignment by selection's own `jobRunOwned`: serving
+an ended Run's work is backfill and resets the turn, and a Run ending later
+never reclassifies services already counted. The streak lives in the
+`image.device` row of `JobLaneAdmission`. A device pull
+(`claimCompanionImageCommand`) claims, prepares, assigns and reserves output
+in one transaction that locks that row before choosing a class, so
+concurrent pulls take their turns one at a time. A hand-off the server
+cannot make (participation turned off, output not reserved, preparation
+failed) is released in the same transaction and counts nothing.
 
 ## Durable invalidation
 

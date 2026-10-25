@@ -40,6 +40,7 @@ import {
   claimImageProcessingOrphans,
   finalizeImageProcessingOrphans,
   getLeasedImageProcessingJobContext,
+  withImageProcessingTransaction,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
   assignImageProcessingExecutor,
@@ -479,12 +480,19 @@ const COMPANION_CLAIM_TRIES = 3;
 /** A hand-off that failed waits this long, so a persistent storage error cannot spin. */
 const HANDOFF_RETRY_MS = 60_000;
 
+/** The analysis output a command needs could not be reserved. */
+class OutputNotReserved extends Error {}
+
 /**
  * Claim and assign the next job a participating device can run, for the
- * device's `imageProcessing.pull`. A claim the server cannot hand over is
- * released (never an attempt) before anything returns: a null command means
- * an empty queue, never an abandoned lease. A failed hand-off throws, so the
- * device sees an error rather than an empty queue.
+ * device's `imageProcessing.pull`. Claim, preparation, assignment and output
+ * reservation share one transaction, which holds the device lane's admission
+ * row: only a hand-off that commits counts toward pull fairness, and
+ * concurrent pulls take their turns one at a time. A claim the server cannot
+ * hand over is released in that transaction (never an attempt): a null
+ * command means an empty queue, never an abandoned lease. A failed hand-off
+ * throws after its release commits, so the device sees an error rather than
+ * an empty queue.
  */
 export async function claimCompanionImageCommand(
   db: Database,
@@ -499,51 +507,76 @@ export async function claimCompanionImageCommand(
     companionClaimCapabilities(device);
   if (!kinds.length) return null;
   for (let tries = 0; tries < COMPANION_CLAIM_TRIES; tries++) {
-    const claimed = await claimImageProcessingJob(db, {
-      kinds,
-      processorRevisions: revisions,
-      allowAvifNormalization,
-      leaseMs: input.leaseMs,
-      deviceId: device.deviceId,
-    });
-    if (!claimed) return null;
-    // The device never receives this claim, so its admission is undone.
-    const release = (reason: string, delayMs?: number) =>
-      releaseImageProcessingLease(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        reason,
-        delayMs,
-        event: "dispatch.released",
-        refusedAdmission: claimed.admission ?? undefined,
-      });
-    let command: ImageProcessingCommand;
-    try {
-      command = await prepareCompanionImageCommand(claimed);
-    } catch (error) {
-      await release(safeImageProcessingError(error), HANDOFF_RETRY_MS);
-      throw error;
-    }
-    const assigned = await assignImageProcessingExecutor(db, {
-      jobId: claimed.id,
-      attemptId: claimed.attemptId,
-      userId: input.userId,
-      executor: {
-        kind: "device",
+    const handOff = await withImageProcessingTransaction(db, async (tx) => {
+      const claimed = await claimImageProcessingJob(tx, {
+        kinds,
+        processorRevisions: revisions,
+        allowAvifNormalization,
+        leaseMs: input.leaseMs,
         deviceId: device.deviceId,
-        name: device.deviceName ?? "Apple device",
-        platform: device.platform,
-        appVersion: device.appVersion,
-        osVersion: device.osVersion ?? null,
-      },
+      });
+      if (!claimed) return { outcome: "empty" as const };
+      const release = (reason: string, delayMs?: number) =>
+        releaseImageProcessingLease(tx, {
+          jobId: claimed.id,
+          attemptId: claimed.attemptId,
+          reason,
+          delayMs,
+          event: "dispatch.released",
+        });
+      try {
+        const command = await prepareCompanionImageCommand(claimed);
+        // Assignment and reservation commit together or not at all, so a
+        // reservation failure never leaves a counted service behind.
+        const assigned = await withImageProcessingTransaction(
+          tx,
+          async (step) => {
+            const accepted = await assignImageProcessingExecutor(step, {
+              jobId: claimed.id,
+              attemptId: claimed.attemptId,
+              userId: input.userId,
+              executor: {
+                kind: "device",
+                deviceId: device.deviceId,
+                name: device.deviceName ?? "Apple device",
+                platform: device.platform,
+                appVersion: device.appVersion,
+                osVersion: device.osVersion ?? null,
+              },
+            });
+            if (!accepted) return false;
+            if (!(await reserveCompanionAnalysisOutput(step, command)))
+              throw new OutputNotReserved();
+            return true;
+          },
+        );
+        if (assigned) return { outcome: "handed" as const, command };
+        // Participation flipped off after hello: this device takes nothing.
+        await release("Device assignment was refused");
+        return { outcome: "refused" as const };
+      } catch (error) {
+        if (error instanceof OutputNotReserved) {
+          await release(
+            "Analysis output could not be reserved",
+            HANDOFF_RETRY_MS,
+          );
+          return { outcome: "retry" as const };
+        }
+        await release(safeImageProcessingError(error), HANDOFF_RETRY_MS);
+        return { outcome: "failed" as const, error };
+      }
     });
-    if (!assigned) {
-      // Participation flipped off after hello: this device takes nothing.
-      await release("Device assignment was refused");
-      return null;
+    switch (handOff.outcome) {
+      case "handed":
+        return handOff.command;
+      case "empty":
+      case "refused":
+        return null;
+      case "failed":
+        throw handOff.error;
+      case "retry":
+        continue;
     }
-    if (await reserveCompanionAnalysisOutput(db, command)) return command;
-    await release("Analysis output could not be reserved", HANDOFF_RETRY_MS);
   }
   return null;
 }

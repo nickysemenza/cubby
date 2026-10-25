@@ -2,7 +2,10 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
+import {
+  JOB_BACKFILL_SHARE,
+  jobRunOwned,
+} from "~/server/generic/jobs/repo/jobs";
 
 /**
  * Device pulls claim one Job at a time but keep the drain's two classes: an
@@ -14,9 +17,9 @@ const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
 const DEVICE_LANE = "image.device";
 
 /**
- * How many device claims in a row were run-owned when admitted, for queue
- * positions. Each claim, reclaims included, is one service; a claim the
- * server cannot hand over is undone by `refuseDeviceAdmission`.
+ * How many device services in a row were run-owned, up to
+ * `DEVICE_OWNED_STREAK`, for queue positions. A service is a hand-off that
+ * committed: an assigned attempt of `image.device` work, reclaims included.
  */
 export async function deviceOwnedStreak(db: Database): Promise<number> {
   const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
@@ -26,8 +29,9 @@ export async function deviceOwnedStreak(db: Database): Promise<number> {
 }
 
 /**
- * Locks the device lane's admission row for the claim's transaction, so
- * concurrent pulls take their turns one at a time, and returns its streak.
+ * Locks the device lane's admission row until the caller's transaction ends
+ * and returns its streak. A device pull holds it from choosing a class
+ * through the hand-off, so concurrent pulls take their turns one at a time.
  */
 export async function lockDeviceAdmission(db: Database): Promise<number> {
   const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
@@ -37,57 +41,22 @@ export async function lockDeviceAdmission(db: Database): Promise<number> {
   return result.rows[0]?.streak ?? 0;
 }
 
-/** What a refused hand-off needs to undo its claim's admission exactly. */
-export type DeviceAdmission = {
-  runOwned: boolean;
-  /** The streak this claim replaced. */
-  priorStreak: number;
-  /** Backfill admissions so far, this claim's included. */
-  backfillAdmissions: number;
-};
-
-/** Counts one admitted claim by the class it was admitted under. */
-export async function recordDeviceAdmission(
-  db: Database,
-  runOwned: boolean,
-  priorStreak: number,
-): Promise<DeviceAdmission> {
-  const result = await repositoryQueries(db).execute<{ backfill: string }>(sql`
-    UPDATE "JobLaneAdmission"
-    SET "ownedStreak" = ${runOwned ? sql`"ownedStreak" + 1` : sql`0`},
-      "backfillAdmissions" = "backfillAdmissions" + ${runOwned ? 0 : 1},
-      "updatedAt" = now()
-    WHERE lane = ${DEVICE_LANE}
-    RETURNING "backfillAdmissions" AS backfill`);
-  return {
-    runOwned,
-    priorStreak,
-    backfillAdmissions: Number(result.rows[0]?.backfill ?? 0),
-  };
-}
-
 /**
- * Undoes the admission of a claim the server could not hand over, in its
- * release's transaction, as if the claim had never been admitted. While no
- * backfill was admitted since, only Run claims were (each adding one): a
- * refused Run claim takes back its own one, and a refused backfill restores
- * the streak it reset plus those Run claims. A backfill admitted since
- * already spent the turn, so the streak stands.
+ * Counts one committed device hand-off of the `image.device` Job `key`, by
+ * its class now (`jobRunOwned`), in the assignment's transaction: only a
+ * hand-off that commits is a service, and a Run ending later never
+ * reclassifies it. A refused or failed hand-off writes nothing.
  */
-export async function refuseDeviceAdmission(
-  db: Database,
-  admission: DeviceAdmission,
-) {
+export async function recordDeviceService(db: Database, key: string) {
+  await lockDeviceAdmission(db);
   await repositoryQueries(db).execute(sql`
     UPDATE "JobLaneAdmission"
-    SET "ownedStreak" = ${
-      admission.runOwned
-        ? sql`greatest("ownedStreak" - 1, 0)`
-        : sql`"ownedStreak" + ${admission.priorStreak}`
-    },
+    SET "ownedStreak" = CASE WHEN served.owned
+        THEN least("ownedStreak" + 1, ${DEVICE_OWNED_STREAK}) ELSE 0 END,
       "updatedAt" = now()
-    WHERE lane = ${DEVICE_LANE}
-      AND "backfillAdmissions" = ${admission.backfillAdmissions}`);
+    FROM (SELECT ${jobRunOwned()} AS owned FROM "Job"
+      WHERE "Job".key = ${key} AND "Job".kind = ${DEVICE_LANE}) served
+    WHERE lane = ${DEVICE_LANE}`);
 }
 
 /** Whether the next device pull owes backfill its turn. */

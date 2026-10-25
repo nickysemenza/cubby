@@ -2887,13 +2887,6 @@
           "notNull": true,
           "default": 0
         },
-        "backfillAdmissions": {
-          "name": "backfillAdmissions",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",

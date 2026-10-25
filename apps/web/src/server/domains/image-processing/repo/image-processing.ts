@@ -43,6 +43,7 @@ import {
   notDeleted,
   withTransaction,
   withTransactionOn,
+  withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
 import {
@@ -66,10 +67,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   deviceBackfillTurn,
-  type DeviceAdmission,
   lockDeviceAdmission,
-  recordDeviceAdmission,
-  refuseDeviceAdmission,
 } from "~/server/generic/jobs/repo/device-admission";
 import {
   enqueueJob,
@@ -212,9 +210,19 @@ export type ClaimedImageProcessingJob = {
   runId: RunId | null;
   /** Database-authoritative end of this attempt's presigned capabilities. */
   leaseExpiresAt: Date;
-  /** A device claim's fairness admission; null for cloud claims. */
-  admission: DeviceAdmission | null;
 };
+
+/**
+ * One image-processing transaction for a service-owned sequence of repo
+ * steps; inside another, a savepoint. A device hand-off runs its claim,
+ * assignment and release in one.
+ */
+export async function withImageProcessingTransaction<T>(
+  db: Database,
+  operation: (transactionDb: Database) => Promise<T>,
+): Promise<T> {
+  return withTransactionDatabase(db, operation);
+}
 
 /** Read-only source boundary shared by scheduling and the AI Gateway service. */
 export async function getUploadedImageProcessingSource(
@@ -593,11 +601,10 @@ export async function claimImageProcessingJob(
     const devicePull =
       !currentExecution && input.processorRevisions !== undefined;
     // Device pulls take their turns one at a time: the lane's admission row
-    // stays locked until this claim commits its class.
-    const priorStreak = devicePull
-      ? await lockDeviceAdmission(databaseForTransaction(tx))
-      : 0;
-    const backfillTurn = devicePull && deviceBackfillTurn(priorStreak);
+    // stays locked until the transaction that hands this claim over ends.
+    const backfillTurn =
+      devicePull &&
+      deviceBackfillTurn(await lockDeviceAdmission(databaseForTransaction(tx)));
     // The internal policy keeps claims within the device’s supported job kinds.
     // A retry prefers a different device than the one its last attempt ran
     // on, within the class whose turn it is; a lone device still takes its
@@ -620,7 +627,6 @@ export async function claimImageProcessingJob(
           submissionId: imageProcessingJob.submissionId,
           derivativeId: imageProcessingJob.derivativeId,
           runId: imageProcessingJob.runId,
-          runOwned: jobRunOwned(),
           originalKey: image.key,
           originalContentType: image.contentType,
           derivativeKey: imageDerivative.key,
@@ -726,13 +732,6 @@ export async function claimImageProcessingJob(
         input.leaseMs,
       ));
     if (!execution) return null;
-    const admission = devicePull
-      ? await recordDeviceAdmission(
-          databaseForTransaction(tx),
-          candidate.runOwned,
-          priorStreak,
-        )
-      : null;
     // A device lease can lapse while every device idles; the wake rings then.
     if (execution.kind === "image.device")
       await armDeviceWake(databaseForTransaction(tx));
@@ -793,7 +792,6 @@ export async function claimImageProcessingJob(
     const {
       previousAttemptId: _previousAttemptId,
       executionId: _executionId,
-      runOwned: _runOwned,
       ...claimed
     } = candidate;
     return {
@@ -803,7 +801,6 @@ export async function claimImageProcessingJob(
       derivativeKey,
       attemptId,
       leaseExpiresAt: execution.leaseExpiresAt,
-      admission,
     };
   });
 }
@@ -901,11 +898,6 @@ export async function releaseImageProcessingLease(
     delayMs?: number;
     event: "dispatch.released" | "execution.released";
     source?: "server" | "device";
-    /**
-     * The fairness class of a device claim the server could not hand over;
-     * the release undoes its admission so a refused backfill stays owed.
-     */
-    refusedAdmission?: DeviceAdmission;
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
@@ -970,11 +962,6 @@ export async function releaseImageProcessingLease(
       source: input.source ?? "server",
       details: { reason: input.reason },
     });
-    if (input.refusedAdmission && execution.kind === "image.device")
-      await refuseDeviceAdmission(
-        databaseForTransaction(tx),
-        input.refusedAdmission,
-      );
     return true;
   });
 }

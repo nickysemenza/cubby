@@ -20,6 +20,7 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
+import { recordDeviceService } from "~/server/generic/jobs/repo/device-admission";
 import {
   externalJobClaim,
   releaseJobClaim,
@@ -145,6 +146,12 @@ export async function assignImageProcessingExecutor(
       diagnostics: input.diagnostics,
     });
     if (number === null) return false;
+    // A device's committed hand-off is one service for pull fairness.
+    if (executor.kind === "device")
+      await recordDeviceService(
+        databaseForTransaction(tx),
+        `image-processing:${input.jobId}`,
+      );
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:assigned`,
