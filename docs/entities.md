@@ -1165,8 +1165,16 @@ share lock only at its final commit fence, after business work and requester
 wakeups. A deactivation or generation change during publication refuses or
 rolls back the write. Product catalog preparation holds no transaction: each
 pair publishes or registers demand in its own guarded transaction, and the
-catalog completes afterward. Connection refresh likewise commits one prepared
-connection or identity pair per guarded transaction. Interrupted catalogs may retain already committed
+catalog completes afterward. Connection refresh commits at most two prepared
+units (connections, identity pairs or field proposals) per guarded transaction:
+each transaction's guards and fences cost about ten statements, and the pair
+stays within the publication statement bound. A refusal in either unit rolls
+back both; the retry rediscovers and republishes them. Each stage captures its
+candidates' evidence before the next stage awaits a provider, and every unit
+rechecks that evidence under its locks, so drift during inference refuses the
+unit rather than being captured as current. The source fingerprint is read once
+per transaction at commit, against the fingerprint the evaluation was claimed
+with. Interrupted catalogs may retain already committed
 pairs; retries reuse their publication/work identities. Pair publication checks
 a transient MVCC row-set fence in one statement instead of repeating snapshots:
 preparation brackets the complete Product, identifier, source, photo/description,
@@ -2144,6 +2152,16 @@ repository ANDs a condition beside it. Email's
 the web and native pickers choose one record, and the repository rejects more than one
 across the three. Each is also a `model.derived` predicate over the one scope
 record they resolve.
+
+A count, total or extreme over related records is a `model.derived`
+`rollup`: `{ rollup: "count", via: "expenses" }`, `{ rollup: "sum", via:
+"expenses.cost" }` or `min`/`max` over a date or numeric terminal field, with
+`absent` naming related stored fields that must be NULL. The generator checks
+the path leads through a list and that the terminal field can be aggregated;
+the list compiler builds a correlated aggregate over live rows at every step,
+and `sum` accumulates in `numeric` before casting so totals do not drift.
+Repositories pass no SQL for a rollup and read the same value for their
+columns through `declaredRollup`.
 
 A text filter declares `anyOf`, the list fields it matches when any one does,
 and `declaredFilterPredicates` ORs a case-insensitive substring match across

@@ -10,6 +10,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import { assessmentState, run as runTable } from "~/server/db/schema";
 import type { PurchaseImportRunAgentRpc } from "~/server/domains/purchase-agent/service/environment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
@@ -37,7 +38,7 @@ const openFinding = and(
 async function closeRetiredExecutionFindings(db: Database) {
   await transitionAssessmentStates(
     db,
-    and(openFinding, obsoleteExecutionFindingSql('"AssessmentState"')),
+    and(openFinding, obsoleteExecutionFindingSql(quotedTable(assessmentState))),
     { status: suggestionStatus.enum.rejected },
     { kind: "coordinator_retired" },
   );
@@ -162,7 +163,7 @@ export async function retireSettledCoordinators(
           and(
             eq(assessmentState.runId, id),
             openFinding,
-            obsoleteExecutionFindingSql('"AssessmentState"'),
+            obsoleteExecutionFindingSql(quotedTable(assessmentState)),
           ),
           { status: suggestionStatus.enum.rejected },
           { kind: "coordinator_retired" },

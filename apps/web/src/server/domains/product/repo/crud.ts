@@ -94,6 +94,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { quotedTable, rankOf } from "~/server/db/helpers/related";
 import {
   cookbook,
   device,
@@ -110,6 +111,7 @@ import {
   plant,
   planting,
   product,
+  productCategory,
   productConversionCoverage,
   productUnitMappings,
   task,
@@ -333,8 +335,13 @@ const productScaffold = listScaffold("product", product, {
         `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL)`,
     ),
     brandId: productBrandNameSql(product.brandId),
-    categoryId: sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path'`,
-    price: sql.raw(displayProductCostSql('"Product"')),
+    // Ranked once over categories: the path summary per Product was ~600 ms.
+    categoryId: rankOf(
+      productCategory,
+      (id) => sql`${categorySummarySql(id)}::jsonb->'path'`,
+      sql`${product.categoryId}`,
+    ),
+    price: sql.raw(displayProductCostSql(quotedTable(product))),
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
         `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
@@ -348,10 +355,10 @@ const productScaffold = listScaffold("product", product, {
     // The range filter reads the catalog's one shared kit walk; the row value
     // walks each product's kits.
     ledgerExpectedQuantity: {
-      value: sql.raw(expectedQuantitySql('"Product"')),
+      value: sql.raw(expectedQuantitySql(quotedTable(product))),
       set: expectedQuantityReadSql(),
     },
-    quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
+    quantityVariance: sql.raw(quantityVarianceSql(quotedTable(product))),
     // Variance only means reconciliation when both physical stock and ledger
     // evidence exist. Locations count as on-hand here because the compared SQL
     // projection counts them too.

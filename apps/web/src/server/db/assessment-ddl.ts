@@ -9,6 +9,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_email_one_link_key" ON "Asses
 -- Match linked association reads: both the UUID key and linked predicate keep
 -- the planner from choosing an unselective scan of the text uniqueness key.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_linked_event_uuid_idx" ON "AssessmentState" (((data->>'eventId')::uuid)) WHERE family='email_link' AND active AND data->>'decision'='linked';
+-- Every reviewed decision of an order event, joined per Email row by the
+-- link-state rank: the text key and the linked-only UUID index cannot serve it.
+CREATE INDEX IF NOT EXISTS "AssessmentState_email_event_uuid_idx" ON "AssessmentState" (((data->>'eventId')::uuid)) WHERE family='email_link' AND active;
 -- A Purchase's reviewed links, read per row by purchaseAssociatedEmailsSql.
 CREATE INDEX IF NOT EXISTS "AssessmentState_email_purchase_uuid_idx" ON "AssessmentState" (((data->>'purchaseId')::uuid)) WHERE family='email_link' AND active;
 

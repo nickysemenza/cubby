@@ -549,11 +549,16 @@ export async function recordAiRefreshAttemptFailure(
   });
 }
 
+/**
+ * Fence a publication on the source fingerprint its evaluation was claimed
+ * with, read once at commit inside the serializable transaction. Each unit's
+ * own basis is rechecked under its locks; this read is the source-wide fence.
+ */
 export async function checkConnectionSourceBeforeCommit(
   db: Database,
   fingerprint: () => Promise<string>,
+  expected: string,
 ) {
-  const expected = await fingerprint();
   await runBeforeCommitDatabase(
     db,
     async () => {

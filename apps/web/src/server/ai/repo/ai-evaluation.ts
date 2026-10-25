@@ -172,11 +172,23 @@ export async function completeAiEvaluation(
   state: "completed" | "blocked" | "obsolete" = "completed",
 ) {
   await guardAiEvaluation(tx, id, token);
+  await settleAiEvaluation(tx, id, z.json().parse(receipt), state);
+}
+
+type EvaluationReceipt = z.output<ReturnType<typeof z.json>>;
+
+/** Completion for a transaction that already holds `guardAiEvaluation`'s locks. */
+async function settleAiEvaluation(
+  tx: Database,
+  id: string,
+  receipt: EvaluationReceipt,
+  state: "completed" | "blocked" | "obsolete",
+) {
   const [row] = await getDb(tx)
     .update(aiEvaluation)
     .set({
       state,
-      receipt: z.json().parse(receipt),
+      receipt,
       error: null,
       updatedAt: new Date(),
     })
@@ -188,7 +200,7 @@ export async function completeAiEvaluation(
   if (!row) throw new Error("AI evaluation attempt is obsolete");
   await getDb(tx)
     .update(aiEvaluationRequest)
-    .set({ receipt: z.json().parse(receipt) })
+    .set({ receipt })
     .where(
       and(
         eq(aiEvaluationRequest.evaluationId, id),
@@ -217,8 +229,9 @@ export async function publishAiEvaluation<T>(
       // Acquire the global fence only after business work. SERIALIZABLE rejects
       // activation changed since this transaction's snapshot; the share lock
       // prevents deactivation between this check and commit.
+      // The guard above already locked this attempt's Run and row.
       if (settlement === "complete")
-        await completeAiEvaluation(tx, id, token, result);
+        await settleAiEvaluation(tx, id, z.json().parse(result), "completed");
       else await fenceAiEvaluationActivation(tx, row);
       return result;
     },

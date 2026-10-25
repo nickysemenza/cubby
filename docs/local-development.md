@@ -306,6 +306,31 @@ waterfalls, but Cloudflare/Hyperdrive connection behavior and Neon compute/cache
 effects still require separate deployed measurements. Local results do not prove
 production page latency.
 
+### Production-volume copy
+
+When the synthetic pack does not reproduce a slow plan, a member may authorize
+tuning against a copy of production. This is the one exception to local data
+being synthetic, so keep it contained:
+
+- Branch production in Neon (`neon branches create --parent production`) and
+  `pg_dump -Fd` the branch from inside the PostgreSQL container, not
+  production itself. Keep connection strings under
+  `~/.local/share/cubby-private/` (mode 600), never in the checkout.
+- Restore into a dedicated `cubby_dev_<name>` database without a checkout
+  comment (`pruneCheckoutDatabases` then leaves it alone), `ANALYZE` it, and
+  delete the dump. The restore reports only the missing `neon` extension.
+- Add the synthetic dev user and the `cubby_dev_fixture` core marker by
+  script, then start an isolated instance with
+  `CUBBY_DEV_INSTANCE=<name> CUBBY_DEV_DB_NAME=cubby_dev_<name> pnpm dev`; it
+  seeds nothing into an existing database.
+- `tooling/checks/read-performance.ts` measures default views; sweep sorts by
+  sending `sort` (not `sorts`) to `entity.listBase` per declared field. Set
+  `log_min_duration_statement` on that database to capture slow statements.
+- Publish only aggregate timings and entity names. Plans and logged statements
+  carry household values: keep them in the private directory and redact
+  before quoting. Drop the database and delete the Neon branch when tuning
+  ends; local timings are not production latency.
+
 The Problems pack adds incomplete entities, a failed photo-processing Run/job,
 and an open Run with pending image work. Both work fixtures retain real local
 source bytes and avoid provider dispatch. Interactive fixture packs use the entity kernel; the

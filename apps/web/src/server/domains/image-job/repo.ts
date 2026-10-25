@@ -61,17 +61,7 @@ const loadFacts = async (
     executor: string | null;
     deviceRan: boolean;
   }>(sql`
-    SELECT j.id,
-      (SELECT coalesce(sum(u."chargedCost"), 0) FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND (
-          (u."jobKind" = ${"image_processing_attempt"} AND u."jobId" IN (
-            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id))
-          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text))) AS charged,
-      (SELECT coalesce(sum(u."standardCost"), 0) FROM "AiUsage" u
-        WHERE u."deletedAt" IS NULL AND (
-          (u."jobKind" = ${"image_processing_attempt"} AND u."jobId" IN (
-            SELECT a.id::text FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id))
-          OR (u."jobKind" = j.kind AND u."jobId" = j.id::text))) AS standard,
+    SELECT j.id, cost.charged, cost.standard,
       coalesce(
         (SELECT a.executor->>${"name"} FROM "ImageProcessingAttempt" a
           WHERE a."jobId" = j.id AND a.executor IS NOT NULL
@@ -83,6 +73,24 @@ const loadFacts = async (
       EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
         WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan"
     FROM "ImageProcessingJob" j
+    -- Each usage source probes "AiUsage_job_idx" by its own (jobKind, jobId).
+    -- An OR with an attempt-id IN list cannot, and scanned every attempt's
+    -- usage once per job and sum (~775 ms for a 50-row page).
+    CROSS JOIN LATERAL (
+      SELECT coalesce(sum(u."chargedCost"), 0) AS charged,
+        coalesce(sum(u."standardCost"), 0) AS standard
+      FROM (
+        SELECT u."chargedCost", u."standardCost"
+          FROM "ImageProcessingAttempt" a
+          JOIN "AiUsage" u ON u."jobKind" = ${"image_processing_attempt"}
+            AND u."jobId" = a.id::text
+          WHERE a."jobId" = j.id AND u."deletedAt" IS NULL
+        UNION ALL
+        SELECT u."chargedCost", u."standardCost" FROM "AiUsage" u
+          WHERE u."jobKind" = j.kind AND u."jobId" = j.id::text
+            AND u."deletedAt" IS NULL
+      ) u
+    ) cost
     WHERE j.id IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,

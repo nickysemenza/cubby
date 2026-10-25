@@ -16,7 +16,7 @@ import { evaluateProductIdentity } from "~/server/ai/product-identity";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { retrieveConnectionCandidates } from "~/server/domains/connection/repo/connection-candidates";
-import { prepareEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+import { prepareEntityConnections as prepareConnectionCandidates } from "~/server/domains/connection/repo/entity-connections";
 import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
@@ -33,6 +33,7 @@ import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-asse
 import { prepareTagSuggestions } from "~/server/generic/assessment/service/tag-suggestions";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { discoverAcquisitionCandidateScan } from "./acquisition-discovery";
 
@@ -59,27 +60,48 @@ export async function prepareEntityConnections(
 ) {
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
+  const stage = <T>(name: string, fn: () => Promise<T>) =>
+    withTrace(TraceNames.service("connections", name), fn, {
+      "connection.source": source.entityKind,
+    });
+  // Each stage's new candidates prepare together, before the next stage can
+  // await a provider: evidence is captured as retrieved, so a change made
+  // while an embedding waits fails the locked basis comparison at publish
+  // instead of being captured as if it had been retrieved.
   const captured = new Set<string>();
   const captureCandidates = async (
     candidates: readonly ConnectionCandidate[],
   ) => {
-    for (const candidate of candidates) {
+    const fresh = candidates.filter((candidate) => {
       const key = `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
-      if (captured.has(key)) continue;
-      const publish = await prepareEntityConnection(db, candidate);
+      if (captured.has(key)) return false;
       captured.add(key);
+      return true;
+    });
+    for (const publish of await stage("prepare", () =>
+      prepareConnectionCandidates(db, fresh),
+    ))
       publishers.push(async (transactionDb) => {
         await publish(transactionDb);
       });
-    }
   };
-  await captureCandidates(await retrieveConnectionCandidates(db, source));
+  await stage("retrieve", async () =>
+    captureCandidates(await retrieveConnectionCandidates(db, source)),
+  );
   // Indexed/semantic retrieval may call a model; preserve earlier candidates first.
-  const acquisition = await discoverAcquisitionCandidateScan(db, source);
-  await captureCandidates(acquisition.candidates);
+  const acquisition = await stage("acquisitionScan", async () => {
+    // Query embeddings bill to the evaluation's Run rather than opening one.
+    const scan = await discoverAcquisitionCandidateScan(db, source, {
+      runId: context.actorContext.runId ?? undefined,
+    });
+    await captureCandidates(scan.candidates);
+    return scan;
+  });
   const candidates: ConnectionCandidate[] = [];
   if (source.entityKind === "expense" || source.entityKind === "inventory") {
-    const recommendations = await getEntityRecommendations(db, source);
+    const recommendations = await stage("recommendations", () =>
+      getEntityRecommendations(db, source),
+    );
     for (const group of recommendations.groups) {
       if (group.kind === "expense-project")
         for (const proposal of group.proposals)
@@ -116,20 +138,24 @@ export async function prepareEntityConnections(
   await captureCandidates(candidates);
   if (source.entityKind === "product") {
     publishers.push(
-      ...(await prepareTagSuggestions(db, source.entityId)).map(
-        (publish) => async (transactionDb: Database) => {
-          await publish(transactionDb);
-        },
-      ),
+      ...(
+        await stage("tagSuggestions", () =>
+          prepareTagSuggestions(db, source.entityId),
+        )
+      ).map((publish) => async (transactionDb: Database) => {
+        await publish(transactionDb);
+      }),
     );
     const runId = await ensureRun(db, context.actorContext, {
       purpose: "ai_suggest",
     });
-    const identity = await evaluateProductIdentity(
-      db,
-      await resolveOrThrow(db, "product", source.entityId),
-      runId,
-      ports.productIdentityPorts,
+    const identity = await stage("productIdentity", async () =>
+      evaluateProductIdentity(
+        db,
+        await resolveOrThrow(db, "product", source.entityId),
+        runId,
+        ports.productIdentityPorts,
+      ),
     );
     if (identity.failure) throw new Error(identity.failure);
     for (const pair of identity.pairs) {
@@ -140,7 +166,9 @@ export async function prepareEntityConnections(
     }
   }
   publishers.push(
-    ...(await prepareFieldConnections(db, context, source, ports)),
+    ...(await stage("fieldConnections", () =>
+      prepareFieldConnections(db, context, source, ports),
+    )),
   );
   return {
     publications: publishers,

@@ -243,11 +243,12 @@ function edgeCondition(
   // The database requires a product-linked Expense to be principal. For a
   // product-scoped path, allocation is therefore the scalar effective project.
   if (edge.edgeKey === "Expense.projectId" && productScopedExpense) {
+    // The canonical expression reads only the Expense, so the planner can
+    // resolve it once per Expense and hash-join Projects. Guarding the food
+    // fallback on the target Project made it a per-pair join filter (an
+    // 8 s Product list sort on production-volume data).
     if (!materializePrincipalProjects)
-      return sql`${effectiveExpenseProjectSql(
-        sourceAlias,
-        sql`${sql.raw(`${targetAlias}."shortcode"`)} = 'PRJ-HSHD'`,
-      )} = ${target}`;
+      return sql`${effectiveExpenseProjectSql(sourceAlias)} = ${target}`;
     const inherited = principalExpenseInheritanceSql(
       "related_expense",
       "related_purchase",

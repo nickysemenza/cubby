@@ -7,6 +7,7 @@ import {
   assessment,
   emailClassificationObservation,
 } from "~/server/db/retained-tables";
+import { EMAIL_OBSERVATION_PUBLICATION_PREFIX } from "~/server/domains/email/repo/email-sql";
 import {
   publishAssessment,
   recordFeedback,
@@ -46,7 +47,12 @@ export async function ensureEmailAssessment(
       evidence: assessment.evidence,
     })
     .from(assessment)
-    .where(eq(assessment.publicationKey, `email-observation:${predictionId}`))
+    .where(
+      eq(
+        assessment.publicationKey,
+        `${EMAIL_OBSERVATION_PUBLICATION_PREFIX}${predictionId}`,
+      ),
+    )
     .limit(1);
   if (existing) return existing;
   const [row] = await getDb(db)
@@ -56,7 +62,7 @@ export async function ensureEmailAssessment(
     .limit(1);
   if (!row) throw new Error("Frozen Email prediction not found");
   return publishAssessment(db, {
-    publicationKey: `email-observation:${row.id}`,
+    publicationKey: `${EMAIL_OBSERVATION_PUBLICATION_PREFIX}${row.id}`,
     family: "email_relevance",
     subject: {
       kind: "email_relevance",

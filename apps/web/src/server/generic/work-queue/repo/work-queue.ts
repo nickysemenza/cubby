@@ -60,6 +60,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   email,
   expense,
@@ -493,7 +494,9 @@ async function workQueueProjection(
     admits("purchase", true) &&
     (!scope.check || scope.check.includes("settlement_reference"))
   ) {
-    const deferred = awaitingPostingSql(purchasePostingStartSql('"Purchase"'));
+    const deferred = awaitingPostingSql(
+      purchasePostingStartSql(quotedTable(purchase)),
+    );
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "purchase",
@@ -534,7 +537,7 @@ async function workQueueProjection(
     const filters = compileProblemFilters(source.entity, source.filters);
     const deferred =
       definition.key === "purchaseFinancialSettlementMismatches"
-        ? awaitingPostingSql(purchasePostingStartSql('"Purchase"'))
+        ? awaitingPostingSql(purchasePostingStartSql(quotedTable(purchase)))
         : null;
     const settlementDetails = deferred
       ? {
@@ -642,7 +645,7 @@ async function workQueueProjection(
 
   if (admits("financialTransaction")) {
     const deferred = awaitingPostingSql(
-      transactionPostingStartSql('"FinancialTransaction"'),
+      transactionPostingStartSql(quotedTable(financialTransaction)),
     );
     selections.push(
       ...workQueueCandidate(scope, {

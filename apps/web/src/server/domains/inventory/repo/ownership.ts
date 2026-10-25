@@ -23,6 +23,7 @@ import {
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   entityLink,
   expense,
@@ -164,7 +165,7 @@ const loadAcquisitionExpenseRows = async (
         notDeleted(expense),
         actualExpense(),
         lte(expense.date, today()),
-        sql.raw(expenseAcquisitionSql('"Expense"')),
+        sql.raw(expenseAcquisitionSql(quotedTable(expense))),
       ),
     );
 
@@ -239,7 +240,7 @@ const loadPurchaseExpenseRows = async (
       purchaseId: expense.purchaseId,
       productId: expense.productId,
       isAcquisition: sql<boolean>`${sql.raw(
-        expenseAcquisitionSql('"Expense"'),
+        expenseAcquisitionSql(quotedTable(expense)),
       )}`,
     })
     .from(expense)

@@ -2,6 +2,7 @@ import { and, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import { financialTransaction } from "~/server/db/schema";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import {
@@ -82,7 +83,7 @@ async function loadFinancialTransactionQualityRecords(
       status: financialTransaction.status,
       kind: financialTransaction.kind,
       merchant: financialTransaction.merchant,
-      allocationDefect: sql<boolean>`${allocationIntegrityDefectSql('"FinancialTransaction"')}`,
+      allocationDefect: sql<boolean>`${allocationIntegrityDefectSql(quotedTable(financialTransaction))}`,
       hasAllocation: sql<boolean>`EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a WHERE a."transactionId" = "FinancialTransaction"."id" AND a."deletedAt" IS NULL)`,
       requiresBooking: sql<boolean>`${financialTransactionRequiresBookingSql("FinancialTransaction")}`,
       expectation: sql<string>`${financialTransactionItemizationExpectationSql("FinancialTransaction")}`,

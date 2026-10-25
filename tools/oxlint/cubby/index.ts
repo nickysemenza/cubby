@@ -18,6 +18,7 @@ import { noDomainBarrelRule } from "./rules/no-domain-barrel.ts";
 import { noDeepRelativeImportsRule } from "./rules/no-deep-relative-imports.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
 import { noHandRolledPluralRule } from "./rules/no-hand-rolled-plural.ts";
+import { noRawDeletedAtPredicateRule } from "./rules/no-raw-deleted-at-predicate.ts";
 import { noRawEnumLiteralInSqlRule } from "./rules/no-raw-enum-literal-in-sql.ts";
 import { noSwallowedCatchRule } from "./rules/no-swallowed-catch.ts";
 import { noUnsafeIdentifiersRule } from "./rules/no-unsafe-identifiers.ts";
@@ -57,6 +58,7 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-native-select": noNativeSelectRule,
     "no-raw-value-control": noRawValueControlRule,
     "no-raw-console": noRawConsoleRule,
+    "no-raw-deleted-at-predicate": noRawDeletedAtPredicateRule,
     "no-raw-enum-literal-in-sql": noRawEnumLiteralInSqlRule,
     "no-raw-table": noRawTableRule,
     "no-unbounded-page-size": noUnboundedPageSizeRule,

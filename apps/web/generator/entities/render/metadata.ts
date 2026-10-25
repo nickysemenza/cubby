@@ -433,9 +433,9 @@ export const renderEntityMetadataArtifacts = (
         }) +
         "\n" +
         'type DerivedOf<E extends Entity> = (typeof generatedEntityListFields)[E]["derived"];\n' +
-        "/** Derived keys whose SQL value the repository passes to `listScaffold`. */\n" +
+        "/** Derived keys whose SQL value the repository passes to `listScaffold`; declared rollups compile their own. */\n" +
         "export type GeneratedDerivedValueKey<E extends Entity> = {\n" +
-        '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
+        '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value"; rollup: object } ? never : DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
         "}[keyof DerivedOf<E>] & string;\n" +
         "/** Row sets whose relation the repository passes to `listScaffold`. */\n" +
         "export type GeneratedRepositoryRowSetKey<E extends Entity> = {\n" +

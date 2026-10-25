@@ -960,7 +960,8 @@ const buildMetadataSchemas = () => {
    * orders and groups by. `via` is a related path of relation keys,
    * optionally ending in a field of the last entity, or a `model.rows` row
    * set and one terminal (its column, or an entity its row references); the
-   * list compiler builds it. `type` is a value whose SQL the repository passes to `listScaffold`;
+   * list compiler builds it. A `rollup` is a correlated aggregate over a
+   * relation path that the compiler also builds. `type` is a value whose SQL the repository passes to `listScaffold`;
    * a `dateInterval` is the two-part `[start, end]` (NULL `end` is open)
    * that range filters test for overlap and a one-date filter for
    * containment.
@@ -970,6 +971,27 @@ const buildMetadataSchemas = () => {
    */
   const entityDerivedFieldMetadataSchema = z.union([
     z.object({ via: nonEmptyString() }).strict(),
+    /**
+     * A correlated aggregate the list compiler builds from a declared
+     * relation path: `count` of the related records, or `sum`/`min`/`max` of
+     * the path's terminal stored field (`"expenses.cost"`). Every step reads
+     * live rows; `absent` keeps only related rows whose listed stored fields
+     * are NULL (an unpriced line count). The repository passes no SQL.
+     */
+    z
+      .object({
+        // Literals, not z.enum: aggregate names are SQL words, not schema
+        // vocabulary for no-raw-enum-literal-in-sql.
+        rollup: z.union([
+          z.literal("count"),
+          z.literal("sum"),
+          z.literal("min"),
+          z.literal("max"),
+        ]),
+        via: nonEmptyString(),
+        absent: z.array(nonEmptyString()).min(1).optional(),
+      })
+      .strict(),
     z
       .object({
         type: z.enum([

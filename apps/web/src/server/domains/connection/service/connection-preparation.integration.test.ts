@@ -13,6 +13,8 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   aiEvaluation,
   assessmentState,
+  entityLink,
+  vendor as vendorTable,
   run,
   expense,
   searchDocument,
@@ -441,6 +443,79 @@ describe("connection preparation and publication authority", () => {
           ),
         ),
     ).toEqual([]);
+  });
+
+  // Regression: batching every stage's candidates captured retrieval-time
+  // evidence only after the semantic scan's provider call returned, so a link
+  // removed meanwhile was captured as current and the proposal still claimed it.
+  it("captures retrieved identity-link evidence before a pending query embedding", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic pending embedding lamp" }),
+      ctx.actor,
+    );
+    const vendor = await findOrCreateVendor(ctx.db, "Synthetic lamp vendor");
+    const order = await createRepoEntity(ctx, "purchase", {
+      vendorId: (
+        await getDb(ctx.db)
+          .select({ code: vendorTable.shortcode })
+          .from(vendorTable)
+          .where(eq(vendorTable.id, vendor))
+      )[0]!.code,
+      orderId: "SYNTHETIC-PENDING-EMBEDDING",
+      defaultProjectId: null,
+    });
+    const [link] = await getDb(ctx.db)
+      .insert(entityLink)
+      .values({
+        kind: "purchaseProduct",
+        fromEntityId: order.entityId,
+        fromKind: "purchase",
+        toEntityId: item.entityId,
+        toKind: "product",
+      } as typeof entityLink.$inferInsert)
+      .returning({ id: entityLink.id });
+    const values = Array.from(
+      { length: getSemanticEmbeddingConfig().dimensions },
+      (_, axis) => (axis === 0 ? 1 : 0),
+    );
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        VECTORIZE: createInMemoryVectorizeIndex(),
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+        CUBBY_TEST_AI_GATEWAY: {
+          fetch: async () => {
+            entered.resolve();
+            await release.promise;
+            return Response.json({ data: [{ index: 0, embedding: values }] });
+          },
+        },
+      }),
+    );
+    const preparation = prepareCombinedConnections(ctx.db, kernelCtx(ctx), {
+      entityKind: "product",
+      entityId: item.id,
+    });
+    try {
+      await Promise.race([
+        entered.promise,
+        preparation.then(() => {
+          throw new Error("Connection preparation ended before the embedding");
+        }),
+      ]);
+      await getDb(ctx.db)
+        .update(entityLink)
+        .set({ deletedAt: new Date() })
+        .where(eq(entityLink.id, link!.id));
+    } finally {
+      release.resolve();
+    }
+    const publish = await preparation;
+    await expect(withTransactionDatabase(ctx.db, publish)).rejects.toThrow(
+      /evidence changed/i,
+    );
   });
 
   it("rolls field publication back with the fenced caller transaction", async () => {
