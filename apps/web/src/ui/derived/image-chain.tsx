@@ -1,7 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
-import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import type { imageChainExplanation } from "@cubby/schemas/field-explanation";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import type { z } from "zod";
 
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { cn } from "~/lib/utils";
@@ -18,9 +19,9 @@ import {
 import { ExplanationEntityLink } from "./why-value";
 
 export type ImageChainQueryOptions =
-  typeof fieldExplanation.explain.queryOptions;
+  typeof fieldExplanation.imageChain.queryOptions;
 
-type Chain = NonNullable<FieldExplanationOutput["imageChain"]>;
+type Chain = z.infer<typeof imageChainExplanation>;
 
 export function ImageChain({ chain }: { chain: Chain }) {
   return (
@@ -74,7 +75,7 @@ export function ImageChain({ chain }: { chain: Chain }) {
 export function RecordImageChain({
   entity,
   id,
-  explain = fieldExplanation.explain.queryOptions,
+  explain = fieldExplanation.imageChain.queryOptions,
 }: {
   entity: Entity;
   id: string;
@@ -84,8 +85,6 @@ export function RecordImageChain({
     explain({
       entityKind: entity,
       entityId: id,
-      field: "displayImages",
-      surface: "detail",
     }),
   );
   if (result.isError)
@@ -94,9 +93,7 @@ export function RecordImageChain({
     return (
       <p className="text-xs text-muted-foreground">Loading image sources…</p>
     );
-  return result.data.imageChain ? (
-    <ImageChain chain={result.data.imageChain} />
-  ) : null;
+  return <ImageChain chain={result.data} />;
 }
 
 export function ImageChainPopover({

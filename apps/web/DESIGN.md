@@ -476,6 +476,8 @@ it may reuse entity links, evidence and existing mutation actions.
 
 Display image sources are read-only strips in precedence order, with a linked
 source header and the chosen cover outlined. Header and table thumbnails open
-the chain; the Images section also renders it. Editing remains #3310.
+the chain; the Images section also renders it. Both read the record-level
+`fieldExplanation.imageChain` query and preserve its precedence order. Editing
+remains #3310.
 The sidebar shows “Updating N values · Activity” only with a nonempty backlog;
 Activity lists outstanding work once per declared derived kind.
