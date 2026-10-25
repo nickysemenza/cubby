@@ -436,12 +436,13 @@ private struct DeviceParticipationSection: View {
 /// Settings › Image work: how many image jobs this device runs at once, one pool shared by
 /// descriptions and subject lifts. Stored per device; 0 is Automatic. The worker picks up a
 /// change on its next pull.
-private struct ImageWorkConcurrencySection: View {
+struct ImageWorkConcurrencySection: View {
     @Environment(AppModel.self) private var model
     @AppStorage(CompanionImageConcurrency.defaultsKey) private var stored = 0
 
     var body: some View {
         Section {
+            ProcessImageQueueButton()
             Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
                 LabeledContent("Jobs at once") {
                     Text(

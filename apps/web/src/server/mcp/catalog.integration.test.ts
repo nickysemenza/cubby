@@ -1,9 +1,11 @@
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
+import { recordShipmentEvidenceInput } from "@cubby/schemas/shipment-evidence";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
+import { StatusCodes } from "http-status-codes";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -511,6 +513,108 @@ describe("MCP catalog", () => {
       "reads only purchase, vendor, product",
     );
     expect((await read("purchase")).isError).not.toBe(true);
+  });
+
+  it("returns input-schema recovery for a delegated shipment write missing its execution envelope", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic envelope member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const runId = await syntheticMailImportRun(ctx.db, ctx.actor, {
+      ledgerPartyId: party.id,
+      mailboxId: "envelope@example.com",
+    });
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    // The action input itself is valid, so this exercises the missing envelope after admission.
+    const input = recordShipmentEvidenceInput.parse({
+      source: {
+        kind: "tracking_page",
+        url: "https://example.com/tracking",
+        externalKey: "synthetic-package",
+        capturedAt: "2026-06-06T09:00:00Z",
+        content: "Synthetic tracking evidence",
+      },
+      purchaseId: null,
+      shipments: [
+        {
+          shipmentId: null,
+          sourceShipmentKey: "synthetic-package",
+          distinctPackageEvidence: null,
+          carrierId: null,
+          carrierName: "Synthetic Carrier",
+          trackingNumber: "SYNTHETIC-123",
+          extraTrackingNumbers: [],
+          purpose: "incoming",
+          observations: [
+            {
+              sourceEventKey: "synthetic-scan",
+              kind: "carrier_possession",
+              timeBasis: "stated_event",
+              time: { kind: "instant", value: "2026-06-03T09:00:00Z" },
+              rawStatus: "Synthetic pickup",
+              location: null,
+              carrierId: null,
+              carrierName: "Synthetic Carrier",
+              trackingNumber: "SYNTHETIC-123",
+            },
+          ],
+        },
+      ],
+    });
+    const result = await callMcpTool(
+      createMcpServer(),
+      "shipments",
+      { action: "record", input },
+      kernelRequestContext(kernel),
+      {
+        entityKernel: kernel,
+        purchaseAgent: { runId, grantId: "synthetic-envelope-grant" },
+      },
+    );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(result._meta).toMatchObject({
+      "cubby/error": {
+        code: "BAD_REQUEST",
+        reason: "INVALID_INPUT",
+        diagnostics: { stage: "input" },
+        validationIssues: [{ code: "invalid_type", path: ["_runExecution"] }],
+      },
+    });
+    const refusal = z
+      .object({
+        "cubby/error": z.object({
+          code: z.enum(["BAD_REQUEST", "INTERNAL_SERVER_ERROR"]),
+        }),
+      })
+      .parse(result._meta)["cubby/error"];
+    expect(StatusCodes[refusal.code]).toBe(400);
+    const recoverySchema = z.object({
+      recovery: z.literal("input_schema"),
+      action: z.string(),
+      inputSchema: z.record(z.string(), z.json()),
+    });
+    const recovery = result.content
+      .filter((block) => block.type === "text")
+      .flatMap((block) => {
+        try {
+          const parsed = recoverySchema.safeParse(JSON.parse(block.text));
+          return parsed.success ? [parsed.data] : [];
+        } catch {
+          return [];
+        }
+      })[0];
+    expect(recovery).toMatchObject({
+      recovery: "input_schema",
+      action: "record",
+      inputSchema: { type: "object" },
+    });
+    expect(recovery?.inputSchema).toMatchObject({
+      properties: { shipments: { type: "array" } },
+    });
   });
 
   it("refuses purchase_import mutations for a run purpose that does not mount them", async () => {

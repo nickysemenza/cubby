@@ -20,7 +20,7 @@ export default defineEntity({
   identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {
     titleField: "name",
-    domain: "plan",
+    domain: "purchases",
     description: "Wanted items and candidate products.",
     emptyState: {
       title: "No wishes yet",

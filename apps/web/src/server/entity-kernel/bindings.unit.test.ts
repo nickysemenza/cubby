@@ -1,5 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { SHORTCODE_PREFIX } from "@cubby/shared";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -201,7 +201,7 @@ describe("entity kernel bindings", () => {
       expect(Boolean(binding.mergeOperation)).toBe(
         includesAction(actions, "merge"),
       );
-      const id = `${SHORTCODE_PREFIX[entity]}ABCD`;
+      const id = testShortcode(entity, "kernel-exposure");
       for (const action of actions) {
         let actionInput = {};
         if (action === "create") {
@@ -261,7 +261,7 @@ describe("entity kernel bindings", () => {
       const executable = generatedEntityKernelContractCases[entity].actions;
       const exposed = generatedMcpEntityKernelContractCases[entity].actions;
       const binding = ENTITY_KERNEL_BINDINGS[entity];
-      const id = `${SHORTCODE_PREFIX[entity]}ABCD`;
+      const id = testShortcode(entity, "kernel-exposure");
 
       for (const action of executable) {
         let actionInput = {};

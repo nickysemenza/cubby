@@ -45,7 +45,8 @@ function entityPrefixMatches(kind: AnyPgColumn, shortcode: AnyPgColumn): SQL {
  *
  * Shared transactional repositories create this row before its payload and
  * preserve its tombstone on removal. `finalizeMerge` also records redirects.
- * Rows are never deleted.
+ * Rows are never deleted, except Job identities pruned with their execution
+ * rows by retention (docs/jobs.md).
  */
 export const entityIdentity = pgTable(
   "Entity",

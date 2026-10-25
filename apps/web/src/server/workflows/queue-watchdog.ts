@@ -17,6 +17,7 @@ import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   measureQueueHealth,
   pruneFinishedJobs,
+  pruneOrphanJobIdentities,
   pruneObservedInvalidationCaptures,
 } from "~/server/generic/jobs/repo/queue-health";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
@@ -87,12 +88,23 @@ export const jobRetentionHandler = defineJobHandler(
     const captures = await pruneObservedInvalidationCaptures(db, {
       limit: RETENTION_BATCH,
     });
-    const more = pruned >= RETENTION_BATCH || captures >= RETENTION_BATCH;
+    const identities = await pruneOrphanJobIdentities(db, {
+      limit: RETENTION_BATCH,
+    });
+    const more =
+      pruned >= RETENTION_BATCH ||
+      captures >= RETENTION_BATCH ||
+      identities >= RETENTION_BATCH;
     return {
       page: {
         done: false,
         availableAt: new Date(Date.now() + (more ? 0 : RETENTION_INTERVAL_MS)),
-        result: { pruned, captures, prunedAt: new Date().toISOString() },
+        result: {
+          pruned,
+          captures,
+          identities,
+          prunedAt: new Date().toISOString(),
+        },
       },
     };
   },

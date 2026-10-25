@@ -7,11 +7,14 @@ import {
 } from "@cubby/schemas/image-processing";
 import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import type { DatabaseChanges } from "~/lib/doorbell";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
+import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { job as durableJob } from "~/server/db/retained-tables";
 import {
@@ -244,13 +247,34 @@ describe("durable image representations", () => {
     vi.setSystemTime(new Date(Date.now() + 30_000));
     try {
       const row = await source();
+      const messages: DatabaseChanges[] = [];
+      setCfEnv(
+        fromPartial<Env>({
+          DB_FRESHNESS: {
+            getByName: () => ({
+              publishChanges: async (changes: DatabaseChanges) => {
+                messages.push(changes);
+              },
+            }),
+          },
+        }),
+      );
       const claimed = await claimImageProcessingJob(ctx.db, {
         jobId: row.jobId,
         kinds: ["subject_lift"],
         leaseMs: 60_000,
       });
       expect(claimed).toMatchObject({ id: row.jobId, kind: "subject_lift" });
+      const [jobIdentity] = await getDb(ctx.db)
+        .select({ shortcode: imageProcessingJob.shortcode })
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, row.jobId));
+      expect(messages).toContainEqual({
+        imageJob: [jobIdentity?.shortcode],
+        image: [row.shortcode],
+      });
     } finally {
+      setCfEnv(undefined);
       vi.useRealTimers();
     }
   });

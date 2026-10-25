@@ -12,6 +12,7 @@ import {
   job,
   jobInvalidation,
   jobInvalidationCapture,
+  entityIdentity,
   run,
 } from "~/server/db/schema";
 import {
@@ -804,17 +805,27 @@ describe("queue watchdog, explain and retention", () => {
 
   it("prunes finished Jobs past retention and keeps failed ones", async () => {
     const old = new Date(Date.now() - JOB_RETENTION_MS - 60_000);
+    const identities: string[] = [];
     for (const [key, state] of [
       ["synthetic.old-completed", "completed"],
       ["synthetic.old-failed", "failed"],
     ] as const) {
       const saved = await enqueueJob(ctx.db, { key, kind: key, input: {} });
+      identities.push(saved.id);
       await getDb(ctx.db)
         .update(job)
         .set({ state, updatedAt: old })
         .where(eq(job.id, saved.id));
     }
     expect(await pruneFinishedJobs(ctx.db, { limit: 100 })).toBe(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ id: entityIdentity.id })
+          .from(entityIdentity)
+          .where(inArray(entityIdentity.id, identities))
+      ).map((row) => row.id),
+    ).toEqual([identities[1]]);
     expect(
       (await getDb(ctx.db).select({ key: job.key }).from(job)).map(
         (row) => row.key,

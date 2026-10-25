@@ -40,6 +40,33 @@ trade. No-value groups without a declared no-value filter remain readable but ca
 
 Web boards use pointer/touch dragging; keyboard users use the Earlier/Later buttons and Move picker. Drag grips are excluded from keyboard focus and the accessibility tree.
 
+## Fixed-filter list embeds and shortcode lengths
+
+`EmbeddedEntityList` in `entity/entity-list/generic-entity-list.tsx` embeds an
+entity's ordinary columns, list read, progressive enrichment and ListWorkbench.
+Callers supply an entity, fixed filters or a saved view id, a page size, optional
+columns/sort and an All N link. Each embed owns local table state and does not
+consume or write its host's URL filters/sort. The host may derive fixed filters
+from its URL. Saved-view filters and fixed scope are composed through the
+manifest; links encode the same effective filter. Embeds stop at their bounded
+first page, and the full list owns further browsing. Optional row disclosure
+uses the shared table's inline detail rows, rather than another table system.
+Embeds use sheet-only row inspection at every viewport width; they do not own a
+docked inspector region.
+
+A retention-managed read-only entity may omit `deletedAt`; generic readers apply
+liveness only where the table declares it. `listScaffold.population` receives the
+same request filters for rows, facets and selection. `populationFilters` names
+request options consumed by that predicate instead of compared with each row;
+Job uses it for its internal-kinds toggle.
+
+`identifiers.shortcodeLength` optionally overrides the minted and accepted body
+length for an entity. The bootstrap registry carries that declaration to shared
+schema validation and `generateShortcode`; omitted lengths keep the existing
+four/five-character validation and five-character generation. Job declares ten.
+Job retention alone may delete `Entity` identities and recycle pruned codes;
+[Jobs](jobs.md#job-entity-and-identity-retention) owns that bounded lifecycle.
+
 ## Generic by default
 
 Cubby's entities share one declaration spine, and every client — web, iOS and
@@ -321,7 +348,7 @@ create: null, update: null }`, absent from both `storage` and every
 `intents.fields` roster — computed in the repo mapper from other columns, and
 points `titleField` at that field. `planting`, `gardenEntry`, `meal`,
 `financialTransaction`, `purchase`, `inventory`, and `vendorAccount` all use
-this pattern today. `domain` (a `WAYFINDING_DOMAINS` line or
+this pattern today. `domain` (one of the ordered `WAYFINDING_DOMAINS`: Plan, Cook, Pantry, Garden, House, Purchases, Finance, or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
 names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
@@ -332,9 +359,7 @@ also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
 (`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` and `entityFieldModels[entity].bulk` share the compiler-derived
-normal-update roster and the exclusions in the bulk edit contract below. Navigation
-grouping, the Records catalog, empty states and the native shell's sections
-all read it; none of them keep a per-entity list of their own.
+normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Wishes, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A `*Override` name is reserved for a
@@ -1347,9 +1372,13 @@ the roster and sends unbranded. Values are ORed and match any entry. Product's
 derived `owners` (display format `resolvedList`: a label, an optional record,
 and whether it is only inherited) rolls up its live entries, resolved only for
 the rows on the page, and its owner filter adds `ownerPresenceFilter` plus
-Unlocated products whose single acquisition would hand the owner down. My stuff, Wardrobe (plus the
-`apparel` category family), Bought for me, and the ownership work queues are
-saved views over these filters.
+Unlocated products whose single acquisition would hand the owner down. My stuff,
+Wardrobe (`apparel` category family), Books (`books` family), Records (`music`
+family), Bought for me, and the ownership work queues are saved views over these
+filters. Books and Records include `@me` + `@household` owners and stock placement;
+Books groups the shelf by category level 2 (genre), while Records sorts by Product
+without grouping. Their home pins have orders 4 and 5, after Wardrobe (0), My stuff
+(1), the task view (2), and Needs a home (3).
 
 Native saved views compile column filters into operation JSON inputs, expanding
 nullable sentinels into presence filters and static range presets into their
@@ -2016,6 +2045,12 @@ projects Purchases plus standalone and planned Expenses. Entity links, covers,
 and edits still use canonical entity kinds and ids; occurrence keys distinguish
 Purchase originals, dated refunds, and Planting milestones in layout and day
 membership. Garden feed UIDs are unchanged.
+
+Calendar pills show explicitly assigned Projects (excluding inherited defaults)
+and spending beneficiary LedgerParty names, including the contributing lines
+of Purchase occurrences.
+Absent context has no placeholder. Spending omits discards (zero or unknown
+cost with negative product quantity); refunds and sales remain visible.
 
 Spending is computed from existing relationships, not stored. Batched Purchase
 evidence loaders feed pure TypeScript calculation functions; the calendar consumes
@@ -3226,7 +3261,8 @@ identity before payload insertion and retain tombstones on soft and hard deletes
 path-compressed `mergedIntoId` redirects. A read through a merged-away code
 returns the survivor with `redirectedFrom`, and detail reads list
 `previousShortcodes`; a write through one refuses with the survivor's code, and
-a deleted code refuses with the deletion date. Codes are never reused, even a
+a deleted code refuses with the deletion date. Except for [pruned Job identities](jobs.md#job-entity-and-identity-retention),
+codes are never reused, even a
 hard-deleted payload's.
 
 Direct files are `EntityAttachment` rows: gallery photos and purchase documents
@@ -3572,7 +3608,7 @@ references the most specific known node; its read-only `category` projection
 contains the complete root-first path and inherited behavior binding. Products
 can stop at any depth or remain unclassified. Filters include descendants.
 Names, aliases, descriptions, and display order are editable. Each feature
-(Food, Books, Tools, Software, …) is bound to exactly one category — usually a
+(Food, Books, Music, Tools, Software, …) is bound to exactly one category — usually a
 root, but a nested node may carry its own binding, which overrides its
 ancestors' (Tools › Tool consumables). A binding is permanent: it survives
 renames and moves and cannot be cleared, replaced, or deleted. Moving a subtree

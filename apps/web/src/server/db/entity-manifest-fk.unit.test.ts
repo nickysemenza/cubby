@@ -124,11 +124,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "source package identity owned by its accepted Shipment",
   },
-  "Job.runId": {
-    classification: "metadata",
-    reason:
-      "attributes execution to a Run without making its lifecycle a second scheduler",
-  },
   "AiEvaluationRequest.runId": {
     classification: "metadata",
     reason:

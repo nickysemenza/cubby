@@ -1,4 +1,8 @@
-import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
+import {
+  runShortcode,
+  parseEntityId,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
   jobLane,
@@ -9,16 +13,7 @@ import {
 } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import {
-  and,
-  desc,
-  eq,
-  inArray,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, desc, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
 
 import type {
   JobFacts,
@@ -26,7 +21,8 @@ import type {
   RunRollup,
 } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase, eqAny } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -34,6 +30,7 @@ import {
   JOB_KIND_POLICY,
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
+import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
 import { imageLeasesByExecutor } from "~/server/generic/jobs/repo/image-leases";
 import { retryJobsNow, type JobRow } from "~/server/generic/jobs/repo/jobs";
 import {
@@ -77,11 +74,13 @@ function laneWhere(lanes: readonly JobLane[]): SQL {
  * requests. A withdrawn (cancelled) request no longer counts, for its owner
  * either. UNION keeps one pair however many routes reach a Job.
  */
-function runDemandPairs(runIds: readonly RunId[]): SQL {
-  const runs = sql.join(
-    runIds.map((id) => sql`${id}::uuid`),
-    sql`, `,
-  );
+function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
+  const runs = Array.isArray(runIds)
+    ? sql.join(
+        runIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )
+    : runIds;
   return sql`(
     SELECT "Job"."runId" AS run_id, "Job".id AS job_id FROM "Job"
       WHERE "Job"."runId" IN (${runs})
@@ -98,6 +97,30 @@ function runDemandPairs(runIds: readonly RunId[]): SQL {
   )`;
 }
 
+/** The list filter/sort and the rollup share the same demand and stall test. */
+export function runStalledSql(now = new Date()): SQL<boolean> {
+  const demand = runDemandPairs(sql`SELECT ${outer(run.id)}`);
+  const at = sql`${now.toISOString()}::timestamp`;
+  return sql<boolean>`(
+    NOT (${run.failureCode} IS NOT DISTINCT FROM 'execution_limit' AND ${run.status} IN (${runStatus.enum.paused_auth}, ${runStatus.enum.needs_review}))
+    AND EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
+      WHERE j.state IN (${jobState.enum.queued},${jobState.enum.retry_wait},${jobState.enum.running},${jobState.enum.paused}))
+    AND NOT EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
+      WHERE j.state = ${jobState.enum.running} AND j."leaseExpiresAt" > ${at})
+    AND coalesce((SELECT max(greatest(j."lastClaimedAt", CASE WHEN j.state = ${jobState.enum.completed} THEN j."updatedAt" END))
+      FROM ${demand} d JOIN "Job" j ON j.id = d.job_id), ${run.startedAt}) <= ${at} - ${RUN_STALL_MS} * interval '1 millisecond'
+  )`;
+}
+
+/** A stopped Run with a retry successor leaves the member's attention roster. */
+export function runNeedsAttentionSql(): SQL<boolean> {
+  const successor = related(
+    run,
+    (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
+  ).exists();
+  return sql<boolean>`(${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor}))`;
+}
+
 /** One Run's demand as a predicate on "Job". */
 export const runDemandWhere = (runId: RunId) =>
   sql`"Job".id IN (SELECT d.job_id FROM ${runDemandPairs([runId])} d)`;
@@ -108,6 +131,8 @@ function jobSetWhere(
   runId: RunId | null,
 ): SQL | undefined {
   return and(
+    filter.entityFilters ? jobEntityWhere(filter.entityFilters) : undefined,
+    filter.codes ? eqAny(job.shortcode, filter.codes) : undefined,
     filter.states
       ? inArray(job.state, filter.states)
       : inArray(job.state, [...LIVE_STATES]),
@@ -120,13 +145,15 @@ function jobSetWhere(
         )})`
       : undefined,
     runId ? runDemandWhere(runId) : undefined,
-    filter.ids ? inArray(job.id, filter.ids) : undefined,
-    filter.needsAttention
-      ? or(
-          eq(job.state, jobState.enum.failed),
-          sql`${job.attempts} >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}`,
+    filter.ids
+      ? inArray(
+          job.id,
+          filter.ids.map((id) => parseEntityId("job", id)),
         )
       : undefined,
+    filter.needsAttention === undefined
+      ? undefined
+      : sql`(${job.state} = ${jobState.enum.failed} OR ${job.attempts} >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}) = ${filter.needsAttention}`,
   );
 }
 
@@ -300,6 +327,7 @@ export async function readRunRollups(
         status: run.status,
         failureCode: run.failureCode,
         startedAt: run.startedAt,
+        stalled: runStalledSql(now),
       })
       .from(run)
       .where(inArray(run.id, ids)),
@@ -313,20 +341,17 @@ export async function readRunRollups(
   const ownerById = new Map(owners.map((row) => [row.id, row]));
   return runs.map((entry) => {
     const counts: RunRollup["counts"] = {};
-    let live = 0;
     let expiredLeases = 0;
     for (const tally of tallies.rows) {
       if (tally.runId !== entry.id) continue;
       const parsed = jobWaitingOnReason.safeParse(tally.reason);
       if (!parsed.success) continue;
-      live += tally.count;
       // A lapsed lease is no progress in flight; only live leases hold off `stalled`.
       if (tally.expired) expiredLeases += tally.count;
       else counts[parsed.data] = (counts[parsed.data] ?? 0) + tally.count;
     }
     const owner = ownerById.get(entry.id);
     const last = lastById.get(entry.id) ?? null;
-    const since = last ?? owner?.startedAt ?? null;
     const waitingForFunding =
       owner?.failureCode === "execution_limit" &&
       (owner.status === runStatus.enum.paused_auth ||
@@ -337,12 +362,7 @@ export async function readRunRollups(
       expiredLeases,
       waitingForFunding,
       lastProgressAt: iso(last),
-      stalled:
-        live > 0 &&
-        !waitingForFunding &&
-        !counts.leased &&
-        since !== null &&
-        now.getTime() - since.getTime() >= RUN_STALL_MS,
+      stalled: owner?.stalled ?? false,
       stallMinutes: RUN_STALL_MS / 60_000,
     };
   });

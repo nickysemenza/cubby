@@ -36,7 +36,9 @@ describe("freshness RPC failure policy", () => {
         },
       }),
     );
-    await expect(notifyDatabaseChanges(["task"])).resolves.toBeUndefined();
+    await expect(
+      notifyDatabaseChanges({ task: null }),
+    ).resolves.toBeUndefined();
   });
   it("bounds an unresponsive RPC to five seconds", async () => {
     vi.useFakeTimers();

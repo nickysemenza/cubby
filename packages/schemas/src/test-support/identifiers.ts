@@ -1,5 +1,9 @@
 import type { ShortcodeFor } from "@cubby/shared";
-import { SHORTCODE_CHARS, SHORTCODE_PREFIX } from "@cubby/shared";
+import {
+  SHORTCODE_CHARS,
+  SHORTCODE_PREFIX,
+  SHORTCODE_LENGTH,
+} from "@cubby/shared";
 import type { DataQuality } from "../data-quality";
 import {
   parseEntityId,
@@ -50,7 +54,10 @@ const deterministicUuid = (entity: ShortcodeEntity, seed: string): string => {
 
 const deterministicBody = (entity: ShortcodeEntity, seed: string): string => {
   const input = `${entity}\u0000${seed}`;
-  return [0, 1, 2, 3]
+  return Array.from(
+    { length: SHORTCODE_LENGTH[entity] ?? 4 },
+    (_, lane) => lane,
+  )
     .map((lane) =>
       SHORTCODE_CHARS.charAt(hashLane(input, lane) % SHORTCODE_CHARS.length),
     )

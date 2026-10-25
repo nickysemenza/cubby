@@ -16,11 +16,13 @@ import {
   householdDayRangeConditions,
   ilikeContains,
   unwrapDb,
+  notDeleted,
 } from "~/server/db/helpers";
 import {
   entityDisplayImagePresenceSql,
   resolveEntityDisplayImageLists,
 } from "~/server/entity-kernel/repo/entity-display-image";
+import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entries";
 import { scoreSql, statusSql } from "~/server/generic/data-quality/repo/sql";
 import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
@@ -88,7 +90,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
         ${sql.join(early, sql``)}
       FROM "Entity" identity JOIN ${payload} ON ${id} = identity.id
       WHERE identity.kind = ${kind} AND identity."deletedAt" IS NULL
-        AND identity."mergedIntoId" IS NULL AND ${payload}."deletedAt" IS NULL
+        AND identity."mergedIntoId" IS NULL AND ${notDeleted(SHORTCODE_TABLE[kind])}
     `;
   });
   const predicates: SQL[] = [];

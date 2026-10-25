@@ -345,6 +345,15 @@ export default defineEntity({
               description: "Books, manuals, and other bound reading matter",
             },
             {
+              value: "music",
+              glyph: {
+                phosphor: "VinylRecord",
+                sfSymbol: "music.note",
+              },
+              label: "Music",
+              description: "Vinyl records, CDs and other recorded music",
+            },
+            {
               value: "tools",
               glyph: {
                 phosphor: "Wrench",

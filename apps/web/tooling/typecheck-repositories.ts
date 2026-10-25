@@ -30,6 +30,8 @@ export const repositoryOwners = [
   "src/server/db/computed/product-brand-sql.ts",
   "src/server/db/computed/text-whitespace.ts",
   "src/server/generated/shortcode-tables.gen.ts",
+  "src/server/generic/shortcode/repo/shortcode-tables.ts",
+  "src/server/generic/shortcode/repo/shortcode-utils.ts",
   "src/server/generic/audit-log/repo/field-write.ts",
   "src/server/generic/assessment/repo/field-input-fence.ts",
   "src/server/generic/jobs/errors.ts",

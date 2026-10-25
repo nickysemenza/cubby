@@ -72,14 +72,16 @@ export type EntityStorageDefaultKind =
   (typeof entityStorageDefaultKinds)[number];
 
 /**
- * The five wayfinding lines. Declared here so `presentation.domain` is a
+ * The seven wayfinding lines. Declared here so `presentation.domain` is a
  * closed vocabulary the browser shell and the native app both derive from.
  */
 export const WAYFINDING_DOMAINS = [
+  "plan",
   "cook",
   "pantry",
-  "plan",
+  "garden",
   "house",
+  "purchases",
   "finance",
 ] as const;
 export type WayfindingDomain = (typeof WAYFINDING_DOMAINS)[number];
@@ -95,7 +97,9 @@ export const WAYFINDING_DOMAIN_PRESENTATION = {
   cook: { label: "Cook", sfSymbol: "fork.knife" },
   pantry: { label: "Pantry", sfSymbol: "shippingbox" },
   plan: { label: "Plan", sfSymbol: "hammer" },
+  garden: { label: "Garden", sfSymbol: "leaf" },
   house: { label: "House", sfSymbol: "house" },
+  purchases: { label: "Purchases", sfSymbol: "bag" },
   finance: { label: "Finance", sfSymbol: "creditcard" },
 } as const satisfies Record<
   WayfindingDomain,
@@ -878,6 +882,15 @@ const buildMetadataSchemas = () => {
         referenceOptions: z
           .object({
             column: nonEmptyString(),
+            onDelete: z
+              .enum([
+                "cascade",
+                "restrict",
+                "no action",
+                "set null",
+                "set default",
+              ])
+              .optional(),
             onUpdate: z
               .enum([
                 "cascade",
@@ -1295,6 +1308,7 @@ const buildMetadataSchemas = () => {
     .object({
       brand: nonEmptyString().nullable(),
       shortcode: nonEmptyString().nullable(),
+      shortcodeLength: z.int().min(5).max(32).optional(),
     })
     .strict();
 

@@ -3,7 +3,6 @@ import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
-import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link, useLocation, useRouter } from "@tanstack/react-router";
 import {
   type ReactNode,
@@ -11,7 +10,6 @@ import {
   useEffect,
   useId,
   useMemo,
-  useState,
   useSyncExternalStore,
 } from "react";
 import { z } from "zod";
@@ -22,7 +20,11 @@ import { MainNav } from "~/features/shell/main-nav";
 import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
-import { DerivedBacklogFooter } from "~/ui/derived/backlog";
+import { DerivedBacklogStatus } from "~/ui/derived/backlog";
+import {
+  BackgroundRefreshStatus,
+  ShellStatusSlot,
+} from "~/ui/feedback/background-refresh-status";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useLocalStorage } from "~/ui/hooks/use-local-storage";
 import {
@@ -37,11 +39,13 @@ import {
 } from "../../entity/navigation/authenticated-shell-controls";
 import { resolveMobileRoute } from "../../entity/navigation/mobile-route-descriptor";
 import {
-  homeNavItem,
+  navIconClass,
+  navActiveClass,
+  topNavItems,
   type NavGroup,
   type NavItem,
   navItemLinkProps,
-  primaryNavGroups,
+  navGroups,
   settingsNavItem,
   useActiveTo,
 } from "../../entity/navigation/nav-items";
@@ -49,13 +53,14 @@ import {
   SidebarRailGroup as RailGroupFlyout,
   SidebarRailLeaf as RailLeaf,
 } from "../../entity/navigation/sidebar-rail-group";
-import { WorkspaceNavigator } from "../../entity/navigation/workspace-navigator";
+import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
 import { createInAppHistory } from "../../ui/navigation/in-app-history";
 import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
 const collapsedPreferenceSchema = z.boolean();
-const foldedGroupsSchema = z.array(z.string());
+const foldedGroupsSchema = z.record(z.string(), z.boolean());
+const defaultFoldOverrides = {};
 let lastCatchUpRequestAt = 0;
 let catchUpRequestPending = false;
 
@@ -91,7 +96,7 @@ type AuthenticatedAppShellProps = {
 /**
  * The authenticated workspace frame. The md rail is intentionally forced: a
  * person's wide/compact preference applies only when there is space for the
- * full 200px sidebar, and a tablet visit must never overwrite that preference.
+ * full 176px sidebar, and a tablet visit must never overwrite that preference.
  */
 export function AuthenticatedAppShell({
   children,
@@ -225,12 +230,10 @@ function WorkspaceSidebar({
   onSearchClick: () => void;
 }) {
   const activeTo = useActiveTo();
-  const [utilityOpen, setUtilityOpen] = useState(false);
-  const [utilityMounted, setUtilityMounted] = useState(false);
   const [foldedGroups, setFoldedGroups] = useLocalStorage(
-    "app-shell:sidebar-folded-groups",
+    "app-shell:sidebar-fold-overrides",
     foldedGroupsSchema,
-    [],
+    defaultFoldOverrides,
   );
 
   return (
@@ -291,25 +294,43 @@ function WorkspaceSidebar({
         className="relative min-h-0 flex-1 overflow-y-auto px-1.5 py-1.5"
         aria-label="Cubby"
       >
-        <SidebarHome active={activeTo === homeNavItem.to} expanded={expanded} />
-        {primaryNavGroups.map((group) => (
+        {topNavItems.map((item) => (
+          <SidebarTopLeaf
+            key={item.to}
+            item={item}
+            active={activeTo === item.to}
+            expanded={expanded}
+          />
+        ))}
+        {navGroups.map((group) => (
           <SidebarGroup
-            key={group.label}
+            key={group.id}
             group={group}
             expanded={expanded}
             activeTo={activeTo}
-            folded={foldedGroups.includes(group.label)}
+            folded={foldedGroups[group.id] ?? group.defaultFolded}
             onToggleFolded={() =>
-              setFoldedGroups((labels) =>
-                labels.includes(group.label)
-                  ? labels.filter((label) => label !== group.label)
-                  : [...labels, group.label],
-              )
+              setFoldedGroups((overrides) => ({
+                ...overrides,
+                [group.id]: !(overrides[group.id] ?? group.defaultFolded),
+              }))
             }
           />
         ))}
       </nav>
-      {expanded ? <DerivedBacklogFooter /> : null}
+      <ShellStatusSlot>
+        <span className={cn("flex", expanded && "lg:hidden")}>
+          <BackgroundRefreshStatus
+            compact
+            idle={<DerivedBacklogStatus compact />}
+          />
+        </span>
+        {expanded && (
+          <span className="hidden lg:flex">
+            <BackgroundRefreshStatus idle={<DerivedBacklogStatus />} />
+          </span>
+        )}
+      </ShellStatusSlot>
       <div
         className={cn(
           "flex flex-col items-center gap-0.5 border-t border-border p-1.5",
@@ -333,20 +354,6 @@ function WorkspaceSidebar({
           type="button"
           variant="ghost"
           size="icon"
-          onClick={() => {
-            setUtilityMounted(true);
-            setUtilityOpen(true);
-          }}
-          className="size-7 text-muted-foreground"
-          aria-label="Tools & data"
-          title="Tools & data"
-        >
-          <WrenchIcon className="size-3.5" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
           onClick={onToggle}
           className="hidden size-7 text-muted-foreground lg:flex"
           aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
@@ -359,37 +366,29 @@ function WorkspaceSidebar({
           )}
         </Button>
       </div>
-      {utilityMounted && (
-        <Suspense fallback={null}>
-          <WorkspaceNavigator
-            open={utilityOpen}
-            onOpenChange={setUtilityOpen}
-            initialView="utility"
-            activeTo={activeTo}
-          />
-        </Suspense>
-      )}
     </aside>
   );
 }
 
-function SidebarHome({
+function SidebarTopLeaf({
+  item,
   active,
   expanded,
 }: {
+  item: NavItem;
   active: boolean;
   expanded: boolean;
 }) {
   return (
     <>
       <div className={cn("md:block", expanded && "lg:hidden")}>
-        <Suspense fallback={<SidebarRailLeafFallback item={homeNavItem} />}>
-          <RailLeaf item={homeNavItem} active={active} />
+        <Suspense fallback={<SidebarRailLeafFallback item={item} />}>
+          <RailLeaf item={item} active={active} />
         </Suspense>
       </div>
       {expanded && (
         <div className="hidden lg:block">
-          <SidebarFullLeaf item={homeNavItem} active={active} />
+          <SidebarFullLeaf item={item} active={active} />
         </div>
       )}
     </>
@@ -456,6 +455,15 @@ function SidebarExpandedDomainGroup({
         aria-controls={routesId}
         className="flex h-6 w-full items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
+        {group.domain && (
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 shrink-0 rounded-[2px]",
+              domainChipClass(group.domain),
+            )}
+          />
+        )}
         {group.label}
         <CaretDownIcon
           className={cn(
@@ -492,7 +500,7 @@ function SidebarRailGroupFallback({ group }: { group: NavGroup }) {
       title={group.label}
       disabled
     >
-      <Icon className="size-3.5" />
+      <Icon className={cn("size-3.5", navIconClass(group))} />
     </button>
   );
 }
@@ -504,12 +512,11 @@ function SidebarFullLeaf({ item, active }: { item: NavItem; active: boolean }) {
       {...navItemLinkProps(item, active)}
       className={cn(
         "flex h-7 min-w-0 items-center gap-2 rounded-lg px-2 text-sm transition-colors hover:bg-black/[0.04] hover:text-foreground-strong",
-        active &&
-          "bg-sidebar-accent font-medium text-foreground-strong hover:bg-sidebar-accent",
+        active && ["font-medium text-foreground-strong", navActiveClass(item)],
       )}
     >
       <Icon
-        className={cn("size-3.5 shrink-0", !active && "text-muted-foreground")}
+        className={cn("size-3.5 shrink-0", navIconClass(item))}
         weight={active ? "bold" : "regular"}
       />
       <span className="min-w-0 truncate">{item.label}</span>

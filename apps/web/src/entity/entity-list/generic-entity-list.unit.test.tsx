@@ -14,6 +14,7 @@ import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entities } from "~/entity/entities";
+import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import {
   ledgerPartyListItem,
@@ -347,4 +348,49 @@ describe("GenericEntityList", () => {
     expect(gadgetCard).not.toHaveTextContent('"path"');
     expect(gadgetCard?.querySelector("pre")).toBeNull();
   });
+});
+
+it("embeds a fixed saved view without inheriting its host URL and links the whole matching population", async () => {
+  const reads: unknown[] = [];
+  const operation: ListQueryOptionsFn<object, { id: string }> = (params) => ({
+    queryKey: ["synthetic-embed", params],
+    execute: async () => {
+      reads.push(params);
+      return {
+        items: [],
+        meta: { pageIndex: 0, pageSize: 10, totalCount: 37 },
+      };
+    },
+  });
+  harness = createBrowserTestHarness({
+    initialPath: "/?kind=foreign&sort=-date",
+  });
+  render(
+    <EmbeddedEntityList
+      entity="run"
+      savedViewId="attention"
+      filters={{ purpose: ["maintenance"] }}
+      pageSize={10}
+      allLink
+      operations={{ list: operation }}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  const link = await screen.findByRole("link", { name: "All 37" });
+  expect(link.getAttribute("href")).toContain("/runs");
+  expect(link.getAttribute("href")).toContain("needsAttention");
+  expect(link.getAttribute("href")).not.toContain("foreign");
+  expect(reads).toContainEqual(
+    expect.objectContaining({
+      filters: expect.objectContaining({
+        purpose: ["maintenance"],
+        needsAttention: true,
+      }),
+      pagination: { pageIndex: 0, pageSize: 10 },
+      sort: [
+        { orderBy: "stalled", direction: "desc" },
+        { orderBy: "startedAt", direction: "desc" },
+      ],
+    }),
+  );
 });

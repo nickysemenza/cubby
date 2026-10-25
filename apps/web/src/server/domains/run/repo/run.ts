@@ -12,6 +12,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
+import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
@@ -22,6 +23,7 @@ import {
 } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { run as runTable } from "~/server/db/schema";
+import { aiUsage } from "~/server/db/schema";
 import {
   defineRepository,
   listOn,
@@ -32,7 +34,12 @@ import {
   createEntityRowFetcher,
   listReadOn,
 } from "~/server/entity-kernel/repo/repository";
-import { readRunRollups } from "~/server/generic/jobs/repo/job-queue";
+import {
+  readRunRollups,
+  runStalledSql,
+  runNeedsAttentionSql,
+} from "~/server/generic/jobs/repo/job-queue";
+import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -75,6 +82,24 @@ const runRead = {
     parentRunId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
+    const costs = bind.batch(async ({ db, rows }) => {
+      const values = rows.length
+        ? await unwrapDb(db)
+            .select({ runId: aiUsage.runId, ...aiCostSummarySql() })
+            .from(aiUsage)
+            .where(
+              and(
+                inArray(
+                  aiUsage.runId,
+                  rows.map((row) => row.id),
+                ),
+                notDeleted(aiUsage),
+              ),
+            )
+            .groupBy(aiUsage.runId)
+        : [];
+      return new Map(values.map((row) => [row.runId, row.chargedCost]));
+    });
     const steps = bind.batch(async ({ db, rows }) => {
       const loaded = await listRunStepsForRuns(
         db,
@@ -124,6 +149,9 @@ const runRead = {
       };
     });
     return [
+      costs.fields(runOut.pick({ chargedCost: true }), (row, loaded) => ({
+        chargedCost: loaded.get(row.id) ?? 0,
+      })),
       lineage.fields(
         runOut.pick({
           successorRunId: true,
@@ -227,7 +255,12 @@ const hydrate = async (
     await listReadPlan<RunRow>("run", runRead).read(db, rows, { kind: "full" })
   ).map((row) => runOut.parse(row));
 
-const scaffold = listScaffold("run", runTable);
+const scaffold = listScaffold("run", runTable, {
+  derived: {
+    stalled: listReadValue(() => runStalledSql()),
+    needsAttention: listReadValue(() => runNeedsAttentionSql()),
+  },
+});
 
 export const listRunsRead = (
   db: Database,

@@ -48,8 +48,7 @@ import {
   SHORTCODE_TABLE,
   TITLE_FIELD_COLUMN,
 } from "~/server/generated/shortcode-tables.gen";
-
-import type { ShortcodeTable } from "./shortcode-utils";
+import type { ShortcodeTable } from "~/server/generic/shortcode/repo/shortcode-tables";
 
 export type { EntityRef } from "@cubby/schemas/identifiers";
 

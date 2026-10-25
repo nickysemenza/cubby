@@ -27,6 +27,32 @@ struct NavigationTests {
         }
     #endif
 
+    @Test func sharedSidebarRoutesNativeListsAndPreservesConfiguredWebOrigin() throws {
+        let server = try #require(URL(string: "https://cubby.example.com:8443/"))
+        let destinations = SidebarManifest.sections.flatMap(\.destinations)
+        for destination in destinations {
+            if let entity = destination.entity {
+                #expect(EntityCatalog.all.contains { $0.key == entity })
+                if entity.nativeActions.contains(.list) {
+                    #expect(destination.nativeDestination == .entity(entity))
+                    continue
+                }
+            }
+            if destination.nativeDestination == nil {
+                let url = try #require(destination.webURL(serverURL: server))
+                #expect(url.scheme == server.scheme)
+                #expect(url.host == server.host)
+                #expect(url.port == server.port)
+                #expect(url.path == destination.route)
+            }
+        }
+        #expect(destinations.first { $0.route == "/" }?.nativeDestination == .section(.today))
+        #expect(destinations.first { $0.route == "/activity" }?.nativeDestination == .section(.activity))
+        #expect(destinations.first { $0.route == "/graph" }?.nativeDestination == .section(.graph))
+        #expect(destinations.first { $0.route == "/work-queue" }?.nativeDestination == nil)
+        #expect(destinations.first { $0.route == "/problems" }?.nativeDestination == nil)
+    }
+
     @Test func sidebarEntitySelectionOwnsBrowseDestination() {
         let navigator = Navigator()
         navigator.selectedRecords[.browse] = record(.location, "LOC-OLD")

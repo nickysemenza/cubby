@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  filterWorkspaceDestinations,
-  workspaceNavigatorLeavesForTest,
-} from "./workspace-navigator";
+import { filterWorkspaceDestinations } from "./workspace-navigator";
 
 describe("workspace navigator", () => {
   it("searches the complete destination universe by label and context", () => {
@@ -19,10 +16,5 @@ describe("workspace navigator", () => {
     expect(
       filterWorkspaceDestinations("groceries").map(({ item }) => item.to),
     ).toContain("/meals/shopping-list");
-  });
-
-  it("contains every canonical leaf exactly once", () => {
-    const routes = workspaceNavigatorLeavesForTest.map((item) => item.to);
-    expect(new Set(routes).size).toBe(routes.length);
   });
 });

@@ -8,6 +8,7 @@
 import { isNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type DerivedInput,
@@ -37,6 +38,8 @@ const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
 const DERIVED_PAGE_MARKS = 500;
 export const DERIVED_COMPUTE_BATCH = 200;
 const FAILURE_BASE_MS = 30_000;
+/** The doorbell's per-category bound; a larger set refreshes the whole kind. */
+const RING_RECORD_LIMIT = 200;
 const FAILURE_MAX_MS = 15 * 60_000;
 
 const markRow = z.object({
@@ -60,6 +63,8 @@ export interface DerivedPublication {
   readonly expanded: number;
   /** Entity kinds whose stored values or freshness changed, for reader notifications. */
   readonly categories: readonly string[];
+  /** The affected records' shortcodes per kind (null past the ring's bound), so readers refetch only those. */
+  readonly changes: DatabaseChanges;
   /** Reconcile marks whose recompute changed the value: an undeclared input. */
   readonly drift: readonly { target: string; count: number }[];
 }
@@ -330,7 +335,7 @@ const expandFanout = async (
   input: DerivedInput,
   target: string,
   marks: readonly Mark[],
-): Promise<number> => {
+): Promise<string[]> => {
   const refs = sql`SELECT unnest(${uuidArrayParam(marks.map((mark) => mark.ref))})`;
   const dependents = input.path
     ? pathSql(input.path, refs)
@@ -346,9 +351,12 @@ const expandFanout = async (
       ticket = nextval('"DerivedTicket"'),
       priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
       "readyAt" = now()
-    RETURNING ref`);
+    RETURNING ref::text AS ref`);
   await clearMarks(tx, target, marks);
-  return result.rows.length;
+  return z
+    .array(z.object({ ref: z.string() }))
+    .parse(result.rows)
+    .map((row) => row.ref);
 };
 
 /** Back off a target whose compute failed; other targets still publish. */
@@ -380,7 +388,12 @@ export async function publishDerivedPage(
   const tx = unwrapDb(db);
   let changed = 0;
   let expanded = 0;
-  const categories = new Set<string>();
+  const affected = new Map<string, Set<string>>();
+  const touch = (entity: string, ids: readonly string[]) => {
+    const set = affected.get(entity) ?? new Set<string>();
+    for (const id of ids) set.add(id);
+    affected.set(entity, set);
+  };
   const drift: { target: string; count: number }[] = [];
   for (const [target, marks] of groupByTarget(plan.marks)) {
     const parsed = parseTarget(target);
@@ -398,9 +411,9 @@ export async function publishDerivedPage(
         target,
         marks,
       );
-      expanded += created;
+      expanded += created.length;
       // Readers learn the dependents are now updating.
-      if (created > 0) categories.add(declaration.entity);
+      if (created.length > 0) touch(declaration.entity, created);
       continue;
     }
     const failure = plan.failed.get(target);
@@ -423,14 +436,44 @@ export async function publishDerivedPage(
     );
     const drifted = changedIds.filter((id) => reconciled.has(id)).length;
     if (drifted > 0) drift.push({ target, count: drifted });
-    categories.add(declaration.entity);
+    // Every claimed record's freshness changed, whether or not its value did.
+    touch(
+      declaration.entity,
+      marks.map((mark) => mark.ref),
+    );
     await propagate(tx, declaration, changedIds);
   }
+  const ids = [...affected.values()].flatMap((set) => [...set]);
+  const codes = new Map(
+    ids.length === 0
+      ? []
+      : z
+          .array(z.object({ id: z.string(), shortcode: z.string() }))
+          .parse(
+            (
+              await tx.execute(sql`
+                SELECT id::text AS id, shortcode FROM "Entity"
+                 WHERE id = ANY(${uuidArrayParam(ids)}) AND shortcode IS NOT NULL`)
+            ).rows,
+          )
+          .map((row) => [row.id, row.shortcode]),
+  );
   return {
     processed: plan.marks.length,
     changed,
     expanded,
-    categories: [...categories].sort(),
+    categories: [...affected.keys()].sort(),
+    changes: Object.fromEntries(
+      [...affected].map(([entity, set]) => [
+        entity,
+        set.size > RING_RECORD_LIMIT
+          ? null
+          : [...set].flatMap((id) => {
+              const code = codes.get(id);
+              return code ? [code] : [];
+            }),
+      ]),
+    ),
     drift,
   };
 }

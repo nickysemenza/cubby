@@ -44,6 +44,7 @@ import {
 import { buildVendorAccountWhere } from "~/server/domains/vendor-account/repo/vendor-account";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { buildWishWhere } from "~/server/domains/wish/repo";
+import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
@@ -72,6 +73,7 @@ type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 type LocalCountEntity = keyof DashboardLocalCounts;
 
 const COUNT_WHERE = {
+  job: () => jobEntityWhere({}),
   sourceTransactionRecord: (db) => buildSourceTransactionRecordWhere(db),
   transactionImport: () => buildTransactionImportWhere(),
   shipment: () => buildShipmentWhere(),

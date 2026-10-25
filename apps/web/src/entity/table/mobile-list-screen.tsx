@@ -121,7 +121,6 @@ export function MobileListScreen<TItem extends RowData>({
 
       {table.getRowModel().rows.length > 0 ? (
         <QueryRefreshStatus
-          refreshing={refreshControls?.isRefreshing ?? false}
           error={error}
           onRetry={refreshControls?.onRefresh}
         />

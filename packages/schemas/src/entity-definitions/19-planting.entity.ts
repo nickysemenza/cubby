@@ -22,7 +22,7 @@ export default defineEntity({
   identifiers: { brand: "PlantingId", shortcode: "PLT-" },
   presentation: {
     titleField: "displayName",
-    domain: "house",
+    domain: "garden",
     description: "Crops growing now and planned for later.",
     emptyState: {
       title: "No plantings yet",

@@ -1,0 +1,2 @@
+ALTER TABLE "ProductCategory" DROP CONSTRAINT "ProductCategory_feature_check";--> statement-breakpoint
+ALTER TABLE "ProductCategory" ADD CONSTRAINT "ProductCategory_feature_check" CHECK ("ProductCategory"."feature" IS NULL OR "ProductCategory"."feature" IN ('food', 'books', 'music', 'tools', 'tool-consumables', 'tool-accessories', 'storage', 'hardware', 'electronics', 'software', 'services', 'household', 'supplies', 'apparel'));

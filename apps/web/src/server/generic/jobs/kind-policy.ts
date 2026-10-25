@@ -15,6 +15,7 @@ export type JobRetryPolicy =
     };
 
 export type JobKindPolicy = {
+  readonly internal: boolean;
   readonly lane: JobLane;
   /** False: only an external executor's pull claims it; the server drain never does. */
   readonly drained: boolean;
@@ -36,6 +37,7 @@ const MAINTENANCE_RETRY = {
 } as const satisfies JobRetryPolicy;
 
 const SERVER: JobKindPolicy = {
+  internal: false,
   lane: "server",
   drained: true,
   retry: { exhaust: true },
@@ -49,6 +51,7 @@ const SERVER: JobKindPolicy = {
 export const JOB_KIND_POLICY = {
   // Image processing is never abandoned (docs/jobs.md#image-processing).
   "image.cloud": {
+    internal: false,
     lane: "frontier_ai",
     drained: true,
     retry: IMAGE_RETRY,
@@ -56,19 +59,21 @@ export const JOB_KIND_POLICY = {
   },
   // Parked for Apple devices: their pull claims it; enqueue and connect ring them.
   "image.device": {
+    internal: false,
     lane: "apple_device",
     drained: false,
     retry: IMAGE_RETRY,
     maxQueued: null,
   },
   // Self-arming maintenance pages must never stop on a transient failure.
-  "queue.watchdog": { ...SERVER, retry: MAINTENANCE_RETRY },
+  "queue.watchdog": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   // Rings companions when parked device work comes due (docs/jobs.md#image-processing).
-  "image.device.wake": { ...SERVER, retry: MAINTENANCE_RETRY },
-  "jobs.retention": { ...SERVER, retry: MAINTENANCE_RETRY },
+  "image.device.wake": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
+  "jobs.retention": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
+  "ai-refresh.activate": { ...SERVER, internal: true },
   // The derived drain and reconcile never fail: a failing page backs off (ADR 0021).
-  "derived.drain": { ...SERVER, retry: MAINTENANCE_RETRY },
-  "derived.reconcile": { ...SERVER, retry: MAINTENANCE_RETRY },
+  "derived.drain": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
+  "derived.reconcile": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   "ai.evaluation": { ...SERVER, lane: "frontier_ai", maxQueued: 2_000 },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
   "purchase.dispatch": { ...SERVER, lane: "external" },
@@ -80,6 +85,11 @@ const POLICY_BY_KIND: ReadonlyMap<string, JobKindPolicy> = new Map(
 
 export const jobKindPolicy = (kind: string): JobKindPolicy =>
   POLICY_BY_KIND.get(kind) ?? SERVER;
+
+/** Hidden from ordinary execution lists, but still counted by queue health. */
+export const INTERNAL_JOB_KINDS = Object.entries(JOB_KIND_POLICY)
+  .filter(([, policy]) => policy.internal)
+  .map(([kind]) => kind);
 
 /** Kinds the server drain must never claim. */
 export const UNDRAINED_JOB_KINDS: readonly string[] = Object.entries(

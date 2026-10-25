@@ -1,3 +1,4 @@
+import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database } from "~/server/db/database";
 import { recordCommittedChanges } from "~/server/db/helpers/core";
 import {
@@ -27,6 +28,8 @@ export async function recordAssessmentChange(
 export type RepositoryChange = {
   kind: "source" | "projection";
   categories: readonly string[];
+  /** Public shortcodes for categories whose affected records are known. */
+  changes?: DatabaseChanges;
 };
 
 /**
@@ -45,7 +48,15 @@ export async function recordChange(
     await repositoryTransaction(db, (tx) => recordChange(tx, change));
     return;
   }
-  await recordCommittedChanges(db, change.categories);
+  await recordCommittedChanges(
+    db,
+    Object.fromEntries(
+      change.categories.map((category) => [
+        category,
+        change.changes?.[category] ?? null,
+      ]),
+    ),
+  );
   if (change.kind !== "source") return;
   await repositoryBeforeCommit(
     db,

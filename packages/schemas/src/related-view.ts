@@ -612,6 +612,7 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
     "owner and hardware are rendered as detail fields; nothing yet declares a relation onto a device",
   imageJob:
     "an Image job's Image and requesting Run are detail fields; its attempts and events are the attempts slot",
+  job: "Execution subjects and Runs are read-only reference fields; Activity embeds the Job roster directly.",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;
 
 type RegisteredRelatedView = (typeof relatedViewRegistry)[number];

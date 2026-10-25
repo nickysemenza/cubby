@@ -25,6 +25,8 @@ CREATE TABLE "DerivedValue" (
 	CONSTRAINT "DerivedValue_entityId_key_pk" PRIMARY KEY("entityId","key")
 );
 --> statement-breakpoint
+ALTER TABLE "EntityQuality" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "EntityQualityCheck" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DROP TABLE "EntityQuality" CASCADE;--> statement-breakpoint
 DROP TABLE "EntityQualityCheck" CASCADE;--> statement-breakpoint
 ALTER TABLE "DerivedValue" ADD CONSTRAINT "DerivedValue_entity_fk" FOREIGN KEY ("entityId","kind") REFERENCES "public"."Entity"("id","kind") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -2313,8 +2315,7 @@ BEGIN
 END $$;--> statement-breakpoint
 DELETE FROM "JobInvalidationCapture" WHERE key LIKE 'refresh:%';--> statement-breakpoint
 DELETE FROM "JobInvalidation" WHERE key LIKE 'refresh:%';--> statement-breakpoint
-DELETE FROM "Job" WHERE kind = 'refresh.family';--> statement-breakpoint
-INSERT INTO "Job" (key, kind, input, state) VALUES ('derived:drain', 'derived.drain', '{}'::jsonb, 'queued'), ('derived:reconcile', 'derived.reconcile', '{}'::jsonb, 'completed') ON CONFLICT (key) DO NOTHING;--> statement-breakpoint
+WITH retired AS (DELETE FROM "Job" WHERE kind = 'refresh.family' RETURNING id) DELETE FROM "Entity" e USING retired r WHERE e.id = r.id AND e.kind = 'job';--> statement-breakpoint
 INSERT INTO "JobInvalidation" (key, "restartsPass") VALUES ('derived:drain', false) ON CONFLICT (key) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.price', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.ledgerExpectedQuantity', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint

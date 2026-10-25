@@ -1,7 +1,9 @@
 import {
   emailShortcode,
+  parseEntityId,
   imageJobShortcode,
   runShortcode,
+  jobShortcode,
   type RunId,
 } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
@@ -78,7 +80,7 @@ async function explainRun(
         .where(
           inArray(
             job.id,
-            samples.rows.map((row) => row.id),
+            samples.rows.map((row) => parseEntityId("job", row.id)),
           ),
         )
         .orderBy(asc(job.availableAt))
@@ -182,7 +184,14 @@ async function explainEmail(db: Database, code: string) {
 }
 
 async function explainJob(db: Database, id: string) {
-  const rows = await getDb(db).select().from(job).where(eq(job.id, id));
+  const rows = await getDb(db)
+    .select()
+    .from(job)
+    .where(
+      jobShortcode.safeParse(id).success
+        ? eq(job.shortcode, id)
+        : eq(job.id, parseEntityId("job", id)),
+    );
   const [facts] = await jobFactsOf(db, rows);
   if (!facts || !rows[0])
     throw createAppError("JOB_NOT_FOUND", "Job was not found");
@@ -201,6 +210,7 @@ export async function explainWaiting(db: Database, raw: string) {
   const id = raw.trim();
   if (z.uuid().safeParse(id).success) return explainJob(db, id);
   const upper = id.toUpperCase();
+  if (jobShortcode.safeParse(upper).success) return explainJob(db, upper);
   const runCode = runShortcode.safeParse(upper);
   if (runCode.success) {
     const [owner] = await getDb(db)

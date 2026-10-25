@@ -5,6 +5,7 @@ import {
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_CHARS,
   SHORTCODE_PREFIX,
+  SHORTCODE_LENGTH,
   type LocationShortcode,
   type AnyShortcode,
   type EmailShortcode,
@@ -94,7 +95,7 @@ describe("prefix registry", () => {
 describe("shortcodeSchema", () => {
   it.each(ENTITIES)("normalizes and brands a %s code", (entity) => {
     const schema = shortcodeSchema(entity);
-    const canonical = `${SHORTCODE_PREFIX[entity]}4K7M`;
+    const canonical = `${SHORTCODE_PREFIX[entity]}${"4K7MN4K7MN".slice(0, SHORTCODE_LENGTH[entity] ?? 4)}`;
     expect(schema.parse(canonical)).toBe(canonical);
     expect(schema.parse(`  ${canonical.toLowerCase()}  `)).toBe(canonical);
   });
@@ -156,6 +157,18 @@ describe("shortcodeSchema", () => {
   );
 });
 
+describe("Job shortcodes", () => {
+  it("keeps JOB bodies at ten characters without widening other entities", () => {
+    const code = generateShortcode("job");
+    expect(code).toMatch(/^JOB-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{10}$/);
+    expect(shortcodeSchema("job").safeParse("JOB-4K7MN").success).toBe(false);
+    expect(shortcodeSchema("run").safeParse("RUN-4K7MN4K7MN").success).toBe(
+      false,
+    );
+    expect(parseShortcode(code)?.type).toBe("job");
+  });
+});
+
 describe("generateShortcode", () => {
   it("returns the entity's exact branded shortcode", () => {
     expectTypeOf(
@@ -170,7 +183,9 @@ describe("generateShortcode", () => {
       for (let i = 0; i < 50; i++) {
         const code = generateShortcode(entity);
         expect(schema.safeParse(code).success).toBe(true);
-        expect(code.slice(SHORTCODE_PREFIX[entity].length)).toHaveLength(5);
+        expect(code.slice(SHORTCODE_PREFIX[entity].length)).toHaveLength(
+          SHORTCODE_LENGTH[entity] ?? 5,
+        );
       }
     },
   );

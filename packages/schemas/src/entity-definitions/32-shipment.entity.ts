@@ -34,7 +34,7 @@ export default defineEntity({
   children: shipmentChildren,
   presentation: {
     titleField: "name",
-    domain: "finance",
+    domain: "purchases",
     description: "A package and its retained shipping evidence.",
     emptyState: {
       title: "No shipments yet",

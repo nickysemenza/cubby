@@ -38,6 +38,7 @@ import {
 
 interface TableStateOptions {
   initialSort?: string;
+  initialSorting?: SortingState;
   initialSortDesc?: boolean;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
@@ -160,6 +161,7 @@ export function useTableState(
 ): TableStateReturn {
   const {
     initialSort = "createdAt",
+    initialSorting,
     initialSortDesc = true,
     initialFilter = NO_INITIAL_FILTER,
     initialPagination = defaultPagination,
@@ -203,7 +205,11 @@ export function useTableState(
   // opt out so they cannot consume the page owner's params.
   const [sorting, setSortingRaw] = useState<SortingState>(() => {
     const fromUrl = paramToSort(urlStateSource[SORT_KEY]);
-    return fromUrl ?? defaultSortState(initialSort, initialSortDesc);
+    return (
+      fromUrl ??
+      initialSorting ??
+      defaultSortState(initialSort, initialSortDesc)
+    );
   });
   // Lazy initializer: URL filters win over the caller's seed, so a shared link
   // restores the same rows before first paint.
@@ -258,6 +264,7 @@ export function useTableState(
     return {
       sorting:
         paramToSort(urlStateSource[SORT_KEY]) ??
+        initialSorting ??
         defaultSortState(initialSort, initialSortDesc),
       columnFilters: resolveOpeningFilters(
         urlFilters,
@@ -276,6 +283,7 @@ export function useTableState(
     // oxlint-disable-next-line react/exhaustive-deps -- keyed on managed values above, not the router's fresh search-object reference
   }, [
     managedSearchKey,
+    initialSorting,
     codec,
     initialSort,
     initialSortDesc,

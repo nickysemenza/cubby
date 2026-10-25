@@ -1,18 +1,50 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import {
+  WAYFINDING_DOMAINS,
   entitySummary,
   type WayfindingDomain,
   WAYFINDING_DOMAIN_PRESENTATION,
 } from "@cubby/schemas/entity-summary";
+import { SIDEBAR_SECTIONS } from "@cubby/schemas/sidebar-manifest";
+import { mapRecord } from "@cubby/shared";
 
-/** Identity hues never replace status tones or active-route treatment. */
+/** Shared identity hues also tint sidebar current rows. */
 const DOMAIN_ICON_CLASSES = {
   cook: "text-(--brand-domain-cook)",
   pantry: "text-(--brand-domain-pantry)",
   plan: "text-(--brand-domain-plan)",
+  garden: "text-(--brand-domain-garden)",
   house: "text-(--brand-domain-house)",
+  purchases: "text-(--brand-domain-purchases)",
   finance: "text-(--brand-domain-finance)",
+} satisfies Record<WayfindingDomain, string>;
+
+/** Section-header chips in the sidebar and More sheet. */
+const DOMAIN_CHIP_CLASSES = {
+  cook: "bg-(--brand-domain-cook)",
+  pantry: "bg-(--brand-domain-pantry)",
+  plan: "bg-(--brand-domain-plan)",
+  garden: "bg-(--brand-domain-garden)",
+  house: "bg-(--brand-domain-house)",
+  purchases: "bg-(--brand-domain-purchases)",
+  finance: "bg-(--brand-domain-finance)",
+} satisfies Record<WayfindingDomain, string>;
+
+/** Current-route surfaces; unclassified sections keep the neutral accent. */
+const DOMAIN_SURFACE_CLASSES = {
+  cook: "bg-(--brand-domain-cook-surface) hover:bg-(--brand-domain-cook-surface)",
+  pantry:
+    "bg-(--brand-domain-pantry-surface) hover:bg-(--brand-domain-pantry-surface)",
+  plan: "bg-(--brand-domain-plan-surface) hover:bg-(--brand-domain-plan-surface)",
+  garden:
+    "bg-(--brand-domain-garden-surface) hover:bg-(--brand-domain-garden-surface)",
+  house:
+    "bg-(--brand-domain-house-surface) hover:bg-(--brand-domain-house-surface)",
+  purchases:
+    "bg-(--brand-domain-purchases-surface) hover:bg-(--brand-domain-purchases-surface)",
+  finance:
+    "bg-(--brand-domain-finance-surface) hover:bg-(--brand-domain-finance-surface)",
 } satisfies Record<WayfindingDomain, string>;
 
 export function domainIconClass(
@@ -21,12 +53,24 @@ export function domainIconClass(
   return domain ? DOMAIN_ICON_CLASSES[domain] : "";
 }
 
+export function domainChipClass(domain: WayfindingDomain): string {
+  return DOMAIN_CHIP_CLASSES[domain];
+}
+
+export function domainSurfaceClass(
+  domain: WayfindingDomain | null | undefined,
+): string {
+  return domain
+    ? DOMAIN_SURFACE_CLASSES[domain]
+    : "bg-sidebar-accent hover:bg-sidebar-accent";
+}
+
 /** The stable wayfinding families used by the Field Guide shell. */
 export type { WayfindingDomain };
 
 /**
  * The entities whose records live on a line, from each declaration's
- * `presentation.domain`. Route roots below stay hand-listed: they include
+ * `presentation.domain`. Route roots come from the shared sidebar, including
  * workbench routes (`/calendar`) that belong to no entity.
  */
 const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
@@ -41,64 +85,19 @@ export type DomainWayfinding = {
   routeRoots: readonly string[];
 };
 
-export const DOMAIN_WAYFINDING = {
-  cook: {
-    id: "cook",
-    label: WAYFINDING_DOMAIN_PRESENTATION.cook.label,
-    entities: entitiesOn("cook"),
-    routeRoots: ["/recipes", "/cookbooks", "/ingredients"],
-  },
-  pantry: {
-    id: "pantry",
-    label: WAYFINDING_DOMAIN_PRESENTATION.pantry.label,
-    entities: entitiesOn("pantry"),
-    routeRoots: [
-      "/products",
-      "/inventory",
-      "/locations",
-      "/labels",
-      "/collections",
-      "/pantry-view",
-    ],
-  },
-  plan: {
-    id: "plan",
-    label: WAYFINDING_DOMAIN_PRESENTATION.plan.label,
-    entities: entitiesOn("plan"),
-    routeRoots: ["/calendar", "/meals", "/wishes"],
-  },
-  house: {
-    id: "house",
-    label: WAYFINDING_DOMAIN_PRESENTATION.house.label,
-    entities: entitiesOn("house"),
-    routeRoots: [
-      "/projects",
-      "/tools",
-      "/tasks",
-      "/plantings",
-      "/garden-workbench",
-      "/garden-entries",
-    ],
-  },
-  finance: {
-    id: "finance",
-    label: WAYFINDING_DOMAIN_PRESENTATION.finance.label,
-    entities: entitiesOn("finance"),
-    routeRoots: [
-      "/expenses",
-      "/purchases",
-      "/vendors",
-      "/financial-accounts",
-      "/financial-transactions",
-      "/household-contribution",
-      "/cash-flow",
-      "/source-transaction-records",
-      "/transaction-imports",
-      "/ledger-parties",
-      "/ledger-transfers",
-    ],
-  },
-} as const satisfies Record<WayfindingDomain, DomainWayfinding>;
+const DOMAIN_WAYFINDING = mapRecord(
+  WAYFINDING_DOMAINS,
+  (domain): DomainWayfinding => ({
+    id: domain,
+    label: WAYFINDING_DOMAIN_PRESENTATION[domain].label,
+    entities: entitiesOn(domain),
+    routeRoots: SIDEBAR_SECTIONS.filter(
+      (section) => section.domain === domain,
+    ).flatMap((section) =>
+      section.destinations.map((destination) => destination.route),
+    ),
+  }),
+);
 
 const domainEntries = Object.values(DOMAIN_WAYFINDING);
 

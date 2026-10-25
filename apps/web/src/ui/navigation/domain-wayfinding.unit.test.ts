@@ -9,8 +9,12 @@ describe("Field Guide domain wayfinding", () => {
     ["/products/PROD-42", "pantry"],
     ["/labels", "pantry"],
     ["/meals/shopping-list", "plan"],
-    ["/garden-workbench?mode=plan", "house"],
+    ["/garden-workbench?mode=plan", "garden"],
     ["/tools", "house"],
+    ["/plants", "garden"],
+    ["/emails", "purchases"],
+    ["/wishes", "purchases"],
+    ["/vendor-accounts", "purchases"],
     ["/expenses/EXP-42?view=list", "finance"],
   ])("classifies %s as %s", (path, expected) => {
     expect(domainForRoute(path)).toBe(expected);

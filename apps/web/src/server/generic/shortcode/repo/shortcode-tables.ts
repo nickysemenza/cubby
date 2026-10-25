@@ -7,7 +7,7 @@ import { SHORTCODE_TABLE as GENERATED_SHORTCODE_TABLE } from "~/server/generated
 export type ShortcodeTable = PgTable & {
   id: PgColumn;
   shortcode: PgColumn;
-  deletedAt: PgColumn;
+  deletedAt?: PgColumn;
 };
 
 /**

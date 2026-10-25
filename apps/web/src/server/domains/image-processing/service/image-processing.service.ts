@@ -28,6 +28,7 @@ import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import {
   claimImageProcessingJob,
+  finalizeCompanionImageLeases,
   releaseImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -41,6 +42,7 @@ import {
   finalizeImageProcessingOrphans,
   getLeasedImageProcessingJobContext,
   withImageProcessingTransaction,
+  type DeviceImageClaimBatch,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
   assignImageProcessingExecutor,
@@ -49,6 +51,7 @@ import {
   createImageProcessingSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-history";
 import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
+import { armDeviceWake } from "~/server/domains/image-processing/repo/image-processing-ring";
 import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
@@ -65,6 +68,7 @@ import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { hasMeaningfulPngTransparency } from "~/server/domains/image/service/image-transparency";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
+import { lockDeviceAdmission } from "~/server/generic/jobs/repo/device-admission";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**
@@ -408,7 +412,7 @@ export async function retryImageProcessingFailures(
 }
 
 /** What a device's hello declares about who runs a claimed job. */
-export type CompanionDevice = Pick<
+type CompanionDevice = Pick<
   z.infer<typeof imageProcessingHello>,
   | "deviceId"
   | "platform"
@@ -462,20 +466,25 @@ export async function pullCompanionImageProcessing(
     appleIntelligenceAvailable:
       hello.capabilities.actualImageDescription.available,
   });
-  const empty = { command: null, remotePaused: participation.remotePaused };
+  const empty = {
+    command: null,
+    commands: [],
+    remotePaused: participation.remotePaused,
+  };
   if (!participation.automaticWork || participation.remotePaused) return empty;
   // A newer Apple build may succeed where an older one kept failing: its
   // first pull makes backing-off device work due again.
   if (participation.appVersionChanged) await retryBackingOffDeviceWork(db);
-  const command = await claimCompanionImageCommand(db, {
+  const commands = await claimCompanionImageCommands(db, {
     device: hello,
     userId,
     leaseMs: input.leaseSeconds * 1000,
+    maxCommands: input.maxCommands ?? 1,
   });
-  return command ? { command, remotePaused: false } : empty;
+  return { command: commands[0] ?? null, commands, remotePaused: false };
 }
 
-/** Candidates one pull may try when the server cannot hand a claim over. */
+/** Consecutive output-reservation refusals before ending a batch. */
 const COMPANION_CLAIM_TRIES = 3;
 /** A hand-off that failed waits this long, so a persistent storage error cannot spin. */
 const HANDOFF_RETRY_MS = 60_000;
@@ -483,39 +492,49 @@ const HANDOFF_RETRY_MS = 60_000;
 /** The analysis output a command needs could not be reserved. */
 class OutputNotReserved extends Error {}
 
+type CompanionImageClaimInput = {
+  device: CompanionDevice;
+  userId: string;
+  leaseMs: number;
+};
+
 /**
- * Claim and assign the next job a participating device can run, for the
- * device's `imageProcessing.pull`. Claim, preparation, assignment and output
- * reservation share one transaction, which holds the device lane's admission
- * row: only a hand-off that commits counts toward pull fairness, and
- * concurrent pulls take their turns one at a time. A claim the server cannot
- * hand over is released in that transaction (never an attempt): a null
- * command means an empty queue, never an abandoned lease. A failed hand-off
- * throws after its release commits, so the device sees an error rather than
- * an empty queue.
+ * One transaction and admission lock per batch. Each accepted hand-off updates the streak before
+ * selecting its successor. A failed hand-off commits its release/backoff; an already prepared
+ * prefix is returned so neither its leases nor the failed candidate become invisible. With no
+ * prepared command the failure throws after commit, preserving the single-command contract.
  */
-export async function claimCompanionImageCommand(
+export async function claimCompanionImageCommands(
   db: Database,
-  input: {
-    device: CompanionDevice;
-    userId: string;
-    leaseMs: number;
-  },
-): Promise<ImageProcessingCommand | null> {
+  input: CompanionImageClaimInput & { maxCommands: number },
+): Promise<ImageProcessingCommand[]> {
   const { device } = input;
   const { revisions, kinds, allowAvifNormalization } =
     companionClaimCapabilities(device);
-  if (!kinds.length) return null;
-  for (let tries = 0; tries < COMPANION_CLAIM_TRIES; tries++) {
-    const handOff = await withImageProcessingTransaction(db, async (tx) => {
+  if (!kinds.length) return [];
+  const batch = await withImageProcessingTransaction(db, async (tx) => {
+    const admission: DeviceImageClaimBatch = {
+      ownedStreak: await lockDeviceAdmission(tx),
+      handedOffIds: [],
+      candidateLimit:
+        input.maxCommands > 1 ? input.maxCommands * COMPANION_CLAIM_TRIES : 0,
+    };
+    const commands: ImageProcessingCommand[] = [];
+    let failure: { error: unknown } | undefined;
+    let tries = 0;
+    while (
+      commands.length < input.maxCommands &&
+      tries < COMPANION_CLAIM_TRIES
+    ) {
       const claimed = await claimImageProcessingJob(tx, {
         kinds,
         processorRevisions: revisions,
         allowAvifNormalization,
         leaseMs: input.leaseMs,
         deviceId: device.deviceId,
+        deviceAdmission: admission,
       });
-      if (!claimed) return { outcome: "empty" as const };
+      if (!claimed) break;
       const release = (reason: string, delayMs?: number) =>
         releaseImageProcessingLease(tx, {
           jobId: claimed.id,
@@ -524,10 +543,10 @@ export async function claimCompanionImageCommand(
           delayMs,
           event: "dispatch.released",
         });
+      const previousStreak = admission.ownedStreak;
       try {
         const command = await prepareCompanionImageCommand(claimed);
-        // Assignment and reservation commit together or not at all, so a
-        // reservation failure never leaves a counted service behind.
+        // Keep the savepoint: failed output reservation must undo assignment and its service.
         const assigned = await withImageProcessingTransaction(
           tx,
           async (step) => {
@@ -535,6 +554,7 @@ export async function claimCompanionImageCommand(
               jobId: claimed.id,
               attemptId: claimed.attemptId,
               userId: input.userId,
+              deviceAdmission: admission,
               executor: {
                 kind: "device",
                 deviceId: device.deviceId,
@@ -550,35 +570,42 @@ export async function claimCompanionImageCommand(
             return true;
           },
         );
-        if (assigned) return { outcome: "handed" as const, command };
-        // Participation flipped off after hello: this device takes nothing.
-        await release("Device assignment was refused");
-        return { outcome: "refused" as const };
+        if (!assigned) {
+          await release("Device assignment was refused");
+          break;
+        }
+        commands.push(command);
+        admission.handedOffIds.push(claimed.id);
+        tries = 0;
       } catch (error) {
+        // The savepoint may have rolled back a service after updating the transaction-local copy.
+        admission.ownedStreak = previousStreak;
         if (error instanceof OutputNotReserved) {
           await release(
             "Analysis output could not be reserved",
             HANDOFF_RETRY_MS,
           );
-          return { outcome: "retry" as const };
+          tries += 1;
+          continue;
         }
         await release(safeImageProcessingError(error), HANDOFF_RETRY_MS);
-        return { outcome: "failed" as const, error };
+        failure = { error };
+        break;
       }
-    });
-    switch (handOff.outcome) {
-      case "handed":
-        return handOff.command;
-      case "empty":
-      case "refused":
-        return null;
-      case "failed":
-        throw handOff.error;
-      case "retry":
-        continue;
     }
-  }
-  return null;
+    // All successful leases share one wake invalidation; per-claim attempts and URLs stay distinct.
+    if (commands.length) {
+      await armDeviceWake(tx);
+      const expires = await finalizeCompanionImageLeases(tx, {
+        claims: commands,
+        leaseMs: input.leaseMs,
+      });
+      for (const command of commands) command.deadline = expires.toISOString();
+    }
+    return { commands, failure };
+  });
+  if (batch.failure && !batch.commands.length) throw batch.failure.error;
+  return batch.commands;
 }
 
 export async function completeAssignedCompanionImageProcessing(

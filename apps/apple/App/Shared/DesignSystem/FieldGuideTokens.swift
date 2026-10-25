@@ -60,9 +60,13 @@ enum FieldGuideTokens {
     static let readingWidth: CGFloat = 720
 }
 
-/// The same five manifest domains appear in native and web navigation.
+/// The same seven manifest domains appear in native and web navigation.
 enum AppDomain: String, CaseIterable, Identifiable {
-    case house, cook, pantry, plan, finance
+    case plan, cook, pantry, garden, house, purchases, finance
+
+    static var allCases: [AppDomain] {
+        SidebarManifest.sections.compactMap { $0.domain.map(AppDomain.init) }
+    }
 
     var id: String { rawValue }
 
@@ -70,15 +74,19 @@ enum AppDomain: String, CaseIterable, Identifiable {
     /// `WAYFINDING_DOMAIN_PRESENTATION` so native and web name every domain alike.
     var wayfinding: WayfindingDomain {
         switch self {
-        case .house: .house
+        case .plan: .plan
         case .cook: .cook
         case .pantry: .pantry
-        case .plan: .plan
+        case .garden: .garden
+        case .house: .house
+        case .purchases: .purchases
         case .finance: .finance
         }
     }
 
     var title: String { wayfinding.title }
+
+    var color: Color { FieldGuideMetrics.domainColor(rawValue) ?? .secondary }
 
     /// The group glyph, used where a domain itself is the subject (a Browse header, a Mac sidebar
     /// row) rather than one entity within it.
@@ -89,11 +97,13 @@ extension AppDomain {
     init(_ domain: WayfindingDomain) {
         self =
             switch domain {
+            case .plan: .plan
             case .cook: .cook
             case .pantry: .pantry
-            case .plan: .plan
-            case .finance: .finance
+            case .garden: .garden
             case .house: .house
+            case .purchases: .purchases
+            case .finance: .finance
             }
     }
 }

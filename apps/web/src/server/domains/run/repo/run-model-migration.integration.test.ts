@@ -224,7 +224,7 @@ describe("AI evaluation slot cutover", () => {
     );
     const migration = readFileSync(
       new URL(
-        "../../../../../drizzle/0035_derived_values.sql",
+        "../../../../../drizzle/0037_derived_values.sql",
         import.meta.url,
       ),
       "utf8",

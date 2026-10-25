@@ -1,4 +1,5 @@
-import { type AnyColumn, isNull } from "drizzle-orm";
+import { type AnyColumn, isNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 /** `term` as a LIKE pattern that matches it literally, for case-insensitive equality. */
 export const escapeLike = (term: string): string =>
@@ -11,8 +12,9 @@ export const escapeLike = (term: string): string =>
  */
 export const ilikeContains = (term: string): string => `%${escapeLike(term)}%`;
 
-export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
-  isNull(table.deletedAt);
+/** Expiring read-only entities have no soft-delete column; every retained row is live. */
+export const notDeleted = (table: PgTable | { deletedAt: AnyColumn }) =>
+  "deletedAt" in table && table.deletedAt ? isNull(table.deletedAt) : sql`true`;
 
 /**
  * Raw-text actual/planned Expense predicates for an aliased `"Expense"` in

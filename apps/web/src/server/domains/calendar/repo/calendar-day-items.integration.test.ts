@@ -6,7 +6,11 @@ import { describe, expect, it } from "vitest";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+  insertEntityAttachments,
+} from "~/server/testing/repo.fixtures";
 
 import { getCalendarRange } from "./calendar";
 
@@ -72,6 +76,9 @@ describe("calendar day membership", () => {
     );
     expect(covers.get(project.output.id)).toBe(expected.get(project.output.id));
     expect(covers.get(task.output.id)).toBe(expected.get(project.output.id));
+    expect(
+      range.items.find((item) => item.id === task.output.id),
+    ).toMatchObject({ assignedProjectName: "Synthetic garden season" });
     expect(covers.get(purchase.output.id)).toBe(expected.get(seller.output.id));
     expect(covers.get(meal.id)).toBe(expected.get(meal.id));
   });
@@ -113,12 +120,42 @@ describe("calendar day membership", () => {
       date: "2026-09-21",
       trade: "other",
     });
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic direct project",
+    });
+    const beneficiary = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic beneficiary",
+    });
     const standalone = await createRepoEntity(ctx, "expense", {
       name: "Synthetic standalone charge",
       cost: 5,
       date: "2026-09-21",
       trade: "other",
+      projectId: project.output.id,
+      beneficiaries: [{ partyId: beneficiary.output.id, weight: 1 }],
     });
+    const product = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic discarded item" }),
+      ctx.actor,
+    );
+    const discardedPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      date: "2026-09-21",
+    });
+    for (const purchaseId of [null, discardedPurchase.output.id]) {
+      for (const cost of [0, null]) {
+        await createRepoEntity(ctx, "expense", {
+          name: "Synthetic discard",
+          trade: "other",
+          date: "2026-09-21",
+          productId: product.id,
+          productQuantity: -1,
+          cost,
+          purchaseId,
+        });
+      }
+    }
     const range = await getCalendarRange(
       ctx.db,
       calendarRangeInput.parse({
@@ -146,6 +183,14 @@ describe("calendar day membership", () => {
       }),
     );
     expect(later.items).toHaveLength(3);
+    expect(
+      later.items.find((item) => item.id === standalone.output.id),
+    ).toMatchObject({
+      spendingContext: {
+        projectNames: ["Synthetic direct project"],
+        partyNames: ["Synthetic beneficiary"],
+      },
+    });
     expect(later.items.find((item) => item.kind === "purchase")).toMatchObject({
       occurrence: "refund",
       cost: -4,

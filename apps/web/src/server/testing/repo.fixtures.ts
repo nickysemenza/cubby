@@ -50,6 +50,7 @@ import {
   insertPayloadsWithIdentities,
   type EntityPayloadValues,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getDb, notDeleted } from "../db/helpers";
 import {
@@ -65,7 +66,6 @@ import {
 import { createRecipe } from "../domains/recipe/repo/crud";
 import type { CookbookImportContext } from "../domains/recipe/repo/import-recipe-convert";
 import { resolveLiveShortcode } from "../generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "../generic/shortcode/repo/shortcode-utils";
 
 // Shared fixture builders for the repo integration tests. Each factory states
 // the irrelevant scaffolding fields once so a test only spells out the values

@@ -168,8 +168,8 @@ save is complete. Settlement matching starts each review visit from a fresh cand
 selection or draft; cached candidates stay unavailable until that read finishes.
 A paused/offline read cannot satisfy a fresh-baseline gate.
 
-Loaded views retain data with Updating… during reconciliation and report refresh
-failure separately. Server reads own membership, ordering, counts and paging: a
+Loaded views retain data during reconciliation. Background refetch feedback belongs
+to the shell status slot; refresh failures and Retry remain inline with the view. Server reads own membership, ordering, counts and paging: a
 saved row may briefly remain in its previous position. Do not append offset pages
 while the current list is reconciling or its refresh has failed. Retained
 page refreshes must preserve confirmed fields until the complete replacement arrives.
@@ -183,24 +183,41 @@ Multi-field rows without a shared atomic row writer reject before dispatch.
 
 The authenticated shell subscribes to the `household.changed` doorbell topic
 (`/api/doorbell`, owned by the household freshness Durable Object) over a
-same-origin WebSocket. A ring names the changed categories; a ring without them
-rereads every loaded view. Writers enroll changed cache categories in their
-transaction; successful savepoints merge them and rollback discards them.
+same-origin WebSocket. A ring carries `changes`, a map from cache category to
+public record shortcodes or `null` for a whole category. Writers that cannot name
+records publish `null`; more than 200 distinct ids collapse to `null`. Image
+processing resolves its storage UUIDs to public shortcodes before enrollment.
+A ring without `changes` rereads every loaded view. Writers enroll changes in
+their transaction; successful savepoints union ids (`null` absorbs ids), while
+rollback discards them.
 After the outer commit, one best-effort hint advances the strong-read window
 before broadcasting. Audit writes cover ordinary entity edits across transports;
 non-audited recipe totals, conversion coverage, assessments, saved AI analyses and search/embedding
-publication enroll at their saved projection owners. Job claims, heartbeats and
+publication enroll at their saved projection owners. Image-processing completion, retry, retirement and subject-lift claims publish record-scoped hints; other claims, ordinary Job heartbeats and
 cursor-only advances do not publish hints. Unchanged periodic projections do not
 trigger refreshes merely to update a computation timestamp.
 
-Hints invalidate the existing cache ripples; they never carry record values or
+Hints invalidate the existing cache ripples. Within an explicitly record-scoped
+category, `entity.detail` and record-scoped `entityReport.get`/`getMany`
+invalidate only matching record shortcodes, or when another category in the same
+coalesced hint is `null`. Id-scoped dependent categories do not reach them: an
+`image` ripple covers every displaying entity, so it would refetch every open
+Image job. `entityGraph.connectedRecords` lists other records and keeps its
+ripple, as do lists and dashboard/nav counts; a `null` category keeps full
+invalidation. Hints
+never carry record values or
 replace receipt reconciliation. Reads already in flight are retired and loaded
 views retain their ordinary refresh/error UI. Notification invalidation retains
 inactive baselines because streamed sections may still need them to hydrate;
 mount and detail loaders refetch those invalidated baselines before reuse.
-Refresh status renders only after its own hydration boundary is ready, since
-the shell can initiate subscription recovery before streamed sections hydrate.
-Additional hints received during refresh are combined for the next read.
+The first ring refreshes immediately; further rings accumulate into at most one
+refresh every five seconds, with a final trailing refresh. A slow read completes
+before starting another. Own mutations retain their immediate local invalidation.
+Subscription recovery on open/resume bypasses the ring throttle. Background
+refetch feedback appears in the reserved sidebar status slot (or a BottomNav
+spinner on mobile) only after 300ms; it never inserts a row into page content.
+Inline refresh errors retain their data and Retry. Native workspace routes have
+no shell indicator.
 Declared reference and projection-path consumers add their own cache roots to
 the hint's ripple. This uses generated read dependencies without recursively
 expanding mutation ripples. Projection completion uses the same notification

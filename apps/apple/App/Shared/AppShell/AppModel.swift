@@ -55,6 +55,8 @@ final class AppModel {
     /// `localExecutionLabel`).
     let backgroundActivity = BackgroundActivityCenter()
     var photoImportFlows: [PhotoImportRunFlow] = []
+    // BackgroundActivityCenter holds sources weakly; this adapter lives as long as the model.
+    @ObservationIgnored private var companionActivitySource: CompanionActivitySource?
     @ObservationIgnored private var companionImageWorker: CompanionImageWorker?
     @ObservationIgnored private var companionImageWorkerGeneration = UUID()
     private(set) var companionImageActivity = CompanionImageWorkerActivity(phase: .stopped)
@@ -253,10 +255,11 @@ final class AppModel {
     private func configureBackgroundActivitySources() {
         backgroundActivity.register(photoLibrary)
         backgroundActivity.register(photoMatches)
-        backgroundActivity.register(
-            CompanionActivitySource { [weak self] in
-                self?.companionImageActivity ?? .init(phase: .stopped)
-            })
+        let companionSource = CompanionActivitySource { [weak self] in
+            self?.companionImageActivity ?? .init(phase: .stopped)
+        }
+        companionActivitySource = companionSource
+        backgroundActivity.register(companionSource)
         backgroundActivity.register(
             LibraryMetadataSyncActivitySource { [weak self] in
                 self?.storedLibraryMetadataSync?.currentActivities ?? []
@@ -624,14 +627,11 @@ final class AppModel {
         Task { await worker?.setMaximumConcurrentCommands(slots) }
     }
 
-    func runCompanionJobsInBackground() async -> Bool {
+    func runCompanionJobsInBackground(
+        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)? = nil
+    ) async -> Bool {
         guard phase == .signedIn, participation.automaticWork else { return false }
-        return await companionImageWorker?.runInBackground(client: client) ?? false
-    }
-
-    func endCompanionBackgroundRun() {
-        let worker = companionImageWorker
-        Task { await worker?.endBackgroundRun() }
+        return await companionImageWorker?.runInBackground(client: client, progress: progress) ?? false
     }
 
     private func configureCompanionImageWorker() {

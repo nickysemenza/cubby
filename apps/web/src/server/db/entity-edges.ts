@@ -1557,6 +1557,7 @@ export const ENTITY_EDGES = {
   // of one run, so they're `owned-child`; rows other entities keep about a
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
+  job: edges({}),
   run: edges({
     "Job.runId": {
       column: job.runId,

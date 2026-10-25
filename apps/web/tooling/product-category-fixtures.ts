@@ -22,11 +22,13 @@ const taxonomyFeatures = [
   "household",
   "supplies",
   "apparel",
+  "music",
 ] as const satisfies readonly ProductCategoryFeature[];
 
 const categoryNames = {
   food: "Food",
   books: "Books",
+  music: "Music",
   tools: "Tools",
   "tool-consumables": "Tool consumables",
   "tool-accessories": "Tool accessories",
@@ -43,6 +45,7 @@ const categoryNames = {
 const categoryCodes = {
   food: "CAT-2222",
   books: "CAT-2223",
+  music: "CAT-2237",
   tools: "CAT-2224",
   "tool-consumables": "CAT-2225",
   "tool-accessories": "CAT-2226",

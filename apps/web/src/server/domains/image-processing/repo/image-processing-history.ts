@@ -10,6 +10,8 @@ import {
   insertAndReturn,
   unwrapDb,
   withTransaction,
+  withTransactionOn,
+  isTransaction,
   databaseForTransaction,
 } from "~/server/db/helpers";
 import {
@@ -20,7 +22,10 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
-import { recordDeviceService } from "~/server/generic/jobs/repo/device-admission";
+import {
+  recordDeviceService,
+  type DeviceAdmission,
+} from "~/server/generic/jobs/repo/device-admission";
 import {
   externalJobClaim,
   releaseJobClaim,
@@ -67,7 +72,7 @@ export async function insertImageProcessingAttempt(
 ): Promise<number | null> {
   const dbc = unwrapDb(db);
   const inserted = await dbc.execute(sql`
-    INSERT INTO "ImageProcessingAttempt"
+    WITH inserted AS (INSERT INTO "ImageProcessingAttempt"
       (id, "jobId", number, "submissionId", state, executor, "assignedUserId",
        "assignedConnectionId", diagnostics, result, error, "completedAt")
     SELECT ${input.attemptId}::uuid, j.id,
@@ -89,12 +94,12 @@ export async function insertImageProcessingAttempt(
     LEFT JOIN "Image" i ON i.id = j."imageId"
     WHERE j.id = ${input.jobId}::uuid
     ON CONFLICT DO NOTHING
-    RETURNING number`);
+    RETURNING number), counted AS (
+      UPDATE "ImageProcessingJob" SET attempts = attempts + 1
+      WHERE id = ${input.jobId}::uuid AND EXISTS (SELECT 1 FROM inserted)
+    ) SELECT number FROM inserted`);
   const row = z.array(z.object({ number: z.number() })).parse(inserted.rows)[0];
   if (!row) return null;
-  await dbc.execute(
-    sql`UPDATE "ImageProcessingJob" SET attempts = attempts + 1 WHERE id = ${input.jobId}::uuid`,
-  );
   return row.number;
 }
 
@@ -106,64 +111,75 @@ export async function assignImageProcessingExecutor(
     executor: ActivityExecutor;
     userId?: string;
     diagnostics?: unknown;
+    deviceAdmission?: DeviceAdmission;
   },
 ): Promise<boolean> {
-  return withTransaction(db, async (tx) => {
-    const [job] = await tx
-      .select({ id: imageProcessingJob.id })
-      .from(imageProcessingJob)
-      .where(
-        and(
-          eq(imageProcessingJob.id, input.jobId),
-          eq(imageProcessingJob.attemptId, input.attemptId),
-          eq(imageProcessingJob.state, "pending"),
-          // Wall time, not now(): a device hand-off assigns inside the
-          // transaction that claimed, and now() stays at its start.
-          sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">clock_timestamp())`,
-        ),
-      )
-      .for("update");
-    if (!job) return false;
-    // Authoritative re-check: `dispatch()`'s socket-attachment cache can be up
-    // to `PARTICIPATION_TTL_MS` stale, so a device that flipped `remotePaused`
-    // or `automaticWork` off between hello and this assignment must still be
-    // refused here, inside the transaction that grants the assignment.
-    let executor = input.executor;
-    if (executor.kind === "device" && executor.deviceId) {
-      const participation = await getDeviceParticipation(tx, executor.deviceId);
-      if (
-        participation &&
-        (!participation.automaticWork || participation.remotePaused)
-      )
-        return false;
-      if (participation) executor = { ...executor, name: participation.name };
-    }
-    // The conflict on the lease's attempt id makes a repeated call return false.
-    const number = await insertImageProcessingAttempt(tx, {
-      jobId: input.jobId,
-      attemptId: input.attemptId,
-      state: "running",
-      executor,
-      userId: input.userId,
-      diagnostics: input.diagnostics,
-    });
-    if (number === null) return false;
-    // A device's committed hand-off is one service for pull fairness.
-    if (executor.kind === "device")
-      await recordDeviceService(
-        databaseForTransaction(tx),
-        `image-processing:${input.jobId}`,
-      );
-    await recordImageProcessingEvent(tx, {
-      jobId: input.jobId,
-      eventKey: `${input.attemptId}:assigned`,
-      event: "execution.assigned",
-      attempt: number,
-      source: executor.kind,
-      details: executor,
-    });
-    return true;
-  });
+  const client = getDb(db);
+  return withTransactionOn(
+    input.deviceAdmission && isTransaction(client) ? client : db,
+    async (tx) => {
+      const [job] = await tx
+        .select({ id: imageProcessingJob.id })
+        .from(imageProcessingJob)
+        .where(
+          and(
+            eq(imageProcessingJob.id, input.jobId),
+            eq(imageProcessingJob.attemptId, input.attemptId),
+            eq(imageProcessingJob.state, "pending"),
+            // Wall time, not now(): a device hand-off assigns inside the
+            // transaction that claimed, and now() stays at its start.
+            sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">clock_timestamp())`,
+          ),
+        )
+        .for("update");
+      if (!job) return false;
+      // Authoritative re-check: `dispatch()`'s socket-attachment cache can be up
+      // to `PARTICIPATION_TTL_MS` stale, so a device that flipped `remotePaused`
+      // or `automaticWork` off between hello and this assignment must still be
+      // refused here, inside the transaction that grants the assignment.
+      let executor = input.executor;
+      if (executor.kind === "device" && executor.deviceId) {
+        const participation = await getDeviceParticipation(
+          tx,
+          executor.deviceId,
+        );
+        if (
+          participation &&
+          (!participation.automaticWork || participation.remotePaused)
+        )
+          return false;
+        if (participation) executor = { ...executor, name: participation.name };
+      }
+      // The conflict on the lease's attempt id makes a repeated call return false.
+      const number = await insertImageProcessingAttempt(tx, {
+        jobId: input.jobId,
+        attemptId: input.attemptId,
+        state: "running",
+        executor,
+        userId: input.userId,
+        diagnostics: input.diagnostics,
+      });
+      if (number === null) return false;
+      // A device's committed hand-off is one service for pull fairness.
+      if (executor.kind === "device") {
+        const ownedStreak = await recordDeviceService(
+          databaseForTransaction(tx),
+          `image-processing:${input.jobId}`,
+        );
+        if (input.deviceAdmission)
+          input.deviceAdmission.ownedStreak = ownedStreak;
+      }
+      await recordImageProcessingEvent(tx, {
+        jobId: input.jobId,
+        eventKey: `${input.attemptId}:assigned`,
+        event: "execution.assigned",
+        attempt: number,
+        source: executor.kind,
+        details: executor,
+      });
+      return true;
+    },
+  );
 }
 
 /** Whether the attempt went to this member's device. */

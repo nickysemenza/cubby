@@ -7,6 +7,41 @@ the decision; this page owns the runtime contract. Derived-data families are
 in [entities](entities.md#background-derived-data); Worker and database
 capacity in [infrastructure](infrastructure.md#postgresql-and-hyperdrive).
 
+## Job entity and identity retention
+
+Job is a read-only generic entity over the existing durable `Job` table. Web,
+Apple and MCP use the entity kernel for list/detail reads. Its `JOB-` shortcode
+has a ten-character body from the shared shortcode alphabet. Enqueue creates
+its `Entity` identity and execution row atomically through the shared identity
+writer; a repeat enqueue by key preserves both identities. Kind policy supplies
+the lane and internal-kind flag. Subject Images supply thumbnails, and Run
+references arrive with their labels in the row read.
+
+The entity exposes execution state, lane, waiting-on text, subject, Run,
+attempts, raw error, lease end and timestamps. Filters cover lane, waiting-on
+reason, state, kind, Run, attention and internal kinds. Internal work is hidden
+by default (`image.device.wake`, `queue.watchdog`, `jobs.retention`,
+`ai-refresh.activate`, plus anything policy marks internal). Saved views are
+In progress, Due, Waiting for Apple, Backing off and Needs attention. Retry now
+uses `job.retryNow` over checked codes or the exact current entity filter.
+
+Job is the sole exception to permanent `Entity` identities: retention deletes
+its identity in the same transaction as its pruned execution row. Retention also
+reconciles a bounded batch of Job identities without a payload, including rows
+orphaned by an old Worker's retention between committed backfill batches and
+deployment. The pass is idempotent and never removes another entity kind.
+Enqueue locks an existing Job through invalidation; retention skips locked
+candidates, so it cannot prune a Job being invalidated or return a stale identity.
+Queue work
+churns at roughly 175,000 Jobs a week; retaining those identities forever would
+make the identity index unbounded. A pruned `JOB-` code may be recycled and no
+longer resolves; every other entity retains its identity and code forever.
+Domain evidence, retained Jobs, failed work and invalidation ownership survive.
+
+Migration `0036_job_entity_identity` adds and backfills codes and identities in
+1,000-row committed batches, preserving every execution field and timestamp.
+See the [production migration procedure](runbooks/production-migrations.md#job-entity-identity-backfill).
+
 ## Kinds and lanes
 
 `apps/web/src/server/generic/jobs/kind-policy.ts` is the one registry of
@@ -101,10 +136,10 @@ is its own Jobs plus the evaluation Jobs it owns or still requests (an
 uncancelled `AiEvaluationRequest`), once each, for rollups, `job.queue` with a
 Run, Retry now and explain.
 
-Device pulls apply the same two classes to one claim at a time
+Device pulls apply the same two classes to each command in a batch
 (`generic/jobs/repo/device-admission.ts`): an active, member-visible Run's
 parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / JOB_BACKFILL_SHARE -
-1`) run-owned device services in a row, the next pull serves backfill. The
+1`) run-owned device services in a row, the next command serves backfill. The
 owed class is chosen first; a device's preference for work another device
 last ran only orders candidates within it. A service is a device hand-off
 that commits (an assigned attempt of `image.device` work; each reclaim
@@ -112,9 +147,11 @@ counts), classified at assignment by selection's own `jobRunOwned`: serving
 an ended Run's work is backfill and resets the turn, and a Run ending later
 never reclassifies services already counted. The streak lives in the
 `image.device` row of `JobLaneAdmission`. A device pull
-(`claimCompanionImageCommand`) claims, prepares, assigns and reserves output
+(`claimCompanionImageCommands`) claims, prepares, assigns and reserves output
 in one transaction that locks that row before choosing a class, so
-concurrent pulls take their turns one at a time. A hand-off the server
+concurrent batches take their turns one at a time. Each committed hand-off
+updates the streak before selecting the next command, so a wide batch keeps
+backfill's reserved share rather than spending only one fairness turn. A hand-off the server
 cannot make (participation turned off, output not reserved, preparation
 failed) is released in the same transaction and counts nothing.
 
@@ -238,9 +275,22 @@ pre-cutover Worker can run; nothing reads it.
 
 Device wire contract:
 
-- `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300). A
-  null command means an empty queue: a claim the server cannot hand over is
-  released first, and a failed hand-off is an error, not an empty pull.
+- `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300) and
+  accepts optional `maxCommands` (1–16, default 1). `commands` contains up to
+  that many commands in hand-off order; the retained `command` field is its
+  first item or null. Older clients keep receiving one command without an
+  update or minimum-version change. A batch uses one transaction and one
+  admission lock. A bounded candidate page per class avoids rescanning the full
+  queue for every slot; each hand-off rechecks due times, leases and Run class
+  within that page, preserving per-command capabilities, device preference,
+  attempts, leases and presigned URLs. A prepared Job cannot re-enter the batch
+  even if its initial lease expires during later preparation. Immediately before
+  hand-off, still-owned leases are re-armed together and every returned command
+  receives the fresh deadline. An empty array/null command means no
+  hand-off: refused claims are released first. A preparation failure releases
+  and backs off that claim. An already prepared prefix is returned; if there
+  is none, the pull throws after the release commits. Neither valid commands
+  nor the failed candidate can become invisible behind a batch error.
 - `imageProcessing.renew` `{jobId, attemptId, deviceId}` extends the lease by
   60 s while the attempt still owns it, including an expired lease no newer
   claim replaced. It returns `{ok: true, leaseExpiresAt}` (the new command
@@ -286,21 +336,22 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
   only on hello), device attempt starts per minute (reclaims included) and the
   ETA at that pace.
 
-The web Activity page is the overview: the watchdog's red badge with raw
-alert evidence when unhealthy, the device backlog notice (loud when work waits
-and no device is pulling), the queue counts by lane and reason (the Apple
-lane also counts active installs, those needing an update, and leases per
-device with expired ones flagged), the image jobs each Apple device is
-processing, cloud leases grouped apart (generic imageJob rows with their
-lease countdown, polled every 15 s while work is in flight because renewals
-publish no change), Runs needing
-attention with their rollup and stall flag, then the filtered Job list. Runs
-needing attention is the Run entity's `attention` view: stopped Runs of
-`ATTENTION_RUN_PURPOSES`; system passes (AI refresh, background) retry on
-their own and stay under AI work. Every count links to that list
-(`/activity?lane=…&reason=…`, also `state`, `kind`, `runId`, `attention`);
-Retry now confirms and applies `job.retryNow` to the list's filter, and each
-row expands to its `job.explain` chain. The audit-log changes feed follows.
+Activity on web and Apple presents the unhealthy-only health notice, device
+backlog banner, compact lane/reason counts, Runs needing attention, then Jobs.
+Navigable counts use the Job entity population, hiding internal work with the
+table; queue health continues to measure internal kinds. Every supplied retry
+restriction intersects, including mixed entity filters, row IDs and Run scope.
+Count chips scope the Job table; web records that scope in Activity's URL.
+Runs use the generic `attention` saved view: member-visible stopped Runs that
+have no successor, plus stalled Runs, ordered stalled first then newest.
+The embed shows ten rows and links to all matching Runs. AI cost is the Run's
+recorded charged usage. Jobs use the generic In progress view, including image
+subject thumbnails, and a chevron expands Explain, that Job's Worker logs and
+Retry now underneath its row. Closed web rows remain 32 px. There is one
+shared table renderer; the separate image-processing roster and hand-written
+queue rows, pickers and pager are removed. Apple keeps its This device status,
+local work, automatic-work toggle and the shared concurrency setting.
+The web audit-log changes feed follows the queue.
 
 The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
 first repairs image execution in bounded batches (retires moot work, reopens

@@ -28,6 +28,7 @@ export const identifierTypeNames = {
   project: "ProjectId",
   purchase: "PurchaseId",
   run: "RunId",
+  job: "JobId",
   recipe: "RecipeId",
   task: "TaskId",
   vendor: "VendorId",
@@ -36,6 +37,9 @@ export const identifierTypeNames = {
 } as const satisfies Readonly<Record<string, string>>;
 
 const storageJsonTypes = {
+  "job.input": "JobPayload",
+  "job.cursor": "JobPayload",
+  "job.result": "JobPayload",
   "shipment.extraTrackingNumbers": "ShipmentExtraTrackingNumber[]",
   "cookbook.rawJson": "CookbookExtraction",
   "cookbook.report": "CookbookRunReport | null",
@@ -104,7 +108,11 @@ const enumColumnExpression = (
   } as const satisfies Readonly<Record<string, string>>;
   const existing = lookupGeneratedType(expressions, key);
   if (existing) return existing;
-  if (field.specialized !== "enum:inheritance-mode") return null;
+  if (
+    field.specialized !== "enum:declaration" &&
+    field.specialized !== "enum:inheritance-mode"
+  )
+    return null;
   const validation = entity.fieldModel.fields.find(
     ({ key }) => key === field.key,
   )?.validation;
@@ -222,12 +230,13 @@ export const renderStorageColumn = (
   if (field.specialized === "updated-at")
     expression += ".$onUpdate(() => new Date())";
   if (field.reference !== null)
-    expression += `.references(${reference(field.reference, field.referenceOptions?.column)}${field.referenceOptions?.onUpdate ? `, { onUpdate: ${JSON.stringify(field.referenceOptions.onUpdate)} }` : ""})`;
+    expression += `.references(${reference(field.reference, field.referenceOptions?.column)}${field.referenceOptions?.onUpdate || field.referenceOptions?.onDelete ? `, ${JSON.stringify({ onUpdate: field.referenceOptions.onUpdate, onDelete: field.referenceOptions.onDelete })}` : ""})`;
   return `${JSON.stringify(field.key)}:${expression}`;
 };
 
 /** The type and value-array imports the column builders above reference. */
 const storageColumnImports =
+  'import type { JobPayload } from "@cubby/schemas/job";\n' +
   'import type { FinancialAccountPartyPeriod, FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
   'import type { ShipmentExtraTrackingNumber } from "@cubby/schemas/shipment-fields";\n' +
   `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +

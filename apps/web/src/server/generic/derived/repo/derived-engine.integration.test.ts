@@ -153,6 +153,24 @@ describe("stored derived values", () => {
     });
   });
 
+  it("rings readers with the shortcodes of the records it published", async () => {
+    const created = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic ringing beans", price: 2 }),
+      TEST_ACTOR,
+    );
+    const publication = await publishDerivedPage(
+      ctx.db,
+      await prepareDerivedPage(
+        ctx.db,
+        derivedComputes,
+        await claimDerivedMarks(ctx.db),
+      ),
+    );
+    expect(publication.categories).toContain("product");
+    expect(publication.changes.product).toContain(created.id);
+  });
+
   it("marks nothing for a save that changes no declared input", async () => {
     const beans = await makeProduct("Synthetic lentils", 3);
     await drain();

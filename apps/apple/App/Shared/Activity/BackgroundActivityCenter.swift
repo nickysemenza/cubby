@@ -54,6 +54,7 @@ final class BackgroundActivityCenter {
     /// participates and sees every activity.
     var participationEnabled = true
 
+    /// The producer retains its source, including closure adapters, for its reporting lifetime.
     func register(_ source: any BackgroundActivitySource) {
         sources.append(RegisteredSource(source))
     }
@@ -254,11 +255,7 @@ final class LibraryMetadataSyncActivitySource: BackgroundActivitySource {
     var currentActivities: [BackgroundActivity] { activities() }
 }
 
-/// A thin adapter over `AppModel.companionImageActivity`: the companion websocket worker is a
-/// value type (`CompanionImageWorkerActivity`), so it cannot itself conform to a class-bound
-/// protocol. This mirrors `AppModel.localExecutionLabel`'s old title mapping exactly, and — unlike
-/// every other source above — deep-links to the server run the companion job is processing rather
-/// than a local activity id, since the job itself runs server-side.
+/// Reads the worker's queue session through a stable adapter across host rebinds.
 final class CompanionActivitySource: BackgroundActivitySource {
     private let activity: () -> CompanionImageWorkerActivity
 
@@ -268,23 +265,14 @@ final class CompanionActivitySource: BackgroundActivitySource {
 
     var currentActivities: [BackgroundActivity] {
         let activity = self.activity()
-        guard activity.phase == .processing else { return [] }
-        let title = activity.kind == "subject_lift" ? "Creating image cutout" : "Describing image"
-        // The companion knows the job's internal UUID, not its `IPR-` code, so the row opens its
-        // own device-local detail rather than a server record.
-        let link: BackgroundActivity.Link = .localActivity("companion-image-job")
+        guard activity.phase == .processing, let queue = activity.queueProgress else { return [] }
         return [
             BackgroundActivity(
-                id: activity.jobID ?? "companion-image-job",
-                kind: .companionJob,
-                title: title,
-                phase: .running,
-                progress: nil,
-                detail: nil,
-                startedAt: activity.startedAt ?? .now,
-                link: link,
-                isUserInitiated: false,
-                isCancellable: false)
+                id: "companion-image-queue", kind: .companionJob,
+                title: "Processing image queue", phase: .running,
+                progress: queue.progress, detail: queue.detail(running: activity.processingCount),
+                startedAt: queue.startedAt, link: .activity,
+                isUserInitiated: false, isCancellable: false)
         ]
     }
 }

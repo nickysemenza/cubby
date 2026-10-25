@@ -1,3 +1,5 @@
+import { swiftCaseName } from "./swift-catalog.ts";
+import { SIDEBAR_SECTIONS } from "@cubby/schemas/sidebar-manifest";
 import {
   COLLECTION_TAG_PREFIX,
   collectionSlugPattern,
@@ -41,6 +43,42 @@ export const renderSwiftSharedConstants = (): EntityArtifacts[] => {
         `        case .${domain}: ${swiftString(WAYFINDING_DOMAIN_PRESENTATION[domain][property])}`,
     ).join("\n");
   return [
+    {
+      relativePath:
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/SidebarManifest.swift",
+      source:
+        generatedHeader +
+        `// swift-format-ignore-file
+
+import CubbyAPISupport
+
+public enum SidebarManifest {
+    public struct Destination: Hashable, Sendable {
+        public let label: String
+        public let route: String
+        public let entity: EntityKey?
+        /// Entity destinations use EntityManifest's descriptor SF Symbol.
+        public let sfSymbol: String?
+    }
+    public struct Section: Identifiable, Sendable {
+        public let id: String
+        public let label: String
+        public let domain: WayfindingDomain?
+        public let defaultFolded: Bool
+        public let destinations: [Destination]
+    }
+    public static let sections: [Section] = [
+${SIDEBAR_SECTIONS.map(
+  (
+    section,
+  ) => `        Section(id: ${swiftString(section.id)}, label: ${swiftString(section.label)}, domain: ${section.domain ? `.${section.domain}` : "nil"}, defaultFolded: ${section.defaultFolded}, destinations: [
+${section.destinations.map((destination) => `            Destination(label: ${swiftString(destination.label)}, route: ${swiftString(destination.route)}, entity: ${"entity" in destination ? `.${swiftCaseName(destination.entity)}` : "nil"}, sfSymbol: ${"sfSymbol" in destination ? swiftString(destination.sfSymbol) : "nil"}),`).join("\n")}
+        ]),`,
+).join("\n")}
+    ]
+}
+`,
+    },
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyKit/Generated/IdentifierKinds.swift",

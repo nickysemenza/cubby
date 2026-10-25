@@ -46,6 +46,7 @@ export const derivedDrainHandler = (computes: DerivedComputes): JobHandler =>
           await recordChange(tx, {
             kind: "projection",
             categories: publication.categories,
+            changes: publication.changes,
           });
         return {
           processed: publication.processed,

@@ -1,39 +1,79 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { readFileSync } from "node:fs";
+
+import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import { SIDEBAR_SECTIONS } from "@cubby/schemas/sidebar-manifest";
 import { describe, expect, it } from "vitest";
 
 import { entities } from "~/entity/entities";
 
 import { domainForRoute } from "../../ui/navigation/domain-wayfinding";
-import {
-  completeNavLeaves,
-  desktopNav,
-  findActiveTo,
-  getEntityNavGroup,
-  getSidebarGroupItems,
-  isNavGroup,
-  primaryNavGroups,
-  settingsNavItem,
-} from "./nav-items";
+import { findActiveTo, getEntityNavGroup, sidebarSections } from "./nav-items";
+
+const manifestRoutes = SIDEBAR_SECTIONS.flatMap((section) =>
+  section.destinations.map((destination) => destination.route),
+);
+const routeTree = readFileSync(
+  new URL("../../routeTree.gen.ts", import.meta.url),
+  "utf8",
+);
+const authenticatedRoutes = [
+  ...new Set(
+    [...routeTree.matchAll(/['"]\/_authenticated(\/[^'"]*)['"]: typeof/g)].map(
+      (match) => (match[1] ?? "/").replace(/\/$/, "") || "/",
+    ),
+  ),
+];
+// These routes are contextual, global controls, account pages or retired redirects.
+const contextualRoutes = new Set([
+  "/connections",
+  "/automatic-decisions",
+  "/recommendations/workbench",
+  "/search",
+  "/settings",
+  "/account/connected-apps",
+  "/activities",
+  "/records",
+]);
 
 describe("workspace navigation contract", () => {
-  it("contains every desktop destination exactly once", () => {
-    const targets = completeNavLeaves.map((item) => item.to);
-    expect(new Set(targets).size).toBe(targets.length);
-    expect(targets.filter((target) => target === settingsNavItem.to)).toEqual([
-      "/settings",
-    ]);
+  it("contains no duplicate routes", () => {
+    expect(new Set(manifestRoutes).size).toBe(manifestRoutes.length);
   });
-
-  it("keeps every primary destination in its route-level domain", () => {
-    for (const group of primaryNavGroups) {
-      if (group.domain === undefined) continue;
-      for (const item of group.children) {
-        // oxlint-disable-next-line vitest/valid-expect -- The second argument is an assertion label for this table-driven check.
-        expect(domainForRoute(String(item.to)), item.label).toBe(group.domain);
-      }
+  it.each(browserRoutedEntities)(
+    "gives %s exactly one canonical list destination",
+    (entity) => {
+      const entries = sidebarSections
+        .flatMap((section) => section.children)
+        .filter((item) => item.entity === entity);
+      expect(entries.map((item) => item.to)).toEqual([
+        entities[entity].routes.list,
+      ]);
+      expect(getEntityNavGroup(entity)?.children).toContain(entries[0]);
+    },
+  );
+  it.each(
+    authenticatedRoutes.filter(
+      (route) =>
+        !route.includes("$") &&
+        !route.endsWith("/new") &&
+        !contextualRoutes.has(route),
+    ),
+  )("gives static authenticated page %s a navigation home", (route) => {
+    expect(manifestRoutes).toContain(route);
+  });
+  it.each(manifestRoutes.filter((route) => route !== "/"))(
+    "uses an existing authenticated route for %s",
+    (route) => {
+      expect(authenticatedRoutes).toContain(route);
+    },
+  );
+  it("keeps each section in its route-level domain", () => {
+    for (const section of sidebarSections) {
+      if (!section.domain) continue;
+      for (const item of section.children)
+        expect(domainForRoute(String(item.to))).toBe(section.domain);
     }
   });
-
   it.each([
     ["/", "/"],
     ["/expenses", "/expenses"],
@@ -44,47 +84,4 @@ describe("workspace navigation contract", () => {
   ])("matches %s to its longest navigation target", (pathname, expected) => {
     expect(findActiveTo(pathname)).toBe(expected);
   });
-
-  it("keeps Settings in the manifest while reserving it for the sidebar footer", () => {
-    const more = desktopNav.find(
-      (node) => isNavGroup(node) && node.label === "More",
-    );
-    expect(more && isNavGroup(more)).toBe(true);
-    if (!more || !isNavGroup(more)) return;
-
-    expect(more.children).toContain(settingsNavItem);
-    expect(more.children.map((item) => item.label)).toEqual(
-      expect.arrayContaining(["Labels", "Problems"]),
-    );
-    expect(getSidebarGroupItems(more)).not.toContain(settingsNavItem);
-  });
-});
-
-// This is the regression test for the drift `getEntityNavGroup` replaced: a
-// hand-kept `Partial<Record<Entity, string>>` map in page-hero.tsx that fell
-// out of sync with `desktopNav` (the Cook/Data reorg moved products,
-// ingredients, usda-food, and image without the map following, and never
-// covered vendor/purchase/wish at all). Deriving from `desktopNav` instead
-// means an entity list route can't silently point nowhere or somewhere wrong.
-describe("getEntityNavGroup", () => {
-  const entityKeys = Object.keys(entities).filter(
-    (entity): entity is BrowserRoutedEntity => entity in entities,
-  );
-
-  it.each(entityKeys)(
-    "resolves entity %s to exactly one nav group",
-    (entity) => {
-      const listRoute = entities[entity].routes.list;
-      // Recomputed independently of getEntityNavGroup's implementation, so
-      // this also catches a route appearing in zero or multiple groups —
-      // the case getEntityNavGroup deliberately has no fallback for.
-      const matchingGroups = desktopNav.filter(
-        (node) =>
-          isNavGroup(node) &&
-          node.children.some((child) => child.to === listRoute),
-      );
-      expect(matchingGroups).toHaveLength(1);
-      expect(getEntityNavGroup(entity)).toBe(matchingGroups[0]);
-    },
-  );
 });

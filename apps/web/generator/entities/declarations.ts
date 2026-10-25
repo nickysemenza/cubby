@@ -222,6 +222,12 @@ export type EntityStorageField = Readonly<{
   defaultValue: DeclarationValue;
   reference: string | null;
   referenceOptions?: Readonly<{
+    onDelete?:
+      | "cascade"
+      | "restrict"
+      | "no action"
+      | "set null"
+      | "set default";
     column: string;
     onUpdate?:
       | "cascade"
@@ -260,9 +266,7 @@ export type EntityFieldModel = Readonly<{
     Record<string, EntityFieldModelMetadata["derived"][string]>
   >;
   /** `model.stored`: stored derived values that are not list fields (ADR 0021). */
-  stored: Readonly<
-    Record<string, EntityFieldModelMetadata["stored"][string]>
-  >;
+  stored: Readonly<Record<string, EntityFieldModelMetadata["stored"][string]>>;
   /** `model.rows`: to-many row sets a `via` may start at. */
   rows: Readonly<Record<string, EntityFieldModelMetadata["rows"][string]>>;
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;

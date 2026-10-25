@@ -1,365 +1,340 @@
-import { deviceOut } from "@cubby/schemas/device";
 import { shortcode } from "@cubby/schemas/identifiers";
-import { imageJobOut } from "@cubby/schemas/image-job";
+import { jobOut } from "@cubby/schemas/job-entity";
 import { runOut } from "@cubby/schemas/run";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
+import { z } from "zod";
 
-import type { JobFacts, QueueHealthSnapshot } from "~/contracts/job.contract";
+import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
-import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 
 import { QueueOverview, type QueueSearch } from "./queue-overview";
 
 installFeatures();
-
-const RUN_ID = shortcode("RUN-4K7M");
-const now = Date.now();
-const at = (minutes: number) => new Date(now + minutes * 60_000).toISOString();
-
-const leasedJob: JobFacts = {
-  id: "00000000-0000-4000-8000-000000000001",
-  key: "image-processing:00000000-0000-4000-8000-000000000002",
-  kind: "image.device",
-  state: "running",
-  generation: 1,
-  attempts: 0,
-  maxAttempts: 3,
-  priority: 0,
-  waitReason: null,
-  waitUntil: null,
-  availableAt: at(-5),
-  leaseExpiresAt: at(-1),
-  error: null,
-  cursor: null,
-  subject: null,
-  createdAt: at(-10),
-  updatedAt: at(-2),
-  ahead: null,
-  lane: "apple_device",
-  waitingOn: {
-    reason: "leased",
-    lane: "apple_device",
-    executor: "Fixture iPad",
-    executorDeviceId: null,
-    leasedAt: at(-3),
-    leaseExpiresAt: at(-1),
-    expired: true,
+const code = shortcode("JOB-4K7MN4K7MN");
+const run = mock(runOut, {
+  overrides: {
+    id: shortcode("RUN-4K7MN"),
+    displayName: "Synthetic photo Run",
+    purpose: "photo_inventory",
+    status: "running",
+    displayStatus: "running",
+    stalled: true,
+    waitingOn: "3 waiting for any Apple device",
   },
-  runId: RUN_ID,
-};
-
-const queue = {
-  counts: [
-    { lane: "apple_device", reason: "waiting_device", count: 41 },
-    { lane: "apple_device", reason: "leased", count: 3 },
-    { lane: "frontier_ai", reason: "waiting_funding", count: 12 },
-  ],
-  total: 56,
-  leases: [
-    { executor: "Fixture iPad", live: 0, expired: 1 },
-    { executor: "Fixture Mac", live: 2, expired: 0 },
-  ],
-  jobs: [leasedJob],
-};
-
-const health: QueueHealthSnapshot = {
-  measuredAt: at(-1),
-  kinds: [],
-  imageDisagreement: 4,
-  alerts: [
-    {
-      kind: "image.device",
-      code: "expired_leases",
-      evidence: "17 expired leases (threshold 10)",
-    },
-  ],
-};
-
-// List rows carry their display images beside the record fields.
-const listRow = <T extends object>(record: T) => ({
-  ...record,
-  displayImages: [],
 });
-
-const runPage = <T,>(items: T[]) => ({
-  items,
-  meta: { pageIndex: 0, pageSize: 50, totalCount: items.length },
+const work = mock(jobOut, {
+  overrides: {
+    id: code,
+    kind: "image.device",
+    lane: "apple_device",
+    state: "queued",
+    waitingOn: "Waiting for any Apple device",
+    runId: run.id,
+    runName: run.displayName,
+    imageId: null,
+    locationId: null,
+    error: "Synthetic retained diagnostic",
+    attempts: 0,
+  },
 });
-
-// Running Runs: only the stalled one needs attention.
-const runningRuns = runPage([
-  listRow(
-    mock(runOut, {
-      overrides: {
-        id: RUN_ID,
-        displayName: "Fixture member · Photo inventory",
-        status: "running",
-        displayStatus: "running",
-        stalled: true,
-        waitingOn: "41 waiting for any Apple device",
-      },
-    }),
-  ),
-  listRow(
-    mock(runOut, {
-      overrides: {
-        id: shortcode("RUN-4K7P"),
-        displayName: "Fixture member · Account sync",
-        status: "running",
-        displayStatus: "running",
-        stalled: false,
-      },
-    }),
-  ),
-]);
-
-// The declared attention view's rows, failures included.
-const stoppedRuns = runPage([
-  listRow(
-    mock(runOut, {
-      overrides: {
-        id: shortcode("RUN-4K7N"),
-        displayName: "Fixture member · Mail import",
-        status: "needs_review",
-        displayStatus: "retried",
-      },
-    }),
-  ),
-  listRow(
-    mock(runOut, {
-      overrides: {
-        id: shortcode("RUN-4K7Q"),
-        displayName: "Fixture member · Failed import",
-        status: "failed",
-        displayStatus: "failed",
-        stalled: false,
-      },
-    }),
-  ),
-  listRow(
-    mock(runOut, {
-      overrides: {
-        id: shortcode("RUN-4K7R"),
-        displayName: "Fixture member · Undelivered import",
-        status: "dispatch_failed",
-        displayStatus: "dispatch_failed",
-        stalled: false,
-      },
-    }),
-  ),
-]);
-const runFilters: unknown[] = [];
-
-const MAC = shortcode("DEV-4K7M");
-const devices = {
-  items: [
-    listRow(
-      mock(deviceOut, {
-        overrides: {
-          id: MAC,
-          name: "Fixture Studio Mac",
-          inactive: false,
-          updateRequired: true,
-        },
-      }),
-    ),
-    listRow(mock(deviceOut, { overrides: { inactive: true } })),
-  ],
-  meta: { pageIndex: 0, pageSize: 50, totalCount: 2 },
-};
-
-// One Apple lease and one cloud lease, both live.
-const processing = runPage([
-  listRow(
-    mock(imageJobOut, {
-      overrides: {
-        id: shortcode("IPR-4K7M"),
-        displayName: "Subject lift · fixture-boots.png",
-        state: "leased",
-        runId: null,
-        leaseDeviceId: MAC,
-        leaseExpiresAt: new Date(now + 45_000),
-      },
-    }),
-  ),
-  listRow(
-    mock(imageJobOut, {
-      overrides: {
-        id: shortcode("IPR-4K7N"),
-        displayName: "Image identification · fixture-label.png",
-        state: "leased",
-        runId: null,
-        leaseDeviceId: null,
-        leaseExpiresAt: new Date(now + 30_000),
-      },
-    }),
-  ),
-]);
-
-const answers = new Map<string, UnparsedStartOperationData>([
-  ["job.queue", queue],
-  [
-    "job.deviceBacklog",
-    {
-      waiting: 41,
-      runsWaiting: 2,
-      workingDevices: 0,
-      claimsPerMinute: 0,
-      etaSeconds: null,
-    },
-  ],
-  ["job.health", { snapshot: health }],
-  ["job.retryNow", { retried: 53 }],
-  [
-    "job.explain",
-    {
-      steps: [
-        {
-          ref: leasedJob.id,
-          kind: "job",
-          label: "image.device · fixture",
-          state: "running",
-          waitingOn: leasedJob.waitingOn,
-          detail: null,
-        },
-      ],
-      rollup: null,
-    },
-  ],
-]);
-
+const inputSchema = z.looseObject({ entity: z.string().optional() });
+const reads: unknown[] = [];
+const retried: unknown[] = [];
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restore: (() => void) | undefined;
-const retried: unknown[] = [];
 
 beforeEach(async () => {
   await page.viewport(1440, 1200);
-  harness = createBrowserTestHarness();
+  reads.length = 0;
   retried.length = 0;
-  runFilters.length = 0;
+  // Foreign page filters/sort must never leak into either embedded list.
+  harness = createBrowserTestHarness({
+    initialPath: "/?kind=foreign&sort=-date",
+  });
   restore = overrideStartDispatch(async (operation, input) => {
-    if (operation === "job.retryNow") retried.push(input);
     if (operation === "entity.list") {
-      const { entity, filters } = input as {
-        entity?: string;
-        filters?: { status?: string[] };
-      };
-      if (entity === "device") return { ok: true, data: devices };
-      if (entity === "imageJob") return { ok: true, data: processing };
-      runFilters.push(filters);
+      reads.push(input);
+      const { entity } = inputSchema.parse(input);
       return {
         ok: true,
-        data: filters?.status?.join() === "running" ? runningRuns : stoppedRuns,
+        data: {
+          // Complete rows carry their media.
+          items: (entity === "run" ? [run] : [work]).map((row) => ({
+            ...row,
+            displayImages: [],
+          })),
+          meta: {
+            pageIndex: 0,
+            pageSize: entity === "run" ? 10 : 25,
+            totalCount: entity === "run" ? 12 : 31,
+          },
+        },
       };
     }
-    const data = answers.get(operation);
-    if (data === undefined) throw new Error(`${operation} is not stubbed`);
-    return { ok: true, data };
+    if (operation === "derived.backlog")
+      return { ok: true, data: { total: 0, kinds: [] } };
+    if (operation === "entity.detail")
+      return {
+        ok: true,
+        data: mock(getEntityDetailOutputSchema("job"), {
+          overrides: {
+            ...work,
+            displayImages: [],
+            attachments: [],
+            redirectedFrom: null,
+            previousShortcodes: [],
+          },
+        }),
+      };
+    if (operation === "suggestions.recordCounts")
+      return { ok: true, data: { records: [] } };
+    if (operation === "entityMedia.displayImages")
+      return { ok: true, data: {} };
+    if (operation === "entity.graph")
+      return {
+        ok: true,
+        data: { nodes: [], edges: [], branches: [], truncated: false },
+      };
+    if (operation === "job.queue") {
+      reads.push({ operation, input });
+      return {
+        ok: true,
+        data: {
+          total: 3,
+          jobs: [],
+          leases: [],
+          counts: [
+            { lane: "apple_device", reason: "waiting_device", count: 3 },
+          ],
+        },
+      };
+    }
+    if (operation === "job.health")
+      return {
+        ok: true,
+        data: {
+          snapshot: {
+            measuredAt: new Date().toISOString(),
+            kinds: [],
+            imageDisagreement: 0,
+            alerts: [
+              {
+                kind: "image.device",
+                code: "expired_leases",
+                evidence: "Synthetic expired leases",
+              },
+            ],
+          },
+        },
+      };
+    if (operation === "job.deviceBacklog")
+      return {
+        ok: true,
+        data: {
+          waiting: 3,
+          runsWaiting: 1,
+          workingDevices: 0,
+          claimsPerMinute: 0,
+          etaSeconds: null,
+        },
+      };
+    if (operation === "job.explain")
+      return {
+        ok: true,
+        data: {
+          steps: [
+            {
+              ref: code,
+              kind: "job",
+              label: "Synthetic Job chain",
+              state: "queued",
+              waitingOn: null,
+              detail: "Synthetic retained diagnostic",
+            },
+          ],
+          rollup: null,
+        },
+      };
+    if (operation === "job.logs")
+      return {
+        ok: true,
+        data: {
+          status: "not_configured",
+          dashboardUrl: "https://example.test/logs",
+        },
+      };
+    if (operation === "job.retryNow") {
+      retried.push(input);
+      return { ok: true, data: { retried: 1 } };
+    }
+    throw new Error(`Unexpected operation ${operation}`);
   });
 });
-
 afterEach(() => {
   restore?.();
   harness.dispose();
 });
 
-const renderOverview = (search: QueueSearch = {}) =>
-  render(<QueueOverview search={search} onSearchChange={() => {}} />, {
-    wrapper: harness.wrapper,
-  });
-
-it("groups the queues by lane and reason, flags expired leases and the watchdog", async () => {
-  renderOverview();
-
-  const alert = await screen.findByTestId("queue-health");
-  expect(alert).toHaveTextContent("Queue unhealthy · 1 alert");
-  expect(alert).toHaveTextContent("17 expired leases (threshold 10)");
-
-  const reason = await screen.findByRole("link", {
-    name: "Waiting for any Apple device",
-  });
-  expect(reason.getAttribute("href")).toContain("lane=apple_device");
-  expect(reason.getAttribute("href")).toContain("reason=waiting_device");
-  expect(screen.getByText("Waiting for AI funding")).toBeVisible();
-  // Inactive installs leave the device count.
-  expect(
-    await screen.findByText("1 active Apple device · 1 need an update"),
-  ).toBeVisible();
-  expect(screen.getByText("1 expired lease")).toBeVisible();
-  expect(screen.getByText("Fixture Mac").closest("li")).toHaveTextContent(
-    "Fixture Mac2 in progress",
+function Overview() {
+  const [search, setSearch] = useState<QueueSearch>({});
+  return (
+    <QueueOverview
+      search={search}
+      onSearchChange={(patch) =>
+        setSearch((previous) => ({ ...previous, ...patch }))
+      }
+    />
   );
+}
 
-  // The declared attention view (failures included) plus stalled running
-  // Runs; a retried Run and a healthy running one leave the list.
-  await expect
-    .poll(() => screen.queryAllByTestId("attention-run").length)
-    .toBe(3);
-  const attention = screen.getAllByTestId("attention-run");
-  expect(attention.map((row) => row.textContent)).toEqual([
-    expect.stringContaining("Failed import"),
-    expect.stringContaining("Undelivered import"),
-    expect.stringContaining("Stalled"),
-  ]);
-  expect(runFilters).toContainEqual(
+it("embeds bounded attention and Job tables, scopes chips, and expands the selected Job's diagnostics", async () => {
+  render(<Overview />, { wrapper: harness.wrapper });
+  expect(await screen.findByTestId("queue-health")).toHaveTextContent(
+    "Synthetic expired leases",
+  );
+  expect(await screen.findByTestId("device-backlog")).toBeVisible();
+  const jobs = await screen.findByRole("table", { name: "Jobs table" });
+  expect(await within(jobs).findByText("image.device")).toBeVisible();
+  const closedRow = within(jobs)
+    .getAllByRole("row")
+    .find((row) =>
+      within(row).queryByRole("button", { name: `Explain ${code}` }),
+    );
+  if (!closedRow) throw new Error("Missing synthetic Job row");
+  expect(Math.round(closedRow.getBoundingClientRect().height)).toBe(32);
+  expect(screen.queryByText("Image work processing")).toBeNull();
+  await waitFor(() =>
+    expect(reads).toContainEqual(
+      expect.objectContaining({
+        entity: "run",
+        pagination: { pageIndex: 0, pageSize: 10 },
+        filters: expect.objectContaining({ needsAttention: true }),
+        sort: [
+          { orderBy: "stalled", direction: "desc" },
+          { orderBy: "startedAt", direction: "desc" },
+        ],
+      }),
+    ),
+  );
+  expect(reads).not.toContainEqual(
     expect.objectContaining({
-      status: [
-        "paused",
-        "paused_auth",
-        "needs_review",
-        "failed",
-        "dispatch_failed",
-      ],
+      filters: expect.objectContaining({ kind: ["foreign"] }),
     }),
   );
-
-  const row = (await screen.findAllByTestId("queue-job"))[0]!;
-  expect(row).toHaveTextContent("Lease expired");
-  expect(row).toHaveTextContent(
-    "Lease on Fixture iPad expired; waiting to be reclaimed",
-  );
-});
-
-it("confirms Retry now over the filtered set", async () => {
-  renderOverview({ lane: "apple_device", reason: "waiting_device" });
-
+  const all = await screen.findByRole("link", { name: "All 12" });
+  expect(all.getAttribute("href")).toContain("/runs");
+  expect(all.getAttribute("href")).toContain("needsAttention");
   await userEvent.click(
-    await screen.findByRole("button", { name: "Retry now" }),
+    await screen.findByRole("button", {
+      name: /Apple devices · Waiting for any Apple device 3/,
+    }),
   );
-  const dialog = await screen.findByRole("alertdialog");
-  expect(dialog).toHaveTextContent("Retry 56 Jobs now?");
-  await userEvent.click(
-    within(dialog).getByRole("button", { name: "Retry now" }),
-  );
-
-  await expect.poll(() => retried).toHaveLength(1);
-  expect(retried[0]).toMatchObject({
-    filter: { lanes: ["apple_device"], reasons: ["waiting_device"] },
-  });
-});
-
-it("warns when device work waits with no device pulling, and groups live leases by holder", async () => {
-  renderOverview();
-
-  const backlog = await screen.findByTestId("device-backlog");
-  expect(backlog).toHaveTextContent(
-    "41 images waiting for an Apple device · holding up 2 Runs",
-  );
-  expect(backlog).toHaveTextContent("No Apple device is processing.");
-
-  const rows = await screen.findAllByTestId("processing-image-job");
-  expect(rows.map((row) => row.textContent)).toEqual([
-    expect.stringMatching(/^Subject lift · fixture-boots\.png.*lease \d+s$/),
-    expect.stringMatching(
-      /^Image identification · fixture-label\.png.*Background maintenance/,
+  await waitFor(() =>
+    expect(reads).toContainEqual(
+      expect.objectContaining({
+        entity: "job",
+        filters: expect.objectContaining({
+          lane: ["apple_device"],
+          reason: ["waiting_device"],
+        }),
+      }),
     ),
-  ]);
-  expect(screen.getByText("Fixture Studio Mac")).toBeVisible();
-  // Cloud work never reads as an Apple device.
-  expect(screen.getByText("AI Gateway and unregistered devices")).toBeVisible();
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: `Explain ${code}` }),
+  );
+  expect(await screen.findByText("Synthetic Job chain")).toBeVisible();
+  expect(
+    await screen.findByText("Inline logs aren't configured"),
+  ).toBeVisible();
+  await userEvent.click(
+    within(screen.getByTestId("job-explain")).getByRole("button", {
+      name: "Retry now",
+    }),
+  );
+  await waitFor(() =>
+    expect(retried).toContainEqual({ filter: { codes: [code] } }),
+  );
+});
+
+it("retries the current filter without widening to other lanes", async () => {
+  render(
+    <QueueOverview
+      search={{ lane: "apple_device", reason: "waiting_device" }}
+      onSearchChange={() => {}}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Retry matching Jobs now" }),
+  );
+  await waitFor(() =>
+    expect(retried).toContainEqual({
+      filter: {
+        entityFilters: expect.objectContaining({
+          lane: ["apple_device"],
+          reason: ["waiting_device"],
+        }),
+      },
+    }),
+  );
+});
+
+it("retries selected Job codes through the same visible filter", async () => {
+  render(
+    <QueueOverview
+      search={{ lane: "apple_device" }}
+      onSearchChange={() => {}}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  const jobs = await screen.findByRole("table", { name: "Jobs table" });
+  await userEvent.click(
+    await within(jobs).findByRole("checkbox", { name: "Select row" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Retry 1 selected Job now" }),
+  );
+  await waitFor(() =>
+    expect(retried).toContainEqual({
+      filter: {
+        codes: [code],
+        entityFilters: expect.objectContaining({ lane: ["apple_device"] }),
+      },
+    }),
+  );
+});
+
+it("opens an Activity Job inspector at desktop width", async () => {
+  render(<Overview />, { wrapper: harness.wrapper });
+  const jobs = await screen.findByRole("table", { name: "Jobs table" });
+  await userEvent.click(await within(jobs).findByText("image.device"));
+  const dialog = await screen.findByRole("dialog", {
+    name: `Job ${code} preview`,
+  });
+  await waitFor(() => expect(dialog).toBeVisible());
+  expect(
+    await within(dialog).findByText("Synthetic retained diagnostic"),
+  ).toBeVisible();
+});
+
+it("requests navigable chip counts from the Job table population", async () => {
+  render(<Overview />, { wrapper: harness.wrapper });
+  await waitFor(() =>
+    expect(reads).toContainEqual(
+      expect.objectContaining({
+        operation: "job.queue",
+        input: expect.objectContaining({
+          filter: { entityFilters: {} },
+          pageSize: 1,
+        }),
+      }),
+    ),
+  );
 });

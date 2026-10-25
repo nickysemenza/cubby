@@ -142,7 +142,7 @@ export default defineEntity({
   identifiers: { brand: "EmailId", shortcode: "EML-" },
   presentation: {
     titleField: "displayName",
-    domain: "finance",
+    domain: "purchases",
     description: "Scanned mailbox messages, their Relevance and import status.",
     emptyState: {
       title: "No Emails yet",
@@ -289,7 +289,7 @@ export default defineEntity({
           columnGroup: "Review",
           listHidden: true,
           optionRole: "category",
-          optionColor: "domain-finance",
+          optionColor: "domain-purchases",
           optionGlyph: { phosphor: "ListChecks", sfSymbol: "checklist" },
         },
         validation: readOnly(mailboxClassificationStage.nullable()),

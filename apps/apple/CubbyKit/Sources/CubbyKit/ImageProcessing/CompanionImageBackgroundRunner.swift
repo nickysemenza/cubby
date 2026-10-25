@@ -1,7 +1,8 @@
 import Foundation
 
 protocol CompanionImageBackgroundTransport: Sendable {
-    func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
+    func deviceBacklog() async throws -> DeviceBacklogBanner?
+    func pull(hello: ImageProcessingHello, leaseSeconds: Int, maxCommands: Int) async throws
         -> PullCompanionImageProcessingOutput
     func complete(deviceID: String, result: ImageProcessingResult) async throws
     /// Hands a claim back; the server does not count a release as an attempt.
@@ -12,6 +13,8 @@ protocol CompanionImageBackgroundTransport: Sendable {
 }
 
 extension CompanionImageBackgroundTransport {
+    func deviceBacklog() async throws -> DeviceBacklogBanner? { nil }
+
     func release(deviceID: String, command: ImageProcessingCommand) async throws {
         guard let claim = CompanionImageCommandClaim(command) else {
             throw UnsupportedNativeResponse(
@@ -23,10 +26,15 @@ extension CompanionImageBackgroundTransport {
 }
 
 extension CubbyClient: CompanionImageBackgroundTransport {
-    func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
+    func deviceBacklog() async throws -> DeviceBacklogBanner? {
+        try await DeviceBacklogBanner.load(client: self)
+    }
+
+    func pull(hello: ImageProcessingHello, leaseSeconds: Int, maxCommands: Int) async throws
         -> PullCompanionImageProcessingOutput
     {
-        try await pullCompanionImageProcessing(.init(hello: hello, leaseSeconds: leaseSeconds))
+        try await pullCompanionImageProcessing(
+            .init(hello: hello, maxCommands: maxCommands, leaseSeconds: leaseSeconds))
     }
 
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
@@ -75,7 +83,7 @@ enum CompanionBackgroundOutcome: Sendable {
 /// foreground socket, so results are durable before either transport tries to send them, and
 /// both deliver through the one `CompanionResultDelivery` backoff. Claims use the resident
 /// worker's 60 s lease and the same `heartbeatInterval` renewals, so a window that ends
-/// mid-command loses at most one lease rather than holding a long claim.
+/// mid-command releases its unrecorded claims instead of holding long leases.
 actor CompanionImageBackgroundRunner {
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let delivery: CompanionResultDelivery
@@ -103,87 +111,133 @@ actor CompanionImageBackgroundRunner {
             }
     }
 
-    /// One bounded window: due results first (a set-aside one never blocks the rest or the pulls),
-    /// then up to `maximumJobs` claims.
+    /// A system-granted window. Pull only into free slots and keep results durable independently
+    /// of delivery. The task's cancellation releases both executing and just-returned claims.
     @discardableResult
     func run(
         transport: any CompanionImageBackgroundTransport,
-        hello: ImageProcessingHello, maximumJobs: Int = 4
+        hello: ImageProcessingHello, maximumJobs: Int = .max,
+        maximumConcurrentCommands: @escaping @Sendable () async -> Int = { 1 },
+        activity: (@Sendable (_ processed: Int, _ running: Int) async -> Void)? = nil
     ) async -> CompanionBackgroundOutcome {
         guard !isRunning, hello.participation.automaticWork else { return .settled }
         isRunning = true
         defer { isRunning = false }
-        let end = Date.now.addingTimeInterval(120)
-        var activeCommand: ImageProcessingCommand?
-        var resultsRemain = false
-        do {
-            switch try await delivery.deliverDue(
-                transport: transport, deviceID: hello.deviceId, limit: 8)
-            {
-            case .delivered: break
-            case .setAside: resultsRemain = true
-            case .updateRequired(let error): return .updateRequired(error)
-            }
-            if Date.now >= end { return .resumable }
-            for _ in 0..<maximumJobs {
-                try Task.checkCancellation()
-                let remaining = Int(end.timeIntervalSinceNow) - 5
-                guard remaining >= 20 else { return .resumable }
-                let pulled = try await transport.pull(
-                    hello: hello, leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
-                guard let command = pulled.command else {
-                    return resultsRemain ? .resumable : .settled
+        return await withTaskGroup(of: (CompanionBackgroundOutcome, Bool, Bool).self) { group in
+            var active = 0
+            var accepted = 0
+            var processed = 0
+            var resultsRemain = false
+            var exhausted = false
+            var stopped = false
+            var updateError: (any Error)?
+            do {
+                switch try await delivery.deliverDue(
+                    transport: transport, deviceID: hello.deviceId, limit: 8)
+                {
+                case .delivered: break
+                case .setAside: resultsRemain = true
+                case .updateRequired(let error): return .updateRequired(error)
                 }
-                guard !pulled.remotePaused else {
-                    return await released(command, transport: transport, hello: hello, or: .settled)
-                }
-                let metadata: CompanionImageCommandMetadata
-                do { metadata = try CompanionImageCommandMetadata(command) } catch {
-                    // Unsupported by this build: hand it back and leave the rest for a later window.
+                repeat {
+                    try Task.checkCancellation()
+                    let slots = CompanionImageConcurrency.slots(for: await maximumConcurrentCommands())
+                    if !stopped, !exhausted, accepted < maximumJobs, active < slots {
+                        let pulled = try await transport.pull(
+                            hello: hello,
+                            leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds,
+                            maxCommands: min(slots - active, maximumJobs - accepted))
+                        exhausted = pulled.commands.isEmpty
+                        for command in pulled.commands {
+                            if Task.isCancelled || pulled.remotePaused {
+                                let outcome = await released(
+                                    command, transport: transport, hello: hello, or: .resumable)
+                                if case .updateRequired(let error) = outcome { updateError = error }
+                                stopped = true
+                                continue
+                            }
+                            accepted += 1
+                            active += 1
+                            group.addTask {
+                                await self.process(command, transport: transport, hello: hello)
+                            }
+                        }
+                        await activity?(processed, active)
+                        if Task.isCancelled { throw CancellationError() }
+                        if pulled.remotePaused { stopped = true }
+                    }
+                    if active > 0, let (outcome, stopPulling, recorded) = await group.next() {
+                        stopped = stopped || stopPulling
+                        active -= 1
+                        if recorded { processed += 1 }
+                        switch outcome {
+                        case .settled:
+                            break
+                        case .resumable:
+                            resultsRemain = true
+                        case .updateRequired(let error):
+                            updateError = error
+                            stopped = true
+                            group.cancelAll()
+                        }
+                        await activity?(processed, active)
+                        // A completion frees a slot; probe again even if the previous pull was empty.
+                        if !stopped { exhausted = false }
+                    }
+                } while active > 0 || (!exhausted && !stopped && accepted < maximumJobs)
+            } catch {
+                stopped = true
+                group.cancelAll()
+                if CompanionResultDelivery.isClientUpdateRequired(error) {
+                    updateError = error
+                } else if !(error is CancellationError) {
                     failureObserver?(error)
-                    return await released(command, transport: transport, hello: hello, or: .settled)
                 }
-                activeCommand = command
-                guard
-                    let result = try await executeRenewing(
-                        command, metadata: metadata, transport: transport, deviceID: hello.deviceId)
-                else {
-                    // The server retired or reassigned this attempt: nothing to record or release.
-                    activeCommand = nil
-                    continue
-                }
-                if Task.isCancelled {
-                    return await released(
-                        command, transport: transport, hello: hello, or: .resumable)
-                }
-                let key = CompanionImageProcessingProtocol.attemptKey(
-                    jobID: metadata.jobID, attemptID: metadata.attemptID)
-                try await outbox.record(result, for: key)
-                let delivered = await delivery.deliver(
-                    result, key: key, transport: transport, deviceID: hello.deviceId)
-                // Before cancellation: a window ending as the server refuses this build still
-                // latches the worker, keeps the recorded result, and releases nothing.
-                if case .updateRequired(let error) = delivered { return .updateRequired(error) }
-                if Task.isCancelled {
-                    return await released(
-                        command, transport: transport, hello: hello, or: .resumable)
-                }
-                activeCommand = nil
-                if case .setAside = delivered { resultsRemain = true }
             }
-            return .resumable
-        } catch is CancellationError {
-            guard let activeCommand else { return .resumable }
-            return await released(activeCommand, transport: transport, hello: hello, or: .resumable)
+            // Cancellation-aware executions release before this system task reports completion.
+            for await (outcome, _, _) in group {
+                if case .updateRequired(let error) = outcome { updateError = error }
+            }
+            if let updateError { return .updateRequired(updateError) }
+            return stopped || resultsRemain || !exhausted ? .resumable : .settled
+        }
+    }
+
+    private func process(
+        _ command: ImageProcessingCommand, transport: any CompanionImageBackgroundTransport,
+        hello: ImageProcessingHello
+    ) async -> (CompanionBackgroundOutcome, Bool, Bool) {
+        // A released or refused lease is not a completed image. Count only durable results.
+        var recorded = false
+        do {
+            try Task.checkCancellation()
+            let metadata = try CompanionImageCommandMetadata(command)
+            guard
+                let result = try await executeRenewing(
+                    command, metadata: metadata, transport: transport, deviceID: hello.deviceId)
+            else { return (.settled, false, false) }
+            try Task.checkCancellation()
+            let key = CompanionImageProcessingProtocol.attemptKey(
+                jobID: metadata.jobID, attemptID: metadata.attemptID)
+            try await outbox.record(result, for: key)
+            recorded = true
+            let delivered = await delivery.deliver(
+                result, key: key, transport: transport, deviceID: hello.deviceId)
+            if case .updateRequired(let error) = delivered { return (.updateRequired(error), true, recorded) }
+            try Task.checkCancellation()
+            switch delivered {
+            case .delivered: return (.settled, false, recorded)
+            case .setAside: return (.resumable, false, recorded)
+            case .updateRequired(let error): return (.updateRequired(error), true, recorded)
+            }
         } catch {
-            if CompanionResultDelivery.isClientUpdateRequired(error) { return .updateRequired(error) }
-            if Task.isCancelled, let activeCommand {
-                return await released(
-                    activeCommand, transport: transport, hello: hello, or: .resumable)
-            } else if !Task.isCancelled {
-                failureObserver?(error)
+            if CompanionResultDelivery.isClientUpdateRequired(error) {
+                return (.updateRequired(error), true, recorded)
             }
-            return .resumable
+            if !(error is CancellationError) { failureObserver?(error) }
+            return (
+                await released(command, transport: transport, hello: hello, or: .resumable), true, recorded
+            )
         }
     }
 

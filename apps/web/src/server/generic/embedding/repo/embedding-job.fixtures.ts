@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntityRef } from "@cubby/schemas/search";
 import { eq } from "drizzle-orm";
 
@@ -22,9 +23,12 @@ export async function advanceEmbeddingFixture(
   await getDb(db)
     .update(job)
     .set({ availableAt: new Date(0) })
-    .where(eq(job.id, id));
+    .where(eq(job.id, parseEntityId("job", id)));
   await advanceJob(db, id, { "embedding.refresh": embeddingJobHandler(port) });
-  const [saved] = await getDb(db).select().from(job).where(eq(job.id, id));
+  const [saved] = await getDb(db)
+    .select()
+    .from(job)
+    .where(eq(job.id, parseEntityId("job", id)));
   if (!saved) throw new Error("Missing synthetic embedding execution");
   return saved;
 }

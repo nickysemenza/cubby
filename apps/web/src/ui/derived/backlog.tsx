@@ -6,16 +6,24 @@ import { Link } from "@tanstack/react-router";
 import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 
-export function DerivedBacklogFooter() {
+/** The shell status slot's derived backlog: shown only while values are updating. */
+export function DerivedBacklogStatus({
+  compact = false,
+}: {
+  compact?: boolean;
+}) {
   const { data } = useQuery(derived.backlog.queryOptions({}));
   if (!data?.total) return null;
+  const label = `Updating ${data.total} values`;
   return (
     <Link
       to="/activity"
       hash="derived-values"
-      className="block px-2 py-2 text-xs text-muted-foreground hover:text-foreground"
+      aria-label={compact ? label : undefined}
+      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
     >
-      Updating {data.total} values · Activity
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-info" />
+      {!compact && <span>{label}</span>}
     </Link>
   );
 }

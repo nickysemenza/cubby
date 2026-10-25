@@ -475,10 +475,12 @@ export const evaluateAppleImageDescriptionOutput = z.object({
  */
 export const pullCompanionImageProcessingInput = z.object({
   hello: imageProcessingHello,
+  maxCommands: z.int().min(1).max(16).optional(),
   leaseSeconds: z.int().min(20).max(300).default(60),
 });
 export const pullCompanionImageProcessingOutput = z.object({
   command: imageProcessingCommand.nullable(),
+  commands: z.array(imageProcessingCommand).max(16),
   remotePaused: z.boolean(),
 });
 export const completeCompanionImageProcessingInput = z.object({

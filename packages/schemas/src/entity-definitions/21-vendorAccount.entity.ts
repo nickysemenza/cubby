@@ -18,7 +18,7 @@ export default defineEntity({
   presentation: {
     list: {},
     titleField: "displayName",
-    domain: "finance",
+    domain: "purchases",
     description: "A member's purchasing relationship with a vendor.",
     emptyState: {
       title: "No vendor accounts yet",
