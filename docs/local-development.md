@@ -69,6 +69,19 @@ Debug Swift apps launched with `--cubby-dev-server <origin>` use
 cache without a browser redirect. This mode accepts only loopback HTTP servers
 and rejects redirects; it is absent from release app builds.
 
+For a Tailscale preview, set `CUBBY_DEV_PREVIEW_ORIGIN` to its exact HTTPS
+origin before starting `pnpm dev`, for example
+`https://dev.example.ts.net:8445`. This adds one trusted origin to the local
+Worker, Vite and Better Auth; checkout/database checks stay unchanged. Restart
+the runtime when changing it. HMR uses the browser's HTTPS host and port.
+
+Inspect `tailscale serve status --json` and choose an unused port, then publish
+with `tailscale serve --bg --https=8445 'http://[::1]:3000'`, using the actual
+local port from `pnpm dev status`. IPv6 localhost may work when `127.0.0.1`
+refuses connections. Preserve other Serve routes. Keep the supervisor running
+independently (`CUBBY_DEV_IDLE_MINUTES=0` disables idle shutdown), and open the
+HTTPS `/__dev/ready` and `/__dev/login` before sharing the preview link.
+
 A real checkout path determines a stable development id. Its database is
 `cubby_dev_<id>` (published at `localhost:55432`), and its Worker resources are named with
 that id. PostgreSQL's container is shared with every checkout and with test runs'

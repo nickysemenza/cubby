@@ -364,7 +364,9 @@ export default defineConfig(async ({ command }) => {
       // The supervisor already selected and advertised this origin.
       port: serverPort,
       strictPort: true,
-      allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
+      allowedHosts: profile?.vars.CUBBY_DEV_PREVIEW_ORIGIN
+        ? [new URL(profile.vars.CUBBY_DEV_PREVIEW_ORIGIN).hostname]
+        : [],
     },
     plugins: [
       // Permit the JS Self-Profiling API in dev (`window.__jsProfile`, see

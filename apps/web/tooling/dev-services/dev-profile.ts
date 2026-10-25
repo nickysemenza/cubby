@@ -123,12 +123,20 @@ function localVars({
   migrationCount,
   migrationHash,
 }: LocalSettings) {
+  const previewOrigin = inherited.CUBBY_DEV_PREVIEW_ORIGIN ?? "";
+  if (
+    previewOrigin &&
+    (new URL(previewOrigin).protocol !== "https:" ||
+      new URL(previewOrigin).origin !== previewOrigin)
+  )
+    throw new Error("CUBBY_DEV_PREVIEW_ORIGIN must be an exact HTTPS origin");
   const vars = {
     NODE_ENV: "development",
 
     SENTRY_ENVIRONMENT:
       inherited.CUBBY_DEV_TELEMETRY === "true" ? "development" : "test",
     APP_ORIGIN: origin,
+    CUBBY_DEV_PREVIEW_ORIGIN: previewOrigin,
     BETTER_AUTH_URL: origin,
     BETTER_AUTH_SECRET: createHash("sha256")
       .update(`cubby-local-${id}`)

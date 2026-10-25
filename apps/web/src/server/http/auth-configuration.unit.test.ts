@@ -24,6 +24,8 @@ it("refreshes auth policy and credentials when bindings change in a reused isola
   let token = "";
   const initial = await withCfEnv(
     bindings({
+      NODE_ENV: "development",
+      CUBBY_DEV_PREVIEW_ORIGIN: "https://dev.example.ts.net:8445",
       ALLOW_SIGNUP: "true",
       INSECURE_AUTH_COOKIES: "true",
       E2E_AUTH_TEST_MODE: "true",
@@ -40,6 +42,12 @@ it("refreshes auth policy and credentials when bindings change in a reused isola
       expect(auth.options.advanced.useSecureCookies).toBe(false);
       expect(auth.options.rateLimit.enabled).toBe(false);
       expect(auth.options.socialProviders.google).toBeDefined();
+      const trusted = auth.options.trustedOrigins;
+      expect(
+        typeof trusted === "function"
+          ? await trusted(new Request("https://dev.example.ts.net:8445"))
+          : trusted,
+      ).toContain("https://dev.example.ts.net:8445");
       token = await createPurchaseAgentOAuthState({
         state: "synthetic-state",
         verifier: "synthetic-verifier".repeat(4),

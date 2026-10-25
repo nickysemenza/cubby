@@ -24,6 +24,7 @@ type LocalDevEnv = Env &
   LocalStorageEnv & {
     DATABASE_URL: string;
     CUBBY_DEV_ID: string;
+    CUBBY_DEV_PREVIEW_ORIGIN: string;
     CUBBY_DEV_DB_NAME: string;
     CUBBY_DEV_PROFILE: "offline" | "integrations";
     CUBBY_DEV_MIGRATION_COUNT: string;
@@ -63,7 +64,8 @@ function assertLocalEnvironment(request: Request, env: LocalDevEnv) {
     !env.CUBBY_DEV_ID ||
     env.E2E_AUTH_TEST_MODE === "true" ||
     !loopback.has(origin.hostname) ||
-    new URL(request.url).origin !== origin.origin ||
+    (new URL(request.url).origin !== origin.origin &&
+      new URL(request.url).origin !== env.CUBBY_DEV_PREVIEW_ORIGIN) ||
     database.pathname.slice(1) !== env.CUBBY_DEV_DB_NAME ||
     !(
       loopback.has(hyperdrive.hostname) ||

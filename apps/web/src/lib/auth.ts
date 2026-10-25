@@ -263,7 +263,7 @@ function createAuth(env: AuthConfiguration) {
     // dev servers (which run on auto-assigned ports — see docs/development.md "Worktrees") can
     // perform auth POSTs. The session cookie itself isn't port-scoped (RFC 6265) and
     // lives in the shared DB, so an existing login already carries across ports; this
-    // only unblocks origin validation.
+    // only unblocks origin validation. Local previews also trust their explicit origin.
     //
     // In prod, trust only the mobile scheme. The custom domain is trusted
     // automatically as the baseURL.
@@ -271,6 +271,9 @@ function createAuth(env: AuthConfiguration) {
       ? (request) => {
           const base = [
             "cubby-mobile://",
+            ...(env.CUBBY_DEV_PREVIEW_ORIGIN
+              ? [env.CUBBY_DEV_PREVIEW_ORIGIN]
+              : []),
             "http://localhost:3000",
             "http://127.0.0.1:3000",
           ];

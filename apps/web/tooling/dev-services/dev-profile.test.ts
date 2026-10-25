@@ -93,3 +93,23 @@ test("dev profiles never redirect the gateway, and offline dev carries no key", 
   assert.equal(offline.vars.AI_GATEWAY_API_KEY, "");
   assert.equal("AI_GATEWAY_ID" in offline.vars, false);
 });
+
+// The preview changes request admission, not checkout/database selection.
+test("an explicit preview origin keeps the local checkout identity", () => {
+  const local = resolveDevProfile("/tmp/cubby-preview", {});
+  const preview = resolveDevProfile("/tmp/cubby-preview", {
+    CUBBY_DEV_PREVIEW_ORIGIN: "https://dev.example.ts.net:8445",
+  });
+  assert.equal(
+    preview.vars.CUBBY_DEV_PREVIEW_ORIGIN,
+    "https://dev.example.ts.net:8445",
+  );
+  assert.equal(preview.origin, local.origin);
+  assert.equal(preview.databaseUrl, local.databaseUrl);
+  assert.equal(preview.id, local.id);
+  assert.throws(() =>
+    resolveDevProfile("/tmp/cubby-preview", {
+      CUBBY_DEV_PREVIEW_ORIGIN: "https://dev.example.ts.net/path",
+    }),
+  );
+});
