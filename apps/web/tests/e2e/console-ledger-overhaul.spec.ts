@@ -20,7 +20,7 @@ test("desktop workspace sidebar marks the current page and collapses", async ({
     .click();
   await expect(page.getByRole("menu")).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(200);
+  await expect.poll(async () => (await sidebar.boundingBox())?.width).toBe(176);
   await expect(
     page.getByRole("link", { name: "Home", exact: true }),
   ).toHaveAttribute("aria-current", "page");
