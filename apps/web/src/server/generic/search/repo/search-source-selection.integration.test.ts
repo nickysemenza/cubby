@@ -14,12 +14,38 @@ import {
   makeLocationInput,
 } from "~/server/testing/repo.fixtures";
 
-import { prepareSearchDocuments } from "./search-document";
+import {
+  prepareSearchDocuments,
+  refreshSearchDocument,
+} from "./search-document";
 
 // A requested source must not compile unrelated entity branches into its SQL.
 // Stable source columns and recursive location paths must survive narrowing.
 describe("search source selection", () => {
   const ctx = withTestDb();
+
+  it("indexes a document whose body exceeds the full-text size limit", async () => {
+    // Distinct synthetic tokens: a tsvector over this whole body is ~2 MB.
+    const notes = Array.from(
+      { length: 180_000 },
+      (_, index) => `token${index.toString(36)}`,
+    ).join(" ");
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic oversized notes", notes }),
+      ctx.actor,
+    );
+    const result = await refreshSearchDocument(
+      ctx.db,
+      "product",
+      item.entityId,
+    );
+    expect(result.status).not.toBe("missing");
+    const stored = await unwrapDb(ctx.db).execute<{ length: number }>(sql`
+      SELECT length(body) AS length FROM "SearchDocument"
+       WHERE "entityId" = ${item.entityId}::uuid`);
+    expect(Number(stored.rows[0]?.length)).toBeGreaterThan(1_000_000);
+  });
 
   it("normalizes document text and query input with the same recipe", async () => {
     for (const text of [

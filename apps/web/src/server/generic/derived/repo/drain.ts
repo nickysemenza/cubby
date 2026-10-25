@@ -19,8 +19,9 @@ import {
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { findPgError } from "~/server/errors/db-errors";
 import {
   type DerivedComputed,
   type DerivedComputes,
@@ -368,6 +369,22 @@ const expandFanout = async (
     .map((row) => row.ref);
 };
 
+/** SQLSTATE data exception, integrity violation or program limit: the target's own data. */
+const isTargetDataError = (error: unknown) =>
+  /^(22|23|54)/.test(findPgError(error)?.code ?? "");
+
+/** The innermost cause carries the database's own message. */
+const errorChainMessage = (error: Error): string => {
+  const messages: string[] = [];
+  for (
+    let current: unknown = error;
+    current instanceof Error && messages.length < 8;
+    current = current.cause
+  )
+    messages.push(current.message.slice(0, 300));
+  return messages.reverse().join(" <- ");
+};
+
 /** Back off a target whose compute failed; other targets still publish. */
 const deferFailed = async (
   tx: Executor,
@@ -431,14 +448,32 @@ export async function publishDerivedPage(
       continue;
     }
     const sink = plan.sinks.get(target);
-    const changedIds = sink
-      ? await publishSink(db, declaration, marks, sink)
-      : await publishValues(
-          tx,
-          declaration,
-          marks,
-          plan.computed.get(target) ?? new Map(),
-        );
+    // A write the database rejects for one target's data (a value too long
+    // for its index, a constraint) rolls back alone and backs off; the rest
+    // of the page publishes. Transaction-level failures still fail the page.
+    // Inside the Job's transaction this is a savepoint.
+    let changedIds: readonly string[];
+    try {
+      changedIds = await withTransactionDatabase(db, (scoped) =>
+        sink
+          ? publishSink(scoped, declaration, marks, sink)
+          : publishValues(
+              unwrapDb(scoped),
+              declaration,
+              marks,
+              plan.computed.get(target) ?? new Map(),
+            ),
+      );
+    } catch (error) {
+      if (!isTargetDataError(error)) throw error;
+      await deferFailed(
+        tx,
+        target,
+        marks,
+        error instanceof Error ? errorChainMessage(error) : String(error),
+      );
+      continue;
+    }
     changed += changedIds.length;
     const reconciled = new Set(
       marks.filter((mark) => mark.priority === 2).map((mark) => mark.ref),

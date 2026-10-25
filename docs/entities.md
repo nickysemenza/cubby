@@ -2403,6 +2403,9 @@ declared dependents, so cascades stop at the first unchanged hop. Sink adapters
 return only records whose output or readiness changed; a recipe recalculation
 that only advances its computation timestamp does not propagate. A failing
 target backs off (30 seconds doubling to 15 minutes) and other targets publish.
+Each target publishes in its own savepoint: a write the database rejects for
+that target's data (SQLSTATE classes 22, 23, 54) backs off the same way with
+the database's message, while transaction-level failures retry the page.
 Value adapters write `DerivedValue`; sink adapters write their own tables
 (search documents with embedding admission, recipe totals, conversion
 coverage). Publication rings the existing reader notifications for every kind

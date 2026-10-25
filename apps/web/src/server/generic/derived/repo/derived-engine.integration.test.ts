@@ -9,7 +9,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, withTransaction } from "~/server/db/helpers";
+import { getDb, unwrapDb, withTransaction } from "~/server/db/helpers";
 import {
   inventoryEntry,
   email as emailTable,
@@ -30,6 +30,7 @@ import {
   publishAssessment,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
+import { derivedSink } from "~/server/generic/derived/repo/compute";
 import {
   claimDerivedMarks,
   markAllStoredDerived,
@@ -186,6 +187,42 @@ describe("stored derived values", () => {
     );
     expect(publication.categories).toContain("product");
     expect(publication.changes.product).toContain(created.id);
+  });
+
+  it("publishes the rest of a page when the database rejects one target's write", async () => {
+    const location = await makeLocation("Synthetic rejecting shelf");
+    const beans = await makeProduct("Synthetic rejected beans", 2);
+    const entry = await makeEntry(beans, location, 3);
+    const rejecting = {
+      ...derivedComputes,
+      // A sink whose write the database rejects for its data (SQLSTATE 22P02).
+      "search.product": derivedSink({
+        prepare: async () => null,
+        publish: async (tx) => {
+          await unwrapDb(tx).execute(sql`SELECT 'not a number'::int`);
+          return [];
+        },
+      }),
+    };
+    for (let page = 0; page < 20; page++) {
+      const claimed = await claimDerivedMarks(ctx.db);
+      if (claimed.every((mark) => mark.target === "product.searchDocument"))
+        break;
+      await publishDerivedPage(
+        ctx.db,
+        await prepareDerivedPage(ctx.db, rejecting, claimed),
+      );
+    }
+    expect((await valuation(entry))?.value).toBe(6);
+    const [failed] = (
+      await getDb(ctx.db).execute(sql`
+        SELECT attempts, "lastError" FROM "DerivedDirty"
+         WHERE target = 'product.searchDocument' AND ref = ${beans}`)
+    ).rows;
+    expect(failed).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("invalid input syntax"),
+    });
   });
 
   it("marks nothing for a save that changes no declared input", async () => {

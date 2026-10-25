@@ -635,6 +635,13 @@ async function markSearchDocumentMissing(
   return { status: "missing", entityKind, entityId };
 }
 
+/**
+ * PostgreSQL rejects a tsvector over 1 MB, which a record carrying a large
+ * encoded payload (an import's coverage digest) can exceed; the full-text
+ * index reads a bounded prefix while the stored body stays complete.
+ */
+const SEARCH_VECTOR_BODY_CHARS = 250_000;
+
 async function upsertSearchDocumentBatch(
   db: Database | DrizzleTransaction,
   entries: ReadonlyArray<{ source: SearchDocumentSource; body: string }>,
@@ -664,7 +671,7 @@ async function upsertSearchDocumentBatch(
       input.body, input.body, input."normalizedText",
       setweight(to_tsvector('simple', input.title), 'A') ||
       setweight(to_tsvector('simple', concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' '))), 'B') ||
-      setweight(to_tsvector('simple', input.body), 'D'), input."sourceHash"
+      setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_BODY_CHARS})), 'D'), input."sourceHash"
     FROM (VALUES ${sql.join(rows, sql`, `)}) AS input(
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "normalizedText", "sourceHash"
