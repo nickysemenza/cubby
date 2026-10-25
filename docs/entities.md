@@ -2703,6 +2703,14 @@ Run source changes enroll quality even when other families ignore Run execution
 metadata; progress-only projections still enroll no family. Old publications
 remain readable until refresh, and member waivers survive evidence changes.
 
+Email metadata persistence registers source intent only when it creates an Email,
+changes its stored metadata, or excludes a pending eligible legacy copy of the
+same message. A replay that does none of those leaves the Email and refresh Job
+tuples unchanged. Explicit member search still renews acquisition expiry and
+registers source intent; metadata changes retain the existing broad refresh
+contract. This does not reclassify evidence, resolve historical ownership, or
+replace member decisions.
+
 Expense uses stored TypeScript checks at rules version 1. One page-scoped
 loader reads its scalar fields, shared allocation/category completeness,
 product-expectation policy and display-image presence. Existing SQL domain
