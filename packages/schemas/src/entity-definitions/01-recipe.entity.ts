@@ -832,9 +832,12 @@ export default defineEntity(
               match: { ingredientId: "id" },
               columns: [
                 "name",
+                "shortcode",
                 "ingredientId",
+                "categoryId",
                 "fdc_id",
                 "labelNutrition",
+                "usdaUnavailable",
                 "price",
                 "deletedAt",
               ],

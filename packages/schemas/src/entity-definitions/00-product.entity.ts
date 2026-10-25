@@ -1,3 +1,5 @@
+import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { productReadSchemas } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
@@ -64,29 +66,6 @@ const KIT_COMPONENT_LINK = {
   dependent: "toEntityId",
   where: { kind: "productComponent" },
 };
-
-/** Rows the effective price reads (stored derived inputs, ADR 0021). */
-const PRICING_INPUTS: DerivedStoredInput[] = [
-  {
-    table: "Product",
-    match: { id: "id" },
-    columns: ["price", "categoryId", "deletedAt"],
-  },
-  {
-    table: "Expense",
-    match: { productId: "id" },
-    columns: [
-      "cost",
-      "productQuantity",
-      "lineKind",
-      "future",
-      "date",
-      "deletedAt",
-    ],
-  },
-  ...KIT_LINK_INPUTS,
-  { table: "ProductCategory", match: { id: "categoryId" } },
-];
 
 /** Rows the ledger quantities read: acquisition lines, stock and locations. */
 const QUANTITY_INPUTS: DerivedStoredInput[] = [
@@ -2229,73 +2208,6 @@ Rules:
             },
 
             {
-              table: "AiAnalysis",
-              match: { entityId: "id" },
-              path: [
-                {
-                  table: "EntityAttachment",
-                  from: "imageId",
-                  to: "entityId",
-                  where: { entityKind: "product" },
-                },
-              ],
-              where: { entityKind: "image", feature: "image-description" },
-            },
-            {
-              table: "AssessmentState",
-              match: { recordId: "id" },
-              path: [
-                {
-                  table: "EntityAttachment",
-                  from: "imageId",
-                  to: "entityId",
-                  where: { entityKind: "product" },
-                },
-              ],
-              where: { family: "image_description" },
-            },
-            {
-              table: "Assessment",
-              match: { subject: "id" },
-              path: [
-                {
-                  table: "EntityAttachment",
-                  from: "imageId",
-                  to: "entityId",
-                  where: { entityKind: "product" },
-                },
-              ],
-              where: { family: "image_description" },
-              json: { key: "recordId" },
-            },
-            {
-              table: "Feedback",
-              match: { assessmentId: "id" },
-              path: [
-                { table: "AssessmentState", from: "id", to: "recordId" },
-                {
-                  table: "EntityAttachment",
-                  from: "imageId",
-                  to: "entityId",
-                  where: { entityKind: "product" },
-                },
-              ],
-            },
-            {
-              table: "Image",
-              match: { id: "id" },
-              columns: ["sha256", "deletedAt"],
-              path: [
-                {
-                  table: "EntityAttachment",
-                  from: "imageId",
-                  to: "entityId",
-                  where: { entityKind: "product" },
-                },
-              ],
-            },
-
-            {
               table: "Ingredient",
               match: { id: "ingredientId" },
               columns: ["naKinds"],
@@ -2372,7 +2284,7 @@ Rules:
           type: "number",
           stored: {
             compute: "product.price",
-            inputs: PRICING_INPUTS,
+            inputs: PRODUCT_PRICING_INPUTS,
             dependsOn: [
               { entity: "product", key: "price", through: KIT_COMPONENT_LINK },
             ],
@@ -3792,6 +3704,7 @@ Rules:
     search: {
       mode: "semantic",
       inputs: [
+        ...imageDescriptionInputs("product"),
         {
           table: "EntityExternalId",
           match: { entityId: "id" },

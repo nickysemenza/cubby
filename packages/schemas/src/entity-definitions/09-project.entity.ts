@@ -81,6 +81,36 @@ const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
       },
     ],
   },
+  // A subtask's effective project belongs to its parent, not its null projectId.
+  {
+    table: "Task",
+    match: { parentTaskId: "id" },
+    columns: [
+      "dueDate",
+      "dueEndDate",
+      "status",
+      "parentTaskId",
+      "projectId",
+      "deletedAt",
+    ],
+    path: [{ table: "Task", from: "id", to: "projectId" }],
+  },
+  {
+    table: "Task",
+    match: { id: "id" },
+    columns: [
+      "dueDate",
+      "dueEndDate",
+      "status",
+      "parentTaskId",
+      "projectId",
+      "deletedAt",
+    ],
+    path: [
+      { table: "Task", from: "id", to: "parentTaskId" },
+      { table: "Task", from: "id", to: "projectId" },
+    ],
+  },
 ];
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({

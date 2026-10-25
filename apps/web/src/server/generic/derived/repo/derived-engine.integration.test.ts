@@ -4,7 +4,7 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -13,12 +13,18 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   inventoryEntry,
   email as emailTable,
+  entityLink,
+  expense,
   product,
   productUnitMappings,
+  recipe as recipeTable,
+  task as taskTable,
 } from "~/server/db/schema";
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
+import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import {
   publishAssessment,
@@ -36,6 +42,10 @@ import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-
 import {
   makeLocationInput,
   makeProductInput,
+  createProductIdentityFixture,
+  createRecipeFixture,
+  ingredientRef,
+  makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
@@ -422,6 +432,270 @@ describe("stored derived values", () => {
     `);
     await drain();
     expect(await body()).not.toContain("block plane");
+  });
+
+  it("refreshes recipe nutrition and both ingredient endpoints after Product edits", async () => {
+    const first = await findOrCreateIngredient(
+      ctx.db,
+      "Synthetic label ingredient",
+    );
+    const second = await findOrCreateIngredient(
+      ctx.db,
+      "Synthetic replacement ingredient",
+    );
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic labelled food",
+        ingredientId: first.id,
+        labelNutrition: {
+          servingGrams: 44,
+          nutrients: { kcal: 80 },
+          source: "Synthetic label",
+        },
+        unitMappings: [
+          {
+            a: { value: 1, unit: "each" },
+            b: { value: 44, unit: "g" },
+            source: "test",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const makeRecipe = (name: string, code: string) =>
+      createRecipeFixture(
+        ctx.db,
+        makeRecipeInput({
+          name,
+          sections: [
+            {
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                ingredientRef(code, { amounts: [{ value: 1, unit: "each" }] }),
+              ],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+    const original = await makeRecipe(
+      "Synthetic first recipe",
+      first.shortcode,
+    );
+    const replacement = await makeRecipe(
+      "Synthetic second recipe",
+      second.shortcode,
+    );
+    const totals = async (id: typeof original.entityId) =>
+      (
+        await getDb(ctx.db).query.recipe.findFirst({
+          where: eq(recipeTable.id, id),
+          columns: { totals: true },
+        })
+      )?.totals;
+    await drain();
+    expect((await totals(original.entityId))?.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 80,
+    });
+    await getDb(ctx.db)
+      .update(product)
+      .set({
+        labelNutrition: {
+          servingGrams: 44,
+          nutrients: { kcal: 160 },
+          source: "Synthetic revised label",
+        },
+      })
+      .where(eq(product.id, subject.entityId));
+    expect(
+      (await fanoutMarks("recipe.totals")).map((mark) => mark.ref),
+    ).toContain(first.id);
+    await drain();
+    expect((await totals(original.entityId))?.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 160,
+    });
+    await getDb(ctx.db)
+      .update(product)
+      .set({ ingredientId: second.id })
+      .where(eq(product.id, subject.entityId));
+    expect(
+      (await fanoutMarks("recipe.totals")).map((mark) => mark.ref),
+    ).toEqual(expect.arrayContaining([first.id, second.id]));
+    await drain();
+    expect((await totals(original.entityId))?.nutrition.kcal.status).toBe(
+      "unavailable",
+    );
+    expect((await totals(replacement.entityId))?.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 160,
+    });
+  });
+
+  it("refreshes sibling component prices while the kit price stays fixed", async () => {
+    const kit = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic fixed-price kit", price: 100 }),
+      ctx.actor,
+    );
+    const first = await makeProduct("Synthetic kit component A", null);
+    const second = await makeProduct("Synthetic kit component B", null);
+    const charge = await createRepoEntity(ctx, "expense", {
+      productId: kit.id,
+      cost: 100,
+      productQuantity: 1,
+      lineKind: "principal",
+      trade: "other",
+      future: false,
+    });
+    await attachProductComponents(
+      ctx.db,
+      kit.entityId,
+      [
+        { productId: first, quantity: 1 },
+        { productId: second, quantity: 1 },
+      ],
+      ctx.actor,
+    );
+    const price = async (id: ProductId) =>
+      (await loadStoredDerived(ctx.db, "product", [id], ["price"]))
+        .get(id)
+        ?.get("price")?.value;
+    await drain();
+    expect(await price(first)).toBe(50);
+    expect(await price(kit.entityId)).toBe(100);
+    await getDb(ctx.db)
+      .update(entityLink)
+      .set({ quantity: 2 })
+      .where(
+        and(
+          eq(entityLink.kind, "productComponent"),
+          eq(entityLink.fromEntityId, kit.entityId),
+          eq(entityLink.toEntityId, second),
+        ),
+      );
+    await drain();
+    expect(await price(kit.entityId)).toBe(100);
+    expect(await price(first)).toBeCloseTo(100 / 3, 2);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ cost: 150 })
+      .where(eq(expense.id, charge.entityId));
+    await drain();
+    expect(await price(kit.entityId)).toBe(100);
+    expect(await price(first)).toBe(50);
+  });
+
+  it("refreshes project dates for subtask date edits and old/new parents", async () => {
+    const first = await createRepoEntity(ctx, "project", {
+      name: "Synthetic project A",
+    });
+    const second = await createRepoEntity(ctx, "project", {
+      name: "Synthetic project B",
+    });
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Synthetic parent A",
+      projectId: first.output.id,
+      trade: "other",
+      due: null,
+    });
+    const otherParent = await createRepoEntity(ctx, "task", {
+      name: "Synthetic parent B",
+      projectId: second.output.id,
+      trade: "other",
+      due: null,
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "Synthetic dated subtask",
+      parentTaskId: parent.output.id,
+      due: { start: "2023-01-02", end: null },
+    });
+    const dates = async (id: typeof first.entityId) => {
+      const values = (
+        await loadStoredDerived(
+          ctx.db,
+          "project",
+          [id],
+          ["startDate", "completionYear"],
+        )
+      ).get(id);
+      return {
+        start: values?.get("startDate")?.value,
+        year: values?.get("completionYear")?.value,
+      };
+    };
+    await drain();
+    expect(await dates(first.entityId)).toEqual({
+      start: "2023-01-02",
+      year: "2023",
+    });
+    const emptyProjectDates = await dates(second.entityId);
+    await getDb(ctx.db)
+      .update(taskTable)
+      .set({ dueDate: "2024-03-04" })
+      .where(eq(taskTable.id, child.entityId));
+    await drain();
+    expect(await dates(first.entityId)).toEqual({
+      start: "2024-03-04",
+      year: "2024",
+    });
+    await getDb(ctx.db)
+      .update(taskTable)
+      .set({ parentTaskId: otherParent.entityId })
+      .where(eq(taskTable.id, child.entityId));
+    expect(
+      (await fanoutMarks("project.startDate")).map((mark) => mark.ref),
+    ).toEqual(expect.arrayContaining([parent.entityId, otherParent.entityId]));
+    await drain();
+    expect(await dates(first.entityId)).toEqual(emptyProjectDates);
+    expect(await dates(second.entityId)).toEqual({
+      start: "2024-03-04",
+      year: "2024",
+    });
+  });
+
+  it("refreshes unrounded inventory valuation when the stored Product price does not change", async () => {
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic two-unit acquisition", price: null }),
+      ctx.actor,
+    );
+    const location = await makeLocation("Synthetic precision shelf");
+    const entry = await makeEntry(subject.entityId, location, 2);
+    const charge = await createRepoEntity(ctx, "expense", {
+      productId: subject.id,
+      cost: 37.97,
+      productQuantity: 2,
+      lineKind: "principal",
+      trade: "other",
+      future: false,
+    });
+    const price = async () =>
+      (
+        await loadStoredDerived(
+          ctx.db,
+          "product",
+          [subject.entityId],
+          ["price"],
+        )
+      )
+        .get(subject.entityId)
+        ?.get("price")?.value;
+    await drain();
+    expect(await price()).toBe(18.99);
+    expect((await valuation(entry))?.value).toBeCloseTo(37.97, 6);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ cost: 37.98 })
+      .where(eq(expense.id, charge.entityId));
+    expect(
+      (await fanoutMarks("inventory.valuation")).map((mark) => mark.ref),
+    ).toContain(subject.entityId);
+    await drain();
+    expect(await price()).toBe(18.99);
+    expect((await valuation(entry))?.value).toBeCloseTo(37.98, 6);
   });
 
   it("recomputes dependents when a value they read changes", async () => {

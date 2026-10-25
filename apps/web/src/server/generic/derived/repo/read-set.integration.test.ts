@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 import { USDAClient } from "~/server/clients/usda";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
-import { image } from "~/server/db/schema";
+import { entityAttachment, image, product } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   createImageProcessingJob,
@@ -152,6 +152,18 @@ describe("stored derived read sets", () => {
       .update(image)
       .set({ sha256: hash })
       .where(eq(image.id, photo.id));
+    const [subject] = await getDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .limit(1);
+    if (!subject) throw new Error("Synthetic Product was not created");
+    // Attached descriptions must be traced for the owner as well as the Image.
+    await getDb(ctx.db).insert(entityAttachment).values({
+      entityKind: "product",
+      entityId: subject.id,
+      imageId: photo.id,
+      purpose: "item",
+    });
     await createImageProcessingJob(ctx.db, {
       imageId: parseEntityId("image", photo.id),
       kind: "subject_lift",

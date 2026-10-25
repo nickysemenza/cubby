@@ -2369,6 +2369,12 @@ values it reads, by column match, link table or join path. A unit test checks
 every declared table and column against the Drizzle schema: PL/pgSQL resolves
 trigger columns only when a row fires, so a misspelled column would fail saves.
 
+Inputs follow the precision and relationships of the compute. Exact valuations
+watch raw pricing inputs rather than a rounded stored price. Kit-link and
+acquisition changes mark every sibling component even when the kit's published
+price stays unchanged. Subtask date inputs follow their old and new parent Task
+endpoints to the parents' projects.
+
 Generated row triggers (`server/db/derived-trigger-ddl.ts`) mark work in the
 writer's transaction. A trigger upserts `DerivedDirty` for the saved row and its
 own old and new matched values, with a fresh `DerivedTicket` sequence value; it

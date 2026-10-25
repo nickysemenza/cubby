@@ -1,3 +1,4 @@
+import { productPricingInputsFor } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { inventoryReadSchemas } from "../inventory-fields";
 import { defineEntity } from "./definition.js";
@@ -620,68 +621,9 @@ export default defineEntity(
           stored: {
             compute: "inventory.valuation",
             inputs: [
-              {
-                table: "Expense",
-                match: { productId: "id" },
-                columns: [
-                  "cost",
-                  "productQuantity",
-                  "lineKind",
-                  "future",
-                  "date",
-                  "deletedAt",
-                ],
-                path: [
-                  { table: "InventoryEntry", from: "productId", to: "id" },
-                ],
-              },
-              {
-                table: "EntityLink",
-                match: { toEntityId: "id" },
-                path: [
-                  { table: "InventoryEntry", from: "productId", to: "id" },
-                ],
-                where: { kind: "productComponent" },
-              },
-              {
-                table: "EntityLink",
-                match: { fromEntityId: "id" },
-                path: [
-                  { table: "InventoryEntry", from: "productId", to: "id" },
-                ],
-                where: { kind: "productComponent" },
-              },
-              {
-                table: "Expense",
-                match: { productId: "id" },
-                columns: [
-                  "cost",
-                  "productQuantity",
-                  "lineKind",
-                  "future",
-                  "date",
-                  "deletedAt",
-                ],
-                path: [
-                  {
-                    table: "EntityLink",
-                    from: "fromEntityId",
-                    to: "toEntityId",
-                    where: { kind: "productComponent" },
-                  },
-                  { table: "InventoryEntry", from: "productId", to: "id" },
-                ],
-              },
-              {
-                table: "ProductCategory",
-                match: { id: "id" },
-                columns: ["parentId", "feature", "deletedAt"],
-                path: [
-                  { table: "Product", from: "categoryId", to: "id" },
-                  { table: "InventoryEntry", from: "productId", to: "id" },
-                ],
-              },
-
+              ...productPricingInputsFor([
+                { table: "InventoryEntry", from: "productId", to: "id" },
+              ]),
               {
                 table: "InventoryEntry",
                 match: { id: "id" },
@@ -693,17 +635,9 @@ export default defineEntity(
                 ],
               },
               {
-                table: "Product",
-                match: { id: "productId" },
-                columns: ["price", "deletedAt"],
-              },
-              {
                 table: "ProductUnitMapping",
                 match: { productId: "productId" },
               },
-            ],
-            dependsOn: [
-              { entity: "product", key: "price", match: { id: "productId" } },
             ],
           },
         },
