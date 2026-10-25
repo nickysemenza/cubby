@@ -19,6 +19,7 @@ export type InventoryPlacement = (typeof inventoryPlacementValues)[number];
 const featureColors = {
   food: "var(--chart-1)",
   books: "var(--chart-3)",
+  music: "var(--chart-3)",
   tools: "var(--chart-2)",
   "tool-consumables": "var(--chart-4)",
   "tool-accessories": "var(--chart-6)",

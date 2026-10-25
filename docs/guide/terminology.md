@@ -606,7 +606,7 @@ A value a record takes from another record rather than storing itself (a parent 
 _Avoid_: derived, computed, default; "Use no value"
 
 **My stuff**:
-The Inventory entries whose Owner is the viewing member. Wardrobe is My stuff narrowed to apparel, and other narrowed views (tools, books) work the same way; another member's stuff is the same view with that member as Owner.
+The Inventory entries whose Owner is the viewing member. Wardrobe narrows My stuff to the apparel category family. Books (`books` family) and Records (`music` family) include both the viewing member (`@me`) and explicitly shared stock (`@household`); another member's stuff is My stuff with that member as Owner.
 _Avoid_: my products, my collection, belongings
 
 **Device**:

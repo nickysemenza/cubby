@@ -1333,9 +1333,13 @@ the roster and sends unbranded. Values are ORed and match any entry. Product's
 derived `owners` (display format `resolvedList`: a label, an optional record,
 and whether it is only inherited) rolls up its live entries, resolved only for
 the rows on the page, and its owner filter adds `ownerPresenceFilter` plus
-Unlocated products whose single acquisition would hand the owner down. My stuff, Wardrobe (plus the
-`apparel` category family), Bought for me, and the ownership work queues are
-saved views over these filters.
+Unlocated products whose single acquisition would hand the owner down. My stuff,
+Wardrobe (`apparel` category family), Books (`books` family), Records (`music`
+family), Bought for me, and the ownership work queues are saved views over these
+filters. Books and Records include `@me` + `@household` owners and stock placement;
+Books groups the shelf by category level 2 (genre), while Records sorts by Product
+without grouping. Their home pins have orders 4 and 5, after Wardrobe (0), My stuff
+(1), the task view (2), and Needs a home (3).
 
 Native saved views compile column filters into operation JSON inputs, expanding
 nullable sentinels into presence filters and static range presets into their
@@ -3631,7 +3635,7 @@ references the most specific known node; its read-only `category` projection
 contains the complete root-first path and inherited behavior binding. Products
 can stop at any depth or remain unclassified. Filters include descendants.
 Names, aliases, descriptions, and display order are editable. Each feature
-(Food, Books, Tools, Software, …) is bound to exactly one category — usually a
+(Food, Books, Music, Tools, Software, …) is bound to exactly one category — usually a
 root, but a nested node may carry its own binding, which overrides its
 ancestors' (Tools › Tool consumables). A binding is permanent: it survives
 renames and moves and cannot be cleared, replaced, or deleted. Moving a subtree

@@ -11,6 +11,7 @@ import { productCategoryShortcode } from "./identifier-fields";
 export const productCategoryFeatureValues = [
   "food",
   "books",
+  "music",
   "tools",
   "tool-consumables",
   "tool-accessories",
