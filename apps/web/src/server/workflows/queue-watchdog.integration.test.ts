@@ -17,6 +17,7 @@ import {
 import {
   claimImageProcessingJob,
   createTransparentDerivativeAndJob,
+  repairImageProcessingExecution,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   imageProcessingLane,
@@ -217,6 +218,50 @@ describe("queue watchdog, explain and retention", () => {
       }),
     ).toMatchObject({ id: lift.jobId });
     expect((await execution(lift.jobId)).attempts).toBe(2);
+  });
+
+  // Review finding: the watchdog armed the wake outside a transaction, so a
+  // failure after the first marker committed but before its Job was created
+  // left a marker whose later revisions never create the Job.
+  it("creates the device wake on a later tick after a failed first arm", async () => {
+    const lift = await subjectLift();
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "retry_wait", availableAt: new Date(Date.now() + 60_000) })
+      .where(eq(job.key, `image-processing:${lift.jobId}`));
+    await getDb(ctx.db).delete(job).where(eq(job.key, "image.device.wake"));
+    await getDb(ctx.db)
+      .delete(jobInvalidation)
+      .where(eq(jobInvalidation.key, "image.device.wake"));
+    const database = getDb(ctx.db);
+    await database.execute(
+      sql.raw(`CREATE FUNCTION synthetic_reject_wake() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'synthetic wake enqueue failure'; END $$ LANGUAGE plpgsql`),
+    );
+    await database.execute(
+      sql.raw(`CREATE TRIGGER synthetic_reject_wake BEFORE INSERT ON "Job"
+      FOR EACH ROW WHEN (NEW.key = 'image.device.wake')
+      EXECUTE FUNCTION synthetic_reject_wake()`),
+    );
+    try {
+      await expect(repairImageProcessingExecution(ctx.db, 25)).rejects.toThrow(
+        "Failed query",
+      );
+    } finally {
+      await database.execute(
+        sql.raw(`DROP TRIGGER IF EXISTS synthetic_reject_wake ON "Job"`),
+      );
+      await database.execute(
+        sql.raw(`DROP FUNCTION IF EXISTS synthetic_reject_wake()`),
+      );
+    }
+    await repairImageProcessingExecution(ctx.db, 25);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: job.id })
+        .from(job)
+        .where(eq(job.key, "image.device.wake")),
+    ).toHaveLength(1);
   });
 
   // The migration's guard trigger names the never-exhausted kinds; a kind

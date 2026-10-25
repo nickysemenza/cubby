@@ -1096,8 +1096,12 @@ export async function repairImageProcessingExecution(
   // Device work an older build backed off never armed the wake, and the
   // drain never claims it; arming the existing wake while parked work exists
   // keeps it from idling until an unrelated ring or reconnect.
+  // One transaction: the first arm records the marker and creates the wake
+  // Job together, or a failure between them would leave a marker whose later
+  // revisions never create it.
   const parked = await parkedDeviceWork(db, new Date());
-  if (parked.due || parked.next) await armDeviceWake(db);
+  if (parked.due || parked.next)
+    await withImageProcessingTransaction(db, (tx) => armDeviceWake(tx));
   // Rows a pre-cutover writer left leased or device-waiting are open work.
   const reopened = await getDb(db)
     .update(imageProcessingJob)
