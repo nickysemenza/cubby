@@ -1599,9 +1599,19 @@ export async function completeImageProcessingJob(
     await recordChange(tx, {
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
-      // Selected descriptions are inputs to image and attached-owner search documents.
-      refresh: job.kind === "describe_image" ? (["search"] as const) : [],
     });
+    // A selected description is search text of the image and every record it
+    // is attached to: an input no column path reaches (ADR 0021).
+    if (job.kind === "describe_image")
+      await unwrapDb(tx).execute(sql`
+        SELECT derived_mark(owner.target, ARRAY[owner.ref])
+          FROM (
+            SELECT 'image.searchDocument' AS target, ${job.imageId}::uuid AS ref
+            UNION
+            SELECT a."entityKind" || '.searchDocument', a."entityId"
+              FROM "EntityAttachment" a
+             WHERE a."imageId" = ${job.imageId}::uuid
+          ) owner`);
     if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };
   });

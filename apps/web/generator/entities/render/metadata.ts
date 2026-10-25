@@ -138,11 +138,12 @@ export const renderEntityMetadataArtifacts = (
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {
       // `derived`/`rows`/`hierarchy`/`grouping` are emitted compiled, in
-      // entity-list-fields.gen.ts.
+      // entity-list-fields.gen.ts; `stored` in entity-stored-derived.gen.ts.
       const {
         sort: _sort,
         intents: _intents,
         derived: _derived,
+        stored: _stored,
         rows: _rows,
         hierarchy: _hierarchy,
         grouping: _grouping,
@@ -413,6 +414,56 @@ export const renderEntityMetadataArtifacts = (
                     ]
                   : [],
             ),
+            ...Object.entries(entity.fieldModel.stored).map(
+              ([key, stored]) => ({
+                entity: entity.key,
+                key,
+                table: entity.descriptor.dbTable ?? null,
+                type: "text",
+                stored,
+              }),
+            ),
+            // Search documents (ADR 0021): the record's own row, its
+            // attachments and attached images, plus declared related rows.
+            ...(entity.descriptor.searchable === true &&
+            typeof entity.descriptor.dbTable === "string"
+              ? [
+                  {
+                    entity: entity.key,
+                    key: "searchDocument",
+                    table: entity.descriptor.dbTable,
+                    type: "text",
+                    stored: {
+                      compute: `search.${entity.key}`,
+                      inputs: [
+                        {
+                          table: entity.descriptor.dbTable,
+                          match: { id: "id" },
+                        },
+                        {
+                          table: "EntityAttachment",
+                          match: { entityId: "id" },
+                          where: { entityKind: entity.key },
+                        },
+                        {
+                          table: "Image",
+                          match: { id: "id" },
+                          columns: ["deletedAt", "shortcode"],
+                          path: [
+                            {
+                              table: "EntityAttachment",
+                              from: "imageId",
+                              to: "entityId",
+                              where: { entityKind: entity.key },
+                            },
+                          ],
+                        },
+                        ...entity.searchInputs,
+                      ],
+                    },
+                  },
+                ]
+              : []),
             // Stored quality (ADR 0021): the record's own row, its waivers and
             // its attachments, plus the declared reads of its evaluator.
             ...(entity.dataQuality && entity.descriptor.dbTable

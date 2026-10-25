@@ -795,6 +795,67 @@ export default defineEntity(
         "cookbookId",
       ],
       audit: ["name", "forkedFromRecipeId"],
+      // Stored derived values that are not list fields (ADR 0021).
+      stored: {
+        totals: {
+          compute: "recipe.totals",
+          inputs: [
+            {
+              table: "Recipe",
+              match: { id: "id" },
+              // Its own output: publishing totals must not re-mark them.
+              except: ["totals", "totalsComputedAt"],
+            },
+            { table: "RecipeSection", match: { recipeId: "id" } },
+            {
+              table: "RecipeSectionIngredient",
+              match: { recipeSectionId: "id" },
+              path: [{ table: "RecipeSection", from: "id", to: "recipeId" }],
+            },
+            {
+              table: "ProductUnitMapping",
+              match: { productId: "id" },
+              path: [
+                { table: "Product", from: "id", to: "ingredientId" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+          ],
+          dependsOn: [
+            {
+              entity: "product",
+              key: "price",
+              path: [
+                { table: "Product", from: "id", to: "ingredientId" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+            {
+              entity: "recipe",
+              key: "totals",
+              path: [
+                { table: "Ingredient", from: "recipeId", to: "id" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+          ],
+        },
+      },
       derived: {
         cookbook: { via: "cookbook" },
         // Totals order only once computed; until then they read as absent.

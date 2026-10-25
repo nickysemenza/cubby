@@ -794,7 +794,14 @@ export default defineEntity({
   ],
   // `displayName` is a non-null projected title (the plant's), so
   // Cmd-K / `/search` can index plantings like every other named entity.
-  search: "semantic",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "semantic",
+    inputs: [
+      { table: "Plant", match: { id: "plantId" } },
+      { table: "Location", match: { id: "locationId" } },
+    ],
+  },
   capabilities: {
     timeline: "custom",
     images: {

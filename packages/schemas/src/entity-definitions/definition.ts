@@ -24,6 +24,7 @@ export type DerivedStoredInput = {
   match: Record<string, string>;
   columns?: string[];
   where?: Record<string, string>;
+  except?: string[];
   path?: {
     table: string;
     from: string;
@@ -1016,6 +1017,11 @@ const buildMetadataSchemas = () => {
       columns: z.array(nonEmptyString()).min(1).optional(),
       /** Only rows whose column holds this value count (a link kind). */
       where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+      /**
+       * Without `columns`: columns whose change never matters besides
+       * `updatedAt`, such as a value's own output column on its own row.
+       */
+      except: z.array(nonEmptyString()).min(1).optional(),
       /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
       path: derivedPathSchema.optional(),
       /**
@@ -1214,6 +1220,11 @@ const buildMetadataSchemas = () => {
         .record(derivedKey, entityDerivedFieldMetadataSchema)
         .optional()
         .default({}),
+      /**
+       * Stored derived values that are not list fields (ADR 0021): outputs a
+       * sink adapter writes to its own table, such as recipe totals.
+       */
+      stored: z.record(derivedKey, derivedStoreSchema).optional().default({}),
       rows: z
         .record(derivedKey, entityRowSetMetadataSchema)
         .optional()
@@ -2956,11 +2967,29 @@ const buildMetadataSchemas = () => {
        * `false`: not searchable.
        */
       search: z
-        .union([z.enum(["semantic", "lexical"]), z.literal(false)])
-        .transform((search) => ({
-          enabled: search !== false,
-          embedding: search === "semantic",
-        })),
+        .union([
+          z.enum(["semantic", "lexical"]),
+          z.literal(false),
+          /**
+           * With `inputs`: the related rows whose text the search document
+           * also reads (ADR 0021), beyond the record's own row, attachments
+           * and attached images.
+           */
+          z
+            .object({
+              mode: z.enum(["semantic", "lexical"]),
+              inputs: z.array(derivedInputSchema).min(1),
+            })
+            .strict(),
+        ])
+        .transform((search) => {
+          const mode = typeof search === "object" ? search.mode : search;
+          return {
+            enabled: mode !== false,
+            embedding: mode === "semantic",
+            inputs: typeof search === "object" ? search.inputs : [],
+          };
+        }),
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,
     })

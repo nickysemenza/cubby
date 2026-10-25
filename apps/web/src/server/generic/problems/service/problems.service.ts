@@ -306,6 +306,30 @@ const findProductCoverageProblems = async (
 };
 
 /** Provider work runs before the Job publication transaction. */
+/**
+ * Conversion coverage for the named Products, as the derived drain's sink
+ * prepares it (ADR 0021): compute outside the transaction, write the
+ * projection in the drain's publication.
+ */
+export async function prepareProductConversionCoverage(
+  db: Database,
+  productIds: readonly ProductId[],
+  usdaClient: UsdaFoodBatchPort,
+) {
+  const { projection } = await findProductCoverageProblems(db, usdaClient, [
+    ...productIds,
+  ]);
+  return {
+    projection,
+    async publish(tx: Database, ids: readonly string[]) {
+      const keep = new Set(ids);
+      const current = projection.filter((row) => keep.has(row.productId));
+      await writeProductConversionCoverageProjection(tx, current);
+      return current.map((row) => row.productId);
+    },
+  };
+}
+
 export async function prepareProductConversionCoveragePage(
   db: Database,
   options: { after?: string; limit: number; createdBefore?: string },

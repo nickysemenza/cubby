@@ -1,4 +1,4 @@
-import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   backgroundTaskMessageSchema,
   type BackgroundTaskMessage,
@@ -11,97 +11,48 @@ import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
-import { scheduleRefreshFamilies } from "~/server/generic/derived-refresh/repo/families";
+import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
+import {
+  type DerivedComputes,
+  derivedSink,
+} from "~/server/generic/derived/repo/compute";
 import {
   claimDerivedMarks,
+  markAllStoredDerived,
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
 import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
-import {
-  refreshFamilyHandler,
-  createProductionRefreshFamilyHandler,
-} from "~/server/workflows/background-tasks/refresh-families";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
 const frontierDrains = new WeakMap<Database, Promise<void>>();
 
-/** Fixture seeding and the offline E2E pump share one real Job drain per handle. */
+/** Fixture seeding and the offline E2E pump settle every derived mark per handle. */
 export function drainDerivedRefreshFrontier(
   db: Database,
-  maxPages = 10_000,
+  maxPages = 1_000,
 ): Promise<void> {
   const existing = frontierDrains.get(db);
   if (existing) return existing;
-  // Lists read published quality and stored derived values, so fixtures
-  // settle them alongside search.
-  const pending = drainFamilyJobs(db, "search", maxPages)
-    .then(() => drainStoredDerived(db))
-    .finally(() => frontierDrains.delete(db));
+  const pending = drainStoredDerived(db, maxPages).finally(() =>
+    frontierDrains.delete(db),
+  );
   frontierDrains.set(db, pending);
   return pending;
-}
-
-async function drainFamilyJobs(
-  db: Database,
-  family: "search",
-  maxPages: number,
-): Promise<void> {
-  const deadline = performance.now() + 30_000;
-  for (let page = 0; page < maxPages; page++) {
-    const [pending] = await getDb(db)
-      .select({ job, invalidated: unobservedJobInvalidation() })
-      .from(job)
-      .where(eq(job.key, `refresh:${family}`))
-      .then((rows) =>
-        rows.map((row) =>
-          Object.assign(row.job, { invalidated: row.invalidated }),
-        ),
-      );
-    if (!pending || (pending.state === "completed" && !pending.invalidated))
-      return;
-    // Families never exhaust; repeated failures ask for attention instead.
-    if (
-      ["failed", "cancelled", "paused"].includes(pending.state) ||
-      (pending.state === "retry_wait" &&
-        pending.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS)
-    )
-      throw new Error(
-        `Synthetic ${family} refresh stopped: ${pending.error ?? pending.state}`,
-      );
-    // Explicit fixture settlement does not wait for the scheduler's backoff clock.
-    await getDb(db)
-      .update(job)
-      .set({ availableAt: new Date(0) })
-      .where(eq(job.id, pending.id));
-    const outcome = await advanceJob(db, pending.id, {
-      "refresh.family": refreshFamilyHandler,
-    });
-    // A failed attempt can still be retry_wait. Read the durable state again
-    // so Job owns the retry budget and terminal errors retain its diagnostics.
-    if (outcome === "skipped") {
-      // Another runtime can already own the same durable Job; wait for its fenced publication.
-      if (performance.now() >= deadline)
-        throw new Error(
-          `Synthetic ${family} Job did not settle: ${pending.state}`,
-        );
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-  }
-  throw new Error(`Synthetic ${family} refresh exceeded ${maxPages} pages`);
 }
 
 /** Drain every ready derived mark through the production compute adapters. */
 export async function drainStoredDerived(
   db: Database,
   maxPages = 1_000,
+  computes: DerivedComputes = derivedComputes,
 ): Promise<void> {
   for (let page = 0; page < maxPages; page++) {
     const marks = await claimDerivedMarks(db);
     if (marks.length === 0) return;
-    const plan = await prepareDerivedPage(db, derivedComputes, marks);
+    const plan = await prepareDerivedPage(db, computes, marks);
     await publishDerivedPage(db, plan);
   }
   throw new Error(`Stored derived drain exceeded ${maxPages} pages`);
@@ -127,59 +78,54 @@ export async function derivedMarkTickets(
     .map((row) => row.ticket);
 }
 
-/** Settle only recipe intent using real Job ownership and an optional USDA fixture seam. */
+/** Settle derived marks with an optional recipe costing seam (a USDA fixture). */
 export async function drainRecipeRefreshJobs(
   db: Database,
   costing?: import("~/server/domains/recipe/repo/recipe-costing").RecipeCostingService,
-  maxPages = 10_000,
+  maxPages = 1_000,
 ): Promise<void> {
-  const handler = costing
-    ? createProductionRefreshFamilyHandler({
-        prepareRecipe: (tx, id) => costing.bindTo(tx).prepareRefresh(id),
-      })
-    : refreshFamilyHandler;
-  for (let page = 0; page < maxPages; page++) {
-    const [pending] = await getDb(db)
-      .select({ job, invalidated: unobservedJobInvalidation() })
-      .from(job)
-      .where(eq(job.key, "refresh:recipes"))
-      .then((rows) =>
-        rows.map((row) =>
-          Object.assign(row.job, { invalidated: row.invalidated }),
-        ),
-      );
-    if (!pending || (pending.state === "completed" && !pending.invalidated))
-      return;
-    // Families never exhaust; repeated failures ask for attention instead.
-    if (
-      ["failed", "cancelled", "paused"].includes(pending.state) ||
-      (pending.state === "retry_wait" &&
-        pending.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS)
-    )
-      throw new Error(
-        `Synthetic recipe refresh stopped: ${pending.error ?? pending.state}`,
-      );
-    const outcome = await advanceJob(db, pending.id, {
-      "refresh.family": handler,
-    });
-    if (outcome === "failed" || outcome === "skipped") {
-      const [settled] = await getDb(db)
-        .select()
-        .from(job)
-        .where(eq(job.id, pending.id));
-      throw new Error(
-        `Synthetic recipe refresh ${outcome}: ${settled?.error ?? settled?.state}`,
-      );
-    }
-  }
-  throw new Error(`Synthetic recipe refresh exceeded ${maxPages} pages`);
+  if (!costing) return drainStoredDerived(db, maxPages);
+  const recipeSink = derivedSink({
+    prepare: async (tx, ids) => {
+      const totals = new Map<
+        string,
+        Awaited<
+          ReturnType<
+            Awaited<ReturnType<typeof costing.prepareRefresh>>["compute"]
+          >
+        >
+      >();
+      for (const id of ids)
+        // SAFETY: the drain passes ids of `recipe.totals` marks only.
+        totals.set(
+          id,
+          await (
+            await costing.bindTo(tx).prepareRefresh(id as RecipeId)
+          ).compute(),
+        );
+      return totals;
+    },
+    publish: async (tx, ids, totals) => {
+      const updates = ids.flatMap((id) => {
+        const value = totals.get(id);
+        // SAFETY: the drain passes ids of `recipe.totals` marks only.
+        return value ? [{ id: id as RecipeId, totals: value }] : [];
+      });
+      await commitRecipeTotals(tx, { updates, freshOnlyIds: [] });
+      return updates.map((update) => update.id);
+    },
+  });
+  return drainStoredDerived(db, maxPages, {
+    ...derivedComputes,
+    "recipe.totals": recipeSink,
+  });
 }
 
-/** Exercise broad raw-SQL catch-up without manufacturing old frontier rows. */
+/** Exercise broad catch-up: mark every stored value, then drain. */
 export async function reconcileDerivedRefreshInputs(
   db: Database,
 ): Promise<void> {
-  await scheduleRefreshFamilies(db, { invalidate: true });
+  await markAllStoredDerived(db);
   await drainDerivedRefreshFrontier(db);
 }
 

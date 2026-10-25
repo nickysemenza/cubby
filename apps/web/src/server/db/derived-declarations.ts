@@ -17,6 +17,8 @@ export interface DerivedInput {
   readonly columns: readonly string[] | null;
   /** Only rows holding these column values count. */
   readonly where: Readonly<Record<string, string>> | null;
+  /** Without `columns`: columns besides `updatedAt` whose change never matters. */
+  readonly except: readonly string[];
   /** A join path from the matched value to this entity's ids. */
   readonly path: readonly DerivedPathStep[] | null;
   /** The matched column is JSON; values are `key` of the array at `array`. */
@@ -90,6 +92,7 @@ const storedEntry = z.object({
         match: z.record(z.string(), z.string()),
         columns: z.array(z.string()).optional(),
         where: z.record(z.string(), z.string()).optional(),
+        except: z.array(z.string()).optional(),
         path: z.array(pathStep).optional(),
         json: z
           .object({ array: z.array(z.string()), key: z.string() })
@@ -164,6 +167,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               entityColumn,
               columns: input.columns ?? null,
               where: input.where ?? null,
+              except: input.except ?? [],
               path: input.path ?? null,
               json: input.json ?? null,
             };

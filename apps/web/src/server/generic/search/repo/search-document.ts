@@ -27,7 +27,6 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
@@ -790,9 +789,6 @@ export async function refreshSearchDocuments(
 ): Promise<SearchDocumentRefreshResult[]> {
   if (refs.length === 0) return [];
   return withTransactionOn(db, async (tx) => {
-    // Standalone explicit refresh holds the same family row through current
-    // authoritative reads and publication. Later edits retain their Job intent.
-    await lockRefreshFamily(tx, "search");
     const prepared = await prepareSearchDocuments(tx, refs);
     return publishPreparedSearchDocuments(tx, prepared);
   });

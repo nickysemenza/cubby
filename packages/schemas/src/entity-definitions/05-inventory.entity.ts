@@ -1010,7 +1010,19 @@ export default defineEntity(
         },
       },
     ],
-    search: "semantic",
+    // Related rows the search document reads (ADR 0021).
+    search: {
+      mode: "semantic",
+      inputs: [
+        { table: "Product", match: { id: "productId" } },
+        { table: "Location", match: { id: "locationId" } },
+        {
+          table: "EntityExternalId",
+          match: { entityId: "productId" },
+          where: { entityKind: "product" },
+        },
+      ],
+    },
     capabilities: {
       images: {
         storage: false,

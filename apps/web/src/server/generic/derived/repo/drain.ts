@@ -20,9 +20,11 @@ import {
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
-import type {
-  DerivedComputed,
-  DerivedComputes,
+import {
+  type DerivedComputed,
+  type DerivedComputes,
+  type DerivedSink,
+  isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
 
 type Executor = ReturnType<typeof unwrapDb>;
@@ -48,6 +50,7 @@ type Mark = z.output<typeof markRow>;
 export interface DerivedPagePlan {
   readonly marks: readonly Mark[];
   readonly computed: ReadonlyMap<string, ReadonlyMap<string, DerivedComputed>>;
+  readonly sinks: ReadonlyMap<string, { sink: DerivedSink; prepared: unknown }>;
   readonly failed: ReadonlyMap<string, string>;
 }
 
@@ -91,6 +94,7 @@ export async function prepareDerivedPage(
   marks: readonly Mark[],
 ): Promise<DerivedPagePlan> {
   const computed = new Map<string, ReadonlyMap<string, DerivedComputed>>();
+  const sinks = new Map<string, { sink: DerivedSink; prepared: unknown }>();
   const failed = new Map<string, string>();
   for (const [target, group] of groupByTarget(marks)) {
     const parsed = parseTarget(target);
@@ -101,6 +105,16 @@ export async function prepareDerivedPage(
       continue;
     }
     try {
+      if (isDerivedSink(compute)) {
+        sinks.set(target, {
+          sink: compute,
+          prepared: await compute.prepare(
+            db,
+            group.map((mark) => mark.ref),
+          ),
+        });
+        continue;
+      }
       const values = new Map<string, DerivedComputed>();
       const ids = group.map((mark) => mark.ref);
       for (let start = 0; start < ids.length; start += DERIVED_COMPUTE_BATCH)
@@ -117,7 +131,7 @@ export async function prepareDerivedPage(
       );
     }
   }
-  return { marks, computed, failed };
+  return { marks, computed, sinks, failed };
 }
 
 const sortColumns = (
@@ -183,6 +197,30 @@ const propagate = async (
         priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
         "readyAt" = now()`);
   }
+};
+
+/** Publish a sink's prepared output for the marks still current, then clear them. */
+const publishSink = async (
+  tx: Executor,
+  declaration: StoredDerivedDeclaration,
+  marks: readonly Mark[],
+  { sink, prepared }: { sink: DerivedSink; prepared: unknown },
+): Promise<string[]> => {
+  const current = await tx.execute(sql`
+    SELECT d.ref::text AS ref FROM "DerivedDirty" d
+      JOIN jsonb_to_recordset(${JSON.stringify(
+        marks.map(({ ref, ticket }) => ({ ref, ticket })),
+      )}::jsonb) AS m(ref uuid, ticket bigint)
+        ON d.ref = m.ref AND d.ticket = m.ticket
+     WHERE d.target = ${declaration.target}
+     FOR UPDATE OF d`);
+  const ids = z
+    .array(z.object({ ref: z.string() }))
+    .parse(current.rows)
+    .map((row) => row.ref);
+  const changed = ids.length ? await sink.publish(tx, ids, prepared) : [];
+  await clearMarks(tx, declaration.target, marks);
+  return [...changed];
 };
 
 /** Write one target's computed values, returning the ids whose value changed. */
@@ -360,8 +398,15 @@ export async function publishDerivedPage(
       await deferFailed(tx, target, marks, failure);
       continue;
     }
-    const values = plan.computed.get(target) ?? new Map();
-    const changedIds = await publishValues(tx, declaration, marks, values);
+    const sink = plan.sinks.get(target);
+    const changedIds = sink
+      ? await publishSink(tx, declaration, marks, sink)
+      : await publishValues(
+          tx,
+          declaration,
+          marks,
+          plan.computed.get(target) ?? new Map(),
+        );
     changed += changedIds.length;
     const reconciled = new Set(
       marks.filter((mark) => mark.priority === 2).map((mark) => mark.ref),
@@ -404,9 +449,10 @@ export async function nextDerivedMarkAt(
 /** Mark every stored value at reconcile priority; publication reports drift. */
 export async function markAllStoredDerived(
   db: Database | DrizzleTransaction,
+  include: (declaration: StoredDerivedDeclaration) => boolean = () => true,
 ): Promise<number> {
   let marked = 0;
-  for (const declaration of storedDerivedDeclarations()) {
+  for (const declaration of storedDerivedDeclarations().filter(include)) {
     const result = await unwrapDb(db).execute(sql`
       INSERT INTO "DerivedDirty" (target, ref, priority)
       SELECT ${declaration.target}, t.id, 2 FROM ${ident(declaration.table)} t

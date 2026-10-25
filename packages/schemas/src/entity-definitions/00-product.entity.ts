@@ -2209,6 +2209,16 @@ Rules:
         // Tasks whose effective subject is the product.
         subjectTasks: { label: "Tasks", relation: "tasks" },
       },
+      // Stored derived values that are not list fields (ADR 0021).
+      stored: {
+        conversionCoverage: {
+          compute: "product.conversionCoverage",
+          inputs: [
+            { table: "Product", match: { id: "id" } },
+            { table: "ProductUnitMapping", match: { productId: "id" } },
+          ],
+        },
+      },
       derived: {
         brandId: { type: "text" },
         brandName: { via: "brand.name" },
@@ -3639,7 +3649,19 @@ Rules:
         },
       },
     ],
-    search: "semantic",
+    // Related rows the search document reads (ADR 0021).
+    search: {
+      mode: "semantic",
+      inputs: [
+        {
+          table: "EntityExternalId",
+          match: { entityId: "id" },
+          where: { entityKind: "product" },
+        },
+        { table: "Vendor", match: { id: "brandId" } },
+        { table: "ProductCategory", match: { id: "categoryId" } },
+      ],
+    },
     capabilities: {
       timeline: "custom",
       // Identity carries the weight: `dataQualityScore asc` is the enrichment

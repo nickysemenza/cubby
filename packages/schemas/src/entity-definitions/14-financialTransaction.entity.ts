@@ -1911,7 +1911,11 @@ export default defineEntity(
         ],
       },
     ],
-    search: "lexical",
+    // Related rows the search document reads (ADR 0021).
+    search: {
+      mode: "lexical",
+      inputs: [{ table: "FinancialAccount", match: { id: "accountId" } }],
+    },
     capabilities: {
       images: {
         storage: false,

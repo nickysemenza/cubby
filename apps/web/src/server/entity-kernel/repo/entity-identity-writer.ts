@@ -16,7 +16,6 @@ import {
   findPgError,
   type UnparsedDatabaseError,
 } from "~/server/errors/db-errors";
-import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 
 export type EntityPayloadValues<T extends PgTable> = InferInsertModel<T> & {
   shortcode: string;
@@ -90,7 +89,6 @@ export async function tombstoneEntityIdentities(
 ): Promise<void> {
   if (ids.length === 0) return;
   // Publication locks its Job before projection rows; removal uses that order too.
-  await lockRefreshFamily(tx, "search");
   // A tombstone has no derived values; the drain never republishes one.
   await tx.delete(derivedValue).where(inArray(derivedValue.entityId, [...ids]));
   await tx

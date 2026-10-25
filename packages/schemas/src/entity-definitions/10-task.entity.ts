@@ -1268,7 +1268,14 @@ export default defineEntity({
       },
     },
   ],
-  search: "semantic",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "semantic",
+    inputs: [
+      { table: "Project", match: { id: "projectId" } },
+      { table: "Product", match: { id: "subjectProductId" } },
+    ],
+  },
   capabilities: {
     timeline: "default",
     images: {

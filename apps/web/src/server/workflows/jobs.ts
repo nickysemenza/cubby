@@ -30,7 +30,6 @@ import {
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { embeddingJobHandler } from "~/server/workflows/background-tasks/embedding";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 import {
   runJobHandler,
   aiEvaluationJobHandler,
@@ -68,7 +67,6 @@ const backgroundHandlers = {
 export const productionJobHandlers: JobHandlers = {
   ...backgroundHandlers,
   "assessment.correction": correctionPropagationHandler,
-  "refresh.family": refreshFamilyHandler,
   "derived.drain": derivedDrainHandler(derivedComputes),
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,

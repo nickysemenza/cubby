@@ -5,13 +5,22 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
+import { derivedDirty } from "~/server/db/retained-tables";
 import {
   entityEmbedding,
   entityIdentity,
@@ -23,7 +32,6 @@ import type {
   PhysicalVectorMatch,
   VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 import {
   hasUnembeddedSearchDocuments,
   prepareSearchDocuments,
@@ -164,22 +172,18 @@ async function validatedScan(
       similarity: match.similarity,
     });
   }
+  // Per candidate kind (ADR 0021): coverage is unconfirmed only while one of
+  // these kinds has a pending search-document mark, not while any search
+  // work anywhere is queued (that held ~17k connection evaluations back).
   const [pending] = await getDb(db)
-    .select({ id: job.id })
-    .from(job)
+    .select({ ref: derivedDirty.ref })
+    .from(derivedDirty)
     .where(
-      and(
-        inArray(job.key, ["refresh:search", "refresh:embeddings"]),
-        or(
-          inArray(job.state, [
-            "queued",
-            "running",
-            "retry_wait",
-            "paused",
-            "failed",
-          ]),
-          unobservedJobInvalidation(),
-        ),
+      or(
+        ...kinds.flatMap((kind) => [
+          eq(derivedDirty.target, `${kind}.searchDocument`),
+          like(derivedDirty.target, `${kind}.searchDocument@%`),
+        ]),
       ),
     )
     .limit(1);

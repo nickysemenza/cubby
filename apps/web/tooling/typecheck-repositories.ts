@@ -38,7 +38,6 @@ export const repositoryOwners = [
   "src/server/generic/jobs/context.ts",
   "src/server/generic/jobs/repo/execution.ts",
   "src/server/generic/jobs/repo/device-admission.ts",
-  "src/server/generic/derived-refresh/repo/families.ts",
   "src/server/errors/db-errors.ts",
   "src/server/operation-runtime/start-operation.contract.ts",
 

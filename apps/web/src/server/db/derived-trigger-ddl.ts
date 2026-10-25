@@ -26,6 +26,7 @@ type TriggerInput = {
   tableColumn: string;
   columns: readonly string[] | null;
   where: Readonly<Record<string, string>> | null;
+  except: readonly string[];
   json: { readonly array: readonly string[]; readonly key: string } | null;
 };
 
@@ -49,12 +50,13 @@ const refsSql = (row: "OLD" | "NEW", input: TriggerInput) => {
 
 const markStatement = (input: TriggerInput) => {
   const column = ident(input.tableColumn);
+  const ignored = `ARRAY[${["updatedAt", ...input.except].map(literal).join(", ")}]`;
   const tracked = input.columns
     ? [...new Set([input.tableColumn, ...input.columns])]
     : null;
   const changed = tracked
     ? `(${tracked.map((name) => `OLD.${ident(name)}`).join(", ")}) IS DISTINCT FROM (${tracked.map((name) => `NEW.${ident(name)}`).join(", ")})`
-    : `(to_jsonb(OLD) - 'updatedAt') IS DISTINCT FROM (to_jsonb(NEW) - 'updatedAt')`;
+    : `(to_jsonb(OLD) - ${ignored}) IS DISTINCT FROM (to_jsonb(NEW) - ${ignored})`;
   // Row-valued comparison needs at least two members; one column compares directly.
   const changedCondition =
     tracked && tracked.length === 1
@@ -88,6 +90,7 @@ export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
             entry.tableColumn === input.tableColumn &&
             JSON.stringify(entry.columns) === JSON.stringify(input.columns) &&
             JSON.stringify(entry.where) === JSON.stringify(input.where) &&
+            JSON.stringify(entry.except) === JSON.stringify(input.except) &&
             JSON.stringify(entry.json) === JSON.stringify(input.json),
         )
       )
@@ -96,6 +99,7 @@ export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
           tableColumn: input.tableColumn,
           columns: input.columns,
           where: input.where,
+          except: input.except,
           json: input.json,
         });
       byTable.set(input.table, entries);

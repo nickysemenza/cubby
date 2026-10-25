@@ -555,6 +555,7 @@ const compileFieldModel = (
       output: [],
       sort: null,
       derived: {},
+      stored: {},
       rows: {},
       hierarchy: null,
       grouping: [],
@@ -894,6 +895,7 @@ const compileFieldModel = (
     output: policy("output"),
     sort,
     derived,
+    stored: model.stored,
     rows: model.rows,
     hierarchy,
     grouping: model.grouping ?? [],
@@ -2549,6 +2551,7 @@ export const compileEntity = (
     table,
     children: declaration.children,
     dataQuality,
+    searchInputs: declaration.search.inputs,
     classificationPolicies: declaration.capabilities.classificationPolicies,
   };
   if (hasGenericListOperation(compiled)) {

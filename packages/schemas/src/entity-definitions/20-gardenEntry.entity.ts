@@ -531,7 +531,18 @@ export default defineEntity({
   ],
   // `displayName` is a non-null projected title (kind · date · location), so
   // Cmd-K / `/search` can index garden entries like every other named entity.
-  search: "semantic",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "semantic",
+    inputs: [
+      { table: "Location", match: { id: "locationId" } },
+      {
+        table: "EntityLink",
+        match: { fromEntityId: "id" },
+        where: { kind: "gardenEntryPlanting" },
+      },
+    ],
+  },
   capabilities: {
     timeline: "default",
     images: {

@@ -8,7 +8,10 @@ import type { Entity } from "@cubby/schemas/entity";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { storedDerived } from "~/server/db/derived-declarations";
-import type { DerivedComputes } from "~/server/generic/derived/repo/compute";
+import {
+  type DerivedComputes,
+  isDerivedSink,
+} from "~/server/generic/derived/repo/compute";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 
 export interface StoredDerivedExplanation {
@@ -29,7 +32,10 @@ export async function explainStoredDerived(
   const compute = computes[declaration.compute];
   const [stored, live] = await Promise.all([
     loadStoredDerived(db, entity, [internalId], [key]),
-    compute ? compute(db, [internalId]) : Promise.resolve(null),
+    // A sink writes its own table; its explanation has no single live value.
+    compute && !isDerivedSink(compute)
+      ? compute(db, [internalId])
+      : Promise.resolve(null),
   ]);
   const read = stored.get(internalId)?.get(key);
   return {

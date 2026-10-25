@@ -23,4 +23,41 @@ export type DerivedCompute = (
   ids: readonly string[],
 ) => Promise<ReadonlyMap<string, DerivedComputed>>;
 
-export type DerivedComputes = Readonly<Record<string, DerivedCompute>>;
+
+
+/**
+ * An adapter whose output lives in its own table (search documents, recipe
+ * totals, conversion coverage) rather than `DerivedValue`. `prepare` runs
+ * outside the publication transaction; `publish` writes only the ids whose
+ * marks are still current and returns those whose output changed.
+ */
+export interface DerivedSink<Prepared = unknown> {
+  readonly kind: "sink";
+  prepare(
+    db: Database | DrizzleTransaction,
+    ids: readonly string[],
+  ): Promise<Prepared>;
+  publish(
+    tx: Database | DrizzleTransaction,
+    ids: readonly string[],
+    prepared: Prepared,
+  ): Promise<readonly string[]>;
+}
+
+export type DerivedAdapter = DerivedCompute | DerivedSink;
+
+/** A sink adapter with its prepared type erased for the registry. */
+export const derivedSink = <Prepared>(
+  sink: Omit<DerivedSink<Prepared>, "kind">,
+): DerivedSink => ({
+  kind: "sink",
+  prepare: sink.prepare,
+  // SAFETY: the drain hands `publish` exactly the value this sink's own
+  // `prepare` returned for the same page.
+  publish: (tx, ids, prepared) => sink.publish(tx, ids, prepared as Prepared),
+});
+
+export const isDerivedSink = (adapter: DerivedAdapter): adapter is DerivedSink =>
+  typeof adapter === "object" && adapter.kind === "sink";
+
+export type DerivedComputes = Readonly<Record<string, DerivedAdapter>>;

@@ -2045,7 +2045,11 @@ export default defineEntity({
       },
     },
   ],
-  search: "lexical",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "lexical",
+    inputs: [{ table: "Vendor", match: { id: "vendorId" } }],
+  },
   capabilities: {
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).

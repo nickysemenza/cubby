@@ -7,11 +7,6 @@ import {
   repositoryTransaction,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import {
-  refreshFamily,
-  invalidateRefreshFamily,
-  type RefreshFamily,
-} from "~/server/generic/derived-refresh/repo/families";
 
 /** Assessment saves register durable correction intent through the same composition boundary. */
 export async function recordAssessmentChange(
@@ -25,52 +20,33 @@ export async function recordAssessmentChange(
   await recordCorrectionWork(db, change);
 }
 
-/** Projection publications notify readers without restarting authoritative refresh. */
-export type RepositoryChange =
-  | { kind: "source"; categories: readonly string[] }
-  | {
-      kind: "projection";
-      categories: readonly string[];
-      /** Explicit downstream inputs; this does not infer or traverse dependencies. */
-      refresh?: readonly RefreshFamily[];
-    };
+/**
+ * Reader notifications. Derived work needs no registration here: generated
+ * triggers mark it in the writer's transaction (ADR 0021).
+ */
+export type RepositoryChange = {
+  kind: "source" | "projection";
+  categories: readonly string[];
+};
 
 /**
- * Register source intent and reader hints at the caller's commit boundary.
- * Source writers must pass their save transaction; a call after saving on a
- * pooled handle cannot make that earlier save atomic with Job enrollment.
+ * Notify readers of committed categories, and wake the Job drain after a
+ * source write commits so derived marks are worked promptly.
  */
 export async function recordChange(
   db: RepositoryQueryInput,
   change: RepositoryChange,
 ): Promise<void> {
-  // Run and audit writes feed no family; stored quality reads Run state
-  // through its generated triggers (ADR 0021).
-  const families =
-    change.kind === "projection"
-      ? (change.refresh ?? [])
-      : change.categories.length > 0 &&
-          change.categories.every(
-            (category) => category === "run" || category === "auditLog",
-          )
-        ? []
-        : refreshFamily.options;
-  if (families.length && !("rollback" in db) && !repositoryParentDatabase(db)) {
+  if (
+    change.kind === "source" &&
+    !("rollback" in db) &&
+    !repositoryParentDatabase(db)
+  ) {
     await repositoryTransaction(db, (tx) => recordChange(tx, change));
     return;
   }
   await recordCommittedChanges(db, change.categories);
-  for (const family of refreshFamily.options.filter((family) =>
-    families.includes(family),
-  ))
-    await repositoryBeforeCommit(
-      db,
-      (tx) => invalidateRefreshFamily(tx, family),
-      {
-        key: `refresh:${family}`,
-      },
-    );
-  if (!families.length) return;
+  if (change.kind !== "source") return;
   await repositoryBeforeCommit(
     db,
     async (tx) => {
@@ -80,6 +56,6 @@ export async function recordChange(
         await wakeJobs({ source: "repository.change" });
       });
     },
-    { key: "refresh:wake" },
+    { key: "derived:wake" },
   );
 }

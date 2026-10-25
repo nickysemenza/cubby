@@ -340,8 +340,8 @@ export function maintenanceStepDrivers(
     }),
     "derived-refresh": onceStep(async ({ db }) => {
       await (
-        await import("~/server/generic/derived-refresh/repo/families")
-      ).scheduleRefreshFamilies(db, { invalidate: true });
+        await import("~/server/generic/derived/repo/drain")
+      ).markAllStoredDerived(db);
       return { done: 0, meta: detail({ admitted: true }) };
     }),
     calendar: onceStep(async () => {

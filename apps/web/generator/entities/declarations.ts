@@ -259,6 +259,10 @@ export type EntityFieldModel = Readonly<{
   derived: Readonly<
     Record<string, EntityFieldModelMetadata["derived"][string]>
   >;
+  /** `model.stored`: stored derived values that are not list fields (ADR 0021). */
+  stored: Readonly<
+    Record<string, EntityFieldModelMetadata["stored"][string]>
+  >;
   /** `model.rows`: to-many row sets a `via` may start at. */
   rows: Readonly<Record<string, EntityFieldModelMetadata["rows"][string]>>;
   hierarchy: Readonly<{ parentField: string; maxDepth: number }> | null;
@@ -385,6 +389,8 @@ export type CompiledEntity = Readonly<{
   children: readonly ChildTableMetadata[];
   /** `capabilities.dataQuality`, or null for an unscored entity. */
   dataQuality: EntityDeclarationMetadata["capabilities"]["dataQuality"];
+  /** `search.inputs`: related rows a search document reads (ADR 0021). */
+  searchInputs: EntityDeclarationMetadata["search"]["inputs"];
   /** `capabilities.classificationPolicies`; validated cross-entity. */
   classificationPolicies: EntityDeclarationMetadata["capabilities"]["classificationPolicies"];
 }>;

@@ -112,6 +112,11 @@ export const markRecipesStale = async (
   await withTransactionOn(db, async (tx) => {
     await unwrapDb(tx).execute(sql`UPDATE ${recipe} SET "totalsComputedAt"=NULL
       WHERE ${inArray(recipe.id, ids)} AND ${notDeleted(recipe)}`);
+    // `totalsComputedAt` is the value's own output, which its trigger
+    // ignores; mark the recompute explicitly (ADR 0021).
+    await unwrapDb(tx).execute(
+      sql`SELECT derived_mark('recipe.totals', ${`{${ids.join(",")}}`}::uuid[])`,
+    );
     await recordChange(tx, { kind: "source", categories: ["recipe"] });
   });
 };

@@ -1887,7 +1887,14 @@ Rules:
       },
     },
   ],
-  search: "lexical",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "lexical",
+    inputs: [
+      { table: "Project", match: { id: "projectId" } },
+      { table: "Purchase", match: { id: "purchaseId" } },
+    ],
+  },
   capabilities: {
     images: {
       storage: false,

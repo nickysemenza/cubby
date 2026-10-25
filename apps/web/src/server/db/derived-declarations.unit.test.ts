@@ -42,6 +42,7 @@ describe("stored derived declarations", () => {
         ...missing(input.table, [
           input.tableColumn,
           ...(input.columns ?? []),
+          ...input.except,
           ...Object.keys(input.where ?? {}),
         ]),
         ...missing(declaration.table, [input.entityColumn]),

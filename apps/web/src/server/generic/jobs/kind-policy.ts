@@ -66,9 +66,6 @@ export const JOB_KIND_POLICY = {
   // Rings companions when parked device work comes due (docs/jobs.md#image-processing).
   "image.device.wake": { ...SERVER, retry: MAINTENANCE_RETRY },
   "jobs.retention": { ...SERVER, retry: MAINTENANCE_RETRY },
-  // Derived refresh passes never restart on capture, so no capture can wake
-  // a failed one; they back off instead of failing.
-  "refresh.family": { ...SERVER, retry: MAINTENANCE_RETRY },
   // The derived drain and reconcile never fail: a failing page backs off (ADR 0021).
   "derived.drain": { ...SERVER, retry: MAINTENANCE_RETRY },
   "derived.reconcile": { ...SERVER, retry: MAINTENANCE_RETRY },
