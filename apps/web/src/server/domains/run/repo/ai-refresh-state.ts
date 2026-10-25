@@ -100,11 +100,12 @@ const supersededReceipt = z.object({ supersededBy: z.uuid() });
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 /**
- * Bound on a work key's chain walk. Reopens after a supersession do not use
- * the reopen budget (an input can change back and forth before anything
- * runs), so a chain can be longer than the budget.
+ * Safety bound on a work key's chain walk. Reopens after a supersession do
+ * not use the reopen budget (an input can change back and forth before
+ * anything runs), so a chain can be longer than the budget; reaching this
+ * bound is a fault, never a tip.
  */
-const MAX_CHAIN_HOPS = 256;
+const MAX_CHAIN_HOPS = 10_000;
 
 /**
  * The row a work key's retries and reopens currently end at, with its reopen
@@ -118,10 +119,13 @@ async function workKeyTip(
 ) {
   let tip = base;
   let reopens = 0;
-  let reopenRows = 0;
-  for (let hop = 0; tip && hop <= MAX_CHAIN_HOPS; hop++) {
+  for (let hop = 0; tip; hop++) {
     const next = retryReceipt.safeParse(tip.receipt).data?.retryEvaluationId;
     if (!next) break;
+    if (hop >= MAX_CHAIN_HOPS)
+      throw new Error(
+        `Evaluation chain for ${workKey} exceeds ${MAX_CHAIN_HOPS} links`,
+      );
     const [row] = await getDb(db)
       .select()
       .from(aiEvaluation)
@@ -131,11 +135,30 @@ async function workKeyTip(
     tip = row;
     // An operator retry of a reopen (`<workKey>:reopen:<n>:operator-retry:<k>`)
     // also counts toward the cap; a reopen of superseded work does not.
-    if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) {
-      reopenRows++;
-      if (!supersededReceipt.safeParse(previous.receipt).success) reopens++;
-    }
+    if (
+      row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`) &&
+      !supersededReceipt.safeParse(previous.receipt).success
+    )
+      reopens++;
   }
+  // The next reopen key follows the highest one that exists, so it never
+  // collides with a row the walk did not reach.
+  const reopenKeys = await getDb(db)
+    .select({ workKey: aiEvaluation.workKey })
+    .from(aiEvaluation)
+    .where(
+      sql`starts_with(${aiEvaluation.workKey}, ${`${workKey}${REOPEN_SEPARATOR}`})`,
+    );
+  const reopenRows = Math.max(
+    0,
+    ...reopenKeys.map(
+      (row) =>
+        Number.parseInt(
+          row.workKey.slice(`${workKey}${REOPEN_SEPARATOR}`.length),
+          10,
+        ) || 0,
+    ),
+  );
   const [owner] =
     tip && ["blocked", "obsolete", "cancelled"].includes(tip.state)
       ? await getDb(db)

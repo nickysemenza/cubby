@@ -402,6 +402,75 @@ describe("AI refresh scheduling admission", () => {
     expect(jobs.filter((row) => row.state === "queued")).toHaveLength(1);
   });
 
+  // Review finding: reopen keys were numbered from the rows the chain walk
+  // reached, so a reopen row beyond the walk's bound made the next reopen
+  // reuse its key, hit the conflict, and schedule nothing again.
+  it("numbers a reopen after every reopen row that exists", async () => {
+    const recordId = crypto.randomUUID();
+    const productTarget = (inputFingerprint: string) => ({
+      target: aiEvaluationTarget.parse({
+        kind: "product",
+        entity: "product",
+        recordId,
+        field: null,
+        assessmentIds: [],
+      }),
+      provenance: aiProvenance.parse({
+        dependencies: [],
+        inputFingerprint,
+        optionFingerprint: "",
+        model: null,
+      }),
+      snapshot: {},
+    });
+    const request = {
+      ...input("product-unreached"),
+      input: aiRefreshRunInput.parse({
+        ...input("product-unreached").input,
+        mailboxId: undefined,
+      }),
+    };
+    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+      productTarget("synthetic-a"),
+    ]);
+    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+      productTarget("synthetic-b"),
+    ]);
+    const [first] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.feature, "product-identity"),
+          eq(aiEvaluation.state, "cancelled"),
+        ),
+      );
+    if (!first) throw new Error("Expected the superseded evaluation");
+    // A reopen row of A that no receipt links to (beyond any walk).
+    await getDb(ctx.db)
+      .insert(aiEvaluation)
+      .values({
+        ...first,
+        id: crypto.randomUUID(),
+        workKey: `${first.workKey}:reopen:1`,
+        state: "obsolete",
+        receipt: null,
+      });
+    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
+      productTarget("synthetic-a"),
+    ]);
+    const queued = await getDb(ctx.db)
+      .select({ workKey: aiEvaluation.workKey })
+      .from(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.feature, "product-identity"),
+          eq(aiEvaluation.state, "queued"),
+        ),
+      );
+    expect(queued).toEqual([{ workKey: `${first.workKey}:reopen:2` }]);
+  });
+
   it("does not join a new activation's work to an older policy Run", async () => {
     const request = (revision: number) => ({
       ...input(`policy-${revision}`),
