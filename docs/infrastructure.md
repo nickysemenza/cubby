@@ -981,9 +981,19 @@ The existing Job logs include `jobKey`, generation and Job identity; publish/fai
 logs also retain `publicationStartedAt` and `publicationDurationMs` when a
 publication was attempted. Compare those intervals and the exact refresh key
 with the aborted transaction interval to find candidate competing publications.
-Overlap alone cannot prove which writer replaced the tuple. Current Job idleness
-does not establish whether a page published during the failed request, and pool
-slot timeout `58000` remains a separate diagnostic from serialization `40001`.
+Overlap alone cannot prove which writer replaced the tuple. Job publication
+intervals exclude business writes during handler preparation and source
+invalidation from other callers. Email metadata persistence registers source
+intent even when its metadata comparison finds no changed columns; an explicit
+member search separately renews acquisition expiry. The finance intake PostgreSQL
+regression coordinates this real persistence path on a second client, checks
+committed search Job generation and tuple replacement, and distinguishes
+unchanged metadata from renewed acquisition metadata. One conflict recovers;
+three conflicts roll back admission completely and exact replay commits once.
+This synthetic writer proof does not identify a production competing writer.
+Current Job idleness does not establish whether a page published during the
+failed request, and pool slot timeout `58000` remains a separate diagnostic from
+serialization `40001`.
 
 Authenticated Start, workflow-stream, HTTP and MCP failures follow the
 [raw diagnostic contract](agents/domain-rules.md#error-diagnostics). Only credential-shaped

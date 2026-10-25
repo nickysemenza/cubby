@@ -9,9 +9,12 @@ import { z } from "zod";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb } from "~/server/db/helpers";
 import { ledgerParty } from "~/server/db/schema";
+import {
+  readEmail,
+  saveMailboxMetadata,
+} from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as refreshFamilies from "~/server/generic/derived-refresh/repo/families";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { systemPrincipal } from "~/server/http/authenticate";
 
 import { sourceTransactionRecordHandlers } from "./source-transaction-record.server";
@@ -33,25 +36,18 @@ const abortedAttempt = z.object({
   durationMs: z.number(),
   retry: z.boolean(),
 });
-const publicationLog = z.object({
-  scope: z.literal("jobs"),
-  message: z.literal("[jobs] publish"),
-  jobId: z.string(),
-  jobKey: z.string(),
-  generation: z.number(),
-  publicationStartedAt: z.number(),
-  publicationDurationMs: z.number(),
-  published: z.boolean(),
-});
-
-// The real operation includes intake savepoints and Sweep admission. A second
-// client publishes a real Job page after its snapshot, before the search upsert.
-// This owns admission rollback/replay and request-correlated contention evidence.
-describe("finance.record publication contention", () => {
+// The second client commits real Email source invalidation after intake's
+// snapshot, before its search upsert. Unchanged metadata must be distinguished
+// from a member search, which renews acquisition expiry even for the same mail.
+describe("finance.record Email persistence contention", () => {
   const ctx = withTestDb();
-  it.each([1, 3])(
-    "preserves admission and exact replay after %i competing search pages",
-    async (conflicts) => {
+  it.each([
+    { conflicts: 1, memberSearch: false },
+    { conflicts: 3, memberSearch: false },
+    { conflicts: 1, memberSearch: true },
+  ])(
+    "preserves admission and exact replay after $conflicts Email saves (member search: $memberSearch)",
+    async ({ conflicts, memberSearch }) => {
       const member = await createRepoEntity(ctx, "ledgerParty", {
         name: "Synthetic intake member",
         kind: "member",
@@ -60,6 +56,35 @@ describe("finance.record publication contention", () => {
         .update(ledgerParty)
         .set({ userId: ctx.actor.userId })
         .where(eq(ledgerParty.id, member.entityId));
+      const metadata = {
+        ledgerPartyId: member.entityId,
+        checksum: "synthetic-mail-checksum",
+        executionPolicy: "classification_only",
+        mail: {
+          sourceKey: "synthetic-mail-source",
+          mailboxId: "synthetic-mailbox",
+          messageId: "synthetic-message",
+          threadId: "synthetic-thread",
+          historyId: "1",
+          internalDate: "2026-05-04T00:00:00.000Z",
+          labelIds: [],
+          headers: {
+            from: "receipts@example.test",
+            subject: "Synthetic receipt",
+          },
+          snippet: null,
+          bodyText: null,
+          bodyHtml: null,
+        },
+      } satisfies Parameters<typeof saveMailboxMetadata>[1];
+      await saveMailboxMetadata(ctx.db, metadata);
+      const emailIdentity = {
+        ledgerPartyId: member.entityId,
+        mailboxId: metadata.mail.mailboxId,
+        messageId: metadata.mail.messageId,
+      };
+      const originalEmail = await readEmail(ctx.db, emailIdentity);
+      expect(originalEmail).not.toBeNull();
       const search = await enqueueJob(ctx.db, {
         key: "refresh:search",
         kind: "refresh.family",
@@ -113,30 +138,49 @@ describe("finance.record publication contention", () => {
       const warnings = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
-      const information = vi
-        .spyOn(console, "info")
-        .mockImplementation(() => undefined);
+      let savingEmail = false;
+      const writerCommits: {
+        startedAt: number;
+        committedAt: number;
+        durationMs: number;
+        generation: number;
+        xmin: string;
+      }[] = [];
+      const searchTuple = async () =>
+        z
+          .object({ generation: z.number(), xmin: z.string() })
+          .parse(
+            (
+              await getDb(ctx.db).execute(
+                sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'refresh:search'`,
+              )
+            ).rows[0],
+          );
+      const originalTuple = await searchTuple();
       const racing = vi
         .spyOn(refreshFamilies, "invalidateRefreshFamily")
         .mockImplementation(async (db, family) => {
-          if (family === "search" && ++attempts <= conflicts) {
-            // The other client has its own invocation correlation, not intake's.
-            const outcome = await withDatabaseOperationMetrics(
-              () =>
-                advanceJob(ctx.db, search.id, {
-                  "refresh.family": {
-                    prepare: async () => ({
-                      page: {
-                        done: false,
-                        cursor: { syntheticPage: attempts },
-                      },
-                    }),
-                  },
-                }),
-              "fedcba9876543210-SJC",
-            );
-            if (outcome !== "succeeded")
-              throw new Error(`Synthetic search publication ${outcome}`);
+          if (!savingEmail && family === "search" && ++attempts <= conflicts) {
+            // A pooled handle leases a separate client from the open intake
+            // transaction. The real save commits its own capture before return.
+            savingEmail = true;
+            const startedAt = Date.now();
+            const started = performance.now();
+            try {
+              await withDatabaseOperationMetrics(
+                () =>
+                  saveMailboxMetadata(ctx.db, { ...metadata, memberSearch }),
+                "fedcba9876543210-SJC",
+              );
+              writerCommits.push({
+                startedAt,
+                committedAt: Date.now(),
+                durationMs: performance.now() - started,
+                ...(await searchTuple()),
+              });
+            } finally {
+              savingEmail = false;
+            }
           }
           return invalidate(db, family);
         });
@@ -145,6 +189,13 @@ describe("finance.record publication contention", () => {
         const diagnostics = warnings.mock.calls.flatMap(([entry]) => {
           const parsed = abortedAttempt.safeParse(entry);
           return parsed.success ? [parsed.data] : [];
+        });
+        console.info({
+          scope: "synthetic-email-contention",
+          conflicts,
+          memberSearch,
+          writerDurationsMs: writerCommits.map((writer) => writer.durationMs),
+          attemptDurationsMs: diagnostics.map((attempt) => attempt.durationMs),
         });
         expect(diagnostics).toHaveLength(conflicts);
         for (const [index, diagnostic] of diagnostics.entries()) {
@@ -163,26 +214,33 @@ describe("finance.record publication contention", () => {
             retry: index < 2,
           });
         }
-        const publications = information.mock.calls.flatMap(([entry]) => {
-          const parsed = publicationLog.safeParse(entry);
-          return parsed.success ? [parsed.data] : [];
-        });
-        expect(publications).toHaveLength(conflicts);
-        for (const [index, publication] of publications.entries()) {
-          expect(publication).toMatchObject({
-            jobId: search.id,
-            jobKey: "refresh:search",
-            generation: search.generation,
-            published: true,
-          });
+        expect(writerCommits).toHaveLength(conflicts);
+        let previousXmin = originalTuple.xmin;
+        for (const [index, writer] of writerCommits.entries()) {
+          expect(writer.generation).toBe(search.generation + index + 1);
+          expect(writer.xmin).not.toBe(previousXmin);
+          previousXmin = writer.xmin;
           const attempt = diagnostics[index]!;
-          expect(publication.publicationStartedAt).toBeGreaterThanOrEqual(
-            attempt.startedAt,
-          );
-          expect(publication.publicationStartedAt).toBeLessThanOrEqual(
+          expect(writer.startedAt).toBeGreaterThanOrEqual(attempt.startedAt);
+          expect(writer.committedAt).toBeLessThanOrEqual(
             attempt.startedAt + attempt.durationMs + 1,
           );
         }
+        const savedEmail = await readEmail(ctx.db, emailIdentity);
+        expect(savedEmail).not.toBeNull();
+        if (!savedEmail || !originalEmail) return;
+        const renewedAcquisition = {
+          updatedAt: expect.any(Date),
+          searchOrigin: "member_search",
+          searchExpiresAt: expect.any(Date),
+        };
+        // Routine unchanged metadata leaves every Email column untouched;
+        // member search deliberately renews its acquisition metadata.
+        expect(savedEmail).toEqual(
+          memberSearch
+            ? { ...originalEmail, ...renewedAcquisition }
+            : originalEmail,
+        );
         expect(attempts).toBe(Math.min(conflicts + 1, 3));
         const failed = {
           ok: false,
@@ -204,7 +262,7 @@ describe("finance.record publication contention", () => {
           sweeps: admitted,
           sweepJobs: admitted,
           expenses: 0,
-          generation: search.generation + admitted,
+          generation: search.generation + conflicts + admitted,
         });
         racing.mockRestore();
         if (!result.ok) result = await record();
@@ -216,7 +274,7 @@ describe("finance.record publication contention", () => {
           sweeps: 1,
           sweepJobs: 1,
           expenses: 0,
-          generation: search.generation + 1,
+          generation: search.generation + conflicts + 1,
         });
         const stored = await read();
         expect(await record()).toMatchObject({
@@ -227,7 +285,6 @@ describe("finance.record publication contention", () => {
       } finally {
         racing.mockRestore();
         warnings.mockRestore();
-        information.mockRestore();
       }
     },
   );
