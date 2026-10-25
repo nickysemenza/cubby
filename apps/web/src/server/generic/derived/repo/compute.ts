@@ -23,8 +23,6 @@ export type DerivedCompute = (
   ids: readonly string[],
 ) => Promise<ReadonlyMap<string, DerivedComputed>>;
 
-
-
 /**
  * An adapter whose output lives in its own table (search documents, recipe
  * totals, conversion coverage) rather than `DerivedValue`. `prepare` runs
@@ -33,12 +31,10 @@ export type DerivedCompute = (
  */
 export interface DerivedSink<Prepared = unknown> {
   readonly kind: "sink";
-  prepare(
-    db: Database | DrizzleTransaction,
-    ids: readonly string[],
-  ): Promise<Prepared>;
+  prepare(db: Database, ids: readonly string[]): Promise<Prepared>;
+  /** `tx` is the publication transaction's repository handle. */
   publish(
-    tx: Database | DrizzleTransaction,
+    tx: Database,
     ids: readonly string[],
     prepared: Prepared,
   ): Promise<readonly string[]>;
@@ -57,7 +53,9 @@ export const derivedSink = <Prepared>(
   publish: (tx, ids, prepared) => sink.publish(tx, ids, prepared as Prepared),
 });
 
-export const isDerivedSink = (adapter: DerivedAdapter): adapter is DerivedSink =>
+export const isDerivedSink = (
+  adapter: DerivedAdapter,
+): adapter is DerivedSink =>
   typeof adapter === "object" && adapter.kind === "sink";
 
 export type DerivedComputes = Readonly<Record<string, DerivedAdapter>>;

@@ -89,7 +89,7 @@ const groupByTarget = (marks: readonly Mark[]) => {
 
 /** Compute every direct mark's value outside the publication transaction. */
 export async function prepareDerivedPage(
-  db: Database | DrizzleTransaction,
+  db: Database,
   computes: DerivedComputes,
   marks: readonly Mark[],
 ): Promise<DerivedPagePlan> {
@@ -201,7 +201,7 @@ const propagate = async (
 
 /** Publish a sink's prepared output for the marks still current, then clear them. */
 const publishSink = async (
-  db: Database | DrizzleTransaction,
+  db: Database,
   declaration: StoredDerivedDeclaration,
   marks: readonly Mark[],
   { sink, prepared }: { sink: DerivedSink; prepared: unknown },
@@ -369,7 +369,7 @@ const deferFailed = async (
 
 /** Publish one prepared page in the caller's transaction. */
 export async function publishDerivedPage(
-  db: Database | DrizzleTransaction,
+  db: Database,
   plan: DerivedPagePlan,
 ): Promise<DerivedPublication> {
   const tx = unwrapDb(db);
