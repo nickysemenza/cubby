@@ -486,7 +486,13 @@ Application rebuilds them inside the existing snapshot write, including for old
 clean Assessments. A collision or scope change after preview refuses application
 without money or an application receipt while preserving the durable member
 command. Exact successful canonical receipt replay precedes the live guard and
-remains inert. Model labels and paid advice cannot release this evidence hold.
+remains inert. Model labels and paid advice cannot release this evidence hold. A
+statement action that applies a transfer pair binds both source legs' provider
+identity facts to its preview/publication fingerprint. A collision on the
+opposite leg, including compatible deleted history excluded from transfer
+discovery, holds either statement proposal. Publication and application batch
+that complete source set again, and the transfer writer independently refuses
+unresolved source-leg identity inside its transaction before creating either leg.
 
 A collection owns its immutable observation time, declared count and optional
 account/date/visibility scope. Chunks resume that collection. Membership is

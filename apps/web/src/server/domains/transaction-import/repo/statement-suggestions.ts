@@ -58,7 +58,10 @@ import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
-import { findTransferPairsForCharges } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+import {
+  findTransferPairsForCharges,
+  transferPairSourceCharges,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   providerScopeRelation,
   PROVIDER_IDENTITY_REVIEW,
@@ -83,6 +86,7 @@ import {
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
+import { createAppError } from "~/server/errors/app-error";
 import {
   publishAssessment,
   publishAssessments,
@@ -183,6 +187,8 @@ export type ChargeProposal = {
   /** The ledger and transaction evidence alone, recomputed at apply. */
   evidenceFingerprint: string;
   providerScopeFingerprint?: string;
+  /** Every retained source leg the proposed action can write. */
+  providerScopeCharges?: readonly ChargeRef[];
   refs: string[];
 };
 
@@ -729,9 +735,19 @@ async function prepareChargePreviews(
   const accepted = new Map(acceptedRows.map((row) => [row.shortcode, row]));
   const preparation =
     sharedPreparation ?? (await prepareFinancialStatementPreview(db));
-  const providerFacts = await providerIdentityFacts(
+  const pairsByCharge = await findTransferPairsForCharges(db, charges);
+  const providerScopeCharges = new Map(
+    [...pairsByCharge].map(([key, pair]) => [
+      key,
+      transferPairSourceCharges(pair.key),
+    ]),
+  );
+  const providerFacts = await providerActionIdentityFacts(
     db,
-    grouped,
+    grouped.map((input) => ({
+      ...input,
+      providerScopeCharges: providerScopeCharges.get(chargeId(input.charge)),
+    })),
     preparation.accounts,
   );
   const preview = await previewFinancialTransactionImport(
@@ -776,6 +792,8 @@ async function prepareChargePreviews(
     preparation,
     preview,
     providerFacts,
+    pairsByCharge,
+    providerScopeCharges,
   };
 }
 
@@ -939,11 +957,82 @@ async function providerIdentityFacts(
   return result;
 }
 
+async function providerIdentityInputs(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  const canonical = new Map<string, Observation>();
+  for (const observation of await loadObservations(db, charges))
+    if (!canonical.has(chargeId(observation)))
+      canonical.set(chargeId(observation), observation);
+  return charges.flatMap((charge) => {
+    const row = canonical.get(chargeId(charge));
+    return row ? [{ charge, canonical: row }] : [];
+  });
+}
+
+/** Bind the provider evidence of every source leg, including an opposite transfer leg. */
+async function providerActionIdentityFacts(
+  db: Database,
+  inputs: readonly Pick<
+    ChargeProposal,
+    "charge" | "canonical" | "providerScopeCharges"
+  >[],
+  accounts?: Parameters<typeof providerIdentityFacts>[2],
+) {
+  if (!inputs.some((input) => input.providerScopeCharges?.length))
+    return providerIdentityFacts(db, inputs, accounts);
+  const charges = new Map(
+    inputs
+      .flatMap((input) => [input.charge, ...(input.providerScopeCharges ?? [])])
+      .map((charge) => [chargeId(charge), charge]),
+  );
+  const current = await providerIdentityInputs(db, [...charges.values()]);
+  const present = new Set(current.map((input) => chargeId(input.charge)));
+  const facts = await providerIdentityFacts(db, current, accounts);
+  const result = new Map(facts);
+  for (const input of inputs) {
+    if (!input.providerScopeCharges?.length) continue;
+    const legs = [
+      ...new Set([input.charge, ...input.providerScopeCharges].map(chargeId)),
+    ].sort();
+    result.set(chargeId(input.charge), {
+      unresolved: legs.some(
+        (key) => !present.has(key) || facts.get(key)?.unresolved,
+      ),
+      fingerprint: await sha256Hex(
+        canonicalJson(
+          legs.map((key) => [key, facts.get(key)?.fingerprint ?? null]),
+        ),
+      ),
+    });
+  }
+  return result;
+}
+
+/** The transfer writer also checks its complete source set inside its transaction. */
+export async function assertStatementProviderIdentity(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  if (!charges.length) return;
+  const unique = [
+    ...new Map(charges.map((charge) => [chargeId(charge), charge])).values(),
+  ];
+  const inputs = await providerIdentityInputs(db, unique);
+  const facts = await providerIdentityFacts(db, inputs);
+  if (
+    inputs.length !== unique.length ||
+    [...facts.values()].some((fact) => fact.unresolved)
+  )
+    throw createAppError("CONSTRAINT_VIOLATION", PROVIDER_IDENTITY_REVIEW);
+}
+
 async function assertProviderIdentityPublication(
   db: Database,
   proposals: readonly ChargeProposal[],
 ) {
-  const facts = await providerIdentityFacts(db, proposals);
+  const facts = await providerActionIdentityFacts(db, proposals);
   for (const proposal of proposals) {
     const current = facts.get(chargeId(proposal.charge));
     if (
@@ -975,6 +1064,8 @@ export async function buildChargeProposals(
     preparation,
     preview,
     providerFacts,
+    pairsByCharge,
+    providerScopeCharges,
   } = prepared;
   const previewByKey = new Map(preview.rows.map((row) => [row.key, row]));
   const ids = preparation.ids;
@@ -1044,8 +1135,6 @@ export async function buildChargeProposals(
     ),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const pairsByCharge = await findTransferPairsForCharges(db, charges);
-
   const pending: Array<{
     charge: ChargeRef;
     canonical: Observation;
@@ -1257,6 +1346,7 @@ export async function buildChargeProposals(
         rows,
         judgment,
         providerFacts.get(chargeId(charge))?.fingerprint,
+        providerScopeCharges.get(chargeId(charge)),
       ),
     );
   }
@@ -1306,6 +1396,7 @@ async function finishProposal(
   observations: Observation[],
   judgment: StatementTransactionJudgment,
   providerScopeFingerprint?: string,
+  providerScopeCharges?: readonly ChargeRef[],
 ): Promise<ChargeProposal> {
   assessmentJudgments.statement_transaction.parse(judgment);
   const fingerprint = await sha256Hex(
@@ -1343,6 +1434,7 @@ async function finishProposal(
     fingerprint,
     evidenceFingerprint: fingerprint,
     providerScopeFingerprint,
+    providerScopeCharges,
     refs,
   };
 }
