@@ -26,6 +26,7 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     }
 
     public let phase: Phase
+    public let queueProgress: CompanionImageQueueProgress?
     public let jobID: String?
     public let kind: String?
     public let startedAt: Date?
@@ -49,12 +50,14 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public let connectedAt: Date?
 
     public init(
-        phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil,
+        phase: Phase, queueProgress: CompanionImageQueueProgress? = nil, jobID: String? = nil,
+        kind: String? = nil, startedAt: Date? = nil,
         remotePaused: Bool = false, processingCount: Int = 0, undeliveredResults: Int = 0,
         deliveryError: String? = nil, lastError: String? = nil, connectionAttempt: Int = 0,
         nextConnectAt: Date? = nil, connectedAt: Date? = nil
     ) {
         self.phase = phase
+        self.queueProgress = queueProgress
         self.jobID = jobID
         self.kind = kind
         self.startedAt = startedAt
@@ -201,6 +204,10 @@ public actor CompanionImageWorker {
     private var acceptance = Acceptance.open
     private var deferredCommands: [ImageProcessingCommand] = []
     private var running: [String: RunningCommand] = [:]
+    private var queueProgress: CompanionImageQueueProgress?
+    private var backlogRefresh: Task<Void, Never>?
+    private var backgroundProcessingCount = 0
+    private var backgroundCompletedCount = 0
     private var isPulling = false
     private var lastError: String?
     /// Subscription diagnostics for Activity; see `CompanionImageWorkerActivity`.
@@ -298,6 +305,7 @@ public actor CompanionImageWorker {
 
     deinit {
         backgroundTask?.cancel()
+        backlogRefresh?.cancel()
         connectionTask?.cancel()
         deliveryRetry?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
@@ -419,14 +427,14 @@ public actor CompanionImageWorker {
     /// The system background task owns this HTTP window; it does not reopen an iOS subscription.
     public func runInBackground(
         client: CubbyClient,
-        progress: (@MainActor @Sendable (_ processed: Int, _ total: Int) -> Void)? = nil
+        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)? = nil
     ) async -> Bool {
         await runInBackground(transport: client, hello: hello(foreground: false), progress: progress)
     }
 
     func runInBackground(
         transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello,
-        progress: (@MainActor @Sendable (_ processed: Int, _ total: Int) -> Void)? = nil
+        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)? = nil
     ) async -> Bool {
         guard shouldRun, isParticipating, !updateRequired, backgroundTask == nil else { return false }
         // One executor owns the shared slots. Settle any resident pull before the HTTP window.
@@ -444,7 +452,10 @@ public actor CompanionImageWorker {
             return await backgroundRunner.run(
                 transport: transport, hello: hello, maximumJobs: Int.max,
                 maximumConcurrentCommands: { await self.maximumConcurrentCommands },
-                progress: progress)
+                activity: { processed, running in
+                    await self.reportBackgroundProgress(
+                        processed: processed, running: running, progress: progress)
+                })
         }
         backgroundTask = task
         let outcome = await withTaskCancellationHandler {
@@ -454,6 +465,8 @@ public actor CompanionImageWorker {
         }
         backgroundTask = nil
         backgroundWindowActive = false
+        backgroundProcessingCount = 0
+        backgroundCompletedCount = 0
         reconcileConnection()
         deliverySnapshot = await delivery.snapshot
         switch outcome {
@@ -619,7 +632,10 @@ public actor CompanionImageWorker {
     }
 
     private func drainWhileRequested() async {
-        defer { isDraining = false }
+        defer {
+            isDraining = false
+            reportActivity()
+        }
         while drainRequested, shouldRun, platformAllowsConnection {
             drainRequested = false
             do {
@@ -772,6 +788,7 @@ public actor CompanionImageWorker {
         guard commandTasks[key] == nil else { return .notStarted }
         let claim = CompanionImageCommandClaim(jobID: metadata.jobID, attemptID: metadata.attemptID)
         inFlight[key] = claim
+        beginQueueSession()
         commandTasks[key] = Task { [weak self] in
             await self?.run(command, metadata: metadata, claim: claim, key: key)
         }
@@ -860,6 +877,7 @@ public actor CompanionImageWorker {
             commandTasks[key] = nil
             inFlight[key] = nil
             requestDrain()
+            reportActivity()
         }
         guard !Task.isCancelled else { return }
         defer {
@@ -884,6 +902,8 @@ public actor CompanionImageWorker {
             guard !Task.isCancelled, inFlight.removeValue(forKey: key) != nil else { return }
             jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
+            queueProgress?.completedCount += 1
+            reportActivity()
             applyDelivery(
                 await delivery.deliver(
                     result, key: key, transport: transport, deviceID: wireDeviceID),
@@ -1022,7 +1042,7 @@ public actor CompanionImageWorker {
             phase = .updateRequired
         } else if !isParticipating {
             phase = .automaticWorkOff
-        } else if !running.isEmpty {
+        } else if queueProgress != nil {
             phase = .processing
         } else if systemAsleep {
             phase = .asleep
@@ -1037,8 +1057,10 @@ public actor CompanionImageWorker {
         }
         let oldest = phase == .processing ? running.values.min { $0.startedAt < $1.startedAt } : nil
         return .init(
-            phase: phase, jobID: oldest?.jobID, kind: oldest?.kind, startedAt: oldest?.startedAt,
-            remotePaused: remotePaused, processingCount: phase == .processing ? running.count : 0,
+            phase: phase, queueProgress: phase == .processing ? queueProgress : nil, jobID: oldest?.jobID,
+            kind: oldest?.kind, startedAt: oldest?.startedAt,
+            remotePaused: remotePaused,
+            processingCount: phase == .processing ? running.count + backgroundProcessingCount : 0,
             undeliveredResults: deliverySnapshot.undelivered,
             deliveryError: deliverySnapshot.latestError,
             lastError: phase == .stopped ? nil : lastError,
@@ -1047,8 +1069,51 @@ public actor CompanionImageWorker {
             connectedAt: phase == .connecting ? nil : connectedAt)
     }
 
+    private func beginQueueSession() {
+        guard queueProgress == nil else { return }
+        queueProgress = .init(startedAt: .now)
+        let sessionID = queueProgress?.id
+        backlogRefresh = Task { [weak self, transport] in
+            while !Task.isCancelled {
+                do {
+                    guard let backlog = try await transport.deviceBacklog() else { return }
+                    await self?.refreshBacklog(backlog, sessionID: sessionID)
+                } catch is CancellationError { return } catch { await self?.failureObserver?(error) }
+                do { try await Task.sleep(for: .seconds(45)) } catch { return }
+            }
+        }
+    }
+
+    private func refreshBacklog(_ backlog: DeviceBacklogBanner, sessionID: String?) {
+        guard queueProgress?.id == sessionID else { return }
+        queueProgress?.refresh(backlog: backlog)
+        reportActivity()
+    }
+
+    private func reportBackgroundProgress(
+        processed: Int, running: Int,
+        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)?
+    ) async {
+        if running > 0 { beginQueueSession() }
+        queueProgress?.completedCount += max(0, processed - backgroundCompletedCount)
+        backgroundCompletedCount = processed
+        backgroundProcessingCount = running
+        reportActivity()
+        await progress?(currentActivity())
+    }
+
     /// Reports only changes, so observers see each transition once.
     private func reportActivity() {
+        // Slot refills and durable result recording belong to the same session. Only a settled
+        // drain or a lifecycle stop ends it; a transient zero-running count does not reset it.
+        if !shouldRun || updateRequired || !isParticipating || systemAsleep
+            || (!platformAllowsConnection && !backgroundWindowActive)
+            || (commandTasks.isEmpty && !isDraining && !backgroundWindowActive)
+        {
+            queueProgress = nil
+            backlogRefresh?.cancel()
+            backlogRefresh = nil
+        }
         let activity = currentActivity()
         guard activity != lastReportedActivity else { return }
         lastReportedActivity = activity

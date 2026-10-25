@@ -29,7 +29,10 @@ struct DeviceWorkWidget: Widget {
                 }
             }
             .padding()
-            .widgetURL(URL(string: "cubby://activity/local/\(context.state.localActivityID)"))
+            .widgetURL(
+                URL(
+                    string: context.state.localActivityID == "companion-image-queue"
+                        ? "cubby://activity" : "cubby://activity/local/\(context.state.localActivityID)"))
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -60,7 +63,10 @@ struct DeviceWorkWidget: Widget {
             } minimal: {
                 Image(systemName: "shippingbox")
             }
-            .widgetURL(URL(string: "cubby://activity/local/\(context.state.localActivityID)"))
+            .widgetURL(
+                URL(
+                    string: context.state.localActivityID == "companion-image-queue"
+                        ? "cubby://activity" : "cubby://activity/local/\(context.state.localActivityID)"))
         }
     }
 }

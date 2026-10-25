@@ -1,10 +1,10 @@
-import CubbyKit
 import Foundation
 import Observation
 import Synchronization
 import Testing
 
 @testable import Cubby
+@testable import CubbyKit
 
 @MainActor
 @Suite("BackgroundActivityCenter")
@@ -17,6 +17,25 @@ struct BackgroundActivityCenterTests {
             id: id, kind: kind, title: title, phase: .running, progress: progress,
             detail: nil, startedAt: startedAt, link: .localActivity(id),
             isUserInitiated: isUserInitiated, isCancellable: false)
+    }
+
+    @Test func queueSourceFeedsSharedProgressAndSummaryAndStopsWhenIdle() {
+        var queue = CompanionImageQueueProgress(startedAt: .now)
+        queue.refresh(backlog: .init(waiting: 60, runsWaiting: 1, workingDevices: 2, etaSeconds: 180))
+        queue.completedCount = 20
+        var worker = CompanionImageWorkerActivity(
+            phase: .processing, queueProgress: queue, processingCount: 4)
+        let source = CompanionActivitySource { worker }
+        let center = BackgroundActivityCenter()
+        center.register(source)
+        #expect(center.visibleActivities.count == 1)
+        #expect(center.aggregateProgress == 0.25)
+        #expect(center.summary == "Processing image queue · 25%")
+        #expect(center.primary?.detail?.hasPrefix("4 running · 20 done") == true)
+        #expect(center.primary?.link == .activity)
+        worker = .init(phase: .idle)
+        #expect(center.visibleActivities.isEmpty)
+        #expect(center.aggregateProgress == nil)
     }
 
     @Test func summaryIsNilWhenNothingIsRunning() {

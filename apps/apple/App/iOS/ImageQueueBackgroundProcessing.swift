@@ -73,12 +73,13 @@ final class ImageQueueBackgroundProcessing {
         let worker = Task { @MainActor in
             if model.phase == .restoring { await model.restoreSession() }
             guard model.phase == .signedIn, model.participation.automaticWork else { return false }
-            return await model.runCompanionJobsInBackground { processed, total in
+            return await model.runCompanionJobsInBackground { activity in
                 if #available(iOS 26.0, *), let continued = task as? BGContinuedProcessingTask {
-                    // Until the queue is empty there may be another batch to discover.
-                    continued.progress.totalUnitCount = Int64(max(total, processed + 1))
-                    continued.progress.completedUnitCount = Int64(processed)
-                    continued.updateTitle("Process image queue", subtitle: "Processed \(processed) images")
+                    guard let queue = activity.queueProgress else { return }
+                    continued.progress.totalUnitCount = Int64(queue.totalCount.map { max(1, $0) } ?? -1)
+                    continued.progress.completedUnitCount = Int64(queue.completedCount)
+                    continued.updateTitle(
+                        "Processing image queue", subtitle: queue.detail(running: activity.processingCount))
                 }
             }
         }
@@ -87,11 +88,6 @@ final class ImageQueueBackgroundProcessing {
         }
         let more = await worker.value
         task.expirationHandler = nil
-        if #available(iOS 26.0, *), let continued = task as? BGContinuedProcessingTask,
-            !worker.isCancelled, !more
-        {
-            continued.progress.completedUnitCount = continued.progress.totalUnitCount
-        }
         task.setTaskCompleted(success: !worker.isCancelled && !more)
         Self.scheduleIfNeeded(
             model: model, earliestBeginDate: Date.now.addingTimeInterval(more ? 3600 : 12 * 3600))
