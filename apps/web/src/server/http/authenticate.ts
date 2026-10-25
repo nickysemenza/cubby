@@ -178,7 +178,7 @@ export interface AuthPorts {
     headers: Headers;
     actor: RequestActor;
   }): Promise<AuthenticatedRequestContext>;
-  /** The delegation's grant is live and its Run belongs to the actor's Ledger Party. */
+  /** The delegation's grant is live and the actor, a member, started its Run. */
   delegationHolds(
     context: AuthenticatedRequestContext,
     delegation: RunDelegation,
@@ -452,6 +452,27 @@ export const principalWithContext = (
   context: AuthenticatedRequestContext,
 ): Principal => ({ ...principal, context });
 
+/**
+ * A delegated Run must be the actor's own and the actor a member whose party
+ * owns it, except a photo Run: it records belongings for either member
+ * (`run-service.ts`), so it may be owned by the other member's party.
+ * Requiring the actor's party there 401'd every MCP call of such a Run's
+ * coordinator (RUN-DFBE2).
+ */
+export const delegatedRunHolds = (
+  scope: {
+    actorUserId: string | null;
+    ledgerPartyId: string | null;
+    public: { purpose: string };
+  },
+  actorUserId: string,
+  party: { id: string } | null | undefined,
+) =>
+  scope.actorUserId === actorUserId &&
+  !!party &&
+  (party.id === scope.ledgerPartyId ||
+    scope.public.purpose === "photo_inventory");
+
 export const authenticate = createAuthenticator({
   getSession: (options) => getAuth().api.getSession(options),
   verifyApiKey: (options) => getAuth().api.verifyApiKey(options),
@@ -476,10 +497,6 @@ export const authenticate = createAuthenticator({
       loadRunScope(context.db, delegation.runId),
       context.currentParty(),
     ]);
-    return (
-      scope.actorUserId === actorUserId &&
-      !!party &&
-      party.id === scope.ledgerPartyId
-    );
+    return delegatedRunHolds(scope, actorUserId, party);
   },
 });

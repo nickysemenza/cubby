@@ -41,9 +41,6 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public let deliveryError: String?
     /// The latest connection, pull, or lease failure, verbatim; cleared by a successful drain.
     public let lastError: String?
-    /// Image job ids of the claims this worker holds now (accepted, not yet recorded). Activity
-    /// marks this device's leases by these, not by the device's display name.
-    public let claimedJobIDs: Set<String>
     /// Failed subscription attempts in a row; 0 once a subscription opens.
     public let connectionAttempt: Int
     /// When the next subscription attempt starts, while one is waiting out its backoff.
@@ -54,8 +51,8 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
     public init(
         phase: Phase, jobID: String? = nil, kind: String? = nil, startedAt: Date? = nil,
         remotePaused: Bool = false, processingCount: Int = 0, undeliveredResults: Int = 0,
-        deliveryError: String? = nil, lastError: String? = nil, claimedJobIDs: Set<String> = [],
-        connectionAttempt: Int = 0, nextConnectAt: Date? = nil, connectedAt: Date? = nil
+        deliveryError: String? = nil, lastError: String? = nil, connectionAttempt: Int = 0,
+        nextConnectAt: Date? = nil, connectedAt: Date? = nil
     ) {
         self.phase = phase
         self.jobID = jobID
@@ -66,7 +63,6 @@ public struct CompanionImageWorkerActivity: Sendable, Equatable {
         self.undeliveredResults = undeliveredResults
         self.deliveryError = deliveryError
         self.lastError = lastError
-        self.claimedJobIDs = claimedJobIDs
         self.connectionAttempt = connectionAttempt
         self.nextConnectAt = nextConnectAt
         self.connectedAt = connectedAt
@@ -138,7 +134,7 @@ struct CompanionUnsupportedCommand: Error, LocalizedError, Sendable {
 
 /// The foreground companion. It subscribes to the `imageProcessing.work` doorbell and, when the
 /// subscription opens and on every ring, drains claimable work through `imageProcessing.pull`,
-/// executing up to `maximumConcurrentCommands` at once, renewing each command's lease every
+/// executing up to `maximumConcurrentCommands` (`CompanionImageConcurrency`) at once, renewing each command's lease every
 /// `heartbeatInterval`, and finishing each with `imageProcessing.complete`. A ring carries no
 /// state; a missed one costs latency only, because every reconnect drains again.
 ///
@@ -193,8 +189,9 @@ public actor CompanionImageWorker {
     private var openedSocket: URLSessionWebSocketTask?
     private var backgroundTask: Task<CompanionBackgroundOutcome, Never>?
     private let backgroundRunner: CompanionImageBackgroundRunner
-    /// Commands run concurrently up to this bound; each command's own lease deadline still applies.
-    static let maximumConcurrentCommands = 4
+    /// Commands run concurrently up to this bound, one pool shared by every kind; each command's
+    /// own lease deadline still applies. Changing it takes effect on the next pull.
+    private var maximumConcurrentCommands: Int
     private var commandTasks: [String: Task<Void, Never>] = [:]
     /// Accepted commands whose result is not yet recorded: exactly the claims a stop releases.
     /// A command leaves it when it commits to recording, or when its lease is refused.
@@ -230,6 +227,7 @@ public actor CompanionImageWorker {
         deviceName: String,
         foreground: Bool,
         isParticipating: Bool = true,
+        maximumConcurrentCommands: Int = CompanionImageConcurrency.automatic,
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         identity: ClientIdentity = .unknown,
         session: URLSession = .cubbyShared,
@@ -243,7 +241,8 @@ public actor CompanionImageWorker {
         // other client the app builds.
         self.init(
             baseURL: baseURL, credentials: credentials, deviceID: deviceID, deviceName: deviceName,
-            foreground: foreground, isParticipating: isParticipating, outbox: outbox,
+            foreground: foreground, isParticipating: isParticipating,
+            maximumConcurrentCommands: maximumConcurrentCommands, outbox: outbox,
             session: session,
             transport: CubbyClient(
                 baseURL: baseURL, credentials: credentials, identity: identity, session: session,
@@ -259,6 +258,7 @@ public actor CompanionImageWorker {
         deviceName: String,
         foreground: Bool,
         isParticipating: Bool = true,
+        maximumConcurrentCommands: Int = CompanionImageConcurrency.automatic,
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         session: URLSession = .cubbyShared,
         transport: any CompanionImageBackgroundTransport,
@@ -275,6 +275,7 @@ public actor CompanionImageWorker {
         self.deviceName = deviceName
         self.foreground = foreground
         self.isParticipating = isParticipating
+        self.maximumConcurrentCommands = CompanionImageConcurrency.slots(for: maximumConcurrentCommands)
         self.outbox = outbox
         self.recordResult = recordResult ?? { try await outbox.record($0, for: $1) }
         let heartbeatPause =
@@ -376,6 +377,16 @@ public actor CompanionImageWorker {
         // Releases use the outgoing credential; finish them before it is removed.
         await releasesIdle()
         try await outbox.removeAll()
+    }
+
+    /// Resizes the shared slot pool. A smaller pool lets running commands finish and pulls again
+    /// only below the new bound; a larger one pulls into the new slots at once.
+    public func setMaximumConcurrentCommands(_ slots: Int) {
+        let slots = CompanionImageConcurrency.slots(for: slots)
+        guard slots != maximumConcurrentCommands else { return }
+        let grew = slots > maximumConcurrentCommands
+        maximumConcurrentCommands = slots
+        if grew { requestDrain() }
     }
 
     public func setForeground(_ foreground: Bool) {
@@ -625,7 +636,7 @@ public actor CompanionImageWorker {
         }
         try await deliverOutbox()
         while isCurrent(), acceptance == .open,
-            commandTasks.count < Self.maximumConcurrentCommands
+            commandTasks.count < maximumConcurrentCommands
         {
             isPulling = true
             reportActivity()
@@ -998,7 +1009,6 @@ public actor CompanionImageWorker {
             undeliveredResults: deliverySnapshot.undelivered,
             deliveryError: deliverySnapshot.latestError,
             lastError: phase == .stopped ? nil : lastError,
-            claimedJobIDs: Set(inFlight.values.map(\.jobID)),
             connectionAttempt: phase == .connecting ? connectionAttempt : 0,
             nextConnectAt: phase == .connecting ? nextConnectAt : nil,
             connectedAt: phase == .connecting ? nil : connectedAt)

@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { job as durableJob } from "~/server/db/retained-tables";
 import {
   aiUsage,
   imageProcessingAttempt,
@@ -13,6 +14,8 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { readDeviceBacklog } from "~/server/generic/jobs/repo/device-backlog";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
   insertEntityFixtures,
@@ -21,7 +24,7 @@ import {
 describe("image job cost", () => {
   const ctx = withTestDb();
 
-  const job = async () => {
+  const job = async (state: "ready" | "pending" = "ready") => {
     const image = await createImageFixture(
       ctx.db,
       `synthetic-job-cost-${crypto.randomUUID()}`,
@@ -35,7 +38,7 @@ describe("image job cost", () => {
           shortcode: generateShortcode("imageJob"),
           imageId: parseEntityId("image", image.id),
           kind: "describe_image",
-          state: "ready",
+          state,
           sourceContentHash: "b".repeat(64),
           processorRevision: 1,
         },
@@ -101,6 +104,96 @@ describe("image job cost", () => {
     );
     expect(read).toMatchObject({
       item: { chargedCost: 1.75, standardCost: 3.5 },
+    });
+  });
+
+  it("shows the Device holding a live lease, its expiry, and the device backlog", async () => {
+    const installationId = crypto.randomUUID();
+    const device = await insertWithShortcode(ctx.db, "device", {
+      name: "Synthetic Mac",
+      installationId,
+      platform: "macos",
+    });
+    const held = await job("pending");
+    const parked = await job("pending");
+    const attemptId = crypto.randomUUID();
+    await getDb(ctx.db)
+      .insert(imageProcessingAttempt)
+      .values({
+        id: attemptId,
+        jobId: held.id,
+        number: 1,
+        state: "leased",
+        executor: {
+          kind: "device",
+          deviceId: installationId,
+          name: "Synthetic Mac",
+          platform: "macos",
+          appVersion: "1",
+          osVersion: "26",
+        },
+      });
+    // A reclaim within the window is a second claim of the same Job.
+    await getDb(ctx.db)
+      .insert(imageProcessingAttempt)
+      .values({
+        id: crypto.randomUUID(),
+        jobId: held.id,
+        number: 2,
+        state: "expired",
+        executor: {
+          kind: "device",
+          deviceId: installationId,
+          name: "Synthetic Mac",
+          platform: "macos",
+          appVersion: "1",
+          osVersion: "26",
+        },
+      });
+    const leaseExpiresAt = new Date(Date.now() + 60_000);
+    await getDb(ctx.db)
+      .insert(durableJob)
+      .values([
+        {
+          key: `image-processing:${held.id}`,
+          kind: "image.device",
+          state: "running",
+          input: {},
+          leaseToken: attemptId,
+          leaseExpiresAt,
+          lastClaimedAt: new Date(),
+        },
+        {
+          key: `image-processing:${parked.id}`,
+          kind: "image.device",
+          state: "queued",
+          input: {},
+        },
+      ]);
+    const read = async (shortcode: string) =>
+      executeEntity(
+        kernelCtx(ctx),
+        entityCommandSchema.parse({
+          action: "get",
+          entity: "imageJob",
+          id: shortcode,
+        }),
+      );
+    expect(await read(held.shortcode)).toMatchObject({
+      item: {
+        state: "leased",
+        leaseDeviceId: device.shortcode,
+        leaseExpiresAt,
+      },
+    });
+    expect(await read(parked.shortcode)).toMatchObject({
+      item: { leaseDeviceId: null, leaseExpiresAt: null },
+    });
+    expect(await readDeviceBacklog(ctx.db)).toMatchObject({
+      waiting: 1,
+      workingDevices: 1,
+      claimsPerMinute: 0.2,
+      etaSeconds: 300,
     });
   });
 });

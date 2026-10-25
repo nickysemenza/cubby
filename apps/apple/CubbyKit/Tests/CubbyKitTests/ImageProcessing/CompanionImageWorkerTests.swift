@@ -104,6 +104,34 @@ struct CompanionImageWorkerTests {
         await worker.stop()
     }
 
+    /// One slot pool: with every slot busy the worker does not pull, and widening the pool (the
+    /// Settings stepper) pulls into the new slot at once, without a restart.
+    @Test func pullsOnlyIntoAFreeSlotAndAWiderPoolPullsAtOnce() async throws {
+        let execution = Gate()
+        let transport = QueuedCompanionTransport(commands: [
+            try describeCommand(), try describeCommand(attempt: "00000000-0000-4000-8000-000000000003"),
+        ])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            maximumConcurrentCommands: 1, outbox: try outbox(), transport: transport,
+            execute: { command in
+                try? await execution.pass()
+                return try Self.failedResult(command)
+            })
+        await worker.start()
+        await worker.requestDrain()
+        await execution.arrivals(1)
+        await worker.drainIdle()
+        #expect(await transport.pulls == 1)
+
+        await worker.setMaximumConcurrentCommands(2)
+        await execution.arrivals(2)
+        execution.open()
+        await worker.commandsIdle()
+        await worker.stop()
+    }
+
     /// Regression: a pull in flight when the subscription ended (iOS backgrounding, or here
     /// participation turning off) still started its job outside the window that asked for it.
     @Test func aCommandPulledAfterTheSubscriptionEndsIsReleased() async throws {

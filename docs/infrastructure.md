@@ -214,7 +214,8 @@ runs in this Worker behind an in-process boundary enforced by construction:
 - MCP calls run Cubby's MCP handler in process. For each request the host
   mints a fresh five-minute delegation bearer bound to the Run and the
   member's live Purchase Agent grant; the MCP handler verifies it, the grant,
-  and LedgerParty ownership exactly as for any external client, and narrows
+  that the member started the Run and owns it through their LedgerParty (a
+  photo Run may be owned by the other member's party), and narrows
   every tool to the purpose's manifest actions
   (`importRunAgentManifest[purpose].mcpActions`). The agent never holds the
   token, and the host reads the agent's request before opening its database
@@ -287,8 +288,8 @@ code + PKCE, `offline_access`, no client secret, and the callback
 provisions the client idempotently when authorization begins. Better Auth's
 existing `oauth_refresh_token` row is the revocable grant; its value is never
 copied to the agent. The web Worker mints five-minute, run-bound delegation tokens
-for MCP calls and rechecks the live grant and LedgerParty ownership on every
-request.
+for MCP calls and rechecks the live grant and Run ownership (`delegatedRunHolds`)
+on every request.
 
 Pi-durable conversations live in the coordinator's Durable Object, so moving
 the class between Workers or replacing it does not carry them over: terminate

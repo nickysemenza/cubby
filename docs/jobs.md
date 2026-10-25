@@ -214,7 +214,8 @@ control refusals are `RUN_CONTROL_REFUSED` (409), never 500.
 
 Image processing is never abandoned. `ImageProcessingJob.state` stores only
 the outcome: `pending` while open, `ready`, or `skipped` for a moot ending
-(image deleted, upload replaced, processor superseded, type excluded). Only
+(image deleted, upload replaced, processor superseded, type excluded: device
+work on a source type no device command carries, such as a GIF). Only
 the server decides a moot ending: an executor's `skipped` (`no_subject`,
 `not_suitable`, `unsupported_format`) is recorded as a retryable failure that
 keeps its reason code, backs off and asks for attention like any failure. A
@@ -263,6 +264,13 @@ cloud call, including the description of a device-normalized AVIF
 A photo-inventory Run's description gate accepts the Apple or the cloud
 description; `cloudDescriptionMissing` and `withoutCloudDescriptionCount`
 note photos grouped while their cloud description waits (for funding, say).
+A description that settled without one (`failed` or `skipped`) holds the
+Run for the member, who can continue without those photos; the coordinator
+never starts on a photo it has no description for.
+
+Each image job reads `leaseDeviceId` (the `DEV-` code whose attempt holds
+the lease, live or expired) and `leaseExpiresAt`. Its saved views are
+`waiting-for-apple` and `processing` (live leases).
 
 ## Diagnostics and repair
 
@@ -279,12 +287,23 @@ note photos grouped while their cloud description waits (for funding, say).
   or a Job id, on MCP (`maintenance`) and `cubby call`.
 - `job.health`: `{snapshot}`, the queue watchdog's latest measurement, null
   before its first page.
+- `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
+  that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
+  only on hello), device attempt starts per minute (reclaims included) and the
+  ETA at that pace.
 
 The web Activity page is the overview: the watchdog's red badge with raw
-alert evidence when unhealthy, the queue counts by lane and reason (the Apple
+alert evidence when unhealthy, the device backlog notice (loud when work waits
+and no device is pulling), the queue counts by lane and reason (the Apple
 lane also counts active installs, those needing an update, and leases per
-device with expired ones flagged), Runs needing attention with their rollup
-and stall flag, then the filtered Job list. Every count links to that list
+device with expired ones flagged), the image jobs each Apple device is
+processing, cloud leases grouped apart (generic imageJob rows with their
+lease countdown, polled every 15 s while work is in flight because renewals
+publish no change), Runs needing
+attention with their rollup and stall flag, then the filtered Job list. Runs
+needing attention is the Run entity's `attention` view: stopped Runs of
+`ATTENTION_RUN_PURPOSES`; system passes (AI refresh, background) retry on
+their own and stay under AI work. Every count links to that list
 (`/activity?lane=…&reason=…`, also `state`, `kind`, `runId`, `attention`);
 Retry now confirms and applies `job.retryNow` to the list's filter, and each
 row expands to its `job.explain` chain. The audit-log changes feed follows.

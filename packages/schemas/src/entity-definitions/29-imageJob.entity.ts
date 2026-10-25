@@ -6,6 +6,7 @@ import {
   imageProcessingJobState,
 } from "../activity-fields.js";
 import {
+  deviceShortcode,
   imageShortcode,
   runShortcode,
   shortcodeSchema,
@@ -154,6 +155,24 @@ export default defineEntity({
           label: "Waiting for Apple",
           description: "Image jobs parked until an Apple device pulls them",
           filters: [{ id: "state", value: ["waiting_for_device"] }],
+          // Parked work has no lease, executor, error or completion yet.
+          layout: {
+            columnVisibility: {
+              leaseDeviceId: false,
+              leaseExpiresAt: false,
+              lastExecutor: false,
+              lastError: false,
+              completedAt: false,
+            },
+          },
+        },
+        {
+          id: "processing",
+          label: "Processing",
+          description:
+            "Image jobs an attempt holds a live lease on, with the device and when the lease lapses",
+          filters: [{ id: "state", value: ["leased"] }],
+          layout: { columnVisibility: { completedAt: false } },
         },
       ],
     },
@@ -265,6 +284,39 @@ export default defineEntity({
         validation: readOnly(z.string().nullable().default(null)),
       },
       {
+        key: "leaseDeviceId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "device" },
+        display: { columnGroup: "Execution", columnLabel: "Device" },
+        explanation: {
+          ruleId: "image-job.lease-device",
+          description:
+            "The Apple device whose attempt holds the job's lease now, live or expired. Empty when no device holds it.",
+        },
+        validation: readOnly(deviceShortcode.nullable().default(null)),
+      },
+      {
+        key: "leaseExpiresAt",
+        kind: "timestamp",
+        nullable: true,
+        display: {
+          columnGroup: "Execution",
+          columnLabel: "Lease ends",
+          format: "timestamp",
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "The job's execution Job" }],
+        },
+        explanation: {
+          ruleId: "image-job.lease-expires-at",
+          description:
+            "When the running attempt's lease lapses unless its device renews it (every 15 s). Past it, any device may reclaim the job.",
+        },
+        validation: readOnly(z.date().nullable().default(null)),
+      },
+      {
         key: "durationMs",
         kind: "number",
         nullable: true,
@@ -373,6 +425,8 @@ export default defineEntity({
       "kind",
       "state",
       "waitingOn",
+      "leaseDeviceId",
+      "leaseExpiresAt",
       "imageId",
       "runId",
       "attempts",

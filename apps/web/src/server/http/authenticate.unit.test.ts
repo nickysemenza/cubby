@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BROWSER_AUTH,
   createAuthenticator,
+  delegatedRunHolds,
   isChallenge,
   MCP_AUTH,
   type Principal,
@@ -218,5 +219,39 @@ describe("MCP tokens", () => {
       ),
     ).toMatchObject({ status: 401 });
     expect(ports.getSession).not.toHaveBeenCalled();
+  });
+});
+
+// Regression (RUN-DFBE2): a photo Run owned by the other member's party
+// 401'd its own coordinator's MCP calls.
+describe("a delegated Run", () => {
+  const member = { id: "party-member-a" };
+  const run = (
+    purpose: string,
+    ledgerPartyId = "party-member-b",
+    actorUserId = "user-a",
+  ) => ({ actorUserId, ledgerPartyId, public: { purpose } });
+  it("holds a photo Run the actor started, whichever member owns it", () => {
+    expect(delegatedRunHolds(run("photo_inventory"), "user-a", member)).toBe(
+      true,
+    );
+  });
+  it("holds other Runs only for the owning member's party", () => {
+    expect(delegatedRunHolds(run("mail_import"), "user-a", member)).toBe(false);
+    expect(
+      delegatedRunHolds(run("mail_import", member.id), "user-a", member),
+    ).toBe(true);
+  });
+  it("refuses another actor's Run and an actor without a member party", () => {
+    expect(
+      delegatedRunHolds(
+        run("photo_inventory", member.id, "user-b"),
+        "user-a",
+        member,
+      ),
+    ).toBe(false);
+    expect(delegatedRunHolds(run("photo_inventory"), "user-a", null)).toBe(
+      false,
+    );
   });
 });

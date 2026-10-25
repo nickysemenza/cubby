@@ -9,6 +9,7 @@ import {
 } from "../identifier-fields.js";
 import {
   RUN_PURPOSE_LABEL,
+  ATTENTION_RUN_PURPOSES,
   VISIBLE_RUN_PURPOSES,
   runCause,
   runDisplayStatus,
@@ -402,8 +403,10 @@ export default defineEntity({
         {
           id: "attention",
           label: "Needs attention",
-          description: "Paused Runs, Runs needing review, and failed Runs",
+          description:
+            "Paused Runs, Runs needing review, and failed Runs a member started or reviews; AI refresh and background passes retry on their own",
           filters: [
+            { id: "purpose", value: [...ATTENTION_RUN_PURPOSES] },
             {
               id: "status",
               value: [

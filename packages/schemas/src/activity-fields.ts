@@ -501,6 +501,15 @@ export const ROUTINE_RUN_PURPOSES = purposesWhere((kind) =>
 );
 export const VISIBLE_RUN_PURPOSES = purposesWhere((kind) => !kind.routine);
 
+/**
+ * Kinds whose stopped Runs ask a member for something. System kinds (AI
+ * refresh passes, grouped background calls) retry on their own and surface
+ * through AI work, so a backlog of them never reads as household attention.
+ */
+export const ATTENTION_RUN_PURPOSES = purposesWhere(
+  (kind) => !kind.routine && kind.trigger !== "system",
+);
+
 /** Kinds whose AI evaluations name the Run as their owner (`AiEvaluation.runId`). */
 export const OWNED_AI_WORK_PURPOSES = purposesWhere(
   (kind) => kind.aiWork === "owned",

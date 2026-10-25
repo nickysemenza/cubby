@@ -156,6 +156,36 @@ describe("durable image representations", () => {
     expect((await execution(row.jobId)).state).toBe("completed");
   });
 
+  // Regression: a GIF's device command failed validation on every pull
+  // (HTTP 500), so its parked device work could never settle.
+  it("settles device work on a type no device command carries, and keeps its cloud work", async () => {
+    const row = await source();
+    const cloudJobId = await createImageProcessingJob(ctx.db, {
+      imageId: parseEntityId("image", row.id),
+      kind: "describe_image",
+      sourceContentHash: hash,
+      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+    });
+    if (!cloudJobId) throw new Error("Missing cloud job");
+    await getDb(ctx.db)
+      .update(image)
+      .set({ contentType: "image/gif" })
+      .where(eq(image.id, row.id));
+    expect(await retireObsoleteImageProcessingJobs(ctx.db, { limit: 10 })).toBe(
+      1,
+    );
+    const states = await getDb(ctx.db)
+      .select({ id: imageProcessingJob.id, state: imageProcessingJob.state })
+      .from(imageProcessingJob)
+      .where(inArray(imageProcessingJob.id, [row.jobId, cloudJobId]));
+    expect(
+      Object.fromEntries(states.map((entry) => [entry.id, entry.state])),
+    ).toEqual({
+      [row.jobId]: "skipped",
+      [cloudJobId]: "pending",
+    });
+  });
+
   it("does not keep a completed cutout in eligibility review because an earlier device description requested review", async () => {
     const row = await source();
     const jobId = await createImageProcessingJob(ctx.db, {

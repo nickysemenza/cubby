@@ -108,9 +108,12 @@ struct PhotoImportFlowTests {
             describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
             deviceWorkError: nil, deviceWorkAttempts: 0)
 
+        var excluded = skipped
+        excluded.targetState = .skipped
+
         #expect(
             PhotoReviewPolicy.groupingReadiness(
-                images: [ready, skipped], runStatus: .running)
+                images: [ready, excluded], runStatus: .running)
                 == .readyToStart)
         #expect(
             PhotoReviewPolicy.groupingReadiness(

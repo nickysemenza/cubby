@@ -22,16 +22,16 @@ struct HouseholdQueueOverviewTests {
         """
     }
 
-    private func leased(executor: String, expiresAt: String, expired: Bool) -> String {
-        #"{"reason":"leased","lane":"apple_device","executor":"\#(executor)","executorDeviceId":null,"leasedAt":"2099-01-01T00:00:00.000Z","leaseExpiresAt":"\#(expiresAt)","expired":\#(expired)}"#
-    }
-
     private func overview(
         runRows: [EntityRow] = [], rollups: JobRunRollupsOutput? = nil
     ) throws -> HouseholdQueueOverview {
         let counts = try queue(
             #"""
-            {"total":64,"leases":[],"jobs":[],"counts":[
+            {"total":64,"jobs":[],"leases":[
+              {"executor":"Synthetic phone","live":0,"expired":15},
+              {"executor":"Synthetic Mac","live":2,"expired":0},
+              {"executor":"Synthetic tablet","live":1,"expired":2}
+            ],"counts":[
               {"lane":"frontier_ai","reason":"waiting_funding","count":40},
               {"lane":"apple_device","reason":"leased","count":3},
               {"lane":"apple_device","reason":"waiting_device","count":14},
@@ -40,26 +40,6 @@ struct HouseholdQueueOverviewTests {
               {"lane":"apple_device","reason":"backing_off","count":0}
             ]}
             """#)
-        let leasedJobs = [
-            job(
-                id: "00000000-0000-4000-8000-000000000001", key: "image-processing:image-job-mine",
-                kind: "image.device", lane: "apple_device",
-                waitingOn: leased(
-                    executor: "Kitchen Mac", expiresAt: "2099-01-01T00:02:00.000Z", expired: false)),
-            // Same display name as this device, but not one of its claims: another install.
-            job(
-                id: "00000000-0000-4000-8000-000000000002", key: "image-processing:image-job-twin",
-                kind: "image.device", lane: "apple_device",
-                waitingOn: leased(
-                    executor: "Kitchen Mac", expiresAt: "2099-01-01T00:00:30.000Z", expired: true)),
-            job(
-                id: "00000000-0000-4000-8000-000000000003", key: "image-processing:image-job-hall",
-                kind: "image.device", lane: "apple_device",
-                waitingOn: leased(
-                    executor: "Hall phone", expiresAt: "2099-01-01T00:01:00.000Z", expired: false)),
-        ]
-        let leased = try queue(
-            #"{"total":3,"leases":[],"counts":[],"jobs":[\#(leasedJobs.joined(separator: ","))]}"#)
         let waitingJobs = [
             job(
                 id: "00000000-0000-4000-8000-000000000004", key: "ai:evaluation:1", kind: "ai.evaluation",
@@ -76,7 +56,7 @@ struct HouseholdQueueOverviewTests {
         let waiting = try queue(
             #"{"total":2,"leases":[],"counts":[],"jobs":[\#(waitingJobs.joined(separator: ","))]}"#)
         return HouseholdQueueOverview.make(
-            counts: counts, leased: leased, waiting: waiting, runRows: runRows,
+            counts: counts, waiting: waiting, runRows: runRows,
             runsNeedingAttention: runRows.count, rollups: rollups)
     }
 
@@ -84,7 +64,7 @@ struct HouseholdQueueOverviewTests {
         let overview = try overview()
         #expect(overview.appleCounts.map(\.reason) == ["waiting_device", "leased"])
         #expect(overview.appleCounts.map(\.count) == [14, 3])
-        #expect(overview.leasedCount == 3)
+        #expect(overview.waitingForDeviceCount == 14)
         #expect(overview.frontierCounts.map(\.reason) == ["due", "waiting_funding"])
         // The funding window's reopening comes from a listed waiting Job.
         #expect(
@@ -95,24 +75,21 @@ struct HouseholdQueueOverviewTests {
         #expect(overview.backingOff.first?.until == Date(timeIntervalSince1970: 4_070_930_400))
     }
 
-    /// Regression: "mine" matched `lastExecutor` to this device's name, so another install with
-    /// the same name read as this device. It now matches this worker's live claims.
-    @Test func marksThisDevicesLeasesByItsClaimsNotItsName() throws {
-        let overview = try overview()
-        #expect(overview.leases.map(\.imageJobID) == ["image-job-twin", "image-job-hall", "image-job-mine"])
-        let split = overview.leases(claimedImageJobIDs: ["image-job-mine"])
-        #expect(split.mine.map(\.imageJobID) == ["image-job-mine"])
-        #expect(split.others.map(\.imageJobID) == ["image-job-twin", "image-job-hall"])
-        #expect(split.others.first?.executor == "Kitchen Mac")
-        #expect(split.others.first?.expired == true)
-        #expect(split.others.last?.expired == false)
-        #expect(overview.leases(claimedImageJobIDs: []).mine.isEmpty)
+    /// An old install holding many expired leases reads as one counted row, not a row per Job.
+    @Test func countsExpiredLeasesPerExecutor() throws {
+        let holders = try overview().expiredLeaseHolders
+        #expect(holders.map(\.executor) == ["Synthetic phone", "Synthetic tablet"])
+        #expect(holders.map(\.expired) == [15, 2])
+        #expect(holders.first?.expiredLabel == "15 expired leases awaiting reclaim")
     }
 
-    @Test func imageJobIDComesOnlyFromImageProcessingKeys() {
-        #expect(HouseholdQueueOverview.imageJobID(fromJobKey: "image-processing:abc") == "abc")
-        #expect(HouseholdQueueOverview.imageJobID(fromJobKey: "image-processing:") == nil)
-        #expect(HouseholdQueueOverview.imageJobID(fromJobKey: "ai:evaluation:abc") == nil)
+    /// Activity reads Runs needing attention from the manifest's saved view, so the view's
+    /// purpose filter (system AI passes excluded) must reach the request.
+    @Test func runsAttentionViewCarriesItsPurposeFilter() throws {
+        let view = try #require(EntityCatalog[.run].presentation.savedViews.first { $0.id == "attention" })
+        let purposes = view.filterState["purpose"] ?? []
+        #expect(!purposes.isEmpty)
+        #expect(!purposes.contains("ai_refresh"))
     }
 
     @Test func runsCarryTheirRollups() throws {

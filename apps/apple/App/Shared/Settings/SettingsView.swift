@@ -99,6 +99,7 @@ struct SettingsView: View {
 
             if model.phase == .signedIn {
                 DeviceParticipationSection(showPauseAnalysis: photosReady)
+                ImageWorkConcurrencySection()
             }
 
             NotificationSettingsSection()
@@ -430,6 +431,54 @@ private struct DeviceParticipationSection: View {
             get: { model.participation.automaticWork },
             set: { model.setParticipation(automaticWork: $0) })
     }
+}
+
+/// Settings › Image work: how many image jobs this device runs at once, one pool shared by
+/// descriptions and subject lifts. Stored per device; 0 is Automatic. The worker picks up a
+/// change on its next pull.
+private struct ImageWorkConcurrencySection: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(CompanionImageConcurrency.defaultsKey) private var stored = 0
+
+    var body: some View {
+        Section {
+            Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
+                LabeledContent("Jobs at once") {
+                    Text(
+                        stored == 0
+                            ? "Automatic (\(CompanionImageConcurrency.automatic))"
+                            : "\(CompanionImageConcurrency.slots(for: stored))"
+                    )
+                    .monospacedDigit()
+                }
+            }
+            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
+            .accessibilityIdentifier("settings.imageWork.jobs")
+        } header: {
+            Eyebrow("Image work")
+        } footer: {
+            Text(
+                "Image descriptions and subject lifts share these slots. This device pulls new work only while a slot is free. Automatic uses the value measured for this kind of device."
+            )
+            .font(.fieldGuideLabel)
+            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+        }
+    }
+
+    /// Stepping below 1 returns to Automatic (stored 0).
+    private var choice: Binding<Int> {
+        Binding(
+            get: { stored },
+            set: {
+                stored = $0
+                model.applyImageWorkConcurrency()
+            })
+    }
+}
+
+#Preview("Image work", traits: .modifier(SignedInPreview())) {
+    Form { ImageWorkConcurrencySection() }
+        .formStyle(.grouped)
 }
 
 #Preview("This device — on", traits: .modifier(SignedInPreview())) {

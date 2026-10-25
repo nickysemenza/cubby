@@ -1,5 +1,6 @@
 import { deviceOut } from "@cubby/schemas/device";
 import { shortcode } from "@cubby/schemas/identifiers";
+import { imageJobOut } from "@cubby/schemas/image-job";
 import { runOut } from "@cubby/schemas/run";
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -154,18 +155,64 @@ const stoppedRuns = runPage([
 ]);
 const runFilters: unknown[] = [];
 
+const MAC = shortcode("DEV-4K7M");
 const devices = {
   items: [
     listRow(
-      mock(deviceOut, { overrides: { inactive: false, updateRequired: true } }),
+      mock(deviceOut, {
+        overrides: {
+          id: MAC,
+          name: "Fixture Studio Mac",
+          inactive: false,
+          updateRequired: true,
+        },
+      }),
     ),
     listRow(mock(deviceOut, { overrides: { inactive: true } })),
   ],
   meta: { pageIndex: 0, pageSize: 50, totalCount: 2 },
 };
 
+// One Apple lease and one cloud lease, both live.
+const processing = runPage([
+  listRow(
+    mock(imageJobOut, {
+      overrides: {
+        id: shortcode("IPR-4K7M"),
+        displayName: "Subject lift · fixture-boots.png",
+        state: "leased",
+        runId: null,
+        leaseDeviceId: MAC,
+        leaseExpiresAt: new Date(now + 45_000),
+      },
+    }),
+  ),
+  listRow(
+    mock(imageJobOut, {
+      overrides: {
+        id: shortcode("IPR-4K7N"),
+        displayName: "Image identification · fixture-label.png",
+        state: "leased",
+        runId: null,
+        leaseDeviceId: null,
+        leaseExpiresAt: new Date(now + 30_000),
+      },
+    }),
+  ),
+]);
+
 const answers = new Map<string, UnparsedStartOperationData>([
   ["job.queue", queue],
+  [
+    "job.deviceBacklog",
+    {
+      waiting: 41,
+      runsWaiting: 2,
+      workingDevices: 0,
+      claimsPerMinute: 0,
+      etaSeconds: null,
+    },
+  ],
   ["job.health", { snapshot: health }],
   ["job.retryNow", { retried: 53 }],
   [
@@ -203,6 +250,7 @@ beforeEach(async () => {
         filters?: { status?: string[] };
       };
       if (entity === "device") return { ok: true, data: devices };
+      if (entity === "imageJob") return { ok: true, data: processing };
       runFilters.push(filters);
       return {
         ok: true,
@@ -293,4 +341,25 @@ it("confirms Retry now over the filtered set", async () => {
   expect(retried[0]).toMatchObject({
     filter: { lanes: ["apple_device"], reasons: ["waiting_device"] },
   });
+});
+
+it("warns when device work waits with no device pulling, and groups live leases by holder", async () => {
+  renderOverview();
+
+  const backlog = await screen.findByTestId("device-backlog");
+  expect(backlog).toHaveTextContent(
+    "41 images waiting for an Apple device · holding up 2 Runs",
+  );
+  expect(backlog).toHaveTextContent("No Apple device is processing.");
+
+  const rows = await screen.findAllByTestId("processing-image-job");
+  expect(rows.map((row) => row.textContent)).toEqual([
+    expect.stringMatching(/^Subject lift · fixture-boots\.png.*lease \d+s$/),
+    expect.stringMatching(
+      /^Image identification · fixture-label\.png.*Background maintenance/,
+    ),
+  ]);
+  expect(screen.getByText("Fixture Studio Mac")).toBeVisible();
+  // Cloud work never reads as an Apple device.
+  expect(screen.getByText("AI Gateway and unregistered devices")).toBeVisible();
 });

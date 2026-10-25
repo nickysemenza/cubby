@@ -20,6 +20,40 @@ public enum CompanionImageProcessingProtocol {
     }
 }
 
+/// How many image commands one resident worker runs at once: one pool of slots shared by
+/// describe_image and subject_lift. The worker pulls only while a slot is free, so the server
+/// needs no per-device limit. `nil` (or 0 in storage) means Automatic.
+public enum CompanionImageConcurrency {
+    /// The explicit choices Settings and `cubby companion --jobs` offer.
+    public static let range = 1...16
+    /// Per-device UserDefaults key; 0 stores Automatic.
+    public static let defaultsKey = "imageWork.concurrentJobs"
+
+    /// Automatic, measured per platform. Mac (M3, `cubby companion --jobs N` against the household
+    /// queue, 3.5 min per N, Oct 2026): 8 slots roughly tripled throughput over 2–4; past 8 the
+    /// on-device describe queue lengthened (median 14–30 s, one 2-minute stall at 12) without a
+    /// clean gain. iPhone/iPad keep the original 4 until measured.
+    public static var automatic: Int {
+        #if os(macOS)
+            8
+        #else
+            4
+        #endif
+    }
+
+    /// The slot count for a stored or flagged choice: Automatic for nil/0, else clamped to `range`.
+    public static func slots(for explicit: Int?) -> Int {
+        guard let explicit, explicit > 0 else { return automatic }
+        return min(max(explicit, range.lowerBound), range.upperBound)
+    }
+
+    /// The stored per-device choice, nil for Automatic.
+    public static func storedChoice(in defaults: UserDefaults = .standard) -> Int? {
+        let value = defaults.integer(forKey: defaultsKey)
+        return value > 0 ? value : nil
+    }
+}
+
 extension ImageProcessingHello {
     /// This device's capability report, sent with every `imageProcessing.pull`.
     static func companion(

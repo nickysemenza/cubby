@@ -1,8 +1,8 @@
 import Foundation
 
 /// Activity's household queue sections, from `job.queue` and `job.runRollups`: per lane, live
-/// Jobs grouped by what they wait on; the Apple device lane's leases split into this device's and
-/// other devices'; Jobs waiting on a time (funding window, backoff); and Runs needing attention
+/// Jobs grouped by what they wait on; executors holding expired Apple-device leases; Jobs waiting
+/// on a time (funding window, backoff); and Runs needing attention
 /// with their rollups. Every figure is a server count or a server row; this type only groups them.
 /// The server excludes inactive installs from lane counts.
 public struct HouseholdQueueOverview: Sendable, Equatable {
@@ -22,30 +22,24 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
         }
     }
 
-    /// A leased Apple-device Job (`waitingOn.reason == "leased"`).
-    public struct Lease: Sendable, Equatable, Identifiable {
-        /// The Job id.
-        public let id: String
-        public let kind: String
-        /// The image job id the device's command carries, from the Job key; matches this device's
-        /// own claims.
-        public let imageJobID: String?
-        /// The executor named on the lease, verbatim.
+    /// One executor's Apple-device leases (`job.queue` `leases`). Live leases list as processing
+    /// image jobs (the imageJob `processing` saved view); expired ones are only counted, because
+    /// the next claim reclaims them and an old install can hold many.
+    public struct LeaseHolder: Sendable, Equatable, Identifiable {
+        /// The executor named on the leases, verbatim.
         public let executor: String?
-        public let leaseExpiresAt: Date
-        /// The server's flag: an expired lease is reclaimed by the next claim.
-        public let expired: Bool
+        public let live: Int
+        public let expired: Int
+        public var id: String { executor ?? "" }
 
-        public init(
-            id: String, kind: String, imageJobID: String?, executor: String?, leaseExpiresAt: Date,
-            expired: Bool
-        ) {
-            self.id = id
-            self.kind = kind
-            self.imageJobID = imageJobID
+        public init(executor: String?, live: Int, expired: Int) {
             self.executor = executor
-            self.leaseExpiresAt = leaseExpiresAt
+            self.live = live
             self.expired = expired
+        }
+
+        public var expiredLabel: String {
+            expired == 1 ? "1 expired lease awaiting reclaim" : "\(expired) expired leases awaiting reclaim"
         }
     }
 
@@ -112,42 +106,29 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
 
     public let appleCounts: [ReasonCount]
     public let frontierCounts: [ReasonCount]
-    /// The first page of leased Apple-device Jobs, oldest-expiring first.
-    public let leases: [Lease]
+    /// Executors holding expired Apple-device leases, most expired first.
+    public let expiredLeaseHolders: [LeaseHolder]
     public let backingOff: [BackingOff]
     public let runsNeedingAttention: Int
     public let runs: [RunRollupRow]
 
     public init(
-        appleCounts: [ReasonCount], frontierCounts: [ReasonCount], leases: [Lease],
-        backingOff: [BackingOff], runsNeedingAttention: Int, runs: [RunRollupRow]
+        appleCounts: [ReasonCount], frontierCounts: [ReasonCount],
+        expiredLeaseHolders: [LeaseHolder] = [], backingOff: [BackingOff],
+        runsNeedingAttention: Int, runs: [RunRollupRow]
     ) {
         self.appleCounts = appleCounts
         self.frontierCounts = frontierCounts
-        self.leases = leases
+        self.expiredLeaseHolders = expiredLeaseHolders
         self.backingOff = backingOff
         self.runsNeedingAttention = runsNeedingAttention
         self.runs = runs
     }
 
-    /// Every leased Apple-device Job, which can exceed the listed rows.
-    public var leasedCount: Int {
-        appleCounts.first { $0.reason == JobWaitingOnReason.leased.rawValue }?.count ?? 0
-    }
-
-    /// Leases this device holds (by its worker's live claims, never by device name) and the rest.
-    public func leases(claimedImageJobIDs: Set<String>) -> (mine: [Lease], others: [Lease]) {
-        let mine = leases.filter { $0.imageJobID.map(claimedImageJobIDs.contains) ?? false }
-        return (mine, leases.filter { !mine.contains($0) })
-    }
-
-    /// Image work's Job key is `image-processing:<image job id>`; the command a device runs
-    /// carries that image job id as its `jobId`.
-    static func imageJobID(fromJobKey key: String) -> String? {
-        let prefix = "image-processing:"
-        guard key.hasPrefix(prefix) else { return nil }
-        let id = key.dropFirst(prefix.count)
-        return id.isEmpty ? nil : String(id)
+    /// Apple-device Jobs waiting for any device, shown beside the imageJob `waiting-for-apple`
+    /// saved view link.
+    public var waitingForDeviceCount: Int {
+        appleCounts.first { $0.reason == JobWaitingOnReason.waitingDevice.rawValue }?.count ?? 0
     }
 
     static func reasonCounts(
@@ -163,9 +144,9 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
             .sorted { (order.firstIndex(of: $0.reason) ?? .max) < (order.firstIndex(of: $1.reason) ?? .max) }
     }
 
-    /// Maps the three `job.queue` reads and the Runs page with their rollups.
+    /// Maps the two `job.queue` reads and the Runs page with their rollups.
     static func make(
-        counts: JobQueueOutput, leased: JobQueueOutput, waiting: JobQueueOutput,
+        counts: JobQueueOutput, waiting: JobQueueOutput,
         runRows: [EntityRow], runsNeedingAttention: Int, rollups: JobRunRollupsOutput?
     ) -> Self {
         var fundingUntil: Date?
@@ -181,13 +162,9 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
             default: break
             }
         }
-        let leases = leased.jobs.compactMap { job -> Lease? in
-            guard case .leased(let lease) = job.waitingOn else { return nil }
-            return Lease(
-                id: job.id, kind: job.kind, imageJobID: imageJobID(fromJobKey: job.key),
-                executor: lease.executor, leaseExpiresAt: lease.leaseExpiresAt, expired: lease.expired)
-        }
-        .sorted { $0.leaseExpiresAt < $1.leaseExpiresAt }
+        let expiredLeaseHolders = counts.leases.filter { $0.expired > 0 }
+            .map { LeaseHolder(executor: $0.executor, live: $0.live, expired: $0.expired) }
+            .sorted { ($1.expired, $0.id) < ($0.expired, $1.id) }
         let order = JobWaitingOnReason.allCases.map(\.rawValue)
         let rollupByRun = Dictionary(
             (rollups?.rollups ?? []).map { ($0.runId, $0) }, uniquingKeysWith: { first, _ in first })
@@ -210,17 +187,15 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
         return Self(
             appleCounts: reasonCounts(counts.counts, lane: .appleDevice),
             frontierCounts: reasonCounts(counts.counts, lane: .frontierAi, fundingUntil: fundingUntil),
-            leases: leases, backingOff: backingOff, runsNeedingAttention: runsNeedingAttention,
-            runs: runs)
+            expiredLeaseHolders: expiredLeaseHolders, backingOff: backingOff,
+            runsNeedingAttention: runsNeedingAttention, runs: runs)
     }
 
-    /// Three `job.queue` reads (lane counts, Apple leases, timed waits), the Runs needing
+    /// Two `job.queue` reads (lane counts with the lease summary, timed waits), the Runs needing
     /// attention page, and those Runs' rollups.
     public static func load(client: CubbyClient) async throws -> Self {
         let lanes: [JobLane] = [.appleDevice, .frontierAi]
         async let counts = client.native_job_queue(body: .init(filter: .init(lanes: lanes), pageSize: 1))
-        async let leased = client.native_job_queue(
-            body: .init(filter: .init(lanes: [.appleDevice], reasons: [.leased]), pageSize: 50))
         async let waiting = client.native_job_queue(
             body: .init(filter: .init(lanes: lanes, reasons: [.waitingFunding, .backingOff]), pageSize: 10))
         let runs = EntityCatalog[.run]
@@ -232,7 +207,7 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
             runRows.isEmpty
             ? nil : try await client.native_job_runRollups(body: .init(runIds: runRows.map(\.id)))
         return make(
-            counts: try await counts, leased: try await leased, waiting: try await waiting,
+            counts: try await counts, waiting: try await waiting,
             runRows: runRows, runsNeedingAttention: runPage?.meta.totalCount ?? 0, rollups: rollups)
     }
 }
