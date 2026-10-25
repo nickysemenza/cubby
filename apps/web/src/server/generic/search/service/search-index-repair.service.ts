@@ -23,7 +23,7 @@ const createSearchIndexRepairCounters = (): SearchIndexRepairCounters => ({
   published: 0,
 });
 
-/** Explicit repair schedules the ordinary family Jobs; the stream only reads them. */
+/** Explicit repair schedules the ordinary derived drain; the stream only reads them. */
 export async function* repairSearchIndex(
   db: Database,
   signal?: AbortSignal,
@@ -61,12 +61,9 @@ export async function* repairSearchIndex(
       yield { type: "done", result: counters };
       return;
     }
-    const orphans = executions.find(
-      (execution) => execution.key === "refresh:orphans",
-    );
     yield {
       type: "progress",
-      phase: orphans?.state === "completed" ? "sources" : "orphans",
+      phase: "sources",
       done: counters.scanned,
       total: counters.scanned + 1,
       counters,

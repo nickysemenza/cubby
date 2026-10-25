@@ -12,13 +12,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
-import { task, job } from "~/server/db/schema";
+import { task } from "~/server/db/schema";
 import { createTask } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
+import { derivedMarkTickets } from "~/server/testing/background-queue";
 import {
   drainDerivedRefreshFrontier,
   captureBackgroundQueue,
@@ -207,7 +208,7 @@ describe("bounded entity writes", () => {
     ).toEqual([]);
   });
 
-  it("coalesces repeated edits into one durable search Job", async () => {
+  it("coalesces repeated edits into one search mark", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic coalesced product" }),
@@ -226,11 +227,13 @@ describe("bounded entity writes", () => {
       id: product.id,
       data: { name: "Synthetic third name" },
     });
-    const work = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, "refresh:search"));
-    expect(work).toHaveLength(1);
+    expect(
+      await derivedMarkTickets(
+        ctx.db,
+        "product.searchDocument",
+        product.entityId,
+      ),
+    ).toHaveLength(1);
   });
 
   it("patches a stored collection without hydrating dependent detail", async () => {

@@ -2369,6 +2369,13 @@ declaration rebuilds the same values. Overrides, explicit None, waivers and
 accepted Suggestions are inputs, never derived rows. Tombstoning a record
 removes its derived values.
 
+Integration tests settle `drainStoredDerived(db)` after source writes before
+asserting stored list values, filters, totals or quality. Invalidation tests
+assert `derivedMarkTickets(db, "<entity>.<key>", ref)` before draining (omit
+`ref` to include fanout marks), then read the published value. Use
+`reconcileDerivedRefreshInputs(db)` only for explicit cache repair coverage;
+reconciliation would conceal a missing declared input in a mutation test.
+
 Lists that need a value live instead (a one-hop lookup or an indexed rollup the
 round-trip report shows cheap) compile it inline; the Location list's direct
 value is a live sum of stored inventory valuations.

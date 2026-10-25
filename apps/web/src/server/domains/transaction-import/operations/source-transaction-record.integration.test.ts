@@ -21,13 +21,14 @@ import {
   readEmail,
   saveMailboxMetadata,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
-import * as refreshFamilies from "~/server/generic/derived-refresh/repo/families";
+import * as changes from "~/server/generic/changes/repo/change";
 import {
   claimJob,
   enqueueJob,
   renewJob,
 } from "~/server/generic/jobs/repo/jobs";
 import { systemPrincipal } from "~/server/http/authenticate";
+import { derivedMarkTickets } from "~/server/testing/background-queue";
 
 import { sourceTransactionRecordHandlers } from "./source-transaction-record.server";
 
@@ -71,11 +72,8 @@ const abortedAttempt = z.object({
   durationMs: z.number(),
   retry: z.boolean(),
 });
-// The second client commits through real source or Job lifecycle owners after
-// intake's snapshot, before search capture. A capture writes only the search
-// family's JobInvalidation row: a genuine source save on the second client
-// still conflicts there and retries, but claims and renewals replace only the
-// execution Job tuple, which the capture never writes, so admission succeeds.
+// Competing source and Job lifecycle writes use a second client after intake's
+// snapshot. Generated marks retain derived work without replacing the drain Job.
 describe("finance.record source and Job lifecycle contention", () => {
   const ctx = withTestDb();
   async function prepareCloudCompletion() {
@@ -122,15 +120,22 @@ describe("finance.record source and Job lifecycle contention", () => {
     const before = await getDb(ctx.db).execute(
       sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
     );
+    const marksBefore = await getDb(ctx.db).execute(
+      sql`SELECT target, ref, ticket FROM "DerivedDirty" ORDER BY target, ref`,
+    );
     const invalidationsBefore = await getDb(ctx.db).execute(
       sql`SELECT key, "restartsPass", xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
     );
-    const invalidate = refreshFamilies.invalidateRefreshFamily;
+    const invalidate = changes.recordChange;
     const capture = vi
-      .spyOn(refreshFamilies, "invalidateRefreshFamily")
-      .mockImplementation(async (db, family) => {
-        await invalidate(db, family);
-        if (family === "search") throw new Error("Synthetic capture rejection");
+      .spyOn(changes, "recordChange")
+      .mockImplementation(async (db, changeEvent) => {
+        await invalidate(db, changeEvent);
+        if (
+          changeEvent.kind === "source" &&
+          changeEvent.categories.length === 0
+        )
+          throw new Error("Synthetic capture rejection");
       });
     try {
       const result = await sourceTransactionRecordHandlers.operations.record({
@@ -154,6 +159,13 @@ describe("finance.record source and Job lifecycle contention", () => {
           )
         ).rows,
       ).toEqual(before.rows);
+      expect(
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT target, ref, ticket FROM "DerivedDirty" ORDER BY target, ref`,
+          )
+        ).rows,
+      ).toEqual(marksBefore.rows);
       // The rolled-back capture left no invalidation behind.
       expect(
         (
@@ -197,7 +209,6 @@ describe("finance.record source and Job lifecycle contention", () => {
     async ({ conflicts, change }) => {
       const lifecycle = change === "claim" || change === "renew";
       // Genuine source captures and execution work use independent write rows.
-      const invalidations = change === "none" || lifecycle ? 0 : conflicts;
       const member = await createRepoEntity(ctx, "ledgerParty", {
         name: "Synthetic intake member",
         kind: "member",
@@ -236,9 +247,9 @@ describe("finance.record source and Job lifecycle contention", () => {
       const originalEmail = await readEmail(ctx.db, emailIdentity);
       expect(originalEmail).not.toBeNull();
       const search = await enqueueJob(ctx.db, {
-        key: "refresh:search",
-        kind: "refresh.family",
-        input: { family: "search" },
+        key: "derived:drain",
+        kind: "derived.drain",
+        input: {},
       });
       const cloudCompletions: Awaited<
         ReturnType<typeof prepareCloudCompletion>
@@ -268,11 +279,10 @@ describe("finance.record source and Job lifecycle contention", () => {
       (SELECT count(*)::int FROM "SourceTransactionRecord") AS records,
       (SELECT count(*)::int FROM "Run" WHERE purpose = 'sweep') AS sweeps,
       (SELECT count(*)::int FROM "Job" WHERE kind = 'run.execute') AS "sweepJobs",
-      (SELECT count(*)::int FROM "Expense") AS expenses,
-      (SELECT count(*)::int FROM "JobInvalidationCapture" WHERE key = 'refresh:search') AS revision`)
+      (SELECT count(*)::int FROM "Expense") AS expenses`)
         ).rows[0];
       let attempts = 0;
-      const invalidate = refreshFamilies.invalidateRefreshFamily;
+      const invalidate = changes.recordChange;
       const warnings = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
@@ -281,22 +291,17 @@ describe("finance.record source and Job lifecycle contention", () => {
         durationMs: number;
         generation: number;
         xmin: string;
-        revision: number;
-        markerXmin: string;
       }[] = [];
       const searchTuple = async () =>
         z
           .object({
             generation: z.number(),
             xmin: z.string(),
-            revision: z.number(),
-            markerXmin: z.string(),
           })
           .parse(
             (
               await getDb(ctx.db).execute(
-                sql`SELECT j.generation, j.xmin::text AS xmin, (SELECT count(*)::int FROM "JobInvalidationCapture" c WHERE c.key = j.key) AS revision, m.xmin::text AS "markerXmin"
-                  FROM "Job" j JOIN "JobInvalidation" m ON m.key = j.key WHERE j.key = 'refresh:search'`,
+                sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'derived:drain'`,
               )
             ).rows[0],
           );
@@ -316,21 +321,15 @@ describe("finance.record source and Job lifecycle contention", () => {
             ).rows[0],
           ).pid;
       const originalTuple = await searchTuple();
-      const qualityCaptures = async () =>
-        z
-          .object({ count: z.number() })
-          .parse(
-            (
-              await getDb(ctx.db).execute(
-                sql`SELECT count(*)::int AS count FROM "JobInvalidationCapture" WHERE key = 'refresh:quality'`,
-              )
-            ).rows[0],
-          ).count;
-      const originalQualityCaptures = await qualityCaptures();
       const racing = vi
-        .spyOn(refreshFamilies, "invalidateRefreshFamily")
-        .mockImplementation(async (db, family) => {
-          if (!savingEmail && family === "search" && ++attempts === 1) {
+        .spyOn(changes, "recordChange")
+        .mockImplementation(async (db, changeEvent) => {
+          if (
+            !savingEmail &&
+            changeEvent.kind === "source" &&
+            changeEvent.categories.length === 0 &&
+            ++attempts === 1
+          ) {
             // A pooled handle leases a second client after the intake snapshot.
             // The real source or lifecycle owner commits before capture resumes.
             savingEmail = true;
@@ -420,7 +419,7 @@ describe("finance.record source and Job lifecycle contention", () => {
               savingEmail = false;
             }
           }
-          return invalidate(db, family);
+          return invalidate(db, changeEvent);
         });
       try {
         const result = await record();
@@ -464,34 +463,24 @@ describe("finance.record source and Job lifecycle contention", () => {
               description: { description: "A synthetic orchard" },
             },
           });
-        expect(await qualityCaptures()).toBe(
-          originalQualityCaptures + invalidations + 1,
-        );
+        expect(
+          await derivedMarkTickets(
+            ctx.db,
+            "sourceTransactionRecord.searchDocument",
+          ),
+        ).not.toEqual([]);
         expect(writerCommits).toHaveLength(
           change === "cloud_completion" ? 1 : conflicts,
         );
         let previousXmin = originalTuple.xmin;
-        let previousMarker = originalTuple.markerXmin;
-        for (const [index, writer] of writerCommits.entries()) {
-          // Captures append input without replacing policy or the execution row.
-          expect(writer.revision).toBe(
-            originalTuple.revision +
-              (change === "cloud_completion"
-                ? conflicts
-                : invalidations === 0
-                  ? 0
-                  : index + 1),
-          );
-          expect(writer.markerXmin).toBe(previousMarker);
-          // Claims and renewals replace the execution tuple.
+        for (const writer of writerCommits) {
+          // Source marks append drain intent; lifecycle writes replace its execution row.
           expect(writer.xmin === previousXmin).toBe(!lifecycle);
-          // A renewal changes no generation; a claim may observe a capture.
           expect(
-            change === "renew" &&
-              writer.generation !== originalTuple.generation,
-          ).toBe(false);
+            change !== "renew" ||
+              writer.generation === originalTuple.generation,
+          ).toBe(true);
           previousXmin = writer.xmin;
-          previousMarker = writer.markerXmin;
         }
         const savedEmail = await readEmail(ctx.db, emailIdentity);
         expect(savedEmail).not.toBeNull();
@@ -525,7 +514,6 @@ describe("finance.record source and Job lifecycle contention", () => {
           sweeps: admitted,
           sweepJobs: admitted,
           expenses: 0,
-          revision: originalTuple.revision + invalidations + admitted,
         });
         racing.mockRestore();
         expect(result).toMatchObject({ ok: true, data: { inserted: 1 } });
@@ -536,7 +524,6 @@ describe("finance.record source and Job lifecycle contention", () => {
           sweeps: 1,
           sweepJobs: 1,
           expenses: 0,
-          revision: originalTuple.revision + invalidations + 1,
         });
         const stored = await read();
         expect(await record()).toMatchObject({

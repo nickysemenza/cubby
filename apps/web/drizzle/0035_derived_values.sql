@@ -755,11 +755,11 @@ BEGIN
     PERFORM derived_mark('product.dataQuality', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF NEW."entityKind" = 'product' THEN PERFORM derived_mark('inventory.searchDocument@5', ARRAY[NEW."entityId"::uuid]); END IF;
+    IF NEW."entityKind" = 'product' THEN PERFORM derived_mark('inventory.searchDocument@6', ARRAY[NEW."entityId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF OLD."entityKind" = 'product' THEN PERFORM derived_mark('inventory.searchDocument@5', ARRAY[OLD."entityId"::uuid]); END IF;
+    IF OLD."entityKind" = 'product' THEN PERFORM derived_mark('inventory.searchDocument@6', ARRAY[OLD."entityId"::uuid]); END IF;
   ELSIF (OLD."entityKind" = 'product' OR NEW."entityKind" = 'product') AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('inventory.searchDocument@5', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
+    PERFORM derived_mark('inventory.searchDocument@6', ARRAY[OLD."entityId"::uuid] || ARRAY[NEW."entityId"::uuid]);
   END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint
@@ -1537,11 +1537,11 @@ BEGIN
     PERFORM derived_mark('location.dataQuality', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('inventory.searchDocument@4', ARRAY[NEW."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('inventory.searchDocument@5', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('inventory.searchDocument@4', ARRAY[OLD."id"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('inventory.searchDocument@5', ARRAY[OLD."id"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('inventory.searchDocument@4', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+    PERFORM derived_mark('inventory.searchDocument@5', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('inventory.dataQuality@4', ARRAY[NEW."id"::uuid]); END IF;
@@ -1818,6 +1818,13 @@ BEGIN
     PERFORM derived_mark('product.dataQuality@11', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('inventory.searchDocument@4', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('inventory.searchDocument@4', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
+    PERFORM derived_mark('inventory.searchDocument@4', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('productCategory.dataQuality', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('productCategory.dataQuality', ARRAY[OLD."id"::uuid]); END IF;
@@ -1840,11 +1847,11 @@ BEGIN
     PERFORM derived_mark('product.conversionCoverage', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('recipe.totals@3', ARRAY[NEW."productId"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('recipe.totals@4', ARRAY[NEW."productId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('recipe.totals@3', ARRAY[OLD."productId"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('recipe.totals@4', ARRAY[OLD."productId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('recipe.totals@3', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
+    PERFORM derived_mark('recipe.totals@4', ARRAY[OLD."productId"::uuid] || ARRAY[NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('inventory.valuation@2', ARRAY[NEW."productId"::uuid]); END IF;
@@ -1990,6 +1997,13 @@ BEGIN
     PERFORM derived_mark('recipe.totals', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('recipe.totals@1', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('recipe.totals@1', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."id", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."deletedAt") THEN
+    PERFORM derived_mark('recipe.totals@1', ARRAY[OLD."id"::uuid] || ARRAY[NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('recipe.searchDocument', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('recipe.searchDocument', ARRAY[OLD."id"::uuid]); END IF;
@@ -2034,11 +2048,11 @@ CREATE OR REPLACE FUNCTION derived_mark_recipesectioningredient() RETURNS trigge
 LANGUAGE plpgsql AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
-    IF true THEN PERFORM derived_mark('recipe.totals@2', ARRAY[NEW."recipeSectionId"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('recipe.totals@3', ARRAY[NEW."recipeSectionId"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
-    IF true THEN PERFORM derived_mark('recipe.totals@2', ARRAY[OLD."recipeSectionId"::uuid]); END IF;
+    IF true THEN PERFORM derived_mark('recipe.totals@3', ARRAY[OLD."recipeSectionId"::uuid]); END IF;
   ELSIF (true OR true) AND (to_jsonb(OLD) - ARRAY['updatedAt']) IS DISTINCT FROM (to_jsonb(NEW) - ARRAY['updatedAt']) THEN
-    PERFORM derived_mark('recipe.totals@2', ARRAY[OLD."recipeSectionId"::uuid] || ARRAY[NEW."recipeSectionId"::uuid]);
+    PERFORM derived_mark('recipe.totals@3', ARRAY[OLD."recipeSectionId"::uuid] || ARRAY[NEW."recipeSectionId"::uuid]);
   END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint

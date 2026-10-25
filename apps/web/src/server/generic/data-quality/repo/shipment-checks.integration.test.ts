@@ -31,7 +31,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { scoreSql } from "~/server/generic/data-quality/repo/sql";
-import { REFRESH_PAGE_SIZE } from "~/server/generic/derived-refresh/repo/families";
+import { DERIVED_COMPUTE_BATCH } from "~/server/generic/derived/repo/drain";
 import {
   claimDerivedMarks,
   markAllStoredDerived,
@@ -461,7 +461,7 @@ describe("Shipment evidence quality", () => {
       ctx.db,
       shipment,
       "shipment",
-      Array.from({ length: REFRESH_PAGE_SIZE }, (_, index) => ({
+      Array.from({ length: DERIVED_COMPUTE_BATCH }, (_, index) => ({
         name: `Synthetic historical parcel ${index}`,
         shortcode: generateShortcode("shipment"),
       })),

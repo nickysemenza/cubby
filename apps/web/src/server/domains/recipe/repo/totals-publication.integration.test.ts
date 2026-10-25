@@ -4,14 +4,18 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { recipe, expense, job } from "~/server/db/schema";
+import { recipe, expense } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
-  enqueueJob,
-  claimJob,
-  publishJobPage,
-} from "~/server/generic/jobs/repo/jobs";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
+  claimDerivedMarks,
+  prepareDerivedPage,
+  publishDerivedPage,
+} from "~/server/generic/derived/repo/drain";
+import {
+  drainStoredDerived,
+  reconcileDerivedRefreshInputs,
+  derivedMarkTickets,
+} from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
   makeRecipeInput,
@@ -19,57 +23,40 @@ import {
   makeProductInput,
   ingredientRef,
 } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 // Recipe output must survive lost wakes and reject a prepared superseded page.
 describe("recipe Job publication", () => {
   const ctx = withTestDb();
-  const drain = async () => {
-    for (let page = 0; page < 1000; page++) {
-      const [execution] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:recipes"));
-      if (!execution || execution.state === "completed") return;
-      if (execution.state === "failed")
-        throw new Error(execution.error ?? "Synthetic recipe Job failed");
-      await advanceJob(ctx.db, execution.id, {
-        "refresh.family": refreshFamilyHandler,
-      });
-    }
-    throw new Error("Synthetic recipe Job did not finish");
-  };
-  const invalidateRecipes = async () => {
-    await enqueueJob(ctx.db, {
-      key: "refresh:recipes",
-      kind: "refresh.family",
-      input: { family: "recipes" },
-      invalidate: true,
-    });
-    await drain();
-  };
+  const drain = () => drainStoredDerived(ctx.db);
+  const invalidateRecipes = () => reconcileDerivedRefreshInputs(ctx.db);
 
-  it("rejects a prepared recipe page after a later authoritative save", async () => {
-    const execution = await enqueueJob(ctx.db, {
-      key: "refresh:recipes",
-      kind: "refresh.family",
-      input: { family: "recipes" },
-    });
-    const claim = await claimJob(ctx.db, execution.id);
-    if (!claim) throw new Error("Missing synthetic recipe claim");
-    await enqueueJob(ctx.db, {
-      key: execution.key,
-      kind: execution.kind,
-      input: execution.input,
-      invalidate: true,
-    });
-    let published = false;
+  it("rejects prepared totals after a later authoritative save", async () => {
+    const subject = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Synthetic fenced recipe" }),
+      ctx.actor,
+    );
+    const marks = await claimDerivedMarks(ctx.db);
+    const plan = await prepareDerivedPage(ctx.db, derivedComputes, marks);
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ name: "Synthetic revised recipe" })
+      .where(eq(recipe.id, subject.entityId));
+    const tickets = await derivedMarkTickets(
+      ctx.db,
+      "recipe.totals",
+      subject.entityId,
+    );
+    await publishDerivedPage(ctx.db, plan);
     expect(
-      await publishJobPage(ctx.db, claim, { done: true }, async () => {
-        published = true;
-      }),
-    ).toBe(false);
-    expect(published).toBe(false);
+      await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
+    ).toEqual(tickets);
+    expect(tickets).toHaveLength(1);
+    await drain();
+    expect(
+      await derivedMarkTickets(ctx.db, "recipe.totals", subject.entityId),
+    ).toEqual([]);
   });
 
   it.each(["price edit", "removal", "endpoint reassignment"])(
@@ -124,9 +111,7 @@ describe("recipe Job publication", () => {
             where: eq(recipe.id, subject.entityId),
           })
         )?.totals;
-      const repair = invalidateRecipes;
       await drain();
-      await repair();
       const before = await stored();
       expect(before).toMatchObject({ cost: { lower: 10 } });
       const fields =
@@ -139,7 +124,10 @@ describe("recipe Job publication", () => {
         .update(expense)
         .set(fields)
         .where(eq(expense.id, charge.entityId));
-      await repair();
+      expect(
+        await derivedMarkTickets(ctx.db, "product.price", product.entityId),
+      ).not.toEqual([]);
+      await drain();
       expect(await stored()).not.toEqual(before);
     },
     30_000,

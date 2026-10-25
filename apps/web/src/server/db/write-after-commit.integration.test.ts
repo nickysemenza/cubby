@@ -24,6 +24,7 @@ import {
 } from "~/server/entity-kernel";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { derivedMarkTickets } from "~/server/testing/background-queue";
 import {
   createImageFixture,
   createPlantFixture,
@@ -101,7 +102,7 @@ describe("repository writes publish after their commit", () => {
     return published;
   };
 
-  it("coalesces source changes across savepoints and leaves family revisions unchanged for projections", async () => {
+  it("coalesces source wakes across savepoints without enrolling work from notifications", async () => {
     await recordChange(ctx.db, { kind: "source", categories: ["task"] });
     // Captures append input without changing the execution Job.
     const generations = () =>
@@ -117,7 +118,7 @@ describe("repository writes publish after their commit", () => {
       getDb(ctx.db)
         .select({ id: job.id, generation: job.generation, state: job.state })
         .from(job)
-        .where(eq(job.kind, "refresh.family"))
+        .where(eq(job.kind, "derived.drain"))
         .orderBy(job.id);
     const before = await generations();
     const executionsBefore = await executions();
@@ -141,13 +142,10 @@ describe("repository writes publish after their commit", () => {
       await recordChange(outer, {
         kind: "projection",
         categories: ["image"],
-        refresh: ["search"],
       });
       expect(published).toEqual([]);
     });
-    expect(await generations()).toEqual(
-      before.map((row) => ({ ...row, generation: row.generation + 1 })),
-    );
+    expect(await generations()).toEqual(before);
     expect(await executions()).toEqual(executionsBefore);
     expect(published).toHaveLength(1);
     const afterSource = await generations();
@@ -199,11 +197,8 @@ describe("repository writes publish after their commit", () => {
       ),
     ).toBe(true);
     expect(
-      await getDb(ctx.db)
-        .select({ state: job.state })
-        .from(job)
-        .where(eq(job.key, "refresh:search")),
-    ).toEqual([{ state: "queued" }]);
+      await derivedMarkTickets(ctx.db, "plant.searchDocument"),
+    ).toHaveLength(2);
   });
 
   it("clears a location's AI description with its last image before the vision refresh is published", async () => {

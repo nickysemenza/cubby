@@ -806,6 +806,21 @@ export default defineEntity(
               // Its own output: publishing totals must not re-mark them.
               except: ["totals", "totalsComputedAt"],
             },
+            // A deleted sub-recipe publishes no totals, so mark its parents from the source row.
+            {
+              table: "Recipe",
+              match: { id: "id" },
+              columns: ["deletedAt"],
+              path: [
+                { table: "Ingredient", from: "recipeId", to: "id" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
             { table: "RecipeSection", match: { recipeId: "id" } },
             {
               table: "RecipeSectionIngredient",

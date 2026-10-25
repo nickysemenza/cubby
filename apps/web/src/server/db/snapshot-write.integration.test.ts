@@ -10,6 +10,7 @@ import {
 } from "~/server/db/helpers";
 import { job, product } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -26,17 +27,24 @@ describe("snapshot write recovery", () => {
     queue = captureBackgroundQueue();
   });
   afterEach(() => queue.restore());
-  const fixture = (name = "Synthetic snapshot subject") =>
-    createProductFixture(
+  const fixture = async (name = "Synthetic snapshot subject") => {
+    const subject = await createProductFixture(
       ctx.db,
       makeProductInput({ name, notes: "Synthetic original note" }),
       ctx.actor,
     );
+    await enqueueJob(ctx.db, {
+      key: "synthetic:snapshot-contention",
+      kind: "synthetic.contention",
+      input: {},
+    });
+    return subject;
+  };
   const replaceJobGeneration = () =>
     getDb(ctx.db)
       .update(job)
       .set({ generation: sql`${job.generation} + 1` })
-      .where(eq(job.key, "refresh:search"));
+      .where(eq(job.key, "synthetic:snapshot-contention"));
 
   // Force a real stale-row lock error independently of capture storage. This
   // synthetic fence tests snapshot retry ownership, not a production writer.
@@ -45,7 +53,7 @@ describe("snapshot write recovery", () => {
     await getDb(tx)
       .select()
       .from(job)
-      .where(eq(job.key, "refresh:search"))
+      .where(eq(job.key, "synthetic:snapshot-contention"))
       .for("update");
   };
 
@@ -58,7 +66,10 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         attempts++;
-        await getDb(tx).select().from(job).where(eq(job.key, "refresh:search"));
+        await getDb(tx)
+          .select()
+          .from(job)
+          .where(eq(job.key, "synthetic:snapshot-contention"));
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
@@ -79,7 +90,10 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         const attempt = ++attempts;
-        await getDb(tx).select().from(job).where(eq(job.key, "refresh:search"));
+        await getDb(tx)
+          .select()
+          .from(job)
+          .where(eq(job.key, "synthetic:snapshot-contention"));
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
@@ -156,7 +170,7 @@ describe("snapshot write recovery", () => {
           await getDb(tx)
             .select()
             .from(job)
-            .where(eq(job.key, "refresh:search"));
+            .where(eq(job.key, "synthetic:snapshot-contention"));
           await runAfterCommit(tx, async () => {
             publications.push(attempt);
           });
@@ -184,7 +198,7 @@ describe("snapshot write recovery", () => {
               await getDb(tx)
                 .select()
                 .from(job)
-                .where(eq(job.key, "refresh:search"));
+                .where(eq(job.key, "synthetic:snapshot-contention"));
               await conflictOnExecutionGuard(tx);
               await recordChange(tx, {
                 kind: "source",

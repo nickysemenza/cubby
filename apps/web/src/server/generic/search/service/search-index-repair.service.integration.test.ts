@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -10,15 +10,15 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
+import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import { repairSearchIndex } from "./search-index-repair.service";
 
 // Explicit repair must commit ordinary Job intent, survive a disconnected
-// reader, and publish through the same generation fence as periodic refresh.
+// reader, and publish through the same generation fence as stored derived recomputation.
 describe("search repair admission", () => {
   const ctx = withTestDb();
-  it("streams real family results while workers rebuild authoritative search text", async () => {
+  it("streams derived drain results while workers rebuild authoritative search text", async () => {
     const subject = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic repair subject" }),
@@ -32,19 +32,11 @@ describe("search repair admission", () => {
       const executions = await getDb(ctx.db)
         .select()
         .from(job)
-        .where(
-          inArray(job.key, [
-            "refresh:search",
-            "refresh:orphans",
-            "refresh:embeddings",
-          ]),
-        );
+        .where(eq(job.key, "derived:drain"));
       if (executions.every((execution) => execution.state === "completed"))
         break;
       for (const execution of executions)
-        await advanceJob(ctx.db, execution.id, {
-          "refresh.family": refreshFamilyHandler,
-        });
+        await advanceJob(ctx.db, execution.id, productionJobHandlers);
     }
     let last = await stream.next();
     while (!last.done && last.value.type !== "done") last = await stream.next();
@@ -73,7 +65,7 @@ describe("search repair admission", () => {
         await getDb(ctx.db)
           .select()
           .from(job)
-          .where(eq(job.key, "refresh:search"))
+          .where(eq(job.key, "derived:drain"))
       )[0]?.state,
     ).toBe("queued");
   });

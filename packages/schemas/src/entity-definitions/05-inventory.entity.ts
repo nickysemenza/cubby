@@ -1015,6 +1015,14 @@ export default defineEntity(
       mode: "semantic",
       inputs: [
         { table: "Product", match: { id: "productId" } },
+        {
+          table: "ProductCategory",
+          match: { id: "id" },
+          path: [
+            { table: "Product", from: "categoryId", to: "id" },
+            { table: "InventoryEntry", from: "productId", to: "id" },
+          ],
+        },
         { table: "Location", match: { id: "locationId" } },
         {
           table: "EntityExternalId",

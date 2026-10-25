@@ -12,7 +12,6 @@ import {
   enqueueEmbeddingRefs,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 /** Explicit fixture time advancement; production due times remain authoritative. */
 export async function advanceEmbeddingFixture(
@@ -47,25 +46,7 @@ export async function embedFixtures(
   return jobs;
 }
 
-/** Fixture seeding satisfies broad admission through the same bounded family. */
+/** Search publication admits embedding work while settling stored projections. */
 export async function settleEmbeddingProjectionJobs(db: Database) {
   await drainDerivedRefreshFrontier(db);
-  const [pending] = await getDb(db)
-    .select()
-    .from(job)
-    .where(eq(job.key, "refresh:embeddings"));
-  if (!pending || pending.state === "completed") return;
-  for (let page = 0; page < 1000; page++) {
-    await advanceJob(db, pending.id, {
-      "refresh.family": refreshFamilyHandler,
-    });
-    const [saved] = await getDb(db)
-      .select()
-      .from(job)
-      .where(eq(job.id, pending.id));
-    if (saved?.state === "completed") return;
-    if (!saved || ["failed", "paused", "cancelled"].includes(saved.state))
-      throw new Error(saved?.error ?? "Synthetic embedding family stopped");
-  }
-  throw new Error("Synthetic embedding family did not finish");
 }
