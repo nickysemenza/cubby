@@ -33,7 +33,8 @@ struct ActivityView: View {
             localExecution(processing.thisDevice)
             OtherDevicesSection(
                 processing: processing, expiredLeaseHolders: queue?.expiredLeaseHolders ?? [],
-                error: [processingError, deviceError].compactMap { $0 }.first)
+                error: [processingError, deviceError].compactMap { $0 }.first,
+                unloadedCount: max(0, (processingList?.meta?.totalCount ?? 0) - processing.loadedCount))
             HouseholdQueueSections(queue: queue, error: queueError)
             Section("Household work") {
                 NavigationLink(value: Route.entityList(.run)) {
@@ -71,10 +72,12 @@ struct ActivityView: View {
         }
     }
 
+    /// A failed refresh keeps the last rows, so it must say so beside them.
     private var processingError: String? {
-        switch processingList?.phase {
-        case .failed(let message), .unavailable(let message): message
-        default: nil
+        guard let processingList else { return nil }
+        switch processingList.phase {
+        case .failed(let message), .unavailable(let message): return message
+        default: return processingList.refreshError ?? processingList.enrichment.errors.first
         }
     }
 

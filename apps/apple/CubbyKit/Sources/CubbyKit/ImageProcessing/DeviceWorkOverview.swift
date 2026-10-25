@@ -117,13 +117,21 @@ public struct ProcessingImageJobs: Sendable, Equatable {
         thisDevice = mine
         otherDevices = order.map { code in
             DeviceGroup(
-                id: code, name: code.isEmpty ? "Unknown device" : (devices.names[code] ?? code),
+                // Cloud leases name no Device; they are never an Apple device.
+                id: code, name: code.isEmpty ? Self.cloudHolderName : (devices.names[code] ?? code),
                 rows: byDevice[code] ?? [])
         }
-        .sorted { ($0.name, $0.id) < ($1.name, $1.id) }
+        // Devices by name; the cloud group last.
+        .sorted { ($0.id.isEmpty ? 1 : 0, $0.name, $0.id) < ($1.id.isEmpty ? 1 : 0, $1.name, $1.id) }
     }
 
     public var isEmpty: Bool { thisDevice.isEmpty && otherDevices.isEmpty }
+
+    /// Every grouped row, this device's included.
+    public var loadedCount: Int { thisDevice.count + otherDevices.reduce(0) { $0 + $1.rows.count } }
+
+    /// The group of leases no Device holds: cloud work and unregistered installs.
+    public static let cloudHolderName = "AI Gateway and unregistered devices"
 
     /// The `DEV-` code holding the row's lease (`leaseDeviceId`).
     public static func leaseDevice(of row: EntityRow) -> String? {

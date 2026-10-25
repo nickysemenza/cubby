@@ -765,10 +765,9 @@ function ImageJobsProcessing() {
       pagination: PROCESSING_PAGE,
       sort: [{ orderBy: "createdAt", direction: "asc" }],
     }),
-    // Renewals move each lease every 15 s without a change notification, so
-    // poll while work is in flight; the countdown would otherwise run out.
-    refetchInterval: (query) =>
-      query.state.data?.items.length ? LEASE_RENEW_MS : false,
+    // Claims and renewals publish no change notification: poll while the
+    // page is visible, empty or not, so new work appears and countdowns hold.
+    refetchInterval: LEASE_RENEW_MS,
     refetchIntervalInBackground: false,
   });
   const devices = useQuery(

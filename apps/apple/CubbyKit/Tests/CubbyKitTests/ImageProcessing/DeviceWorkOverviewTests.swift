@@ -73,7 +73,7 @@ struct DeviceWorkOverviewTests {
         #expect(processing.thisDevice.map(\.id) == ["IPR-SYN1", "IPR-SYN6"])
         #expect(
             processing.otherDevices.map(\.name) == [
-                "Another phone", "DEV-SYN9", "Synthetic Mac", "Unknown device",
+                "Another phone", "DEV-SYN9", "Synthetic Mac", "AI Gateway and unregistered devices",
             ])
         #expect(processing.otherDevices.map(\.id) == ["DEV-SYN3", "DEV-SYN9", "DEV-SYN2", ""])
         #expect(

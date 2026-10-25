@@ -183,12 +183,21 @@ struct OtherDevicesSection: View {
     let processing: ProcessingImageJobs
     let expiredLeaseHolders: [HouseholdQueueOverview.LeaseHolder]
     let error: String?
+    /// Processing jobs past the loaded page; this device's own may be among them.
+    let unloadedCount: Int
 
     var body: some View {
-        if !processing.otherDevices.isEmpty || !expiredLeaseHolders.isEmpty || error != nil {
-            Section("Other devices") {
+        if !processing.otherDevices.isEmpty || !expiredLeaseHolders.isEmpty || error != nil
+            || unloadedCount > 0
+        {
+            Section("Other devices and cloud") {
                 if let error {
                     Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                if unloadedCount > 0 {
+                    NavigationLink(value: Route.entityList(.imageJob, savedView: "processing")) {
+                        Label("\(unloadedCount) more processing", systemImage: "ellipsis.circle")
+                    }
                 }
                 ForEach(processing.otherDevices) { group in
                     DeviceGroupHeader(group: group)
@@ -222,7 +231,8 @@ private struct DeviceGroupHeader: View {
         let label = LabeledContent {
             Text("\(group.rows.count) processing")
         } label: {
-            Label(group.name, systemImage: "macbook.and.iphone").font(.subheadline)
+            Label(group.name, systemImage: group.id.isEmpty ? "cloud" : "macbook.and.iphone")
+                .font(.subheadline)
         }
         if group.id.isEmpty {
             label
@@ -484,7 +494,7 @@ private func previewProcessing() -> ProcessingImageJobs {
             OtherDevicesSection(
                 processing: processing,
                 expiredLeaseHolders: [.init(executor: "Synthetic old phone", live: 0, expired: 15)],
-                error: nil)
+                error: nil, unloadedCount: 3)
         }
     }
 }
