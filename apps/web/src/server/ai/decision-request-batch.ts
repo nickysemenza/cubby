@@ -66,7 +66,13 @@ export class DecisionRequestBatch {
   private observed = new Set<number>();
   private entries: Entry[] = [];
 
-  constructor(private readonly count: number) {}
+  constructor(
+    private readonly count: number,
+    private readonly concurrency = 4,
+  ) {
+    if (!Number.isInteger(concurrency) || concurrency < 1)
+      throw new Error("Decision request concurrency must be positive");
+  }
 
   ready(index: number) {
     this.observed.add(index);
@@ -96,6 +102,7 @@ export class DecisionRequestBatch {
       group.push(entry);
       groups.set(entry.group, group);
     }
+    const chunks: Entry[][] = [];
     for (const group of groups.values()) {
       let chunk: Entry[] = [];
       for (const entry of group) {
@@ -104,13 +111,23 @@ export class DecisionRequestBatch {
           chunk.length &&
           (next.length > 64 || !decisionInputFitsContext(combine(next)))
         ) {
-          void this.dispatch(chunk);
+          chunks.push(chunk);
           chunk = [];
         }
         chunk.push(entry);
       }
-      if (chunk.length) void this.dispatch(chunk);
+      if (chunk.length) chunks.push(chunk);
     }
+    let next = 0;
+    const worker = async () => {
+      while (next < chunks.length) await this.dispatch(chunks[next++]!);
+    };
+    for (
+      let index = 0;
+      index < Math.min(this.concurrency, chunks.length);
+      index++
+    )
+      void worker();
   }
 
   private async dispatch(entries: Entry[]) {

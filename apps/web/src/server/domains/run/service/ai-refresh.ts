@@ -27,7 +27,10 @@ import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
+import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
   suggestFields,
@@ -49,16 +52,27 @@ import {
 import {
   claimAiEvaluation,
   publishAiEvaluation,
+  publishAiEvaluationPage,
+  failAiEvaluationPage,
+  type EvaluationPageFailure,
 } from "~/server/ai/repo/ai-evaluation";
 import {
   readAiRefreshActivation,
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
+import type {
+  EvaluationPageAdapter,
+  EvaluationPageTarget,
+  EvaluationPagePreparation,
+  EvaluationPageOutcome,
+} from "~/server/ai/repo/evaluation-page";
+import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshot,
+  productIdentitySnapshots,
   prepareProductIdentityPair,
   prepareProductIdentityPairRequests,
   preparedProductIdentityPair,
@@ -83,12 +97,14 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { withJobExecution } from "~/server/generic/jobs/context";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
+import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import { checkConnectionSourceBeforeCommit } from "../repo/ai-refresh-state";
 import {
@@ -347,23 +363,40 @@ async function scheduleProductIdentityDiscovery(
   const products = cursor.productDone
     ? []
     : await liveProductIdsAfter(db, cursor.product, EMAIL_RECLASSIFY_LIMIT);
-  for (const item of products) {
-    const prepared = await productIdentitySnapshot(db, item.id);
-    if (!prepared) continue;
-    const provenance = aiProvenance.parse({
-      dependencies: dependencyStamps(activation.manifest, ["product-identity"]),
-      inputFingerprint: prepared.fingerprint,
-      optionFingerprint: "canonical-product-pairs-v1",
-      model: null,
-    });
-    const target = aiEvaluationTarget.parse({
-      kind: "product",
-      entity: "product",
-      recordId: item.id,
-      field: null,
-      assessmentIds: [],
-    });
-    const key = await sha256Hex(JSON.stringify([item.id, provenance]));
+  const snapshots = await productIdentitySnapshots(
+    db,
+    products.map((item) => item.id),
+  );
+  const targets = products.flatMap((item) => {
+    const prepared = snapshots.get(item.id);
+    if (!prepared) return [];
+    return [
+      {
+        target: aiEvaluationTarget.parse({
+          kind: "product",
+          entity: "product",
+          recordId: item.id,
+          field: null,
+          assessmentIds: [],
+        }),
+        provenance: aiProvenance.parse({
+          dependencies: dependencyStamps(activation.manifest, [
+            "product-identity",
+          ]),
+          inputFingerprint: prepared.fingerprint,
+          optionFingerprint: "canonical-product-pairs-v1",
+          model: null,
+        }),
+        snapshot: prepared.snapshot,
+      },
+    ];
+  });
+  if (targets.length) {
+    const key = await sha256Hex(
+      JSON.stringify(
+        targets.map((entry) => [entry.target.recordId, entry.provenance]),
+      ),
+    );
     const productRun = await scheduleEvaluationRun(
       db,
       ports.context?.actorContext ?? systemActor(),
@@ -371,16 +404,13 @@ async function scheduleProductIdentityDiscovery(
         purpose: "ai_refresh",
         trigger: "scheduled",
         status: "running",
-        clientKey: `ai-refresh:product:${key}`,
+        clientKey: `ai-refresh:product-page:${key}`,
         input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
       },
-      [{ target, provenance, snapshot: prepared.snapshot }],
+      targets,
     );
     if (productRun.kind === "scheduled") scheduledRuns.add(productRun.runId);
-    if (productRun.kind === "deferred") {
-      deferred = true;
-      break;
-    }
+    deferred = productRun.kind === "deferred";
   }
   return {
     runs: [...scheduledRuns],
@@ -1202,4 +1232,405 @@ export async function executeAiRefreshTarget(
     if (!obsolete) throw error;
   }
   return true;
+}
+
+type WrappedProductPreparation =
+  | { kind: "pair"; pair: z.infer<typeof preparedProductIdentityPair> }
+  | {
+      kind: "catalog";
+      productId: import("@cubby/schemas/identifiers").ProductId;
+      sourceFence: string;
+      catalog: Awaited<ReturnType<typeof prepareProductIdentityCatalog>>;
+    };
+type WrappedProductOutcome = {
+  publish: (tx: Database) => Promise<void>;
+  receipt: z.infer<ReturnType<typeof z.json>>;
+};
+
+function inEvaluationContext<T>(
+  db: Database,
+  target: EvaluationPageTarget,
+  work: () => Promise<T>,
+): Promise<T> {
+  return withJobExecution(db, target.claim, () =>
+    withWorkflowExecution(
+      {
+        runId: target.evaluation.runId,
+        attempt: target.claim.generation,
+        database: db,
+      },
+      work,
+    ),
+  );
+}
+
+/** Transitional Product adapter: Lane B replaces its per-target reads/writes with set loaders. */
+export function productEvaluationPageAdapter(
+  ports: AiRefreshPorts = {},
+): EvaluationPageAdapter<WrappedProductPreparation, WrappedProductOutcome> {
+  return {
+    async prepare(db, targets) {
+      // Transitional reads use four root-handle continuations; Lane B loads the set once.
+      const results = await settleDecisionWorkItems(targets, (target) =>
+        inEvaluationContext(db, target, async () => {
+          const item = target.evaluation;
+          if (target.target.kind === "product_pair") {
+            const pair = preparedProductIdentityPair.parse(item.snapshot);
+            const current = await prepareProductIdentityPair(
+              db,
+              pair.productIds,
+            );
+            if (
+              !current ||
+              current.fingerprint !== item.provenance.inputFingerprint
+            )
+              throw new Error("Product pair evidence changed during inference");
+            return {
+              kind: "ready" as const,
+              target,
+              evidenceDigest: pair.fingerprint,
+              prepared: { kind: "pair" as const, pair },
+            };
+          }
+          if (target.target.kind !== "product")
+            throw new Error("Unsupported Product page target");
+          const productId = parseEntityId("product", target.target.recordId);
+          const source = await productIdentitySnapshot(db, productId);
+          if (
+            !source ||
+            source.fingerprint !== item.provenance.inputFingerprint
+          )
+            throw new Error("AI evaluation target changed during inference");
+          const catalog = await prepareProductIdentityCatalog(db, productId);
+          const sourceFence = await productIdentityEvidenceFence(db, [
+            productId,
+          ]);
+          const latest = await productIdentitySnapshot(db, productId);
+          if (
+            !latest ||
+            latest.fingerprint !== source.fingerprint ||
+            (await productIdentityEvidenceFence(db, [productId])) !==
+              sourceFence
+          )
+            throw new Error(
+              "Product identity evidence changed during inference",
+            );
+          return {
+            kind: "ready" as const,
+            target,
+            evidenceDigest: source.fingerprint,
+            prepared: {
+              kind: "catalog" as const,
+              productId,
+              sourceFence,
+              catalog,
+            },
+          };
+        }),
+      );
+      return results.map((result, index) =>
+        result.status === "fulfilled"
+          ? result.value
+          : {
+              kind: "failed" as const,
+              target: targets[index]!,
+              error:
+                result.reason instanceof Error
+                  ? result.reason
+                  : new Error(String(result.reason)),
+            },
+      );
+    },
+    async evaluate(db, entry, usage) {
+      const item = entry.target.evaluation;
+      if (entry.prepared.kind === "pair") {
+        const pair = entry.prepared.pair;
+        const result = await evaluatePreparedProductIdentityPair(
+          db,
+          pair,
+          item.runId,
+          {
+            ...ports.productIdentityPorts,
+            usage,
+            evaluationId: item.id,
+            provenance: item.provenance,
+          },
+        );
+        const publish = await prepareProductPairPublication(db, result);
+        return {
+          publish: async (tx) => {
+            await publish(tx);
+          },
+          receipt: {
+            pair: pair.productIds,
+            fingerprint: pair.fingerprint,
+            model: result.producer.model,
+            actionable: result.actionable,
+            conflict: result.conflict,
+          },
+        };
+      }
+      const { productId, sourceFence, catalog } = entry.prepared;
+      let rulePairs = 0,
+        requestedPairs = 0;
+      // Existing single-pair wrappers remain until Lane B's bounded edge writer lands.
+      // Each edge commits idempotently before the source enumeration receipt.
+      for (const pair of catalog.pairs) {
+        const result = pair.exact
+          ? await evaluatePreparedProductIdentityPair(db, pair, item.runId, {
+              ...ports.productIdentityPorts,
+              usage,
+              evaluationId: item.id,
+              provenance: item.provenance,
+            })
+          : null;
+        const publish = result
+          ? await prepareProductPairPublication(db, result)
+          : await prepareProductIdentityPairRequest(
+              db,
+              pair,
+              item.runId,
+              item.provenance,
+            );
+        await publishAiEvaluation(
+          db,
+          item.id,
+          entry.target.claim.leaseToken,
+          async (tx) => {
+            await publish(tx);
+            return null;
+          },
+          "continue",
+        );
+        if (result) rulePairs++;
+        else requestedPairs++;
+      }
+      return {
+        publish: async (tx) => {
+          if (
+            (await productIdentityEvidenceFence(tx, [productId])) !==
+            sourceFence
+          )
+            throw new Error(
+              "Product identity evidence changed during inference",
+            );
+        },
+        receipt: jsonSnapshot({
+          eligible: catalog.eligible,
+          excluded: !catalog.eligible ? "misc_or_deleted" : null,
+          rulePairs,
+          requestedPairs,
+          catalogEnumeration: true,
+          coverage: catalog.coverage,
+        }),
+      };
+    },
+    async publish(tx, outcomes) {
+      const publications = [];
+      for (const entry of outcomes) {
+        await entry.outcome.publish(tx);
+        publications.push({
+          evaluationId: entry.target.evaluation.id,
+          state: "completed" as const,
+          receipt: entry.outcome.receipt,
+        });
+      }
+      return publications;
+    },
+  };
+}
+
+function pageFailure(
+  target: EvaluationPageTarget,
+  error: unknown,
+): EvaluationPageFailure {
+  const deferred = findErrorCause(
+    error,
+    (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+  );
+  const budget = findErrorCause(
+    error,
+    (cause): cause is AiBudgetExhaustedError =>
+      cause instanceof AiBudgetExhaustedError,
+  );
+  const capacity = aiWorkDeferral(error);
+  const message = scrubErrorMessage(
+    error instanceof Error ? error.message : String(error),
+  );
+  const obsolete =
+    /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists/.test(
+      message,
+    );
+  const admission = message.includes("AI Gateway admission is waiting");
+  const wait = deferred
+    ? { until: deferred.until, reason: deferred.reason }
+    : budget
+      ? {
+          until: new Date(budget.resumeAt),
+          reason: "ai_funding_window" as const,
+        }
+      : capacity
+        ? {
+            until: new Date(capacity.until),
+            reason: "provider_capacity" as const,
+          }
+        : admission
+          ? {
+              until: new Date(Date.now() + 30_000),
+              reason: "rate_limit" as const,
+            }
+          : undefined;
+  return {
+    target,
+    state: obsolete
+      ? "obsolete"
+      : !wait && target.claim.attempts >= target.claim.maxAttempts
+        ? "failed"
+        : "retry_wait",
+    error: message,
+    ...(wait ? { wait } : {}),
+  };
+}
+
+/** A finite decision scope; each continuation captures its own target authority. */
+export async function executeAiRefreshPage<P, O>(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  adapter: EvaluationPageAdapter<P, O>,
+) {
+  const compiled = await compiledRefreshManifest();
+  const compatible = targets.filter((entry) =>
+    dependenciesCurrent(
+      {
+        ...entry.evaluation.provenance,
+        dependencies: entry.evaluation.provenance.dependencies.map((stamp) => ({
+          ...stamp,
+          generation: 0,
+        })),
+      },
+      compiled,
+    ),
+  );
+  const failures = targets
+    .filter((entry) => !compatible.includes(entry))
+    .map((target) =>
+      pageFailure(
+        target,
+        new Error("AI evaluation Worker prompt manifest is obsolete"),
+      ),
+    );
+  const prepared = await adapter.prepare(db, compatible);
+  if (
+    prepared.length !== compatible.length ||
+    new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
+      compatible.length
+  )
+    throw new Error("AI page adapter returned an unexpected preparation set");
+  const ready: Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[] = [];
+  let preparedBytes = 0;
+  let overflow = false;
+  for (const entry of prepared) {
+    if (entry.kind === "failed") {
+      failures.push(pageFailure(entry.target, entry.error));
+      continue;
+    }
+    const bytes = new TextEncoder().encode(
+      JSON.stringify([entry.prepared, entry.target.evaluation.snapshot]),
+    ).byteLength;
+    if (bytes > 4 * 1024 * 1024) {
+      failures.push({
+        target: entry.target,
+        state: "failed",
+        error: "AI evaluation evidence exceeds the 4 MiB page bound",
+      });
+      continue;
+    }
+    overflow ||= preparedBytes + bytes > 4 * 1024 * 1024;
+    if (overflow) {
+      failures.push({
+        target: entry.target,
+        state: "retry_wait",
+        error: "AI page evidence suffix remains due",
+        wait: { until: new Date(), reason: "provider_capacity" },
+      });
+      continue;
+    }
+    preparedBytes += bytes;
+    ready.push(entry);
+  }
+  // Object identity is the existing DecisionRequestBatch's attribution boundary.
+  const groups = new Map<string, AiRunContext>();
+  const usageFor = (target: EvaluationPageTarget) => {
+    const key = JSON.stringify([
+      target.evaluation.runId,
+      target.evaluation.feature,
+      "product-identity",
+      false,
+      "default",
+    ]);
+    let usage = groups.get(key);
+    if (!usage) {
+      usage = {
+        db,
+        runId: target.evaluation.runId,
+        operation: "product-identity",
+      };
+      groups.set(key, usage);
+    }
+    return usage;
+  };
+  const outcomes: EvaluationPageOutcome<O>[] = [];
+  const settled = await settleDecisionWorkItems(ready, (entry) =>
+    inEvaluationContext(db, entry.target, async () => ({
+      target: entry.target,
+      evidenceDigest: entry.evidenceDigest,
+      outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
+    })),
+  );
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") outcomes.push(result.value);
+    else failures.push(pageFailure(ready[index]!.target, result.reason));
+  });
+  const publishChunk = async (
+    chunk: readonly EvaluationPageOutcome<O>[],
+  ): Promise<void> => {
+    if (!chunk.length) return;
+    try {
+      const published = await publishAiEvaluationPage(db, chunk, (tx, valid) =>
+        adapter.publish(tx, valid),
+      );
+      const ids = new Set(published.map((entry) => entry.evaluationId));
+      for (const entry of chunk)
+        if (!ids.has(entry.target.evaluation.id))
+          failures.push(
+            pageFailure(
+              entry.target,
+              new Error("AI evaluation generation or Run is obsolete"),
+            ),
+          );
+    } catch (error) {
+      // Only a failed chunk splits; already committed siblings never replay.
+      if (chunk.length > 1) {
+        const middle = Math.ceil(chunk.length / 2);
+        await publishChunk(chunk.slice(0, middle));
+        await publishChunk(chunk.slice(middle));
+      } else failures.push(pageFailure(chunk[0]!.target, error));
+    }
+  };
+  for (let offset = 0; offset < outcomes.length; offset += 25)
+    await publishChunk(outcomes.slice(offset, offset + 25));
+  await failAiEvaluationPage(db, failures);
+  log.info("evaluation page", {
+    claimedSlots: targets.length,
+    prepared: ready.length,
+    completed:
+      outcomes.length -
+      failures.filter((entry) =>
+        outcomes.some((outcome) => outcome.target === entry.target),
+      ).length,
+    failed: failures.length,
+    publicationChunks: Math.ceil(outcomes.length / 25),
+    usageGroups: groups.size,
+    preparedBytes,
+  });
 }

@@ -13,6 +13,8 @@ export type PreparedJobPage = {
   publish?: (tx: Database) => Promise<void | JobPage["result"]>;
 };
 export type JobHandler = {
+  /** Optional finite set executor; the drain admits one service turn per fair round. */
+  advancePage?: (db: Database, anchorId: string) => Promise<string>;
   prepare(db: Database, job: JobClaim): Promise<PreparedJobPage>;
   /** One lane executes a bounded kind batch; every checkpoint publishes separately. */
   batch?: {
