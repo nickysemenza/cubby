@@ -1959,7 +1959,9 @@ no range. Candidate hydration computes this only for the requested Wish IDs.
 
 `apps/web/src/lib/search-normalization.ts` owns the search normalization recipe:
 trim, collapse whitespace, then lowercase. Query input, document writers and
-embedding freshness SQL interpret that same recipe and whitespace set.
+embedding freshness SQL interpret that same recipe and whitespace set. Purchase
+search titles use the order id when present, otherwise the Vendor and optional
+date; an unknown date must not turn the title into null.
 
 Task effective due dates use the ordered parts in `apps/web/src/lib/task-dates.ts`.
 In-memory reads and SQL predicates compile the same precedence; calendar overlap
