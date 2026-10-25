@@ -888,15 +888,16 @@ public actor CompanionImageWorker {
         let deviceID = wireDeviceID
         let failureObserver = failureObserver
         releaseTasks[id] = Task { [weak self] in
-            await CompanionClaimRelease.bestEffort(
+            let refusal = await CompanionClaimRelease.bestEffort(
                 transport: transport, deviceID: deviceID, claim: claim,
                 failureObserver: failureObserver)
-            await self?.releaseFinished(id)
+            await self?.releaseFinished(id, refusal: refusal)
         }
     }
 
-    private func releaseFinished(_ id: UUID) {
+    private func releaseFinished(_ id: UUID, refusal: (any Error)?) {
         releaseTasks[id] = nil
+        if let refusal { enterUpdateRequired(refusal) }
     }
 
     // MARK: Errors and activity
@@ -978,22 +979,33 @@ public actor CompanionImageWorker {
 enum CompanionClaimRelease {
     static let timeout = Duration.seconds(3)
 
+    /// Returns the 426 CLIENT_UPDATE_REQUIRED that refused the release, for the caller to latch;
+    /// any other failure goes to `failureObserver` and the lease expires on its own.
+    @discardableResult
     static func bestEffort(
         transport: any CompanionImageBackgroundTransport, deviceID: String,
         claim: CompanionImageCommandClaim, failureObserver: CompanionImageWorker.FailureObserver?
-    ) async {
-        let cleanup = Task {
-            await withTaskGroup(of: Void.self) { group in
+    ) async -> (any Error)? {
+        let cleanup = Task { () -> (any Error)? in
+            await withTaskGroup(of: (any Error)?.self) { group in
                 group.addTask {
-                    do { try await transport.release(deviceID: deviceID, claim: claim) } catch {
+                    do {
+                        try await transport.release(deviceID: deviceID, claim: claim)
+                    } catch {
+                        if CompanionResultDelivery.isClientUpdateRequired(error) { return error }
                         failureObserver?(error)
                     }
+                    return nil
                 }
-                group.addTask { try? await Task.sleep(for: timeout) }
-                await group.next()
+                group.addTask {
+                    try? await Task.sleep(for: timeout)
+                    return nil
+                }
+                let first = await group.next() ?? nil
                 group.cancelAll()
+                return first
             }
         }
-        await cleanup.value
+        return await cleanup.value
     }
 }

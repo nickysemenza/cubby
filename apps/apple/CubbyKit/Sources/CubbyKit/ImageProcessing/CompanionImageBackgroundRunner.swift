@@ -135,15 +135,13 @@ actor CompanionImageBackgroundRunner {
                     return resultsRemain ? .resumable : .settled
                 }
                 guard !pulled.remotePaused else {
-                    await releaseClaim(transport: transport, hello: hello, command: command)
-                    return .settled
+                    return await released(command, transport: transport, hello: hello, or: .settled)
                 }
                 let metadata: CompanionImageCommandMetadata
                 do { metadata = try CompanionImageCommandMetadata(command) } catch {
                     // Unsupported by this build: hand it back and leave the rest for a later window.
-                    await releaseClaim(transport: transport, hello: hello, command: command)
                     failureObserver?(error)
-                    return .settled
+                    return await released(command, transport: transport, hello: hello, or: .settled)
                 }
                 activeCommand = command
                 guard
@@ -155,35 +153,33 @@ actor CompanionImageBackgroundRunner {
                     continue
                 }
                 if Task.isCancelled {
-                    await releaseClaim(transport: transport, hello: hello, command: command)
-                    return .resumable
+                    return await released(
+                        command, transport: transport, hello: hello, or: .resumable)
                 }
                 let key = CompanionImageProcessingProtocol.attemptKey(
                     jobID: metadata.jobID, attemptID: metadata.attemptID)
                 try await outbox.record(result, for: key)
                 let delivered = await delivery.deliver(
                     result, key: key, transport: transport, deviceID: hello.deviceId)
+                // Before cancellation: a window ending as the server refuses this build still
+                // latches the worker, keeps the recorded result, and releases nothing.
+                if case .updateRequired(let error) = delivered { return .updateRequired(error) }
                 if Task.isCancelled {
-                    await releaseClaim(transport: transport, hello: hello, command: command)
-                    return .resumable
+                    return await released(
+                        command, transport: transport, hello: hello, or: .resumable)
                 }
                 activeCommand = nil
-                switch delivered {
-                case .delivered: break
-                case .setAside: resultsRemain = true
-                case .updateRequired(let error): return .updateRequired(error)
-                }
+                if case .setAside = delivered { resultsRemain = true }
             }
             return .resumable
         } catch is CancellationError {
-            if let activeCommand {
-                await releaseClaim(transport: transport, hello: hello, command: activeCommand)
-            }
-            return .resumable
+            guard let activeCommand else { return .resumable }
+            return await released(activeCommand, transport: transport, hello: hello, or: .resumable)
         } catch {
             if CompanionResultDelivery.isClientUpdateRequired(error) { return .updateRequired(error) }
             if Task.isCancelled, let activeCommand {
-                await releaseClaim(transport: transport, hello: hello, command: activeCommand)
+                return await released(
+                    activeCommand, transport: transport, hello: hello, or: .resumable)
             } else if !Task.isCancelled {
                 failureObserver?(error)
             }
@@ -244,13 +240,19 @@ actor CompanionImageBackgroundRunner {
         }
     }
 
-    private func releaseClaim(
-        transport: any CompanionImageBackgroundTransport,
-        hello: ImageProcessingHello, command: ImageProcessingCommand
-    ) async {
-        guard let claim = CompanionImageCommandClaim(command) else { return }
-        await CompanionClaimRelease.bestEffort(
+    /// Hands `command`'s claim back, then ends the window with `outcome`, unless the release was
+    /// refused for this build's version.
+    private func released(
+        _ command: ImageProcessingCommand, transport: any CompanionImageBackgroundTransport,
+        hello: ImageProcessingHello, or outcome: CompanionBackgroundOutcome
+    ) async -> CompanionBackgroundOutcome {
+        guard let claim = CompanionImageCommandClaim(command) else { return outcome }
+        if let refusal = await CompanionClaimRelease.bestEffort(
             transport: transport, deviceID: hello.deviceId, claim: claim,
             failureObserver: failureObserver)
+        {
+            return .updateRequired(refusal)
+        }
+        return outcome
     }
 }

@@ -79,14 +79,18 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
         /// Live Jobs per waiting-on reason, in the server's reason order.
         public let counts: [ReasonCount]
         public let waitingForFunding: Bool
+        /// Running Jobs whose executor's lease lapsed; the next claim reclaims them.
+        public let expiredLeases: Int
         public let stalled: Bool
         public let stallMinutes: Int
         public let lastProgressAt: Date?
 
         public init(
             id: String, title: String, counts: [ReasonCount] = [], waitingForFunding: Bool = false,
-            stalled: Bool = false, stallMinutes: Int = 0, lastProgressAt: Date? = nil
+            expiredLeases: Int = 0, stalled: Bool = false, stallMinutes: Int = 0,
+            lastProgressAt: Date? = nil
         ) {
+            self.expiredLeases = expiredLeases
             self.id = id
             self.title = title
             self.counts = counts
@@ -94,6 +98,15 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
             self.stalled = stalled
             self.stallMinutes = stallMinutes
             self.lastProgressAt = lastProgressAt
+        }
+
+        /// Expired leases the next claim reclaims, worded for Activity; `nil` when there are none.
+        public var expiredLeasesLabel: String? {
+            switch expiredLeases {
+            case 0: nil
+            case 1: "1 expired lease awaiting reclaim"
+            default: "\(expiredLeases) expired leases awaiting reclaim"
+            }
         }
     }
 
@@ -190,7 +203,8 @@ public struct HouseholdQueueOverview: Sendable, Equatable {
                         (order.firstIndex(of: $0.reason) ?? .max, $0.reason)
                             < (order.firstIndex(of: $1.reason) ?? .max, $1.reason)
                     },
-                waitingForFunding: rollup.waitingForFunding, stalled: rollup.stalled,
+                waitingForFunding: rollup.waitingForFunding, expiredLeases: rollup.expiredLeases,
+                stalled: rollup.stalled,
                 stallMinutes: rollup.stallMinutes, lastProgressAt: rollup.lastProgressAt)
         }
         return Self(

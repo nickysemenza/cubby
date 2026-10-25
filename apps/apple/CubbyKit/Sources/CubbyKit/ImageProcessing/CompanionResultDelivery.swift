@@ -24,20 +24,25 @@ actor CompanionResultDelivery {
 
     private struct SetAside {
         var failures: Int
+        var lastAttemptAt: ContinuousClock.Instant
         var nextAttemptAt: ContinuousClock.Instant
     }
 
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     private let failureObserver: CompanionImageWorker.FailureObserver?
+    /// The backoff clock; tests advance it by hand.
+    private let now: @Sendable () -> ContinuousClock.Instant
     private var setAside: [String: SetAside] = [:]
     private var latestError: String?
 
     init(
         outbox: CompanionResultOutbox<ImageProcessingResult>,
-        failureObserver: CompanionImageWorker.FailureObserver?
+        failureObserver: CompanionImageWorker.FailureObserver?,
+        now: @escaping @Sendable () -> ContinuousClock.Instant = { .now }
     ) {
         self.outbox = outbox
         self.failureObserver = failureObserver
+        self.now = now
     }
 
     var snapshot: Snapshot {
@@ -47,6 +52,8 @@ actor CompanionResultDelivery {
     }
 
     /// Sends up to `limit` recorded results that are due, skipping those still backing off.
+    /// Never-attempted results go first, then the least recently attempted, so results the server
+    /// keeps rejecting cannot take every bounded window from one behind them.
     func deliverDue(
         transport: any CompanionImageBackgroundTransport, deviceID: String, limit: Int = .max
     ) async throws -> Outcome {
@@ -54,10 +61,18 @@ actor CompanionResultDelivery {
         let pendingKeys = Set(pending.map(\.key))
         // Delivered by another path or discarded.
         setAside = setAside.filter { pendingKeys.contains($0.key) }
-        let now = ContinuousClock.now
+        let now = self.now()
         var attempted = 0
         var outcome = Outcome.delivered
-        for entry in pending {
+        let ordered = pending.enumerated().sorted { lhs, rhs in
+            switch (setAside[lhs.element.key]?.lastAttemptAt, setAside[rhs.element.key]?.lastAttemptAt) {
+            case (nil, nil): lhs.offset < rhs.offset
+            case (nil, _): true
+            case (_, nil): false
+            case (let left?, let right?): left == right ? lhs.offset < rhs.offset : left < right
+            }
+        }.map(\.element)
+        for entry in ordered {
             if let held = setAside[entry.key], held.nextAttemptAt > now {
                 outcome = .setAside
                 continue
@@ -91,8 +106,10 @@ actor CompanionResultDelivery {
             if Self.isClientUpdateRequired(error) { return .updateRequired(error) }
             if error is CancellationError || Task.isCancelled { return .setAside }
             let failures = (setAside[key]?.failures ?? 0) + 1
+            let attemptedAt = now()
             setAside[key] = SetAside(
-                failures: failures, nextAttemptAt: .now + Self.retryDelay(failures: failures))
+                failures: failures, lastAttemptAt: attemptedAt,
+                nextAttemptAt: attemptedAt + Self.retryDelay(failures: failures))
             latestError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
             if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
                 failureObserver?(error)

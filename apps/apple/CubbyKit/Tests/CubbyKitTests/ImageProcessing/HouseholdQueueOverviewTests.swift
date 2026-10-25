@@ -124,7 +124,7 @@ struct HouseholdQueueOverviewTests {
         let rollups = try JSONDecoder.cubby().decode(
             JobRunRollupsOutput.self,
             from: Data(
-                #"{"rollups":[{"runId":"RUN-SYN1","counts":{"leased":1,"waiting_funding":12,"due":0},"expiredLeases":0,"waitingForFunding":true,"lastProgressAt":"2099-01-01T00:00:00.000Z","stalled":true,"stallMinutes":15}]}"#
+                #"{"rollups":[{"runId":"RUN-SYN1","counts":{"leased":1,"waiting_funding":12,"due":0},"expiredLeases":2,"waitingForFunding":true,"lastProgressAt":"2099-01-01T00:00:00.000Z","stalled":true,"stallMinutes":15}]}"#
                     .utf8))
         let overview = try overview(runRows: rows, rollups: rollups)
         #expect(overview.runsNeedingAttention == 2)
@@ -134,6 +134,9 @@ struct HouseholdQueueOverviewTests {
         #expect(first.stalled)
         #expect(first.stallMinutes == 15)
         #expect(first.waitingForFunding)
+        #expect(first.expiredLeases == 2)
+        #expect(first.expiredLeasesLabel == "2 expired leases awaiting reclaim")
+        #expect(overview.runs.last?.expiredLeasesLabel == nil)
         // A Run without a rollup still lists, with nothing claimed about its Jobs.
         #expect(overview.runs.last == .init(id: "RUN-SYN2", title: "Synthetic import"))
     }

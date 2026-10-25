@@ -184,6 +184,103 @@ struct CompanionImageBackgroundTests {
         await worker.stop()
     }
 
+    /// Regression: replay took the outbox in key order, eight per window, so eight results the
+    /// server kept rejecting ahead of a valid ninth took every window (windows are spaced beyond
+    /// the backoff, so the same eight were always due). Least recently attempted goes first.
+    @Test func rejectedResultsNeverStarveALaterOne() async throws {
+        let fileURL = try outboxFile()
+        let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
+        var rejected: Set<String> = []
+        for index in 0..<8 {
+            let job = "00000000-0000-4000-8000-00000000010\(index)"
+            rejected.insert(job)
+            try await outbox.record(
+                try await BackgroundExecutionFixture().complete(try command(job: job)),
+                for: "a-rejected-\(index)")
+        }
+        let valid = "00000000-0000-4000-8000-0000000002ff"
+        try await outbox.record(
+            try await BackgroundExecutionFixture().complete(try command(job: valid)),
+            for: "z-valid")
+        let clock = ManualClock()
+        let delivery = CompanionResultDelivery(
+            outbox: outbox, failureObserver: nil, now: { clock.now })
+        let transport = BackgroundTransportFixture(commands: [], rejectedJobs: rejected)
+        let runner = CompanionImageBackgroundRunner(
+            outbox: outbox, delivery: delivery,
+            execute: { try await BackgroundExecutionFixture().complete($0) })
+        for _ in 0..<3 {
+            await runner.run(transport: transport, hello: hello(), maximumJobs: 1)
+            // The next window opens after every backoff has lapsed.
+            clock.advance(by: .seconds(3_600))
+        }
+        #expect(try await outbox.pending().map(\.key).contains("z-valid") == false)
+        #expect(await transport.deliveredAttempts == ["00000000-0000-4000-8000-000000000002"])
+    }
+
+    /// Regression: a 426 answering a claim release (a version bump between the pull and the
+    /// release of a command this build cannot run) only reached the failure observer, so the
+    /// worker never latched and later windows kept starting.
+    @Test func aReleaseRefusedForUpdateLatchesTheWorker() async throws {
+        let unsupported = try JSONDecoder.companionImageProcessing.decode(
+            ImageProcessingCommand.self,
+            from: Data(
+                #"{"kind":"future_kind","jobId":"00000000-0000-4000-8000-0000000000bb","attemptId":"00000000-0000-4000-8000-0000000000bc","deadline":"2099-01-01T00:00:00Z"}"#
+                    .utf8))
+        let transport = BackgroundTransportFixture(
+            commands: [unsupported], releaseError: Self.updateRefusal("imageProcessing.release"))
+        let (worker, phases) = try makeWorker(transport: transport)
+        await worker.start()
+        let hello = hello()
+        #expect(await worker.runInBackground(transport: transport, hello: hello) == false)
+        #expect(await worker.isUpdateRequired)
+        #expect(phases.latest == .updateRequired)
+        #expect(await worker.runInBackground(transport: transport, hello: hello) == false)
+        #expect(await transport.pullCount == 1)
+        await worker.stop()
+    }
+
+    /// Regression: when the window ended while a delivery answered 426, the runner checked
+    /// cancellation first, released the claim and reported resumable, so the worker never latched.
+    @Test func anUpdateRefusalDuringWindowExpiryStillLatches() async throws {
+        let transport = BackgroundTransportFixture(
+            commands: [try command()],
+            completionError: Self.updateRefusal("imageProcessing.complete"))
+        let (worker, _) = try makeWorker(transport: transport)
+        await worker.start()
+        let hello = hello()
+        let run = Task { await worker.runInBackground(transport: transport, hello: hello) }
+        await transport.completionHold.arrivals(1)
+        await worker.endBackgroundRun()
+        transport.completionHold.release()
+        #expect(await run.value == false)
+        #expect(await worker.isUpdateRequired)
+        #expect(await transport.releaseCount == 0)
+        #expect(try await worker.drainState().pendingResults == 1)
+        await worker.stop()
+    }
+
+    private static func updateRefusal(_ operation: String) -> CubbyAPIError {
+        CubbyAPIError(
+            status: CubbyAPIError.clientUpdateRequiredStatus, operationID: operation, detail: nil)
+    }
+
+    private func makeWorker(
+        transport: BackgroundTransportFixture
+    ) throws -> (CompanionImageWorker, PhaseFixture) {
+        let fileURL = try outboxFile()
+        let phases = PhaseFixture()
+        let worker = CompanionImageWorker(
+            baseURL: URL(string: "http://127.0.0.1:9")!,
+            credentials: CredentialProvider(host: "example.test", store: InMemorySessionTokenStore()),
+            deviceID: UUID(), deviceName: "Synthetic phone", foreground: false,
+            outbox: CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL),
+            transport: transport, activityObserver: { phases.record($0.phase) },
+            execute: { try await BackgroundExecutionFixture().complete($0) })
+        return (worker, phases)
+    }
+
     @Test func cancellationReleasesAndKeepsTheOutboxEmpty() async throws {
         let command = try command()
         let transport = BackgroundTransportFixture(commands: [command])
@@ -293,6 +390,11 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
     let renewError: (any Error)?
     /// Results for these jobs are always refused.
     let rejectedJobs: Set<String>
+    /// Fails every release with this error.
+    let releaseError: (any Error)?
+    /// Holds each completion on `completionHold` (ignoring cancellation), then throws this.
+    let completionError: (any Error)?
+    nonisolated let completionHold = Gate()
     private(set) var completionCount = 0
     private(set) var rejectedCount = 0
     private(set) var deliveredAttempts: [String] = []
@@ -306,8 +408,11 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         commands: [ImageProcessingCommand], failFirstCompletion: Bool = false,
         waitDuringCompletion: Bool = false,
         renewal: CompanionLeaseRenewal = .renewed(leaseExpiresAt: .distantFuture),
-        renewError: (any Error)? = nil, rejectedJobs: Set<String> = []
+        renewError: (any Error)? = nil, rejectedJobs: Set<String> = [],
+        releaseError: (any Error)? = nil, completionError: (any Error)? = nil
     ) {
+        self.releaseError = releaseError
+        self.completionError = completionError
         self.commands = commands
         self.failFirstCompletion = failFirstCompletion
         self.waitDuringCompletion = waitDuringCompletion
@@ -323,6 +428,10 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         return .init(command: commands.isEmpty ? nil : commands.removeFirst(), remotePaused: false)
     }
     func complete(deviceID: String, result: ImageProcessingResult) async throws {
+        if let completionError {
+            await completionHold.hold()
+            throw completionError
+        }
         if rejectedJobs.contains(result.jobId) {
             rejectedCount += 1
             throw Failure.network
@@ -332,12 +441,22 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         if failFirstCompletion { failFirstCompletion = false; throw Failure.network }
         deliveredAttempts.append(result.attemptId)
     }
-    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws { releaseCount += 1 }
+    func release(deviceID: String, claim: CompanionImageCommandClaim) async throws {
+        releaseCount += 1
+        if let releaseError { throw releaseError }
+    }
     func renew(deviceID: String, claim: CompanionImageCommandClaim) async throws -> CompanionLeaseRenewal {
         renewCount += 1
         if let renewError { throw renewError }
         return renewal
     }
+}
+
+/// A clock the test advances by hand.
+private final class ManualClock: Sendable {
+    private let instant = Mutex(ContinuousClock.now)
+    var now: ContinuousClock.Instant { instant.withLock { $0 } }
+    func advance(by duration: Duration) { instant.withLock { $0 += duration } }
 }
 
 /// The latest worker phase reported.

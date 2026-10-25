@@ -274,6 +274,9 @@ private struct RunRollupLabel: View {
             if run.waitingForFunding {
                 Text("Paused: waiting for AI funding").font(.caption).foregroundStyle(.secondary)
             }
+            if let expired = run.expiredLeasesLabel {
+                Text(expired).font(.caption).foregroundStyle(FieldGuideTokens.warning)
+            }
             if !run.counts.isEmpty {
                 Text(run.counts.map { "\($0.count) \($0.title.lowercased())" }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
@@ -351,8 +354,8 @@ private struct RunRollupLabel: View {
                         runsNeedingAttention: 1,
                         runs: [
                             .init(
-                                id: "RUN-SYN1", title: "Synthetic photo batch", stalled: true,
-                                stallMinutes: 15)
+                                id: "RUN-SYN1", title: "Synthetic photo batch", expiredLeases: 2,
+                                stalled: true, stallMinutes: 15)
                         ]))
             }
         }

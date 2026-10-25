@@ -175,10 +175,11 @@ system sleep, a remote pause, and a command this build cannot parse — after wh
 off before pulling again. macOS reports `foreground` from the scene state, keeps working while
 locked or in the background, stops pulling during system sleep, and pulls immediately on wake and
 on every reconnect. A result whose delivery fails is set aside on disk with its own capped backoff
-(2 s doubling to 15 min), shared by the resident worker and the charging window; deliveries and
+(2 s doubling to 15 min), shared by the resident worker and the charging window. Replay sends never-attempted results first,
+then the least recently attempted, so rejected results cannot starve a bounded window; deliveries and
 pulls continue and Activity shows "N results waiting to deliver" with the latest error. A 426
-CLIENT_UPDATE_REQUIRED from any image operation, including a charging window's pull, renewal or
-delivery, cancels execution, keeps recorded results, ends background windows, stops pulling for the
+CLIENT_UPDATE_REQUIRED from any image operation, including a charging window's pull, renewal,
+delivery or claim release, cancels execution, keeps recorded results, ends background windows, stops pulling for the
 worker's life, latches the app's update banner (the worker's client shares the app's request
 observer), and Activity shows "Update required to process images". Activity's "This device" row
 always names the worker phase (idle, connected, pulling, processing N, update required, paused
@@ -186,7 +187,8 @@ from the web, automatic work off, asleep, disconnected with the last error). Bel
 queue reads `job.queue` (a failed refresh keeps the earlier counts beside an inline error): Apple-device and cloud-AI counts by waiting-on reason (funding waits with
 their reopening time), leases split into this device's (matched by the worker's live claims, never
 by device name) and other devices' with lease expiry and the server's `expired` flag, and Jobs
-backing off; Runs needing attention carry their `job.runRollups` counts and stall flag.
+backing off; Runs needing attention carry their `job.runRollups` counts, stall flag and
+expired leases awaiting reclaim.
 
 The worker subscribes to the `imageProcessing.work` doorbell (`/api/doorbell`). The ring carries
 no job: on subscribe, on every ring and after each result the worker drains, calling
