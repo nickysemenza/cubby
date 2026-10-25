@@ -134,8 +134,26 @@ describe("fair drain under a flood", () => {
       served.push(...batch.map((row) => row.id));
     });
     expect(ids.every((id) => served.includes(id))).toBe(true);
-    expect(Object.fromEntries(predicted)).toEqual(
-      Object.fromEntries(ids.map((id) => [id, served.indexOf(id)])),
+    // Exact within the first batch; later batches re-rank kinds by their
+    // last service, so a projection is exact to the batch.
+    const batchOf = (index: number) => Math.floor(index / JOB_DRAIN.batch);
+    expect(
+      Object.fromEntries(
+        [...predicted].map(([id, ahead]) => [
+          id,
+          ahead < JOB_DRAIN.batch ? ahead : `batch ${batchOf(ahead)}`,
+        ]),
+      ),
+    ).toEqual(
+      Object.fromEntries(
+        ids.map((id) => {
+          const index = served.indexOf(id);
+          return [
+            id,
+            index < JOB_DRAIN.batch ? index : `batch ${batchOf(index)}`,
+          ];
+        }),
+      ),
     );
   });
 });

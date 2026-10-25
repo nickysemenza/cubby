@@ -301,8 +301,13 @@ describe("image execution history conservation", () => {
       .from(imageProcessingAttempt)
       .where(eq(imageProcessingAttempt.id, lease.attemptId));
     expect(recorded?.executor?.deviceId).toBe(deviceId);
-    // The reclaim expired it; the late delivery did not overwrite that.
-    expect(recorded?.state).toBe("expired");
+    // The reclaim expired it; the late skip is an executor failure, so it
+    // lands in this attempt's history like any late failure, without
+    // touching the newer attempt.
+    expect(recorded).toMatchObject({
+      state: "failed",
+      error: "unsupported_format",
+    });
     const events = await getDb(ctx.db)
       .select()
       .from(imageProcessingEvent)
