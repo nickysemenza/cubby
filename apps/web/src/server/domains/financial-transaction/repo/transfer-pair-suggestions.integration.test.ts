@@ -6,6 +6,7 @@ import {
   type FinancialAccountShortcode,
 } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import {
   transferPairJudgment,
   type TransferPairJudgment,
@@ -24,6 +25,8 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { unwrapDb } from "~/server/db/helpers";
 import {
+  assessmentState,
+  feedback,
   financialAccount,
   financialTransaction,
   ledgerParty,
@@ -35,6 +38,8 @@ import { labelTransferPairSuggestions } from "~/server/domains/financial-transac
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { previewStatementSuggestion } from "~/server/domains/transaction-import/repo/statement-suggestion-preview";
+import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
@@ -1553,6 +1558,147 @@ describe("transfer-pair suggestions", () => {
     ]);
     expect(await transfers()).toEqual([]);
   });
+
+  it.each([false, true])(
+    "refuses statement A when only transfer leg B has a deleted provider collision, afterPreview=%s",
+    async (afterPreview) => {
+      const member = await owner("Synthetic guarded transfer member");
+      await account(
+        "Synthetic guard checking",
+        member,
+        checking,
+        "synthetic-checking-id",
+      );
+      await account(
+        "Synthetic guard savings",
+        member,
+        savings,
+        "synthetic-savings-id",
+      );
+      await statement([
+        {
+          account: "Synthetic guard checking",
+          date: "2026-05-04",
+          amount: 70,
+          description: "ONLINE TRANSFER TO SAVINGS",
+          providerTransactionId: "synthetic-transfer-a",
+          providerAccountId: "synthetic-checking-id",
+        },
+        {
+          account: "Synthetic guard savings",
+          date: "2026-05-04",
+          amount: -70,
+          description: "ONLINE TRANSFER FROM CHECKING",
+          providerTransactionId: "synthetic-transfer-b",
+          providerAccountId: "synthetic-savings-id",
+        },
+        {
+          account: "Synthetic guard savings",
+          date: "2026-05-01",
+          amount: -777,
+          description: "SYNTHETIC RETIRED PROVIDER OBSERVATION",
+          providerTransactionId: "synthetic-transfer-c",
+          providerAccountId: "synthetic-savings-id",
+        },
+      ]);
+      const [retired] = await unwrapDb(ctx.db)
+        .select()
+        .from(sourceTransactionRecord)
+        .where(
+          eq(
+            sourceTransactionRecord.providerTransactionId,
+            "synthetic-transfer-c",
+          ),
+        );
+      // Retained tombstones are absent from pair discovery but still constrain
+      // provider identity. Today's intake cannot construct the historical collision.
+      await unwrapDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({ deletedAt: new Date() })
+        .where(eq(sourceTransactionRecord.id, retired!.id));
+      const collide = () =>
+        unwrapDb(ctx.db)
+          .update(sourceTransactionRecord)
+          .set({ providerTransactionId: "synthetic-transfer-b" })
+          .where(eq(sourceTransactionRecord.id, retired!.id));
+      if (!afterPreview) await collide();
+      await refresh();
+      await generateStatementSuggestionPage(ctx.db, {
+        after: null,
+        runId: null,
+      });
+      const stateIds = (
+        await unwrapDb(ctx.db)
+          .select({ id: assessmentState.id })
+          .from(assessmentState)
+      ).map((state) => state.id);
+      const suggestion = (
+        await readStatementSuggestions(ctx.db, stateIds)
+      ).find((item) => item.amount === 70)!;
+      expect(suggestion).toBeDefined();
+      const application = statementTransactionApplication.parse({
+        kind: "statement_transaction",
+        action: "create",
+      });
+      const command = {
+        assessmentId: suggestion.assessmentId,
+        expectedFingerprint: suggestion.fingerprint,
+        operationId: "synthetic-guarded-transfer-a",
+        verdict: "correct" as const,
+        intent: "apply" as const,
+        application,
+      };
+      if (afterPreview) {
+        await previewStatementSuggestion(ctx.db, {
+          assessmentId: suggestion.assessmentId,
+          expectedFingerprint: suggestion.fingerprint,
+          application,
+        });
+        await collide();
+      }
+      // includes-deleted: refusal must preserve B's retained collision evidence.
+      const before = await unwrapDb(ctx.db)
+        .select()
+        .from(sourceTransactionRecord)
+        .orderBy(sourceTransactionRecord.id);
+      await expect(
+        reviewAssessment(ctx.db, kernelCtx(ctx), command),
+      ).rejects.toThrow(/provider identity|evidence changed/i);
+      expect(suggestion.clean).toBe(afterPreview);
+      await expect(
+        previewStatementSuggestion(ctx.db, {
+          assessmentId: suggestion.assessmentId,
+          expectedFingerprint: suggestion.fingerprint,
+          application,
+        }),
+      ).rejects.toThrow(/provider identity|evidence changed/i);
+      const [pair] = await pending();
+      await expect(
+        applyTransferPair(ctx.db, kernelCtx(ctx), {
+          key: pair!.judgment.key,
+          expectedFingerprint: pair!.fingerprint,
+        }),
+      ).rejects.toThrow(/provider identity/i);
+      expect(await liveTransactions()).toEqual([]);
+      expect(await transfers()).toEqual([]);
+      // includes-deleted: compare the complete retained source graph.
+      expect(
+        await unwrapDb(ctx.db)
+          .select()
+          .from(sourceTransactionRecord)
+          .orderBy(sourceTransactionRecord.id),
+      ).toEqual(before);
+      const events = await unwrapDb(ctx.db)
+        .select({ operationId: feedback.operationId })
+        .from(feedback);
+      expect(events).toContainEqual({
+        operationId: "synthetic-guarded-transfer-a",
+      });
+      expect(events).not.toContainEqual({
+        operationId: "command-application:synthetic-guarded-transfer-a",
+      });
+    },
+  );
 
   it("refuses a stale accept and leaves no created leg behind", async () => {
     const member = await owner("Synthetic member");

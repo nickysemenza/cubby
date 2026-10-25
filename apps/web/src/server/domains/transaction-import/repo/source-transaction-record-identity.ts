@@ -1,5 +1,7 @@
+import type { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
+import type { z } from "zod";
 
 /**
  * The frozen legacy identity function for a provider statement row.
@@ -88,3 +90,78 @@ export async function sourceTransactionRecordOccurrenceId(
   const payload = JSON.stringify([source, "v2", fingerprint, rowPosition]);
   return `v2:${await sha256Hex(payload)}`;
 }
+
+type ProviderScope = {
+  accountDescriptor: string;
+  providerAccountId: string | null;
+  accountId?: string | null;
+};
+type ProviderScopeAccount = {
+  id: string;
+  aliases: z.infer<typeof financialAccountSourceAliases>;
+};
+
+/** Explicit provider scope compatibility, shared by intake and retained review.
+ * Complete charge history must supply known IDs, including retired observations.
+ * Supersession and matching amounts/descriptions grant no identity authority.
+ */
+export function providerScopeRelation({
+  source,
+  left,
+  right,
+  leftKnownIds,
+  rightKnownIds,
+  accounts,
+}: {
+  source: string;
+  left: ProviderScope;
+  right: ProviderScope;
+  leftKnownIds: ReadonlySet<string>;
+  rightKnownIds: ReadonlySet<string>;
+  accounts: readonly ProviderScopeAccount[];
+}): "compatible" | "distinct" | "unresolved" {
+  const leftIds = new Set([
+    ...leftKnownIds,
+    ...(left.providerAccountId ? [left.providerAccountId] : []),
+  ]);
+  const rightIds = new Set([
+    ...rightKnownIds,
+    ...(right.providerAccountId ? [right.providerAccountId] : []),
+  ]);
+  if (
+    leftIds.size &&
+    rightIds.size &&
+    ![...leftIds].some((id) => rightIds.has(id))
+  )
+    return "distinct";
+  if (leftIds.size > 1 || rightIds.size > 1) return "unresolved";
+  const leftId = [...leftIds][0] ?? null;
+  const rightId = [...rightIds][0] ?? null;
+  if (leftId && rightId) return "compatible";
+  if (canonical(left.accountDescriptor) === canonical(right.accountDescriptor))
+    return "compatible";
+  const resolve = (scope: ProviderScope, knownId: string | null) =>
+    accounts.filter((account) =>
+      knownId
+        ? account.aliases.some(
+            (alias) =>
+              alias.source === source && alias.externalAccountId === knownId,
+          )
+        : account.id === scope.accountId ||
+          account.aliases.some(
+            (alias) =>
+              alias.source === source &&
+              canonical(alias.alias) === canonical(scope.accountDescriptor),
+          ),
+    );
+  const leftAccounts = resolve(left, leftId);
+  const rightAccounts = resolve(right, rightId);
+  if (leftAccounts.length !== 1 || rightAccounts.length !== 1)
+    return "unresolved";
+  return leftAccounts[0]!.id === rightAccounts[0]!.id
+    ? "compatible"
+    : "distinct";
+}
+
+export const PROVIDER_IDENTITY_REVIEW =
+  "This provider identity has ambiguous historical account evidence; resolve its charge identity before continuing.";

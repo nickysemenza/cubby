@@ -468,6 +468,32 @@ withdrawal, a superseded charge no longer corroborates the older booking.
 Unresolved references and genuinely independent current charges still require
 review; supersession does not grant authority to change money by itself.
 
+Retained provider identities that span multiple compatible charge keys remain
+review-required in statement discovery, fresh preview and financial application.
+The guard uses provider/source scope, complete known account-ID history and
+explicit live account aliases; it checks legacy null account scopes as well as
+known scopes. Distinct known provider account IDs and genuinely positioned
+ID-less occurrences stay independent. Equal amounts or merchant text grant no
+identity authority. Supersession, ignore, withdrawal and deleted observations do
+not prove event equivalence or release the successor's unresolved identity.
+Discovery and refusal preserve observations, keys, memberships, references and
+member judgments; identity resolution remains separate review work.
+
+The bounded charge page loads provider history and account facts before spending
+preparation. Its evidence fingerprint includes relevant retained scope and
+mutable alias facts, and publication rechecks those facts after model work.
+Application rebuilds them inside the existing snapshot write, including for old
+clean Assessments. A collision or scope change after preview refuses application
+without money or an application receipt while preserving the durable member
+command. Exact successful canonical receipt replay precedes the live guard and
+remains inert. Model labels and paid advice cannot release this evidence hold. A
+statement action that applies a transfer pair binds both source legs' provider
+identity facts to its preview/publication fingerprint. A collision on the
+opposite leg, including compatible deleted history excluded from transfer
+discovery, holds either statement proposal. Publication and application batch
+that complete source set again, and the transfer writer independently refuses
+unresolved source-leg identity inside its transaction before creating either leg.
+
 A collection owns its immutable observation time, declared count and optional
 account/date/visibility scope. Chunks resume that collection. Membership is
 independent of first ownership, and migration preserves known memberships

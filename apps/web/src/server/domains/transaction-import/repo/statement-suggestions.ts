@@ -7,6 +7,7 @@ import {
   feedbackEvent,
   feedbackVerdict,
 } from "@cubby/schemas/assessment";
+import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
   FINANCIAL_STATEMENT_IMPORT_MAX_ROWS,
@@ -34,7 +35,7 @@ import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
@@ -47,12 +48,24 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { assessmentState, financialTransaction } from "~/server/db/schema";
+import {
+  assessmentState,
+  financialTransaction,
+  financialAccount,
+  sourceTransactionRecord,
+} from "~/server/db/schema";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
-import { findTransferPairsForCharges } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+import {
+  findTransferPairsForCharges,
+  transferPairSourceCharges,
+} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+import {
+  providerScopeRelation,
+  PROVIDER_IDENTITY_REVIEW,
+} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   chargeKeyOf,
   chargeStateOf,
@@ -73,6 +86,7 @@ import {
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
+import { createAppError } from "~/server/errors/app-error";
 import {
   publishAssessment,
   publishAssessments,
@@ -172,6 +186,9 @@ export type ChargeProposal = {
   fingerprint: string;
   /** The ledger and transaction evidence alone, recomputed at apply. */
   evidenceFingerprint: string;
+  providerScopeFingerprint?: string;
+  /** Every retained source leg the proposed action can write. */
+  providerScopeCharges?: readonly ChargeRef[];
   refs: string[];
 };
 
@@ -718,6 +735,21 @@ async function prepareChargePreviews(
   const accepted = new Map(acceptedRows.map((row) => [row.shortcode, row]));
   const preparation =
     sharedPreparation ?? (await prepareFinancialStatementPreview(db));
+  const pairsByCharge = await findTransferPairsForCharges(db, charges);
+  const providerScopeCharges = new Map(
+    [...pairsByCharge].map(([key, pair]) => [
+      key,
+      transferPairSourceCharges(pair.key),
+    ]),
+  );
+  const providerFacts = await providerActionIdentityFacts(
+    db,
+    grouped.map((input) => ({
+      ...input,
+      providerScopeCharges: providerScopeCharges.get(chargeId(input.charge)),
+    })),
+    preparation.accounts,
+  );
   const preview = await previewFinancialTransactionImport(
     db,
     {
@@ -759,7 +791,263 @@ async function prepareChargePreviews(
     accepted,
     preparation,
     preview,
+    providerFacts,
+    pairsByCharge,
+    providerScopeCharges,
   };
+}
+
+/** Bounded provider history, including tombstones and reviewed successors. A
+ * replacement relation is not proof that two retained provider keys are one event.
+ */
+async function providerIdentityFacts(
+  db: Database,
+  inputs: readonly { charge: ChargeRef; canonical: Observation }[],
+  accounts?: readonly {
+    id: string;
+    sourceAliases: ReturnType<typeof financialAccountSourceAliases.parse>;
+  }[],
+) {
+  const asked = inputs.flatMap(({ charge, canonical }) =>
+    canonical.providerTransactionId
+      ? [
+          {
+            charge,
+            canonical,
+            providerTransactionId: canonical.providerTransactionId,
+          },
+        ]
+      : [],
+  );
+  const result = new Map<
+    string,
+    { fingerprint: string; unresolved: boolean }
+  >();
+  if (!asked.length) return result;
+  const client = unwrapDb(db);
+  // includes-deleted: narrow identities first, then load complete charge history
+  // so retired known account IDs still prevent null-scope ABA.
+  const keys = client
+    .selectDistinct({
+      source: sourceTransactionRecord.source,
+      chargeKey: sourceTransactionRecord.chargeKey,
+    })
+    .from(sourceTransactionRecord)
+    .where(
+      or(
+        ...asked.map(({ charge, providerTransactionId }) =>
+          and(
+            eq(sourceTransactionRecord.source, charge.source),
+            eq(
+              sourceTransactionRecord.providerTransactionId,
+              providerTransactionId,
+            ),
+          ),
+        ),
+      ),
+    )
+    .as("provider_keys");
+  const rows = await client
+    .select({
+      id: sourceTransactionRecord.id,
+      source: sourceTransactionRecord.source,
+      chargeKey: sourceTransactionRecord.chargeKey,
+      providerTransactionId: sourceTransactionRecord.providerTransactionId,
+      providerAccountId: sourceTransactionRecord.providerAccountId,
+      accountDescriptor: sourceTransactionRecord.accountDescriptor,
+      accountId: sourceTransactionRecord.accountId,
+      deletedAt: sourceTransactionRecord.deletedAt,
+      supersededByRowId: sourceTransactionRecord.supersededByRowId,
+      withdrawnAt: sourceTransactionRecord.withdrawnAt,
+    })
+    .from(sourceTransactionRecord)
+    .innerJoin(
+      keys,
+      and(
+        eq(keys.source, sourceTransactionRecord.source),
+        eq(keys.chargeKey, sourceTransactionRecord.chargeKey),
+      ),
+    )
+    .orderBy(
+      sourceTransactionRecord.source,
+      sourceTransactionRecord.chargeKey,
+      sourceTransactionRecord.id,
+    );
+  const scopedAccounts =
+    accounts ??
+    (
+      await unwrapDb(db)
+        .select({
+          id: financialAccount.id,
+          sourceAliases: financialAccount.sourceAliases,
+        })
+        .from(financialAccount)
+        .where(isNull(financialAccount.deletedAt))
+    ).map((account) => ({
+      ...account,
+      sourceAliases: financialAccountSourceAliases.parse(account.sourceAliases),
+    }));
+  const known = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const key = chargeId(row);
+    const ids = known.get(key) ?? new Set<string>();
+    if (row.providerAccountId) ids.add(row.providerAccountId);
+    known.set(key, ids);
+  }
+  const scopeAccounts = scopedAccounts.map((account) => ({
+    id: account.id,
+    aliases: account.sourceAliases,
+  }));
+  for (const { charge, canonical } of asked) {
+    const history = rows.filter(
+      (row) =>
+        row.source === charge.source &&
+        row.providerTransactionId === canonical.providerTransactionId,
+    );
+    const ownIds = known.get(chargeId(charge)) ?? new Set<string>();
+    const unresolved =
+      ownIds.size > 1 ||
+      history.some(
+        (row) =>
+          row.chargeKey !== charge.chargeKey &&
+          providerScopeRelation({
+            source: charge.source,
+            left: canonical,
+            right: row,
+            leftKnownIds: ownIds,
+            rightKnownIds: known.get(chargeId(row)) ?? new Set<string>(),
+            accounts: scopeAccounts,
+          }) !== "distinct",
+      );
+    // Scope aliases are mutable authority. Retain only accounts relevant to this
+    // identity so unrelated account maintenance cannot stale every proposal.
+    const normalize = (value: string) =>
+      value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+    const chargeHistory = rows.filter((row) =>
+      history.some(
+        (member) =>
+          member.source === row.source && member.chargeKey === row.chargeKey,
+      ),
+    );
+    const relevantAccounts = scopeAccounts.filter((account) =>
+      chargeHistory.some(
+        (row) =>
+          row.accountId === account.id ||
+          account.aliases.some(
+            (alias) =>
+              alias.source === row.source &&
+              ((row.providerAccountId !== null &&
+                alias.externalAccountId === row.providerAccountId) ||
+                normalize(alias.alias) === normalize(row.accountDescriptor)),
+          ),
+      ),
+    );
+    result.set(chargeId(charge), {
+      unresolved,
+      fingerprint: await sha256Hex(
+        canonicalJson(
+          jsonSnapshot.parse({
+            history: chargeHistory,
+            accounts: relevantAccounts.sort((a, b) => a.id.localeCompare(b.id)),
+          }),
+        ),
+      ),
+    });
+  }
+  return result;
+}
+
+async function providerIdentityInputs(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  const canonical = new Map<string, Observation>();
+  for (const observation of await loadObservations(db, charges))
+    if (!canonical.has(chargeId(observation)))
+      canonical.set(chargeId(observation), observation);
+  return charges.flatMap((charge) => {
+    const row = canonical.get(chargeId(charge));
+    return row ? [{ charge, canonical: row }] : [];
+  });
+}
+
+/** Bind the provider evidence of every source leg, including an opposite transfer leg. */
+async function providerActionIdentityFacts(
+  db: Database,
+  inputs: readonly Pick<
+    ChargeProposal,
+    "charge" | "canonical" | "providerScopeCharges"
+  >[],
+  accounts?: Parameters<typeof providerIdentityFacts>[2],
+) {
+  if (!inputs.some((input) => input.providerScopeCharges?.length))
+    return providerIdentityFacts(db, inputs, accounts);
+  const charges = new Map(
+    inputs
+      .flatMap((input) => [input.charge, ...(input.providerScopeCharges ?? [])])
+      .map((charge) => [chargeId(charge), charge]),
+  );
+  const current = await providerIdentityInputs(db, [...charges.values()]);
+  const present = new Set(current.map((input) => chargeId(input.charge)));
+  const facts = await providerIdentityFacts(db, current, accounts);
+  const result = new Map(facts);
+  for (const input of inputs) {
+    if (!input.providerScopeCharges?.length) continue;
+    const legs = [
+      ...new Set([input.charge, ...input.providerScopeCharges].map(chargeId)),
+    ].sort();
+    result.set(chargeId(input.charge), {
+      unresolved: legs.some(
+        (key) => !present.has(key) || facts.get(key)?.unresolved,
+      ),
+      fingerprint: await sha256Hex(
+        canonicalJson(
+          legs.map((key) => [key, facts.get(key)?.fingerprint ?? null]),
+        ),
+      ),
+    });
+  }
+  return result;
+}
+
+/** The transfer writer also checks its complete source set inside its transaction. */
+export async function assertStatementProviderIdentity(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  if (!charges.length) return;
+  const unique = [
+    ...new Map(charges.map((charge) => [chargeId(charge), charge])).values(),
+  ];
+  const inputs = await providerIdentityInputs(db, unique);
+  const facts = await providerIdentityFacts(db, inputs);
+  if (
+    inputs.length !== unique.length ||
+    [...facts.values()].some((fact) => fact.unresolved)
+  )
+    throw createAppError("CONSTRAINT_VIOLATION", PROVIDER_IDENTITY_REVIEW);
+}
+
+async function assertProviderIdentityPublication(
+  db: Database,
+  proposals: readonly ChargeProposal[],
+) {
+  const facts = await providerActionIdentityFacts(db, proposals);
+  for (const proposal of proposals) {
+    const current = facts.get(chargeId(proposal.charge));
+    if (
+      current?.unresolved &&
+      (proposal.judgment.clean ||
+        proposal.judgment.reviewReason !== PROVIDER_IDENTITY_REVIEW)
+    )
+      throw new Error(
+        "Unresolved provider identity requires statement review before publication.",
+      );
+    if (current?.fingerprint !== proposal.providerScopeFingerprint)
+      throw new Error(
+        "Provider identity evidence changed before statement publication; refresh suggestions.",
+      );
+  }
 }
 
 export async function buildChargeProposals(
@@ -775,6 +1063,9 @@ export async function buildChargeProposals(
     accepted,
     preparation,
     preview,
+    providerFacts,
+    pairsByCharge,
+    providerScopeCharges,
   } = prepared;
   const previewByKey = new Map(preview.rows.map((row) => [row.key, row]));
   const ids = preparation.ids;
@@ -844,8 +1135,6 @@ export async function buildChargeProposals(
     ),
   ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
-  const pairsByCharge = await findTransferPairsForCharges(db, charges);
-
   const pending: Array<{
     charge: ChargeRef;
     canonical: Observation;
@@ -872,8 +1161,9 @@ export async function buildChargeProposals(
     const priorTransaction = matchedCode
       ? accepted.get(matchedCode)
       : undefined;
-    const reviewReason =
-      priorTransaction && priorTransaction.accountId !== accountId
+    const reviewReason = providerFacts.get(chargeId(charge))?.unresolved
+      ? PROVIDER_IDENTITY_REVIEW
+      : priorTransaction && priorTransaction.accountId !== accountId
         ? "The source account conflicts with the accepted transaction account; review the account evidence."
         : sourceCorrectionReason(priorTransaction, canonical);
     const effectiveStatus = canonical.providerStatus ?? "observed";
@@ -1049,7 +1339,16 @@ export async function buildChargeProposals(
       judgment,
       judgment.create?.amount ?? canonical.amount,
     );
-    proposals.push(await finishProposal(charge, canonical, rows, judgment));
+    proposals.push(
+      await finishProposal(
+        charge,
+        canonical,
+        rows,
+        judgment,
+        providerFacts.get(chargeId(charge))?.fingerprint,
+        providerScopeCharges.get(chargeId(charge)),
+      ),
+    );
   }
   return proposals;
 }
@@ -1096,12 +1395,15 @@ async function finishProposal(
   canonical: Observation,
   observations: Observation[],
   judgment: StatementTransactionJudgment,
+  providerScopeFingerprint?: string,
+  providerScopeCharges?: readonly ChargeRef[],
 ): Promise<ChargeProposal> {
   assessmentJudgments.statement_transaction.parse(judgment);
   const fingerprint = await sha256Hex(
     canonicalJson({
       revision: STATEMENT_SUGGESTION_REVISION,
       cleanPolicy: STATEMENT_CLEAN_POLICY,
+      ...(providerScopeFingerprint ? { providerScopeFingerprint } : {}),
       judgment,
       observations: observations
         .map((row) => [
@@ -1131,6 +1433,8 @@ async function finishProposal(
     judgment,
     fingerprint,
     evidenceFingerprint: fingerprint,
+    providerScopeFingerprint,
+    providerScopeCharges,
     refs,
   };
 }
@@ -1193,7 +1497,9 @@ async function buildHoldVoidProposalsForHolds(
   holds: readonly PendingTransaction[],
   onFailure?: (hold: PendingTransaction, error: unknown) => void,
 ) {
-  const proposals: ChargeProposal[] = [];
+  const proposals: Array<
+    Pick<ChargeProposal, "charge" | "canonical" | "observations" | "judgment">
+  > = [];
   for (const hold of holds) {
     try {
       const date = hold.transactionDate ?? hold.postedDate;
@@ -1218,8 +1524,11 @@ async function buildHoldVoidProposalsForHolds(
         source: canonical.source,
         chargeKey: canonical.chargeKey,
       };
-      proposals.push(
-        await finishProposal(charge, canonical, rows, {
+      proposals.push({
+        charge,
+        canonical,
+        observations: rows,
+        judgment: {
           recommended: "void",
           reviewReason: null,
           accountId: hold.accountId,
@@ -1233,14 +1542,31 @@ async function buildHoldVoidProposalsForHolds(
           transfer: null,
           transferPair: null,
           clean: false,
-        }),
-      );
+        },
+      });
     } catch (error) {
       if (!onFailure || isWorkflowInterrupted(error)) throw error;
       onFailure(hold, error);
     }
   }
-  return proposals;
+  const facts = await providerIdentityFacts(db, proposals);
+  return Promise.all(
+    proposals.map((proposal) => {
+      const scope = facts.get(chargeId(proposal.charge));
+      return finishProposal(
+        proposal.charge,
+        proposal.canonical,
+        proposal.observations,
+        {
+          ...proposal.judgment,
+          reviewReason: scope?.unresolved
+            ? PROVIDER_IDENTITY_REVIEW
+            : proposal.judgment.reviewReason,
+        },
+        scope?.fingerprint,
+      );
+    }),
+  );
 }
 
 async function loadObservationsById(db: Database, rowIds: readonly string[]) {
@@ -1501,6 +1827,7 @@ export async function publishChargeProposal(
   const ruleGeneration = producer.kind === "rule";
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
+    await assertProviderIdentityPublication(tx, [proposal]);
     let retainedSpendingCheckpoint: StatementLabelCheckpoint | undefined;
     const client = getDb(tx);
     await client.execute(
@@ -1898,6 +2225,21 @@ async function publishCompleteLabelBatch(
           ),
         )
       : null;
+    await assertProviderIdentityPublication(
+      tx,
+      entries
+        .filter(({ proposal }) => {
+          const pending = (prior.get(chargeId(proposal.charge)) ?? []).filter(
+            (row) => row.active && row.status === suggestionStatus.enum.pending,
+          );
+          return (
+            !scopedIds ||
+            !pending.length ||
+            pending.some((row) => scopedIds.has(row.id))
+          );
+        })
+        .map(({ proposal }) => proposal),
+    );
     const publications: Array<{
       entry: CompleteStatementLabelPublication;
       history: ChargePublicationHistory[];
@@ -2173,6 +2515,7 @@ async function publishRuleBatch(
   if (!eligible.length) return new Map();
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
+    await assertProviderIdentityPublication(tx, eligible);
     const { charges, prior, current } = await lockChargePublicationInputs(
       tx,
       eligible,

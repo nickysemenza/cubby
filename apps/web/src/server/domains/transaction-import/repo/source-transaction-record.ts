@@ -31,6 +31,8 @@ import {
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
+  providerScopeRelation,
+  PROVIDER_IDENTITY_REVIEW,
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
 } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
@@ -378,6 +380,10 @@ async function prepareStatementObservations(
         .from(financialAccount)
         .where(notDeleted(financialAccount))
     : [];
+  const scopedAccounts = accounts.map((account) => ({
+    ...account,
+    aliases: financialAccountSourceAliases.parse(account.aliases),
+  }));
   const normalizedAlias = (value: string) =>
     value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
   const coverage = input.import.coverage;
@@ -420,7 +426,6 @@ async function prepareStatementObservations(
       const predecessors = previousProviderRows.filter((prior) => {
         if (prior.providerTransactionId !== row.providerTransactionId)
           return false;
-        // An old null account ID cannot bridge past a later known account.
         const knownIds = new Set(
           retainedAccountIds
             .filter((retained) => retained.chargeKey === prior.chargeKey)
@@ -428,48 +433,22 @@ async function prepareStatementObservations(
               retained.providerAccountId ? [retained.providerAccountId] : [],
             ),
         );
-        if (
-          knownIds.size > 1 ||
-          (providerAccountId !== null &&
-            [...knownIds].some((id) => id !== providerAccountId))
-        )
-          return false;
-        if (providerAccountId && prior.providerAccountId)
-          return providerAccountId === prior.providerAccountId;
-        if (
-          normalizedAlias(prior.accountDescriptor) ===
-          normalizedAlias(row.accountDescriptor)
-        )
-          return true;
         return (
-          providerAccountId !== null &&
-          accounts.some((account) => {
-            const aliases = financialAccountSourceAliases.parse(
-              account.aliases,
-            );
-            return (
-              aliases.some(
-                (alias) =>
-                  alias.source === source &&
-                  alias.externalAccountId === providerAccountId,
-              ) &&
-              (prior.accountId === account.id ||
-                aliases.some(
-                  (alias) =>
-                    alias.source === source &&
-                    normalizedAlias(alias.alias) ===
-                      normalizedAlias(prior.accountDescriptor),
-                ))
-            );
-          })
+          providerScopeRelation({
+            source,
+            left: prior,
+            right: { ...row, providerAccountId },
+            leftKnownIds: knownIds,
+            rightKnownIds: new Set(
+              providerAccountId ? [providerAccountId] : [],
+            ),
+            accounts: scopedAccounts,
+          }) === "compatible"
         );
       });
       const keys = [...new Set(predecessors.map((prior) => prior.chargeKey))];
       if (keys.length > 1)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "This provider identity has ambiguous historical account evidence; resolve its charge identity before importing a revision.",
-        );
+        throw createAppError("CONSTRAINT_VIOLATION", PROVIDER_IDENTITY_REVIEW);
       if (keys[0]) chargeKey = keys[0];
       const retained = priorMembers.filter(
         (prior) =>

@@ -950,6 +950,14 @@ const parseLegKey = (key: string) => {
   return null;
 };
 
+/** Source charges a pair action can write, using the owning leg-key parser. */
+export function transferPairSourceCharges(pairKey: string): ChargeRef[] {
+  return pairKey.split("~").flatMap((key) => {
+    const parsed = parseLegKey(key);
+    return parsed?.charge ? [parsed.charge] : [];
+  });
+}
+
 /** Reject non-transfer seeds together; eligible seeds still hydrate independently
  * so preview duplicate checks and complete competing pools remain unchanged. */
 async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
@@ -1392,10 +1400,7 @@ export async function refreshTransferPairStatements(
     SELECT 1 FROM "AssessmentState" WHERE ${pending} LIMIT 1
   `);
   if (!rows.length) return false;
-  const charges = pairKey.split("~").flatMap((key) => {
-    const parsed = parseLegKey(key);
-    return parsed?.charge ? [parsed.charge] : [];
-  });
+  const charges = transferPairSourceCharges(pairKey);
   const {
     buildChargeProposals,
     publishChargeProposal,
@@ -2148,6 +2153,14 @@ export async function applyTransferPair(
         "This transfer pair is no longer a candidate: a leg was paired, matched or removed. Refresh suggestions and review again.",
       );
     const raw = current.judgment;
+    const { assertStatementProviderIdentity } =
+      await import("~/server/domains/transaction-import/repo/statement-suggestions");
+    await assertStatementProviderIdentity(
+      txDb,
+      [raw.outflow, raw.inflow].flatMap((leg) =>
+        leg.charge ? [leg.charge] : [],
+      ),
+    );
     // Any status: the suggestion's own handler marks it applied first.
     const published = (
       await storedPairs(txDb, sql`s.data->>'pairKey' = ${input.key}`, "any")

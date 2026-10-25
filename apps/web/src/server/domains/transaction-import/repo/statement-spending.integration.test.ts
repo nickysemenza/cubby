@@ -1,6 +1,9 @@
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import {
+  sourceTransactionRecordProviderStatus,
+  recordSourceTransactionRecordsInput,
+} from "@cubby/schemas/source-transaction-record";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { eq, isNull, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
@@ -23,6 +26,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
+import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import * as refreshFamilies from "~/server/generic/derived-refresh/repo/families";
 
@@ -32,7 +36,12 @@ import { answering } from "./statement-decision-port.fixtures";
 import * as statementApplication from "./statement-suggestion-application";
 import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import { readStatementSuggestions } from "./statement-suggestion-read";
-import { generateStatementSuggestionPage } from "./statement-suggestions";
+import {
+  buildChargeProposals,
+  buildHoldVoidProposals,
+  generateStatementHoldVoidPage,
+  generateStatementSuggestionPage,
+} from "./statement-suggestions";
 
 // Failure modes: a clean accept writes only settlement evidence; a matched
 // charge disappears before its spending is booked; unchanged re-import skips
@@ -325,6 +334,507 @@ describe("statement spending review and re-import", () => {
         racing.mockRestore();
         rebuilding.mockRestore();
       }
+    },
+  );
+  async function providerHistory(
+    input: ReturnType<typeof recordSourceTransactionRecordsInput.parse>,
+  ) {
+    const aliases = [
+      {
+        source: "monarch",
+        alias: "Synthetic card 4242",
+        externalAccountId: null,
+      },
+      {
+        source: "monarch",
+        alias: "Synthetic long card 4242",
+        externalAccountId: "synthetic-account",
+      },
+    ];
+    await getDb(ctx.db).execute(
+      sql`UPDATE "FinancialAccount" SET "sourceAliases" = ${JSON.stringify(aliases)}::jsonb`,
+    );
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        ...input,
+        import: { ...input.import, fingerprint: "synthetic-provider-scope" },
+        rows: [
+          {
+            ...input.rows[0],
+            accountDescriptor: "Synthetic long card 4242",
+            providerTransactionId: "synthetic-other-provider-id",
+            providerAccountId: "synthetic-account",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        ...input,
+        import: { ...input.import, fingerprint: "synthetic-provider-revision" },
+        rows: [
+          {
+            ...input.rows[0],
+            accountDescriptor: "Synthetic long card 4242",
+            providerTransactionId: "synthetic-other-provider-id",
+            providerAccountId: "synthetic-account",
+            providerNotes: "Synthetic newer observation",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    // Historical retained keys cannot be constructed by today's guarded intake.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "SourceTransactionRecord" SET "providerTransactionId" = 'synthetic-shared-provider-id' WHERE "providerTransactionId" IS NULL`,
+    );
+  }
+  const providerCollision = () =>
+    getDb(ctx.db).execute(
+      sql`UPDATE "SourceTransactionRecord" SET "providerTransactionId" = 'synthetic-shared-provider-id' WHERE "providerTransactionId" = 'synthetic-other-provider-id'`,
+    );
+
+  const chargeRefs = async () =>
+    (
+      await getDb(ctx.db).execute<{ source: string; chargeKey: string }>(
+        sql`SELECT DISTINCT source, "chargeKey" FROM "SourceTransactionRecord"`,
+      )
+    ).rows;
+  it("holds compatible provider keys from either account representation in direct and page discovery", async () => {
+    const { input } = await fixture();
+    await providerHistory(input);
+    await providerCollision();
+    const charges = await chargeRefs();
+    expect(charges).toHaveLength(2);
+    const together = await buildChargeProposals(ctx.db, charges);
+    for (const charge of charges) {
+      const [direct] = await buildChargeProposals(ctx.db, [charge]);
+      expect(direct?.judgment).toEqual(
+        together.find(
+          (proposal) => proposal.charge.chargeKey === charge.chargeKey,
+        )?.judgment,
+      );
+      expect(direct?.judgment).toMatchObject({
+        clean: false,
+        reviewReason: expect.stringMatching(/provider identity/i),
+      });
+    }
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const states = await getDb(ctx.db).query.assessmentState.findMany();
+    expect(
+      await readStatementSuggestions(
+        ctx.db,
+        states.map((state) => state.id),
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          clean: false,
+          reviewReason: expect.stringMatching(/provider identity/i),
+        }),
+      ]),
+    );
+  });
+  it.each([false, true])(
+    "refuses a retained clean proposal after provider collision, previewed=%s",
+    async (previewed) => {
+      const { input, advice, account } = await fixture();
+      await providerHistory(input);
+      if (previewed) {
+        const legacy = (
+          await getDb(ctx.db).query.sourceTransactionRecord.findMany()
+        ).find((row) => row.providerAccountId === null)!;
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 42.5,
+          postedDate: "2026-05-04",
+          merchant: "Synthetic Orchard",
+          sourceRefs: [
+            { source: legacy.source, externalId: legacy.externalId },
+          ],
+        });
+      }
+      await label(advice);
+      const suggestions = await readStatementSuggestions(
+        ctx.db,
+        (await getDb(ctx.db).query.assessmentState.findMany()).map(
+          (state) => state.id,
+        ),
+      );
+      const suggestion = suggestions.find(
+        (item) => item.recommended === (previewed ? "book" : "create"),
+      );
+      expect(suggestion?.clean).toBe(true);
+      const draft = {
+        assessmentId: suggestion!.assessmentId,
+        expectedFingerprint: suggestion!.fingerprint,
+        application: {
+          kind: "statement_transaction",
+          action: previewed ? "book" : "create",
+        },
+      };
+      if (previewed) await previewStatementSuggestion(ctx.db, draft);
+      await providerCollision();
+      const automatic = await applyAutomaticRules(
+        ctx.db,
+        [suggestion!.assessmentId],
+        { context: kernelCtx(ctx), importClean: true },
+      );
+      expect(automatic.applied).toEqual([]);
+      expect(automatic.refused).toEqual([
+        expect.objectContaining({
+          assessmentId: suggestion!.assessmentId,
+          message: expect.stringMatching(/evidence changed|provider identity/i),
+        }),
+      ]);
+      const before = (
+        await getDb(ctx.db).execute<{ snapshot: unknown }>(
+          sql`SELECT jsonb_build_object(
+            'rows', (SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM "SourceTransactionRecord" r),
+            'transactions', (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM "FinancialTransaction" t),
+            'refs', (SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM "EntityExternalId" e)
+          ) AS snapshot`,
+        )
+      ).rows[0]!.snapshot;
+      await expect(previewStatementSuggestion(ctx.db, draft)).rejects.toThrow(
+        /evidence changed|provider identity/i,
+      );
+      await expect(
+        reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: suggestion!.assessmentId,
+          expectedFingerprint: suggestion!.fingerprint,
+          operationId: "synthetic-held-provider-command",
+          verdict: "correct",
+          intent: "apply",
+          application: statementTransactionApplication.parse(draft.application),
+        }),
+      ).rejects.toThrow(/evidence changed|provider identity/i);
+      expect(
+        await getDb(ctx.db).query.financialTransaction.findMany(),
+      ).toHaveLength(previewed ? 1 : 0);
+      expect(await getDb(ctx.db).query.expense.findMany()).toHaveLength(0);
+      expect(
+        await getDb(ctx.db).query.financialTransactionAllocation.findMany(),
+      ).toHaveLength(0);
+      expect(
+        (
+          await getDb(ctx.db).execute<{ snapshot: unknown }>(
+            sql`SELECT jsonb_build_object(
+            'rows', (SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM "SourceTransactionRecord" r),
+            'transactions', (SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM "FinancialTransaction" t),
+            'refs', (SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM "EntityExternalId" e)
+          ) AS snapshot`,
+          )
+        ).rows[0]!.snapshot,
+      ).toEqual(before);
+      const feedback = await getDb(ctx.db).query.feedback.findMany();
+      expect(feedback).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            operationId: "synthetic-held-provider-command",
+          }),
+        ]),
+      );
+      expect(
+        feedback.some(
+          (event) =>
+            event.operationId ===
+            "command-application:synthetic-held-provider-command",
+        ),
+      ).toBe(false);
+    },
+  );
+  it.each([
+    "distinct_account",
+    "other_provider_id",
+    "positioned_idless",
+    "retired_known_scope",
+  ])("preserves provider scope independence: %s", async (scenario) => {
+    const { input, advice } = await fixture();
+    await providerHistory(input);
+    if (scenario === "distinct_account") {
+      const owner = await createRepoEntity(ctx, "ledgerParty", {
+        name: "Synthetic second cardholder",
+        kind: "member",
+      });
+      await createRepoEntity(ctx, "financialAccount", {
+        name: "Synthetic independent card",
+        identity: { kind: "credit_card", network: "visa" },
+        ledgerPartyId: owner.output.id,
+        sourceAliases: [
+          {
+            source: "monarch",
+            alias: "Synthetic card 4242",
+            externalAccountId: "synthetic-other-account",
+          },
+        ],
+      });
+      await getDb(ctx.db).execute(
+        sql`UPDATE "SourceTransactionRecord" SET "providerAccountId" = 'synthetic-other-account' WHERE "providerAccountId" IS NULL`,
+      );
+      await providerCollision();
+    } else if (scenario === "retired_known_scope") {
+      const retained = await getDb(
+        ctx.db,
+      ).query.sourceTransactionRecord.findMany();
+      const legacy = retained.find((row) => row.providerAccountId === null)!;
+      const historical = retained.find((row) => !row.current)!;
+      // Even a removed older known scope prevents a current null scope from
+      // bridging the provider ID into a different known account (ABA).
+      await getDb(ctx.db).execute(
+        sql`UPDATE "SourceTransactionRecord" SET "chargeKey" = ${legacy.chargeKey}, "providerAccountId" = 'synthetic-retired-account', "providerTransactionId" = 'synthetic-shared-provider-id', "deletedAt" = now() WHERE id = ${historical.id}::uuid`,
+      );
+      await providerCollision();
+    } else if (scenario === "positioned_idless") {
+      await getDb(ctx.db).execute(
+        sql`UPDATE "SourceTransactionRecord" SET "providerTransactionId" = NULL WHERE "providerAccountId" IS NULL`,
+      );
+    }
+    const proposals = await buildChargeProposals(ctx.db, await chargeRefs());
+    expect(proposals).toHaveLength(2);
+    expect(
+      proposals.every((proposal) => proposal.judgment.reviewReason === null),
+    ).toBe(true);
+    await label(advice);
+    const suggestions = await readStatementSuggestions(
+      ctx.db,
+      (await getDb(ctx.db).query.assessmentState.findMany()).map(
+        (state) => state.id,
+      ),
+    );
+    expect(suggestions).toHaveLength(2);
+    expect(suggestions.every((suggestion) => suggestion.clean)).toBe(true);
+  });
+  it.each(["superseded", "deleted", "withdrawn"])(
+    "keeps unresolved provider successor histories held: %s",
+    async (state) => {
+      const { input } = await fixture();
+      await providerHistory(input);
+      await providerCollision();
+      const legacy = (
+        await getDb(ctx.db).query.sourceTransactionRecord.findMany()
+      ).find((row) => row.providerAccountId === null)!;
+      if (state === "superseded")
+        await getDb(ctx.db).execute(
+          sql`UPDATE "SourceTransactionRecord" SET "supersededByRowId" = (SELECT id FROM "SourceTransactionRecord" WHERE "providerAccountId" IS NOT NULL AND current LIMIT 1) WHERE id = ${legacy.id}::uuid`,
+        );
+      if (state === "deleted")
+        await getDb(ctx.db).execute(
+          sql`UPDATE "SourceTransactionRecord" SET "deletedAt" = now() WHERE id = ${legacy.id}::uuid`,
+        );
+      if (state === "withdrawn")
+        await getDb(ctx.db).execute(
+          sql`UPDATE "SourceTransactionRecord" SET "withdrawnAt" = now() WHERE id = ${legacy.id}::uuid`,
+        );
+      const known = (await chargeRefs()).find(
+        (charge) => charge.chargeKey !== legacy.chargeKey,
+      )!;
+      const [proposal] = await buildChargeProposals(ctx.db, [known]);
+      expect(proposal?.judgment).toMatchObject({
+        clean: false,
+        reviewReason: expect.stringMatching(/provider identity/i),
+      });
+    },
+  );
+  it("replays the exact successful canonical receipt before a later provider collision", async () => {
+    const { input, advice } = await fixture();
+    await providerHistory(input);
+    await label(advice);
+    const [suggestion] = await readStatementSuggestions(
+      ctx.db,
+      (await getDb(ctx.db).query.assessmentState.findMany()).map(
+        (state) => state.id,
+      ),
+    );
+    const command = {
+      assessmentId: suggestion!.assessmentId,
+      expectedFingerprint: suggestion!.fingerprint,
+      operationId: "synthetic-canonical-provider-replay",
+      verdict: "correct" as const,
+      intent: "apply" as const,
+      application: statementTransactionApplication.parse({
+        kind: "statement_transaction",
+        action: "create",
+      }),
+    };
+    const receipt = await reviewAssessment(ctx.db, kernelCtx(ctx), command);
+    await providerCollision();
+    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), command)).toEqual(
+      receipt,
+    );
+    expect(await total()).toBe(42.5);
+    expect(
+      await getDb(ctx.db).query.financialTransaction.findMany(),
+    ).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).query.financialTransactionAllocation.findMany(),
+    ).toHaveLength(1);
+  });
+  it("refuses paid label publication when provider identity changes during preparation", async () => {
+    const { input, advice } = await fixture();
+    await providerHistory(input);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    let changed = false;
+    const result = await labelStatementSuggestions(ctx.db, {
+      port: async (request) => {
+        if (!changed) {
+          changed = true;
+          await providerCollision();
+        }
+        return answer(request);
+      },
+      spendingAdvice: async () => advice,
+    });
+    expect(result.completed).toBe(0);
+    expect(result.failed.length).toBeGreaterThan(0);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const suggestions = await readStatementSuggestions(
+      ctx.db,
+      (await getDb(ctx.db).query.assessmentState.findMany()).map(
+        (state) => state.id,
+      ),
+    );
+    expect(
+      suggestions.every(
+        (suggestion) => !suggestion.clean && Boolean(suggestion.reviewReason),
+      ),
+    ).toBe(true);
+    expect(
+      await getDb(ctx.db).query.financialTransaction.findMany(),
+    ).toHaveLength(0);
+  });
+  it("rechecks mutable account aliases after preview before applying a provider key", async () => {
+    const { input, advice } = await fixture();
+    await providerHistory(input);
+    const account = (await getDb(ctx.db).query.financialAccount.findMany())[0]!;
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic alias holder",
+      kind: "member",
+    });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "FinancialAccount" SET "sourceAliases" = '[{"source":"monarch","alias":"Synthetic card 4242","externalAccountId":null}]'::jsonb WHERE id = ${account.id}::uuid`,
+    );
+    const other = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic separate alias card",
+      identity: { kind: "credit_card", network: "visa" },
+      ledgerPartyId: owner.output.id,
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Synthetic long card 4242",
+          externalAccountId: "synthetic-account",
+        },
+      ],
+    });
+    await providerCollision();
+    await label(advice);
+    const legacy = (
+      await getDb(ctx.db).query.sourceTransactionRecord.findMany()
+    ).find((row) => row.providerAccountId === null)!;
+    const suggestion = (
+      await readStatementSuggestions(
+        ctx.db,
+        (await getDb(ctx.db).query.assessmentState.findMany()).map(
+          (state) => state.id,
+        ),
+      )
+    ).find((item) => item.chargeKey === legacy.chargeKey)!;
+    expect(suggestion.clean).toBe(true);
+    const draft = {
+      assessmentId: suggestion.assessmentId,
+      expectedFingerprint: suggestion.fingerprint,
+      application: { kind: "statement_transaction", action: "create" },
+    };
+    await previewStatementSuggestion(ctx.db, draft);
+    // The source and canonical account stay unchanged; alias authority now
+    // makes the other retained provider key compatible with this account.
+    await getDb(ctx.db).execute(
+      sql`UPDATE "FinancialAccount" SET "sourceAliases" = '[]'::jsonb WHERE shortcode = ${other.output.id}`,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "FinancialAccount" SET "sourceAliases" = '[{"source":"monarch","alias":"Synthetic card 4242","externalAccountId":null},{"source":"monarch","alias":"Synthetic long card 4242","externalAccountId":"synthetic-account"}]'::jsonb WHERE id = ${account.id}::uuid`,
+    );
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: suggestion.assessmentId,
+        expectedFingerprint: suggestion.fingerprint,
+        operationId: "synthetic-alias-collision",
+        verdict: "correct",
+        intent: "apply",
+        application: statementTransactionApplication.parse(draft.application),
+      }),
+    ).rejects.toThrow(/evidence changed|provider identity/i);
+    expect(
+      await getDb(ctx.db).query.financialTransaction.findMany(),
+    ).toHaveLength(0);
+    expect(await getDb(ctx.db).query.expense.findMany()).toHaveLength(0);
+  });
+  it.each([false, true])(
+    "preserves provider-backed void publication with identity collision=%s",
+    async (collision) => {
+      const { input, account } = await fixture();
+      await providerHistory(input);
+      if (collision) await providerCollision();
+      const legacy = (
+        await getDb(ctx.db).query.sourceTransactionRecord.findMany()
+      ).find((row) => row.providerAccountId === null)!;
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "pending",
+        amount: 42.5,
+        transactionDate: "2026-05-04",
+        merchant: "Synthetic Orchard",
+        sourceRefs: [{ source: legacy.source, externalId: legacy.externalId }],
+      });
+      const coverage = await recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: {
+            ...input.import,
+            fingerprint: "synthetic-void-coverage",
+            rowCountDeclared: 0,
+            coverage: {
+              account: "Synthetic card 4242",
+              from: "2026-05-01",
+              to: "2026-05-20",
+              visibility: "all",
+            },
+          },
+          rows: [],
+          complete: true,
+        }),
+        ctx.actor,
+      );
+      // Retain a historical source-confirmed withdrawal without asking intake to
+      // reconcile money; the proposal writer owns the behavior exercised here.
+      await getDb(ctx.db).execute(
+        sql`UPDATE "SourceTransactionRecord" SET "providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending}, "withdrawnAt" = now(), "withdrawalImportId" = ${coverage.batchId}::uuid WHERE id = ${legacy.id}::uuid`,
+      );
+      const [proposal] = await buildHoldVoidProposals(ctx.db);
+      expect(proposal?.judgment.recommended).toBe("void");
+      expect(Boolean(proposal?.judgment.reviewReason)).toBe(collision);
+      const generated = await generateStatementHoldVoidPage(ctx.db, {
+        after: null,
+        runId: null,
+      });
+      expect(generated).toMatchObject({ published: 1, failed: [] });
+      const [state] = await getDb(ctx.db).query.assessmentState.findMany();
+      expect(state).toBeDefined();
+      const outcome = await previewStatementSuggestion(ctx.db, {
+        assessmentId: state!.id,
+        expectedFingerprint: state!.fingerprint,
+        application: { kind: "statement_transaction", action: "void" },
+      })
+        .then((preview) => preview.status)
+        .catch((error: unknown) => String(error));
+      expect(outcome).toMatch(collision ? /provider identity/i : /^void$/);
     },
   );
   // Preview must fence missing/stale assessments and invalid drafts before
