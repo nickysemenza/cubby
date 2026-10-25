@@ -146,7 +146,7 @@
     "@cloudflare/config": "0.27.0",
     "@cloudflare/vite-plugin": "2.0.0-beta.v.1",
     "@cloudflare/vitest-plugin": "^1.4.3",
-    "@cloudflare/workers-types": "5.20261016.1",
+    "@cloudflare/workers-types": "5.20261018.1",
     "@devoxa/integresql-client": "^2.1.2",
     "@faker-js/faker": "^10.6.0",
     "@hookform/devtools": "^4.4.0",
