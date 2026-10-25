@@ -27,7 +27,6 @@ import { z } from "zod";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { outer, related } from "~/server/db/helpers/related";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import {
   repositoryQueries as getDb,
@@ -167,10 +166,7 @@ export async function imageIdentificationCategories(db: Database) {
     .where(
       and(
         notDeleted(productCategory),
-        related(
-          product,
-          (p) => sql`${p.categoryId} = ${outer(productCategory.id)}`,
-        ).exists(),
+        sql`EXISTS (SELECT 1 FROM "Product" p WHERE p."categoryId" = ${productCategory.id} AND p."deletedAt" IS NULL)`,
       ),
     )
     .orderBy(asc(productCategory.name), asc(productCategory.id))
