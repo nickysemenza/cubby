@@ -18,7 +18,6 @@ import {
 } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   expense,
   financialTransaction,
@@ -27,7 +26,10 @@ import {
 } from "~/server/db/generated/entity-table-definitions.gen";
 import { vendor } from "~/server/db/generated/identity-storage-tables.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries as unwrapDb,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 import { ledgerSourceClaim } from "~/server/db/retained-tables";
 import { liveSettlementAllocationWhere } from "~/server/domains/purchase/repo/settlement-predicates";
 import {
@@ -92,7 +94,7 @@ const claimOccurredOnSql = sql<
  * inside; the events are dated afterwards and clipped to the window.
  */
 const candidatePurchases = (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   input: LoadPurchaseSpendingInput,
 ) => {
   const client = unwrapDb(db);
@@ -166,7 +168,7 @@ const candidatePurchases = (
 };
 
 const loadLines = async (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   purchaseIds: readonly PurchaseId[],
 ) => {
   const client = unwrapDb(db);
@@ -228,7 +230,7 @@ const loadLines = async (
 };
 
 const loadAllocations = (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   purchaseIds: readonly PurchaseId[],
 ) =>
   unwrapDb(db)
@@ -258,7 +260,7 @@ const loadAllocations = (
  * only; see `~/server/lib/purchase-spending` for amount and date rules.
  */
 export async function loadPurchaseSpending(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   input: LoadPurchaseSpendingInput,
 ): Promise<PurchaseSpendingCalendarEvent[]> {
   const purchases = await candidatePurchases(db, input);
