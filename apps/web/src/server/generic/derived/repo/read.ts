@@ -42,26 +42,6 @@ export function storedDerivedSql(
   return sql`(SELECT ${column} FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key})`;
 }
 
-/** The stored JSON value. */
-export function storedDerivedValueSql(
-  entity: Entity,
-  key: string,
-  id: AnyColumn | SQL,
-): SQL {
-  requireStored(entity, key);
-  return sql`(SELECT value FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key})`;
-}
-
-/** True while a recompute is queued for the record. */
-export function storedDerivedStaleSql(
-  entity: Entity,
-  key: string,
-  id: AnyColumn | SQL,
-): SQL<boolean> {
-  const declaration = requireStored(entity, key);
-  return sql<boolean>`EXISTS (SELECT 1 FROM "DerivedDirty" WHERE target = ${declaration.target} AND ref = ${id})`;
-}
-
 const valueRow = z.object({
   entityId: z.string(),
   key: z.string(),

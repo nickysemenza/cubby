@@ -228,7 +228,7 @@ export function storedDerived(
   );
 }
 
-export function storedDerivedByTarget(
+function storedDerivedByTarget(
   target: string,
 ): StoredDerivedDeclaration | null {
   return (
@@ -274,9 +274,4 @@ export function dependentsOf(
       )
       .map((dependency) => ({ declaration, dependency })),
   );
-}
-
-/** Reset the cache; tests that register declarations call it. */
-export function resetStoredDerivedCache(): void {
-  cached = null;
 }

@@ -75,7 +75,7 @@ const markStatement = (input: TriggerInput) => {
 };
 
 /** Every source table's inputs, with fanout targets resolved. */
-export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
+function derivedTriggerInputs(): Map<string, TriggerInput[]> {
   const byTable = new Map<string, TriggerInput[]>();
   for (const declaration of storedDerivedDeclarations())
     for (const [index, input] of declaration.inputs.entries()) {
@@ -108,7 +108,7 @@ export function derivedTriggerInputs(): Map<string, TriggerInput[]> {
 }
 
 /** The shared mark function: upsert a fresh ticket and capture the drain Job once per transaction. */
-export const derivedMarkFunctionSql =
+const derivedMarkFunctionSql =
   () => `CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[]) RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN

@@ -34,7 +34,7 @@ export { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 const ident = (name: string) => sql.raw(`"${name.replaceAll('"', '""')}"`);
 
 /** Marks claimed per page, and ids per compute call. */
-export const DERIVED_PAGE_MARKS = 500;
+const DERIVED_PAGE_MARKS = 500;
 export const DERIVED_COMPUTE_BATCH = 200;
 const FAILURE_BASE_MS = 30_000;
 const FAILURE_MAX_MS = 15 * 60_000;
@@ -425,27 +425,6 @@ export async function publishDerivedPage(
     categories: [...categories].sort(),
     drift,
   };
-}
-
-/** Whether ready marks remain after a page. */
-export async function derivedMarksReady(
-  db: Database | DrizzleTransaction,
-): Promise<boolean> {
-  const result = await unwrapDb(db).execute(sql`
-    SELECT EXISTS (SELECT 1 FROM "DerivedDirty" WHERE "readyAt" <= now()) AS ready`);
-  return z.object({ ready: z.boolean() }).parse(result.rows[0]).ready;
-}
-
-/** The earliest backoff deadline, for a page that found nothing ready. */
-export async function nextDerivedMarkAt(
-  db: Database | DrizzleTransaction,
-): Promise<Date | null> {
-  const result = await unwrapDb(db).execute(sql`
-    SELECT min("readyAt") AS next FROM "DerivedDirty"`);
-  const next = z
-    .object({ next: z.coerce.date().nullable() })
-    .parse(result.rows[0]).next;
-  return next;
 }
 
 /** Mark every stored value at reconcile priority; publication reports drift. */
