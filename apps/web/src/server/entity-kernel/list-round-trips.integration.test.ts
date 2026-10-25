@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
@@ -25,6 +26,20 @@ const pageWork = z.object({
   statements: z.number().int().nonnegative(),
   busyIntervals: z.number().int().nonnegative(),
 });
+const provenance = z.object({
+  revision: z.string(),
+  environment: z.string(),
+  workload: z.string(),
+  unavailable: z.array(z.string()),
+});
+const WORKLOAD =
+  "seedReferenceUniverse, kernel list default page of 25, warm (minimum busy intervals over three reads)";
+const UNAVAILABLE = [
+  "production latency",
+  "plan work",
+  "response bytes",
+  "time to useful data",
+];
 const output = process.env.CUBBY_LIST_EVIDENCE;
 
 describe.skipIf(!output)("entity list round-trip evidence", () => {
@@ -32,7 +47,7 @@ describe.skipIf(!output)("entity list round-trip evidence", () => {
 
   it("reports every entity's default page", async () => {
     const baseline = z
-      .record(z.string(), pageWork)
+      .object({ provenance, pages: z.record(z.string(), pageWork) })
       .parse(JSON.parse(readFileSync(BASELINE_FILE, "utf8")));
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
@@ -69,17 +84,28 @@ describe.skipIf(!output)("entity list round-trip evidence", () => {
       };
       statementsByEntity[entity] = samples[0]?.statements ?? [];
     }
-    // Completeness, not a performance threshold: the report covers every list.
-    expect(Object.keys(measured)).toEqual([...listEntities]);
+    // A page that issued no statement was not measured (a stubbed or
+    // short-circuited read), so the report would be empty for it.
+    expect(
+      Object.entries(measured).filter(([, page]) => page.statements === 0),
+    ).toEqual([]);
     writeFileSync(
       output!,
       JSON.stringify(
         {
-          workload: "reference universe, default page of 25, warm",
+          provenance: {
+            revision: execFileSync("git", ["rev-parse", "--short=10", "HEAD"], {
+              encoding: "utf8",
+            }).trim(),
+            environment: `local IntegreSQL database, ${process.platform}`,
+            workload: WORKLOAD,
+            unavailable: UNAVAILABLE,
+          },
+          baseline: baseline.provenance,
           measured,
           changedFromBaseline: Object.fromEntries(
             Object.entries(measured).flatMap(([entity, page]) => {
-              const before = baseline[entity];
+              const before = baseline.pages[entity];
               return before &&
                 before.statements === page.statements &&
                 before.busyIntervals === page.busyIntervals
