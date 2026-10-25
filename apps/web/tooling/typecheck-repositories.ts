@@ -23,6 +23,7 @@ export const repositoryOwners = [
   "src/server/db/assessment-correction-lock-schema.ts",
   "src/server/generic/assessment/repo/correction-lock.ts",
   "src/server/db/derived-value-schema.ts",
+  "src/server/db/derived-declarations.ts",
   "src/server/lib/canonical-json.ts",
   "src/server/db/computed/product-classification-evidence.ts",
   "src/server/db/computed/image-description-confirmation.ts",

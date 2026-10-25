@@ -232,7 +232,12 @@ describe("stored derived values", () => {
     await getDb(ctx.db)
       .update(product)
       .set({ name: "Synthetic kettle mk2" })
-      .where(eq(product.id, await resolved(kettle.id, "product")));
+      .where(
+        eq(
+          product.id,
+          parseEntityId("product", await resolved(kettle.id, "product")),
+        ),
+      );
     // Expand fanout marks only; the direct marks they create stay pending.
     while ((await fanoutMarks("task.searchDocument")).length > 0)
       await publishDerivedPage(
