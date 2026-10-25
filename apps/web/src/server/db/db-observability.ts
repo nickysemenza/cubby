@@ -10,6 +10,12 @@ export type DatabaseOperationMetrics = {
   queryActiveWallMs: number;
   queryMaxDurationMs: number;
   queryMaxConcurrency: number;
+  /**
+   * Queries that started while no other query was in flight: the request's
+   * sequential round trips. Each costs a full network round trip in
+   * production, so this, not `queryCount`, bounds latency.
+   */
+  querySerialStarts: number;
   clientQueueCount: number;
   clientQueueDurationSumMs: number;
   clientQueueActiveWallMs: number;
@@ -59,6 +65,7 @@ const emptyMetrics = (): StoredDatabaseOperationMetrics => {
     queryActiveWallMs: 0,
     queryMaxDurationMs: 0,
     queryMaxConcurrency: 0,
+    querySerialStarts: 0,
     clientQueueCount: 0,
     clientQueueDurationSumMs: 0,
     clientQueueActiveWallMs: 0,
@@ -105,7 +112,10 @@ const beginDatabaseActivity = (
   for (const metrics of collectors) {
     const activity = metrics.activity[kind];
     activity.activeCount += 1;
-    if (activity.activeCount === 1) activity.activeStartedAt = startedAt;
+    if (activity.activeCount === 1) {
+      activity.activeStartedAt = startedAt;
+      if (kind === "query") metrics.querySerialStarts += 1;
+    }
 
     const maxConcurrency = `${kind}MaxConcurrency` as const;
     metrics[maxConcurrency] = Math.max(
@@ -164,6 +174,7 @@ export const databaseMetricAttributes = (
   "db.query.active_wall_ms": Math.round(metrics.queryActiveWallMs),
   "db.query.max_duration_ms": Math.round(metrics.queryMaxDurationMs),
   "db.query.max_concurrency": metrics.queryMaxConcurrency,
+  "db.query.serial_starts": metrics.querySerialStarts,
   "db.client_queue.count": metrics.clientQueueCount,
   "db.client_queue.duration_sum_ms": Math.round(
     metrics.clientQueueDurationSumMs,

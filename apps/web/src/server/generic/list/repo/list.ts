@@ -144,6 +144,7 @@ import {
   wantsListGroup,
   listReadPlan,
   selectedListProjection,
+  type ListPagePrefetch,
   type ListReadOptions,
 } from "./list-projection";
 
@@ -1392,7 +1393,13 @@ interface ListHydration<Row, Out> {
     rows: Row[],
     projection: ListProjection,
     context: ListContext,
+    prefetched?: ListPagePrefetch,
   ) => Promise<Out[]> | Out[];
+  /** Start the page's id-only hydration loads; see `listReadPlan.prefetch`. */
+  prefetch?: (
+    ids: readonly string[],
+    projection: ListProjection,
+  ) => ListPagePrefetch;
   /** A context the repository already built for its own where-builder. */
   context?: ListContext;
   where?: SQL | undefined;
@@ -1772,6 +1779,10 @@ export function listScaffold<
       // Data a caller already loaded for a prepare (a Problems sweep's
       // attention items), used instead of loading it again.
       seeded: ReadonlyArray<readonly [ListPrepare<unknown>, unknown]> = [],
+      // `projection: false` loads only what the query itself reads (filters,
+      // sorts, grouping); `nested: false` skips related scopes a seeded
+      // query context already loaded.
+      { projection = true, nested: loadNested = true } = {},
     ): Promise<ListContext> {
       const values = listFilterValues.parse(request.filters);
       // An active filter reads its derived entry, or every derived member of
@@ -1803,7 +1814,8 @@ export function listScaffold<
                 generatedEntityListFields[entity].metrics.some(
                   (metric) => metric.key === key,
                 )) ||
-              projects(key, request.projection ?? { kind: "full" }))),
+              (projection &&
+                projects(key, request.projection ?? { kind: "full" })))),
       );
       const scopes = requestedScopes(values);
       const prepares = new Set(
@@ -1836,7 +1848,7 @@ export function listScaffold<
       // A related scope's list prepares its own data, only when the request
       // sets that scope.
       const nested = await Promise.all(
-        scopes.map(({ nested, value }) =>
+        (loadNested ? scopes : []).map(({ nested, value }) =>
           nested.context(db, {
             filters: value,
             readIntent: "count",
@@ -2162,8 +2174,9 @@ export function listScaffold<
       plan.validate(request.projection ?? { kind: "full" });
       return scaffold.list(db, request, {
         ...spec,
-        hydrate: (rows, projection, context) =>
-          plan.read(db, rows, projection, context),
+        hydrate: (rows, projection, context, prefetched) =>
+          plan.read(db, rows, projection, context, "stored", prefetched),
+        prefetch: (ids, projection) => plan.prefetch(db, ids, projection),
       });
     },
     /** Narrow/internal consumers retain the selected raw shape and own their explicit computation. */
@@ -2200,7 +2213,21 @@ export function listScaffold<
       // Keep the PgTable object: interpolating an aliased table into SQL
       // emits only its alias, while Drizzle's FROM builder names its origin.
       const source = listTable;
-      const context = spec.context ?? (await scaffold.context(db, request));
+      // The query reads only filter, sort and grouping prepares. Prepares a page
+      // merely displays load beside the id and row queries, for hydration.
+      const context =
+        spec.context ??
+        (await scaffold.context(db, request, [], { projection: false }));
+      const hydrationContext =
+        spec.context || request.readIntent === "count"
+          ? Promise.resolve(spec.context ?? context)
+          : scaffold
+              .context(db, request, context.entries(), { nested: false })
+              .then((full) => context.with(full));
+      hydrationContext.catch(() => {
+        // SILENT: hydration awaits and surfaces this rejection; only a page
+        // that fails or returns no rows first leaves it unread.
+      });
       const filtered =
         "where" in spec
           ? spec.where
@@ -2291,6 +2318,7 @@ export function listScaffold<
               .limit(clauses.limit)
               .offset(clauses.offset)) as Row[];
           }));
+      let prefetched: ListPagePrefetch | undefined;
       const readLoadedPageWithCount =
         loadIds && !spec.count
           ? () =>
@@ -2314,10 +2342,9 @@ export function listScaffold<
                   (page.offset === 0 && page.limit > 0
                     ? 0
                     : await countWhere(db, table, where, source));
-                const data = await loadIds(
-                  ids.map((row) => row.id),
-                  projection,
-                );
+                const pageIds = ids.map((row) => row.id);
+                prefetched = spec.prefetch?.(pageIds, projection);
+                const data = await loadIds(pageIds, projection);
                 span.setAttributes({
                   "db.result_count": data.length,
                   "db.total_count": count,
@@ -2403,7 +2430,12 @@ export function listScaffold<
           if (readIntent === "count" || data.length === 0)
             return { data: [], count, ...grouped };
           return withListReadTracing({ rows: data.length }, async () => {
-            const hydrated = await spec.hydrate(data, projection, context);
+            const hydrated = await spec.hydrate(
+              data,
+              projection,
+              await hydrationContext,
+              prefetched,
+            );
             if (!parent) return { data: hydrated, count, ...grouped };
             const codeOf = (row: Out) => {
               const { id } = listRowIdSchema.parse(row);

@@ -263,6 +263,11 @@ export class ListContext {
         );
   }
 
+  /** The loaded prepares, to seed a fuller context without reloading them. */
+  entries(): Array<readonly [ListPrepare<unknown>, unknown]> {
+    return [...this.prepared];
+  }
+
   has(prepare: ListPrepare<unknown>): boolean {
     return this.prepared.has(prepare);
   }

@@ -94,6 +94,8 @@ describe("database operation metrics", () => {
         queryActiveWallMs: 13,
         queryMaxDurationMs: 10,
         queryMaxConcurrency: 2,
+        // A and B overlap (one round trip); C starts after both settle.
+        querySerialStarts: 2,
         acquireCount: 2,
         acquireDurationSumMs: 9,
         acquireActiveWallMs: 6,
