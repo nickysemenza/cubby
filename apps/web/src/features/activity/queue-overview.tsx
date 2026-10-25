@@ -11,14 +11,18 @@ import {
   type JobState,
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
-import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
+import {
+  runPurpose,
+  runStatus,
+  VISIBLE_RUN_PURPOSES,
+} from "@cubby/schemas/run-fields";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import type {
@@ -30,9 +34,12 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entityListFor } from "~/entity/entity-list";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { runHref } from "~/entity/routing/purchase-import-links";
+import { hasDisplayImages } from "~/entity/table/column-helpers";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
+import { formatDuration, formatMinutesSeconds } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import {
   RecordDetail,
@@ -41,7 +48,7 @@ import {
   RecordRow,
 } from "~/ui/common/record-list";
 import { showErrorToast } from "~/ui/feedback/error-details";
-import { Row, Section, Stack } from "~/ui/layout";
+import { Panel, Row, Section, Stack } from "~/ui/layout";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +61,7 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import { Image } from "~/ui/primitives/image";
 import { StatusText } from "~/ui/primitives/status-text";
 
 import { JobStatePill } from "../job/job-status";
@@ -606,6 +614,9 @@ const ATTENTION_FILTERS = (() => {
     status: runStatus
       .array()
       .parse(view.filters.find(({ id }) => id === "status")?.value),
+    purpose: runPurpose
+      .array()
+      .parse(view.filters.find(({ id }) => id === "purpose")?.value),
   };
 })();
 
@@ -683,6 +694,187 @@ function RunsNeedingAttention() {
   );
 }
 
+/**
+ * Parked Apple-device work at a glance: what waits, which devices are
+ * working it and when it drains at their current pace. Silent once nothing
+ * waits; loud when work waits and no device is pulling.
+ */
+function DeviceBacklogNotice() {
+  const backlog = useQuery(job.deviceBacklog.queryOptions({}));
+  const data = backlog.data;
+  if (!data?.waiting) return null;
+  const idle = data.workingDevices === 0;
+  return (
+    <Panel tone={idle ? "warning" : "muted"} data-testid="device-backlog">
+      <output className="grid gap-1 text-sm">
+        <p>
+          <Link
+            to="/image-jobs"
+            search={{ state: "waiting_for_device" }}
+            className="font-medium text-link hover:underline"
+          >
+            {countLabel(data.waiting, "image")} waiting for an Apple device
+          </Link>
+          {data.runsWaiting
+            ? ` · holding up ${countLabel(data.runsWaiting, "Run")}`
+            : ""}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {idle
+            ? "No Apple device is processing. Keep Cubby open on your Mac (or run `cubby companion`) to work through it."
+            : `${countLabel(data.workingDevices, "device")} working · ${formatCount(Math.round(data.claimsPerMinute))}/min${
+                data.etaSeconds === null
+                  ? ""
+                  : ` · about ${formatDuration(data.etaSeconds * 1_000)} at this pace`
+              }`}
+        </p>
+      </output>
+    </Panel>
+  );
+}
+
+const PROCESSING_PAGE = { pageIndex: 0, pageSize: 50 };
+
+/** A per-second clock for lease countdowns (leases last 60 s). */
+function useSecondClock() {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
+
+/**
+ * Image jobs an Apple device holds a live lease on, grouped by device: the
+ * generic imageJob rows (thumbnail, job, Run) with each lease's countdown.
+ * Expired leases of old installs stay counted per executor in Queues.
+ */
+function ImageJobsProcessing() {
+  const processing = useQuery(
+    entityListFor("imageJob").queryOptions({
+      filters: { state: ["leased"] },
+      pagination: PROCESSING_PAGE,
+      sort: [{ orderBy: "createdAt", direction: "asc" }],
+    }),
+  );
+  const devices = useQuery(
+    entityListFor("device").queryOptions({
+      filters: {},
+      pagination: { pageIndex: 0, pageSize: 50 },
+    }),
+  );
+  const now = useSecondClock();
+  const rows = processing.data?.items ?? [];
+  const deviceName = new Map<string, string>(
+    (devices.data?.items ?? []).map((device) => [device.id, device.name]),
+  );
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const device = row.leaseDeviceId ?? "";
+    groups.set(device, [...(groups.get(device) ?? []), row]);
+  }
+  return (
+    <RecordList
+      state={
+        processing.isPending
+          ? { status: "pending", rows: 3 }
+          : processing.isError
+            ? {
+                status: "error",
+                error: processing.error,
+                title: "Couldn't load image jobs",
+                onRetry: () => void processing.refetch(),
+              }
+            : { status: "success" }
+      }
+      empty={<span>No Apple device is processing image work right now.</span>}
+      footer={
+        (processing.data?.meta.totalCount ?? 0) > rows.length ? (
+          <Link
+            to="/image-jobs"
+            search={{ state: "leased" }}
+            className="text-link hover:underline"
+          >
+            All {formatCount(processing.data?.meta.totalCount ?? 0)} processing
+          </Link>
+        ) : null
+      }
+    >
+      {[...groups].map(([device, jobs]) => (
+        <RecordGroup
+          key={device || "unknown"}
+          label={
+            device ? (
+              <EntityRefLink
+                entity="device"
+                id={device}
+                name={deviceName.get(device) ?? device}
+              />
+            ) : (
+              "Unregistered device"
+            )
+          }
+          count={jobs.length}
+        >
+          {jobs.map((row) => {
+            const image = hasDisplayImages(row) ? row.displayImages[0] : null;
+            const remaining = row.leaseExpiresAt
+              ? new Date(row.leaseExpiresAt).getTime() - now
+              : null;
+            return (
+              <RecordRow
+                key={row.id}
+                data-testid="processing-image-job"
+                leading={
+                  image ? (
+                    <Image
+                      src={image.url}
+                      alt=""
+                      displayWidth={96}
+                      className="size-10 rounded-md border border-border object-cover"
+                    />
+                  ) : null
+                }
+                primary={
+                  <EntityRefLink
+                    entity="imageJob"
+                    id={row.id}
+                    name={row.displayName}
+                  />
+                }
+                secondary={
+                  row.runId ? (
+                    <EntityRefLink entity="run" id={row.runId} />
+                  ) : (
+                    "Background maintenance"
+                  )
+                }
+                trailing={
+                  remaining === null ? null : (
+                    <span
+                      className={cn(
+                        "font-mono text-xs tabular-nums",
+                        remaining <= 0
+                          ? "text-warning"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {remaining <= 0
+                        ? "lease lapsed"
+                        : `lease ${formatMinutesSeconds(remaining)}`}
+                    </span>
+                  )
+                }
+              />
+            );
+          })}
+        </RecordGroup>
+      ))}
+    </RecordList>
+  );
+}
+
 /** The queue part of Activity: health, lanes, Runs, then the Job list. */
 export function QueueOverview({
   search,
@@ -695,12 +887,20 @@ export function QueueOverview({
   return (
     <Stack gap="lg">
       <QueueHealthNotice health={health.data?.snapshot} />
+      <DeviceBacklogNotice />
       <Section
         headingAs="h2"
         title="Queues"
         caption="Live Jobs by who runs them and what they wait on."
       >
         <QueueSummary search={search} />
+      </Section>
+      <Section
+        headingAs="h2"
+        title="Apple devices processing"
+        caption="Image jobs a device holds a lease on; it renews every 15 seconds, and a lapsed lease lets any device take the job."
+      >
+        <ImageJobsProcessing />
       </Section>
       <Section headingAs="h2" title="Runs needing attention">
         <RunsNeedingAttention />

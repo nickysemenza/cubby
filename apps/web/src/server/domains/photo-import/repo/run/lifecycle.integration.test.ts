@@ -114,7 +114,7 @@ describe("photo run lifecycle", () => {
     processor: "cubby" | "external";
     open?: boolean;
     images?: number;
-    describe?: "pending" | "failed" | "ready" | "none";
+    describe?: "pending" | "failed" | "skipped" | "ready" | "none";
     generation?: boolean;
   }) => {
     // One member party per login; a test seeding two Runs reuses it.
@@ -205,7 +205,10 @@ describe("photo run lifecycle", () => {
             sourceContentHash: sha256,
             processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
             runId: run.id,
-            lastError: describe === "failed" ? "synthetic failure" : null,
+            lastError:
+              describe === "failed" || describe === "skipped"
+                ? "synthetic failure"
+                : null,
           },
         ]);
       }
@@ -301,6 +304,26 @@ describe("photo run lifecycle", () => {
     expect(replay.positionOffset).toBe(3);
     expect(replay.lifecycle.plannedImageCount).toBe(7);
     expect(replay.lifecycle.openBatchCount).toBe(1);
+  });
+
+  // Regression (RUN-6KHAT): a skipped description counted as described, so
+  // the coordinator started on photos it had no description for.
+  it("holds a skipped description for the member instead of dispatching", async () => {
+    const { run, codes } = await seedRun({
+      processor: "cubby",
+      describe: "skipped",
+    });
+    const blocked = await advancePhotoRun(ctx.db, run.shortcode);
+    expect(blocked.phase).toBe("needs_attention");
+    expect(blocked.failedImageIds).toEqual(expect.arrayContaining(codes));
+    expect((await readRun(run.id)).dispatchEventId).toBeNull();
+    await excludeFailedPhotoRunImages(ctx.db, {
+      runId: run.shortcode,
+      imageIds: codes,
+    });
+    expect((await readPhotoRunLifecycle(ctx.db, run.shortcode)).phase).not.toBe(
+      "needs_attention",
+    );
   });
 
   it("holds failed descriptions for the member and keeps excluded photos as reasoned skips", async () => {

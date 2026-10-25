@@ -3,6 +3,10 @@ import {
   imageProcessingJobKind,
 } from "@cubby/schemas/activity";
 import {
+  deviceShortcode,
+  type DeviceShortcode,
+} from "@cubby/schemas/identifiers";
+import {
   type ImageJobFilters,
   type ImageJobOut,
   imageJobOut,
@@ -143,7 +147,7 @@ type Execution = Pick<
 const loadLeaseDevices = async (
   db: Database | DrizzleTransaction,
   leaseTokens: readonly string[],
-): Promise<Map<string, string>> => {
+): Promise<Map<string, DeviceShortcode>> => {
   if (leaseTokens.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({ token: imageProcessingAttempt.id, shortcode: device.shortcode })
@@ -159,7 +163,9 @@ const loadLeaseDevices = async (
       ),
     )
     .where(inArray(imageProcessingAttempt.id, [...leaseTokens]));
-  return new Map(rows.map((row) => [row.token, row.shortcode]));
+  return new Map(
+    rows.map((row) => [row.token, deviceShortcode.parse(row.shortcode)]),
+  );
 };
 
 /**

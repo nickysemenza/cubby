@@ -1962,7 +1962,9 @@ async function loadPhotoRunImages(
           ? cutout.lastError
           : null,
       describeReason:
-        describe?.state === "failed" || cloudDescriptionMissing
+        describe?.state === "failed" ||
+        describe?.state === "skipped" ||
+        cloudDescriptionMissing
           ? (describe?.lastError ?? null)
           : null,
       description: selectedDescription.description,

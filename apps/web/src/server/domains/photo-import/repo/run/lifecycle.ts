@@ -47,6 +47,14 @@ const DESCRIPTION_IN_FLIGHT = new Set([
   "waiting_for_device",
 ]);
 
+/**
+ * A settled description that left the photo without one: a failure, or a
+ * skip (its source was replaced or excluded by policy). Both hold the Run
+ * for the member; counting a skip as described let the coordinator start on
+ * photos it could not read (RUN-6KHAT).
+ */
+const DESCRIPTION_MISSING = new Set(["failed", "skipped"]);
+
 type RunStatus = z.infer<typeof runStatus>;
 
 const log = createLogger("photo-run-lifecycle");
@@ -90,7 +98,10 @@ function derivePhotoRunLifecycle(
       : DESCRIPTION_IN_FLIGHT.has(image.describe),
   );
   const failedImageIds = pending
-    .filter((image) => image.describe === "failed")
+    .filter(
+      (image) =>
+        image.describe !== null && DESCRIPTION_MISSING.has(image.describe),
+    )
     .map((image) => image.id);
   const openBatchCount =
     run.input?.batches.filter((batch) => batch.state === "open").length ?? 0;
@@ -540,7 +551,11 @@ export async function excludeFailedPhotoRunImages(
   for (const id of input.imageIds) {
     const image = byId.get(id);
     if (!image) throw new Error(`Photo ${id} is not in run ${input.runId}`);
-    if (image.targetState !== "pending" || image.describe !== "failed")
+    if (
+      image.targetState !== "pending" ||
+      image.describe === null ||
+      !DESCRIPTION_MISSING.has(image.describe)
+    )
       throw new Error(
         `Photo ${id} has no failed description to continue without`,
       );

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   BROWSER_AUTH,
   createAuthenticator,
+  delegatedRunHolds,
   isChallenge,
   MCP_AUTH,
   type Principal,
@@ -218,5 +219,24 @@ describe("MCP tokens", () => {
       ),
     ).toMatchObject({ status: 401 });
     expect(ports.getSession).not.toHaveBeenCalled();
+  });
+});
+
+// Regression (RUN-DFBE2): a photo Run owned by the other member's party
+// 401'd its own coordinator's MCP calls.
+describe("a delegated Run", () => {
+  const member = { id: "party-member-a" };
+  it("holds for the actor who started it, whichever member owns it", () => {
+    expect(delegatedRunHolds({ actorUserId: "user-a" }, "user-a", member)).toBe(
+      true,
+    );
+  });
+  it("refuses another actor's Run and an actor without a member party", () => {
+    expect(delegatedRunHolds({ actorUserId: "user-b" }, "user-a", member)).toBe(
+      false,
+    );
+    expect(delegatedRunHolds({ actorUserId: "user-a" }, "user-a", null)).toBe(
+      false,
+    );
   });
 });
