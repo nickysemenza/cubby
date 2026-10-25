@@ -776,8 +776,12 @@ export const aiHandlers = implementOperationDomain(aiContract, {
       cacheStatus: "none",
     }),
   usageFilterOptions: (context) => listAiUsageFilterOptions(context.db),
-  usageRecent: (context, input) => listRecentAiUsage(context.db, input),
-  usageSummary: (context, input) => summarizeAiUsage(context.db, input.days),
+  usageRecent: async (context, input) => ({
+    items: await listRecentAiUsage(context.db, input),
+  }),
+  usageSummary: async (context, input) => ({
+    items: await summarizeAiUsage(context.db, input.days),
+  }),
 });
 
 export const aiStreamHandlers = implementSubscriptionDomain(aiStreamsContract, {

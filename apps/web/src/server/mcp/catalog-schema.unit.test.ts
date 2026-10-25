@@ -594,6 +594,20 @@ describe("MCP catalog schemas", () => {
     // This compiles every advertised input and output graph, not one schema.
   }, 15_000);
 
+  it("publishes object outputs for every action", () => {
+    // `structuredContent` must be an object; a bare array output fails every
+    // call at the output stage (seen with ai_read.usage_recent).
+    const arrays: string[] = [];
+    for (const tool of compiledMcpTools(
+      MCP_TOOL_BINDINGS,
+      MCP_TOOL_DECLARATIONS,
+    ))
+      for (const [name, action] of tool.actions)
+        if (safeToJsonSchema(action.output, "output").type === "array")
+          arrays.push(`${tool.name}.${name}`);
+    expect(arrays).toEqual([]);
+  });
+
   it.each([
     { candidates: z.tuple([]), accepted: [], rejected: ["candidate"] },
     {
