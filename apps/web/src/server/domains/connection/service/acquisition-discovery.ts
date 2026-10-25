@@ -1,6 +1,7 @@
 import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import type { RunId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { z } from "zod";
 
@@ -26,6 +27,7 @@ import { findLexicalSearchCandidates } from "~/server/generic/search/service/sea
 export async function discoverAcquisitionCandidateScan(
   db: Database,
   source: EntityRef,
+  options: { runId?: RunId } = {},
 ): Promise<{
   candidates: ConnectionCandidate[];
   complete: boolean;
@@ -92,7 +94,7 @@ export async function discoverAcquisitionCandidateScan(
             { query, entityKinds: [kind], limit: 10 },
             10,
           ),
-          semanticEntityCandidateScan(db, query, 10, kind),
+          semanticEntityCandidateScan(db, query, 10, kind, options.runId),
         ]);
         return { kind, lexical, semantic };
       }),

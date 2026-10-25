@@ -78,7 +78,10 @@ export async function prepareEntityConnections(
   );
   // Indexed/semantic retrieval may call a model; preserve earlier candidates first.
   const acquisition = await stage("acquisitionScan", async () => {
-    const scan = await discoverAcquisitionCandidateScan(db, source);
+    // Query embeddings bill to the evaluation's Run rather than opening one.
+    const scan = await discoverAcquisitionCandidateScan(db, source, {
+      runId: context.actorContext.runId ?? undefined,
+    });
     captureCandidates(scan.candidates);
     return scan;
   });

@@ -30,8 +30,8 @@ import {
 // fingerprint checks made one evaluation issue hundreds of serial round trips.
 // The budget scales with neither candidate count nor publication count.
 const CANDIDATES = 6;
-// Ratchet: measured 369 before batching, 282 after sequencing fixes; lower it with each fix, never raise it.
-const QUERY_BUDGET = 282;
+// Ratchet: measured 369 before batching, 282 after sequencing fixes, 229 with run-billed shared embeddings; lower it with each fix, never raise it.
+const QUERY_BUDGET = 229;
 
 describe("connection evaluation query budget", () => {
   const ctx = withTestDb();
