@@ -14,6 +14,8 @@ gif = { version = "0.14.2", default-features = false, features = [
 jpeg-encoder = { version = "0.7.1", default-features = false, features = [
   "std",
 ], optional = true }
+# Row streaming for analysis PNGs; the same decoder `image` already links.
+png = { version = "0.18.1", optional = true }
 image = { version = "0.25.9", default-features = false, features = [
   "jpeg",
   "png",
@@ -53,7 +55,7 @@ console_error_panic_hook = { workspace = true, optional = true }
 # wasm`; cubby-ffi takes `default-features = false` and never `wasm`. Native
 # Rust tests retain the defaults, including the model-image codecs.
 default = ["html", "ai-usage", "model-images"]
-model-images = ["dep:image", "dep:jpeg-encoder", "dep:gif"]
+model-images = ["dep:image", "dep:jpeg-encoder", "dep:gif", "dep:png"]
 html = ["dep:scraper", "dep:url"]
 ai-usage = ["dep:cookbook"]
 # The wasm-bindgen exports, Tsify `.d.ts` derives, and wasm init. Upstream

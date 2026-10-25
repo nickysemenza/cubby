@@ -3,6 +3,24 @@ import { wasm } from "~/server/wasm";
 /** An unsupported, invalid or oversized input leaves purchase evidence missing. */
 export class ModelImageInputError extends Error {}
 
+/**
+ * The analysis JPEG for a PNG the image edge refuses to decode, bounded by
+ * `maxEdge` on both axes and by `maxBytes`.
+ */
+export function prepareAnalysisPng(
+  bytes: Uint8Array,
+  maxEdge: number,
+  maxBytes: number,
+): Uint8Array {
+  try {
+    return wasm.prepare_analysis_png(bytes, maxEdge, maxBytes);
+  } catch (error) {
+    // Rust Result::Err(String) is a JS string. Traps and host failures propagate.
+    if (typeof error === "string") throw new Error(error, { cause: error });
+    throw error;
+  }
+}
+
 /** Keep private bytes in-process and the full frame: cropping can lose an order. */
 export async function prepareModelImage(
   bytes: Uint8Array,

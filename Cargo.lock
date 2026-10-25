@@ -1356,6 +1356,7 @@ dependencies = [
  "ingredient",
  "jpeg-encoder",
  "js-sys",
+ "png",
  "recipe-scraper",
  "recipe-types",
  "rstest",

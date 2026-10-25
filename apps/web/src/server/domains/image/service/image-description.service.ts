@@ -27,7 +27,12 @@ import {
   findCachedImageDescriptionAnalysis,
   getUploadedImageProcessingSource,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
+import {
+  DESCRIPTION_RENDITION_EDGE,
+  MAX_ANALYSIS_FALLBACK_SOURCE_BYTES,
+  MAX_DESCRIPTION_RENDITION_BYTES,
+} from "~/server/domains/image-processing/service/cloud-limits";
+import { prepareAnalysisPng } from "~/server/domains/image-processing/service/model-image";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import {
   recordImageDescriptionInput,
@@ -49,25 +54,51 @@ export function imageAnalysisRenditionUrl(originalUrl: string): string {
 
 const RENDITION_ERROR_BODY_CHARS = 500;
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
 /**
  * Fetch the edge rendition, refusing a non-2xx response. Without the check an
  * error page is read as image bytes and the job fails later with an unrelated
  * "must be JPEG" message that hides the real status.
+ *
+ * The edge answers 422 when it cannot decode the source. Its PNG decoder
+ * rejects files our decoder accepts (a damaged ancillary chunk around intact
+ * pixels), so a refused PNG is normalized in-process to the same bounds rather
+ * than retried against the same deterministic refusal.
  */
-export async function fetchAnalysisRendition(
-  url: string,
-  fetcher?: typeof fetch,
-  maxBytes = MAX_DESCRIPTION_RENDITION_BYTES,
-): Promise<Uint8Array> {
-  const response = await fetchExternalResponse(url, { fetcher });
-  if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    throw new Error(
-      `Analysis rendition fetch failed: HTTP ${response.status} ${response.statusText}`.trimEnd() +
-        (body ? `: ${body.slice(0, RENDITION_ERROR_BODY_CHARS)}` : ""),
-    );
+export async function fetchAnalysisRendition(input: {
+  sourceUrl: string;
+  renditionUrl: string;
+  maxEdge: number;
+  maxBytes: number;
+  fetcher?: typeof fetch;
+}): Promise<Uint8Array> {
+  const { fetcher, maxBytes } = input;
+  const response = await fetchExternalResponse(input.renditionUrl, {
+    fetcher,
+  });
+  if (response.ok) return await readResponseWithLimit(response, maxBytes);
+  const body = await response.text().catch(() => "");
+  const refusal = new Error(
+    `Analysis rendition fetch failed: HTTP ${response.status} ${response.statusText}`.trimEnd() +
+      (body ? `: ${body.slice(0, RENDITION_ERROR_BODY_CHARS)}` : ""),
+  );
+  if (response.status !== 422) throw refusal;
+  const original = await fetchExternalResponse(input.sourceUrl, { fetcher });
+  if (!original.ok) throw refusal;
+  const bytes = await readResponseWithLimit(
+    original,
+    MAX_ANALYSIS_FALLBACK_SOURCE_BYTES,
+  );
+  if (!PNG_SIGNATURE.every((value, index) => bytes[index] === value))
+    throw refusal;
+  try {
+    return prepareAnalysisPng(bytes, input.maxEdge, maxBytes);
+  } catch (error) {
+    throw new Error(`${refusal.message}; in-process PNG normalization failed`, {
+      cause: error,
+    });
   }
-  return await readResponseWithLimit(response, maxBytes);
 }
 
 /**
@@ -144,7 +175,8 @@ export async function describeOriginalImage(
     ),
     cached: false,
   });
-  let analysisUrl = imageAnalysisRenditionUrl(getR2PublicUrl(source.key));
+  const sourceUrl = getR2PublicUrl(source.key);
+  let analysisUrl = imageAnalysisRenditionUrl(sourceUrl);
   // Companions receive a rewritable staging PUT, never this server-owned snapshot key.
   const key =
     input.normalizedInput?.key ?? imageAnalysisKey("input", input.attemptId);
@@ -154,7 +186,13 @@ export async function describeOriginalImage(
   )
     throw new Error("Image analysis attempt is no longer current");
   const bytes =
-    input.normalizedInput?.bytes ?? (await fetchAnalysisRendition(analysisUrl));
+    input.normalizedInput?.bytes ??
+    (await fetchAnalysisRendition({
+      sourceUrl,
+      renditionUrl: analysisUrl,
+      maxEdge: DESCRIPTION_RENDITION_EDGE,
+      maxBytes: MAX_DESCRIPTION_RENDITION_BYTES,
+    }));
   const inspected = await inspectImageFile(bytes, "image/jpeg");
   if (inspected.detectedContentType !== "image/jpeg")
     throw new Error("Analysis rendition must be JPEG");
