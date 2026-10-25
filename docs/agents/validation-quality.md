@@ -12,7 +12,10 @@ into the consuming compiler program.
 tests and test tooling. When tests or test tooling change,
 include `pnpm typecheck` as an affected check: passing Vitest does not
 prove those files typecheck. This checks the full program that `pnpm check` and
-CI run. Tests use the configured TypeScript libraries; runtime support for an
+CI run. `typecheck:web` also skips the repository-program boundary check
+(`tooling/typecheck-repositories.ts`): run `pnpm typecheck` when a change adds
+imports to a server module, because a repository-owned module must not reach
+server composition such as `db/helpers/related.ts` or the schema. Tests use the configured TypeScript libraries; runtime support for an
 API does not establish that the configured libraries expose it.
 Typecheck locally only through these entry points, or
 `node scripts/tsc.ts --noEmit -p <tsconfig>` for one project: they ready
