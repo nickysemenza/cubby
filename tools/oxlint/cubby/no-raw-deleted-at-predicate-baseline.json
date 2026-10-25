@@ -84,7 +84,6 @@
   "apps/web/src/server/domains/spending-category/repo/spending-category.ts": 3,
   "apps/web/src/server/domains/spending-category/repo/spending-classification-review.ts": 6,
   "apps/web/src/server/domains/task/repo/blocking-sql.ts": 9,
-  "apps/web/src/server/domains/task/repo/crud.ts": 2,
   "apps/web/src/server/domains/task/repo/summary.ts": 1,
   "apps/web/src/server/domains/task/repo/today-briefing.ts": 2,
   "apps/web/src/server/domains/transaction-import/repo/entity-repositories.ts": 1,

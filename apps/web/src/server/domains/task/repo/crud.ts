@@ -250,12 +250,11 @@ async function assertEffectiveTaskTrade(
   tx: DrizzleTransaction,
   id: TaskId,
 ): Promise<void> {
-  const result = await tx.execute<{ trade: string | null }>(sql`
-    SELECT ${effectiveFieldSql("task", "trade")} AS "trade"
-    FROM "Task"
-    WHERE "id" = ${id} AND "deletedAt" IS NULL
-  `);
-  if (result.rows[0]?.trade == null) {
+  const [row] = await tx
+    .select({ trade: effectiveFieldSql<string | null>("task", "trade") })
+    .from(task)
+    .where(and(eq(task.id, id), notDeleted(task)));
+  if (row?.trade == null) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Task needs a trade or an inherited trade source.",
@@ -264,21 +263,21 @@ async function assertEffectiveTaskTrade(
 }
 
 const taskEffectiveValues = async (tx: DrizzleTransaction, id: TaskId) => {
-  const result = await tx.execute<{
-    projectId: ProjectId | null;
-    assigneeId: import("@cubby/schemas/identifiers").LedgerPartyId | null;
-    subjectProductId: ProductId | null;
-    trade: Trade | null;
-  }>(sql`
-    SELECT
-      ${effectiveFieldSql("task", "assigneeId")} AS "assigneeId",
-      ${effectiveFieldSql("task", "projectId")} AS "projectId",
-      ${effectiveFieldSql("task", "subjectProductId")} AS "subjectProductId",
-      ${effectiveFieldSql("task", "trade")} AS "trade"
-    FROM "Task"
-    WHERE "id" = ${id} AND "deletedAt" IS NULL
-  `);
-  return result.rows[0] ?? null;
+  const [row] = await tx
+    .select({
+      assigneeId: effectiveFieldSql<
+        import("@cubby/schemas/identifiers").LedgerPartyId | null
+      >("task", "assigneeId"),
+      projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
+      subjectProductId: effectiveFieldSql<ProductId | null>(
+        "task",
+        "subjectProductId",
+      ),
+      trade: effectiveFieldSql<Trade | null>("task", "trade"),
+    })
+    .from(task)
+    .where(and(eq(task.id, id), notDeleted(task)));
+  return row ?? null;
 };
 
 /** A task can only target a live product; stale picker/API ids fail clearly. */
