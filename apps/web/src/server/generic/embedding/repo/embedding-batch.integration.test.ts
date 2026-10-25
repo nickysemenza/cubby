@@ -577,8 +577,20 @@ describe("embedding batches in the shared drain", () => {
       } finally {
         unlocked.resolve();
         finish.resolve();
-        await holding;
-        await draining;
+        try {
+          await holding;
+          await draining;
+        } finally {
+          // The file database resets rows between cases, not its catalog.
+          if (failure === "error") {
+            await getDb(ctx.db).execute(
+              sql`DROP TRIGGER IF EXISTS synthetic_renewal_failure ON "Job"`,
+            );
+            await getDb(ctx.db).execute(
+              sql`DROP FUNCTION IF EXISTS synthetic_renewal_failure()`,
+            );
+          }
+        }
       }
     },
   );
