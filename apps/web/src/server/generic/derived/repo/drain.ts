@@ -452,12 +452,15 @@ export async function nextDerivedMarkAt(
 export async function markAllStoredDerived(
   db: Database | DrizzleTransaction,
   include: (declaration: StoredDerivedDeclaration) => boolean = () => true,
+  /** Only records whose id hashes to `index` of `count` buckets. */
+  slice?: { readonly index: number; readonly count: number },
 ): Promise<number> {
   let marked = 0;
   for (const declaration of storedDerivedDeclarations().filter(include)) {
     const result = await unwrapDb(db).execute(sql`
       INSERT INTO "DerivedDirty" (target, ref, priority)
       SELECT ${declaration.target}, t.id, 2 FROM ${ident(declaration.table)} t
+      ${slice ? sql`WHERE mod(abs(hashtext(t.id::text)), ${slice.count}) = ${slice.index}` : sql``}
       ON CONFLICT (target, ref) DO NOTHING
       RETURNING ref`);
     marked += result.rows.length;

@@ -279,6 +279,23 @@ describe("stored derived values", () => {
     expect(await marks("product.price")).toEqual([]);
   });
 
+  it("reconciles every record once across its daily buckets", async () => {
+    const location = await makeLocation("Garage shelf");
+    for (const name of ["Synthetic tape", "Synthetic glue", "Synthetic rope"])
+      await makeEntry(await makeProduct(name, 1), location, 1);
+    await drain();
+    const include = (declaration: { target: string }) =>
+      declaration.target === "inventory.valuation";
+    let marked = 0;
+    for (let index = 0; index < 4; index++)
+      marked += await markAllStoredDerived(ctx.db, include, {
+        index,
+        count: 4,
+      });
+    expect(marked).toBe(3);
+    expect(await marks("inventory.valuation")).toHaveLength(3);
+  });
+
   it("rebuilds the same values from an empty cache", async () => {
     const location = await makeLocation("Hall cupboard");
     const towels = await makeProduct("Synthetic towels", 4);

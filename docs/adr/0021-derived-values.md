@@ -54,8 +54,9 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
 - **One drain.** A single `derived.drain` Job kind claims dirty rows in
   batches, computes each field set-based, publishes only changed values, then
   marks dependents of changed values. It clears a dirty row only when its ticket
-  is unchanged. Member edits go first; an hourly reconciliation and a CI
-  read-set check cover undeclared inputs.
+  is unchanged. Member edits go first; an hourly reconciliation of one 24th of
+  the records (each record daily) and a CI read-set check cover undeclared
+  inputs.
 - **AI work has one slot.** Each (record, feature) owns one slot, keyed by a
   hash of its declared input projection; reverts reuse the response cache.
   High-confidence suggestions on descriptive fields decide at read time as

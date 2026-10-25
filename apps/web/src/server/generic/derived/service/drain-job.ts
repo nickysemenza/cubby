@@ -1,9 +1,10 @@
 /**
  * The two derived Jobs (ADR 0021). `derived.drain` drains dirty marks page by
  * page; generated triggers capture it once per writing transaction, so it is
- * due whenever marks exist. `derived.reconcile` re-marks every stored value
- * hourly at the lowest priority: an undeclared input shows up as drift and
- * converges instead of staying silently wrong.
+ * due whenever marks exist. `derived.reconcile` re-marks one of 24 id buckets
+ * hourly at the lowest priority, so every stored value is rechecked daily
+ * without a whole-corpus recompute each hour: an undeclared input shows up as
+ * drift and converges instead of staying silently wrong.
  */
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
@@ -27,6 +28,7 @@ const log = createLogger("derived");
 export const DERIVED_RECONCILE_JOB_KEY = "derived:reconcile";
 const DRAIN_REPEAT_MS = 60_000;
 const RECONCILE_INTERVAL_MS = 60 * 60_000;
+const RECONCILE_BUCKETS = 24;
 
 /** Each page claims ready marks, computes outside the transaction and publishes. */
 export const derivedDrainHandler = (computes: DerivedComputes): JobHandler =>
@@ -58,7 +60,12 @@ export const derivedReconcileHandler: JobHandler = defineJobHandler(
   z.object({}).passthrough(),
   async () => ({
     page: { done: true },
-    publish: async (tx) => ({ marked: await markAllStoredDerived(tx) }),
+    publish: async (tx) => ({
+      marked: await markAllStoredDerived(tx, undefined, {
+        index: new Date().getUTCHours() % RECONCILE_BUCKETS,
+        count: RECONCILE_BUCKETS,
+      }),
+    }),
   }),
 );
 

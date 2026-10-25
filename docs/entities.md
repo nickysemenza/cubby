@@ -2356,9 +2356,12 @@ target backs off (30 seconds doubling to 15 minutes) and other targets publish.
 Value adapters write `DerivedValue`; sink adapters write their own tables
 (search documents with embedding admission, recipe totals, conversion
 coverage). Publication rings the existing reader notifications for every kind
-it touched. `derived.reconcile` marks every stored value hourly at the lowest
-priority and logs `derived.drift` when a recompute changes a value: an
-undeclared input converges instead of staying silently wrong. A deploy that
+it touched. `derived.reconcile` marks one of 24 id buckets each hour at the
+lowest priority, so every stored value is rechecked daily without recomputing
+the corpus hourly, and logs `derived.drift` when a recompute changes a value:
+an undeclared input converges instead of staying silently wrong. The read-set
+tracer (`derived/repo/read-set.integration.test.ts`) fails CI when a compute
+reads a table its declaration does not list. A deploy that
 changes a value's rules marks it in its migration.
 
 Reads never compute or repair: lists compile a stored field to one primary-key
