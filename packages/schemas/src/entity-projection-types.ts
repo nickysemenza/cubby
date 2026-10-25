@@ -136,6 +136,20 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
   research?: { readonly fillFields: readonly string[] };
 };
 
+/**
+ * A declared correlated aggregate over a relation path. `column` is the
+ * terminal stored column a `sum`/`min`/`max` reads (null for `count`);
+ * `absent` lists terminal columns that must be NULL.
+ */
+export type GeneratedRollup<E extends string = Entity> = {
+  readonly aggregate: "count" | "sum" | "min" | "max";
+  readonly path: string;
+  readonly steps: readonly RelationshipPathStep[];
+  readonly target: E;
+  readonly column: string | null;
+  readonly absent: readonly string[];
+};
+
 export type GeneratedListField<E extends string = Entity> =
   | {
       readonly shape: "via";
@@ -185,6 +199,8 @@ export type GeneratedListField<E extends string = Entity> =
       readonly options: readonly string[] | null;
       readonly sort: null;
       readonly group: string | null;
+      /** Compiled from a `rollup` declaration; the repository passes no SQL. */
+      readonly rollup?: GeneratedRollup<E>;
     }
   | {
       readonly shape: "predicate";

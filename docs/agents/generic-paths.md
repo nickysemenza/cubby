@@ -94,6 +94,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`; every
   recursive descendant expansion over a `model.hierarchy`), `listPrepare`
   (`field-compiler.ts`; request data a `model.derived` field's SQL reads),
+  `declaredRollup` (`field-compiler.ts`; a `model.derived` `rollup`'s compiled
+  aggregate, for a repository column showing the same value), `related()` /
+  `outer()` (`server/db/helpers/related.ts`; every other correlated count,
+  sum, extreme, existence or to-one lookup, live by default),
   `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
   policy-driven removal (`server/generic/removal/repo/`).
   List filtering, sorting, paging, and count share a plain root-table FROM,

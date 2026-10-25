@@ -115,6 +115,7 @@ import {
   ListContext,
   listPrepare,
 } from "~/server/generic/list/repo/field-compiler";
+import { declaredRollup } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -316,13 +317,19 @@ const vendorPurchases = () =>
   related(purchase, (p) => sql`${p.vendorId} = ${outer(vendor.id)}`);
 const vendorBrandedProducts = () =>
   related(product, (g) => sql`${g.brandId} = ${outer(vendor.id)}`);
-/** Expenses on the Vendor's live Purchases. */
-const vendorExpenses = () =>
-  vendorPurchases().join(expense, (e, p) => sql`${e.purchaseId} = ${p.id}`);
 
-export const vendorPurchaseCount = vendorPurchases().count();
+// Declared rollups (`vendor.model.derived`); the manifest owns their SQL.
+export const vendorPurchaseCount = declaredRollup(
+  "vendor",
+  "purchaseCount",
+  vendor,
+);
 
-const vendorBrandedProductCount = vendorBrandedProducts().count();
+const vendorBrandedProductCount = declaredRollup(
+  "vendor",
+  "brandedProductCount",
+  vendor,
+);
 
 const role = vendorOut.shape.role.enum;
 const vendorRole = sql<VendorOut["role"]>`(SELECT CASE
@@ -354,9 +361,13 @@ const vendorBrandSpend = vendorBrandedProducts()
   )
   .sum((e) => e.cost);
 
-const vendorExpenseCount = vendorExpenses().count();
+const vendorExpenseCount = declaredRollup("vendor", "expenseCount", vendor);
 
-const vendorFirstPurchaseDate = vendorPurchases().min<string>((p) => p.date);
+const vendorFirstPurchaseDate = declaredRollup<string | null>(
+  "vendor",
+  "firstPurchaseDate",
+  vendor,
+);
 
 const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
   WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
@@ -367,7 +378,7 @@ const vendorMissingItemizationCount = sql<number>`(SELECT count(*)::int FROM "Pu
     AND ${effectivePurchaseItemizationExpectationSql("vp")}=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
     AND NOT ${purchaseHasItemizationSql("vp")})`;
 
-const vendorSpend = vendorExpenses().sum((e) => e.cost);
+const vendorSpend = declaredRollup("vendor", "spend", vendor);
 
 const vendorLatestPurchaseDate = vendorPurchases().max<string>((p) => p.date);
 
@@ -696,15 +707,10 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
 
 const vendorScaffold = listScaffold("vendor", vendor, {
   derived: {
-    spend: vendorSpend,
     role: vendorRole,
-    purchaseCount: vendorPurchaseCount,
-    brandedProductCount: vendorBrandedProductCount,
     brandCategoryCount: vendorBrandCategoryCount,
     purchasedBrandProductCount: vendorPurchasedBrandProductCount,
     brandSpend: vendorBrandSpend,
-    expenseCount: vendorExpenseCount,
-    firstPurchaseDate: vendorFirstPurchaseDate,
     documentedPurchaseCount: vendorDocumentedPurchaseCount,
     missingItemizationCount: vendorMissingItemizationCount,
     // A vendor with no purchases leads a newest-first list.

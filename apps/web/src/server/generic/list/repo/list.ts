@@ -121,6 +121,7 @@ import {
   derivedPrepare,
   derivedIntervalSql,
   derivedValueSet,
+  declaredRollups,
   derivedValueSql,
   type AnyDerivedSql,
   groupSql,
@@ -1615,7 +1616,12 @@ export function listScaffold<
     shortcode: AnyColumn;
   },
 >(entity: E, table: T, ...[options]: ListScaffoldArgs<E>) {
-  const derivedSql: AnyDerivedSql = options?.derived ?? {};
+  // Declared rollups compile from the manifest; a repository supplies only
+  // the remaining value and predicate SQL.
+  const derivedSql: AnyDerivedSql = {
+    ...declaredRollups(entity, table),
+    ...options?.derived,
+  };
   const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
   const listFields = generatedEntityListFields[entity];

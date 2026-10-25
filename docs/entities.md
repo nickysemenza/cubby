@@ -2145,6 +2145,16 @@ the web and native pickers choose one record, and the repository rejects more th
 across the three. Each is also a `model.derived` predicate over the one scope
 record they resolve.
 
+A count, total or extreme over related records is a `model.derived`
+`rollup`: `{ rollup: "count", via: "expenses" }`, `{ rollup: "sum", via:
+"expenses.cost" }` or `min`/`max` over a date or numeric terminal field, with
+`absent` naming related stored fields that must be NULL. The generator checks
+the path leads through a list and that the terminal field can be aggregated;
+the list compiler builds a correlated aggregate over live rows at every step,
+and `sum` accumulates in `numeric` before casting so totals do not drift.
+Repositories pass no SQL for a rollup and read the same value for their
+columns through `declaredRollup`.
+
 A text filter declares `anyOf`, the list fields it matches when any one does,
 and `declaredFilterPredicates` ORs a case-insensitive substring match across
 them. A member is a stored `text` or `text[]` field (matched by element, and

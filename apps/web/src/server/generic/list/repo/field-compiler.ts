@@ -482,6 +482,65 @@ const relatedColumnSql = (
   })`;
 };
 
+type Rollup = NonNullable<Extract<DerivedField, { shape: "value" }>["rollup"]>;
+
+/**
+ * A declared `rollup`: the aggregate of the live rows a relation path leads
+ * to from the outer row of `table`. Each hop is live, like every `via`.
+ */
+const rollupSql = (entity: Entity, rollup: Rollup, table: PgTable): SQL => {
+  const traversal = compileTraversal(entity, rollup.steps, "ru", {
+    to: rollup.target,
+    root: `"${getTableName(table)}"`,
+  });
+  const [first, ...rest] = traversal.hops;
+  if (first === undefined)
+    throw new Error(`${entity} rollup ${rollup.path} has no relation step`);
+  const leaf = (column: string) =>
+    sql`${sql.raw(traversal.leafAlias)}.${sql.identifier(column)}`;
+  const value = rollup.column === null ? null : leaf(rollup.column);
+  const aggregate =
+    rollup.aggregate === "count"
+      ? sql`count(*)::int`
+      : rollup.aggregate === "sum"
+        ? // Accumulate exactly; summing double precision drifts by cents.
+          sql`COALESCE(sum(${value}::numeric), 0)::double precision`
+        : sql`${sql.raw(rollup.aggregate)}(${value})`;
+  const firstAlias = sql.raw(first.alias);
+  const conditions = [
+    sql`(${first.condition})`,
+    ...(first.softDelete ? [sql`${firstAlias}."deletedAt" IS NULL`] : []),
+    ...rollup.absent.map((column) => sql`${leaf(column)} IS NULL`),
+  ];
+  const joins = rest.length ? sql` ${renderJoins({ hops: rest })}` : sql``;
+  return sql`(SELECT ${aggregate} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias}${joins} WHERE ${sql.join(conditions, sql` AND `)})`;
+};
+
+/** One declared rollup, for a repository column that shows the same value. */
+export const declaredRollup = <T = number>(
+  entity: Entity,
+  key: string,
+  table: PgTable,
+): SQL<T> => {
+  const field = derivedFieldsOf(entity)[key];
+  if (field?.shape !== "value" || !field.rollup)
+    throw new Error(`${entity}.model.derived.${key} is not a declared rollup`);
+  return sql<T>`${rollupSql(entity, field.rollup, table)}`;
+};
+
+/** Every declared rollup of `entity`, as SQL correlated to `table`. */
+export const declaredRollups = (
+  entity: Entity,
+  table: PgTable,
+): Readonly<Record<string, SQL>> =>
+  Object.fromEntries(
+    Object.entries(derivedFieldsOf(entity)).flatMap(([key, field]) =>
+      field.shape === "value" && field.rollup
+        ? [[key, rollupSql(entity, field.rollup, table)]]
+        : [],
+    ),
+  );
+
 /** The scalar a to-one `via` path reads: the terminal field or record title. */
 const relatedScalarSql = (
   entity: Entity,

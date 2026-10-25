@@ -141,6 +141,7 @@ import {
   validateProductPolicy,
   validateLiveInheritedPolicies,
 } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { declaredRollup } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -310,10 +311,17 @@ const purchaseExpenses = () =>
   related(expense, (e) => sql`${e.purchaseId} = ${outer(purchase.id)}`);
 const purchaseId = outer(purchase.id);
 
-const purchaseExpenseCount = purchaseExpenses().count();
+// Declared rollups (`purchase.model.derived`); the manifest owns their SQL.
+const purchaseExpenseCount = declaredRollup(
+  "purchase",
+  "expenseCount",
+  purchase,
+);
 
-const purchaseExpenseTotal = purchaseExpenses().sum(
-  (e) => sql`${e.cost}::numeric`,
+const purchaseExpenseTotal = declaredRollup(
+  "purchase",
+  "expenseTotal",
+  purchase,
 );
 
 const purchaseUnpricedExpenseCount = purchaseExpenses()
@@ -333,12 +341,11 @@ const purchaseVendorUnpricedExpenseCount =
 
 const purchasePostedRefundTotal = postedRefundTotal(purchaseId);
 
-const purchaseDocumentCount = related(
-  entityAttachment,
-  (a) => sql`${a.entityId} = ${purchaseId}`,
-)
-  .join(image, (i, a) => sql`${i.id} = ${a.imageId}`)
-  .count();
+const purchaseDocumentCount = declaredRollup(
+  "purchase",
+  "documentCount",
+  purchase,
+);
 
 const purchaseVendor = (options?: { includeDeleted: true }) =>
   related(vendor, (v) => sql`${v.id} = ${outer(purchase.vendorId)}`, options);
@@ -618,9 +625,6 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
     // A purchase with no live vendor leads a descending list.
     vendorId: { sql: purchaseVendorName, nulls: "high" },
-    expenseCount: purchaseExpenseCount,
-    expenseTotal: purchaseExpenseTotal,
-    documentCount: purchaseDocumentCount,
     pricedExpenseTotal: sql`CASE WHEN ${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} THEN ${purchaseExpenseTotal} END`,
     expenseStatus: sql`CASE
       WHEN ${purchaseExpenseCount} = 0 THEN ${purchaseExpenseStatus.enum.empty}::text

@@ -460,6 +460,82 @@ const compileVia = (
   };
 };
 
+const rollupNumericKinds = new Set(["number", "currency", "integer"]);
+
+/**
+ * A `rollup` derived entry: its relation path compiles like `via`, then the
+ * aggregate is checked against what the path ends in. `count` needs a path
+ * to a list of records; `sum` a numeric stored field; `min`/`max` a numeric
+ * or date one. `absent` names stored fields of the path's last entity.
+ */
+const compileRollup = (
+  owner: CompiledEntity,
+  entry: {
+    rollup: "count" | "sum" | "min" | "max";
+    via: string;
+    absent?: readonly string[];
+  },
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  context: string,
+): CompiledListField => {
+  const via = compileVia(owner, entry.via, byKey, context);
+  if (via.shape !== "via")
+    throw new EntityDeclarationError(
+      `${context} rollup via ${entry.via} must be a relation path, not a row set.`,
+    );
+  if (!via.many)
+    throw new EntityDeclarationError(
+      `${context} rollup via ${entry.via} leads to a single record; aggregate a list of records.`,
+    );
+  const target = byKey.get(via.target);
+  if (target === undefined)
+    throw new EntityDeclarationError(
+      `${context} rollup via ${entry.via}: unknown entity ${via.target}.`,
+    );
+  const terminal = via.terminal.kind === "field" ? via.terminal : null;
+  if (entry.rollup === "count" && terminal !== null)
+    throw new EntityDeclarationError(
+      `${context} counts records: end the path at a relation, not ${terminal.column}.`,
+    );
+  if (entry.rollup !== "count") {
+    if (terminal === null)
+      throw new EntityDeclarationError(
+        `${context} ${entry.rollup} needs the path to end in a stored field.`,
+      );
+    const numeric = rollupNumericKinds.has(terminal.fieldKind);
+    const dated = terminal.fieldKind === "date";
+    if (!(numeric || (entry.rollup !== "sum" && dated)))
+      throw new EntityDeclarationError(
+        `${context} cannot ${entry.rollup} ${terminal.column} (${terminal.fieldKind}).`,
+      );
+  }
+  const absent = (entry.absent ?? []).map((field) => {
+    const stored = target.fieldModel.storage.find(({ key }) => key === field);
+    if (stored === undefined)
+      throw new EntityDeclarationError(
+        `${context} absent ${field} is not a stored field of ${target.key}.`,
+      );
+    return stored.column;
+  });
+  const dated = terminal?.fieldKind === "date";
+  return {
+    shape: "value",
+    type: dated ? "date" : "number",
+    options: null,
+    sort: null,
+    // Same grouping availability as the `type` value it replaces.
+    group: null,
+    rollup: {
+      aggregate: entry.rollup,
+      path: entry.via,
+      steps: via.steps,
+      target: via.target,
+      column: terminal?.column ?? null,
+      absent,
+    },
+  };
+};
+
 // Mode values reach SQL as literals, so they must stay plain words.
 const sqlWord = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 
@@ -1356,31 +1432,33 @@ export const compileListFields = (
     for (const [key, entry] of Object.entries(entity.fieldModel.derived)) {
       const derivedContext = `${context}.model.derived.${key}`;
       derived[key] =
-        "via" in entry
-          ? compileVia(entity, entry.via, byKey, derivedContext, rows)
-          : "type" in entry
-            ? {
-                shape: "value",
-                type: entry.type,
-                options: entry.options ?? null,
-                sort: null,
-                group:
-                  entry.type === "dateInterval"
-                    ? `${humanize(key)} is a date span, so a record has no single date to group under.`
-                    : null,
-              }
-            : {
-                shape: "predicate",
-                predicate: entry.predicate,
-                options: entry.options ?? null,
-                reason: entry.reason,
-                sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
-                group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
-                exclude:
-                  entry.negatable === true
-                    ? null
-                    : `Include only: ${entry.reason.replace(/\.$/, "")}.`,
-              };
+        "rollup" in entry
+          ? compileRollup(entity, entry, byKey, derivedContext)
+          : "via" in entry
+            ? compileVia(entity, entry.via, byKey, derivedContext, rows)
+            : "type" in entry
+              ? {
+                  shape: "value",
+                  type: entry.type,
+                  options: entry.options ?? null,
+                  sort: null,
+                  group:
+                    entry.type === "dateInterval"
+                      ? `${humanize(key)} is a date span, so a record has no single date to group under.`
+                      : null,
+                }
+              : {
+                  shape: "predicate",
+                  predicate: entry.predicate,
+                  options: entry.options ?? null,
+                  reason: entry.reason,
+                  sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
+                  group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
+                  exclude:
+                    entry.negatable === true
+                      ? null
+                      : `Include only: ${entry.reason.replace(/\.$/, "")}.`,
+                };
       validateDerivedReference(entity, key, derived[key], derivedContext);
     }
     const sort = entity.fieldModel.sort;
