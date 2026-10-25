@@ -32,7 +32,8 @@ import {
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
-import { householdDaySql } from "~/server/db/helpers/query";
+import { unwrapDb } from "~/server/db/helpers";
+import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
@@ -526,6 +527,43 @@ export const declaredRollup = <T = number>(
   if (field?.shape !== "value" || !field.rollup)
     throw new Error(`${entity}.model.derived.${key} is not a declared rollup`);
   return sql<T>`${rollupSql(entity, field.rollup, table)}`;
+};
+
+/** A rollup's value: a count or sum, a date extreme, or NULL. */
+const rollupValue = z.union([z.number(), z.string(), z.null()]);
+type RollupValue = z.output<typeof rollupValue>;
+const rollupRow = z.object({ id: z.string() }).catchall(rollupValue);
+
+/**
+ * The batched form of declared rollups: `keys` for every record in `ids`,
+ * in one statement, keyed by record id. Detail reads, quality loaders and
+ * other non-list readers use it instead of a statement per record.
+ */
+
+export const loadDeclaredRollups = async (
+  db: Database | DrizzleTransaction,
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  ids: readonly string[],
+  keys: readonly string[],
+): Promise<Map<string, ReadonlyMap<string, RollupValue>>> => {
+  if (ids.length === 0 || keys.length === 0) return new Map();
+  const id = sql`${sql.identifier(getTableName(table))}.${sql.identifier(table.id.name)}`;
+  const rows = await unwrapDb(db).execute(
+    sql`SELECT ${id} AS id, ${sql.join(
+      keys.map(
+        (key) =>
+          sql`${declaredRollup(entity, key, table)} AS ${sql.identifier(key)}`,
+      ),
+      sql`, `,
+    )} FROM ${table} WHERE ${id} = ANY(${uuidArrayParam(ids)})`,
+  );
+  return new Map(
+    rows.rows.map((raw) => {
+      const { id: rowId, ...values } = rollupRow.parse(raw);
+      return [rowId, new Map(Object.entries(values))];
+    }),
+  );
 };
 
 /** Every declared rollup of `entity`, as SQL correlated to `table`. */

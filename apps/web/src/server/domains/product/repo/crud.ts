@@ -94,7 +94,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
-import { quotedTable } from "~/server/db/helpers/related";
+import { quotedTable, rankOf } from "~/server/db/helpers/related";
 import {
   cookbook,
   device,
@@ -111,6 +111,7 @@ import {
   plant,
   planting,
   product,
+  productCategory,
   productConversionCoverage,
   productUnitMappings,
   task,
@@ -334,7 +335,12 @@ const productScaffold = listScaffold("product", product, {
         `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL)`,
     ),
     brandId: productBrandNameSql(product.brandId),
-    categoryId: sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path'`,
+    // Ranked once over categories: the path summary per Product was ~600 ms.
+    categoryId: rankOf(
+      productCategory,
+      (id) => sql`${categorySummarySql(id)}::jsonb->'path'`,
+      sql`${product.categoryId}`,
+    ),
     price: sql.raw(displayProductCostSql(quotedTable(product))),
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +

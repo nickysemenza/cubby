@@ -182,3 +182,22 @@ export const related = <T extends PgTable>(
   const first = step(table, on, options);
   return new Related(first.columns, [first.step], []);
 };
+
+/**
+ * Sort by a costly per-target key over a small table: rank every live row of
+ * `table` by `key(id)` once (an uncorrelated InitPlan), then order each outer
+ * row by its `value`'s position. Equal to ordering by `key(value)` itself,
+ * without evaluating it per outer row; a missing or deleted target ranks NULL.
+ */
+export const rankOf = (
+  table: PgTable & { id: AnyColumn; deletedAt: AnyColumn },
+  key: (id: SQL) => SQL,
+  value: SQL,
+): SQL<number | null> => {
+  const name = nextAlias();
+  const id = sql`${sql.identifier(name)}.${sql.identifier(table.id.name)}`;
+  const deletedAt = sql`${sql.identifier(name)}.${sql.identifier(table.deletedAt.name)}`;
+  return sql<
+    number | null
+  >`array_position((SELECT array_agg(${id} ORDER BY ${key(id)}) FROM ${sql.identifier(getTableName(table))} ${sql.identifier(name)} WHERE ${deletedAt} IS NULL), ${value})`;
+};
