@@ -225,6 +225,13 @@
       "when": 1792901686373,
       "tag": "0031_device_apple_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792907644810,
+      "tag": "0032_job_lane_admission",
+      "breakpoints": true
     }
   ]
 }

@@ -60,7 +60,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { quotedTable } from "~/server/db/helpers/related";
+import { outer, quotedTable, related } from "~/server/db/helpers/related";
 import {
   email,
   expense,
@@ -608,7 +608,13 @@ async function workQueueProjection(
           (purpose) => !isStepRunPurpose(purpose),
         ).map((purpose) => sql`${purpose}`),
         sql`, `,
-      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND /* includes-deleted: the work moved even to a deleted successor */ NOT EXISTS (SELECT 1 FROM "Run" successor WHERE successor."predecessorRunId" = "Run".id)))`,
+      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
+        runTable,
+        (successor) =>
+          sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+        // The work moved even to a deleted successor.
+        { includeDeleted: true },
+      ).exists()}))`,
       details: {
         source: "execution",
         kind: "repair",

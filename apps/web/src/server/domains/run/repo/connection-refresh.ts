@@ -226,16 +226,17 @@ export async function prepareConnectionDiscoveryRoster(
   const current = input.runId && (await runIsActive(db, input.runId));
   // Keep the stopped owner's identity across pages that admit nothing, or a
   // later page would reopen the original key and resolve the stopped Run.
-  const stopped = current ? null : (input.runId ?? input.replacing ?? null);
-  const opened =
-    current || !(await hasAdmissibleTarget(db, page.targets))
-      ? null
-      : await input.createRun(db, stopped);
-  // Recheck the owner admission resolved to: an idempotent open can return an
-  // existing Run that was stopped since.
-  const runId =
-    (current ? input.runId : null) ??
-    (opened && (await runIsActive(db, opened)) ? opened : null);
+  let stopped = current ? null : (input.runId ?? input.replacing ?? null);
+  let runId = current ? input.runId : null;
+  if (!runId && (await hasAdmissibleTarget(db, page.targets)))
+    // An idempotent open can return a Run stopped since it was created, also
+    // one the cursor never saved; continue after it under its next key.
+    for (let open = 0; open < 3 && !runId; open++) {
+      const opened = await input.createRun(db, stopped);
+      if (await runIsActive(db, opened)) runId = opened;
+      else if (opened === stopped) break;
+      else stopped = opened;
+    }
   const inserted = runId
     ? await insertEvaluationTargets(db, runId, page.targets)
     : 0;

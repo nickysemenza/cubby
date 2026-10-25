@@ -74,13 +74,12 @@ import {
   isNotNull,
   isNull,
   lt,
-  notExists,
+  not,
   notInArray,
   or,
   sql,
   type SQL,
 } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type {
@@ -91,6 +90,7 @@ import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   aiUsage,
   auditLog,
@@ -1050,8 +1050,6 @@ const isFundingStoppedForReview = (row: {
   row.failureCode === "execution_limit" &&
   !row.hasSuccessor;
 
-const successorRun = alias(runTable, "successor_run");
-
 /** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
 
 export async function redispatchBudgetPausedImports(
@@ -1079,12 +1077,14 @@ export async function redispatchBudgetPausedImports(
           lt(runTable.updatedAt, pausedBefore),
           notDeleted(runTable),
           isNull(runTable.retiredAt),
-          // includes-deleted: the work moved even if the successor was deleted.
-          notExists(
-            tx
-              .select({ id: successorRun.id })
-              .from(successorRun)
-              .where(eq(successorRun.predecessorRunId, runTable.id)),
+          // The work moved even if the successor was deleted.
+          not(
+            related(
+              runTable,
+              (successor) =>
+                sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+              { includeDeleted: true },
+            ).exists(),
           ),
         ),
       )

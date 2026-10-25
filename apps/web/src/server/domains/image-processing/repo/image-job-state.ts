@@ -36,34 +36,3 @@ export const imageJobDisplayStateSql = (
     ELSE ${STATE.pending} END
     FROM "Job" dj WHERE dj.key = 'image-processing:' || ${row.id}::text), ${STATE.pending})
 END)`;
-
-/** The same derivation in TypeScript, for rows already joined to their Job. */
-export function imageJobDisplayState(
-  stored: ImageProcessingJobState,
-  execution: {
-    kind: string;
-    state: string;
-    attempts: number;
-    leaseExpiresAt: Date | null;
-  } | null,
-  now = new Date(),
-): ImageProcessingJobState {
-  if (stored !== STATE.pending) return stored;
-  if (!execution) return STATE.pending;
-  if (
-    execution.state === jobState.enum.running &&
-    execution.leaseExpiresAt &&
-    execution.leaseExpiresAt > now
-  )
-    return STATE.leased;
-  if (
-    execution.state === jobState.enum.failed ||
-    execution.state === jobState.enum.cancelled ||
-    execution.state === jobState.enum.paused ||
-    execution.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS
-  )
-    return STATE.failed;
-  return execution.kind === "image.device"
-    ? STATE.waiting_for_device
-    : STATE.pending;
-}

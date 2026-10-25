@@ -176,7 +176,8 @@ off before pulling again. macOS reports `foreground` from the scene state, keeps
 locked or in the background, stops pulling during system sleep, and pulls immediately on wake and
 on every reconnect. A result whose delivery fails is set aside on disk with its own capped backoff
 (2 s doubling to 15 min), shared by the resident worker and the charging window. Replay sends never-attempted results first,
-then the least recently attempted, so rejected results cannot starve a bounded window; deliveries and
+then the least recently attempted, in an order stored beside the outbox so it survives relaunch, so
+rejected results cannot starve a bounded window; deliveries and
 pulls continue and Activity shows "N results waiting to deliver" with the latest error. A 426
 CLIENT_UPDATE_REQUIRED from any image operation, including a charging window's pull, renewal,
 delivery or claim release, cancels execution, keeps recorded results, ends background windows, stops pulling for the

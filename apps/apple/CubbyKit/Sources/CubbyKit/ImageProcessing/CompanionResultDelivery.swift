@@ -24,7 +24,6 @@ actor CompanionResultDelivery {
 
     private struct SetAside {
         var failures: Int
-        var lastAttemptAt: ContinuousClock.Instant
         var nextAttemptAt: ContinuousClock.Instant
     }
 
@@ -51,9 +50,8 @@ actor CompanionResultDelivery {
             nextAttemptAt: setAside.values.map(\.nextAttemptAt).min())
     }
 
-    /// Sends up to `limit` recorded results that are due, skipping those still backing off.
-    /// Never-attempted results go first, then the least recently attempted, so results the server
-    /// keeps rejecting cannot take every bounded window from one behind them.
+    /// Sends up to `limit` recorded results that are due, skipping those still backing off, in
+    /// the outbox's durable replay order (never attempted, then least recently attempted).
     func deliverDue(
         transport: any CompanionImageBackgroundTransport, deviceID: String, limit: Int = .max
     ) async throws -> Outcome {
@@ -64,15 +62,7 @@ actor CompanionResultDelivery {
         let now = self.now()
         var attempted = 0
         var outcome = Outcome.delivered
-        let ordered = pending.enumerated().sorted { lhs, rhs in
-            switch (setAside[lhs.element.key]?.lastAttemptAt, setAside[rhs.element.key]?.lastAttemptAt) {
-            case (nil, nil): lhs.offset < rhs.offset
-            case (nil, _): true
-            case (_, nil): false
-            case (let left?, let right?): left == right ? lhs.offset < rhs.offset : left < right
-            }
-        }.map(\.element)
-        for entry in ordered {
+        for entry in pending {
             if let held = setAside[entry.key], held.nextAttemptAt > now {
                 outcome = .setAside
                 continue
@@ -98,6 +88,9 @@ actor CompanionResultDelivery {
         transport: any CompanionImageBackgroundTransport, deviceID: String
     ) async -> Outcome {
         do {
+            // Rotation must survive a relaunch, or the same rejected results lead every window;
+            // the order is advisory, so a failed write never blocks the send.
+            try? await outbox.markAttempted(key)
             try await transport.complete(deviceID: deviceID, result: result)
             try await outbox.acknowledge(key)
             setAside[key] = nil
@@ -108,8 +101,7 @@ actor CompanionResultDelivery {
             let failures = (setAside[key]?.failures ?? 0) + 1
             let attemptedAt = now()
             setAside[key] = SetAside(
-                failures: failures, lastAttemptAt: attemptedAt,
-                nextAttemptAt: attemptedAt + Self.retryDelay(failures: failures))
+                failures: failures, nextAttemptAt: attemptedAt + Self.retryDelay(failures: failures))
             latestError = (error as? LocalizedError)?.errorDescription ?? String(describing: error)
             if !AuthenticatedSocketSupport.isExpectedReconnectFailure(error) {
                 failureObserver?(error)

@@ -8,7 +8,7 @@ import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { recordJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 
-import type { ImageProcessingCompanionRpc } from "./companion-rpc";
+import type { ImageProcessingCompanionRpc } from "../operations/rpc";
 
 const log = createLogger("image-processing");
 
@@ -70,7 +70,7 @@ export async function ringImageProcessingCompanionsAfterCommit(
  * drained, so without it work whose backoff or abandoned lease expires while
  * every device idles would wait for an unrelated save, pull or connect.
  */
-export const DEVICE_WAKE_KEY = "image.device.wake";
+const DEVICE_WAKE_KEY = "image.device.wake";
 
 /**
  * Arm the wake in the caller's transaction whenever parked device work gets

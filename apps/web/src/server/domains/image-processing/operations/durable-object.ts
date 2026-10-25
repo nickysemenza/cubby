@@ -7,7 +7,7 @@ import {
   ringDoorbell,
 } from "~/server/http/doorbell-socket";
 
-import type { ImageProcessingCompanionRpc } from "../repo/companion-rpc";
+import type { ImageProcessingCompanionRpc } from "./rpc";
 
 /**
  * Owner of the `imageProcessing.work` doorbell. Postgres job state and leases

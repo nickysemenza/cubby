@@ -2,39 +2,48 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import {
-  JOB_BACKFILL_SHARE,
-  jobRunOwned,
-} from "~/server/generic/jobs/repo/jobs";
+import { JOB_BACKFILL_SHARE } from "~/server/generic/jobs/repo/jobs";
 
 /**
  * Device pulls claim one Job at a time but keep the drain's two classes: an
  * active, member-visible Run's parked work (`jobRunOwned`) leads, and after
  * this many run-owned device services in a row backfill is owed the next.
  */
-export const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
+const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
+
+const DEVICE_LANE = "image.device";
 
 /**
- * How many of the latest device services in a row were run-owned, up to
- * `DEVICE_OWNED_STREAK`. A service is a claim handed over to a device (an
- * `ImageProcessingAttempt` of `image.device` work), so each reclaim of one
- * row counts; ownership is selection's own definition, evaluated now.
+ * How many device claims in a row were run-owned when admitted, up to
+ * `DEVICE_OWNED_STREAK`, for queue positions. Each claim, reclaims included,
+ * is one service; a claim the server then cannot hand over still counts.
  */
 export async function deviceOwnedStreak(db: Database): Promise<number> {
-  const result = await repositoryQueries(db).execute<{ owned: boolean }>(sql`
-    SELECT ${jobRunOwned()} AS owned
-    FROM "ImageProcessingAttempt" a
-    JOIN "ImageProcessingJob" p ON p.id = a."jobId"
-    JOIN "Job" ON "Job".key = 'image-processing:' || p.id::text
-    WHERE "Job".kind = 'image.device'
-    ORDER BY a."startedAt" DESC, a.id DESC
-    LIMIT ${DEVICE_OWNED_STREAK}`);
-  let streak = 0;
-  for (const row of result.rows) {
-    if (!row.owned) break;
-    streak++;
-  }
-  return streak;
+  const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
+    SELECT "ownedStreak" AS streak FROM "JobLaneAdmission"
+    WHERE lane = ${DEVICE_LANE}`);
+  return result.rows[0]?.streak ?? 0;
+}
+
+/**
+ * Locks the device lane's admission row for the claim's transaction, so
+ * concurrent pulls take their turns one at a time, and returns its streak.
+ */
+export async function lockDeviceAdmission(db: Database): Promise<number> {
+  const result = await repositoryQueries(db).execute<{ streak: number }>(sql`
+    INSERT INTO "JobLaneAdmission" (lane) VALUES (${DEVICE_LANE})
+    ON CONFLICT (lane) DO UPDATE SET lane = EXCLUDED.lane
+    RETURNING "ownedStreak" AS streak`);
+  return result.rows[0]?.streak ?? 0;
+}
+
+/** Counts one admitted claim by the class it was admitted under. */
+export async function recordDeviceAdmission(db: Database, runOwned: boolean) {
+  await repositoryQueries(db).execute(sql`
+    UPDATE "JobLaneAdmission"
+    SET "ownedStreak" = ${runOwned ? sql`least("ownedStreak" + 1, ${DEVICE_OWNED_STREAK})` : sql`0`},
+      "updatedAt" = now()
+    WHERE lane = ${DEVICE_LANE}`);
 }
 
 /** Whether the next device pull owes backfill its turn. */

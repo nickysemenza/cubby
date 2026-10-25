@@ -1,5 +1,5 @@
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, inArray, lt, notInArray, sql } from "drizzle-orm";
 
 import type { QueueHealthSnapshot } from "~/contracts/job.contract";
 import type { Database } from "~/server/db";
@@ -12,7 +12,7 @@ import {
 } from "~/server/generic/jobs/repo/jobs";
 
 /** Thresholds that raise a watchdog alert; each alert carries its raw numbers. */
-export const QUEUE_ALERT_THRESHOLDS = {
+const QUEUE_ALERT_THRESHOLDS = {
   /** A drained kind's oldest due Job has waited this long. */
   oldestDueSeconds: 30 * 60,
   /** Due Jobs grew by this many since the previous measurement. */
@@ -108,7 +108,7 @@ export async function measureQueueHealth(
 }
 
 /** Pure thresholds over one measurement. */
-export function queueAlerts(
+function queueAlerts(
   kinds: QueueHealthSnapshot["kinds"],
   imageDisagreement: number,
 ): QueueHealthSnapshot["alerts"] {
@@ -169,25 +169,6 @@ export function queueAlerts(
       evidence: `${imageDisagreement} open image jobs without a live execution after repair`,
     });
   return alerts;
-}
-
-/** Room a producer has under its kind's queued cap; null means uncapped. */
-export async function jobKindAdmission(
-  db: Database,
-  kind: string,
-): Promise<number | null> {
-  const cap = jobKindPolicy(kind).maxQueued;
-  if (cap === null) return null;
-  const [row] = await getDb(db)
-    .select({ queued: sql<number>`count(*)::int` })
-    .from(job)
-    .where(
-      and(
-        eq(job.kind, kind),
-        inArray(job.state, [jobState.enum.queued, jobState.enum.retry_wait]),
-      ),
-    );
-  return Math.max(0, cap - (row?.queued ?? 0));
 }
 
 /** Completed and cancelled Jobs older than this are pruned; failed ones stay. */

@@ -1,6 +1,6 @@
 {
-  "id": "6d5d0942-b86c-4aa6-a372-906d74a85148",
-  "prevId": "54b6fc0a-93e1-45b1-86b0-59c8dad607b7",
+  "id": "760aa746-c70d-4bff-8734-bed9c580fec2",
+  "prevId": "6d5d0942-b86c-4aa6-a372-906d74a85148",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2865,6 +2865,39 @@
           ]
         }
       },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.JobLaneAdmission": {
+      "name": "JobLaneAdmission",
+      "schema": "",
+      "columns": {
+        "lane": {
+          "name": "lane",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ownedStreak": {
+          "name": "ownedStreak",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

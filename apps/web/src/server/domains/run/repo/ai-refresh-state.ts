@@ -133,13 +133,15 @@ async function workKeyTip(
     reopenable:
       tip !== undefined &&
       reopens < MAX_REOPENS &&
+      // A member's cancel of the owning Run vetoes every reopen, also of work
+      // superseded before that cancel.
+      owner?.failureCode !== "user_cancelled" &&
       // A Run stopped as superseded (backlog cleared, not a member's decision)
       // leaves its cancelled work for paced discovery to re-admit.
       (tip.state === "cancelled"
         ? owner?.failureCode === SUPERSEDED_RUN_FAILURE ||
           supersededReceipt.safeParse(tip.receipt).success
-        : ["blocked", "obsolete"].includes(tip.state) &&
-          owner?.failureCode !== "user_cancelled"),
+        : ["blocked", "obsolete"].includes(tip.state)),
   };
 }
 

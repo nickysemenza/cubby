@@ -291,6 +291,45 @@ describe("connection discovery pacing", () => {
     expect(later.replacing).toBeNull();
   });
 
+  it("continues after a Run its open returns stopped when the cursor never saved it", async () => {
+    await tasks(["Synthetic unpublished continuation task"]);
+    const keyed = async (db: Database, replacing: RunId | null) => {
+      const activation = await readAiRefreshActivation(db);
+      if (!activation) throw new Error("Synthetic AI refresh is not active");
+      return ensureRun(db, systemActor(), {
+        purpose: "connection_discovery",
+        trigger: "scheduled",
+        status: "running",
+        execution: false,
+        clientKey: `connection-discovery:synthetic-claim:3${replacing ? `:after:${replacing}` : ""}`,
+        input: connectionDiscoveryRunInput.parse({
+          kind: "connection_discovery",
+          activation,
+        }),
+      });
+    };
+    // Preparation committed this Run, then publication failed before the
+    // cursor saved it; the member cancelled it before the replay.
+    const stopped = await keyed(ctx.db, null);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, stopped));
+    const replay = await prepareConnectionDiscoveryRoster(ctx.db, {
+      runId: null,
+      replacing: null,
+      after: null,
+      limit: 25,
+      entityKinds: ["task"],
+      newestFirst: true,
+      createRun: keyed,
+    });
+    expect(replay.runId).not.toBeNull();
+    expect(replay.runId).not.toBe(stopped);
+    expect(replay.inserted).toBe(1);
+    expect(replay.replacing).toBeNull();
+  });
+
   it("re-admits an input that reverts before its replacement ran", async () => {
     const [created] = await tasks(["Synthetic reverting task"]);
     const [row] = await getDb(ctx.db)
@@ -318,6 +357,38 @@ describe("connection discovery pacing", () => {
     );
     expect(states.filter((state) => state === "queued")).toHaveLength(1);
     expect(states.filter((state) => state === "cancelled")).toHaveLength(2);
+  });
+
+  // Review finding: a superseded receipt reopened work even after the member
+  // cancelled the Run that owned it.
+  it("never re-admits superseded work whose Run the member cancelled", async () => {
+    const [created] = await tasks(["Synthetic cancelled reverting task"]);
+    const [row] = await getDb(ctx.db)
+      .select({ id: task.id })
+      .from(task)
+      .where(eq(task.shortcode, created!.output.id));
+    const page = () =>
+      prepareConnectionDiscoveryRoster(ctx.db, {
+        runId: null,
+        after: null,
+        limit: 25,
+        entityKinds: ["task"],
+        newestFirst: true,
+        createRun: createDiscoveryRun,
+      });
+    const rename = (name: string) =>
+      getDb(ctx.db).update(task).set({ name }).where(eq(task.id, row!.id));
+    const first = await page(); // fingerprint A queued
+    if (!first.runId) throw new Error("Synthetic discovery admitted nothing");
+    await rename("Synthetic cancelled reverting task, edited");
+    await page(); // B queued, A superseded
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, first.runId));
+    await rename("Synthetic cancelled reverting task");
+    const reverted = await page();
+    expect(reverted.inserted).toBe(0);
   });
 
   it("holds its cursor while the evaluation backlog is at the cap", async () => {

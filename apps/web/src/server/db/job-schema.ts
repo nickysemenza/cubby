@@ -130,3 +130,16 @@ export const jobInvalidationCapture = pgTable(
   },
   (table) => [primaryKey({ columns: [table.key, table.revision] })],
 );
+
+/**
+ * Fairness state a lane's pulls serialize on. A device pull locks its lane's
+ * row, classifies the claim when it admits it, and advances or resets
+ * `ownedStreak` in the claim's transaction: concurrent pulls cannot both take
+ * Run work at backfill's turn, and a Run finishing later never reclassifies
+ * services already counted.
+ */
+export const jobLaneAdmission = pgTable("JobLaneAdmission", {
+  lane: text("lane").primaryKey(),
+  ownedStreak: integer("ownedStreak").notNull().default(0),
+  updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
+});

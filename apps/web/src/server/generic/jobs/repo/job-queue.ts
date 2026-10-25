@@ -42,7 +42,7 @@ import {
 } from "~/server/generic/jobs/repo/waiting-on";
 
 /** A Run whose live Jobs saw no claim or completion for this long is stalled. */
-export const RUN_STALL_MS = 15 * 60_000;
+const RUN_STALL_MS = 15 * 60_000;
 
 const LIVE_STATES = [
   jobState.enum.queued,
@@ -77,7 +77,7 @@ function laneWhere(lanes: readonly JobLane[]): SQL {
  * requests. A withdrawn (cancelled) request no longer counts, for its owner
  * either. UNION keeps one pair however many routes reach a Job.
  */
-export function runDemandPairs(runIds: readonly RunId[]): SQL {
+function runDemandPairs(runIds: readonly RunId[]): SQL {
   const runs = sql.join(
     runIds.map((id) => sql`${id}::uuid`),
     sql`, `,
@@ -103,7 +103,7 @@ export const runDemandWhere = (runId: RunId) =>
   sql`"Job".id IN (SELECT d.job_id FROM ${runDemandPairs([runId])} d)`;
 
 /** The SQL predicate of a filtered Job set, shared by the list, counts and Retry now. */
-export function jobSetWhere(
+function jobSetWhere(
   filter: JobSetFilter,
   runId: RunId | null,
 ): SQL | undefined {

@@ -186,7 +186,8 @@ struct CompanionImageBackgroundTests {
 
     /// Regression: replay took the outbox in key order, eight per window, so eight results the
     /// server kept rejecting ahead of a valid ninth took every window (windows are spaced beyond
-    /// the backoff, so the same eight were always due). Least recently attempted goes first.
+    /// the backoff, so the same eight were always due). Least recently attempted goes first, and
+    /// that order survives the process ending between windows.
     @Test func rejectedResultsNeverStarveALaterOne() async throws {
         let fileURL = try outboxFile()
         let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
@@ -203,19 +204,18 @@ struct CompanionImageBackgroundTests {
         try await outbox.record(
             try await BackgroundExecutionFixture().complete(try command(job: valid)),
             for: "z-valid")
-        let clock = ManualClock()
-        let delivery = CompanionResultDelivery(
-            outbox: outbox, failureObserver: nil, now: { clock.now })
         let transport = BackgroundTransportFixture(commands: [], rejectedJobs: rejected)
-        let runner = CompanionImageBackgroundRunner(
-            outbox: outbox, delivery: delivery,
-            execute: { try await BackgroundExecutionFixture().complete($0) })
         for _ in 0..<3 {
+            // Each window is a cold launch: a fresh outbox and delivery over the same file.
+            let relaunched = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+            let runner = CompanionImageBackgroundRunner(
+                outbox: relaunched,
+                delivery: CompanionResultDelivery(outbox: relaunched, failureObserver: nil),
+                execute: { try await BackgroundExecutionFixture().complete($0) })
             await runner.run(transport: transport, hello: hello(), maximumJobs: 1)
-            // The next window opens after every backoff has lapsed.
-            clock.advance(by: .seconds(3_600))
         }
-        #expect(try await outbox.pending().map(\.key).contains("z-valid") == false)
+        let reopened = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
+        #expect(try await reopened.pending().map(\.key).contains("z-valid") == false)
         #expect(await transport.deliveredAttempts == ["00000000-0000-4000-8000-000000000002"])
     }
 
@@ -450,13 +450,6 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
         if let renewError { throw renewError }
         return renewal
     }
-}
-
-/// A clock the test advances by hand.
-private final class ManualClock: Sendable {
-    private let instant = Mutex(ContinuousClock.now)
-    var now: ContinuousClock.Instant { instant.withLock { $0 } }
-    func advance(by duration: Duration) { instant.withLock { $0 += duration } }
 }
 
 /// The latest worker phase reported.

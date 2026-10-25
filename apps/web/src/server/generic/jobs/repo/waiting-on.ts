@@ -27,7 +27,7 @@ import {
 } from "~/server/generic/jobs/repo/jobs";
 
 /** Lane throughput is measured over this window. */
-export const LANE_THROUGHPUT_WINDOW_MS = 30 * 60_000;
+const LANE_THROUGHPUT_WINDOW_MS = 30 * 60_000;
 
 type WaitingFacts = Pick<
   JobRow,

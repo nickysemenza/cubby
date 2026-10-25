@@ -19,7 +19,7 @@ export type JobKindPolicy = {
   /** False: only an external executor's pull claims it; the server drain never does. */
   readonly drained: boolean;
   readonly retry: JobRetryPolicy;
-  /** Queued Jobs a producer may keep at once; `jobKindAdmission` reports the room left. */
+  /** Queued Jobs a kind should keep at most; the watchdog alerts above it. */
   readonly maxQueued: number | null;
 };
 

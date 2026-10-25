@@ -66,7 +66,8 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   deviceBackfillTurn,
-  deviceOwnedStreak,
+  lockDeviceAdmission,
+  recordDeviceAdmission,
 } from "~/server/generic/jobs/repo/device-admission";
 import {
   enqueueJob,
@@ -587,11 +588,21 @@ export async function claimImageProcessingJob(
     // leads, but backfill keeps its reserved share of pulls.
     const devicePull =
       !currentExecution && input.processorRevisions !== undefined;
+    // Device pulls take their turns one at a time: the lane's admission row
+    // stays locked until this claim commits its class.
     const backfillTurn =
       devicePull &&
-      deviceBackfillTurn(await deviceOwnedStreak(databaseForTransaction(tx)));
+      deviceBackfillTurn(await lockDeviceAdmission(databaseForTransaction(tx)));
     // The internal policy keeps claims within the device’s supported job kinds.
-    const candidates = (avoidDeviceId?: string) =>
+    // A retry prefers a different device than the one its last attempt ran
+    // on, within the class whose turn it is; a lone device still takes its
+    // own retries.
+    const ranOnThisDevice = input.deviceId
+      ? sql<boolean>`EXISTS (SELECT 1 FROM ${imageProcessingAttempt} a
+          WHERE a.id = ${imageProcessingJob.attemptId}
+            AND a.executor->>'deviceId' = ${input.deviceId})`
+      : undefined;
+    const candidates = () =>
       tx
         .select({
           id: imageProcessingJob.id,
@@ -604,6 +615,7 @@ export async function claimImageProcessingJob(
           submissionId: imageProcessingJob.submissionId,
           derivativeId: imageProcessingJob.derivativeId,
           runId: imageProcessingJob.runId,
+          runOwned: jobRunOwned(),
           originalKey: image.key,
           originalContentType: image.contentType,
           derivativeKey: imageDerivative.key,
@@ -680,17 +692,13 @@ export async function claimImageProcessingJob(
                     ),
                   ),
                 ),
-            avoidDeviceId
-              ? sql`NOT EXISTS (SELECT 1 FROM ${imageProcessingAttempt} a
-                  WHERE a.id = ${imageProcessingJob.attemptId}
-                    AND a.executor->>'deviceId' = ${avoidDeviceId})`
-              : undefined,
           ),
         )
         .orderBy(
           ...(devicePull
             ? [backfillTurn ? asc(jobRunOwned()) : desc(jobRunOwned())]
             : []),
+          ...(ranOnThisDevice ? [asc(ranOnThisDevice)] : []),
           asc(durableJob.availableAt),
           asc(imageProcessingJob.id),
         )
@@ -702,10 +710,7 @@ export async function claimImageProcessingJob(
             of: [imageProcessingJob, image],
             skipLocked: true,
           });
-    // A retry prefers a different device than the one its last attempt ran
-    // on; a lone device still takes its own retries.
-    let [candidate] = await lock(candidates(input.deviceId));
-    if (!candidate && input.deviceId) [candidate] = await lock(candidates());
+    const [candidate] = await lock(candidates());
     if (!candidate) return null;
 
     const execution =
@@ -716,6 +721,11 @@ export async function claimImageProcessingJob(
         input.leaseMs,
       ));
     if (!execution) return null;
+    if (devicePull)
+      await recordDeviceAdmission(
+        databaseForTransaction(tx),
+        candidate.runOwned,
+      );
     // A device lease can lapse while every device idles; the wake rings then.
     if (execution.kind === "image.device")
       await armDeviceWake(databaseForTransaction(tx));
@@ -776,6 +786,7 @@ export async function claimImageProcessingJob(
     const {
       previousAttemptId: _previousAttemptId,
       executionId: _executionId,
+      runOwned: _runOwned,
       ...claimed
     } = candidate;
     return {
@@ -794,7 +805,7 @@ export async function claimImageProcessingJob(
  * lease no newer claim replaced still belongs to it, so a late result is
  * adopted rather than dropped; a reclaim replaces the token atomically.
  */
-export const attemptOwnsExecution = (attemptId: string) =>
+const attemptOwnsExecution = (attemptId: string) =>
   sql<boolean>`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${attemptId}::uuid)`;
 
 /** Read the one output key bound to the current attempt before validating its bytes. */
@@ -1962,7 +1973,7 @@ export async function releaseAssignedImageProcessingJob(
 }
 
 /** The device lease each renewal extends to. */
-export const DEVICE_LEASE_RENEWAL_MS = 60_000;
+const DEVICE_LEASE_RENEWAL_MS = 60_000;
 
 /**
  * A device heartbeat: extend the attempt's Job lease by 60 s while it still

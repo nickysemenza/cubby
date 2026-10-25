@@ -206,6 +206,109 @@ describe("background companion leases", () => {
     expect(order.filter((id) => owned.includes(id))).toHaveLength(6);
   });
 
+  // Review finding: the different-device preference filtered candidates
+  // before the owed class was chosen, so a device's own released backfill
+  // lost its turn to fresh Run work for as long as Run work kept arriving.
+  it("gives a device its own released backfill when backfill's turn comes", async () => {
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    const released = await claim();
+    if (released?.id !== backfill) throw new Error("Expected backfill lease");
+    await assign(released);
+    expect(
+      await releaseAssignedImageProcessingJob(ctx.db, {
+        jobId: released.id,
+        attemptId: released.attemptId,
+        userId,
+        deviceId,
+      }),
+    ).toBe(true);
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const owned: string[] = [];
+    for (let index = 0; index < 5; index++)
+      owned.push(
+        await job(
+          IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+          "image/jpeg",
+          runId,
+        ),
+      );
+    const order: string[] = [];
+    for (let pull = 0; pull < 5; pull++) {
+      const lease = await claim();
+      if (!lease) continue;
+      await assign(lease);
+      order.push(lease.id);
+    }
+    expect(order).toEqual([...owned.slice(0, 4), backfill]);
+  });
+
+  // Review finding: the streak reclassified past services by current Run
+  // ownership, so a Run finishing turned its four services into backfill and
+  // the next Run began a fresh owned streak while backfill waited.
+  it("counts a service by the class it was admitted under", async () => {
+    const first = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    for (let index = 0; index < 4; index++) {
+      await job(
+        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        "image/jpeg",
+        first,
+      );
+      const lease = await claim(crypto.randomUUID());
+      if (!lease) throw new Error("Expected Run lease");
+      await assign(lease);
+    }
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, first));
+    const next = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION, "image/jpeg", next);
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    expect((await claim(crypto.randomUUID()))?.id).toBe(backfill);
+  });
+
+  // Review finding: concurrent pulls at the last owned slot both read the
+  // streak before either service was recorded, so both took Run work.
+  it("serializes concurrent pulls at backfill's turn", async () => {
+    const owner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    for (let index = 0; index < 3; index++) {
+      await job(
+        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        "image/jpeg",
+        owner,
+      );
+      const lease = await claim(crypto.randomUUID());
+      if (!lease) throw new Error("Expected Run lease");
+      await assign(lease);
+    }
+    for (let index = 0; index < 2; index++)
+      await job(
+        IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        "image/jpeg",
+        owner,
+      );
+    const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
+    // One owned slot remains: of two simultaneous pulls, one serves it and the
+    // other is backfill's turn.
+    const leases = await Promise.all([
+      claim(crypto.randomUUID()),
+      claim(crypto.randomUUID()),
+    ]);
+    expect(leases.map((lease) => lease?.id)).toContain(backfill);
+  });
+
   // Review finding: the backfill turn counted any Job with a runId as
   // run-owned and reset only on runId-less claims, while selection owns work
   // by an active, member-visible Run; and it counted rows by their last

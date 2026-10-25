@@ -104,10 +104,15 @@ Run, Retry now and explain.
 Device pulls apply the same two classes to one claim at a time
 (`generic/jobs/repo/device-admission.ts`): an active, member-visible Run's
 parked work leads, and after `DEVICE_OWNED_STREAK` (`1 / JOB_BACKFILL_SHARE -
-1`) run-owned device services in a row, the next pull serves backfill. A
-service is a claim handed over to a device (an assigned attempt), so each
-reclaim counts; ownership is selection's own `jobRunOwned`, so serving an
-ended Run's work is backfill and resets the turn.
+1`) run-owned device services in a row, the next pull serves backfill. The
+owed class is chosen first; a device's preference for work another device
+last ran only orders candidates within it. A service is one device claim
+(each reclaim counts), classified when admitted by selection's own
+`jobRunOwned`: serving an ended Run's work is backfill and resets the turn,
+and a Run ending later never reclassifies services already counted. The
+streak lives in the `image.device` row of `JobLaneAdmission`, which each
+device claim locks and updates in its transaction, so concurrent pulls take
+their turns one at a time.
 
 ## Durable invalidation
 
@@ -263,8 +268,8 @@ The `jobs.retention` Job prunes completed and cancelled Jobs older than
 cleanup reads finished rows), and all domain evidence (image attempts, AI
 evaluations, Run history, audit) stay.
 
-`jobKindAdmission` reports the room a producer has under its kind's
-`maxQueued`; the watchdog raises `over_capacity` past it.
+A kind's `maxQueued` is a watchdog bound, not an admission gate: the watchdog
+raises `over_capacity` past it, and producers pace themselves (see Producers).
 
 ## Producers
 
