@@ -77,7 +77,7 @@ struct ActivityView: View {
         guard let processingList else { return nil }
         switch processingList.phase {
         case .failed(let message), .unavailable(let message): return message
-        default: return processingList.refreshError ?? processingList.enrichment.errors.first
+        default: return processingList.refreshError
         }
     }
 
