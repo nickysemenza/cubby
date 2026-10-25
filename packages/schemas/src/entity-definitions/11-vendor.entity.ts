@@ -164,30 +164,6 @@ export default defineEntity({
           filters: [{ id: "needsClassification", value: "true" }],
         },
       ],
-      read: {
-        relations: [
-          "defaultSpendingCategoryName",
-          "defaultSpendingCategoryEmoji",
-        ],
-        media: ["logo", "displayImages"],
-        derived: [
-          "role",
-          "purchaseCount",
-          "brandedProductCount",
-          "brandCategoryCount",
-          "purchasedBrandProductCount",
-          "brandSpend",
-          "expenseCount",
-          "firstPurchaseDate",
-          "documentedPurchaseCount",
-          "missingItemizationCount",
-          "spend",
-          "latestPurchaseDate",
-          "mailSearch",
-          "fieldResolutions",
-        ],
-        quality: ["dataQuality"],
-      },
       totals: [
         { id: "spend", label: "Spend", keys: ["spend"], format: "currency" },
         {

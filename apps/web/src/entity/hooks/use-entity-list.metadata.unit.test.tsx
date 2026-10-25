@@ -52,27 +52,12 @@ const queryOptions = () => ({
       {
         id: "PRD-TEST",
         name: "Example product",
-        notes: null,
+        notes: "Example note",
         brandId: "VEN-22222",
       },
     ],
     meta: { pageIndex: 0, pageSize: 25, totalCount: 1 },
-    deferredGroups: [{ id: "derived" as const, fields: ["notes"] }],
   }),
-  progressive: {
-    enrich: async () => ({
-      groups: [
-        {
-          id: "derived" as const,
-          fields: ["notes"],
-          state: "ready" as const,
-          data: [{ id: "PRD-TEST", notes: "Example note" }],
-        },
-      ],
-      missingIds: [],
-    }),
-    summary: async () => ({}),
-  },
 });
 
 function MetadataTable({

@@ -82,7 +82,6 @@ export default defineEntity(
       },
       list: {
         links: [{ label: "Import", path: "/recipes/import" }],
-        read: { media: ["displayImages"], quality: ["dataQuality"] },
       },
     },
     model: {

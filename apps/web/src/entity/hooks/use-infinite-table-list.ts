@@ -27,13 +27,6 @@ import {
   usePaginatedTableCore,
 } from "../../ui/hooks/use-paginated-table-core";
 import type { TableStateReturn } from "../table/use-table-state";
-import type {
-  ListGroupState,
-  ListEnrichmentFailure,
-  ListReadGroup,
-} from "./progressive-list";
-import { useProgressiveList } from "./use-progressive-list";
-
 interface UseInfiniteTableListOptions<
   TFilters,
   TData extends IdentifiedListRow,
@@ -47,7 +40,6 @@ interface UseInfiniteTableListOptions<
   groupBy?: ListGroupBy[];
   /** A declared tree's scope for the paged rows (`roots` when nested). */
   nesting?: ListNesting;
-  visibleFields?: readonly string[];
 }
 
 export interface InfiniteScrollControls<
@@ -79,14 +71,7 @@ interface UseInfiniteTableListReturn<
   sums?: Record<string, number>;
   /** The declared list totals as the server words them, by total id. */
   totalLabels?: Record<string, string>;
-  deferredFields: readonly string[];
-  enrichmentVersion: number;
-  summaryState: ListGroupState;
-  enrichmentFailures: ListEnrichmentFailure[];
-  retryEnrichment: (pageIndex: number, group: ListReadGroup) => Promise<void>;
-  retrySummary: () => void;
-  enrichmentState: (id: string, field: string) => ListGroupState | undefined;
-  isFieldReady: (id: string, field: string) => boolean;
+  derived: ListQueryResponse<TData>["meta"]["derived"];
   groups?: ListGroupSummary[];
   memberships?: ListGroupMembership[];
   isLoading: boolean;
@@ -214,7 +199,6 @@ export function useInfiniteTableList<
   tableState,
   groupBy,
   nesting,
-  visibleFields,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData,
@@ -280,6 +264,13 @@ export function useInfiniteTableList<
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const lastMeta = infiniteData?.pages.at(-1)?.meta;
   const groups = infiniteData?.pages[0]?.meta?.groups;
+  const derived = useMemo(() => {
+    const combined: NonNullable<ListQueryResponse<TData>["meta"]["derived"]> =
+      {};
+    for (const page of infiniteData?.pages ?? [])
+      Object.assign(combined, page.meta.derived);
+    return combined;
+  }, [infiniteData]);
   const memberships = useMemo(() => {
     if (
       !infiniteData?.pages.some((page) => page.meta.memberships !== undefined)
@@ -295,17 +286,6 @@ export function useInfiniteTableList<
       }),
     );
   }, [infiniteData]);
-  const progressive = useProgressiveList({
-    pages: infiniteData?.pages,
-    scope,
-    queryKey: infiniteQueryKey,
-    plan: firstPageOptions,
-    paused: isPlaceholderData,
-    refreshing: isRefetching && !isFetchingNextPage,
-    visibleFields,
-  });
-  const data = firstPageOptions.progressive ? progressive.data : flatData;
-
   type FetchResult = Awaited<ReturnType<typeof fetchNextPage>>;
   const nextPageInFlightRef = useRef<Promise<FetchResult> | null>(null);
   const queryScope = scope;
@@ -406,28 +386,11 @@ export function useInfiniteTableList<
 
   return {
     pages: infiniteData?.pages,
-    data,
+    data: flatData,
     totalCount,
-    sums: firstPageOptions.progressive
-      ? progressive.totals?.sums
-      : isPlaceholderData
-        ? undefined
-        : lastMeta?.sums,
-    totalLabels: firstPageOptions.progressive
-      ? progressive.totals?.totalLabels
-      : isPlaceholderData
-        ? undefined
-        : lastMeta?.totalLabels,
-    summaryState: firstPageOptions.progressive
-      ? progressive.summaryState
-      : { state: "ready" },
-    enrichmentState: progressive.enrichmentState,
-    isFieldReady: progressive.isFieldReady,
-    enrichmentFailures: progressive.enrichmentFailures,
-    retryEnrichment: progressive.retryEnrichment,
-    retrySummary: progressive.retrySummary,
-    deferredFields: progressive.deferredFields,
-    enrichmentVersion: progressive.renderVersion,
+    sums: isPlaceholderData ? undefined : lastMeta?.sums,
+    totalLabels: isPlaceholderData ? undefined : lastMeta?.totalLabels,
+    derived,
     groups,
     memberships,
     isLoading,

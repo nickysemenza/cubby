@@ -202,12 +202,6 @@ export default defineEntity(
             },
           },
         ],
-        read: {
-          relations: ["product", "location", "ownerLedgerPartyId"],
-          derived: ["valuation", "effectiveOwnership", "fieldResolutions"],
-          media: ["displayImages"],
-          quality: ["dataQuality"],
-        },
         totals: [
           {
             id: "valuation",

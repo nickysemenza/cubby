@@ -7,11 +7,6 @@ import {
   type EntityListInputByEntity,
   type EntityListResultByEntity,
   listEntities,
-  entityListInputSchema,
-  entityListBaseOutputSchema,
-  entityListEnrichmentInputSchema,
-  entityListEnrichmentOutputSchema,
-  entityListSummaryOutputSchema,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
 
@@ -99,27 +94,6 @@ export const entityListContract = defineContract(
     selectionIds: query({
       input: entitySelectionIdsInputSchema,
       output: entitySelectionIdsOutputSchema,
-      observability: { entities: listEntities },
-    }),
-    listBase: query({
-      note: "The progressive list split for native; agents use entity_read.list",
-      input: entityListInputSchema,
-      output: entityListBaseOutputSchema,
-      nativeModels: { input: "json", output: "json" },
-      observability: { entities: listEntities },
-    }),
-    listEnrichment: query({
-      note: "The progressive list split for native; agents use entity_read.list",
-      input: entityListEnrichmentInputSchema,
-      output: entityListEnrichmentOutputSchema,
-      nativeModels: { input: "json", output: "json" },
-      observability: { entities: listEntities },
-    }),
-    listSummary: query({
-      note: "Full-filter totals; entity_read.list returns its total",
-      input: entityListInputSchema,
-      output: entityListSummaryOutputSchema,
-      nativeModels: { input: "json", output: "json" },
       observability: { entities: listEntities },
     }),
     facetCounts: query({

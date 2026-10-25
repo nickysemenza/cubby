@@ -32,20 +32,7 @@ export default defineEntity({
         },
       ],
     },
-    list: {
-      read: {
-        relations: [
-          "fromPartyId",
-          "toPartyId",
-          "toPartyName",
-          "sourceClaims",
-          "evidenceTransactionIds",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-        derived: ["classification"],
-      },
-    },
+    list: {},
     titleField: "fromPartyName",
     domain: "finance",
     description: "Transfers recorded between ledger parties.",

@@ -39,19 +39,7 @@ export default defineEntity({
         },
       ],
     },
-    list: {
-      read: {
-        relations: [
-          "providerVendorId",
-          "ledgerPartyId",
-          "providerVendorName",
-          "ledgerPartyName",
-        ],
-        derived: ["transactionCount"],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
-    },
+    list: {},
     titleField: "name",
     domain: "finance",
     description: "Accounts that provide settlement evidence.",

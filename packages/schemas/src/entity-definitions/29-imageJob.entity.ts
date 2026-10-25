@@ -141,7 +141,7 @@ export default defineEntity({
     },
     list: {
       // The thumbnail borrows the Image the job processes; quality is the job's own checks.
-      read: { media: ["displayImages"], quality: ["dataQuality"] },
+
       savedViews: [
         {
           id: "attention",

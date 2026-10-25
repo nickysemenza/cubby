@@ -188,28 +188,6 @@ export default defineEntity({
           sort: [{ id: "updatedAt", desc: true }],
         },
       ],
-      read: {
-        relations: [
-          "projectId",
-          "subjectProductId",
-          "parentTaskId",
-          "projectName",
-          "subjectProductName",
-          "assigneeId",
-          "assigneeName",
-          "parentTaskName",
-          "blockedByIds",
-          "blockingIds",
-        ],
-        derived: [
-          "fieldResolutions",
-          "subtaskCount",
-          "doneSubtaskCount",
-          "trade",
-        ],
-        media: ["images", "displayImages"],
-        quality: ["dataQuality"],
-      },
       views: [
         "table",
         {

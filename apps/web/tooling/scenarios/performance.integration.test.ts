@@ -126,7 +126,7 @@ it("seeds connected performance history readable by the real Work queue", async 
       { dataStatus: ["needs_data"] },
       [{ orderBy: "dataQuality", direction: "asc" }],
       { pageIndex: 0, pageSize: 25 },
-      { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+      { kind: "selected", fields: ["dataQuality"] },
     ),
   );
   expect(parcels.result.count).toBe(1);

@@ -41,20 +41,7 @@ export default defineEntity({
       description: "Record packages through the shipping evidence workflow.",
     },
     icons: { phosphor: "Package", sfSymbol: "shippingbox", emoji: "📦" },
-    list: {
-      read: {
-        media: ["displayImages"],
-        relations: ["purchaseName", "carrierName", "vendorId", "vendorName"],
-        quality: ["dataQuality"],
-        derived: [
-          "firstEventDate",
-          "lastEventDate",
-          "eventSpanHours",
-          "eventSpanLabel",
-          "eventCount",
-        ],
-      },
-    },
+    list: {},
     detail: {
       omitRelations: {
         "tracking-emails": "Shown with witnessed paths in Connected records.",

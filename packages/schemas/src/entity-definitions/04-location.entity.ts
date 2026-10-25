@@ -223,12 +223,6 @@ export default defineEntity(
             },
           },
         ],
-        read: {
-          relations: ["product", "children", "parent", "inventoryEntries"],
-          derived: ["valuation", "valuationLabel"],
-          media: ["images", "displayImages"],
-          quality: ["dataQuality"],
-        },
         views: [
           { kind: "slot", id: "gallery", label: "Contents" },
           "table",

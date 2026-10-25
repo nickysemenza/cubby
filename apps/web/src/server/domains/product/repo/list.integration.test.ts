@@ -497,7 +497,17 @@ describe("product list staged projections", () => {
       pagination,
       "page",
       undefined,
-      { kind: "enrichment", groups: ["derived"] },
+      {
+        kind: "selected",
+        fields: [
+          "price",
+          "pricing",
+          "quantityLedger",
+          "onHandUnits",
+          "quantityVariance",
+          "expenseTotal",
+        ],
+      },
     );
     expect(enrichment.data).toHaveLength(1);
     expect(enrichment.data[0]).toMatchObject({

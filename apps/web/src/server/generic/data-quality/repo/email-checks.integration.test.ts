@@ -208,7 +208,7 @@ describe("Email data quality", () => {
         { dataGap: ["email_not_imported"] },
         [{ orderBy: "dataQuality", direction: "asc" }],
         { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+        { kind: "selected", fields: ["dataQuality"] },
       ),
     );
     expect(filtered.result.count).toBe(4);
@@ -232,7 +232,7 @@ describe("Email data quality", () => {
         { dataGap: ["email_not_imported"] },
         [],
         { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: [], groups: [] },
+        { kind: "selected", fields: [] },
         "count",
       ),
     );
@@ -245,7 +245,7 @@ describe("Email data quality", () => {
         { dataStatus: ["needs_data"] },
         [],
         { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: [], groups: [] },
+        { kind: "selected", fields: [] },
         "count",
       ),
     );

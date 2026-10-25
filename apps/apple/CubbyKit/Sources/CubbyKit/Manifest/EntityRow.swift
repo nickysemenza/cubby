@@ -8,8 +8,6 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
     public let subtitle: String?
     public let imageURL: URL?
     public let raw: JSONValue
-    public let pendingFields: Set<String>
-    public let failedFields: Set<String>
 
     public var redirectedFrom: String? { raw["redirectedFrom"]?.stringValue }
     public var previousShortcodes: [String] {
@@ -17,16 +15,13 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
     }
 
     public init(
-        id: String, title: String, subtitle: String?, imageURL: URL?, raw: JSONValue,
-        pendingFields: Set<String> = [], failedFields: Set<String> = []
+        id: String, title: String, subtitle: String?, imageURL: URL?, raw: JSONValue
     ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.imageURL = imageURL
         self.raw = raw
-        self.pendingFields = pendingFields
-        self.failedFields = failedFields
     }
 
     /// The row's `raw` payload as a typed alias (`row.decode(ProductDetail.self)`), for a slot

@@ -156,12 +156,6 @@ export default defineEntity(
             },
           },
         ],
-        read: {
-          relations: ["product", "appearsInRecipes"],
-          derived: ["ownRecipeCount"],
-          media: ["displayImages"],
-          quality: ["dataQuality"],
-        },
         links: [
           { label: "Equivalences", path: "/ingredients/equivalences" },
           { label: "Workbench", path: "/ingredients/workbench" },

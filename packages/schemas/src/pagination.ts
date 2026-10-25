@@ -352,6 +352,7 @@ export function buildPaginatedResponse<T>(
     totalLabels?: Record<string, string>;
     groups?: ListGroupSummary[];
     memberships?: ListGroupMembership[];
+    derived?: z.infer<typeof paginatedMetaSchema>["derived"];
     membershipCount?: number;
   } = {},
 ) {
@@ -361,6 +362,7 @@ export function buildPaginatedResponse<T>(
     pageSize: pagination.pageSize,
     totalCount: count,
   };
+  if (aggregates.derived) meta.derived = aggregates.derived;
   if (aggregates.sums) meta.sums = aggregates.sums;
   if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
   if (aggregates.groups) meta.groups = aggregates.groups;

@@ -81,11 +81,6 @@ export default defineEntity({
       ],
     },
     list: {
-      read: {
-        relations: ["locationId", "plantingIds", "locationName", "plantings"],
-        media: ["images", "displayImages"],
-        quality: ["dataQuality"],
-      },
       timeline: { fields: ["observedOn"] },
     },
   },

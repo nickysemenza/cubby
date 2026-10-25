@@ -393,7 +393,7 @@ describe("Shipment evidence quality", () => {
       { dataGap: ["shipment_span"] },
       [{ orderBy: "dataQuality", direction: "asc" }],
       { pageIndex: 0, pageSize: 100 },
-      { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+      { kind: "selected", fields: ["dataQuality"] },
     );
     expect(filtered.data.map((row) => row.id).sort()).toEqual(
       parcels
@@ -406,7 +406,7 @@ describe("Shipment evidence quality", () => {
       {},
       [{ orderBy: "dataQuality", direction: "asc" }],
       { pageIndex: 0, pageSize: 100 },
-      { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+      { kind: "selected", fields: ["dataQuality"] },
     );
     expect(
       sorted.data.map((row) => dataQuality.parse(row.dataQuality).score),

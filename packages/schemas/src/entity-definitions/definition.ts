@@ -17,13 +17,6 @@ import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 
-const entityReadCapability = z.enum([
-  "media",
-  "quality",
-  "relations",
-  "derived",
-]);
-
 /** The scalar shapes the entity compiler can persist and project. */
 /** One `model.derived.<key>.stored.inputs` row (ADR 0021), for shared input lists. */
 export type DerivedStoredInput = {
@@ -1609,29 +1602,6 @@ const buildMetadataSchemas = () => {
         ),
       list: z
         .object({
-          /** Deferred ownership; remaining canonical list fields are core. */
-          read: z
-            .object({
-              media: z.array(nonEmptyString()).default([]),
-              quality: z.array(nonEmptyString()).default([]),
-              relations: z.array(nonEmptyString()).default([]),
-              derived: z.array(nonEmptyString()).default([]),
-              dependencies: z
-                .partialRecord(
-                  entityReadCapability,
-                  z.array(entityReadCapability),
-                )
-                .default({}),
-            })
-            .strict()
-            .optional()
-            .default({
-              media: [],
-              quality: [],
-              relations: [],
-              derived: [],
-              dependencies: {},
-            }),
           /** The first view is the default; `table` when omitted. */
           views: z.array(listViewSchema).min(1).optional().default(["table"]),
           /** URL-compatible aliases for retired view ids, mapped before rendering. */
@@ -1884,7 +1854,6 @@ const buildMetadataSchemas = () => {
             viewAliases,
             totals,
             metrics,
-            read,
             shelfSubtitleOverride,
             titleSubtitle,
             initialFilter,
@@ -1901,7 +1870,6 @@ const buildMetadataSchemas = () => {
             viewAliases,
             totals,
             metrics,
-            read,
             shelf:
               shelfSubtitleOverride === undefined
                 ? null

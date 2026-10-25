@@ -66,14 +66,15 @@ describe("declared list scopes", () => {
     entity: "ingredient" | "task" | "expense",
     filters: ListFilterValues,
   ) => {
-    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].base(
+    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
       context(),
       {
         filters,
         pagination: page,
       },
+      ["id"],
     );
-    return sorted(pageResult.data.map((row) => row.id));
+    return sorted(pageResult.items.map((row) => row.id));
   };
   /** Codes of `rows` matching `where`, sorted. */
   const matching = async (

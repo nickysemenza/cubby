@@ -81,7 +81,6 @@ function Page({
   storedOperations = stored,
   readRecord,
   mutationPort,
-  isFieldReady,
 }: {
   record?: PageRecord;
   extra?: boolean;
@@ -89,7 +88,6 @@ function Page({
   storedOperations?: StoredSuggestionOperations;
   readRecord?: () => Promise<PageRecord | null>;
   mutationPort?: EntityMutationPort;
-  isFieldReady?: (id: string, field: string) => boolean;
 }) {
   return (
     <RecordSuggestionsProvider
@@ -104,7 +102,6 @@ function Page({
       storedSuggestionOperations={storedOperations}
       readRecord={readRecord}
       mutationPort={mutationPort}
-      isFieldReady={isFieldReady}
     >
       <RecordFieldSuggestion record={record} field="categoryId" surface="cell">
         <span>{record.categoryId ? "Saved category" : "Empty category"}</span>
@@ -151,28 +148,6 @@ function operationsReturning(calls: FieldSuggestionsInput[]) {
 }
 
 describe("suggestion lifecycle", () => {
-  it("waits for hidden basis evidence while retaining an explicit null target", async () => {
-    const calls: FieldSuggestionsInput[] = [];
-    const operations = operationsReturning(calls);
-    const pendingEvidence = vi.fn(
-      (_id: string, field: string) => field !== "classificationEvidence",
-    );
-    const page = (isFieldReady: (id: string, field: string) => boolean) => (
-      <Page operations={operations} isFieldReady={isFieldReady} />
-    );
-    const view = render(page(pendingEvidence), { wrapper: harness.wrapper });
-    await waitFor(() =>
-      expect(pendingEvidence).toHaveBeenCalledWith(
-        id,
-        "classificationEvidence",
-      ),
-    );
-    expect(calls.flatMap((call) => call.targets)).not.toContain("categoryId");
-    view.rerender(page(() => true));
-    await waitFor(() => expect(categoryButton()).toBeInTheDocument());
-    expect(calls.flatMap((call) => call.targets)).toContain("categoryId");
-  });
-
   it("refreshes only the refused finance question and preserves other field answers", async () => {
     const expenseId = testShortcode("expense", "finance-lifecycle");
     const spendingCategoryId = testShortcode(

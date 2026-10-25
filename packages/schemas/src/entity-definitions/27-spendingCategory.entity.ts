@@ -78,12 +78,6 @@ export default defineEntity({
       ],
     },
     list: {
-      read: {
-        relations: ["parentId", "productCategories"],
-        derived: ["fieldResolutions"],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       tree: {},
     },
   },

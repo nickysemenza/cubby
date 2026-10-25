@@ -127,27 +127,6 @@ export default defineEntity({
       ],
     },
     list: {
-      read: {
-        relations: [
-          "plantId",
-          "sourceProductId",
-          "locationId",
-          "taskId",
-          "plantName",
-          "sourceProductName",
-          "locationName",
-          "taskName",
-        ],
-        derived: [
-          "expectedHarvestStart",
-          "expectedHarvestEnd",
-          "expectedHarvest",
-          "guideSowWindow",
-          "guideTransplantWindow",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       views: [
         "table",
         {

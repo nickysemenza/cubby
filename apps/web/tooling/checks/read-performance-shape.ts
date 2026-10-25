@@ -1,3 +1,4 @@
+import { listReadSchema } from "~/entity/model/list-read-schema";
 import { reportSlot } from "@cubby/schemas/entity-report";
 import { z } from "zod";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
@@ -5,12 +6,6 @@ import {
   entityListInputSchema,
   listEntities,
 } from "~/entity/generated/entity-lists.gen";
-import {
-  listReadFields,
-  listGroupsForFields,
-} from "~/entity/model/list-read-schema";
-import { listEnrichmentGroups } from "~/entity/model/list-read-fields";
-
 /** Operator assertions, not inferred deployment facts. No free-form labels. */
 export const workloadContextSchema = z
   .object({
@@ -57,59 +52,10 @@ export function requestedReadMetadata(
         }
       : null;
   }
-  if (
-    ![
-      "entity.list",
-      "entity.listBase",
-      "entity.listEnrichment",
-      "entity.listSummary",
-    ].includes(operation)
-  )
-    return null;
+  if (operation !== "entity.list") return null;
   const entity = entitySchema.safeParse(input.entity);
   if (!entity.success) return null;
-  const declared = listReadFields(entity.data);
-  const projection =
-    operation === "entity.listBase"
-      ? "base"
-      : operation === "entity.listEnrichment"
-        ? "enrichment"
-        : operation === "entity.listSummary"
-          ? "summary"
-          : "full";
-  const requestedFields = z.array(z.string()).max(500).safeParse(input.fields);
-  if (
-    projection === "enrichment" &&
-    (!requestedFields.success ||
-      requestedFields.data.some(
-        (field) =>
-          !listEnrichmentGroups.some((group) =>
-            declared[group].includes(field),
-          ),
-      ))
-  )
-    return null;
-  const groups =
-    projection === "enrichment" && requestedFields.success
-      ? {
-          success: true as const,
-          data: listGroupsForFields(entity.data, requestedFields.data),
-        }
-      : {
-          success: true as const,
-          data:
-            projection === "base"
-              ? ["core" as const]
-              : projection === "summary"
-                ? []
-                : [
-                    "core" as const,
-                    ...listEnrichmentGroups.filter(
-                      (group) => declared[group].length > 0,
-                    ),
-                  ],
-        };
-  if (!groups.success) return null;
+  const declared = Object.keys(listReadSchema(entity.data).shape);
   const filters = record.safeParse(input.filters ?? {});
   const contract = entityListInputSchema.options.find(
     (option) => option.shape.entity.value === entity.data,
@@ -119,24 +65,10 @@ export function requestedReadMetadata(
     evidence: "partial",
     kind: "list",
     entity: entity.data,
-    projection,
-    groups: groups.data,
-    declaredFields:
-      projection === "summary"
-        ? null
-        : projection === "enrichment" && requestedFields.success
-          ? [...new Set(requestedFields.data)]
-          : groups.data.flatMap((group) => declared[group]),
+    projection: "full",
+    declaredFields: declared,
     requestedSort: null,
     requestedGrouping: null,
-    declaredGroupDependencies:
-      projection === "summary" || projection === "base"
-        ? null
-        : Object.fromEntries(
-            Object.entries(declared.dependencies).filter(([group]) =>
-              groups.data.some((requested) => requested === group),
-            ),
-          ),
     filterFields: filters.success
       ? allowed.filter((key) => Object.hasOwn(filters.data, key))
       : null,

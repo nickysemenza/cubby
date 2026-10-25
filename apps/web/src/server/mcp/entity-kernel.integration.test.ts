@@ -583,8 +583,17 @@ describe("MCP entity kernel boundary", () => {
       .object({ action: z.literal("list"), entity: z.literal("product") })
       .passthrough()
       .parse(full.structuredContent);
-    expect(summary.structuredContent).toEqual(
-      projectEntityResult({ action: "list" }, fullResult),
+    // A narrow read has provenance only for the inherited fields it loaded.
+    const withoutDerived = z
+      .object({
+        meta: z
+          .object({})
+          .catchall(z.unknown())
+          .transform(({ derived: _derived, ...meta }) => meta),
+      })
+      .passthrough();
+    expect(withoutDerived.parse(summary.structuredContent)).toEqual(
+      withoutDerived.parse(projectEntityResult({ action: "list" }, fullResult)),
     );
     expect(summary.structuredContent).toMatchObject({
       items: [

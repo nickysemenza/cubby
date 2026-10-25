@@ -116,12 +116,6 @@ export default defineEntity({
       activityRelations: [{ relation: "plantings", dateField: "sowedOn" }],
     },
     list: {
-      read: {
-        relations: ["ingredientId", "ingredientName"],
-        derived: ["guideSowWindow", "guideTransplantWindow", "routes"],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],
     },
   },

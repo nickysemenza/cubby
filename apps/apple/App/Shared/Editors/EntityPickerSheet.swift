@@ -222,10 +222,9 @@ struct EntityPickerSheet: View {
         }
         return EntityListPageSource(
             id: scope,
-            enrichesRows: !searchRPC,
             loadPage: { page in
                 guard ready, !searchRPC else { return emptyPage(page) }
-                return try await client.progressiveList(
+                return try await client.list(
                     descriptor, page: page, pageSize: 25, filters: filters)
             },
             searchPage: { query, page in
@@ -248,7 +247,7 @@ struct EntityPickerSheet: View {
                 // Search stays on the scoped list route; a global search would widen candidates.
                 var scopedFilters = filters
                 if let searchKey { scopedFilters.set([query], for: searchKey) }
-                return try await client.progressiveList(
+                return try await client.list(
                     descriptor, page: page, pageSize: 25, filters: scopedFilters)
             })
     }

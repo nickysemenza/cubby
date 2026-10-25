@@ -106,8 +106,7 @@ test("linked Expense categories display their readable label and transaction exp
   });
   const enrichment = page.waitForResponse(
     (response) =>
-      dispatchesOperation(response.request(), "entity.listEnrichment") &&
-      response.ok(),
+      dispatchesOperation(response.request(), "entity.list") && response.ok(),
   );
   await gotoAuthenticatedPage(
     page,

@@ -2,8 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Entity } from "@cubby/schemas/entity";
 
-import type { ListEnrichmentGroup } from "~/entity/model/list-read-fields";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import type { ListBindingGroup } from "~/server/generic/list/repo/list-projection";
 import { type AppSpan, withTrace } from "~/server/observability/tracing";
 
 interface ListReadTraceContext {
@@ -78,10 +78,10 @@ export async function traceListCount(
   );
 }
 export function traceListGroup<T>(
-  groups: ListEnrichmentGroup | readonly ListEnrichmentGroup[],
+  groups: ListBindingGroup | readonly ListBindingGroup[],
   run: () => Promise<T>,
 ): Promise<T> {
-  return withTrace("entity.list.enrichment.group", run, {
+  return withTrace("entity.list.binding", run, {
     ...dimensions(),
     "list.groups": [groups].flat().join(","),
   });

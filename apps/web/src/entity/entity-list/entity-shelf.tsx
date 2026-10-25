@@ -4,13 +4,11 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { entities, entityDetailParams } from "~/entity/entities";
-import type { ListGroupState } from "~/entity/hooks/progressive-list";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
 import { EntityEmptyState } from "~/entity/table/entity-empty-states";
 import { ShelfCard, ShelfGrid } from "~/entity/table/shelf";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 
-import { DeferredListValue } from "./deferred-list-value";
 import { recordCaption } from "./record-caption";
 
 /**
@@ -75,7 +73,6 @@ export function EntityShelf<TRow extends { id: string }>({
   onRowHoverEnd,
   currentRowId,
   onRetry,
-  enrichmentState,
   emptyState,
 }: {
   emptyState?: ReactNode;
@@ -91,7 +88,6 @@ export function EntityShelf<TRow extends { id: string }>({
   onRowHoverEnd?: (record: TRow) => void;
   currentRowId?: string;
   onRetry?: () => void;
-  enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
 }) {
   return (
     <ShelfGrid
@@ -107,7 +103,6 @@ export function EntityShelf<TRow extends { id: string }>({
       renderCard={(record) => {
         const row = shelfRowSchema.parse(record);
         const images = shelfImages(entity, row);
-        const mediaState = enrichmentState?.(row.id, "displayImages");
         return (
           <ShelfCard
             key={row.id}
@@ -119,30 +114,9 @@ export function EntityShelf<TRow extends { id: string }>({
                 : entityDetailParams(row.id)
             }
             image={images[0]?.url}
-            media={
-              mediaState && mediaState.state !== "ready" ? (
-                <div
-                  className="absolute inset-0 flex items-center justify-center"
-                  aria-label={
-                    mediaState.state === "loading" ||
-                    mediaState.state === "pending"
-                      ? "Loading media"
-                      : "Media unavailable"
-                  }
-                >
-                  {mediaState.state === "error" ? (
-                    <span className="p-3 text-xs text-destructive">
-                      {mediaState.error}
-                    </span>
-                  ) : (
-                    <DeferredListValue state={mediaState} label="media" />
-                  )}
-                </div>
-              ) : undefined
-            }
             extraCount={images.length - 1}
             title={shelfTitle(entity, row)}
-            subtitle={recordCaption(entity, row, { enrichmentState })}
+            subtitle={recordCaption(entity, row)}
             entity={entity}
             compact={compact}
             onInspect={onInspect ? () => onInspect(record) : undefined}

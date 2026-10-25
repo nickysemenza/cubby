@@ -80,12 +80,6 @@ export default defineEntity({
           filters: [{ id: "acquiredAt", value: "false" }],
         },
       ],
-      read: {
-        relations: ["candidates", "candidateItems"],
-        derived: ["candidateCount", "priceRange"],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       extraActions: ["markPurchased"],
       totals: [
         {

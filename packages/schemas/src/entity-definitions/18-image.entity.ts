@@ -103,7 +103,7 @@ export default defineEntity(
         ],
       },
       // An uploaded image displays itself; it loads as list media.
-      list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
+      list: {},
     },
     model: {
       fields: [

@@ -193,7 +193,6 @@ export default defineEntity({
       ],
     },
     list: {
-      read: { media: ["displayImages"], quality: ["dataQuality"] },
       views: ["table"],
       savedViews: [
         {

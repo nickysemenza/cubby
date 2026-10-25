@@ -174,7 +174,7 @@ export const renderKernelBindingsArtifacts = (
       source:
         generatedHeader +
         'import { deferredService } from "~/server/http/deferred-service";\n' +
-        'import { defineProgressiveListOperations } from "~/server/entity-kernel/list-read";\n\n' +
+        'import { defineListOperations } from "~/server/entity-kernel/list-read";\n\n' +
         "// Only the selected entity loads its authoritative repository. No context is retained.\n" +
         `export const ENTITY_LIST_READ_OPERATIONS = {\n${kernelEntities
           .filter((entity) => hasGenericListOperation(entity))
@@ -184,7 +184,7 @@ export const renderKernelBindingsArtifacts = (
               throw new EntityDeclarationError(
                 `${entity.key}.ports.repository is required for a list reader.`,
               );
-            return `  ${JSON.stringify(entity.key)}: deferredService(async () => defineProgressiveListOperations((await import(${JSON.stringify(port.module)})).${port.export}), () => ({})),`;
+            return `  ${JSON.stringify(entity.key)}: deferredService(async () => defineListOperations((await import(${JSON.stringify(port.module)})).${port.export}), () => ({})),`;
           })
           .join("\n")}\n} as const;\n`,
     },

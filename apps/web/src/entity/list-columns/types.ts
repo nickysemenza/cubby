@@ -30,12 +30,10 @@ type ListOverrideListOptions<
 > = Partial<
   Pick<
     UseEntityListOptions<TData, TFilters, TRow>,
-    | "additionalReadFields"
     | "deletable"
     | "deleteEmptyLabel"
     | "filterOptions"
     | "getMappings"
-    | "mappingsReadFields"
     | "hiddenFilterColumns"
     | "initialColumnVisibility"
     | "nameClassName"
@@ -105,7 +103,6 @@ export interface EntityListOverrideResult<
   below?: (list: UseEntityListReturn<TData, TFilters, TRow>) => ReactNode;
   /** A provider the whole list body renders inside. */
   /** Deferred fields required before rows are handed to a provider. */
-  wrapReadFields?: readonly string[];
   wrap?: (children: ReactNode, context: { data: TRow[] }) => ReactNode;
 }
 

@@ -207,7 +207,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             } else if let status = row.raw[key]?["status"]?.stringValue {
                 text = field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
             } else {
-                text = row.pendingFields.contains(key) ? "Loading…" : "Unavailable"
+                text = "Unavailable"
             }
             return Fact(id: key, label: field.label, value: text)
         }

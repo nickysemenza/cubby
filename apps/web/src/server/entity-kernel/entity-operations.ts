@@ -19,7 +19,7 @@ import {
 import { getErrorMessage } from "@cubby/shared";
 import { z } from "zod";
 
-import { listReadFields } from "~/entity/model/list-read-schema";
+import { listReadSchema } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
@@ -170,7 +170,7 @@ type MutationReadDemand<Read extends boolean> = Read extends true
 
 const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
   const requested = z.array(z.string()).parse(fields);
-  const allowed = Object.values(listReadFields(entity)).flat();
+  const allowed = Object.keys(listReadSchema(entity).shape);
   for (const field of requested) {
     if (!allowed.includes(field))
       throw new Error(`Unknown mutation response field: ${field}`);
@@ -463,6 +463,7 @@ const buildEntityOperations = <
               ),
               mediaPage.count,
               {
+                derived: mediaPage.derived ?? {},
                 ...aggregates(
                   binding.entity,
                   "sums" in mediaPage

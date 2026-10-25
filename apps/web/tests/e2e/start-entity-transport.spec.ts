@@ -1,4 +1,3 @@
-import { chooseListView } from "./support/e2e-helpers";
 /**
  * The core entity browser runtime uses named operations
  * (docs/entities.md, "Transports").
@@ -13,14 +12,14 @@ import { chooseListView } from "./support/e2e-helpers";
  */
 
 import superjson from "superjson";
-import { entityListEnrichmentOutputSchema } from "~/entity/generated/entity-lists.gen";
+
 import { z } from "zod";
 
 import {
   BROWSER_OPERATION_PATH,
   isBrowserOperationPath,
 } from "~/lib/browser-operation-path";
-import { seedProductPrerequisite } from "./fixtures/catalog";
+
 import { createProduct } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchOperations, unbatchFor } from "./support/dispatch-wire";
@@ -134,8 +133,8 @@ test("core entity list, detail, and mutation ride named browser operations", asy
     `entity.mutate should carry the create:\n${report()}`,
   ).not.toHaveLength(0);
   expect(
-    matching("entity.listBase", '"pageIndex"'),
-    `entity.listBase should carry the product page:\n${report()}`,
+    matching("entity.list", '"pageIndex"'),
+    `entity.list should carry the product page:\n${report()}`,
   ).not.toHaveLength(0);
   const detailRequests = matching("entity.detail", '"entity":"product"');
   expect(
@@ -173,7 +172,7 @@ test("core entity list, detail, and mutation ride named browser operations", asy
         entity: "product",
       }),
       expect.objectContaining({
-        operation: "entity.listBase",
+        operation: "entity.list",
         kind: "query",
         entity: "product",
       }),
@@ -203,8 +202,8 @@ test("server error references remain usable on desktop", async ({
   let structured = false;
   await page.goto("/");
   await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (await unbatchFor(route, ["entity.listBase"])) return;
-    if (route.request().headers()["x-cubby-operation"] !== "entity.listBase") {
+    if (await unbatchFor(route, ["entity.list"])) return;
+    if (route.request().headers()["x-cubby-operation"] !== "entity.list") {
       await route.continue();
       return;
     }
@@ -224,7 +223,7 @@ test("server error references remain usable on desktop", async ({
                 message: "Synthetic structured server refusal",
                 diagnostics: {
                   origin: "server",
-                  operation: "entity.listBase",
+                  operation: "entity.list",
                   stage: "run",
                   causes: [{ name: "Error", message: responseBody, stack }],
                 },
@@ -257,7 +256,7 @@ test("server error references remain usable on desktop", async ({
     .click();
   const dialog = page.getByRole("dialog", { name: "Technical details" });
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("entity.listBase / http");
+  await expect(dialog).toContainText("entity.list / http");
   await expect(dialog).toContainText(
     "SQLSTATE 53300 <script>synthetic-inert</script>",
   );
@@ -307,125 +306,3 @@ test("server error references remain usable on desktop", async ({
 
 // The real browser must remain usable while an independent field read hangs;
 // releasing a failed group must not replace its already visible base records.
-test("base list keeps row identity, selection and phone cards while enrichment fails", async ({
-  page,
-}) => {
-  const name = `Progressive fixture ${Date.now()}`;
-  await page.goto("/");
-  const product = await seedProductPrerequisite(page, { name });
-  let failEnrichment = true;
-  let release!: () => void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  let requested!: () => void;
-  const started = new Promise<void>((resolve) => {
-    requested = resolve;
-  });
-  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (await unbatchFor(route, ["entity.listEnrichment"])) return;
-    if (
-      route.request().headers()["x-cubby-operation"] !== "entity.listEnrichment"
-    ) {
-      await route.continue();
-      return;
-    }
-    if (!failEnrichment) {
-      await route.continue();
-      return;
-    }
-    requested();
-    await held;
-    // Preserve the real exact-field acknowledgement while injecting a failure.
-    const response = await route.fetch();
-    const result = z
-      .object({ ok: z.literal(true), data: entityListEnrichmentOutputSchema })
-      .parse(superjson.deserialize(await response.json()));
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(
-        superjson.serialize({
-          ok: true,
-          data: {
-            entity: result.data.entity,
-            groups: result.data.groups.map(({ id, fields }) => ({
-              id,
-              fields,
-              state: "error",
-              error: {
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Synthetic deferred lookup failure",
-              },
-            })),
-            missingIds: [],
-          },
-        }),
-      ),
-    });
-  });
-  try {
-    await page.goto(`/products?name=${encodeURIComponent(name)}&view=table`);
-    await started;
-    const identity = page.getByRole("link", { name, exact: true }).first();
-    await expect(identity).toBeVisible();
-    await expect(identity).toHaveAttribute("href", `/products/${product.id}`);
-    const row = page.getByRole("row").filter({ has: identity });
-    await expect(row.getByLabel("Loading field").first()).toBeVisible();
-    const checkbox = row.getByRole("checkbox", { name: "Select row" });
-    await checkbox.click();
-    await expect(checkbox).toBeChecked();
-    await page.setViewportSize({ width: 390, height: 844 });
-    await expect(
-      page
-        .getByRole("list", { name: "Products list" })
-        .getByText(name, { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("checkbox", { name: "Select item", exact: true }),
-    ).toBeChecked();
-    await expect(page.getByLabel("Loading field").first()).toBeVisible();
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await chooseListView(page, "Cards");
-    const card = page
-      .locator("[data-entity-card]")
-      .filter({ has: page.getByRole("link", { name, exact: true }) });
-    await expect(card.getByLabel("Loading media").first()).toBeVisible();
-    await card.evaluate(async (element) => {
-      const animations: Animation[] = [];
-      for (
-        let ancestor: Element | null = element;
-        ancestor;
-        ancestor = ancestor.parentElement
-      ) {
-        animations.push(...ancestor.getAnimations());
-      }
-      await Promise.all(animations.map((animation) => animation.finished));
-    });
-    const before = await card.boundingBox();
-    release();
-    await expect(
-      card
-        .getByText("Synthetic deferred lookup failure", { exact: true })
-        .first(),
-    ).toBeVisible();
-    failEnrichment = false;
-    await page
-      .getByRole("button", { name: "Retry media", exact: true })
-      .first()
-      .click();
-    await expect(card.getByLabel("Loading media")).toHaveCount(0);
-    await expect(
-      card.getByText("Synthetic deferred lookup failure", { exact: true }),
-    ).toHaveCount(0);
-    const after = await card.boundingBox();
-    expect(after?.width).toBe(before?.width);
-    expect(after?.height).toBe(before?.height);
-    await expect(card.getByRole("link", { name, exact: true })).toHaveAttribute(
-      "href",
-      `/products/${product.id}`,
-    );
-  } finally {
-    release();
-  }
-});

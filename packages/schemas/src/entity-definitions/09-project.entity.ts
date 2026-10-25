@@ -237,30 +237,6 @@ export default defineEntity({
           filters: [{ id: "status", value: ["done"] }],
         },
       ],
-      read: {
-        relations: [
-          "locations",
-          "parentProjectId",
-          "parentProjectName",
-          "childProjectIds",
-          "blockedByIds",
-          "blockingIds",
-          "googleDriveFolderUrl",
-          "notionPageUrl",
-        ],
-        derived: [
-          "defaultTrade",
-          "assigneeId",
-          "assigneeName",
-          "fieldResolutions",
-          "rollup",
-          "spent",
-          "taskProgress",
-          "dates",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       totals: [
         {
           id: "costEstimate",

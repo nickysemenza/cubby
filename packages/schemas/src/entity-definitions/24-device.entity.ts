@@ -18,18 +18,7 @@ export default defineEntity({
   table: "Device",
   identifiers: { brand: "DeviceId", shortcode: "DEV-" },
   presentation: {
-    list: {
-      read: {
-        relations: [
-          "ledgerPartyId",
-          "productId",
-          "ledgerPartyName",
-          "productName",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
-    },
+    list: {},
     titleField: "name",
     domain: null,
     description: "One install of the native companion app.",

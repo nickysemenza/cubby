@@ -13,33 +13,6 @@ afterEach(() => {
 });
 
 describe("entity cards", () => {
-  it("retains card identity while deferred media is pending or fails", () => {
-    harness = createBrowserTestHarness();
-    const { rerender } = render(
-      <EntityShelf
-        entity="product"
-        items={[{ id: "PRD-2345", name: "Synthetic product" }]}
-        enrichmentState={() => ({ state: "loading" })}
-      />,
-      { wrapper: harness.wrapper },
-    );
-    expect(
-      screen.getByRole("link", { name: "Synthetic product" }),
-    ).toHaveAttribute("href", "/products/PRD-2345");
-    expect(screen.getAllByLabelText("Loading media").length).toBeGreaterThan(0);
-    rerender(
-      <EntityShelf
-        entity="product"
-        items={[{ id: "PRD-2345", name: "Synthetic product" }]}
-        enrichmentState={() => ({
-          state: "error",
-          error: "Synthetic media failure",
-        })}
-      />,
-    );
-    expect(screen.getByText("Synthetic media failure")).toBeVisible();
-  });
-
   it("sections cards by explicit membership and filters to a section", () => {
     const onFilter = vi.fn();
     render(

@@ -1,4 +1,3 @@
-import { compileListReadSchema } from "../../src/entity/model/list-read-fields.ts";
 import {
   withEntityListMedia,
   withEntityDetailMedia,
@@ -2557,17 +2556,6 @@ export const compileEntity = (
       throw new EntityDeclarationError(
         `${key}.readSchemas.list must be an object.`,
       );
-    try {
-      compileListReadSchema(
-        readSchemas.list,
-        inspector.list.read,
-        inspector.list.read.dependencies,
-      );
-    } catch (error) {
-      throw new EntityDeclarationError(
-        `${key}.presentation.list.read: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
   }
   return compiled;
 };

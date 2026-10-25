@@ -67,7 +67,7 @@ extension EntityKey {
 }
 
 extension EntityDescriptor {
-    /// The kernel list body (`entity.list`, `entity.listBase`, `entity.listSummary`): flat
+    /// The kernel list body (`entity.list`): flat
     /// filter names re-nested and typed from the catalog, a 1-based page as the 0-based
     /// `pageIndex`, `sort` (`name,-createdAt`) as `[{orderBy, direction}]`, and the
     /// ordered `groupBy` dimensions, each with its own ancestor level or calendar bucket.

@@ -184,6 +184,7 @@ import {
   listReadPlan,
   wantsListGroup,
 } from "~/server/generic/list/repo/list-projection";
+import { withPageDerived } from "~/server/generic/list/repo/page-derived";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
@@ -1210,7 +1211,9 @@ export const listProductsRead = async (
     count: totalCount,
     ...(sums ? { sums } : {}),
     ...(groups ? { groups, memberships, membershipCount } : {}),
-    data: await plan.read(db, results, projection, filtered.context),
+    ...(await withPageDerived(db, "product", results, () =>
+      plan.read(db, results, projection, filtered.context),
+    )),
   };
 };
 

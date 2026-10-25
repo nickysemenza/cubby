@@ -143,13 +143,6 @@ export default defineEntity(
             },
           },
         ],
-        read: {
-          relations: ["recipes", "recipeNames"],
-          derived: ["totals", "costTotalLabel", "cost", "calories"],
-          media: ["images", "displayImages"],
-          quality: ["dataQuality"],
-          dependencies: { derived: ["relations"] },
-        },
         views: [
           {
             kind: "slot",

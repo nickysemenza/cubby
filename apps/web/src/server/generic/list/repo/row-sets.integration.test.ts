@@ -69,14 +69,15 @@ describe("row-set filters", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
   const listed = async (entity: ListEntity, filters: ListFilterValues) => {
-    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].base(
+    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
       context(),
       {
         filters,
         pagination: page,
       },
+      ["id"],
     );
-    return sorted(pageResult.data.map((row) => row.id));
+    return sorted(pageResult.items.map((row) => row.id));
   };
   /** The live rows of `table` the retired predicate's SQL selects. */
   const oracle = async (table: string, condition: SQL) =>

@@ -100,58 +100,10 @@ export const renderEntityReadArtifacts = (
     .join("\n");
   const listReadSchemas = listEntitySpecs
     .map(
-      ({ key, inspector }) =>
-        `  ${JSON.stringify(key)}: compileListReadSchema(${key}ListItem, ${compactLiteral(inspector.list.read)}, ${compactLiteral(inspector.list.read.dependencies)}),`,
-    )
-    .join("\n");
-  const listBaseItemSchemas = listEntitySpecs
-    .map(({ key, inspector }) => {
-      const read = inspector.list.read;
-      const fields = [
-        ...read.media,
-        ...read.quality,
-        ...read.relations,
-        ...read.derived,
-      ];
-      return `export const ${key}ListBaseItem = z.object(${key}ListItem.shape).omit(${compactLiteral(Object.fromEntries(fields.map((field) => [field, true])))});`;
-    })
-    .join("\n");
-  const listBaseVariants = listEntitySpecs
-    .map(
       ({ key }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),data:z.array(${key}ListBaseItem),meta:entityListBaseMetaSchema,groups:z.array(entityListGroupSchema)})`,
+        `  ${JSON.stringify(key)}: compileListReadSchema(${key}ListItem),`,
     )
-    .join(",\n");
-  const listEnrichmentVariants = listEntitySpecs
-    .map(({ key, inspector }) => {
-      // A deferred patch may carry only fields owned by its group. A partial
-      // full-row schema applies defaults to absent core fields and erases them.
-      const readyGroups = (
-        ["media", "quality", "relations", "derived"] as const
-      )
-        .map((group) => {
-          const pick = Object.fromEntries(
-            ["id", ...inspector.list.read[group]].map((field) => [field, true]),
-          );
-          return `z.object({id:z.literal(${JSON.stringify(group)}),fields:z.array(z.string()),state:z.literal("ready"),data:z.array(z.object(${key}ListItem.shape).pick(${compactLiteral(pick)}).partial().required({id:true}))})`;
-        })
-        .join(",\n");
-      return `z.object({entity:z.literal(${JSON.stringify(key)}),groups:z.array(z.discriminatedUnion("state",[
-        z.discriminatedUnion("id",[${readyGroups}]),
-        entityListEnrichmentErrorSchema
-      ])),missingIds:z.array(z.string())})`;
-    })
-    .join(",\n");
-  const progressiveListSchemas = `
-export const entityListBaseMetaSchema = entityListMetaSchema.omit({sums:true});
-export const entityListGroupSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string())});
-${listBaseItemSchemas}
-export const entityListBaseOutputSchema = z.discriminatedUnion("entity", [${listBaseVariants}]);
-export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntities),ids:z.array(z.string().min(1)).max(500),fields:z.array(z.string().min(1)).max(500)});
-export const entityListEnrichmentErrorSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string()),state:z.literal("error"),error:publicStartOperationErrorSchema});
-export const entityListEnrichmentOutputSchema = z.discriminatedUnion("entity",[${listEnrichmentVariants}]);
-export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional(),totalLabels:z.record(z.string(),z.string()).optional()});
-`;
+    .join("\n");
   const listOutputSchemas = listEntitySpecs
     .map(
       ({ key }) =>
@@ -220,7 +172,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
         'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { compileListReadSchema } from "../model/list-read-fields";\n' +
-        'import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";\n' +
         'import { listChildCountSchema, listNestingSchema, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
@@ -236,7 +187,6 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         `export const entityListInputSchema = z.discriminatedUnion("entity", [\n  ${listInputVariants}\n]);\n\n` +
         `${listItemSchemas}\n\n` +
         `export const ENTITY_LIST_READ_SCHEMAS = {\n${listReadSchemas}\n} as const;\n\n` +
-        progressiveListSchemas +
         "const ENTITY_LIST_OUTPUT_SCHEMAS = {\n" +
         `${listOutputSchemas}\n` +
         "} as const;\n\n" +

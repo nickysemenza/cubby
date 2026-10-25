@@ -166,19 +166,6 @@ struct EntityListView: View {
             )
         )
         .onChange(of: searchText) { _, value in applySearchText(value) }
-        .onChange(
-            of: model.map {
-                visibleEnrichment($0).errors + [visibleEnrichment($0).summaryError].compactMap { $0 }
-            } ?? []
-        ) { previous, errors in
-            for message in errors where !previous.contains(message) {
-                Diagnostics.report(
-                    NSError(
-                        domain: "EntityListEnrichment", code: 1,
-                        userInfo: [NSLocalizedDescriptionKey: message]),
-                    context: "Browse \(key.rawValue)")
-            }
-        }
         .toolbar { toolbarContent }
         .task(id: key) {
             if model == nil {
@@ -744,25 +731,10 @@ struct EntityListView: View {
 
     private func hasBanner(_ model: GenericEntityListModel) -> Bool {
         model.refreshError != nil || model.searchModel?.refreshError != nil
-            || !visibleEnrichment(model).errors.isEmpty
-            || visibleEnrichment(model).summaryError != nil
-            || (!descriptor.presentation.listTotals.isEmpty && visibleEnrichment(model).isLoadingSummary)
-    }
-
-    private func visibleEnrichment(_ model: GenericEntityListModel) -> EntityListEnrichmentModel {
-        model.isSearching ? (model.searchModel?.enrichment ?? model.enrichment) : model.enrichment
     }
 
     @ViewBuilder
     private func banner(_ model: GenericEntityListModel) -> some View {
-        let enrichment = visibleEnrichment(model)
-        let detailErrors = enrichment.errors + [enrichment.summaryError].compactMap { $0 }
-        if !detailErrors.isEmpty {
-            InlineLoadFailure(message: detailErrors.joined(separator: "\n")) { enrichment.retry() }
-        }
-        if enrichment.isLoadingSummary && !descriptor.presentation.listTotals.isEmpty {
-            LoadingIndicator(label: "Loading totals")
-        }
         if let error = model.refreshError {
             InlineLoadFailure(message: error) { await model.refresh() }
         }
@@ -1200,10 +1172,6 @@ struct EntityListView: View {
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 }
-            } else if row.pendingFields.contains(field.key) {
-                Text("Loading…").foregroundStyle(.secondary).lineLimit(1)
-            } else if row.failedFields.contains(field.key) {
-                Text("Unavailable").foregroundStyle(.secondary).lineLimit(1)
             } else {
                 Text("—").foregroundStyle(.tertiary)
             }
@@ -1483,8 +1451,6 @@ struct EntityRowView: View {
             facts.append("\(descriptor.field(date.id)?.label ?? date.id): \(value)")
         }
         if photoMode { facts.append(layout.presentation.shortcode) }
-        if !row.pendingFields.isEmpty { facts.append("Loading details") }
-        if !row.failedFields.isEmpty { facts.append("Some details unavailable") }
         return facts.joined(separator: ", ")
     }
 }

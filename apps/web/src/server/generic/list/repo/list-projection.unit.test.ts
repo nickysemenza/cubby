@@ -6,7 +6,6 @@ import { selectListReadRows } from "~/entity/model/list-read-schema";
 import { db } from "~/server/db";
 
 import {
-  expandListGroups,
   loadListGroup,
   listReadPlan,
   selectedListProjection,
@@ -124,7 +123,6 @@ describe("list projection group execution", () => {
       plan.read(db, [], {
         kind: "selected",
         fields: ["unknownField"],
-        groups: [],
       }),
     ).rejects.toThrow("Unknown list field");
   });
@@ -157,29 +155,12 @@ describe("list projection group execution", () => {
 
   // A selected consumer must include transitive dependencies once, before its
   // own group. A cycle must fail rather than recurse indefinitely.
-  it("expands transitive loader dependencies in order, deduplicating repeated consumers", () => {
-    expect(
-      expandListGroups(["derived", "media", "derived"], {
-        derived: ["relations"],
-        relations: ["quality"],
-        media: ["relations"],
-      }),
-    ).toEqual(["quality", "relations", "derived", "media"]);
-    expect(expandListGroups([], { derived: ["relations"] })).toEqual([]);
-    expect(() =>
-      expandListGroups(["derived"], {
-        derived: ["relations"],
-        relations: ["derived"],
-      }),
-    ).toThrow("dependency cycle");
-  });
-
   // Shared dependencies must execute once, and omitted groups must perform no
-  // work: either failure adds database reads to progressive list requests.
+  // work: either failure adds database reads to selected list requests.
   it("loads a shared relation dependency once without running omitted quality work", async () => {
     const projection = {
-      kind: "enrichment" as const,
-      groups: ["derived" as const],
+      kind: "selected" as const,
+      fields: ["consumerField"],
     };
     const executed: string[] = [];
     const [relations, quality] = await Promise.all([

@@ -2,9 +2,6 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
 
-import { referenceFieldReadFields } from "../entity-references";
-import { readPathRoot } from "../read-path";
-
 type ManifestField =
   (typeof entityFieldModels)[ShortcodeEntity]["fields"][number];
 
@@ -94,26 +91,4 @@ export function visibleSuggestTargets(
       .map((field) => field.key)
       .filter((key) => updateFields.includes(key)),
   );
-}
-
-/** Inputs used by current values, basis labels and inheritance fingerprints. */
-export function suggestionReadFields(
-  entity: ShortcodeEntity,
-  targets: SuggestTargets,
-): string[] {
-  if (targets.targets.length === 0) return [];
-  const keys = new Set([
-    ...suggestionContextKeys(entity, targets),
-    ...targets.targets.map((target) => target.key),
-  ]);
-  const fields = ["fieldResolutions"];
-  for (const key of keys) {
-    const field = entityFieldModels[entity].fields.find(
-      (candidate) => candidate.key === key,
-    );
-    const root = readPathRoot(field?.readKey ?? key);
-    if (root) fields.push(root);
-    if (field?.reference) fields.push(...referenceFieldReadFields(field));
-  }
-  return [...new Set(fields)];
 }

@@ -28,30 +28,6 @@ it("admits only declared shape and preserves unknown evidence", () => {
     requestedReadMetadata("other.query", { slots: ["project.budget"] }),
   ).toBeNull();
 });
-it("describes list projections from declarations, not supplied field names", () => {
-  const metadata = requestedReadMetadata("entity.listEnrichment", {
-    entity: "product",
-    ids: ["synthetic-private-id"],
-    fields: ["unitPrice"],
-  });
-  expect(metadata).toMatchObject({
-    kind: "list",
-    projection: "enrichment",
-    groups: ["derived"],
-    loadedDependencies: null,
-  });
-  expect(JSON.stringify(metadata)).not.toContain("synthetic-");
-  expect(metadata).toMatchObject({ declaredFields: ["unitPrice"] });
-  expect(
-    requestedReadMetadata("entity.listSummary", { entity: "product" }),
-  ).toMatchObject({ declaredFields: null });
-  expect(
-    requestedReadMetadata("entity.listEnrichment", {
-      entity: "product",
-      fields: ["synthetic-secret"],
-    }),
-  ).toBeNull();
-});
 it("bounds operator context without free text or raw workload records", () => {
   expect(
     workloadContextSchema.parse({
@@ -73,7 +49,7 @@ it("bounds operator context without free text or raw workload records", () => {
 });
 
 it("publishes only schema-admitted list filter names", () => {
-  const metadata = requestedReadMetadata("entity.listBase", {
+  const metadata = requestedReadMetadata("entity.list", {
     entity: "product",
     filters: {
       searchQuery: "synthetic-private-value",
@@ -82,7 +58,6 @@ it("publishes only schema-admitted list filter names", () => {
   });
   expect(metadata).toMatchObject({
     filterFields: ["searchQuery"],
-    declaredGroupDependencies: null,
   });
   expect(JSON.stringify(metadata)).not.toContain("synthetic-");
 });
