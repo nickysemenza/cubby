@@ -70,6 +70,38 @@ function laneWhere(lanes: readonly JobLane[]): SQL {
   return or(...parts) ?? sql`false`;
 }
 
+/**
+ * Each listed Run's demand as (run_id, job_id) pairs: Jobs it owns by
+ * `runId`, and AI evaluation Jobs, which carry no `runId` because one
+ * evaluation can serve several Runs, for evaluations the Run owns or still
+ * requests. A withdrawn (cancelled) request no longer counts, for its owner
+ * either. UNION keeps one pair however many routes reach a Job.
+ */
+export function runDemandPairs(runIds: readonly RunId[]): SQL {
+  const runs = sql.join(
+    runIds.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  );
+  return sql`(
+    SELECT "Job"."runId" AS run_id, "Job".id AS job_id FROM "Job"
+      WHERE "Job"."runId" IN (${runs})
+    UNION
+    SELECT e."runId", j.id FROM "AiEvaluation" e
+      JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
+      WHERE e."runId" IN (${runs}) AND NOT EXISTS (
+        SELECT 1 FROM "AiEvaluationRequest" w WHERE w."evaluationId" = e.id
+          AND w."runId" = e."runId" AND w."cancelledAt" IS NOT NULL)
+    UNION
+    SELECT r."runId", j.id FROM "AiEvaluationRequest" r
+      JOIN "Job" j ON j.key = 'ai-evaluation:' || r."evaluationId"::text
+      WHERE r."runId" IN (${runs}) AND r."cancelledAt" IS NULL
+  )`;
+}
+
+/** One Run's demand as a predicate on "Job". */
+export const runDemandWhere = (runId: RunId) =>
+  sql`"Job".id IN (SELECT d.job_id FROM ${runDemandPairs([runId])} d)`;
+
 /** The SQL predicate of a filtered Job set, shared by the list, counts and Retry now. */
 export function jobSetWhere(
   filter: JobSetFilter,
@@ -87,7 +119,7 @@ export function jobSetWhere(
           sql`, `,
         )})`
       : undefined,
-    runId ? eq(job.runId, runId) : undefined,
+    runId ? runDemandWhere(runId) : undefined,
     filter.ids ? inArray(job.id, filter.ids) : undefined,
     filter.needsAttention
       ? or(
@@ -239,28 +271,29 @@ export async function readRunRollups(
 ): Promise<RunRollup[]> {
   if (!runs.length) return [];
   const ids = runs.map((entry) => entry.id);
-  const reason = jobWaitingOnReasonSql();
+  const reason = jobWaitingOnReasonSql(undefined, now);
+  const at = sql`${now.toISOString()}::timestamp`;
+  const demand = runDemandPairs(ids);
   const [tallies, progress, owners] = await Promise.all([
-    getDb(db)
-      .select({
-        runId: job.runId,
-        reason: sql<JobWaitingOnReason | null>`${reason}`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(job)
-      .where(and(inArray(job.runId, ids), inArray(job.state, [...LIVE_STATES])))
-      .groupBy(sql`1`, sql`2`),
-    getDb(db)
-      .select({
-        runId: job.runId,
-        // Decoded as the UTC timestamp column it is, not as local time.
-        last: sql<Date | null>`max(greatest(${job.lastClaimedAt}, CASE WHEN ${job.state} = ${jobState.enum.completed} THEN ${job.updatedAt} END))`.mapWith(
-          job.lastClaimedAt,
-        ),
-      })
-      .from(job)
-      .where(inArray(job.runId, ids))
-      .groupBy(job.runId),
+    getDb(db).execute<{
+      runId: RunId;
+      reason: JobWaitingOnReason | null;
+      expired: boolean;
+      count: number;
+    }>(sql`SELECT d.run_id AS "runId", ${reason} AS reason,
+        ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" <= ${at}) AS expired,
+        count(*)::int AS count
+      FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id
+      WHERE "Job".state IN (${sql.join(
+        LIVE_STATES.map((state) => sql`${state}`),
+        sql`, `,
+      )})
+      GROUP BY 1, 2, 3`),
+    // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
+    getDb(db).execute<{ runId: RunId; last: number | null }>(sql`
+      SELECT d.run_id AS "runId", (extract(epoch FROM max(greatest("Job"."lastClaimedAt",
+          CASE WHEN "Job".state = ${jobState.enum.completed} THEN "Job"."updatedAt" END))) * 1000)::float8 AS last
+      FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id GROUP BY 1`),
     getDb(db)
       .select({
         id: run.id,
@@ -272,18 +305,24 @@ export async function readRunRollups(
       .where(inArray(run.id, ids)),
   ]);
   const lastById = new Map(
-    progress.map((row) => [row.runId, row.last ?? null]),
+    progress.rows.map((row) => [
+      row.runId,
+      row.last === null ? null : new Date(row.last),
+    ]),
   );
   const ownerById = new Map(owners.map((row) => [row.id, row]));
   return runs.map((entry) => {
     const counts: RunRollup["counts"] = {};
     let live = 0;
-    for (const tally of tallies) {
+    let expiredLeases = 0;
+    for (const tally of tallies.rows) {
       if (tally.runId !== entry.id) continue;
       const parsed = jobWaitingOnReason.safeParse(tally.reason);
       if (!parsed.success) continue;
-      counts[parsed.data] = (counts[parsed.data] ?? 0) + tally.count;
       live += tally.count;
+      // A lapsed lease is no progress in flight; only live leases hold off `stalled`.
+      if (tally.expired) expiredLeases += tally.count;
+      else counts[parsed.data] = (counts[parsed.data] ?? 0) + tally.count;
     }
     const owner = ownerById.get(entry.id);
     const last = lastById.get(entry.id) ?? null;
@@ -295,6 +334,7 @@ export async function readRunRollups(
     return {
       runId: runShortcode.parse(entry.shortcode),
       counts,
+      expiredLeases,
       waitingForFunding,
       lastProgressAt: iso(last),
       stalled:

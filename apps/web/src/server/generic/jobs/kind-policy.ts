@@ -63,6 +63,8 @@ export const JOB_KIND_POLICY = {
   },
   // Self-arming maintenance pages must never stop on a transient failure.
   "queue.watchdog": { ...SERVER, retry: MAINTENANCE_RETRY },
+  // Rings companions when parked device work comes due (docs/jobs.md#image-processing).
+  "image.device.wake": { ...SERVER, retry: MAINTENANCE_RETRY },
   "jobs.retention": { ...SERVER, retry: MAINTENANCE_RETRY },
   "ai.evaluation": { ...SERVER, lane: "frontier_ai", maxQueued: 2_000 },
   "assessment.correction": { ...SERVER, maxQueued: 500 },

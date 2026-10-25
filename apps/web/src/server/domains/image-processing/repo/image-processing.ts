@@ -73,6 +73,8 @@ import {
   releaseJobClaim,
   retryJobsNow,
   assertJobClaim,
+  JOB_BACKFILL_SHARE,
+  jobRunOwned,
   JobSupersededError,
   type JobClaim,
 } from "~/server/generic/jobs/repo/jobs";
@@ -83,7 +85,10 @@ import {
   insertImageProcessingAttempt,
   recordImageProcessingEvent,
 } from "./image-processing-history";
-import { ringImageProcessingCompanionsAfterCommit } from "./image-processing-ring";
+import {
+  armDeviceWake,
+  ringImageProcessingCompanionsAfterCommit,
+} from "./image-processing-ring";
 
 /** A server-side failure is retried later; image work never fails terminally. */
 export const SERVER_FAILURE_RETRYABLE = true;
@@ -534,6 +539,25 @@ async function rebuildTransparentDerivative(
 }
 
 /**
+ * Whether this device pull owes backfill its reserved share: as many
+ * run-owned device claims as fill a drain batch's non-reserved slots
+ * (`JOB_BACKFILL_SHARE`) happened since backfill was last served.
+ */
+async function deviceBackfillTurn(tx: DrizzleTransaction) {
+  const streak = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
+  const [row] = await tx
+    .execute<{ owned: number }>(sql`
+    SELECT count(*)::int AS owned FROM ${durableJob} o
+    WHERE o.kind = 'image.device' AND o."runId" IS NOT NULL
+      AND o."lastClaimedAt" > coalesce(
+        (SELECT max(b."lastClaimedAt") FROM ${durableJob} b
+          WHERE b.kind = 'image.device' AND b."runId" IS NULL),
+        '-infinity'::timestamp)`)
+    .then((result) => result.rows);
+  return (row?.owned ?? 0) >= streak;
+}
+
+/**
  * Claim one job with a bounded lease. No HTTP path waits for device work.
  * Expired leases are safe to reclaim because every completion must echo
  * the Job's lease token as its attemptId; reclaiming one is not an attempt.
@@ -575,6 +599,11 @@ export async function claimImageProcessingJob(
         jobId: input.jobId,
       });
     }
+    // Device admission keeps the drain's priorities: an active Run's work
+    // leads, but backfill keeps its reserved share of pulls.
+    const devicePull =
+      !currentExecution && input.processorRevisions !== undefined;
+    const backfillTurn = devicePull && (await deviceBackfillTurn(tx));
     // The internal policy keeps claims within the device’s supported job kinds.
     const candidates = (avoidDeviceId?: string) =>
       tx
@@ -672,7 +701,13 @@ export async function claimImageProcessingJob(
               : undefined,
           ),
         )
-        .orderBy(asc(durableJob.availableAt), asc(imageProcessingJob.id))
+        .orderBy(
+          ...(devicePull
+            ? [backfillTurn ? asc(jobRunOwned()) : desc(jobRunOwned())]
+            : []),
+          asc(durableJob.availableAt),
+          asc(imageProcessingJob.id),
+        )
         .limit(1);
     const lock = (query: ReturnType<typeof candidates>) =>
       currentExecution
@@ -695,6 +730,9 @@ export async function claimImageProcessingJob(
         input.leaseMs,
       ));
     if (!execution) return null;
+    // A device lease can lapse while every device idles; the wake rings then.
+    if (execution.kind === "image.device")
+      await armDeviceWake(databaseForTransaction(tx));
     let derivativeId = candidate.derivativeId;
     if (candidate.kind === "subject_lift" && !candidate.derivativeKey)
       derivativeId = (await rebuildTransparentDerivative(tx, candidate)).id;
@@ -908,6 +946,12 @@ export async function releaseImageProcessingLease(
     await releaseJobClaim(databaseForTransaction(tx), execution, {
       availableAt: new Date(Date.now() + (input.delayMs ?? 0)),
     });
+    // Released device work goes to another companion: ring at once, and
+    // through the wake once a delayed release comes due.
+    if (execution.kind === "image.device") {
+      await armDeviceWake(databaseForTransaction(tx));
+      if (!input.delayMs) await ringImageProcessingCompanionsAfterCommit(tx);
+    }
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
       eventKey: `${input.attemptId}:released`,
@@ -1259,60 +1303,62 @@ async function settleImageProcessingFailure(
     input.execution,
     new Error(input.reason),
   );
+  // The backoff ends while devices may idle; the wake rings them then.
+  if (input.execution.kind === "image.device")
+    await armDeviceWake(databaseForTransaction(tx));
   await tx
     .update(imageProcessingJob)
     .set({ ...input.set, lastError: input.reason })
     .where(eq(imageProcessingJob.id, job.id));
 }
 
-async function adoptTerminalCompletion(
+async function adoptFailedCompletion(
   tx: DrizzleTransaction,
   job: CompletionJob,
   input: CompletionInput,
   execution: JobClaim,
 ): Promise<boolean> {
   const outcome = input.result.outcome;
-  if (outcome.status === "completed") return false;
-  const base = {
-    attemptId: null,
-    runtime: input.runtime ?? null,
-    result: outcome,
-  };
-  if (outcome.status === "failed") {
-    // The failed attempt keeps its id on the row so the retry can prefer
-    // another device; its Job token is gone, so it can no longer adopt.
-    await settleImageProcessingFailure(tx, job, {
-      reason: outcome.reason,
-      set: { runtime: base.runtime, result: base.result },
-      execution,
-    });
-    if (input.orphanOutputKey)
-      await tx
-        .insert(imageProcessingOrphan)
-        .values({
-          key: input.orphanOutputKey,
-          attemptId: input.result.attemptId,
-          reason: outcome.reason,
-        })
-        .onConflictDoNothing();
-    return true;
-  }
-  await tx
-    .update(imageProcessingJob)
-    .set({
-      ...base,
-      state: "skipped",
-      completedAt: sql`now()`,
-      lastError: outcome.reason,
-    })
-    .where(eq(imageProcessingJob.id, job.id));
-  if (job.derivativeId) {
+  if (outcome.status !== "failed") return false;
+  // The failed attempt keeps its id on the row so the retry can prefer
+  // another device; its Job token is gone, so it can no longer adopt.
+  await settleImageProcessingFailure(tx, job, {
+    reason: outcome.reason,
+    set: { runtime: input.runtime ?? null, result: outcome },
+    execution,
+  });
+  if (input.orphanOutputKey)
     await tx
-      .update(imageDerivative)
-      .set({ status: "skipped", failureReason: outcome.reason })
-      .where(eq(imageDerivative.id, job.derivativeId));
-  }
+      .insert(imageProcessingOrphan)
+      .values({
+        key: input.orphanOutputKey,
+        attemptId: input.result.attemptId,
+        reason: outcome.reason,
+      })
+      .onConflictDoNothing();
   return true;
+}
+
+/**
+ * An executor's `skipped` (no_subject, not_suitable, unsupported_format) is
+ * its verdict on one attempt, not a moot ending: only the server ends work
+ * as moot (deletion, replacement, supersession, policy exclusion, in
+ * `retireObsoleteImageProcessingJobs`). It is recorded as a retryable
+ * failure that keeps its reason code, so the work backs off, runs again, and
+ * asks for attention after repeated failures like any other failure.
+ */
+function reportedSkipAsFailure(input: CompletionInput): CompletionInput {
+  const outcome = input.result.outcome;
+  if (outcome.status !== "skipped") return input;
+  const failed = {
+    status: "failed" as const,
+    retryable: true,
+    reason: outcome.reason,
+  };
+  return {
+    ...input,
+    result: { ...input.result, outcome: { ...failed, kind: outcome.kind } },
+  };
 }
 
 async function adoptSuccessfulCompletion(
@@ -1400,8 +1446,9 @@ async function adoptSuccessfulCompletion(
  */
 export async function completeImageProcessingJob(
   db: Database,
-  input: CompletionInput,
+  reported: CompletionInput,
 ): Promise<{ adopted: boolean; orphanKey: string | null }> {
+  const input = reportedSkipAsFailure(reported);
   let settledPhotoRunId: string | null = null;
   const completion = await withTransaction(db, async (tx) => {
     // A result after lease expiry is still adopted while no newer attempt
@@ -1480,7 +1527,7 @@ export async function completeImageProcessingJob(
       return { adopted: false, orphanKey: null };
     }
     const adopted =
-      (await adoptTerminalCompletion(tx, job, input, execution)) ||
+      (await adoptFailedCompletion(tx, job, input, execution)) ||
       (await adoptSuccessfulCompletion(tx, job, input));
     if (!adopted) return { adopted: false, orphanKey: null };
     const outcome = input.result.outcome;

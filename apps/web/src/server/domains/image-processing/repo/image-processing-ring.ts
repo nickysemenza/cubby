@@ -1,8 +1,12 @@
+import { jobState } from "@cubby/schemas/job";
 import { createLogger } from "@cubby/worker-tracing";
+import { sql } from "drizzle-orm";
 
 import { getExecutionCtx, getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
+import { recordJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 
 import type { ImageProcessingCompanionRpc } from "./companion-rpc";
 
@@ -48,4 +52,56 @@ export async function ringImageProcessingCompanionsAfterCommit(
     if (ctx) ctx.waitUntil(ring);
     else await ring;
   });
+}
+
+/**
+ * The durable device wake: one Job (`image.device.wake`) that rings
+ * companions when parked device work comes due. `image.device` is never
+ * drained, so without it work whose backoff or abandoned lease expires while
+ * every device idles would wait for an unrelated save, pull or connect.
+ */
+export const DEVICE_WAKE_KEY = "image.device.wake";
+
+/**
+ * Arm the wake in the caller's transaction whenever parked device work gets
+ * a later availability or a lease. A durable invalidation (restarting) of
+ * the wake's own Job, so an arm that lands while a wake page runs supersedes
+ * it and is never lost; the woken page recomputes its schedule from Job rows.
+ */
+export async function armDeviceWake(db: Database) {
+  await recordJobInvalidation(db, {
+    key: DEVICE_WAKE_KEY,
+    kind: DEVICE_WAKE_KEY,
+    input: {},
+    restartsPass: true,
+  });
+}
+
+/**
+ * Whether parked device work is claimable now (due, or a lapsed lease), and
+ * when the earliest later work or lease expiry falls due.
+ */
+export async function parkedDeviceWork(
+  db: Database,
+  now: Date,
+): Promise<{ due: boolean; next: Date | null }> {
+  const at = sql`${now.toISOString()}::timestamp`;
+  const result = await getDb(db).execute<{
+    due: boolean | null;
+    next: number | null;
+  }>(sql`SELECT
+      bool_or((state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "availableAt" <= ${at})
+        OR (state = ${jobState.enum.running} AND "leaseExpiresAt" <= ${at})) AS due,
+      -- Epoch milliseconds: the driver would read a zoneless timestamp as local time.
+      (extract(epoch FROM min(CASE
+        WHEN state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "availableAt" > ${at} THEN "availableAt"
+        WHEN state = ${jobState.enum.running} AND "leaseExpiresAt" > ${at} THEN "leaseExpiresAt" END)) * 1000)::float8 AS next
+    FROM "Job"
+    WHERE kind = 'image.device'
+      AND state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running})`);
+  const row = result.rows[0];
+  return {
+    due: row?.due ?? false,
+    next: row?.next == null ? null : new Date(row.next),
+  };
 }

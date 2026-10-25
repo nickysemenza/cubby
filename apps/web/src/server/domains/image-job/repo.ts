@@ -128,11 +128,12 @@ const loadFacts = async (
 };
 
 /**
- * A skipped job's stored reason is a code; the household reads what Apple
- * decided, or that an older policy skipped it. Stored diagnostics stay intact.
+ * An executor's skip reason is stored as a code: on a job that retries it
+ * (executor skips are failures now) or on one an older release ended as
+ * skipped. The household reads what Apple decided, or that an older policy
+ * skipped it. Stored diagnostics stay intact.
  */
 const issueText = (row: ImageJobRow, deviceRan: boolean) => {
-  if (row.state !== "skipped") return row.lastError;
   switch (row.lastError) {
     case "no_subject":
       return "Apple found no foreground subject.";

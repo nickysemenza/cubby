@@ -56,8 +56,13 @@ export type JobFacts = z.infer<typeof jobFacts>;
 /** A Run's live Jobs by what they wait on, and whether it stopped progressing. */
 const runRollup = z.object({
   runId: runShortcode,
-  /** Live Jobs per waiting-on reason; terminal Jobs are not counted. */
+  /**
+   * Live Jobs per waiting-on reason; terminal Jobs are not counted. `leased`
+   * counts live leases only: an expired one is in `expiredLeases`.
+   */
   counts: z.partialRecord(jobWaitingOnReason, z.number().int().nonnegative()),
+  /** Running Jobs whose executor's lease lapsed; the next claim reclaims them. */
+  expiredLeases: z.number().int().nonnegative(),
   /** The Run itself waits for AI funding (paused, or a legacy review stop). */
   waitingForFunding: z.boolean(),
   /** Latest claim or completion across the Run's Jobs. */
@@ -313,7 +318,8 @@ export const jobContract = defineContract(
       description:
         "The queue watchdog's latest per-kind health (oldest due age, claims per minute, due growth, expired leases, image/Job disagreement) and the alerts it raised, with raw numbers.",
       input: z.strictObject({}),
-      output: queueHealthSnapshot.nullable(),
+      // An object even before the first measurement: MCP structured results must be objects.
+      output: z.object({ snapshot: queueHealthSnapshot.nullable() }),
       cache: { tags: [["run"]], profile: "live-status" },
     }),
     logs: query({

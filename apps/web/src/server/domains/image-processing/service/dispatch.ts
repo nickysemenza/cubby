@@ -10,6 +10,7 @@ import { providerFor } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import {
@@ -120,31 +121,14 @@ export async function dispatchImageProcessingWakeup(
       ? "completed"
       : "skipped";
   } catch (error) {
-    const deferred = findErrorCause(
-      error,
-      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
-    );
-    if (deferred) {
-      await deferImageProcessingJob(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        until: deferred.until,
-        reason: deferred.message,
-        waitReason: deferred.reason,
-      });
+    if (
+      await deferCloudAttemptForTypedWait(
+        db,
+        { jobId: claimed.id, attemptId: claimed.attemptId },
+        error,
+      )
+    )
       return "deferred";
-    }
-    // Running out of AI money is a funding wait, never an attempt.
-    if (error instanceof AiBudgetExhaustedError) {
-      await deferImageProcessingJob(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-        until: new Date(error.resumeAt),
-        reason: error.message,
-        waitReason: jobWaitReason.enum.ai_funding_window,
-      });
-      return "deferred";
-    }
     await completeImageProcessingJob(db, {
       result: {
         jobId: claimed.id,
@@ -161,6 +145,47 @@ export async function dispatchImageProcessingWakeup(
     // The cause is on the row and its Job backs off; the next claim retries.
     return "failed";
   }
+}
+
+/**
+ * A typed provider wait (`JobDeferredError`) or exhausted AI money is a wait,
+ * never an attempt: the claim is released until the wait ends. Returns
+ * whether `error` was such a wait. Every cloud provider call shares this,
+ * including the description of a device-normalized AVIF.
+ */
+export async function deferCloudAttemptForTypedWait(
+  db: Database,
+  attempt: { jobId: string; attemptId: string },
+  error: UnparsedError,
+): Promise<boolean> {
+  const deferred = findErrorCause(
+    error,
+    (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+  );
+  if (deferred) {
+    await deferImageProcessingJob(db, {
+      ...attempt,
+      until: deferred.until,
+      reason: deferred.message,
+      waitReason: deferred.reason,
+    });
+    return true;
+  }
+  const exhausted = findErrorCause(
+    error,
+    (cause): cause is AiBudgetExhaustedError =>
+      cause instanceof AiBudgetExhaustedError,
+  );
+  if (exhausted) {
+    await deferImageProcessingJob(db, {
+      ...attempt,
+      until: new Date(exhausted.resumeAt),
+      reason: exhausted.message,
+      waitReason: jobWaitReason.enum.ai_funding_window,
+    });
+    return true;
+  }
+  return false;
 }
 
 /** Both transports mint exactly the same source/output capabilities. */

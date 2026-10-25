@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { deviceWakeHandler } from "~/server/domains/image-processing/service/device-wake";
 import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
@@ -72,6 +73,7 @@ export const productionJobHandlers: JobHandlers = {
   "ai.evaluation": aiEvaluationJobHandler,
   "ai-refresh.activate": aiRefreshActivationHandler,
   "queue.watchdog": queueWatchdogHandler,
+  "image.device.wake": deviceWakeHandler,
   "jobs.retention": jobRetentionHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,

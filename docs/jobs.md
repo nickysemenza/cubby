@@ -23,7 +23,13 @@ its row's `maxAttempts`. Each kind names its lane, the executor that runs it:
 `drained: false` parks a kind: the drain never claims it, so device work no
 longer churns through server claims. Enqueueing device work rings connected
 companions after commit, and a companion connecting to the doorbell is rung at
-once; there is no polling interval.
+once; there is no polling interval. Work that comes due later (a failure
+backoff, a deferral, a lapsed lease, a delayed release) rings through the
+`image.device.wake` Job: each of those events arms it (`armDeviceWake`, a
+restarting invalidation of its own Job, so an arm during a wake page is never
+lost), and its page rings when parked work is claimable, then sleeps until
+the next parked availability or lease expiry. A release with no delay also
+rings at once.
 
 ## Waiting on
 
@@ -31,8 +37,10 @@ once; there is no polling interval.
 waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
 `jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
 
-- `due`: claimable now; `aheadCount` in the drain's fair order and
-  `etaSeconds` from claims over the last 30 minutes.
+- `due`: claimable now; `aheadCount` in the drain's own selection order (the
+  fair order per class, interleaved per batch with backfill's reserve:
+  `drainSelectionIndex`) and `etaSeconds` from claims over the last 30
+  minutes.
 - `waiting_device`: parked device work; position in device-pull order.
 - `waiting_funding`: an `ai_funding_window` wait until the window resets.
 - `leased`: an executor holds it, named with its device installation id
@@ -83,7 +91,14 @@ The drain runs up to `JOB_DRAIN.concurrency` pages of a batch at once, and the
 queue consumer (`packages/shared/src/background-queue-consumer.json`) runs
 several drains. Every page holds its own row lock and lease. AI evaluation Jobs
 carry no `runId` because shared evaluations serve several Runs; they compete
-as backfill.
+as backfill. Run views still attribute them: a Run's demand (`runDemandPairs`)
+is its own Jobs plus the evaluation Jobs it owns or still requests (an
+uncancelled `AiEvaluationRequest`), once each, for rollups, `job.queue` with a
+Run, Retry now and explain.
+
+Device pulls apply the same two classes to one claim at a time: an active
+Run's parked work leads, and after `1 / JOB_BACKFILL_SHARE - 1` run-owned
+device claims since backfill was last served, the next pull serves backfill.
 
 ## Durable invalidation
 
@@ -111,8 +126,12 @@ window. Paused and cancelled Jobs are member stops and never wake.
 
 Each capture also appends its revision and time to `JobInvalidationCapture`.
 Health dates a woken Job from its first revision past `observedRevision`, so
-repeated captures keep the original pending start; retention deletes rows a
-claim has observed.
+repeated captures keep the original pending start, and so does a catch-up
+requeue (`repeatJob`) that resets availability to now without serving the
+capture: a woken Job is due since the earlier of its first unseen capture and
+its availability. Retention deletes rows a claim has observed. Migration 0030
+recorded each marker already ahead of its Job at the cutover as a capture of
+its current revision, dated by the marker's last write.
 
 ## Retries
 
@@ -142,7 +161,10 @@ control refusals are `RUN_CONTROL_REFUSED` (409), never 500.
 
 Image processing is never abandoned. `ImageProcessingJob.state` stores only
 the outcome: `pending` while open, `ready`, or `skipped` for a moot ending
-(image deleted, upload replaced, processor superseded, type excluded). A
+(image deleted, upload replaced, processor superseded, type excluded). Only
+the server decides a moot ending: an executor's `skipped` (`no_subject`,
+`not_suitable`, `unsupported_format`) is recorded as a retryable failure that
+keeps its reason code, backs off and asks for attention like any failure. A
 stored `failed` is a legacy state of a superseded processor. The displayed
 state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
@@ -181,6 +203,10 @@ Device wire contract:
   unchanged; after a newer claim it returns `{adopted: false}` and a late
   failure is kept in the old attempt's history.
 
+A typed provider wait or an exhausted AI budget is never an attempt on any
+cloud call, including the description of a device-normalized AVIF
+(`deferCloudAttemptForTypedWait`): the claim is released until the wait ends.
+
 A photo-inventory Run's description gate accepts the Apple or the cloud
 description; `cloudDescriptionMissing` and `withoutCloudDescriptionCount`
 note photos grouped while their cloud description waits (for funding, say).
@@ -190,12 +216,14 @@ note photos grouped while their cloud description waits (for funding, say).
 - `job.queue`: live Jobs counted by lane and waiting-on reason, the set's
   leased image work per executor (`leases`: live and expired), and a page of
   matching Jobs with their `waitingOn`.
-- `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason, its
-  own funding wait, and `stalled` when nothing was claimed or finished for
-  `RUN_STALL_MS`.
+- `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason
+  (`leased` counts live leases; lapsed ones are `expiredLeases`), its own
+  funding wait, and `stalled` when nothing was claimed or finished for
+  `RUN_STALL_MS` and no live lease is in flight.
 - `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
   or a Job id, on MCP (`maintenance`) and `cubby call`.
-- `job.health`: the queue watchdog's latest measurement.
+- `job.health`: `{snapshot}`, the queue watchdog's latest measurement, null
+  before its first page.
 
 The web Activity page is the overview: the watchdog's red badge with raw
 alert evidence when unhealthy, the queue counts by lane and reason (the Apple

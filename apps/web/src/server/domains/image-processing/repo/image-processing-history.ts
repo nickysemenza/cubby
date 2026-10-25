@@ -25,6 +25,8 @@ import {
   releaseJobClaim,
 } from "~/server/generic/jobs/repo/jobs";
 
+import { armDeviceWake } from "./image-processing-ring";
+
 export async function recordImageProcessingEvent(
   db: Database | DrizzleTransaction,
   input: {
@@ -277,6 +279,9 @@ export async function deferImageProcessingJob(
       availableAt: input.until,
       waitReason: input.waitReason,
     });
+    // Parked device work waits out the deferral; the wake rings when it ends.
+    if (execution.kind === "image.device")
+      await armDeviceWake(databaseForTransaction(tx));
     await tx
       .update(imageProcessingAttempt)
       .set({ state: "released", completedAt: sql`now()`, error: input.reason })

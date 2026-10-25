@@ -286,10 +286,14 @@ const runOwningJob = new QueryBuilder()
     ),
   );
 
+/** Whether the outer `"Job"` row belongs to a running, member-visible Run. */
+export const jobRunOwned = () =>
+  sql<boolean>`("Job"."runId" IS NOT NULL AND EXISTS (${runOwningJob}))`;
+
 const fairlyOrderedDueJobs = (now: Date, perKind?: number) => sql`
   WITH due AS (
     SELECT "Job".id, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."availableAt",
-      ("Job"."runId" IS NOT NULL AND EXISTS (${runOwningJob})) AS run_owned
+      ${jobRunOwned()} AS run_owned
     FROM "Job" WHERE ${drainedDue(now)}
   ), backlog AS (
     SELECT kind, count(*) AS size FROM due GROUP BY kind
@@ -319,6 +323,41 @@ const fairlyOrderedDueJobs = (now: Date, perKind?: number) => sql`
     FROM candidates
   )`;
 
+/** Backfill's reserved slots in a batch of `limit` while it has due work. */
+const backfillReserve = (limit: number, backfill: number) =>
+  Math.min(backfill, Math.ceil(limit * JOB_BACKFILL_SHARE));
+
+/**
+ * Where the `classPosition`-th Job (1-based) of its class lands in the drain's
+ * successive batches, as the number of Jobs served before it. Each batch is
+ * selected like `dueJobs`: backfill keeps its reserve, run-owned work fills
+ * the rest first, then backfill takes what run-owned work left.
+ */
+export function drainSelectionIndex(
+  job: { runOwned: boolean; classPosition: number },
+  totals: { owned: number; backfill: number },
+  batch = JOB_DRAIN.batch,
+): number {
+  let owned = 0;
+  let backfill = 0;
+  while (owned < totals.owned || backfill < totals.backfill) {
+    const reserved = backfillReserve(batch, totals.backfill - backfill);
+    const takeOwned = Math.min(totals.owned - owned, batch - reserved);
+    const takeBackfill = Math.min(
+      totals.backfill - backfill,
+      batch - takeOwned,
+    );
+    const served = owned + backfill;
+    if (job.runOwned && job.classPosition <= owned + takeOwned)
+      return served + (job.classPosition - owned - 1);
+    if (!job.runOwned && job.classPosition <= backfill + takeBackfill)
+      return served + takeOwned + (job.classPosition - backfill - 1);
+    owned += takeOwned;
+    backfill += takeBackfill;
+  }
+  return owned + backfill;
+}
+
 /**
  * One fair batch: run-owned Jobs first, but backfill keeps
  * `JOB_BACKFILL_SHARE` of the batch whenever it has due work.
@@ -334,17 +373,18 @@ export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
     WHERE class_position <= ${limit} ORDER BY overall`);
   const owned = result.rows.filter((row) => row.run_owned);
   const backfill = result.rows.filter((row) => !row.run_owned);
-  const reserved = Math.min(
-    backfill.length,
-    Math.ceil(limit * JOB_BACKFILL_SHARE),
-  );
+  const reserved = backfillReserve(limit, backfill.length);
   const leading = owned.slice(0, Math.max(0, limit - reserved));
   return [...leading, ...backfill.slice(0, limit - leading.length)].map(
     ({ id, kind }) => ({ id, kind }),
   );
 }
 
-/** Visible queue positions use the drain's fair order: due Jobs ahead of each. */
+/**
+ * Visible queue positions: due Jobs the drain serves before each, in its own
+ * selection order (fair order within each class, interleaved per batch with
+ * backfill's reserve), so "ahead" and the ETA from it match the drain.
+ */
 export async function dueJobPositions(
   db: Database,
   ids: readonly string[],
@@ -352,14 +392,30 @@ export async function dueJobPositions(
   if (!ids.length) return new Map();
   const result = await getDb(db).execute<{
     id: string;
-    ahead: number;
+    run_owned: boolean;
+    class_position: number;
+    owned_total: number;
+    backfill_total: number;
   }>(sql`${fairlyOrderedDueJobs(new Date())}
-    SELECT id, (overall - 1)::int AS ahead FROM ordered
+    SELECT id, run_owned, class_position::int AS class_position,
+      owned_total::int AS owned_total, backfill_total::int AS backfill_total
+    FROM (SELECT *,
+        count(*) FILTER (WHERE run_owned) OVER () AS owned_total,
+        count(*) FILTER (WHERE NOT run_owned) OVER () AS backfill_total
+      FROM ordered) counted
     WHERE id IN (${sql.join(
       ids.map((id) => sql`${id}::uuid`),
       sql`, `,
     )})`);
-  return new Map(result.rows.map((row) => [row.id, row.ahead]));
+  return new Map(
+    result.rows.map((row) => [
+      row.id,
+      drainSelectionIndex(
+        { runOwned: row.run_owned, classPosition: row.class_position },
+        { owned: row.owned_total, backfill: row.backfill_total },
+      ),
+    ]),
+  );
 }
 
 export async function dueJobsAhead(db: Database, id: string) {

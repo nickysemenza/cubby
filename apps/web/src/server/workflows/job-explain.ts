@@ -20,6 +20,7 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   jobFactsOf,
   readRunRollups,
+  runDemandWhere,
 } from "~/server/generic/jobs/repo/job-queue";
 import { jobWaitingOnReasonSql } from "~/server/generic/jobs/repo/waiting-on";
 
@@ -67,7 +68,7 @@ async function explainRun(
       SELECT "Job".id, row_number() OVER (
         PARTITION BY ${reason} ORDER BY "Job"."availableAt", "Job".id
       ) AS position, "Job".kind
-      FROM "Job" WHERE "Job"."runId" = ${runId}::uuid
+      FROM "Job" WHERE ${runDemandWhere(runId)}
         AND "Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})
     ) ranked WHERE position <= ${SAMPLES_PER_REASON} OR kind = 'run.execute'`);
   const rows = samples.rows.length

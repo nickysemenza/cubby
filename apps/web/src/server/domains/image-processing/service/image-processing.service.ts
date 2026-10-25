@@ -55,6 +55,7 @@ import {
 import { completeCloudImageDescription } from "~/server/domains/image-processing/service/cloud-description";
 import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
 import {
+  deferCloudAttemptForTypedWait,
   prepareCompanionImageCommand,
   reserveCompanionAnalysisOutput,
 } from "~/server/domains/image-processing/service/dispatch";
@@ -255,6 +256,10 @@ async function completeNormalizedImageInput(
       }),
     };
   } catch (error) {
+    // The verified JPEG stays retained under this attempt's input key; only
+    // the provider call waits, without spending an attempt.
+    if (await deferCloudAttemptForTypedWait(db, result, error))
+      return { adopted: false };
     const completion = await completeImageProcessingJob(db, {
       result: {
         ...result,

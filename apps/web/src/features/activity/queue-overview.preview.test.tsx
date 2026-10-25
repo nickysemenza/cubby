@@ -166,7 +166,7 @@ const devices = {
 
 const answers = new Map<string, UnparsedStartOperationData>([
   ["job.queue", queue],
-  ["job.health", health],
+  ["job.health", { snapshot: health }],
   ["job.retryNow", { retried: 53 }],
   [
     "job.explain",

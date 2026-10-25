@@ -47,14 +47,18 @@ export async function measureQueueHealth(
   // When each due Job became due: an unobserved capture wakes it at its
   // first revision past `observedRevision` (later captures keep that start;
   // the marker's own write time only dates history from before the capture
-  // log), an expired lease at its expiry.
+  // log), an expired lease at its expiry. A woken Job whose availability
+  // already passed takes the earlier of the two: the periodic catch-up
+  // requeues with availability "now" without serving the capture.
+  const unobservedSince = sql`coalesce(
+    (SELECT min(c."capturedAt") FROM "JobInvalidationCapture" c
+      WHERE c.key = "Job".key AND c.revision > coalesce("Job"."observedRevision", 0)),
+    (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key))`;
   const dueSince = sql`(CASE
     WHEN ${woken} AND (${job.state} IN (${jobState.enum.completed}, ${jobState.enum.failed}) OR ${job.availableAt} > ${at})
-      THEN coalesce(
-        (SELECT min(c."capturedAt") FROM "JobInvalidationCapture" c
-          WHERE c.key = "Job".key AND c.revision > coalesce("Job"."observedRevision", 0)),
-        (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key))
+      THEN ${unobservedSince}
     WHEN ${job.state} = ${jobState.enum.running} THEN ${job.leaseExpiresAt}
+    WHEN ${woken} THEN least(${unobservedSince}, ${job.availableAt})
     ELSE ${job.availableAt} END)`;
   const windowStart = sql`${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute'`;
   const rows = await getDb(db)

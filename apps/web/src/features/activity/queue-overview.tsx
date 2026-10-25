@@ -693,7 +693,7 @@ export function QueueOverview({
   const health = useQuery(job.health.queryOptions({}));
   return (
     <Stack gap="lg">
-      <QueueHealthNotice health={health.data} />
+      <QueueHealthNotice health={health.data?.snapshot} />
       <Section
         headingAs="h2"
         title="Queues"
