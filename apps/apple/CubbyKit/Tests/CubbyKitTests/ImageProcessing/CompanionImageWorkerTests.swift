@@ -18,6 +18,40 @@ private final class RenewalStub: URLProtocol, @unchecked Sendable {
 
 @Suite("CompanionImageWorker", .timeLimit(.minutes(1)))
 struct CompanionImageWorkerTests {
+    /// Field finding: a device that could never subscribe showed only "Disconnected —
+    /// reconnecting", and an expected reconnect failure never reached diagnostics, so the reason
+    /// was invisible on the device and in Sentry. A failed attempt now reports which step failed,
+    /// the attempt number and the next try, and the first failure of a streak is reported.
+    @Test func aFailedSubscriptionReportsItsStepAttemptAndNextTry() async throws {
+        let activity = ActivityRecorder()
+        let reported = Gate()
+        let failed = Gate()
+        let failures = Mutex<[String]>([])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: QueuedCompanionTransport(commands: []),
+            failureObserver: { error in
+                failures.withLock { $0.append((error as? LocalizedError)?.errorDescription ?? "") }
+                reported.signal()
+            },
+            activityObserver: {
+                activity.record($0)
+                if $0.connectionAttempt > 0 { failed.signal() }
+            },
+            execute: { try Self.failedResult($0) })
+        await worker.start()
+        await reported.arrivals()
+        await failed.arrivals()
+        let latest = try #require(activity.activity)
+        #expect(latest.phase == .connecting)
+        #expect(latest.connectionAttempt == 1)
+        #expect(latest.nextConnectAt != nil)
+        #expect(latest.lastError?.contains(" failed (") == true)
+        #expect(failures.withLock { $0.first?.contains(" failed (") } == true)
+        await worker.stop()
+    }
+
     /// Regression (CUBBY-APPLE-7F): URLSession called a ping's handler twice, the second time
     /// with POSIX 53 as the connection aborted, and the second resume of the checked
     /// continuation crashed the app.
