@@ -45,8 +45,14 @@ import { entityAttachment, image } from "~/server/db/schema";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import {
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+  compatibleSubjectLiftOutputs,
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
+import {
+  imageRepresentationRow,
+  imageRepresentationRowsSql,
+  imageRepresentationsFromRows,
+} from "~/server/domains/image-processing/repo/image-representations";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { suggestedMerchantVendorCandidatesSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
@@ -457,6 +463,7 @@ const displayImageRowSchema = z.object({
   entityKind: entitySchema,
   entityId: z.string(),
   refKey: z.string(),
+  representations: z.array(imageRepresentationRow).optional(),
   images: z.array(
     z.object({
       id: imageShortcode,
@@ -488,7 +495,7 @@ async function resolveDisplayImageListsFromSqlRefs(
   refsSql: SQL,
   sourceTypes: ReadonlySet<Entity>,
 ): Promise<Map<string, DisplayImageSummary[]>> {
-  const ranked = await resolveRankedDisplayImages(db, refsSql, sourceTypes);
+  const { ranked } = await resolveRankedDisplayImages(db, refsSql, sourceTypes);
   return new Map(
     [...ranked].map(([key, images]) => [key, images.map(({ image }) => image)]),
   );
@@ -510,7 +517,7 @@ export async function resolveEntityDisplayImageChain(
 ): Promise<RankedDisplayImage[]> {
   if (!DISPLAY_IMAGE_ENTITIES.has(ref.entityKind)) return [];
   const key = entityRefKey(ref.entityKind, ref.entityId);
-  const ranked = await resolveRankedDisplayImages(
+  const { ranked } = await resolveRankedDisplayImages(
     db,
     sql`refs("entityKind", "entityId", "refKey") AS (VALUES (${ref.entityKind}::text, ${ref.entityId}::uuid, ${key}::text))`,
     new Set([ref.entityKind]),
@@ -547,7 +554,11 @@ async function resolveRankedDisplayImages(
   db: Database | DrizzleTransaction,
   refsSql: SQL,
   sourceTypes: ReadonlySet<Entity>,
-): Promise<Map<string, RankedDisplayImage[]>> {
+  includeAttachments = false,
+): Promise<{
+  ranked: Map<string, RankedDisplayImage[]>;
+  representations: Map<string, ImageRepresentations>;
+}> {
   // Unrelated entity arms still incur planner/JIT costs even when their WHERE
   // clauses can never match. Compile only the source types in this batch.
   const selectedBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
@@ -632,12 +643,19 @@ async function resolveRankedDisplayImages(
        AND derivative."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}
        AND derivative.status = 'ready'
        AND derivative."deletedAt" IS NULL
-    ) AS images
+    ) AS images ${
+      includeAttachments
+        ? sql`, (
+      SELECT COALESCE(json_agg(attachment), '[]'::json)
+      FROM (${imageRepresentationRowsSql({ attachedTo: sql`refs."entityId"` }, compatibleSubjectLiftOutputs)}) attachment
+    ) AS representations`
+        : sql``
+    }
     FROM refs
   `);
 
   const rows = z.array(displayImageRowSchema).parse(result.rows);
-  return new Map(
+  const ranked = new Map(
     rows.map((row) => [
       row.refKey,
       row.images.map((img) => {
@@ -665,12 +683,25 @@ async function resolveRankedDisplayImages(
       }),
     ]),
   );
+  return {
+    ranked,
+    representations: imageRepresentationsFromRows(
+      rows.flatMap((row) => row.representations ?? []),
+    ),
+  };
 }
 
-async function resolveUniversalEntityDisplayImageLists(
+export interface EntityDisplayMedia {
+  readonly displayImages: ReadonlyMap<string, DisplayImageSummary[]>;
+  readonly representations: ReadonlyMap<string, ImageRepresentations>;
+}
+
+/** Resolve canonical display images and requested attachment representations in one query. */
+export async function resolveEntityDisplayMedia(
   db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
-): Promise<Map<string, DisplayImageSummary[]>> {
+  options: { attachments?: boolean } = {},
+): Promise<EntityDisplayMedia> {
   const supported = [
     ...new Map(
       refs
@@ -678,7 +709,8 @@ async function resolveUniversalEntityDisplayImageLists(
         .map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
     ).values(),
   ];
-  if (supported.length === 0) return new Map();
+  if (supported.length === 0)
+    return { displayImages: new Map(), representations: new Map() };
   const values = sql.join(
     supported.map(
       (ref) =>
@@ -686,11 +718,21 @@ async function resolveUniversalEntityDisplayImageLists(
     ),
     sql`, `,
   );
-  return resolveDisplayImageListsFromSqlRefs(
+  const resolved = await resolveRankedDisplayImages(
     db,
     sql`refs("entityKind", "entityId", "refKey") AS (VALUES ${values})`,
     new Set(supported.map((ref) => ref.entityKind)),
+    options.attachments === true,
   );
+  return {
+    displayImages: new Map(
+      [...resolved.ranked].map(([key, images]) => [
+        key,
+        images.map(({ image }) => image),
+      ]),
+    ),
+    representations: resolved.representations,
+  };
 }
 
 /** Public shortcodes join durable identities inside the image query. */
@@ -762,7 +804,7 @@ export async function resolveEntityDisplayImageLists(
   db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
 ): Promise<Map<string, DisplayImageSummary[]>> {
-  return resolveUniversalEntityDisplayImageLists(db, refs);
+  return new Map((await resolveEntityDisplayMedia(db, refs)).displayImages);
 }
 
 const publicEntityRowSchema = z.looseObject({ id: z.string() });
@@ -975,20 +1017,25 @@ export async function withDisplayImages<Row extends { id: string }, Out>(
   // an argument so the parse sees them; the spread below covers the rest.
   toOut: (row: Row, displayImages: DisplayImageSummary[]) => Out,
   // Only the authoritative resolver's result from this read may be reused.
-  preloaded?: ReadonlyMap<string, DisplayImageSummary[]>,
+  preloaded?: EntityDisplayMedia,
 ): Promise<Array<Out & { displayImages: DisplayImageSummary[] }>> {
   const lists =
-    preloaded ??
+    preloaded?.displayImages ??
     (await resolveEntityDisplayImageLists(
       db,
       rows.map((row) => ({ entityKind, entityId: row.id })),
     ));
+  const representations = new Map(preloaded?.representations);
+  // Preserve the display resolver's precedence for images it already resolved.
+  // Extra attachment representations cover only references missing from that set.
+  for (const [code, value] of resolvedImageRepresentations(lists))
+    representations.set(code, value);
   return hydrateImageReadProjection(
     db,
     rows.map((row) => {
       const displayImages = lists.get(entityRefKey(entityKind, row.id)) ?? [];
       return { ...toOut(row, displayImages), displayImages };
     }),
-    resolvedImageRepresentations(lists),
+    representations,
   );
 }

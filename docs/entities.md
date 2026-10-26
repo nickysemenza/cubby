@@ -1950,6 +1950,14 @@ rejection. Expense Project and spending allocations use the ID path and start
 together, rather than waiting for the relation-loaded rows. This changes no
 allocation precedence, filter membership or response fields.
 
+Requested attachment galleries prefetch their image representations by page IDs
+alongside row hydration. One canonical media query returns display images and
+attachment representations. The same representation resolver handles public image
+codes and directly owned live attachments, including files excluded from display
+images. Display-image results keep their precedence; only authoritative results
+from this read seed nested hydration. Unknown nested references retain the batched
+fallback, and supplied DTO representations never count as trusted preloads.
+
 Project subtree reads load the tree beside household-grouped Expense and Task
 inputs, then apply the selected descendant scope in memory. A shared in-flight
 tree is reused by settings and rollups. The Expense and date aggregates already

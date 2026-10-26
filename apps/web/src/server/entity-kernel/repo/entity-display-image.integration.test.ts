@@ -1,5 +1,6 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { locationListItemOut } from "@cubby/schemas/location";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -7,7 +8,7 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
-import { getDb } from "~/server/db/helpers";
+import { getDb, mapImages } from "~/server/db/helpers";
 import {
   entityAttachment,
   financialTransaction,
@@ -50,6 +51,10 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import {
+  listReadPlan,
+  selectedListProjection,
+} from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
@@ -320,6 +325,65 @@ describe("entity display image resolver", () => {
       },
     ]);
     expect(measured.queryCount).toBe(1);
+  });
+
+  it("prefetches non-displayable attachments without trusting their supplied representations", async () => {
+    const owner = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic attachment shelf" }),
+      ctx.actor,
+    );
+    const file = await makeImage({ contentType: "application/pdf" });
+    await insertEntityAttachments(ctx.db, {
+      entityId: owner.entityId,
+      imageId: file.id,
+      sortOrder: 0,
+    });
+    const row = {
+      id: owner.entityId,
+      shortcode: owner.id,
+      images: mapImages([file]).map((image) => ({
+        ...image,
+        representations: expectedRepresentations("images/stale.jpg"),
+      })),
+    };
+    const plan = listReadPlan<typeof row>("location", {
+      media: true,
+      bindings: (bind) => [
+        bind(locationListItemOut.pick({ images: true }), (row) => ({
+          images: row.images,
+        })),
+      ],
+    });
+    const projection = selectedListProjection("location", [
+      "images",
+      "displayImages",
+    ]);
+    const prefetched = await countTestDbQueries(async () => {
+      const early = plan.prefetch(ctx.db, [owner.entityId], projection);
+      await Promise.all(Object.values(early));
+      return early;
+    });
+    expect(prefetched.queryCount).toBe(1);
+    const early = prefetched.result;
+    const measured = await countTestDbQueries(() =>
+      plan.read(ctx.db, [row], projection, undefined, undefined, early),
+    );
+    expect(measured.result).toMatchObject([
+      {
+        images: [
+          {
+            id: file.shortcode,
+            representations: expectedRepresentations(file.key),
+          },
+        ],
+        displayImages: [],
+      },
+    ]);
+    expect(measured.queryCount).toBe(0);
+    expect(row.images[0]?.representations).toEqual(
+      expectedRepresentations("images/stale.jpg"),
+    );
   });
 
   it("hydrates missing nested image codes once while preserving trusted preloads and tombstones", async () => {

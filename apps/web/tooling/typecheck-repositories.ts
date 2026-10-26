@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/domains/image-processing/repo/image-representations.ts",
   "src/server/generic/relatedness/repo/relationship-query.ts",
   "src/server/db/computed/source-transaction-settlement-sql.ts",
   "src/server/domains/purchase/repo/purchase-purchaser.ts",
