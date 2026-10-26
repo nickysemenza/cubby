@@ -2418,9 +2418,11 @@ that target's data (SQLSTATE classes 22, 23, 54) backs off the same way with
 the database's message, while transaction-level failures retry the page.
 Value adapters write `DerivedValue`; sink adapters write their own tables
 (search documents with embedding admission, recipe totals, conversion
-coverage). Search publication batches consecutive live documents in stable
-record order, retaining that lock order across missing-document updates;
-it does not issue an upsert per document in a backfill page.
+coverage). Search publication uses one sorted upsert across live documents and
+existing documents marked missing, preserving the latter's content. It then
+retires the observed missing documents in one update within the same transaction.
+This retains stable lock order without splitting mixed backfill pages into
+one write per record. Missing records without documents create no placeholders.
 Publication rings the existing reader notifications for every kind
 it touched. `derived.reconcile` marks one of 24 id buckets each hour at the
 lowest priority, so every stored value is rechecked daily without recomputing

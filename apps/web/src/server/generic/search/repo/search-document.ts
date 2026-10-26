@@ -6,9 +6,10 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
   searchableEntities,
+  searchableEntitySchema,
 } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { type SQL, sql } from "drizzle-orm";
+import { isNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -25,6 +26,7 @@ import {
 } from "~/server/db/derived-declarations";
 import {
   unwrapDb,
+  isTransaction,
   uuidArrayParam,
   withTransactionOn,
 } from "~/server/db/helpers";
@@ -145,14 +147,6 @@ const textList = (values: Array<string | null | undefined>): string[] =>
     const trimmed = value?.trim();
     return trimmed ? [trimmed] : [];
   });
-
-const textArray = (values: string[]): SQL =>
-  values.length === 0
-    ? sql`ARRAY[]::text[]`
-    : sql`ARRAY[${sql.join(
-        values.map((value) => sql`${value}`),
-        sql`, `,
-      )}]::text[]`;
 
 /**
  * The document metadata projection. Semantic text is deliberately loaded by
@@ -627,17 +621,27 @@ async function markSearchDocumentMissing(
   entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
+  await markSearchDocumentsMissing(db, [{ entityKind, entityId }]);
+  return { status: "missing", entityKind, entityId };
+}
+
+async function markSearchDocumentsMissing(
+  db: Database | DrizzleTransaction,
+  refs: readonly SearchableEntityRef[],
+): Promise<void> {
+  if (!refs.length) return;
   const changed = await unwrapDb(db).execute(sql`
-    UPDATE "SearchDocument" SET "deletedAt" = now(), "updatedAt" = now()
-    WHERE "entityKind" = ${entityKind} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
-    RETURNING "entityId"
-  `);
+    UPDATE "SearchDocument" d SET "deletedAt" = now(), "updatedAt" = now()
+    FROM jsonb_to_recordset(${JSON.stringify(refs)}::jsonb)
+      AS wanted("entityKind" text, "entityId" uuid)
+    WHERE d."entityKind" = wanted."entityKind" AND d."entityId" = wanted."entityId"
+      AND d."deletedAt" IS NULL
+    RETURNING d."entityId"`);
   if (changed.rows.length)
     await recordChange(db, {
       kind: "projection",
       categories: ["search", "relatedData", "problems"],
     });
-  return { status: "missing", entityKind, entityId };
 }
 
 /**
@@ -651,22 +655,37 @@ const SEARCH_VECTOR_PART_CHARS = 100_000;
 async function upsertSearchDocumentBatch(
   db: Database | DrizzleTransaction,
   entries: ReadonlyArray<{ source: SearchDocumentSource; body: string }>,
+  missing: readonly SearchableEntityRef[] = [],
 ): Promise<SearchDocumentRefreshResult[]> {
-  if (entries.length === 0) return [];
+  if (entries.length === 0 && missing.length === 0) return [];
   const rows = await Promise.all(
     entries.map(async ({ source, body }) => {
       const normalizedText = normalizeSearchText(source.title);
       const sourceHash = await searchDocumentSourceHash(source, body);
-      return sql`(
-        ${source.entityKind}::text, ${source.entityId}::uuid,
-        ${source.title}::text,
-        ${source.subtitle}::text, ${source.typeHint}::text,
-        ${textArray(source.aliases)}, ${textArray(source.keywords)},
-        ${body}::text, ${normalizedText}::text, ${sourceHash}::text
-      )`;
+      return {
+        ...source,
+        body,
+        normalizedText,
+        sourceHash,
+        semanticText: body,
+      };
     }),
   );
   const changed = await unwrapDb(db).execute(sql`
+    WITH input AS MATERIALIZED (
+      SELECT i.*, NULL::tsvector AS "searchVector", false AS missing FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
+        AS i("entityKind" text, "entityId" uuid, title text, subtitle text,
+          "typeHint" text, aliases text[], keywords text[], body text,
+          "normalizedText" text, "sourceHash" text, "semanticText" text)
+      UNION ALL
+      SELECT d."entityKind", d."entityId", d.title, d.subtitle, d."typeHint",
+        d.aliases, d.keywords, d.body, d."normalizedText", d."sourceHash", d."semanticText", d."searchVector", true
+      FROM "SearchDocument" d
+      JOIN jsonb_to_recordset(${JSON.stringify(missing)}::jsonb)
+        AS wanted("entityKind" text, "entityId" uuid)
+        ON d."entityKind" = wanted."entityKind" AND d."entityId" = wanted."entityId"
+      WHERE ${isNull(sql`d."deletedAt"`)}
+    ), written AS (
     INSERT INTO "SearchDocument" (
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "semanticText", "normalizedText",
@@ -674,14 +693,11 @@ async function upsertSearchDocumentBatch(
     )
     SELECT input."entityKind", input."entityId", input.title,
       input.subtitle, input."typeHint", input.aliases, input.keywords,
-      input.body, input.body, input."normalizedText",
-      setweight(to_tsvector('simple', left(input.title, ${SEARCH_VECTOR_PART_CHARS})), 'A') ||
+      input.body, input."semanticText", input."normalizedText",
+      coalesce(input."searchVector", setweight(to_tsvector('simple', left(input.title, ${SEARCH_VECTOR_PART_CHARS})), 'A') ||
       setweight(to_tsvector('simple', left(concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' ')), ${SEARCH_VECTOR_PART_CHARS})), 'B') ||
-      setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_PART_CHARS})), 'D'), input."sourceHash"
-    FROM (VALUES ${sql.join(rows, sql`, `)}) AS input(
-      "entityKind", "entityId", title, subtitle, "typeHint",
-      aliases, keywords, body, "normalizedText", "sourceHash"
-    )
+      setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_PART_CHARS})), 'D')), input."sourceHash"
+    FROM input
     ORDER BY input."entityKind", input."entityId"
     ON CONFLICT ("entityKind", "entityId") WHERE "deletedAt" IS NULL DO UPDATE SET
       title = EXCLUDED.title,
@@ -692,13 +708,31 @@ async function upsertSearchDocumentBatch(
       "searchVector" = EXCLUDED."searchVector",
       "sourceHash" = EXCLUDED."sourceHash", "updatedAt" = now(),
       "deletedAt" = NULL
-    WHERE "SearchDocument"."sourceHash" IS DISTINCT FROM EXCLUDED."sourceHash"
+    WHERE NOT EXISTS (SELECT 1 FROM input retired WHERE retired.missing
+      AND retired."entityKind" = EXCLUDED."entityKind" AND retired."entityId" = EXCLUDED."entityId")
+      AND ("SearchDocument"."sourceHash" IS DISTINCT FROM EXCLUDED."sourceHash"
       OR "SearchDocument".body IS DISTINCT FROM EXCLUDED.body
       OR "SearchDocument"."semanticText" IS DISTINCT FROM EXCLUDED."semanticText"
-      OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title
+      OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title)
     RETURNING "entityKind"
+    ) SELECT (SELECT count(*)::int FROM written) AS changed,
+      coalesce(jsonb_agg(jsonb_build_object('entityKind', input."entityKind", 'entityId', input."entityId"))
+        FILTER (WHERE input.missing), '[]'::jsonb) AS missing
+      FROM input
   `);
-  if (changed.rows.length)
+  const publication = z
+    .object({
+      changed: z.number(),
+      missing: z.array(
+        z.object({ entityKind: searchableEntitySchema, entityId: z.string() }),
+      ),
+    })
+    .parse(changed.rows[0]);
+  // The sorted upsert also locks existing missing rows without changing their
+  // text. Retire only those observed rows after every publication lock is held;
+  // missing records that had no document never acquire placeholder documents.
+  await markSearchDocumentsMissing(db, publication.missing);
+  if (publication.changed)
     await recordChange(db, {
       kind: "projection",
       categories: ["search", "relatedData", "problems"],
@@ -774,40 +808,30 @@ export async function publishPreparedSearchDocuments(
   prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
 ): Promise<SearchDocumentRefreshResult[]> {
   await assertCurrentJob(db);
-  const results: SearchDocumentRefreshResult[] = [];
-  const refs = [
-    ...prepared.entries.map((entry) => entry.source),
-    ...prepared.missing,
-  ].sort((a, b) =>
-    entityRefKey(a.entityKind, a.entityId).localeCompare(
-      entityRefKey(b.entityKind, b.entityId),
+  const entries = [...prepared.entries].sort((a, b) =>
+    entityRefKey(a.source.entityKind, a.source.entityId).localeCompare(
+      entityRefKey(b.source.entityKind, b.source.entityId),
     ),
   );
-  const entriesByRef = new Map(
-    prepared.entries.map((entry) => [
-      entityRefKey(entry.source.entityKind, entry.source.entityId),
-      entry,
-    ]),
-  );
-  let pending: typeof prepared.entries = [];
-  const flush = async () => {
-    results.push(...(await upsertSearchDocumentBatch(db, pending)));
-    pending = [];
-  };
-  for (const ref of refs) {
-    const entry = entriesByRef.get(entityRefKey(ref.entityKind, ref.entityId));
-    if (entry) pending.push(entry);
-    else {
-      // Preserve the global lock order across upserts and missing documents.
-      // Live runs share one batch instead of one round trip per document.
-      await flush();
-      results.push(
-        await markSearchDocumentMissing(db, ref.entityKind, ref.entityId),
+  if (!prepared.missing.length) return upsertSearchDocumentBatch(db, entries);
+  const current = unwrapDb(db);
+  return withTransactionOn(
+    isTransaction(current) ? current : db,
+    async (tx) => {
+      const results: SearchDocumentRefreshResult[] = [
+        ...(await upsertSearchDocumentBatch(tx, entries, prepared.missing)),
+        ...prepared.missing.map((ref) => ({
+          status: "missing" as const,
+          ...ref,
+        })),
+      ];
+      return results.sort((a, b) =>
+        entityRefKey(a.entityKind, a.entityId).localeCompare(
+          entityRefKey(b.entityKind, b.entityId),
+        ),
       );
-    }
-  }
-  await flush();
-  return results;
+    },
+  );
 }
 
 export async function refreshSearchDocuments(

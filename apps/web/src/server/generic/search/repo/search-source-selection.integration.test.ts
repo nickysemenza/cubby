@@ -152,21 +152,47 @@ describe("search source selection", () => {
        WHERE "entityId" = ANY(${uuidArrayParam(refs.map((ref) => ref.entityId))})
          AND "deletedAt" IS NULL`);
     expect(stored.rows[0]?.count).toBe(8);
-    const missing = prepared.entries
-      .filter((_, index) => index % 3 === 0)
+    const ordered = [...prepared.entries].sort((a, b) =>
+      a.source.entityId.localeCompare(b.source.entityId),
+    );
+    const missing = ordered
+      .filter((_, index) => index % 2 === 0)
       .map((entry) => entry.source);
-    const retained = prepared.entries.filter((_, index) => index % 3 !== 0);
-    const mixed = await publishPreparedSearchDocuments(ctx.db, {
-      entries: retained,
-      missing,
-    });
-    expect(mixed.filter((row) => row.status === "missing")).toHaveLength(3);
-    expect(mixed.filter((row) => row.status === "upserted")).toHaveLength(5);
+    const retained = ordered.filter((_, index) => index % 2 !== 0);
+    const mixed = await countTestDbQueries(() =>
+      publishPreparedSearchDocuments(ctx.db, {
+        entries: retained,
+        missing,
+      }),
+    );
+    expect(mixed.result.filter((row) => row.status === "missing")).toHaveLength(
+      4,
+    );
+    expect(
+      mixed.result.filter((row) => row.status === "upserted"),
+    ).toHaveLength(4);
+    expect(mixed.queryCount).toBeLessThanOrEqual(single.queryCount + 4);
     const removed = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
       SELECT count(*)::int AS count FROM "SearchDocument"
        WHERE "entityId" = ANY(${uuidArrayParam(missing.map((ref) => ref.entityId))})
          AND "deletedAt" IS NOT NULL`);
-    expect(removed.rows[0]?.count).toBe(3);
+    expect(removed.rows[0]?.count).toBe(4);
+    await publishPreparedSearchDocuments(ctx.db, { entries: [], missing });
+    const history = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM "SearchDocument"
+      WHERE "entityId" = ANY(${uuidArrayParam(refs.map((ref) => ref.entityId))})`);
+    expect(history.rows[0]?.count).toBe(8);
+    await publishPreparedSearchDocuments(ctx.db, prepared);
+    // Opposing live/missing sets must still acquire publication locks in the
+    // same order, including when one publisher starts with reversed input.
+    const competing = await Promise.all([
+      publishPreparedSearchDocuments(ctx.db, { entries: retained, missing }),
+      publishPreparedSearchDocuments(ctx.db, {
+        entries: ordered.filter((_, index) => index % 2 === 0).reverse(),
+        missing: retained.map((entry) => entry.source).reverse(),
+      }),
+    ]);
+    expect(competing.map((results) => results.length)).toEqual([8, 8]);
   });
 
   it("retains source columns and deduplicates mixed requested records", async () => {
