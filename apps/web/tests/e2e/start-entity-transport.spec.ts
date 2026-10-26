@@ -21,6 +21,7 @@ import {
 } from "~/lib/browser-operation-path";
 
 import { createProduct } from "./support/e2e-helpers";
+import { ensureMemberParty } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";
 import { dispatchOperations, unbatchFor } from "./support/dispatch-wire";
 
@@ -91,6 +92,8 @@ test("core entity list, detail, and mutation ride named browser operations", asy
   });
 
   const name = `E2E Start Transport ${Date.now()}`;
+  // Full detail mounts member-scoped reports as well as the entity read.
+  await ensureMemberParty(page, "Synthetic transport");
   await createProduct(page, name);
 
   // In-app navigation throughout: a `page.goto` runs the route loader on the
