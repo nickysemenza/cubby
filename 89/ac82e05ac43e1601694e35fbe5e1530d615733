@@ -1,0 +1,21 @@
+apps/web/DESIGN.md
+  s_34f0947f9f6a59::t_b06e92b3d43ad7 243,246-247
+docs/entities.md
+  s_34f0947f9f6a59::t_0e572b5d9d11cf 209-219,385,389,393-399,434-438,443
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "89ac82e05ac43e1601694e35fbe5e1530d615733",
+  "prompts": {},
+  "sessions": {
+    "s_34f0947f9f6a59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "121d83ba-ae8e-437b-8994-c2d0064b0126",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
