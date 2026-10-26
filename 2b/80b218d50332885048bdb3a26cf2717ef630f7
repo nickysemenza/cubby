@@ -1,0 +1,31 @@
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_34f0947f9f6a59::t_2a85538e6ce875 30-38,40-57,59,64,68-76,78-85,107-115,127-148,468-470,472-474,1237-1242,1252,1342-1349,1360,1376,1379,1382-1384,1386,1392-1398
+apps/apple/App/Shared/Entity/Detail/DetailSummaryGrid.swift
+  s_34f0947f9f6a59::t_4852ae1d239b34 5,9,12,33-34,36-51,53,58-63,132-134,152-155
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_34f0947f9f6a59::t_2ebed98be6dd01 584-585,587-592,763,812
+apps/apple/App/Tests/Entity/Detail/DetailActivityDateTests.swift
+  s_34f0947f9f6a59::t_50d7e9f92c9336 15-40
+apps/apple/App/Tests/Entity/Detail/EntityFieldValueTests.swift
+  s_34f0947f9f6a59::t_9d415ac0a29acc 9-18
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/EntityManifestTests.swift
+  s_34f0947f9f6a59::t_2f38e044d21a38 57-69
+apps/apple/DESIGN.md
+  s_34f0947f9f6a59::t_a2a32fa9c513e7 136-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2b80b218d50332885048bdb3a26cf2717ef630f7",
+  "prompts": {},
+  "sessions": {
+    "s_34f0947f9f6a59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "121d83ba-ae8e-437b-8994-c2d0064b0126",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
