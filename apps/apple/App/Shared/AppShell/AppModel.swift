@@ -638,7 +638,7 @@ final class AppModel {
         await companionImageWorker?.stopAndReleaseClaims()
     }
 
-    /// Applies Settings › Image work (`CompanionImageConcurrency.defaultsKey`, stored per device)
+    /// Applies Settings › Advanced image work (`CompanionImageConcurrency.defaultsKey`, stored per device)
     /// to the running worker; it takes effect on the next pull, without a restart.
     func applyImageWorkConcurrency() {
         let slots = CompanionImageConcurrency.slots(for: CompanionImageConcurrency.storedChoice())
@@ -646,11 +646,9 @@ final class AppModel {
         Task { await worker?.setMaximumConcurrentCommands(slots) }
     }
 
-    func runCompanionJobsInBackground(
-        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)? = nil
-    ) async -> Bool {
+    func runCompanionJobsInBackground() async -> Bool {
         guard phase == .signedIn, participation.automaticWork else { return false }
-        return await companionImageWorker?.runInBackground(client: client, progress: progress) ?? false
+        return await companionImageWorker?.runInBackground(client: client) ?? false
     }
 
     private func configureCompanionImageWorker() {

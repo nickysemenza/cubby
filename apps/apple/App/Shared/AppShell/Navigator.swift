@@ -349,13 +349,11 @@ final class Navigator {
 enum ActivitySelection: Hashable, Identifiable, Codable {
     case serverRun(String)
     case localActivity(String)
-    case record(RecordSelection)
 
     var id: String {
         switch self {
         case .serverRun(let id): "server:\(id)"
         case .localActivity(let id): "local:\(id)"
-        case .record(let record): "record:\(record.key.rawValue):\(record.id)"
         }
     }
 }
