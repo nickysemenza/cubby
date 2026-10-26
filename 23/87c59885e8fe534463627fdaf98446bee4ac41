@@ -1,0 +1,55 @@
+apps/web/src/server/ai/field-suggest/suggest-fields.ts
+  s_9d09521008a76d::t_7d919e593cd8c7 117-118,1160-1166
+apps/web/src/server/ai/product-identity.ts
+  s_9d09521008a76d::t_18396a7705e5a6 26,183-191,206-218,295-299,307-326
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_9d09521008a76d::t_0b398db73ef54a 112-117
+apps/web/src/server/domains/connection/service/entity-connections.ts
+  s_9d09521008a76d::t_a6cafbdd9a8da3 7,25,64,154-155,157,160-167,171,186,199-200,249
+apps/web/src/server/domains/product/repo/match/product-identity-fence.ts
+  s_9d09521008a76d::t_d81a5971e45d8e 25-39,43-46,48,51,53,55-56,58,60-62,64-79,82-90,92-95,98-100
+apps/web/src/server/domains/product/repo/match/product-identity-snapshot.ts
+  s_9d09521008a76d::t_33fba70385d622 31,37-40,121,134-139,186-225,261-262,308,310,314,316-318,321-354,356-369
+apps/web/src/server/domains/product/repo/match/product-match-candidate.ts
+  s_9d09521008a76d::t_97da8f9f844ad6 48,121-147
+apps/web/src/server/domains/product/repo/product-identity-claims.ts
+  s_9d09521008a76d::t_b025fd7888cd84 4,58,63,117-121
+apps/web/src/server/domains/product/repo/product-variant-evidence.integration.test.ts
+  s_9d09521008a76d::t_f16d8f34401c37 15-18,237-249
+apps/web/src/server/domains/product/repo/product-variant-evidence.ts
+  s_9d09521008a76d::t_f3336e3c240e43 92-93,95,98,100-104,106-113,121-131,145,147,152-157,165-177,179-196
+apps/web/src/server/domains/run/operations/ai.server.ts
+  s_9d09521008a76d::t_c2d5c8473b039f 297
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_9d09521008a76d::t_d28920fde1771f 1408-1409,1493-1494
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_9d09521008a76d::t_8387a16f9213cf 47,63,66-69,246,887-901,904-916,918-920,922,924-948,1013
+apps/web/src/server/generic/assessment/repo/assessment-product.integration.test.ts
+  s_9d09521008a76d::t_1caef4ef533c60 45,109-110,114,116-118,120,544-551
+apps/web/src/server/generic/entity-report/repo/entity-report.integration.test.ts
+  s_9d09521008a76d::t_6b599ab5c0998f 481-484
+apps/web/src/server/generic/entity-report/repo/index.ts
+  s_9d09521008a76d::t_8538b90f366863 156-185
+apps/web/src/server/generic/entity-report/repo/summary.ts
+  s_9d09521008a76d::t_1d0464171bfbc9 107,109,165,167,300,302
+apps/web/docs/web-runtime.md
+  s_9d09521008a76d::t_46aa0d316f3589 290-293
+docs/entities.md
+  s_9d09521008a76d::t_dc459198477d2c 1229-1234
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2387c59885e8fe534463627fdaf98446bee4ac41",
+  "prompts": {},
+  "sessions": {
+    "s_9d09521008a76d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a178c2-a10b-7971-80c6-3985d51fedd9",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
