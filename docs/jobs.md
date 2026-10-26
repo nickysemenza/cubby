@@ -141,7 +141,11 @@ Job budget bounds the expanded selection:
 Selection reads one database snapshot for fair seeds, reserved pages and batch
 widening. Timed Jobs and pending-capture wakes use separate scans, so terminal
 history is not searched to find pending captures. Run classification joins the
-active Runs once. Backlog counts still include all due Jobs after exclusions and
+active Runs once.
+Evaluation lookups parse canonical Job keys and join the evaluation UUID primary
+key, rather than scanning evaluation history through a concatenated text key.
+Noncanonical keys retain their unmatched behavior and never fail a UUID cast.
+Backlog counts still include all due Jobs after exclusions and
 compute the logarithmic weight once per kind. Each kind and ownership/exemption
 class contributes a bounded priority prefix before window ranking; an exempt routine Run cannot hide
 ordinary siblings needed to widen another selected page. The latest claim comes
