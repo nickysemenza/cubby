@@ -29,12 +29,19 @@ export const correctionOperationId = (
   targetAssessmentId: string,
 ) => `correction:${sourceFeedbackId}:${targetAssessmentId}`;
 
+// Keep indexed UUID columns intact. Only canonical stored handles matched the
+// former id::text comparison; malformed historical metadata must remain unmatched.
+const correctionFeedbackId = (
+  key: "sourceFeedbackId" | "sourceApplicationFeedbackId",
+) =>
+  sql`substring(correction_outcome.metadata->>${key} FROM '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')::uuid`;
+
 /** Historical attempts are visible only with their automatic receipt and bound member application. */
 export function correctionOutcomeExists(assessmentId: SQL, receiptId?: SQL) {
   return sql`EXISTS (
     SELECT 1 FROM "Feedback" correction_outcome
-    JOIN "Feedback" correction_root ON correction_root.id::text = correction_outcome.metadata->>'sourceFeedbackId'
-    JOIN "Feedback" correction_application ON correction_application.id::text = correction_outcome.metadata->>'sourceApplicationFeedbackId'
+    JOIN "Feedback" correction_root ON correction_root.id = ${correctionFeedbackId("sourceFeedbackId")}
+    JOIN "Feedback" correction_application ON correction_application.id = ${correctionFeedbackId("sourceApplicationFeedbackId")}
     WHERE correction_outcome."assessmentId" = ${assessmentId}
       ${receiptId ? sql`AND correction_outcome.id = ${receiptId}` : sql``}
       AND correction_outcome.metadata->>${"kind"} = ${CORRECTION_OUTCOME_RECEIPT_KIND}
