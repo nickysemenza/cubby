@@ -206,7 +206,6 @@ export async function publishProductPairPublications(
         z.record(z.string(), z.json()).safeParse(proposed.signals).data ?? {};
       const data = pairProjection.parse({
         ...proposed,
-        actionable: proposed.actionable && guard.exact,
         conflict: proposed.conflict || guard.conflict,
         evidence:
           guard.verification === "pending_verification"

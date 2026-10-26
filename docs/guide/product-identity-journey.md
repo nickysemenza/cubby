@@ -89,7 +89,9 @@ most 25 outcomes, take pair locks in stable order and publish immutable evidence
 in sets. Repeated requests for a pair share one publication while retaining their
 own execution receipts. Supersession and activation write replayable projection
 Feedback, carrying member suppression forward and leaving historical conflicts
-as verification guards. Similarity alone never makes a pair actionable.
+as verification guards. Publication preserves the caller's explicit actionability
+judgment; ordinary detector evaluation makes only exact identity actionable.
+Similarity alone never makes a pair actionable.
 
 Preparation, review reads, Problems, proposals and merges consume stored evidence without model calls. Every Product merge entry point checks all pairs among the combined Products, including loser-to-loser pairs, after acquiring Product and identifier parent locks and before mutation. Inference exclusions never bypass merge safety. Source or Product edits retire current pair actions. A historical grounded contradiction remains a verification guard after its support changes or disappears: a new agent proposal or exact-identifier outage fallback cannot clear it. Fresh current grounded evidence must address the conflicting dimensions and acknowledge the prior conflict lineage before merging can proceed. Partial or uncertain grounding leaves that guard pending. A recorded contradiction between structured model values also stays pending when a supporting Source disappears; current Source-bound agreeing model values clear only that model-specific reason. Exact identifier admission remains separate from semantic variant evidence. A confirmed variant contradiction under an exact claim exposes a conflict
 without assigning the identifier twice. Shared URLs and partial variant words

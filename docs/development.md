@@ -512,6 +512,9 @@ emits deployable Build Output under `apps/web/.cloudflare/output/v0/`, including
 the Worker bundle and copied static assets. Worker JavaScript uses ASCII
 source escapes while retaining Unicode runtime values and diagnostic names;
 this reduces resident script-string memory in the constrained Worker isolate.
+The Worker SSR build preserves source execution order across Rolldown chunks;
+otherwise schema/pool chunk cycles can initialize Drizzle subclasses before
+their base classes. Client chunking retains its separate configuration.
 Deployment reuses this output with
 `cf deploy --prebuilt --mode production`. The plugin writes directly into this
 output tree; there is no separate `dist` bundle.
