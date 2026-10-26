@@ -68,6 +68,10 @@ struct EntityListView: View {
     @State private var cardDensity = ListPresentationChoice.cards
     @State private var browsePresentation = BrowsePresentation.list
     @State private var hiddenTableColumns = Set<String>()
+    #if os(macOS)
+        /// Column hides, order and widths per entity, restored with the window.
+        @SceneStorage private var columnCustomization: TableColumnCustomization<EntityRow>
+    #endif
     @State private var quickActions = RowQuickActionRunner()
     @State private var selectedTableRecordID: String?
     @State private var openedRecord: RecordSelection?
@@ -93,11 +97,21 @@ struct EntityListView: View {
         _model = State(initialValue: model)  // state-init-ok
         _browsePresentation = State(initialValue: presentation)  // state-init-ok: route-scoped lifetime
         _hiddenTableColumns = State(  // state-init-ok: manifest defaults for this route's entity
-            initialValue: Set(EntityCatalog[key].fields.filter(\.listHidden).map(\.key))
-                .subtracting(EntityRowPresentation.listContextKeys(descriptor: EntityCatalog[key])))
+            initialValue: Self.defaultHiddenTableColumns(EntityCatalog[key]))
+        #if os(macOS)
+            _columnCustomization = SceneStorage(
+                wrappedValue: TableColumnCustomization<EntityRow>(), "cubby.table.\(key.rawValue)")
+        #endif
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
+
+    /// Table columns start hidden where the manifest declares `listHidden`, except a relation's
+    /// context fields, which stand in for a column web shows.
+    private static func defaultHiddenTableColumns(_ descriptor: EntityDescriptor) -> Set<String> {
+        Set(descriptor.fields.filter(\.listHidden).map(\.key))
+            .subtracting(EntityRowPresentation.listContextKeys(descriptor: descriptor))
+    }
 
     /// Filtering by the coverage registry keeps an entity-qualified slot from being mistaken
     /// for a built-in view during initial selection or picker changes.
@@ -366,14 +380,14 @@ struct EntityListView: View {
                     Toggle(
                         field.label,
                         isOn: Binding(
-                            get: { !hiddenTableColumns.contains(field.key) },
-                            set: { visible in
-                                if visible {
-                                    hiddenTableColumns.remove(field.key)
-                                } else {
-                                    hiddenTableColumns.insert(field.key)
+                            get: {
+                                switch columnCustomization[visibility: field.key] {
+                                case .visible: true
+                                case .hidden: false
+                                default: !hiddenTableColumns.contains(field.key)
                                 }
-                            })
+                            },
+                            set: { columnCustomization[visibility: field.key] = $0 ? .visible : .hidden })
                     )
                     .accessibilityIdentifier("browse.\(key.rawValue).column.\(field.key)")
                 }
@@ -903,26 +917,15 @@ struct EntityListView: View {
             EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)?.value,
             row.subtitle, titleParts.subtitle,
         ].compactMap { $0 }.first(where: EntityRowPresentation.isVisibleListFactValue)
-        return HStack(spacing: FieldGuideTokens.Space.xs) {
-            Thumb(
-                url: row.imageURL, size: 18, symbol: descriptor.recordSymbol(in: row),
-                emoji: descriptor.recordEmoji(in: row))
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
-                Text(titleParts.title)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                if descriptor.presentation.titleSubtitle, let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("browse.\(key.rawValue).table.row.\(row.id)")
-        }
-        .frame(minHeight: 24, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
+        return EntityTableTitleCell(
+            title: titleParts.title,
+            subtitle: descriptor.presentation.titleSubtitle ? subtitle : nil,
+            imageURL: row.imageURL, symbol: descriptor.recordSymbol(in: row),
+            emoji: descriptor.recordEmoji(in: row)
+        )
+        .entityTableCell()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("browse.\(key.rawValue).table.row.\(row.id)")
     }
 
     @ViewBuilder
@@ -931,11 +934,16 @@ struct EntityListView: View {
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         let sections = model.sections
         let actions = sectionActions(model)
-        let fields = tableFields
+        let hasMore = model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore
         #if os(macOS)
+            // Every column is declared so hides persist; manifest `listHidden` sets the default.
+            let fields = allTableFields
+            let defaultHidden = hiddenTableColumns
             // Native table cells are rehosted when sorting replaces the rows, so capture the
             // owning model before that boundary for their reference actions.
             let cellAppModel = appModel
+        #else
+            let fields = tableFields
         #endif
         VStack(spacing: 0) {
             tableControls(model)
@@ -949,7 +957,10 @@ struct EntityListView: View {
                 }
             #endif
             #if os(macOS)
-                Table(of: EntityRow.self, selection: tableSelection, sortOrder: tableSortOrder(model)) {
+                Table(
+                    of: EntityRow.self, selection: tableSelection, sortOrder: tableSortOrder(model),
+                    columnCustomization: $columnCustomization
+                ) {
                     if descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(
                             Text(tableTitleLabel),
@@ -957,15 +968,17 @@ struct EntityListView: View {
                         ) { row in
                             tableTitle(row)
                         }
-                        .width(min: 240)
+                        .width(.title)
                         .customizationID("title")
+                        .disabledCustomizationBehavior(.visibility)
                     }
                     if !descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(Text(tableTitleLabel)) { (row: EntityRow) in
                             tableTitle(row)
                         }
-                        .width(min: 240)
+                        .width(.title)
                         .customizationID("title")
+                        .disabledCustomizationBehavior(.visibility)
                     }
                     TableColumnForEach(fields, id: \.key) { field in
                         if let sortKey = sortKey(for: field) {
@@ -975,16 +988,18 @@ struct EntityListView: View {
                                 tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
-                            .width(min: 180)
+                            .width(EntityTableColumnWidth(field))
                             .customizationID(field.key)
+                            .defaultVisibility(defaultHidden.contains(field.key) ? .hidden : .automatic)
                         }
                         if sortKey(for: field) == nil {
                             TableColumn(columnHeader(field)) { (row: EntityRow) in
                                 tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
-                            .width(min: 180)
+                            .width(EntityTableColumnWidth(field))
                             .customizationID(field.key)
+                            .defaultVisibility(defaultHidden.contains(field.key) ? .hidden : .automatic)
                         }
                     }
                 } rows: {
@@ -1000,8 +1015,18 @@ struct EntityListView: View {
                     } else {
                         ForEach(visibleRows) { TableRow($0) }
                     }
+                    // Load more is the table's last row, so paging stays inside the scrolled
+                    // content instead of a footer below it.
+                    if hasMore {
+                        Section {
+                            ForEach([EntityRow]()) { TableRow($0) }
+                        } header: {
+                            HStack { loadMore(model) }.frame(maxWidth: .infinity)
+                        }
+                    }
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: true))
+                .environment(\.defaultMinListRowHeight, EntityTableLayout.rowHeight)
                 .contextMenu(forSelectionType: String.self) { records in
                     if let id = records.first {
                         Button("Copy link", systemImage: "link") {
@@ -1053,11 +1078,13 @@ struct EntityListView: View {
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #endif
-            if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
-                loadMore(model)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, FieldGuideTokens.Space.sm)
-            }
+            #if !os(macOS)
+                if hasMore {
+                    loadMore(model)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, FieldGuideTokens.Space.sm)
+                }
+            #endif
         }
         .navigationDestination(item: $openedRecord) { record in
             RouteDestinationView(route: .entityDetail(record.key, id: record.id))
@@ -1145,9 +1172,9 @@ struct EntityListView: View {
         }
     }
 
-    private var tableCellMinimumHeight: CGFloat {
+    private var tableCellMinimumHeight: CGFloat? {
         #if os(macOS)
-            24
+            nil
         #else
             FieldGuideTokens.touchTarget
         #endif
@@ -1159,6 +1186,8 @@ struct EntityListView: View {
         }
     #endif
 
+    /// Mac cells are one line: the provenance caption iPhone stacks below a value is dropped,
+    /// and only a cell with an action (a reference) takes keyboard focus.
     @ViewBuilder
     private func tableCell(
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
@@ -1167,59 +1196,73 @@ struct EntityListView: View {
             if let reason = field.displayApplicabilityRefusal(in: row.raw) {
                 Text("—").foregroundStyle(.tertiary)
                     .help(reason)
-                    .focusable()
                     .accessibilityLabel("\(field.label): Not applicable. \(reason)")
             } else if let fact {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    HStack(spacing: FieldGuideTokens.Space.xs) {
-                        DerivedValueStatus(raw: row.raw, field: field.key)
-                        if field.listRenderer == .dataQuality {
-                            if EntityRowPresentation.needsData(in: row) {
-                                HStack(spacing: FieldGuideTokens.Space.xs) {
-                                    Circle().fill(.orange).frame(width: 6, height: 6)
-                                    Text("Needs data")
-                                }
-                            } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
-                                Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
-                            }
-                        } else if let reference = EntityFieldValue.reference(
-                            in: row.raw, field: field, surface: "list")
-                        {
-                            tableReference(reference, value: fact.value)
-                                .buttonStyle(.borderless)
-                                .accessibilityIdentifier(
-                                    "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
-                            if fact.inherited { InheritedMarker() }
-                        } else if let option = EntityFieldValue.option(
-                            in: row.raw, field: field, surface: "list"),
-                            let chip = StatusChip(text: fact.value, option: option)
-                        {
-                            chip
-                        } else {
-                            Group {
-                                if let date = fact.dateValue {
-                                    #if os(macOS)
-                                        DateDisplay(date, compact: true)
-                                    #else
-                                        DateDisplay(date, compact: true, stacked: true)
-                                    #endif
-                                } else {
-                                    InheritedMarker.text(fact.segments)
-                                        .accessibilityLabel(fact.spokenValue)
-                                }
-                            }
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        }
+                #if os(macOS)
+                    tableValue(field, row: row, fact: fact)
+                #else
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        tableValue(field, row: row, fact: fact)
+                        DerivedProvenanceCaption(raw: row.raw, field: field.key)
                     }
-                    DerivedProvenanceCaption(raw: row.raw, field: field.key)
-                }
+                #endif
             } else {
                 Text("—").foregroundStyle(.tertiary)
             }
         }
-        .frame(minHeight: tableCellMinimumHeight, alignment: .leading)
+        #if os(macOS)
+            .entityTableCell()
+        #else
+            .frame(minHeight: tableCellMinimumHeight, alignment: .leading)
+        #endif
+    }
+
+    @ViewBuilder
+    private func tableValue(
+        _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact
+    ) -> some View {
+        HStack(spacing: FieldGuideTokens.Space.xs) {
+            DerivedValueStatus(raw: row.raw, field: field.key)
+            if field.listRenderer == .dataQuality {
+                if EntityRowPresentation.needsData(in: row) {
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
+                        Circle().fill(.orange).frame(width: 6, height: 6)
+                        Text("Needs data")
+                    }
+                } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
+                    Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
+                }
+            } else if let reference = EntityFieldValue.reference(
+                in: row.raw, field: field, surface: "list")
+            {
+                tableReference(reference, value: fact.value)
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier(
+                        "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
+                if fact.inherited { InheritedMarker() }
+            } else if let option = EntityFieldValue.option(
+                in: row.raw, field: field, surface: "list"),
+                let chip = StatusChip(text: fact.value, option: option)
+            {
+                chip
+            } else {
+                Group {
+                    if let date = fact.dateValue {
+                        #if os(macOS)
+                            DateDisplay(date, compact: true)
+                        #else
+                            DateDisplay(date, compact: true, stacked: true)
+                        #endif
+                    } else {
+                        InheritedMarker.text(fact.segments)
+                            .accessibilityLabel(fact.spokenValue)
+                    }
+                }
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+            }
+        }
     }
 
     @ViewBuilder
