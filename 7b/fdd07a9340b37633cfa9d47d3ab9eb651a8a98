@@ -1,0 +1,23 @@
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_b740f50efa58f5::t_acb0c8fca270a3 21,38-40,75-76,82-86
+apps/web/tooling/scenarios/performance.integration.test.ts
+  s_b740f50efa58f5::t_f5d449d9d96a1f 6-7,138-166
+docs/entities.md
+  s_b740f50efa58f5::t_a29f0afc9e8806 2601-2606
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7bfdd07a9340b37633cfa9d47d3ab9eb651a8a98",
+  "prompts": {},
+  "sessions": {
+    "s_b740f50efa58f5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16b7e-32f6-74b1-a89c-f90576476df6",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
