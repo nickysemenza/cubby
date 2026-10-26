@@ -190,6 +190,21 @@ final class AppModel {
     let requestTrace = RequestTrace()
     let nativeWorkspaces = NativeWorkspaceContext()
     var lastError: String?
+    @ObservationIgnored private var lastErrorRetry: (@MainActor () async -> Void)?
+    var canRetryLastError: Bool { lastError != nil && lastErrorRetry != nil }
+
+    func dismissLastError() {
+        lastError = nil
+        lastErrorRetry = nil
+    }
+
+    /// Consume before scheduling so alert dismissal cannot discard the requested retry.
+    @discardableResult
+    func retryLastError() -> Task<Void, Never>? {
+        guard let retry = lastErrorRetry, lastError != nil else { return nil }
+        dismissLastError()
+        return Task { await retry() }
+    }
     /// Bumped by every write the app makes to an entity; a list or detail showing one of
     /// `entityMutationKeys` refreshes on the next revision (`.task(id:)` on the views).
     private(set) var entityMutationRevision = 0
@@ -343,12 +358,12 @@ final class AppModel {
         } catch is CancellationError {
             return
         } catch {
-            Diagnostics.report(error, context: "maintenance.requestCatchUp")
+            handle(error) { [weak self] in await self?.requestCatchUpIfNeeded() }
         }
     }
 
     func signIn(email: String, password: String) async {
-        lastError = nil
+        dismissLastError()
         let flow = auth
         do {
             let credential = try await flow.signIn(email: email, password: password)
@@ -365,7 +380,7 @@ final class AppModel {
 
     #if DEBUG
         func signInForDevelopment() async {
-            lastError = nil
+            dismissLastError()
             let flow = auth
             do {
                 let credential = try await flow.signInForDevelopment()
@@ -384,7 +399,7 @@ final class AppModel {
     func signInWithGoogle(
         authenticate: @escaping AuthFlow.WebAuthenticationHandler
     ) async {
-        lastError = nil
+        dismissLastError()
         let flow = auth
         do {
             let credential = try await flow.signInWithGoogle(authenticate: authenticate)
@@ -435,6 +450,7 @@ final class AppModel {
     }
 
     private func finishSignIn(with credential: CubbyCredential) async {
+        dismissLastError()
         self.credential = credential
         phase = .signedIn
         warmBrowseCounts()
@@ -448,6 +464,7 @@ final class AppModel {
     }
 
     func signOut() async {
+        dismissLastError()
         await PhotoImportNotificationCoordinator.shared.stop(client: client)
         for flow in photoImportFlows { flow.interrupt() }
         photoImportFlows.removeAll()
@@ -481,11 +498,13 @@ final class AppModel {
 
     /// Called by any screen that receives a `CubbyAPIError`: a 401 means the middleware already
     /// dropped the credential, so the UI should follow it out.
-    func handle(_ error: any Error) {
+    func handle(_ error: any Error, retry: (@MainActor () async -> Void)? = nil) {
         Diagnostics.report(error, context: "app.handle")
+        lastError = error.userMessage
+        lastErrorRetry = retry
         if let apiError = error as? CubbyAPIError {
-            lastError = apiError.detail?.message ?? "HTTP \(apiError.status)"
             if apiError.isUnauthorized {
+                lastErrorRetry = nil
                 stopAutomaticPhotoMatching()
                 UserDefaults.standard.set(false, forKey: Self.photoMatchingPendingKey)
                 #if os(iOS)
@@ -500,8 +519,6 @@ final class AppModel {
                     try? await companionImageWorker?.stopAndDiscardPendingResults()
                 }
             }
-        } else {
-            lastError = String(describing: error)
         }
     }
 
@@ -574,6 +591,7 @@ final class AppModel {
     }
 
     private func rebindClients() {
+        dismissLastError()
         stopAutomaticPhotoMatching()
         lastCatchUpRequestAt = nil
         storedLibraryMetadataSync?.cancel()

@@ -86,6 +86,14 @@ struct RootView: View {
                     RootSplitView()
                 #endif
             }
+            .alert("Request failed", isPresented: signedInFailure) {
+                if model.canRetryLastError {
+                    Button("Retry") { model.retryLastError() }
+                }
+                Button("Dismiss", role: .cancel) { model.dismissLastError() }
+            } message: {
+                Text(model.lastError ?? "")
+            }
             .id(ObjectIdentifier(model.client))
             .task(id: model.host) {
                 await model.spotlight.refreshIfNeeded(client: model.client, host: model.host)
@@ -111,6 +119,12 @@ struct RootView: View {
                 DeviceParticipationOnboardingSheet()
             }
         }
+    }
+
+    private var signedInFailure: Binding<Bool> {
+        Binding(
+            get: { model.phase == .signedIn && model.lastError != nil },
+            set: { presented in if !presented { model.dismissLastError() } })
     }
 
     private var showsParticipationOnboarding: Binding<Bool> {

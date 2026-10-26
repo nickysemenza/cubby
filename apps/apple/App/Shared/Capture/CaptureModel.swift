@@ -98,6 +98,7 @@ final class CaptureModel {
             }
             missingError = nil
         } catch {
+            Diagnostics.report(error, context: "capture.checkMissing")
             missingError = error.userMessage
         }
     }
@@ -112,6 +113,7 @@ final class CaptureModel {
             tree = try await client.locationTree()
             missingError = nil
         } catch {
+            Diagnostics.report(error, context: "capture.moveMissing")
             missingError = error.userMessage
         }
     }
@@ -121,6 +123,7 @@ final class CaptureModel {
             let unknown = try await client.ensureGlobalUnknownLocation()
             await moveMissing(id, to: unknown)
         } catch {
+            Diagnostics.report(error, context: "capture.sendMissingToUnknown")
             missingError = error.userMessage
         }
     }
