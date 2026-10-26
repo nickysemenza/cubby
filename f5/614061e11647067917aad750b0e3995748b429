@@ -1,0 +1,33 @@
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_34f0947f9f6a59::t_530845b04dc165 137-142,149-154,163-165,232-245,254-257,266,268-270,283-287,291-296,298-303,311-329
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_34f0947f9f6a59::t_3b5a1c8a469828 88-99
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_34f0947f9f6a59::t_c93d0bdef01df4 57-60,69-72,92-97
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_34f0947f9f6a59::t_b461b219e59c8d 70-72,82-96
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_34f0947f9f6a59::t_a9464f74e389a5 191-196,204-207,237-245,254-256,258,265,268-270,273-276,279-282,291-293,301-306
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_34f0947f9f6a59::t_631e1aeff4e61c 83-85,93-98
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_34f0947f9f6a59::t_2d738511385688 101-110,125-128,146-162,169-170,182-193,205-215
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_34f0947f9f6a59::t_b67963e21bfa77 163-168,185,190-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f5614061e11647067917aad750b0e3995748b429",
+  "prompts": {},
+  "sessions": {
+    "s_34f0947f9f6a59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "121d83ba-ae8e-437b-8994-c2d0064b0126",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
