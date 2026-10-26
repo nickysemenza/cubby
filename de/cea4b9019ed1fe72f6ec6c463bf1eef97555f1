@@ -1,0 +1,21 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_c503e493e0915b::t_4db76e79c7e9f7 325
+apps/apple/e2e/qa-entity-table.ad
+  s_c503e493e0915b::t_a0f67e64e5405e 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "decea4b9019ed1fe72f6ec6c463bf1eef97555f1",
+  "prompts": {},
+  "sessions": {
+    "s_c503e493e0915b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a61-18fe-7413-9322-d8bc677509bc",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
