@@ -135,6 +135,14 @@ describe("relationship evidence coverage", () => {
     const vendor = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic relationship brand",
     });
+    const member = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic relationship member",
+      kind: "member",
+    });
+    const account = await createRepoEntity(ctx, "vendorAccount", {
+      vendorId: vendor.output.id,
+      ledgerPartyId: member.output.id,
+    });
     expect(
       (
         await getConnectedRecords(ctx.db, {
@@ -183,11 +191,19 @@ describe("relationship evidence coverage", () => {
     expect(explored.nodes.map((node) => node.entityId)).toContain(
       vendor.output.id,
     );
+    expect(explored.nodes.map((node) => node.entityId)).toContain(
+      account.output.id,
+    );
     expect(
       explored.paths.some(
         (path) =>
           path.nodeRefs.map((ref) => ref.entityId).join(",") ===
-          [execution.shortcode, target.id, vendor.output.id].join(","),
+          [
+            execution.shortcode,
+            target.id,
+            vendor.output.id,
+            account.output.id,
+          ].join(","),
       ),
     ).toBe(true);
     const nonEntity = await enqueueJob(ctx.db, {
