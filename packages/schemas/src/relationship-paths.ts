@@ -1,4 +1,5 @@
 import type { Entity } from "./entity";
+import { relationshipQueryDefinition } from "./relationship-query-definitions";
 import type {
   EntityRelationship,
   RelationshipProvenance,
@@ -29,10 +30,29 @@ export const relationshipSources = (
   {
     key: relationship.sourceKey ?? "direct",
     label: relationship.label,
-    provenance: relationship.provenance,
+    provenance: traversableProvenance(relationship.provenance),
   },
-  ...relationship.sources,
+  ...relationship.sources.map((source) => ({
+    ...source,
+    provenance: traversableProvenance(source.provenance),
+  })),
 ];
+
+const traversableProvenance = (
+  provenance: RelationshipProvenance,
+): RelationshipProvenance => {
+  if (provenance.kind !== "query") return provenance;
+  relationshipQueryDefinition(provenance.query);
+  return {
+    kind: "local-path",
+    steps: [
+      {
+        edge: `Relationship.${provenance.query}`,
+        direction: provenance.reverse ? "incoming" : "outgoing",
+      },
+    ],
+  };
+};
 
 const samePath = (
   left: readonly { edge: string; direction: string }[],

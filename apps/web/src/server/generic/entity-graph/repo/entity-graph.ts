@@ -56,13 +56,15 @@ type EntityGraphReadOptions = {
 };
 
 const pathDescription = (provenance: RelationshipProvenance): string[] =>
-  provenance.kind === "local-path"
-    ? provenance.steps.map((step) => `${step.direction}:${step.edge}`)
-    : provenance.kind === "unconstrained"
-      ? [`unconstrained:${provenance.edge}`]
-      : provenance.kind === "derived"
-        ? [`derived:${provenance.filter}`]
-        : provenance.sourceColumns.map((column) => `external:${column}`);
+  provenance.kind === "query"
+    ? [`query:${provenance.query}`]
+    : provenance.kind === "local-path"
+      ? provenance.steps.map((step) => `${step.direction}:${step.edge}`)
+      : provenance.kind === "unconstrained"
+        ? [`unconstrained:${provenance.edge}`]
+        : provenance.kind === "derived"
+          ? [`derived:${provenance.filter}`]
+          : provenance.sourceColumns.map((column) => `external:${column}`);
 
 type LocalPath = Extract<RelationshipProvenance, { kind: "local-path" }>;
 const pathKey = (path: LocalPath) => pathDescription(path).join("|");
@@ -136,7 +138,7 @@ const canonicalEdge = (
 
 const labelOverrides = new Map(Object.entries(LABEL_COLUMN_OVERRIDES));
 
-export const labelSql = (entity: Entity, alias: string) => {
+const recordLabelSql = (entity: Entity, alias: string) => {
   const prefix = alias ? `${alias}.` : "";
   const column = (name: string) => sql.raw(`${prefix}"${name}"`);
   switch (entity) {
@@ -225,6 +227,14 @@ export const labelSql = (entity: Entity, alias: string) => {
         : column("shortcode");
     }
   }
+};
+
+/** Retained evidence names tombstones without presenting them as live records. */
+export const labelSql = (entity: Entity, alias: string) => {
+  const label = recordLabelSql(entity, alias);
+  return entityManifest[entity].softDelete
+    ? sql`${label} || CASE WHEN ${sql.raw(`${alias ? `${alias}.` : ""}"deletedAt"`)} IS NOT NULL THEN ' (deleted)' ELSE '' END`
+    : label;
 };
 
 /** Small, universal display facts; relationship-specific views can enrich further. */

@@ -62,6 +62,12 @@ export default defineEntity(
       },
       icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
       detail: {
+        omitRelations: {
+          "sighting-devices":
+            "Connected records shows the witnessed reporting devices without a second table.",
+          "sighting-members":
+            "Connected records distinguishes observers from the Captured by photographer.",
+        },
         summary: [
           {
             kind: "report",
@@ -1037,6 +1043,44 @@ export default defineEntity(
       ],
     },
     relations: [
+      {
+        key: "sighting-devices",
+        label: "Sighting devices",
+        target: "device",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            { edge: "ImageSighting.imageId", direction: "incoming" },
+            { edge: "ImageSighting.deviceId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "ImageSighting.deviceId", direction: "incoming" },
+            { edge: "ImageSighting.imageId", direction: "outgoing" },
+          ],
+        },
+      },
+      {
+        key: "sighting-members",
+        label: "Observed by",
+        target: "ledgerParty",
+        cardinality: "many",
+        provenance: {
+          kind: "local-path",
+          steps: [
+            { edge: "ImageSighting.imageId", direction: "incoming" },
+            { edge: "ImageSighting.ledgerPartyId", direction: "outgoing" },
+          ],
+        },
+        inverse: {
+          steps: [
+            { edge: "ImageSighting.ledgerPartyId", direction: "incoming" },
+            { edge: "ImageSighting.imageId", direction: "outgoing" },
+          ],
+        },
+      },
       {
         key: "captured-by",
         label: "Captured by",

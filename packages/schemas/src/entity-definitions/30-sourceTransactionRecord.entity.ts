@@ -1103,6 +1103,25 @@ export default defineEntity({
     },
     {
       key: "transactions",
+      sources: [
+        {
+          key: "accepted",
+          label: "Accepted settlement",
+          provenance: {
+            kind: "query",
+            query: "transactionSourceRecords",
+            reverse: true,
+          },
+          inverse: {
+            steps: [
+              {
+                edge: "Relationship.transactionSourceRecords",
+                direction: "outgoing",
+              },
+            ],
+          },
+        },
+      ],
       label: "Transactions",
       target: "financialTransaction",
       cardinality: "many",

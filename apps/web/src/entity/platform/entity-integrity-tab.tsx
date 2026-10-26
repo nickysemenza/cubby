@@ -339,6 +339,14 @@ function RelationshipProvenanceView({
       </Row>
     );
   }
+  if (provenance.kind === "query") {
+    return (
+      <Badge variant="outline">
+        evidence · {provenance.query}
+        {provenance.reverse ? " (inverse)" : ""}
+      </Badge>
+    );
+  }
   return (
     <Row gap="xs" align="center" wrap>
       <Badge variant="outline">external · {provenance.system}</Badge>

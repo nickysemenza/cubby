@@ -323,6 +323,7 @@
     {
       "files": [
         "packages/schemas/src/entity-definitions/**/*.ts",
+        "packages/schemas/src/relationship-query-definitions.ts",
         "packages/schemas/src/child-tables/**/*.ts",
         "packages/schemas/src/*-fields.ts",
         "packages/schemas/src/ai-evaluation.ts",

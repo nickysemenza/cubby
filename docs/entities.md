@@ -3086,7 +3086,28 @@ Do not create another entity-specific category column or allocation renderer.
 ## Relations, deletion, and merge
 
 Every logical relation declares its target, cardinality, primary named source,
-provenance path, and inverse path. A relationship may add more named sources;
+provenance path, and inverse path. Query-backed sources name a read-only
+association in `relationship-query-definitions.ts`; `relationship-query.ts`
+owns its SQL condition. The shared traversal compiler follows these sources in
+either direction and at any supported depth. They store no second graph or
+membership. Query sources distinguish retained history from current references.
+
+Shared AI Jobs expose every requesting Run and both Product-pair endpoints;
+their optional owning Run is separate. Job subjects exclude non-entity origins.
+Image processing links use the exact execution key. Lease-device links retain
+an expired holder until release or reclamation. Photo membership and library
+sightings do not imply inventory ownership. Reviewed Email financial evidence
+retains the account at review even if the transaction later changes account.
+Historical leaves may name tombstones, labelled `(deleted)`; ordinary
+references continue to require live targets.
+
+The generator renders query relationships in Connected records rather than
+manufacturing another filtered table. Public local reference fields must have
+a connected target group; the coverage guard also checks the query target
+roster against every local entity. Physical FK coverage still requires a graph
+path or justified internal classification.
+
+A relationship may add more named sources;
 for example, `Purchase.products` combines detachable `explicit` evidence from
 `purchaseProduct` links with non-detachable `expense` evidence from every live
 product-linked Expense, including exits, adjustments, unknown quantities, and
@@ -3162,6 +3183,11 @@ Reads batch up to 25 roots under aggregate ceilings of 500 records, 1,000
 edges, 32 reads, and ten seconds. Completion distinguishes exhaustion from
 depth, pagination, and budget limits; returned paths explain the explored
 records and do not claim an unsearched branch has no shorter connection.
+Distinct evidence edges between the same records retain distinct paths.
+Exploration retains at most three shortest evidence paths per record; reaching
+that ceiling reports a budget limit, never exhaustion. Connected tables retain
+all distinct witnessed paths for each paged target. Automatic summaries remain
+explicitly curated and do not expand through member, category or location hubs.
 `entity.graphPaths` remains the destination-path search. Cycles are valid, and
 all traversal applies the live-record filters, including on intermediate tables.
 
@@ -3173,8 +3199,11 @@ The graph's structural metadata stays available to native clients. Detail-page
 connections use declared local relationships and curated multi-step routes,
 rather than arbitrary graph reachability. Header context requests the preview reader's `context` scope, retaining
 the original curated route titles and witnessed paths; the default
-`connections` scope groups all declared routes by target kind. Existing filter-derived relations retain
-their owning filtered tables; external references have no local detail target.
+`connections` scope groups all declared routes by target kind. Existing
+filter-derived relations retain their owning filtered tables, including their
+proposal states, and add query sources for accepted associations. Proposals stay
+in the separate suggestion review; graph proximity never promotes them to facts.
+External references have no local detail target.
 `createConnectionCatalog` compiles each entity's directional relationships,
 grouped views, curated context and named route lookup once. Only curated
 multi-step routes need explicit entries; new entities inherit direct and inverse

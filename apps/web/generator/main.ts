@@ -4,10 +4,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import {
-  curatedConnectionViews,
-  derivedConnectedRelationship,
-} from "@cubby/schemas/compiler/connected-view-definitions";
+import { curatedConnectionViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import type {
   CompiledEntity,
   EntityArtifacts,
@@ -22,7 +19,7 @@ import { renderShortcodeRegistryArtifacts } from "./entities/shortcode-registry.
 
 // `relationshipProvenanceSchema`'s local-path member; the schema module itself
 // imports generated files, which do not exist yet when this validation runs.
-const localPathProvenance = z.object({ kind: z.literal("local-path") });
+const localPathProvenance = z.object({ kind: z.enum(["local-path", "query"]) });
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -46,16 +43,16 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
             `Connected view ${source}.${view.key} has too few relations for its presentation`,
           );
         let current = source;
-        for (const [index, key] of route.entries()) {
+        for (const key of route) {
           const relation = byKey
             .get(current)
             ?.relations.find((candidate) => candidate.key === key);
           if (
             !relation ||
             (!localPathProvenance.safeParse(relation.provenance).success &&
-              !(
-                derivedConnectedRelationship(current, key)?.target ===
-                  relation.target && index === route.length - 1
+              !(relation.sources ?? []).some(
+                (source) =>
+                  localPathProvenance.safeParse(source.provenance).success,
               ))
           ) {
             throw new EntityDeclarationError(

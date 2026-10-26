@@ -6,7 +6,6 @@ import {
   type ConnectedRecordsPreviewInput,
   type ConnectedRecordsPreviewOutput,
 } from "@cubby/schemas/connected-records";
-import type { DerivedConnectedRelationship } from "@cubby/schemas/connected-views";
 import {
   connectedPathVariants,
   connectionCatalog,
@@ -19,7 +18,6 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
 import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
 
@@ -65,20 +63,15 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
     }
     distinct.set(
       JSON.stringify(variant.witnesses) +
-        variant.steps
-          .map((step) => `${step.direction}:${step.edge}`)
-          .join("|") +
-        (variant.derived
-          ? `|${variant.derived.source}.${variant.derived.key}`
-          : ""),
+        variant.steps.map((step) => `${step.direction}:${step.edge}`).join("|"),
       variant,
     );
   }
   return [...distinct.values()].map((variant, index) => {
     const traversal = compileTraversal(source, variant.steps, `c${index}_`, {
       root: "s",
-      leaf: variant.derived ? "derived_source" : "t",
-      to: variant.derived?.source ?? view.target,
+      leaf: "t",
+      to: view.target,
     });
     const nodes: {
       entity: Entity;
@@ -101,23 +94,11 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
             ];
       }),
     ];
-    const derivedJoin = variant.derived
-      ? derivedConnectionJoin(variant.derived, traversal.leafAlias, "t")
-      : sql``;
-    if (variant.derived)
-      nodes.push({
-        entity: view.target,
-        alias: "t",
-        via: variant.witnesses.at(-1)?.witness,
-      });
     if (nodes.at(-1)?.entity !== view.target) {
       throw new Error(`Connected view ${source}.${viewKey} has no target node`);
     }
     return {
-      traversal: {
-        ...traversal,
-        joins: sql`${traversal.joins} ${derivedJoin}`,
-      },
+      traversal,
       hops: nodes.length - 1,
       path: sql`jsonb_build_array(${sql.join(
         nodes.map((node) => nodeExpression(node.entity, node.alias, node.via)),
@@ -125,23 +106,6 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
       )})`,
     };
   });
-}
-
-/** Each derived terminal reuses its owning policy rather than guessing physical links. */
-const derivedJoinBuilders = {
-  purchaseEmails: (sourceAlias: string, targetAlias: string) =>
-    sql`JOIN LATERAL (${purchaseAssociatedEmailsSql(sql.raw(`${sourceAlias}."id"`))}) ${sql.raw(targetAlias)} ON true`,
-} satisfies Record<
-  DerivedConnectedRelationship["resolver"],
-  (sourceAlias: string, targetAlias: string) => SQL
->;
-
-function derivedConnectionJoin(
-  derived: DerivedConnectedRelationship,
-  sourceAlias: string,
-  targetAlias: string,
-): SQL {
-  return derivedJoinBuilders[derived.resolver](sourceAlias, targetAlias);
 }
 
 const pageRowSchema = z.object({

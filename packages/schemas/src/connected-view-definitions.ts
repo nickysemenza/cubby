@@ -9,23 +9,6 @@ export {
   type RelationshipCatalog,
 } from "./relationship-paths";
 
-/** Typed hooks for derived terminal relationships; physical routes need no hook. */
-const derivedConnectedRelationships = [
-  {
-    source: "purchase",
-    key: "emails",
-    target: "email",
-    resolver: "purchaseEmails",
-  },
-] as const;
-export type DerivedConnectedRelationship =
-  (typeof derivedConnectedRelationships)[number];
-export const derivedConnectedRelationship = (source: string, key: string) =>
-  derivedConnectedRelationships.find(
-    (relationship) =>
-      relationship.source === source && relationship.key === key,
-  );
-
 export interface ConnectedView {
   key: string;
   title: string;
@@ -347,6 +330,12 @@ export const curatedConnectionViews = {
     },
   ],
   vendor: [
+    {
+      key: "purchased-categories",
+      title: "Related product categories",
+      target: "productCategory",
+      routes: [["products", "category"]],
+    },
     {
       key: "settlement-transactions",
       title: "Settlement transactions",

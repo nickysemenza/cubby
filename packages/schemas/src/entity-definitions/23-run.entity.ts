@@ -1374,6 +1374,25 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "source-images",
+      label: "Source images",
+      target: "image",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "PhotoRunImage.runId", direction: "incoming" },
+          { edge: "PhotoRunImage.imageId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "PhotoRunImage.imageId", direction: "incoming" },
+          { edge: "PhotoRunImage.runId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
       key: "vendor-account",
       label: "Vendor account",
       target: "vendorAccount",

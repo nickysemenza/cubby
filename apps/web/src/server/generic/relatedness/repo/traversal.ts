@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema } from "@cubby/schemas/entity";
 import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import { relationshipQueryDefinition } from "@cubby/schemas/relationship-query-definitions";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
@@ -16,6 +18,7 @@ import {
   effectiveExpenseProjectSql,
   principalExpenseInheritanceSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
+import { relationshipQueryCondition } from "~/server/generic/relatedness/repo/relationship-query";
 
 interface EdgeSpec {
   edgeKey: string;
@@ -369,6 +372,39 @@ export const compileTraversal = (
   const inheritedRelations: InheritedRelation[] = [];
 
   for (const [index, step] of steps.entries()) {
+    if (step.edge.startsWith("Relationship.")) {
+      const key = step.edge.slice("Relationship.".length);
+      const query = relationshipQueryDefinition(key);
+      const outgoing = step.direction === "outgoing";
+      const expected = entityTable(
+        entitySchema.parse(outgoing ? query.source : query.target),
+      );
+      if (expected !== currentTable)
+        throw new Error(`Relationship ${key} cannot follow ${currentTable}`);
+      const nextTable = entityTable(
+        entitySchema.parse(outgoing ? query.target : query.source),
+      );
+      const alias =
+        index === steps.length - 1 && aliases?.leaf
+          ? aliases.leaf
+          : `${aliasPrefix}${index + 1}`;
+      hops.push({
+        table: nextTable,
+        alias,
+        fromAlias: currentAlias,
+        fromColumn: "id",
+        toColumn: "id",
+        softDelete: !query.history && softDeleteForTable(nextTable),
+        condition: relationshipQueryCondition(
+          key,
+          outgoing ? currentAlias : alias,
+          outgoing ? alias : currentAlias,
+        ),
+      });
+      currentTable = nextTable;
+      currentAlias = alias;
+      continue;
+    }
     const edge = EDGES.get(step.edge);
     if (!edge) throw new Error(`Unknown relatedness edge ${step.edge}`);
     const alias =

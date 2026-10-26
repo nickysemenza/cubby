@@ -15,6 +15,7 @@ import {
   financialTransactionAllocation,
   purchase,
 } from "~/server/db/schema";
+import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { createAppError } from "~/server/errors/app-error";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -23,7 +24,6 @@ import {
   lockUpdatePurchases,
   updateFinancialTransaction,
 } from "./financial-transaction";
-import { transactionSettlementConflicts } from "./settlement-conflicts";
 
 /** Conflicts on purchases this proposal newly names, before the write. */
 async function conflictsToAcknowledge(

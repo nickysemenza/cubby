@@ -106,6 +106,8 @@ export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
 /**
  * How a declared logical relationship is actually realized in storage.
  *
+ * - `query` — a named read-only association, composed in either direction by
+ *   the shared traversal compiler. Its owner controls historical liveness.
  * - `local-path` — one or more real FK hops. Verified end-to-end against
  *   Drizzle metadata: every step must be a real FK, the steps must chain, and
  *   the last one must land on the declared target's table.
@@ -118,9 +120,15 @@ export type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
  *   stores nothing of its own (ADR 0011). Names the target's list filter
  *   descriptor that answers "records related to this one"; the relation
  *   section, HTTP, MCP and native lists all read through that filter. The
- *   graph walker skips it: there is no edge to traverse or protect.
+ *   graph walker follows its separately declared query sources, when present;
+ *   the filtered table can additionally retain review/proposal states.
  */
 export const relationshipProvenanceSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("query"),
+    query: z.string().min(1),
+    reverse: z.boolean().optional(),
+  }),
   z.object({
     kind: z.literal("local-path"),
     steps: z.array(relationshipPathStepSchema).min(1),

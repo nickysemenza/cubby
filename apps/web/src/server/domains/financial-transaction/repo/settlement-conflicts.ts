@@ -41,9 +41,12 @@ import {
 import { paymentTender } from "@cubby/schemas/purchase-import";
 import { eq, inArray, type SQL, sql } from "drizzle-orm";
 
-import type { DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import { financialTransaction, purchase } from "~/server/db/schema";
+import type {
+  RepositoryQueryClient as DrizzleClient,
+  RepositoryQueryTransaction as DrizzleTransaction,
+} from "~/server/db/repository-access.boundary";
+import { financialTransaction, purchase } from "~/server/db/retained-tables";
 import { purchaseMailPartiesSql } from "~/server/domains/email/repo/email-sql";
 import { createAppError } from "~/server/errors/app-error";
 

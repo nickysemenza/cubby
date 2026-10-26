@@ -40,6 +40,7 @@ import {
   paymentFundingPartySql,
 } from "~/server/domains/financial-account/repo/funding-sql";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { findSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   assertMailFinancialEvidenceCurrent,
   type PreparedMailFinancialEvent,
@@ -61,7 +62,6 @@ import {
   commitFinancialSpending,
 } from "./financial-spending";
 import { updateFinancialTransaction } from "./financial-transaction";
-import { findSettlementConflicts } from "./settlement-conflicts";
 
 type Result = z.infer<typeof financialConvergenceResult>;
 type Ready = {
