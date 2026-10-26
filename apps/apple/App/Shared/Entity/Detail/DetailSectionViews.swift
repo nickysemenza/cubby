@@ -825,56 +825,9 @@ private struct FieldExplanationPresenter: ViewModifier {
                             }
                         }
                     }
-                    Divider()
-                    explanationSectionLabel("Technical details")
-                    Text(resolved.rule.description).font(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Rule: \(resolved.rule.id) · r\(resolved.rule.revision)")
-                        .font(.caption.monospaced()).textSelection(.enabled)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Evaluated:")
-                        DateDisplay(date: resolved.evaluatedAt)
-                    }.font(.caption).foregroundStyle(.secondary)
-                    if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value) {
-                        if value.objectValue != nil || value.arrayValue != nil {
-                            ExplanationEvidenceValue(value: value)
-                        } else if let code = value.stringValue, code != resolved.interpretation?.result {
-                            Text("Result code: \(code)").font(.caption.monospaced())
-                        }
-                    }
-                    ForEach(Array(resolved.actions.enumerated()), id: \.offset) { _, action in
-                        if action.kind.rawValue == "editSource",
-                            let entity = EntityKey(rawValue: action.target.entityKind.rawValue)
-                        {
-                            NavigationLink(
-                                action.label, value: Route.entityDetail(entity, id: action.target.entityId))
-                        }
-                    }
-                    if let breakdown = resolved.qualityBreakdown {
-                        Text("Score calculation").font(.headline)
-                        Text(breakdown.summary).font(.callout.monospacedDigit())
-                        ForEach(breakdown.checks, id: \.check) { check in
-                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                                Text(check.label).font(.callout.weight(.semibold))
-                                Text("\(check.stateLabel) · \(check.weightLabel)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                if check.state.rawValue == "gap" { Text(check.description).font(.callout) }
-                                DataExceptionControl(
-                                    draft: .init(entityID: subject.id, check: check.check),
-                                    isGap: check.state.rawValue == "gap",
-                                    options: check.exceptionReasons.map {
-                                        .init(reason: $0.reason, label: $0.label)
-                                    },
-                                    recorded: check.exception.map {
-                                        ($0.reason, $0.note, $0.state.rawValue == "stale")
-                                    },
-                                    onChanged: reloadExplanation
-                                )
-                                Text("\(check.facet) · \(check.check)").font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                    OpenOnWebButton(
+                        target: .record(key: subject.entity, id: subject.id),
+                        label: "Review data quality on web")
                     if case .value(.some(let evidence)) = resolved.resolutionEvidence {
                         Divider()
                         explanationSectionLabel(evidence.chain.title ?? "Resolution order")
@@ -954,12 +907,6 @@ private struct FieldExplanationPresenter: ViewModifier {
         #endif
         .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.sheet)
-    }
-
-    /// Re-explains after an exception changed; `resolved` is shadowed inside the popover body.
-    private func reloadExplanation() {
-        resolved = nil
-        Task { await loadExplanation() }
     }
 
     private func loadExplanation() async {
