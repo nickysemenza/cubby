@@ -146,7 +146,7 @@ struct RootSplitView: View {
                 if section.label.isEmpty {
                     Section {
                         manifestRows(section)
-                        ForEach([AppSection.capture, .photos, .browse, .search]) { native in
+                        ForEach([AppSection.capture, .photos, .search]) { native in
                             Label {
                                 Text(native.title)
                             } icon: {
@@ -284,7 +284,11 @@ struct RootSplitView: View {
         } else if let key = model.navigator.browseKey, let browsing {
             EntityListView(key: key, model: browsing.list(for: key), usesBrowseSelection: true).id(key)
         } else {
-            BrowseRootView()
+            // A record without a native list (or an older restored Browse selection) has no list;
+            // the sidebar already names every list, so there is no separate catalog.
+            ContentUnavailableView(
+                "Choose a list", systemImage: "sidebar.left",
+                description: Text("Pick a list in the sidebar."))
         }
     }
 

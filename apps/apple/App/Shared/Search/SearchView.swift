@@ -2,8 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// The Search tab: search-as-you-type across every intent-exposed entity, scoped by kind, with a
-/// scanner sheet for the barcode/ISBN/label path. Owns a `SearchModel` created per host, mirroring
-/// `CaptureView`/`CaptureModel`.
+/// scanner sheet for the barcode/ISBN/label path on iOS (Mac resolves codes typed into the field).
+/// Owns a `SearchModel` created per host, mirroring `CaptureView`/`CaptureModel`.
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var search: SearchModel?
@@ -49,7 +49,9 @@ struct SearchContent: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismissSearch) private var dismissSearch
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var scanning = false
+    #if os(iOS)
+        @State private var scanning = false
+    #endif
     @State private var creatingProduct = false
     @State private var presentation = ListPresentationChoice.list
     @FocusState private var searchFieldFocused: Bool
@@ -126,20 +128,24 @@ struct SearchContent: View {
                         )
                     }
                 }
-                ToolbarItem {
-                    Button {
-                        scanning = true
-                    } label: {
-                        Label("Scan a code", systemImage: "barcode.viewfinder")
+                #if os(iOS)
+                    ToolbarItem {
+                        Button {
+                            scanning = true
+                        } label: {
+                            Label("Scan a code", systemImage: "barcode.viewfinder")
+                        }
                     }
-                }
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     presentationPicker
                 }
             }
-            .sheet(isPresented: $scanning) {
-                ScanLookupSheet(onTextResolved: { search.query = $0 }).nativeSheet(.picker)
-            }
+            #if os(iOS)
+                .sheet(isPresented: $scanning) {
+                    ScanLookupSheet(onTextResolved: { search.query = $0 }).nativeSheet(.picker)
+                }
+            #endif
             .task { applyPendingFocusRequest() }
             .onChange(of: model.navigator.focusSearchRequest) { applyPendingFocusRequest() }
     }
@@ -210,14 +216,16 @@ struct SearchContent: View {
     }
 
     /// The un-searched state: recents alone don't need a big empty view (they show as
-    /// suggestions), so this is mostly an invitation to scan instead of type.
+    /// suggestions), so on iOS this is mostly an invitation to scan instead of type.
     private var emptyState: some View {
         ContentUnavailableView {
             Label("Search Cubby", systemImage: "magnifyingglass")
         } description: {
             Text("Find a product, location, recipe, or anything else.")
         } actions: {
-            Button("Scan a code") { scanning = true }
+            #if os(iOS)
+                Button("Scan a code") { scanning = true }
+            #endif
         }
     }
 

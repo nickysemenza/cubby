@@ -72,7 +72,8 @@ enum PhoneTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Top-level sections. The Mac exposes all in its sidebar; iOS maps them into `PhoneTab`.
+/// Top-level sections. iOS maps them into `PhoneTab`. On Mac, `browse` has no sidebar row of its
+/// own: it holds the entity lists that the sidebar's manifest rows open.
 enum AppSection: String, CaseIterable, Identifiable, Codable {
     case today, activity, capture, photos, browse, search, graph, dev, settings
 
@@ -112,7 +113,7 @@ enum AppSection: String, CaseIterable, Identifiable, Codable {
         #if os(iOS)
             [.today, .capture, .browse, .search]
         #else
-            [.today, .activity, .capture, .photos, .browse, .search, .graph]
+            [.today, .activity, .capture, .photos, .search, .graph]
         #endif
     }
 }

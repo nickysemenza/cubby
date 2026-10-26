@@ -1,60 +1,61 @@
 import CubbyKit
 import SwiftUI
 
-/// Declared browse roots in shared sidebar order. Native lists stay in the catalog; web-only
-/// roots retain an explicit browser entry point after the native sections.
-struct BrowseRootView: View {
-    var title = "Browse"
+#if os(iOS)
+    /// The iPhone/iPad Library: declared browse roots in shared sidebar order. Native lists stay in
+    /// the catalog; web-only roots retain an explicit browser entry point after the native sections.
+    /// Mac has no catalog because its sidebar already lists every root.
+    struct BrowseRootView: View {
+        var title = "Browse"
 
-    @Environment(AppModel.self) private var model
-    @State private var query = ""
+        @Environment(AppModel.self) private var model
+        @State private var query = ""
 
-    var body: some View {
-        List {
-            ForEach(SidebarManifest.sections) { section in
-                let destinations = section.destinations.filter {
-                    $0.entity != nil && $0.nativeDestination != nil && matchesQuery($0)
-                }
-                if !destinations.isEmpty {
-                    Section {
-                        ForEach(destinations, id: \.route) { destination in
-                            if let key = destination.entity {
-                                row(for: EntityCatalog[key])
-                                    .listRowInsets(browseRowInsets)
+        var body: some View {
+            List {
+                ForEach(SidebarManifest.sections) { section in
+                    let destinations = section.destinations.filter {
+                        $0.entity != nil && $0.nativeDestination != nil && matchesQuery($0)
+                    }
+                    if !destinations.isEmpty {
+                        Section {
+                            ForEach(destinations, id: \.route) { destination in
+                                if let key = destination.entity {
+                                    row(for: EntityCatalog[key])
+                                        .listRowInsets(browseRowInsets)
+                                }
                             }
+                        } header: {
+                            headerTitle(section.label, domain: section.domain.map { AppDomain($0) })
+                        }
+                    }
+                }
+                if !webDestinations.isEmpty {
+                    Section {
+                        ForEach(webDestinations, id: \.route) { destination in
+                            OpenOnWebButton(target: destination.webTarget) {
+                                HStack(spacing: FieldGuideTokens.Space.md) {
+                                    if let key = destination.entity {
+                                        DomainMark(key, style: .symbol, size: 15)
+                                            .fieldGuideIconSlot()
+                                    }
+                                    Text("Open \(destination.label) on web")
+                                        .font(.fieldGuideBody)
+                                    Spacer(minLength: FieldGuideTokens.Space.sm)
+                                    Image(systemName: "arrow.up.right")
+                                        .foregroundStyle(.secondary)
+                                }
+                                .frame(minHeight: FieldGuideTokens.touchTarget)
+                            }
+                            .accessibilityIdentifier(
+                                "browse.web.\(destination.entity?.rawValue ?? destination.route)"
+                            )
+                            .listRowInsets(browseRowInsets)
                         }
                     } header: {
-                        headerTitle(section.label, domain: section.domain.map { AppDomain($0) })
+                        headerTitle("More on web")
                     }
                 }
-            }
-            if !webDestinations.isEmpty {
-                Section {
-                    ForEach(webDestinations, id: \.route) { destination in
-                        OpenOnWebButton(target: destination.webTarget) {
-                            HStack(spacing: FieldGuideTokens.Space.md) {
-                                if let key = destination.entity {
-                                    DomainMark(key, style: .symbol, size: 15)
-                                        .fieldGuideIconSlot()
-                                }
-                                Text("Open \(destination.label) on web")
-                                    .font(.fieldGuideBody)
-                                Spacer(minLength: FieldGuideTokens.Space.sm)
-                                Image(systemName: "arrow.up.right")
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                        }
-                        .accessibilityIdentifier(
-                            "browse.web.\(destination.entity?.rawValue ?? destination.route)"
-                        )
-                        .listRowInsets(browseRowInsets)
-                    }
-                } header: {
-                    headerTitle("More on web")
-                }
-            }
-            #if os(iOS)
                 Section {
                     NavigationLink(value: Route.photosLibrary) {
                         Label("All photos", systemImage: "photo.on.rectangle.angled")
@@ -72,83 +73,71 @@ struct BrowseRootView: View {
                 } header: {
                     headerTitle("Explore")
                 }
-            #endif
-        }
-        .accessibilityIdentifier("browse.catalog")
-        .listStyle(.automatic)
-        .fieldGuideScreen()
-        .navigationTitle(title)
-        .searchable(text: $query)
-        .overlay {
-            if !query.isEmpty
-                && !SidebarManifest.sections.flatMap(\.destinations).contains(where: {
-                    $0.entity != nil && matchesQuery($0)
-                })
-            {
-                ContentUnavailableView.search(text: query)
+            }
+            .accessibilityIdentifier("browse.catalog")
+            .listStyle(.automatic)
+            .fieldGuideScreen()
+            .navigationTitle(title)
+            .searchable(text: $query)
+            .overlay {
+                if !query.isEmpty
+                    && !SidebarManifest.sections.flatMap(\.destinations).contains(where: {
+                        $0.entity != nil && matchesQuery($0)
+                    })
+                {
+                    ContentUnavailableView.search(text: query)
+                }
+            }
+            .task(id: model.host) {
+                await model.browseCounts.load(client: model.client, host: model.host)
+            }
+            .refreshControl {
+                await model.browseCounts.load(client: model.client, host: model.host, force: true)
             }
         }
-        .task(id: model.host) {
-            await model.browseCounts.load(client: model.client, host: model.host)
-        }
-        .refreshControl {
-            await model.browseCounts.load(client: model.client, host: model.host, force: true)
-        }
-    }
 
-    private func headerTitle(_ title: String, domain: AppDomain? = nil) -> some View {
-        HStack(spacing: FieldGuideTokens.Space.sm) {
-            if let domain { DomainMark(domain) }
-            Text(title).font(.subheadline.weight(.semibold)).textCase(nil)
-            Spacer()
-        }
-        .listRowInsets(
-            EdgeInsets(
-                top: 0, leading: FieldGuideTokens.Space.lg, bottom: 0, trailing: FieldGuideTokens.Space.lg)
-        )
-    }
-
-    @ViewBuilder private func row(for descriptor: EntityDescriptor) -> some View {
-        #if os(macOS)
-            Button {
-                model.navigator.macDestination = .entity(descriptor.key)
-            } label: {
-                EntityBrowseRow(
-                    descriptor: descriptor,
-                    count: model.browseCounts.count(for: descriptor.key)
-                )
+        private func headerTitle(_ title: String, domain: AppDomain? = nil) -> some View {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                if let domain { DomainMark(domain) }
+                Text(title).font(.subheadline.weight(.semibold)).textCase(nil)
+                Spacer()
             }
-            .buttonStyle(.plain)
-        #else
+            .listRowInsets(
+                EdgeInsets(
+                    top: 0, leading: FieldGuideTokens.Space.lg, bottom: 0, trailing: FieldGuideTokens.Space.lg)
+            )
+        }
+
+        private func row(for descriptor: EntityDescriptor) -> some View {
             NavigationLink(value: Route.entityList(descriptor.key)) {
                 EntityBrowseRow(
                     descriptor: descriptor,
                     count: model.browseCounts.count(for: descriptor.key)
                 )
             }
-        #endif
-    }
+        }
 
-    /// The row owns its own 44pt height, so the list must not add its default vertical padding.
-    private var browseRowInsets: EdgeInsets {
-        EdgeInsets(
-            top: 0, leading: FieldGuideTokens.Space.lg,
-            bottom: 0, trailing: FieldGuideTokens.Space.lg
-        )
-    }
+        /// The row owns its own 44pt height, so the list must not add its default vertical padding.
+        private var browseRowInsets: EdgeInsets {
+            EdgeInsets(
+                top: 0, leading: FieldGuideTokens.Space.lg,
+                bottom: 0, trailing: FieldGuideTokens.Space.lg
+            )
+        }
 
-    private func matchesQuery(_ destination: SidebarManifest.Destination) -> Bool {
-        query.isEmpty || destination.label.localizedCaseInsensitiveContains(query)
-            || destination.entity.map { EntityCatalog[$0].plural.localizedCaseInsensitiveContains(query) }
-                == true
-    }
+        private func matchesQuery(_ destination: SidebarManifest.Destination) -> Bool {
+            query.isEmpty || destination.label.localizedCaseInsensitiveContains(query)
+                || destination.entity.map { EntityCatalog[$0].plural.localizedCaseInsensitiveContains(query) }
+                    == true
+        }
 
-    private var webDestinations: [SidebarManifest.Destination] {
-        SidebarManifest.sections.flatMap(\.destinations).filter {
-            $0.entity != nil && $0.nativeDestination == nil && matchesQuery($0)
+        private var webDestinations: [SidebarManifest.Destination] {
+            SidebarManifest.sections.flatMap(\.destinations).filter {
+                $0.entity != nil && $0.nativeDestination == nil && matchesQuery($0)
+            }
         }
     }
-}
+#endif
 
 /// Row counts from `dashboard.counts`, loaded once per host. `nil` while loading or on
 /// failure, so a Browse row shows nothing on the right rather than a stale or fabricated number.
@@ -177,25 +166,27 @@ final class BrowseCountsModel {
     }
 }
 
-/// One catalog row: the entity's own glyph in its domain color, its plural name, and (once loaded)
-/// how many records exist.
-private struct EntityBrowseRow: View {
-    let descriptor: EntityDescriptor
-    let count: Int?
+#if os(iOS)
+    /// One catalog row: the entity's own glyph in its domain color, its plural name, and (once loaded)
+    /// how many records exist.
+    private struct EntityBrowseRow: View {
+        let descriptor: EntityDescriptor
+        let count: Int?
 
-    var body: some View {
-        HStack(spacing: FieldGuideTokens.Space.md) {
-            DomainMark(descriptor.key, style: .symbol, size: 15)
-                .fieldGuideIconSlot()
-            Text(descriptor.plural)
-                .font(.fieldGuideBody)
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-            if let count { NativeCountBadge(count: count) }
+        var body: some View {
+            HStack(spacing: FieldGuideTokens.Space.md) {
+                DomainMark(descriptor.key, style: .symbol, size: 15)
+                    .fieldGuideIconSlot()
+                Text(descriptor.plural)
+                    .font(.fieldGuideBody)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
+                if let count { NativeCountBadge(count: count) }
+            }
+            .frame(minHeight: FieldGuideTokens.touchTarget)
+            .accessibilityIdentifier("browse.catalog.\(descriptor.key.rawValue)")
         }
-        .frame(minHeight: FieldGuideTokens.touchTarget)
-        .accessibilityIdentifier("browse.catalog.\(descriptor.key.rawValue)")
     }
-}
+#endif
 
 /// A row's record count: plain, muted, tabular digits at the trailing edge — no box, so a column
 /// of counts reads as quiet data rather than a stack of controls. Hierarchical `.secondary` (not a
@@ -217,6 +208,8 @@ func entitySymbol(for key: EntityKey) -> String {
     EntityCatalog[key].sfSymbol
 }
 
-#Preview(traits: .modifier(SignedInPreview())) {
-    NavigationStack { BrowseRootView() }
-}
+#if os(iOS)
+    #Preview(traits: .modifier(SignedInPreview())) {
+        NavigationStack { BrowseRootView() }
+    }
+#endif

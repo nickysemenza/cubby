@@ -1,74 +1,73 @@
 import CubbyKit
 import SwiftUI
 
-/// A single-shot code lookup, presented from Search's toolbar and empty state: scan or type a
-/// code, then act on what it resolves to. Unlike `CaptureView`'s sweep, there is no location and
-/// no tally — this answers "what is this" and hands off, it never writes stock itself.
-struct ScanLookupSheet: View {
-    /// Called when the resolved value is plain text (not a code at all); the caller feeds it back
-    /// into `SearchModel.query` so the field's search takes over. Defaults to a no-op so the sheet
-    /// can be previewed standalone.
-    var onTextResolved: (String) -> Void = { _ in }
-    /// Preview-only seed for the outcome panel; never set by real callers.
-    var previewOutcome: LookupOutcome?
+#if os(iOS)
+    /// A single-shot code lookup, presented from Search's toolbar and empty state on iPhone and iPad:
+    /// scan or type a code, then act on what it resolves to. Mac has no camera here; its search field
+    /// resolves codes on submit. Unlike `CaptureView`'s sweep, there is no location and
+    /// no tally — this answers "what is this" and hands off, it never writes stock itself.
+    struct ScanLookupSheet: View {
+        /// Called when the resolved value is plain text (not a code at all); the caller feeds it back
+        /// into `SearchModel.query` so the field's search takes over. Defaults to a no-op so the sheet
+        /// can be previewed standalone.
+        var onTextResolved: (String) -> Void = { _ in }
+        /// Preview-only seed for the outcome panel; never set by real callers.
+        var previewOutcome: LookupOutcome?
 
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @State private var manualEntry = ""
-    @State private var resolving = false
-    @State private var outcome: LookupOutcome?
-    @State private var errorMessage: String?
-    @State private var creatingProduct = false
-    /// When each raw value was last accepted. Keyed per code because the scanner reports every
-    /// code in frame, so two labels alternating (A, B, A…) must each keep their own window.
-    @State private var recentReads: [String: Date] = [:]
+        @Environment(AppModel.self) private var model
+        @Environment(\.dismiss) private var dismiss
+        @State private var manualEntry = ""
+        @State private var resolving = false
+        @State private var outcome: LookupOutcome?
+        @State private var errorMessage: String?
+        @State private var creatingProduct = false
+        /// When each raw value was last accepted. Keyed per code because the scanner reports every
+        /// code in frame, so two labels alternating (A, B, A…) must each keep their own window.
+        @State private var recentReads: [String: Date] = [:]
 
-    /// A repeat of a raw value inside this window is a re-read, not a new code — mirrors
-    /// `ScanSession.debounceInterval` without touching `ScanDrain`, which this screen has no
-    /// session to anchor.
-    private static let repeatWindow: TimeInterval = 1.5
+        /// A repeat of a raw value inside this window is a re-read, not a new code — mirrors
+        /// `ScanSession.debounceInterval` without touching `ScanDrain`, which this screen has no
+        /// session to anchor.
+        private static let repeatWindow: TimeInterval = 1.5
 
-    var body: some View {
-        NavigationStack {
-            content
-                .fieldGuideScreen()
-                .navigationTitle("Scan a code")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }
+        var body: some View {
+            NavigationStack {
+                content
+                    .fieldGuideScreen()
+                    .navigationTitle("Scan a code")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") { dismiss() }
+                        }
                     }
-                }
-        }
-        .task { outcome = previewOutcome }
-    }
-
-    private var content: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                #if os(iOS)
-                    scannerSlot
-                #endif
-                manualEntryField
-                if resolving {
-                    LoadingIndicator(label: "Resolving code").frame(maxWidth: .infinity)
-                } else if let outcome {
-                    outcomePanel(outcome)
-                } else if let errorMessage {
-                    Panel {
-                        Text(errorMessage)
-                            .font(.fieldGuideBody)
-                            .foregroundStyle(FieldGuideTokens.destructive)
-                    }
-                }
             }
-            .padding(FieldGuideTokens.Space.lg)
-            .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .task { outcome = previewOutcome }
         }
-        .fieldGuideScreen()
-    }
 
-    #if os(iOS)
+        private var content: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                    scannerSlot
+                    manualEntryField
+                    if resolving {
+                        LoadingIndicator(label: "Resolving code").frame(maxWidth: .infinity)
+                    } else if let outcome {
+                        outcomePanel(outcome)
+                    } else if let errorMessage {
+                        Panel {
+                            Text(errorMessage)
+                                .font(.fieldGuideBody)
+                                .foregroundStyle(FieldGuideTokens.destructive)
+                        }
+                    }
+                }
+                .padding(FieldGuideTokens.Space.lg)
+                .frame(maxWidth: FieldGuideTokens.readingWidth, alignment: .leading)
+                .frame(maxWidth: .infinity)
+            }
+            .fieldGuideScreen()
+        }
+
         private var scannerSlot: some View {
             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
                 .fill(FieldGuideTokens.inset)
@@ -81,142 +80,140 @@ struct ScanLookupSheet: View {
                         .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                 )
         }
-    #endif
 
-    private var manualEntryField: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Eyebrow("Barcode, ISBN, or label")
-            HStack(spacing: FieldGuideTokens.Space.sm) {
-                TextField("Barcode, ISBN, or label", text: $manualEntry)
-                    .keyboardDismissBar()
-                    .font(.fieldGuideCode)
-                    .textFieldStyle(.plain)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
+        private var manualEntryField: some View {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                Eyebrow("Barcode, ISBN, or label")
+                HStack(spacing: FieldGuideTokens.Space.sm) {
+                    TextField("Barcode, ISBN, or label", text: $manualEntry)
+                        .keyboardDismissBar()
+                        .font(.fieldGuideCode)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
                         .keyboardType(.asciiCapable)
                         .textInputAutocapitalization(.characters)
-                    #endif
-                    .onSubmit { handleRead(manualEntry) }
-                    .padding(.horizontal, FieldGuideTokens.Space.md)
-                    .frame(height: FieldGuideTokens.touchTarget)
-                    .background(
-                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
-                            .fill(FieldGuideTokens.surface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
-                            .strokeBorder(
-                                FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
-                    )
-                Button("Look up") { handleRead(manualEntry) }
-                    .font(.fieldGuideTitle)
-                    .buttonStyle(.borderedProminent)
-                    .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
-                    .tint(FieldGuideTokens.interaction)
-                    .frame(height: FieldGuideTokens.touchTarget)
-                    .disabled(manualEntry.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .onSubmit { handleRead(manualEntry) }
+                        .padding(.horizontal, FieldGuideTokens.Space.md)
+                        .frame(height: FieldGuideTokens.touchTarget)
+                        .background(
+                            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                                .fill(FieldGuideTokens.surface)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
+                                .strokeBorder(
+                                    FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+                        )
+                    Button("Look up") { handleRead(manualEntry) }
+                        .font(.fieldGuideTitle)
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                        .tint(FieldGuideTokens.interaction)
+                        .frame(height: FieldGuideTokens.touchTarget)
+                        .disabled(manualEntry.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
             }
         }
-    }
 
-    @ViewBuilder
-    private func outcomePanel(_ outcome: LookupOutcome) -> some View {
-        switch outcome {
-        case .products(let rows, let code):
-            ProductMatchesPanel(rows: rows, code: code) { row in
-                RecentEntities.record(row.id)
-                dismiss()
-                model.navigator.openInPlace(.entity(.product, id: row.id))
-            }
-        case .unknownCode(let code, let catalog):
-            UnknownCodePanel(code: code, catalog: catalog, creating: creatingProduct) {
-                Task { await createProduct(code: code) }
-            } onStock: {
-                model.navigator.pendingCaptureCode = code
-                dismiss()
-                model.navigator.open(.capture(location: nil))
-            }
-        case .link, .text:
-            // Both are handled synchronously by `resolve(_:)` (navigate or hand off to search)
-            // and never linger as the panel's state.
-            EmptyView()
-        }
-    }
-
-    private func handleRead(_ raw: String) {
-        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return }
-        let now = Date.now
-        if let last = recentReads[value], now.timeIntervalSince(last) < Self.repeatWindow { return }
-        recentReads[value] = now
-        // Single-shot: the first code to reach the server wins. A second read while one is in
-        // flight would race it for `outcome`, and the panel's Create/Stock buttons would then act
-        // on whichever answer landed last.
-        guard !resolving else { return }
-        Task { await resolve(value) }
-    }
-
-    private func resolve(_ raw: String) async {
-        resolving = true
-        errorMessage = nil
-        defer { resolving = false }
-        do {
-            let result = try await CodeLookup(service: model.client).resolve(raw)
-            switch result {
-            case .link(let link):
-                dismiss()
-                model.navigator.openInPlace(link)
-            case .products(let rows, _) where rows.count == 1:
-                if let row = rows.first {
+        @ViewBuilder
+        private func outcomePanel(_ outcome: LookupOutcome) -> some View {
+            switch outcome {
+            case .products(let rows, let code):
+                ProductMatchesPanel(rows: rows, code: code) { row in
                     RecentEntities.record(row.id)
                     dismiss()
                     model.navigator.openInPlace(.entity(.product, id: row.id))
                 }
-            case .text(let value):
-                dismiss()
-                onTextResolved(value)
-            default:
-                outcome = result
+            case .unknownCode(let code, let catalog):
+                UnknownCodePanel(code: code, catalog: catalog, creating: creatingProduct) {
+                    Task { await createProduct(code: code) }
+                } onStock: {
+                    model.navigator.pendingCaptureCode = code
+                    dismiss()
+                    model.navigator.open(.capture(location: nil))
+                }
+            case .link, .text:
+                // Both are handled synchronously by `resolve(_:)` (navigate or hand off to search)
+                // and never linger as the panel's state.
+                EmptyView()
             }
-        } catch {
-            errorMessage = error.userMessage
-            Diagnostics.report(error, context: "scanLookup.resolve")
+        }
+
+        private func handleRead(_ raw: String) {
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { return }
+            let now = Date.now
+            if let last = recentReads[value], now.timeIntervalSince(last) < Self.repeatWindow { return }
+            recentReads[value] = now
+            // Single-shot: the first code to reach the server wins. A second read while one is in
+            // flight would race it for `outcome`, and the panel's Create/Stock buttons would then act
+            // on whichever answer landed last.
+            guard !resolving else { return }
+            Task { await resolve(value) }
+        }
+
+        private func resolve(_ raw: String) async {
+            resolving = true
+            errorMessage = nil
+            defer { resolving = false }
+            do {
+                let result = try await CodeLookup(service: model.client).resolve(raw)
+                switch result {
+                case .link(let link):
+                    dismiss()
+                    model.navigator.openInPlace(link)
+                case .products(let rows, _) where rows.count == 1:
+                    if let row = rows.first {
+                        RecentEntities.record(row.id)
+                        dismiss()
+                        model.navigator.openInPlace(.entity(.product, id: row.id))
+                    }
+                case .text(let value):
+                    dismiss()
+                    onTextResolved(value)
+                default:
+                    outcome = result
+                }
+            } catch {
+                errorMessage = error.userMessage
+                Diagnostics.report(error, context: "scanLookup.resolve")
+            }
+        }
+
+        private func createProduct(code: String) async {
+            creatingProduct = true
+            defer { creatingProduct = false }
+            do {
+                let found = try await model.client.findOrCreateProduct(raw: code)
+                RecentEntities.record(found.product.id.rawValue)
+                dismiss()
+                model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
+            } catch {
+                errorMessage = error.userMessage
+                Diagnostics.report(error, context: "scanLookup.createProduct")
+            }
         }
     }
 
-    private func createProduct(code: String) async {
-        creatingProduct = true
-        defer { creatingProduct = false }
-        do {
-            let found = try await model.client.findOrCreateProduct(raw: code)
-            RecentEntities.record(found.product.id.rawValue)
-            dismiss()
-            model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
-        } catch {
-            errorMessage = error.userMessage
-            Diagnostics.report(error, context: "scanLookup.createProduct")
-        }
+    #Preview("Manual entry", traits: .modifier(SignedInPreview())) {
+        ScanLookupSheet()
     }
-}
 
-#Preview("Manual entry", traits: .modifier(SignedInPreview())) {
-    ScanLookupSheet()
-}
-
-#Preview("Unknown code, catalog hit", traits: .modifier(SignedInPreview())) {
-    ScanLookupSheet(
-        previewOutcome: .unknownCode(
-            "00012345678905",
-            catalog: UpcLookupOutputValue(
-                upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", brand: nil,
-                category: nil,
-                description: nil, priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false)
+    #Preview("Unknown code, catalog hit", traits: .modifier(SignedInPreview())) {
+        ScanLookupSheet(
+            previewOutcome: .unknownCode(
+                "00012345678905",
+                catalog: UpcLookupOutputValue(
+                    upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", brand: nil,
+                    category: nil,
+                    description: nil, priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false)
+            )
         )
-    )
-}
+    }
 
-#Preview("Multiple products", traits: .modifier(SignedInPreview())) {
-    ScanLookupSheet(
-        previewOutcome: .products(PreviewFixtures.sampleRows, code: "00012345678905")
-    )
-}
+    #Preview("Multiple products", traits: .modifier(SignedInPreview())) {
+        ScanLookupSheet(
+            previewOutcome: .products(PreviewFixtures.sampleRows, code: "00012345678905")
+        )
+    }
+#endif
