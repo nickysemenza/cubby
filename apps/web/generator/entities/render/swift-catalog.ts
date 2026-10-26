@@ -33,6 +33,7 @@ import {
   requireNativeCoverage,
   nativeHeroActionPlans,
 } from "@cubby/schemas/compiler/native-coverage";
+import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { generatedHeader } from "../../artifacts.ts";
 import { parseRangeBounds } from "@cubby/shared/filter";
@@ -613,7 +614,9 @@ const presentationJSON = (
   return {
     detailVariant: detail.variant,
     heroChip: detail.hero.chip ?? null,
-    summarySlots: detail.summary.map((slot) => {
+    // Web-only slots and sections never reach the native manifest.
+    summarySlots: detail.summary.flatMap((slot) => {
+      if (!onDetailSurface(slot, "native")) return [];
       switch (slot.kind) {
         case "fields":
           return {
@@ -655,9 +658,9 @@ const presentationJSON = (
       relation: entry.relation,
       dateField: entry.dateField,
     })),
-    detailSections: detail.sections.map((section) =>
-      detailSectionJSON(entity, section),
-    ),
+    detailSections: detail.sections
+      .filter((section) => onDetailSurface(section, "native"))
+      .map((section) => detailSectionJSON(entity, section)),
     connectedViews: entityConnectedViews.map((view) => ({
       key: view.key,
       title: view.title,
@@ -876,7 +879,9 @@ export const renderSwiftEntityCatalog = (
     detailSlot: used(
       entities.flatMap((entity) =>
         entity.inspector.detail.sections.flatMap((section) =>
-          section.kind === "slot" ? [`${entity.key}.${section.id}`] : [],
+          section.kind === "slot" && onDetailSurface(section, "native")
+            ? [`${entity.key}.${section.id}`]
+            : [],
         ),
       ),
     ),

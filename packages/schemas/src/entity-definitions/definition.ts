@@ -1,4 +1,7 @@
-import { detailSummarySchema } from "../entity-detail-summary";
+import {
+  detailSummarySchema,
+  detailSurfacesSchema,
+} from "../entity-detail-summary";
 import { displayImageQualityCheck } from "./data-quality-image";
 import {
   colorTokenSchema,
@@ -1349,10 +1352,12 @@ const buildMetadataSchemas = () => {
     placement: sectionPlacement,
     /** Focused detail workspace; omission follows the section's semantic kind. */
     workspace: sectionWorkspace.optional(),
+    surfaces: detailSurfacesSchema,
   };
   /**
-   * One detail section. `fields` names every `display.detail` field exactly
-   * once across the sections; `relation` renders the target entity's list
+   * One detail section, in reading order. `fields` names `display.detail`
+   * fields at most once across the sections (every one that is not
+   * `listHidden` or shown by a summary slot must be named); `relation` renders the target entity's list
    * filtered by the named descriptor against this record; `timeline` mounts
    * the entity's timeline capability; `slot` is the one per-platform
    * hand-written fill, rendered only where a registry provides it.
@@ -1435,6 +1440,7 @@ const buildMetadataSchemas = () => {
         explanationField: fieldKey.nullable().optional().default(null),
         workspace: sectionWorkspace.optional(),
         placement: sectionPlacement,
+        surfaces: detailSurfacesSchema,
       })
       .strict(),
   ]);
@@ -1538,7 +1544,11 @@ const buildMetadataSchemas = () => {
             .object({
               /** An enum or boolean field rendered as the title chip. */
               chip: fieldKey.nullable().optional().default(null),
-              /** A reference field rendered as the ancestry breadcrumb. */
+              /**
+               * The field the detail read's `breadcrumb` projection walks: a
+               * reference (a location's ancestry, else the one record), or a
+               * placement object carrying `locationId`.
+               */
               breadcrumb: fieldKey.nullable().optional().default(null),
               /**
                * A date or timestamp field recording when the thing happened,
@@ -1586,13 +1596,14 @@ const buildMetadataSchemas = () => {
             .nullable()
             .optional()
             .default(null),
-          /** Omitted: one Overview section for all detail fields; [] opts out. */
-          sectionOverrides: z.array(detailSectionSchema).optional(),
-          /** Extra field groups, slots and timelines appended to inferred sections. */
-          additionalSections: z
-            .array(detailSectionSchema)
-            .optional()
-            .default([]),
+          /**
+           * The detail page's authored reading order. Edit sections group a
+           * form; these group a record for reading, so neither derives from
+           * the other. Undeclared `many` relations append derived sections.
+           */
+          sections: z.array(detailSectionSchema, {
+            error: "must author the detail page's sections",
+          }),
           /** Ambiguous relation back-filters, keyed by relation name. */
           relationFilterOverrides: z
             .record(
@@ -1625,11 +1636,10 @@ const buildMetadataSchemas = () => {
         .prefault({})
         .transform(
           ({
-            sectionOverrides,
+            sections,
             summary,
             activityRelations,
             overviewSections,
-            additionalSections,
             relationFilterOverrides,
             variantOverride,
             hero,
@@ -1640,10 +1650,9 @@ const buildMetadataSchemas = () => {
             summary,
             hero,
             quickActions,
-            sections: sectionOverrides,
+            sections,
             activityRelations,
             overviewSections,
-            additionalSections,
             relationFilterOverrides,
             omitRelations,
           }),

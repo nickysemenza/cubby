@@ -111,7 +111,26 @@ export default defineEntity(
         hero: {
           breadcrumb: "parentId",
         },
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "aliases",
+              "tags",
+              "type",
+              "notes",
+              "productId",
+              "parentId",
+            ],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["id", "lastBulkInventory", "createdAt", "updatedAt"],
+          },
           {
             kind: "slot",
             id: "contents-valuation",

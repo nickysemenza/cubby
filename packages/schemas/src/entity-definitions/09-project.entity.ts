@@ -233,7 +233,37 @@ export default defineEntity({
 
         extraActions: ["setStatus"],
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["emoji", "name", "status", "kind", "parentProjectId"],
+        },
+        {
+          kind: "fields",
+          id: "defaults",
+          title: "Defaults",
+          fields: ["locations", "assigneeId", "defaultTrade"],
+        },
+        {
+          kind: "fields",
+          id: "budget-estimate",
+          title: "Budget",
+          fields: ["costEstimate"],
+        },
+        {
+          kind: "fields",
+          id: "schedule-dates",
+          title: "Schedule",
+          fields: ["dates"],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["updatedAt"],
+        },
         { kind: "slot", id: "budget", title: "Budget" },
         { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
         {

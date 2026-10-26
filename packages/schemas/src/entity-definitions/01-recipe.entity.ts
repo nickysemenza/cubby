@@ -116,7 +116,31 @@ export default defineEntity(
           { relation: "meals", dateField: "date" },
         ],
 
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["name"],
+          },
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: ["meta", "yield", "tags", "notes", "forkedFromRecipeId"],
+          },
+          {
+            kind: "fields",
+            id: "servings",
+            title: "Servings",
+            fields: ["servings"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["createdAt", "updatedAt", "source", "activeMinutes"],
+          },
           {
             kind: "fields",
             id: "contents",

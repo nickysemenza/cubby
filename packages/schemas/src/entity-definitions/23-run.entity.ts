@@ -183,7 +183,7 @@ export default defineEntity({
         breadcrumb: "vendorAccountId",
       },
       // The summary carries purpose/results; raw record facts must not precede review.
-      sectionOverrides: [
+      sections: [
         {
           kind: "fields",
           id: "overview",

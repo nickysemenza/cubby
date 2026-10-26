@@ -81,6 +81,26 @@ export default defineEntity({
         { relation: "plantings", dateField: "sowedOn" },
         { relation: "images", dateField: "capturedAt" },
       ],
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "locationId",
+            "kind",
+            "observedOn",
+            "notes",
+            "harvestAmount",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["plantings"],
+        },
+      ],
     },
     list: {
       timeline: { fields: ["observedOn"] },

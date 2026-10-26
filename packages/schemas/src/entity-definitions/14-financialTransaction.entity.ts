@@ -176,6 +176,47 @@ export default defineEntity(
           products:
             "Reached through the Purchases table on this page; the product path is three joins deep.",
         },
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "itemizationExpectation",
+              "accountId",
+              "kind",
+              "status",
+              "amount",
+              "sourceRefs",
+              "allocations",
+            ],
+          },
+          {
+            kind: "fields",
+            id: "schedule",
+            title: "Schedule",
+            fields: ["postedDate"],
+          },
+          {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["merchant"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: [
+              "bookingCoverage",
+              "documentCoverage",
+              "itemizationCoverage",
+              "productsCoverage",
+              "spendingCategorySummary",
+              "vendorInference",
+            ],
+          },
+        ],
       },
     },
     model: {

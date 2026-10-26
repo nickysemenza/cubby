@@ -67,6 +67,37 @@ export default defineEntity({
           fields: ["updateRequired", "inactive", "appleIntelligenceAvailable"],
         },
       ],
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "installationId",
+            "name",
+            "platform",
+            "appVersion",
+            "osVersion",
+            "lastSeenAt",
+            "automaticWork",
+            "remotePaused",
+            "ledgerPartyId",
+            "productId",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: [
+            "appleIntelligenceAvailable",
+            "updateRequired",
+            "inactive",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+      ],
     },
   },
   model: {

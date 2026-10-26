@@ -134,7 +134,22 @@ export default defineEntity({
         extraActions: ["complete", "bulkEdit", "delete"],
       },
       quickActions: ["complete"],
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "name",
+            "status",
+            "assigneeId",
+            "projectId",
+            "subjectProductId",
+            "parentTaskId",
+            "trade",
+          ],
+        },
+        { kind: "fields", id: "schedule", title: "Schedule", fields: ["due"] },
         {
           kind: "fields",
           id: "dependencies",

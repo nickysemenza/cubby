@@ -135,7 +135,32 @@ export default defineEntity({
       hero: {
         chip: "state",
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "kind",
+            "state",
+            "imageId",
+            "runId",
+            "attempts",
+            "lastExecutor",
+            "lastError",
+            "waitingOn",
+            "leaseDeviceId",
+            "leaseExpiresAt",
+            "durationMs",
+            "chargedCost",
+            "standardCost",
+            "processorRevision",
+            "dispatchedAt",
+            "completedAt",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
         { kind: "slot", id: "attempts", title: "Attempts and events" },
       ],
     },

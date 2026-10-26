@@ -484,6 +484,15 @@ const fieldLookup = (
   };
 };
 
+/** A json read shaped `{ locationId, … }` (Product's primary placement). */
+const isPlacementField = (field: EntityFieldModel["fields"][number]) => {
+  if (field.kind !== "json") return false;
+  let read: unknown = field.validation.read;
+  while (read instanceof z.ZodNullable || read instanceof z.ZodOptional)
+    read = read.unwrap();
+  return read instanceof z.ZodObject && "locationId" in read.shape;
+};
+
 const checkHero = (
   hero: EntityPresentation["detail"]["hero"],
   lookup: FieldLookup,
@@ -517,9 +526,9 @@ const checkHero = (
   }
   if (hero.breadcrumb !== null) {
     const field = lookup.read(hero.breadcrumb, "detail.hero.breadcrumb");
-    if (field.reference === null)
+    if (field.reference === null && !isPlacementField(field))
       throw new EntityDeclarationError(
-        `${lookup.context}.detail.hero.breadcrumb ${hero.breadcrumb} must be a reference field.`,
+        `${lookup.context}.detail.hero.breadcrumb ${hero.breadcrumb} must be a reference field or a placement object with a locationId.`,
       );
   }
   if (hero.when !== null) {
@@ -533,7 +542,8 @@ const checkHero = (
 
 /** Returns whether a timeline section is declared. */
 const checkSections = (
-  sections: NonNullable<EntityPresentation["detail"]["sections"]>,
+  sections: EntityPresentation["detail"]["sections"],
+  summary: EntityPresentation["detail"]["summary"],
   fieldModel: EntityFieldModel,
   relations: EntityDeclarationMetadata["relations"],
   lookup: FieldLookup,
@@ -607,15 +617,24 @@ const checkSections = (
         break;
     }
   }
-  if (sections.some((section) => section.kind === "fields")) {
-    const orphans = [...detailFieldKeys].filter(
-      (key) => !namedDetailFields.has(key),
+  // A summary slot is a placement too: both clients omit its fields from
+  // later field sections. A listHidden field may stay off the page.
+  const summarized = new Set(
+    summary.flatMap((slot) => (slot.kind === "fields" ? slot.fields : [])),
+  );
+  const orphans = fieldModel.fields
+    .filter(
+      (field) =>
+        field.display.detail &&
+        !field.display.listHidden &&
+        !namedDetailFields.has(field.key) &&
+        !summarized.has(field.key),
+    )
+    .map((field) => field.key);
+  if (orphans.length > 0)
+    throw new EntityDeclarationError(
+      `${context}.detail.sections leave display.detail fields unplaced: ${orphans.join(", ")}.`,
     );
-    if (orphans.length > 0)
-      throw new EntityDeclarationError(
-        `${context}.detail.sections leave display.detail fields unplaced: ${orphans.join(", ")}.`,
-      );
-  }
   return timelineSection;
 };
 
@@ -879,56 +898,7 @@ export const compilePresentation = (
       lookup,
     ),
   };
-  const detailFields = fieldModel.fields
-    .filter((field) => field.display.detail)
-    .map((field) => field.key);
-  const additionalFields = new Set(
-    detail.additionalSections.flatMap((section) =>
-      section.kind === "fields"
-        ? section.fields
-        : section.kind === "relation"
-          ? section.contextFields
-          : [],
-    ),
-  );
-  const overviewFields = detailFields.filter(
-    (key) => !additionalFields.has(key),
-  );
-  // Read and edit share the same declared groups. Uneditable computed facts
-  // retain a separate summary section rather than preceding record identity.
-  const grouped = edit.sections.flatMap((section) => {
-    const fields = section.fields.filter((key) => overviewFields.includes(key));
-    return fields.length === 0
-      ? []
-      : [
-          {
-            kind: "fields" as const,
-            id: section.id === "main" ? "overview" : `fields-${section.id}`,
-            title: section.title ?? "Record",
-            placement: "primary" as const,
-            workspace: "overview" as const,
-            fields,
-          },
-        ];
-  });
-  const groupedKeys = new Set(grouped.flatMap((section) => section.fields));
-  const remaining = overviewFields.filter((key) => !groupedKeys.has(key));
-  const declaredSections = detail.sections ?? [
-    ...grouped,
-    ...(remaining.length === 0
-      ? []
-      : [
-          {
-            kind: "fields" as const,
-            id: grouped.length === 0 ? "overview" : "summaries",
-            title: grouped.length === 0 ? "Record" : "Coverage and summaries",
-            placement: "primary" as const,
-            workspace: "overview" as const,
-            fields: remaining,
-          },
-        ]),
-    ...detail.additionalSections,
-  ];
+  const declaredSections = detail.sections;
   const sections =
     emojiField &&
     !declaredSections.some(
@@ -986,6 +956,7 @@ export const compilePresentation = (
     });
   const timelineSection = checkSections(
     sections,
+    detail.summary,
     fieldModel,
     relations,
     lookup,
@@ -1044,7 +1015,6 @@ export const compilePresentation = (
       overviewSections: detail.overviewSections,
       preview,
       omitRelations: detail.omitRelations,
-      additionalSections: detail.additionalSections,
       relationFilterOverrides: detail.relationFilterOverrides,
     },
     list: {

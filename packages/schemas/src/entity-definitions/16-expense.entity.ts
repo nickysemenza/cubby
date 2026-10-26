@@ -126,7 +126,38 @@ export default defineEntity({
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "spendingCategoryId",
+            "economicRole",
+            "name",
+            "projectId",
+            "productId",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "details",
+          title: "Details",
+          fields: [
+            "cost",
+            "lineKind",
+            "lineBasis",
+            "costType",
+            "trade",
+            "url",
+            "notes",
+            "future",
+            "productQuantity",
+            "vendor",
+            "orderId",
+          ],
+        },
+        { kind: "fields", id: "schedule", title: "Schedule", fields: ["date"] },
         {
           kind: "fields",
           id: "purchase",

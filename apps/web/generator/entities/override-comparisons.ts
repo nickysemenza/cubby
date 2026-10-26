@@ -108,8 +108,6 @@ const effectiveValue = (
       return entity.route?.detailParam ?? null;
     case "presentation.detail.variantOverride":
       return entity.inspector.detail.variant;
-    case "presentation.detail.sectionOverrides":
-      return entity.inspector.detail.sections;
     case "presentation.detail.relationFilterOverrides":
       return Object.fromEntries(
         Object.keys(declared.inspector.detail.relationFilterOverrides).map(

@@ -112,7 +112,19 @@ export default defineEntity(
             "The composition slot renders served recipes with their portions.",
         },
         hero: { when: { field: "date", label: "Eaten" } },
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: ["date", "name", "sortOrder", "mealType", "mealKind"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["recipeNames", "createdAt", "updatedAt"],
+          },
           {
             kind: "slot",
             id: "composition",
