@@ -28,8 +28,8 @@ struct CubbyApp: App {
                 }
             #endif
             if e2eURL != nil {
-                // A fixture install stays a plain viewer without presenting the
-                // first-install companion-work decision over the E2E flow.
+                // A fixture install stays a plain viewer without showing Photos' inline
+                // companion-work question in the E2E flow.
                 DeviceParticipation(automaticWork: false, answeredAt: .now).save(to: .standard)
             }
         #else
@@ -85,6 +85,12 @@ struct CubbyApp: App {
                     .tint(FieldGuideTokens.interaction)
             }
             .defaultSize(width: 1400, height: 900)
+            // The app menu's Settings… item and ⌘, open this window.
+            Settings {
+                SettingsWindow()
+                    .environment(model)
+                    .tint(FieldGuideTokens.interaction)
+            }
         #else
             WindowGroup { appContent }
                 .commands { CubbyCommands() }

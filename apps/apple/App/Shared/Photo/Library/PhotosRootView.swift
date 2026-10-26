@@ -233,6 +233,9 @@ private struct PhotoLibraryBrowser: View {
                     filter: $filter, selectedCategory: $selectedCategory,
                     dimPhotosInCubby: $dimPhotosInCubby, showsCategories: !picker,
                     unanalysedCount: unanalysedCount)
+                if !picker && appModel.participation.answeredAt == nil {
+                    DeviceParticipationPrompt()
+                }
                 ScrollViewReader { proxy in
                     ScrollView {
                         // `pinnedViews: .sectionHeaders` keeps each month's label on screen while
@@ -584,6 +587,40 @@ private final class FilteredMonthAssetsCache {
         entries[month.id] = (filter, category, revision, categoryRevision, result)
         return result
     }
+}
+
+/// The once-per-install companion-work question, asked in place above the grid the first time
+/// Photos opens with full access rather than at sign-in. Until it is answered the master switch
+/// stays off (`DeviceParticipation`'s default); either answer sets `answeredAt`, so the row does
+/// not return. Settings › Advanced changes the answer later.
+private struct DeviceParticipationPrompt: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        Panel(spacing: FieldGuideTokens.Space.sm) {
+            Text("Help process photos on this device?").font(.headline)
+            Text(
+                "This device can match your library against Cubby, analyse photos in the background, and run companion image jobs. Change this anytime in Settings."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                Button("Turn on") { appModel.setParticipation(automaticWork: true) }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("photos.participation.optIn")
+                Button("Not now") { appModel.setParticipation(automaticWork: false) }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("photos.participation.optOut")
+            }
+        }
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.bottom, FieldGuideTokens.Space.sm)
+    }
+}
+
+#Preview("Participation prompt", traits: .modifier(SignedInPreview())) {
+    DeviceParticipationPrompt()
 }
 
 /// Tracks which months are on screen (via each `Section`'s `onAppear`/`onDisappear`) and keeps

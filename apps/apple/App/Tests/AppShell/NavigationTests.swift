@@ -8,22 +8,22 @@ import Testing
 @Suite("Navigation")
 struct NavigationTests {
     #if os(macOS)
-        @Test func openingSettingsPreservesBrowseContextAndReturnsToSettingsRoot() {
+        /// Mac Settings is a separate window, so a section stored by an older build must not put
+        /// Settings back in the main window.
+        @Test func restoringAStoredSettingsSectionKeepsTheMainWindowAndBrowseContext() throws {
             let navigator = Navigator()
             navigator.macDestination = .entity(.product)
             let selection = record(.product, "PRD-1")
             navigator.selectedRecords[.browse] = selection
             navigator.paths[.browse] = [.entityDetail(.product, id: "PRD-1")]
+            let saved = try JSONEncoder().encode(navigator.restoration)
 
-            navigator.openSettings()
-            #expect(navigator.macDestination == .section(.settings))
-            navigator.paths[.settings] = [.dev]
-            navigator.openSettings()
-            #expect(navigator.paths[.settings] == [])
-
-            navigator.macDestination = .entity(.product)
-            #expect(navigator.selectedRecords[.browse] == selection)
-            #expect(navigator.paths[.browse] == [.entityDetail(.product, id: "PRD-1")])
+            let restored = Navigator()
+            restored.restore(section: AppSection.settings.rawValue, navigation: saved)
+            #expect(restored.section == .today)
+            restored.macDestination = .entity(.product)
+            #expect(restored.selectedRecords[.browse] == selection)
+            #expect(restored.paths[.browse] == [.entityDetail(.product, id: "PRD-1")])
         }
     #endif
 

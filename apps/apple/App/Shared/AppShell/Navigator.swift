@@ -181,7 +181,14 @@ final class Navigator {
 
     func restore(section storedSection: String, navigation data: Data?) {
         guard !launchLinkApplied else { return }
-        if let section = AppSection(rawValue: storedSection) { self.section = section }
+        if let section = AppSection(rawValue: storedSection) {
+            #if os(macOS)
+                // Mac Settings is its own window; an older build may have stored it as a section.
+                if section != .settings { self.section = section }
+            #else
+                self.section = section
+            #endif
+        }
         guard let data, let saved = try? JSONDecoder().decode(Restoration.self, from: data) else { return }
         browseKey = saved.browseKey
         paths = saved.paths
@@ -244,14 +251,6 @@ final class Navigator {
             pendingCliAuth = CliAuthRequest(port: port, nonce: nonce)
         }
     }
-
-    #if os(macOS)
-        func openSettings() {
-            launchLinkApplied = true
-            section = .settings
-            paths[.settings] = []
-        }
-    #endif
 
     /// Pushes Dev onto whatever section is currently showing on iOS, since it no longer has its
     /// own tab (`AppSection.tabs` excludes it there); on macOS, where it stays a sidebar row,

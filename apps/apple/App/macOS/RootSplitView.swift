@@ -155,11 +155,6 @@ struct RootSplitView: View {
                             .tag(SidebarDestination.section(native))
                         }
                     }
-                    Section {
-                        Label(AppSection.settings.title, systemImage: AppSection.settings.symbol)
-                            .tag(SidebarDestination.section(.settings))
-                            .accessibilityIdentifier("sidebar.settings")
-                    }
                     let workingActivities = model.backgroundActivity.visibleActivities
                     if !workingActivities.isEmpty {
                         Section("Working") {

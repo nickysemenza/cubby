@@ -8,7 +8,8 @@ import SwiftUI
 /// App-level menu commands and keyboard shortcuts. On Mac: File › New (⌘N for the focused entity,
 /// plus a per-entity submenu), Open on Web ⌥⌘O and Copy Link ⇧⌘C for the focused record or list;
 /// View › Refresh ⌘R; Edit › Find ⌘F (the visible list's filter, else global Search) and Search
-/// Everything ⌥⌘F; and a Go menu numbering the sidebar's sections. On iOS: ⌘1…⌘N select the tabs,
+/// Everything ⌥⌘F; and a Go menu numbering the sidebar's sections. Settings… (⌘,) is the
+/// `Settings` scene's own app-menu item, not a command here. On iOS: ⌘1…⌘N select the tabs,
 /// ⌘F jumps to Search, and ⌘0 opens Dev, which is off the tab bar there.
 ///
 /// `Commands` runs outside any window's view hierarchy, so it cannot read `@Environment(AppModel
@@ -17,7 +18,6 @@ import SwiftUI
 /// switching goes through `AppModel.active`, a static weak reference `CubbyApp.init` sets once.
 struct CubbyCommands: Commands {
     #if os(macOS)
-        @Environment(\.openWindow) private var openWindow
         @FocusedValue(\.sceneCommands) private var scene
         @FocusedValue(\.listSearch) private var listSearch
     #endif
@@ -26,13 +26,6 @@ struct CubbyCommands: Commands {
 
     var body: some Commands {
         #if os(macOS)
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
-                    AppModel.active?.navigator.openSettings()
-                    openWindow(id: "main")
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
             CommandGroup(replacing: .newItem) { newRecordCommands }
             CommandGroup(after: .newItem) {
                 Divider()
