@@ -20,7 +20,7 @@
   "nutritionDisplay": {
     "source": "label",
     "title": "From package label",
-    "basis": "Per serving \u00b7 30 g",
+    "basis": "Per serving · 30 g",
     "sourceNote": "Synthetic package label",
     "inferenceEvidence": null,
     "rows": [
@@ -76,7 +76,11 @@
   "commodity": false,
   "recipeUsages": [],
   "cookbooks": [],
-  "primaryPlacement": {"locationId": "LOC-5678", "path": "Home › Garage › Shelf A", "onHand": 2},
+  "primaryPlacement": {
+    "locationId": "LOC-5678",
+    "path": "Home › Garage › Shelf A",
+    "onHand": 2
+  },
   "quantityLedger": {
     "acquiredUnits": 0,
     "exitedUnits": 0,
@@ -98,5 +102,6 @@
   "brandId": "VEN-2345",
   "brandName": "Sample Manufacturer",
   "growsPlantId": null,
-  "labelNutrition": null
+  "labelNutrition": null,
+  "unitPriceMappings": []
 }
