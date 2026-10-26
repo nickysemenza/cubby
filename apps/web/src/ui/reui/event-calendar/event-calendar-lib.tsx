@@ -203,6 +203,7 @@ function packWeekRowLanes<TData>(
   rowIndex: number,
   rowStart: Date,
   timeZone: string,
+  columns = 7,
 ): EventCalendarSegment<TData>[] {
   type Bar = {
     seg: EventCalendarSegment<TData>;
@@ -214,14 +215,10 @@ function packWeekRowLanes<TData>(
   };
 
   const bars: Bar[] = segments.map((seg) => {
-    const dayIndex = Math.round(
-      (zonedStartOfDay(seg.day, timeZone).getTime() -
-        zonedStartOfDay(rowStart, timeZone).getTime()) /
-        (24 * 60 * 60 * 1000),
-    );
+    const dayIndex = differenceInCalendarDays(toZoned(seg.day, timeZone), toZoned(rowStart, timeZone));
     return {
       seg,
-      colStart: Math.max(0, Math.min(6, dayIndex)),
+      colStart: Math.max(0, Math.min(columns - 1, dayIndex)),
       colSpan: 1,
       isStart: seg.isStart,
       isEnd: seg.isEnd,
@@ -260,8 +257,8 @@ function packWeekRowLanes<TData>(
   for (const bar of rowBars) {
     let lane = 0;
     for (;;) {
-      lanes[lane] ??= new Array(7).fill(false);
-      const row = (lanes[lane] ??= new Array(7).fill(false));
+      lanes[lane] ??= new Array(columns).fill(false);
+      const row = (lanes[lane] ??= new Array(columns).fill(false));
       let free = true;
       for (let c = bar.colStart; c < bar.colStart + bar.colSpan; c++) {
         if (row[c]) {

@@ -11,7 +11,7 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { addDays } from "date-fns";
 import type { ComponentProps } from "react";
 import {
@@ -20,16 +20,19 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import {
   EntityDisplayImagesProvider,
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
+import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
@@ -41,11 +44,16 @@ import { Picker } from "~/ui/combobox/picker";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
+import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
+import { useLocalStorage } from "~/ui/hooks/use-local-storage";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
+import { Spinner } from "~/ui/primitives/spinner";
+import { Switch } from "~/ui/primitives/switch";
 import {
   type EventCalendarRenderEventProps,
   type EventCalendarRenderEventRoot,
@@ -68,10 +76,12 @@ import {
   calendarItemTriggerClassName,
 } from "./calendar-item-row";
 import { calendarItemPresentation } from "./calendar-kind-registry";
+import { CalendarOverview } from "./calendar-overview";
 import {
   formatCalendarPeriodTitle,
   getCalendarPeriodRange,
   householdCalendarDate,
+  isLongCalendarPeriod,
   shiftCalendarPeriod,
   type CalendarViewPeriod,
 } from "./calendar-period";
@@ -92,13 +102,25 @@ function defaultCreateKind(source?: CalendarSourceKind): CreatableKind {
 const NO_ITEMS: CalendarItem[] = [];
 const NO_DAY_SUMMARIES: Record<string, CalendarDaySummary> = {};
 const GRID_PERIOD_OPTIONS = [
-  { value: "month", label: "Month" },
-  { value: "fortnight", label: "Fortnight" },
   { value: "week", label: "Week" },
+  { value: "fortnight", label: "Fortnight" },
+  { value: "month", label: "Month" },
 ] as const;
+const ALIGN_WEEKDAYS_SCHEMA = z.boolean();
+const DATE_PERIOD_GROUP = { id: "dates", label: "Date grid", order: 0 };
 const PERIOD_OPTIONS = [
-  ...GRID_PERIOD_OPTIONS,
-  { value: "schedule", label: "Schedule" },
+  ...GRID_PERIOD_OPTIONS.map((option) => ({
+    ...option,
+    group: DATE_PERIOD_GROUP,
+  })),
+  { value: "quarter", label: "3 months", group: DATE_PERIOD_GROUP },
+  { value: "half-year", label: "6 months", group: DATE_PERIOD_GROUP },
+  { value: "year", label: "Year", group: DATE_PERIOD_GROUP },
+  {
+    value: "schedule",
+    label: "Schedule",
+    group: { id: "schedule", label: "Timeline", order: 1 },
+  },
 ] as const;
 // SAFETY: the calendar's custom properties also drive lane placement and drag
 // geometry; compact styling must not scale the painted chips independently.
@@ -271,28 +293,33 @@ const scheduleQueryInput = (
 };
 
 function CalendarScheduleRead({ input }: { input: CalendarRangeInput }) {
-  const { data, isError, error, refetch } = useQuery(
+  const { data, isPending, isError, error, refetch } = useQuery(
     calendar.schedule.queryOptions(input),
   );
-  if (isError) {
-    return <CalendarRangeError error={error} onRetry={() => void refetch()} />;
-  }
-  if (!data) return <Description>Loading schedule…</Description>;
+  const loading = useHydratedLoading(isPending);
+  if (loading) return <CalendarLoading label="Loading schedule…" />;
   return (
-    <CalendarSchedule
-      data={data}
-      window={{
-        startDate: input.startDate,
-        endDate: formatPlainDate(
-          addDays(parsePlainDate(input.endDateExclusive), -1),
-        ),
-      }}
-    />
+    <>
+      {isError && (
+        <CalendarRangeError error={error} onRetry={() => void refetch()} />
+      )}
+      {data && (
+        <CalendarSchedule
+          data={data}
+          window={{
+            startDate: input.startDate,
+            endDate: formatPlainDate(
+              addDays(parsePlainDate(input.endDateExclusive), -1),
+            ),
+          }}
+        />
+      )}
+    </>
   );
 }
 
 export function UnifiedCalendar({
-  period,
+  period: requestedPeriod,
   date,
   day,
   filters,
@@ -302,6 +329,19 @@ export function UnifiedCalendar({
   onDayChange,
   periodActions,
 }: UnifiedCalendarProps) {
+  const isMobile = useIsMobile();
+  const alignmentId = useId();
+  const period =
+    isMobile && isLongCalendarPeriod(requestedPeriod)
+      ? "month"
+      : requestedPeriod;
+  const longPeriod = isLongCalendarPeriod(period);
+  const [alignWeekdays, setAlignWeekdays] = useLocalStorage(
+    "calendar.align-weekdays",
+    ALIGN_WEEKDAYS_SCHEMA,
+    true,
+  );
+  const { inspectRow, PreviewSheet } = useEntityPreview();
   const today = householdLocalDate();
   useHouseholdToday(today);
   const anchorDate = date ?? today;
@@ -354,12 +394,13 @@ export function UnifiedCalendar({
       ),
     [activePeriod, filters, lockedKinds],
   );
-  const { data, isLoading, isError, error, refetch } = useQuery({
+  const { data, isPending, isError, error, refetch } = useQuery({
     ...calendar.range.queryOptions(range),
     enabled: period !== "schedule",
-    // Without this every chip toggle blanks the month grid mid-flight.
-    placeholderData: keepPreviousData,
   });
+  // Query keys own date/filter scope. Same-scope refetches retain their data;
+  // another range must never masquerade as the newly selected calendar.
+  const isLoading = useHydratedLoading(isPending);
   const items = data?.items ?? NO_ITEMS;
   const imageRefs = useMemo<EntityRef[]>(
     () => items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
@@ -560,11 +601,31 @@ export function UnifiedCalendar({
           <h2 className="font-heading text-sm font-semibold">{periodTitle}</h2>
           <Row align="center" gap="xs" className="ml-auto">
             <PeriodActions render={periodActions} range={activePeriod} />
+            {longPeriod && (
+              <label
+                htmlFor={alignmentId}
+                className="hidden items-center gap-2 text-xs md:flex"
+              >
+                <Switch
+                  id={alignmentId}
+                  checked={alignWeekdays}
+                  onCheckedChange={setAlignWeekdays}
+                />
+                Align weekdays
+              </label>
+            )}
             <Picker
-              mode="segmented"
-              className="md:[&_[data-slot=toggle-group-item]]:h-6 md:[&_[data-slot=toggle-group-item]]:px-2"
+              mode="choose"
               label="Calendar period"
-              options={lockedKinds ? GRID_PERIOD_OPTIONS : PERIOD_OPTIONS}
+              options={
+                lockedKinds
+                  ? GRID_PERIOD_OPTIONS
+                  : isMobile
+                    ? PERIOD_OPTIONS.filter(
+                        (option) => !isLongCalendarPeriod(option.value),
+                      )
+                    : PERIOD_OPTIONS
+              }
               value={period}
               onValueChange={(v) => {
                 const next = PERIOD_OPTIONS.find(
@@ -578,15 +639,23 @@ export function UnifiedCalendar({
 
         {period === "schedule" ? (
           <CalendarScheduleRead input={scheduleRange} />
+        ) : isLoading ? (
+          <CalendarLoading label="Loading calendar…" />
         ) : isError ? (
           <CalendarRangeError error={error} onRetry={() => void refetch()} />
         ) : null}
+
+        {period !== "schedule" && !isLoading && data && items.length === 0 && (
+          <output className="text-sm text-muted-foreground">
+            No events in this period.
+          </output>
+        )}
 
         {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
             reports false on the server, so a JS-only switch would paint the
             seven-column grid on a phone until hydration — the same trap
             `RTable` documents at length. */}
-        {period !== "schedule" && !isError && (
+        {period !== "schedule" && !isLoading && data && (
           <>
             <div className="md:hidden">
               <CalendarAgenda
@@ -619,7 +688,23 @@ export function UnifiedCalendar({
               />
             </div>
 
-            {period === "month" ? (
+            {longPeriod ? (
+              <CalendarOverview
+                start={activePeriod.start}
+                end={activePeriod.end}
+                events={sourceEvents}
+                summaries={data.days}
+                today={today}
+                aligned={alignWeekdays}
+                selectedDay={selectedDay}
+                onDayChange={setSelectedDay}
+                onInspect={(item) =>
+                  inspectRow({
+                    original: { id: item.id, entityKind: item.kind },
+                  })
+                }
+              />
+            ) : period === "month" ? (
               <MonthEventCalendar<CalendarItem>
                 {...calendarInteractionProps}
                 renderEvent={CalendarMonthChip}
@@ -654,7 +739,7 @@ export function UnifiedCalendar({
         )}
       </Stack>
 
-      {period !== "schedule" && (
+      {period !== "schedule" && !longPeriod && !isLoading && data && (
         <CalendarDaySheet
           day={selectedDay}
           items={selectedItems}
@@ -679,6 +764,7 @@ export function UnifiedCalendar({
       )}
 
       <CalendarItemInspector handle={editorHandle} />
+      <PreviewSheet />
 
       {createKind ? (
         <Suspense fallback={null}>
@@ -690,6 +776,18 @@ export function UnifiedCalendar({
         </Suspense>
       ) : null}
     </EntityDisplayImagesProvider>
+  );
+}
+
+function CalendarLoading({ label }: { label: string }) {
+  return (
+    <output
+      className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground"
+      aria-live="polite"
+    >
+      <Spinner aria-hidden="true" className="motion-reduce:animate-none" />
+      {label}
+    </output>
   );
 }
 

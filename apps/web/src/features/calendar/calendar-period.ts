@@ -16,7 +16,18 @@ import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
 import type { CalendarPeriod } from "~/ui/reui/event-calendar/event-calendar-types";
 
-export type CalendarViewPeriod = CalendarPeriod | "schedule";
+export type CalendarViewPeriod =
+  | CalendarPeriod
+  | "quarter"
+  | "half-year"
+  | "year"
+  | "schedule";
+
+export function isLongCalendarPeriod(period: CalendarViewPeriod) {
+  return period === "quarter" || period === "half-year" || period === "year";
+}
+
+const LONG_PERIOD_MONTHS = { quarter: 3, "half-year": 6, year: 12 } as const;
 
 function householdCalendarDate(plainDate: string) {
   const parsed = parsePlainDate(plainDate);
@@ -35,6 +46,22 @@ const WEEK_ALIGNED_SPAN = new Map<CalendarViewPeriod, number>([
 ]);
 
 function getCalendarPeriodRange(anchor: Date, period: CalendarViewPeriod) {
+  if (period === "quarter" || period === "half-year" || period === "year") {
+    const months = LONG_PERIOD_MONTHS[period];
+    const activeStart = addMonths(
+      startOfMonth(anchor),
+      -(anchor.getMonth() % months),
+    );
+    const activeEnd = addMonths(activeStart, months);
+    // Padding belongs to the renderer, not the query: a leap year already
+    // uses the full 366-day calendar range budget.
+    return {
+      activeStart,
+      activeEnd,
+      visibleStart: activeStart,
+      visibleEnd: activeEnd,
+    };
+  }
   const weeks = WEEK_ALIGNED_SPAN.get(period);
   const activeStart = weeks
     ? startOfWeek(anchor, { weekStartsOn: 0 })
@@ -60,6 +87,12 @@ function shiftCalendarPeriod(
   period: CalendarViewPeriod,
   direction: -1 | 1,
 ) {
+  if (period === "quarter" || period === "half-year" || period === "year") {
+    return addMonths(
+      getCalendarPeriodRange(anchor, period).activeStart,
+      direction * LONG_PERIOD_MONTHS[period],
+    );
+  }
   const weeks = WEEK_ALIGNED_SPAN.get(period);
   return weeks
     ? addWeeks(anchor, direction * weeks)
@@ -71,6 +104,10 @@ function formatCalendarPeriodTitle(
   period: CalendarViewPeriod,
   activeEnd: Date,
 ) {
+  if (period === "year") return format(anchor, "yyyy");
+  if (period === "quarter" || period === "half-year") {
+    return `${format(anchor, "MMM")}–${format(addDays(activeEnd, -1), "MMM yyyy")}`;
+  }
   if (period === "month" || period === "schedule")
     return formatCalendarDay(anchor, "monthYearLong");
   // Week and fortnight share the compact range label; `anchor` is the period's

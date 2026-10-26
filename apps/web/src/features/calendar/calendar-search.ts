@@ -17,7 +17,15 @@ export const calendarPeriodParam = z
   .catch(undefined);
 
 const calendarViewPeriodParam = z
-  .enum(["month", "fortnight", "week", "schedule"])
+  .enum([
+    "month",
+    "fortnight",
+    "week",
+    "quarter",
+    "half-year",
+    "year",
+    "schedule",
+  ])
   .optional()
   .catch(undefined);
 

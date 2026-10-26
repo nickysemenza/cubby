@@ -12,6 +12,37 @@ import {
 const zone = "America/Los_Angeles";
 
 describe("calendar period", () => {
+  it("fits a leap year inside the server range budget without querying padding", () => {
+    const range = getCalendarPeriodRange(new TZDate(2028, 7, 14, zone), "year");
+    expect(formatPlainDate(range.visibleStart)).toBe("2028-01-01");
+    expect(formatPlainDate(range.visibleEnd)).toBe("2029-01-01");
+    expect(
+      formatCalendarPeriodTitle(range.activeStart, "year", range.activeEnd),
+    ).toBe("2028");
+  });
+
+  it("aligns quarters and halves and navigates by the complete period", () => {
+    const anchor = new TZDate(2026, 10, 30, zone);
+    const quarter = getCalendarPeriodRange(anchor, "quarter");
+    const half = getCalendarPeriodRange(anchor, "half-year");
+    expect(formatPlainDate(quarter.activeStart)).toBe("2026-10-01");
+    expect(formatPlainDate(quarter.activeEnd)).toBe("2027-01-01");
+    expect(formatPlainDate(half.activeStart)).toBe("2026-07-01");
+    expect(formatPlainDate(half.activeEnd)).toBe("2027-01-01");
+    expect(formatPlainDate(shiftCalendarPeriod(anchor, "quarter", 1))).toBe(
+      "2027-01-01",
+    );
+    expect(formatPlainDate(shiftCalendarPeriod(anchor, "half-year", -1))).toBe(
+      "2026-01-01",
+    );
+    expect(formatPlainDate(shiftCalendarPeriod(anchor, "year", 1))).toBe(
+      "2027-01-01",
+    );
+    expect(
+      formatCalendarPeriodTitle(half.activeStart, "half-year", half.activeEnd),
+    ).toBe("Jul–Dec 2026");
+  });
+
   it("builds an exact Sunday-to-Sunday week across spring-forward", () => {
     const range = getCalendarPeriodRange(
       new TZDate(2026, 2, 11, 12, 0, 0, zone),

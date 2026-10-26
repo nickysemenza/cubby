@@ -52,6 +52,18 @@ const segment = (
 });
 
 describe("ReUI month span packing", () => {
+  it("packs long overview rows beyond column seven across a DST boundary", () => {
+    const rowStart = toZoned(new Date("2026-03-01T08:00:00Z"), "America/Los_Angeles");
+    const start = addDays(rowStart, 8);
+    const item = occurrence("long-row", start, addDays(start, 3));
+    const bars = packWeekRowLanes([
+      segment(item, start, true, false),
+      segment(item, addDays(start, 1), false, false),
+      segment(item, addDays(start, 2), false, true),
+    ], 0, rowStart, "America/Los_Angeles", 21);
+    expect(bars[0]).toMatchObject({ colStart: 8, colSpan: 3, lane: 0, isStart: true, isEnd: true });
+  });
+
   it("merges a multi-day project bar and moves overlaps to another lane", () => {
     const rowStart = new Date("2026-07-05T00:00:00.000Z");
     const project = occurrence(
