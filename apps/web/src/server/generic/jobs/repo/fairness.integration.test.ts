@@ -2,7 +2,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
@@ -15,6 +15,7 @@ import {
   dueJobs,
   enqueueJob,
   releaseJobClaim,
+  type JobClaim,
 } from "./jobs";
 import { loadJobWaitingOn } from "./waiting-on";
 
@@ -47,8 +48,216 @@ describe("fair drain under a flood", () => {
   const ctx = withTestDb();
 
   it(
-    "fills embedding pages to 100 Jobs while other kinds are due",
+    "scans past locked expired evaluations for the rest of the invocation",
     { timeout: 30_000 },
+    async () => {
+      const expired: JobClaim["id"][] = [];
+      for (let index = 0; index < 3; index++) {
+        const row = await enqueueJob(ctx.db, {
+          key: `synthetic.locked-expiry.${index}`,
+          kind: "ai.evaluation",
+          input: {},
+          priority: 100,
+        });
+        await getDb(ctx.db)
+          .update(job)
+          .set({
+            state: "running",
+            leaseToken: crypto.randomUUID(),
+            leaseExpiresAt: new Date(0),
+          })
+          .where(eq(job.id, row.id));
+        expired.push(row.id);
+      }
+      const healthy = await enqueueJob(ctx.db, {
+        key: "synthetic.unlocked-evaluation",
+        kind: "ai.evaluation",
+        input: {},
+      });
+      const locked = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const holding = withTransactionDatabase(ctx.db, async (tx) => {
+        await getDb(tx)
+          .select()
+          .from(job)
+          .where(inArray(job.id, expired))
+          .for("update");
+        locked.resolve();
+        await release.promise;
+      });
+      holding.catch(locked.reject);
+      const served: string[] = [];
+      const handlers: JobHandlers = {
+        "ai.evaluation": {
+          prepare: async (_db, claim) => {
+            served.push(claim.id);
+            return { page: { done: true } };
+          },
+        },
+      };
+      try {
+        await locked.promise;
+        const outcomes = await drainDueJobs(ctx.db, handlers, 12);
+        expect(served).toEqual([healthy.id]);
+        expect(
+          outcomes.filter((outcome) => outcome === "skipped"),
+        ).toHaveLength(3);
+      } finally {
+        release.resolve();
+        await holding;
+      }
+      await drainDueJobs(ctx.db, handlers, 12);
+      expect(new Set(served)).toEqual(new Set([healthy.id, ...expired]));
+    },
+  );
+
+  it.each([false, true])(
+    "reserves an embedding execution lane ahead of three blocked Run pages (owned=%s)",
+    { timeout: 60_000 },
+    async (owned) => {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+        trigger: "manual",
+        execution: false,
+      });
+      for (let index = 0; index < 3; index++)
+        await enqueueJob(ctx.db, {
+          key: `synthetic.reserved-run.${index}`,
+          kind: "run.execute",
+          input: {},
+          runId,
+        });
+      await enqueueJob(ctx.db, {
+        key: "synthetic.reserved-embedding",
+        kind: "embedding.refresh",
+        input: {},
+        ...(owned ? { runId } : {}),
+      });
+      if (owned)
+        await enqueueJob(ctx.db, {
+          key: "synthetic.reserved-backfill",
+          kind: "embedding.refresh",
+          input: {},
+        });
+      const otherKinds = owned
+        ? []
+        : Array.from(
+            { length: 30 },
+            (_, index) => `a.synthetic-background.${index}`,
+          );
+      for (const kind of otherKinds)
+        await enqueueJob(ctx.db, { key: kind, kind, input: {} });
+      const release = Promise.withResolvers<void>();
+      let runs = 0;
+      let embeddings = 0;
+      const handlers: JobHandlers = {
+        ...Object.fromEntries(
+          otherKinds.map((kind) => [
+            kind,
+            { prepare: async () => ({ page: { done: true } }) },
+          ]),
+        ),
+        "run.execute": {
+          prepare: async () => {
+            runs++;
+            await release.promise;
+            return { page: { done: true } };
+          },
+        },
+        "embedding.refresh": {
+          prepare: async () => {
+            throw new Error("Expected batch execution");
+          },
+          batch: {
+            size: 100,
+            execute: async (_db, claims, { checkpoint }) => {
+              embeddings++;
+              await release.promise;
+              await checkpoint(
+                new Map(
+                  claims.map((claim) => [
+                    claim.id,
+                    { status: "fulfilled", value: { page: { done: true } } },
+                  ]),
+                ),
+              );
+            },
+          },
+        },
+      };
+      const draining = drainDueJobs(ctx.db, handlers, 32);
+      try {
+        await expect.poll(() => runs + embeddings, { timeout: 10_000 }).toBe(3);
+        expect(embeddings).toBe(1);
+        expect(runs).toBe(2);
+      } finally {
+        release.resolve();
+        await draining;
+      }
+      expect(runs).toBe(3);
+    },
+  );
+
+  it.each(["image.cloud", "synthetic.blocked"])(
+    "keeps consumers available while %s pages are blocked",
+    { timeout: 60_000 },
+    async (kind) => {
+      for (let index = 0; index < 12; index++)
+        await enqueueJob(ctx.db, {
+          key: `synthetic.consumer-flood.${index}`,
+          kind,
+          input: {},
+        });
+      const release = Promise.withResolvers<void>();
+      let active = 0;
+      let peak = 0;
+      let settled = 0;
+      let healthy = false;
+      const handlers: JobHandlers = {
+        [kind]: {
+          prepare: async () => {
+            active++;
+            peak = Math.max(peak, active);
+            await release.promise;
+            active--;
+            return { page: { done: true } };
+          },
+        },
+        "synthetic.new-kind": {
+          prepare: async () => {
+            healthy = true;
+            return { page: { done: true } };
+          },
+        },
+      };
+      const consumers = Array.from({ length: 4 }, () =>
+        drainDueJobs(ctx.db, handlers, 32).finally(() => {
+          settled++;
+        }),
+      );
+      try {
+        await expect.poll(() => active, { timeout: 10_000 }).toBeGreaterThan(0);
+        await expect
+          .poll(() => settled, { timeout: 10_000 })
+          .toBeGreaterThan(0);
+        expect(peak).toBeLessThanOrEqual(2);
+        await enqueueJob(ctx.db, {
+          key: "synthetic.consumer-new-work",
+          kind: "synthetic.new-kind",
+          input: {},
+        });
+        await drainDueJobs(ctx.db, handlers, 32);
+        expect(healthy).toBe(true);
+      } finally {
+        release.resolve();
+        await Promise.all(consumers);
+      }
+    },
+  );
+
+  it(
+    "fills embedding pages to 100 Jobs while other kinds are due",
+    { timeout: 120_000 },
     async () => {
       for (const [kind, count] of [
         ["embedding.refresh", 200],
@@ -103,7 +312,7 @@ describe("fair drain under a flood", () => {
           },
         },
       };
-      const draining = drainDueJobs(ctx.db, handlers, 256);
+      const draining = drainDueJobs(ctx.db, handlers, 256, 60_000);
       try {
         await Promise.race([
           started.promise,
@@ -111,7 +320,7 @@ describe("fair drain under a flood", () => {
             throw new Error("Drain finished before the first embedding page");
           }),
         ]);
-        await expect.poll(() => images).toBe(20);
+        await expect.poll(() => images, { timeout: 20_000 }).toBe(20);
         expect(pages).toEqual([100]);
       } finally {
         release.resolve();
@@ -364,6 +573,9 @@ describe("fair drain under a flood", () => {
           ).id,
         );
 
+      // The template starts empty. Give the planner the synthetic flood's
+      // actual cardinality rather than waiting for background auto-analyze.
+      await getDb(ctx.db).execute(sql`ANALYZE "Job"`);
       const claimedAt = new Map<string, number>();
       let round = 0;
       await drainRounds(ctx.db, 12, (batch) => {

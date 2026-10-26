@@ -1,4 +1,5 @@
 import type { JobLane } from "@cubby/schemas/job";
+import { BACKGROUND_QUEUE_CONSUMER } from "@cubby/shared/background-queue";
 
 /**
  * How a failed page waits before its next claim. `exhaust: true` fails the Job
@@ -28,8 +29,19 @@ export type JobKindPolicy = {
   readonly maxInFlight?: number;
   /** Background pages in one drain; active Run work bypasses this limit. */
   readonly maxConcurrentPages?: number;
+  /** Live background pages across consumers; a batch shares one lease token. */
+  readonly maxInFlightPages?: number;
   /** Start these background page slots before other backfill when due. */
   readonly reservedConcurrentPages?: number;
+};
+
+/** Strict shares: one kind never borrows all lanes or all queue consumers. */
+export const JOB_BACKGROUND_SHARE = {
+  maxConcurrentPages: 1,
+  maxInFlightPages: Math.max(
+    1,
+    Math.floor(BACKGROUND_QUEUE_CONSUMER.maxConcurrency / 2),
+  ),
 };
 
 const IMAGE_RETRY = {
@@ -45,6 +57,7 @@ const MAINTENANCE_RETRY = {
 } as const satisfies JobRetryPolicy;
 
 const SERVER: JobKindPolicy = {
+  ...JOB_BACKGROUND_SHARE,
   internal: false,
   lane: "server",
   drained: true,
@@ -59,11 +72,9 @@ const SERVER: JobKindPolicy = {
 export const JOB_KIND_POLICY = {
   // Image processing is never abandoned (docs/jobs.md#image-processing).
   "image.cloud": {
-    internal: false,
+    ...SERVER,
     lane: "frontier_ai",
-    drained: true,
     retry: IMAGE_RETRY,
-    maxQueued: null,
   },
   // Parked for Apple devices: their pull claims it; enqueue and connect ring them.
   "image.device": {
