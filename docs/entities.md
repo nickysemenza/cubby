@@ -1924,6 +1924,15 @@ custom selectors/counts and group summaries
 retain their existing paths. Tracing reports the combined page/count phase as
 `entity.list.core.pageWithCount`, without invented separate timings.
 
+List bindings that need only internal page IDs use `bind.ids`; the same plan
+starts them beside row hydration as soon as selection finishes. Row-dependent
+bindings use `bind.batch`. Both memoize within one page, including transitive
+dependencies, and admit work only for requested canonical fields. Early failures
+surface with the complete page; an abandoned row load does not leave an unhandled
+rejection. Expense Project and spending allocations use the ID path and start
+together, rather than waiting for the relation-loaded rows. This changes no
+allocation precedence, filter membership or response fields.
+
 Project subtree reads load the tree beside household-grouped Expense and Task
 inputs, then apply the selected descendant scope in memory. A shared in-flight
 tree is reused by settings and rollups. The Expense and date aggregates already

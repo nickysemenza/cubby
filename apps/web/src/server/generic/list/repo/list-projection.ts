@@ -94,8 +94,15 @@ export const listGroupFields = <T extends object>(
 const scored = new Set<string>(scoredEntities);
 const isScored = (entity: string): entity is ScoredEntity => scored.has(entity);
 
+type ListIdPage = {
+  db: Database | DrizzleTransaction;
+  ids: readonly string[];
+  projection: ListProjection;
+};
+
 /** Id-only page loads started before the rows arrive; see `prefetch`. */
 export type ListPagePrefetch = {
+  page: ListIdPage;
   qualities?: ReturnType<typeof loadDataQualities>;
   images?: Promise<Map<string, DisplayImageSummary[]>>;
 };
@@ -111,6 +118,7 @@ export type ListReadValueContext = {
   >;
 };
 type ListReadPage<Row> = {
+  idPage: ListIdPage;
   db: Database | DrizzleTransaction;
   rows: Row[];
   projection: ListProjection;
@@ -118,12 +126,24 @@ type ListReadPage<Row> = {
 };
 type ListReadBinding<Row> = {
   schema: z.ZodObject;
+  prefetch?: (page: ListIdPage) => Promise<void>;
   prepare?: (page: ListReadPage<Row>) => Promise<void>;
   value: (
     row: Row,
     page: ListReadPage<Row>,
     context: ListReadValueContext,
   ) => Promise<object> | object;
+};
+type ListBatch<Row, Page, Loaded> = {
+  load: (page: Page) => Promise<Loaded>;
+  fields: <Fields extends z.ZodRawShape>(
+    schema: z.ZodObject<Fields>,
+    value: (
+      row: Row,
+      loaded: Loaded,
+      context: ListReadValueContext,
+    ) => z.output<z.ZodObject<Fields>>,
+  ) => ListReadBinding<Row>;
 };
 type BindListFields<Row> = {
   <Fields extends z.ZodRawShape>(
@@ -133,17 +153,12 @@ type BindListFields<Row> = {
       context: ListReadValueContext,
     ) => z.output<z.ZodObject<Fields>>,
   ): ListReadBinding<Row>;
-  batch: <Loaded>(load: (page: ListReadPage<Row>) => Promise<Loaded>) => {
-    load: (page: ListReadPage<Row>) => Promise<Loaded>;
-    fields: <Fields extends z.ZodRawShape>(
-      schema: z.ZodObject<Fields>,
-      value: (
-        row: Row,
-        loaded: Loaded,
-        context: ListReadValueContext,
-      ) => z.output<z.ZodObject<Fields>>,
-    ) => ListReadBinding<Row>;
-  };
+  batch: <Loaded>(
+    load: (page: ListReadPage<Row>) => Promise<Loaded>,
+  ) => ListBatch<Row, ListReadPage<Row>, Loaded>;
+  ids: <Loaded>(
+    load: (page: ListIdPage) => Promise<Loaded>,
+  ) => ListBatch<Row, ListIdPage, Loaded>;
 };
 export type ListReadOptions<Row> = {
   media?: boolean;
@@ -198,6 +213,37 @@ export function listReadPlan<Row>(
   options: ListReadOptions<Row> = {},
 ) {
   const schema = listReadSchema(entity);
+  const batch = <Page extends object, Loaded>(
+    load: (page: Page) => Promise<Loaded>,
+    pageOf: (page: ListReadPage<Row>) => Page,
+    prefetchPage?: (page: ListIdPage) => Page,
+  ): ListBatch<Row, Page, Loaded> => {
+    const memo = new WeakMap<Page, Promise<Loaded>>();
+    const get = (page: Page): Promise<Loaded> => {
+      let loaded = memo.get(page);
+      if (loaded === undefined) {
+        loaded = load(page);
+        memo.set(page, loaded);
+      }
+      return loaded;
+    };
+    return {
+      load: get,
+      fields: (picked, value) => ({
+        schema: picked,
+        prefetch: prefetchPage
+          ? async (page) => {
+              await get(prefetchPage(page));
+            }
+          : undefined,
+        prepare: async (page) => {
+          await get(pageOf(page));
+        },
+        value: async (row, page, context) =>
+          value(row, await get(pageOf(page)), context),
+      }),
+    };
+  };
   const bind: BindListFields<Row> = Object.assign(
     <Fields extends z.ZodRawShape>(
       picked: z.ZodObject<Fields>,
@@ -210,36 +256,14 @@ export function listReadPlan<Row>(
       value: (row, _page, context) => value(row, context),
     }),
     {
-      batch: <Loaded>(load: (page: ListReadPage<Row>) => Promise<Loaded>) => {
-        const memo = new WeakMap<ListReadPage<Row>, Promise<Loaded>>();
-        const get = (page: ListReadPage<Row>): Promise<Loaded> => {
-          let loaded = memo.get(page);
-          if (loaded === undefined) {
-            loaded = load(page);
-            memo.set(page, loaded);
-          }
-          return loaded;
-        };
-        return {
-          load: get,
-          fields: <Fields extends z.ZodRawShape>(
-            picked: z.ZodObject<Fields>,
-            value: (
-              row: Row,
-              loaded: Loaded,
-              context: ListReadValueContext,
-            ) => z.output<z.ZodObject<Fields>>,
-          ): ListReadBinding<Row> => ({
-            schema: picked,
-            prepare: async (page) => {
-              await get(page);
-            },
-            value: async (row, page, context) => {
-              return value(row, await get(page), context);
-            },
-          }),
-        };
-      },
+      batch: <Loaded>(load: (page: ListReadPage<Row>) => Promise<Loaded>) =>
+        batch(load, (page) => page),
+      ids: <Loaded>(load: (page: ListIdPage) => Promise<Loaded>) =>
+        batch(
+          load,
+          (page) => page.idPage,
+          (page) => page,
+        ),
     },
   );
   const bindings = options.bindings?.(bind) ?? [];
@@ -381,6 +405,7 @@ export function listReadPlan<Row>(
     projection: ListProjection,
     qualitySource: "stored" | "live" = "stored",
   ): ListPagePrefetch => {
+    const page = { db, ids, projection };
     const settled = <V>(promise: Promise<V>) => {
       promise.catch(() => {
         // SILENT: `read` awaits and surfaces this rejection; only a page
@@ -388,7 +413,17 @@ export function listReadPlan<Row>(
       });
       return promise;
     };
+    if (ids.length)
+      for (const binding of bindings)
+        if (
+          binding.prefetch &&
+          Object.keys(binding.schema.shape).some((key) =>
+            wanted(projection, key),
+          )
+        )
+          settled(binding.prefetch(page));
     return {
+      page,
       qualities:
         isScored(entity) && wantsListGroup(projection, "quality") && ids.length
           ? settled(
@@ -426,7 +461,21 @@ export function listReadPlan<Row>(
     ): Promise<ListReadRow[]> {
       validate(projection);
       if (!rows.length) return [];
+      const sources = rows.map((row) => ({
+        row,
+        source: sourceRecord.parse(row),
+        identity: sourceIdentity.parse(row),
+      }));
+      const early =
+        prefetched ??
+        prefetch(
+          db,
+          sources.map(({ identity }) => identity.id),
+          projection,
+          qualitySource,
+        );
       const page: ListReadPage<Row> = {
+        idPage: early.page,
         db,
         rows: [...rows],
         projection,
@@ -437,11 +486,6 @@ export function listReadPlan<Row>(
           wanted(projection, key),
         ),
       );
-      const sources = rows.map((row) => ({
-        row,
-        source: sourceRecord.parse(row),
-        identity: sourceIdentity.parse(row),
-      }));
       const lookups = new Map<
         string,
         ReturnType<typeof lookupEntityReferences>
@@ -485,14 +529,6 @@ export function listReadPlan<Row>(
           }
         }),
       );
-      const early =
-        prefetched ??
-        prefetch(
-          db,
-          sources.map(({ identity }) => identity.id),
-          projection,
-          qualitySource,
-        );
       const [qualities, images, links] = await Promise.all([
         early.qualities,
         early.images,
