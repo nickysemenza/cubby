@@ -2,7 +2,7 @@ import type { DerivedBacklog } from "@cubby/schemas/derived-backlog";
 
 type Entity = DerivedBacklog["kinds"][number]["entity"];
 
-export type BacklogMatrixRow = {
+type BacklogMatrixRow = {
   entity: Entity;
   /** Declared fields only; an absent key means the entity has no such kind. */
   counts: ReadonlyMap<string, number>;
