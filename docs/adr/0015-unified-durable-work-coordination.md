@@ -139,7 +139,10 @@ than creating a second scheduler.
 Its committed upload hash and mutation receipt survive visibility polling and
 restart, avoiding repeated upload after retained success. `embedding.cleanup`
 deletes only an unselected, stopped physical artifact and retains its remote
-delete receipt. Explicit retry of stopped embedding execution allocates a fresh
+delete receipt. Recording that receipt scopes both retirement cases (unselected
+state or a deleted row) to the named physical ID; unrelated retired artifacts
+retain their existing receipt and timestamps. A missing or selected live ID
+changes no artifact. Explicit retry of stopped embedding execution allocates a fresh
 physical Job ID and retires the old key. A delayed cleanup can therefore never
 delete the replacement upload. Failed and retired artifacts retain diagnostics
 in terminal Jobs without automatic resurrection.

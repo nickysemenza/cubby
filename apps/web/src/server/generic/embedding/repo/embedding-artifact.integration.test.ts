@@ -9,6 +9,8 @@ import { setCfEnv, type getAiGateway } from "~/server/cf-env";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job, entityEmbedding } from "~/server/db/schema";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
+import { recordEmbeddingDeletion } from "~/server/generic/embedding/repo/embedding-cleanup";
+import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -19,6 +21,7 @@ import { withJobExecution } from "~/server/generic/jobs/context";
 import { claimJob, publishJobPage } from "~/server/generic/jobs/repo/jobs";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
+import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -44,6 +47,53 @@ import { getStoredEmbeddingHashes } from "./entity-embedding-refresh";
 describe("immutable embedding artifacts", () => {
   const ctx = withTestDb();
   afterEach(() => setCfEnv(undefined));
+
+  it("records deletion only for the named retired artifact and preserves unrelated receipts", async () => {
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic cleanup scope" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", subject.entityId);
+    const text = await getSearchDocumentEmbeddingText(
+      ctx.db,
+      "product",
+      subject.entityId,
+    );
+    if (!text) throw new Error("Synthetic search projection missing");
+    const input = { ...text, config: getSemanticEmbeddingConfig() };
+    const first = await seedEntityEmbedding(ctx.db, input);
+    const target = await seedEntityEmbedding(ctx.db, input);
+    await recordEmbeddingDeletion(ctx.db, first, "synthetic-first-receipt");
+    const selected = await seedEntityEmbedding(ctx.db, input);
+    const read = () =>
+      getDb(ctx.db).select().from(entityEmbedding).orderBy(entityEmbedding.id);
+    const before = await read();
+    await recordEmbeddingDeletion(ctx.db, target, "synthetic-target-receipt");
+    const after = await read();
+    expect(after.find((row) => row.id === first)).toEqual(
+      before.find((row) => row.id === first),
+    );
+    expect(after.find((row) => row.id === target)).toMatchObject({
+      artifactState: "retired",
+      deletionId: "synthetic-target-receipt",
+      deletedAt: expect.any(Date),
+    });
+    expect(after.find((row) => row.id === selected)).toEqual(
+      before.find((row) => row.id === selected),
+    );
+    await recordEmbeddingDeletion(
+      ctx.db,
+      selected,
+      "synthetic-rejected-receipt",
+    );
+    await recordEmbeddingDeletion(
+      ctx.db,
+      crypto.randomUUID(),
+      "synthetic-missing-receipt",
+    );
+    expect(await read()).toEqual(after);
+  });
 
   it("readmits a page of current Jobs without per-record transactions", async () => {
     const refs: Parameters<typeof prepareSearchDocuments>[1][number][] = [];
