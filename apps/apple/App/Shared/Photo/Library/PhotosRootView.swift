@@ -148,6 +148,7 @@ private struct PhotoLibraryBrowser: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.developerOverlays) private var developerOverlays
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let maxSelectionCount: Int
     let picker: Bool
     let analysisStore: PhotoAnalysisStore?
@@ -289,7 +290,9 @@ private struct PhotoLibraryBrowser: View {
                             Menu("Jump to month", systemImage: "calendar") {
                                 ForEach(library.months) { month in
                                     Button(month.id.formatted(.dateTime.month(.wide).year())) {
-                                        withAnimation { proxy.scrollTo(month.id, anchor: .top) }
+                                        withAnimation(reduceMotion ? nil : .default) {
+                                            proxy.scrollTo(month.id, anchor: .top)
+                                        }
                                     }
                                 }
                             }

@@ -48,7 +48,7 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                             .accessibilityIdentifier(titleIdentifier)
                             .fixedSize(horizontal: false, vertical: true)
                         context().font(.caption).foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(textSize.isAccessibilitySize ? nil : 1)
                             .truncationMode(.tail)
                             .fixedSize(horizontal: false, vertical: true)
                     }

@@ -942,7 +942,7 @@ struct EntityListView: View {
             let nextSort = current == key ? "-\(key)" : key
             Task { await model.apply(sort: nextSort) }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
                 Text(title)
                 if let key, model.sort == key || model.sort == "-\(key)" {
                     Image(systemName: model.sort == key ? "arrow.up" : "arrow.down")
@@ -1294,7 +1294,7 @@ struct EntityListView: View {
             if field.listRenderer == .dataQuality {
                 if EntityRowPresentation.needsData(in: row) {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
-                        Circle().fill(.orange).frame(width: 6, height: 6)
+                        Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                         Text("Needs data")
                     }
                 } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
@@ -1482,7 +1482,7 @@ struct EntityQualityFact: View {
                 in: EntityRow(id: id, title: "", subtitle: nil, imageURL: nil, raw: raw))
         {
             HStack(spacing: FieldGuideTokens.Space.xs) {
-                Circle().fill(.orange).frame(width: 6, height: 6)
+                Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                 Text("Needs data")
             }
             .font(.caption.weight(.medium))
@@ -1571,7 +1571,7 @@ struct EntityRowView: View {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 DerivedValueStatus(raw: row.raw, field: nil)
                 if layout.needsData {
-                    Circle().fill(.orange).frame(width: 6, height: 6)
+                    Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                 }
                 let facts =
                     ([layout.needsData ? "Needs data" : nil, layout.subtitleText]

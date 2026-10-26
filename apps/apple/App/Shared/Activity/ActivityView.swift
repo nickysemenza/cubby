@@ -26,6 +26,7 @@ struct ActivityView: View {
                 OpenOnWebButton(target: .route(path: "/work-queue"), label: "Open work queue on web")
             }
         }
+        .fieldGuideSectionStyle()
         .navigationTitle("Activity")
         .refreshControl { await load() }
         // Reload when this device's own phase changes (a job finished, a reconnect).
@@ -284,6 +285,7 @@ struct LocalActivityDetailView: View {
                 ContentUnavailableView("Finished", systemImage: "checkmark.circle")
             }
         }
+        .fieldGuideSectionStyle()
         .navigationTitle(activity?.title ?? "Activity")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

@@ -26,4 +26,22 @@ struct RecordListRowRenderingTests {
         #expect(image.height >= Int(FieldGuideTokens.touchTarget))
         #expect(image.height < 120)
     }
+
+    @Test(arguments: [CGFloat(320), CGFloat(640)])
+    func accessibilitySizeShowsWrappedContext(width: CGFloat) throws {
+        let row = RecordListRow(title: "Workshop drill", symbol: "wrench") {
+            Text(
+                "Garage shelf · Upper cabinet · Household tools · Long handled garden tools · Repair supplies"
+            )
+        } rail: {
+            Text("Available")
+        } supplement: {
+            EmptyView()
+        }
+        .frame(width: width)
+        .environment(\.dynamicTypeSize, .accessibility3)
+
+        let image = try #require(ImageRenderer(content: row).cgImage)
+        #expect(image.height > 100)
+    }
 }
