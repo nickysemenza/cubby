@@ -2,10 +2,13 @@ import type { Entity } from "@cubby/schemas/entity";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertAndReturn } from "~/server/db/helpers";
-import { mealRecipe } from "~/server/db/schema";
+import { getDb, insertAndReturn } from "~/server/db/helpers";
+import { mealRecipe, meal as mealTable } from "~/server/db/schema";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
-import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
+import {
+  buildMealWhere,
+  createMealWithEntityId,
+} from "~/server/domains/meal/repo/crud";
 import { saveMealFood } from "~/server/domains/meal/repo/food";
 import { saveMealRecipePreparation } from "~/server/domains/meal/repo/portions";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
@@ -18,7 +21,7 @@ import {
 import { getEntityGraph } from "./entity-graph";
 
 /**
- * Regression for PRD-KMK2: `MealFoodEntry` (product/ingredient, ledgerParty,
+ * Regression: `MealFoodEntry` (product/ingredient, ledgerParty,
  * meal) and `MealRecipePortion` (ledgerParty, meal, mealRecipe) previously had
  * zero manifest-relation coverage, so a product's food entry at a meal was
  * invisible on the Relations tab / entity graph even though the FK existed.
@@ -78,7 +81,7 @@ describe("entity graph meal/food-entry relationships", () => {
       );
     };
 
-    // The PRD-KMK2 case: a product-kind food entry links product <-> meal.
+    // A product-kind entry: a product-kind food entry links product <-> meal.
     await follow({ entityKind: "product", entityId: product.id }, "meals", {
       entityKind: "meal",
       entityId: meal.output.id,
@@ -181,9 +184,8 @@ describe("entity graph meal/food-entry relationships", () => {
       ),
     ).toBe(false);
 
-    // Related views compile only the primary source (`relatedViewPath` in
-    // `packages/schemas/src/related-view.ts`), so the list column sees the
-    // food-entry meal and not the portion-only leftovers meal.
+    // Preview counts and list filters must include the same served-portion
+    // evidence as the graph, without counting the first meal twice.
     const previews = await loadRelatedPreviews(ctx.db, {
       source: "ledgerParty",
       sourceIds: [party.output.id],
@@ -192,9 +194,22 @@ describe("entity graph meal/food-entry relationships", () => {
     const mealsPreview = previews.find(
       (group) => group.relationKey === "ledgerParty.meals",
     );
-    expect(mealsPreview?.totalCount).toBe(1);
-    expect(mealsPreview?.items).toEqual([
-      expect.objectContaining({ entity: "meal", id: meal.output.id }),
-    ]);
+    expect(mealsPreview?.totalCount).toBe(2);
+    expect(mealsPreview?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entity: "meal", id: meal.output.id }),
+        expect.objectContaining({
+          entity: "meal",
+          id: leftoversMeal.output.id,
+        }),
+      ]),
+    );
+    const filtered = await getDb(ctx.db)
+      .select({ id: mealTable.shortcode })
+      .from(mealTable)
+      .where(buildMealWhere(ctx.db, { eaterId: [party.output.id] }));
+    expect(filtered.map((row) => row.id).sort()).toEqual(
+      [meal.output.id, leftoversMeal.output.id].sort(),
+    );
   });
 });

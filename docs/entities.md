@@ -3112,7 +3112,10 @@ for example, `Purchase.products` combines detachable `explicit` evidence from
 `purchaseProduct` links with non-detachable `expense` evidence from every live
 product-linked Expense, including exits, adjustments, unknown quantities, and
 planned lines. Counts, filters, inverse navigation, and graph traversal use the
-same deduplicated union. Movement roles and planned status are backend evidence;
+same deduplicated union. Curated list previews and filters expand every named
+source through the shared path compiler, including MealFoodEntry and served
+MealRecipePortion evidence; they do not select only the primary source.
+Movement roles and planned status are backend evidence;
 an unconfirmed explicit-only link is Linked and does not establish acquisition or
 ownership. Existing links remain unconfirmed. Explicit acquisition confirmation
 (`EntityLink.acquisitionConfirmed`, allowed only on `purchaseProduct`) establishes

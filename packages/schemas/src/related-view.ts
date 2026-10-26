@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { Entity } from "./entity";
+import { connectedPathVariants } from "./connected-views";
 import { localRelationshipByKey } from "./entity-manifest";
 import { money } from "./money";
 import { partyFilter, sortDirection } from "./pagination";
@@ -199,9 +200,6 @@ const relatedViewPresentationRegistry = [
   },
   {
     columnGroup: "People",
-    // The `eaters` relation's list column reads only the primary (food-entry)
-    // source; the `portions` (served-portion) source is graph-only, because
-    // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
     key: "meal.eaters",
     source: "meal",
     relationship: "eaters",
@@ -463,9 +461,6 @@ const relatedViewPresentationRegistry = [
   },
   {
     columnGroup: "Meals",
-    // The `meals` relation's list column reads only the primary (food-entry)
-    // source; the `portions` (served-portion) source is graph-only, because
-    // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
     key: "ledgerParty.meals",
     source: "ledgerParty",
     relationship: "meals",
@@ -483,74 +478,7 @@ const relatedViewPresentationRegistry = [
   },
 ] as const satisfies readonly RelatedViewPresentationDefinition[];
 
-/**
- * The registry chooses which declared graph relationships are presented in a
- * table. Traversal reads this map, not the legacy view-local path, so all live
- * SQL now starts from the manifest graph while the presentation migration is
- * completed incrementally.
- */
 type RelatedViewPresentation = (typeof relatedViewPresentationRegistry)[number];
-
-const relatedViewRelationshipKeys = {
-  "product.vendors": "vendors",
-  "product.projects": "purchased-projects",
-  "product.usedOnProjects": "project-uses",
-  "product.purchases": "purchases",
-  "product.expenses": "expenses",
-  "product.inventory": "inventory",
-  "product.wishes": "wishes",
-  "product.tasks": "tasks",
-  "product.meals": "meals",
-  "product.eaters": "eaters",
-  "ingredient.meals": "meals",
-  "ingredient.eaters": "eaters",
-  "recipe.ingredients": "ingredients",
-  "recipe.meals": "meals",
-  "meal.recipes": "recipes",
-  "meal.foodProducts": "food-products",
-  "meal.foodIngredients": "food-ingredients",
-  "meal.eaters": "eaters",
-  "location.ingredients": "ingredients",
-  "inventory.ingredient": "ingredient",
-  "project.blockedBy": "blocked-by",
-  "project.tasks": "tasks",
-  "project.expenses": "expenses",
-  "project.taskProducts": "task-products",
-  "project.purchasedProducts": "purchased-products",
-  "project.usedTools": "resources",
-  "project.vendors": "vendors",
-  "task.blockedBy": "blocked-by",
-  "task.parent": "parent",
-  "vendor.expenses": "expenses",
-  "vendor.brandedProducts": "branded-products",
-  "vendorAccount.purchases": "purchases",
-  "vendor.purchases": "purchases",
-  "vendor.products": "products",
-  "vendor.projects": "projects",
-  "vendor.transactions": "transactions",
-  "purchase.expenses": "expenses",
-  "purchase.transactions": "financial-transactions",
-  "purchase.products": "products",
-  "purchase.projects": "projects",
-  "expense.transactions": "transactions",
-  "financialAccount.transactions": "transactions",
-  "financialAccount.purchases": "purchases",
-  "financialAccount.vendors": "vendors",
-  "financialTransaction.vendor": "vendor",
-  "financialTransaction.expenses": "expenses",
-  "financialTransaction.products": "products",
-  "wish.candidates": "candidates",
-  "ledgerParty.meals": "meals",
-  "ledgerParty.recipesEaten": "recipes-eaten",
-} as const satisfies Record<
-  (typeof relatedViewPresentationRegistry)[number]["key"],
-  string
->;
-type RelatedViewRelationshipKey = keyof typeof relatedViewRelationshipKeys;
-const isRelatedViewRelationshipKey = (
-  key: string,
-): key is RelatedViewRelationshipKey =>
-  Object.hasOwn(relatedViewRelationshipKeys, key);
 
 export const relatedViewRegistry = relatedViewPresentationRegistry.map(
   (view) => {
@@ -562,14 +490,18 @@ export const relatedViewRegistry = relatedViewPresentationRegistry.map(
   label: string;
 })[];
 
-export const relatedViewPath = (
+/** Every declared evidence source participates in previews and filters. */
+export const relatedViewPaths = (
   view: Pick<RelatedViewDefinition, "source" | "key">,
 ) => {
-  if (!isRelatedViewRelationshipKey(view.key)) {
-    throw new Error(`Unknown related view key: ${view.key}`);
-  }
-  const relationshipKey = relatedViewRelationshipKeys[view.key];
-  return localRelationshipByKey(view.source, relationshipKey).provenance.steps;
+  const definition = relatedViewRegistry.find(
+    (candidate) =>
+      candidate.key === view.key && candidate.source === view.source,
+  );
+  if (!definition) throw new Error(`Unknown related view key: ${view.key}`);
+  return connectedPathVariants(view.source, [definition.relationship]).map(
+    (variant) => variant.steps,
+  );
 };
 
 type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
