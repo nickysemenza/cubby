@@ -27,7 +27,6 @@ import type {
   EditableEntity,
   EntityMutationPort,
 } from "~/entity/editing/types";
-import { entities } from "~/entity/entities";
 import { entityListFor } from "~/entity/entity-list";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
@@ -336,18 +335,8 @@ export function RelationSectionActions({
 }
 
 /** The section header owns creation; an empty body keeps one compact state message. */
-function RelationEmptyState({
-  pluralLabel,
-  emptyLabel,
-}: {
-  pluralLabel: string;
-  emptyLabel: string | undefined;
-}) {
-  return (
-    <p className="text-sm text-muted-foreground">
-      {emptyLabel ?? `No ${pluralLabel.toLocaleLowerCase()} yet.`}
-    </p>
-  );
+function RelationEmptyState({ emptyLabel }: { emptyLabel: string }) {
+  return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
 }
 
 /** Skeleton cells sized like the data they'll hold, no shimmer. */
@@ -672,7 +661,6 @@ function LiveEntityRelationTable({
   // `undefined` too since the query never completes with data).
   const resolvedEmpty = !list.workbench.error && list.totalCount === 0;
   useSectionEmpty(resolvedEmpty);
-  const { pluralLabel } = entities[target];
 
   if (list.workbench.error && list.data.length === 0) {
     return (
@@ -693,9 +681,12 @@ function LiveEntityRelationTable({
     );
   }
 
+  // An empty section is one quiet row: its muted heading and "0". Only a
+  // declared sentence (a journal's first-entry prompt, "not a kit yet")
+  // earns a body line.
   if (list.totalCount === 0) {
-    return (
-      <RelationEmptyState pluralLabel={pluralLabel} emptyLabel={emptyLabel} />
+    return emptyLabel === undefined ? null : (
+      <RelationEmptyState emptyLabel={emptyLabel} />
     );
   }
 

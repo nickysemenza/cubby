@@ -1,4 +1,5 @@
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
+import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -20,7 +21,6 @@ import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { PuzzlePieceIcon } from "@phosphor-icons/react/dist/csr/PuzzlePiece";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { Link } from "@tanstack/react-router";
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -32,21 +32,14 @@ import {
   type EntityEditDialogRequest,
 } from "~/entity/editing/entity-edit-dialog";
 import type { EditableEntity } from "~/entity/editing/types";
-import {
-  entities,
-  entityDetailParams,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
   type EntityDisplayImagesQueryOptions,
 } from "~/entity/entity-media/entity-display-images";
-import {
-  readRecordField,
-  readDisplayReferenceField,
-} from "~/entity/entity-references";
+import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
@@ -60,14 +53,6 @@ import {
 } from "~/ui/derived/image-chain";
 import { WhyValue } from "~/ui/derived/why-value";
 import { Section } from "~/ui/layout";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/ui/primitives/breadcrumb";
 import { DetailEditAction } from "~/ui/primitives/detail-edit-action";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
@@ -144,96 +129,19 @@ const sectionIcon = (kind: DeclaredSection["kind"]) => {
   }
 };
 
-/** The chip, stats and breadcrumb the hero declares, read off the record. */
-function heroOf<E extends GenericDetailEntity>(
+/** The chip the hero declares, read off the record. */
+function heroStampOf<E extends GenericDetailEntity>(
   entity: E,
   record: DetailRecordOf<E>,
 ) {
   const { hero } = presentationOf(entity).detail;
   const fields: readonly DisplayField[] = entityFieldModels[entity].fields;
-  const field = (key: string) =>
-    fields.find((candidate) => candidate.key === key);
-  const chipField = hero.chip === null ? undefined : field(hero.chip);
+  const chipField =
+    hero.chip === null
+      ? undefined
+      : fields.find((candidate) => candidate.key === hero.chip);
   const chip = chipField ? heroChipLabel(entity, record, chipField) : null;
-  const heroStamp =
-    chip === null ? undefined : { label: chip, tone: "ink" as const };
-  const breadcrumbField =
-    hero.breadcrumb === null ? undefined : field(hero.breadcrumb);
-  return { heroStamp, breadcrumbField };
-}
-
-const ancestorSchema: z.ZodType<{
-  id: string;
-  name?: string | null;
-  parent?: unknown;
-}> = z.looseObject({
-  id: z.string(),
-  name: z.string().nullish(),
-  parent: z.unknown().optional(),
-});
-
-/**
- * The ancestry a breadcrumb reference field implies: the nested chain under
- * the key minus `Id` (`parent.parent…`) when the projection carries one,
- * else the one linked record.
- */
-function ancestry<TRecord extends object>(
-  record: TRecord,
-  field: DisplayField,
-): Array<{ id: string; name: string }> {
-  const reference = readDisplayReferenceField(record, field);
-  if (reference === null || reference.items.length === 0) return [];
-  const base = field.key.replace(/Ids?$/u, "");
-  const chain: Array<{ id: string; name: string }> = [];
-  let current = ancestorSchema.safeParse(
-    readRecordField(record, base, z.unknown()),
-  );
-  while (current.success) {
-    chain.unshift({
-      id: current.data.id,
-      name: current.data.name ?? current.data.id,
-    });
-    current = ancestorSchema.safeParse(current.data.parent);
-  }
-  if (chain.length > 0) return chain;
-  const [item] = reference.items;
-  return item ? [{ id: item.id, name: item.name ?? item.id }] : [];
-}
-
-function AncestryBreadcrumb({
-  entity,
-  chain,
-  current,
-}: {
-  entity: GenericDetailEntity;
-  chain: Array<{ id: string; name: string }>;
-  current: string;
-}) {
-  if (chain.length === 0 || !isBrowserRoutedEntity(entity)) return null;
-  return (
-    <Breadcrumb className="min-h-11 border-y border-border px-2">
-      <BreadcrumbList>
-        {chain.map((ancestor) => (
-          <BreadcrumbItem key={ancestor.id}>
-            <BreadcrumbLink
-              render={
-                <Link
-                  to={entities[entity].routes.detail}
-                  params={entityDetailParams(ancestor.id)}
-                />
-              }
-            >
-              {ancestor.name}
-            </BreadcrumbLink>
-            <BreadcrumbSeparator />
-          </BreadcrumbItem>
-        ))}
-        <BreadcrumbItem>
-          <BreadcrumbPage>{current}</BreadcrumbPage>
-        </BreadcrumbItem>
-      </BreadcrumbList>
-    </Breadcrumb>
-  );
+  return chip === null ? undefined : { label: chip, tone: "ink" as const };
 }
 
 function SlotFallback() {
@@ -271,7 +179,18 @@ function declaredSections<E extends GenericDetailEntity>(
 ): DetailSection[] {
   const { detail, singular } = presentationOf(entity);
   const slots = detailSlotsFor(entity);
-  const built = detail.sections.flatMap((section): DetailSection[] => {
+  // A field a summary slot shows is not repeated by a later section.
+  const summarized = new Set(
+    detail.summary.flatMap((slot) =>
+      slot.kind === "fields" && onDetailSurface(slot, "web") ? slot.fields : [],
+    ),
+  );
+  const unsummarized = (keys: readonly string[]) =>
+    keys.filter((key) => !summarized.has(key));
+  const sections = detail.sections.filter((section) =>
+    onDetailSurface(section, "web"),
+  );
+  const built = sections.flatMap((section): DetailSection[] => {
     const base = {
       id: section.id,
       placement: section.placement,
@@ -286,7 +205,9 @@ function declaredSections<E extends GenericDetailEntity>(
             : undefined),
     };
     switch (section.kind) {
-      case "fields":
+      case "fields": {
+        const fields = unsummarized(section.fields);
+        if (fields.length === 0) return [];
         return [
           {
             ...base,
@@ -295,13 +216,15 @@ function declaredSections<E extends GenericDetailEntity>(
               <EntityRecordFields
                 entity={entity}
                 record={record}
-                fields={section.fields}
+                fields={fields}
               />
             ),
           },
         ];
+      }
       case "relation": {
         const plan = planRelationSection(entity, section);
+        const contextFields = unsummarized(section.contextFields);
         const createLabel =
           detail.variant === "journal" ? verbDef("logEntry").label : undefined;
         return [
@@ -323,11 +246,11 @@ function declaredSections<E extends GenericDetailEntity>(
             ),
             content: (
               <div className="grid min-w-0 grid-cols-1 gap-3">
-                {section.contextFields?.length > 0 ? (
+                {contextFields.length > 0 ? (
                   <EntityRecordFields
                     entity={entity}
                     record={record}
-                    fields={section.contextFields}
+                    fields={contextFields}
                   />
                 ) : null}
                 <EntityRelationTable
@@ -397,7 +320,7 @@ function declaredSections<E extends GenericDetailEntity>(
       }
     }
   });
-  return orderSections(detail.variant, detail.sections, built);
+  return orderSections(detail.variant, sections, built);
 }
 
 /**
@@ -544,7 +467,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const bag = detailRecordSchema.parse(record);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const { heroStamp, breadcrumbField } = heroOf(entity, record);
+  const heroStamp = heroStampOf(entity, record);
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const heroActions: readonly string[] = detail.hero.actions;
@@ -571,12 +494,14 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     .looseObject({ emoji: z.string().nullish() })
     .parse(record).emoji;
   const sections = declaredSections(entity, record, bag, operations);
-  // The first fields section is the record's headline facts, leading the
-  // content column ahead of Needs you and Activity.
-  const factsId = detail.sections.find(
-    (section) => section.kind === "fields",
-  )?.id;
-  const facts = sections.find((section) => section.id === factsId);
+  // The first fields section left after the summary is the record's headline
+  // facts, leading the content column ahead of Needs you and Activity.
+  const fieldSectionIds = new Set(
+    detail.sections.flatMap((section) =>
+      section.kind === "fields" ? [section.id] : [],
+    ),
+  );
+  const facts = sections.find((section) => fieldSectionIds.has(section.id));
   // Change history plus declared dated relations, merged into one timeline.
   const timeline =
     isAuditableEntity(entity) || detail.activityRelations.length > 0;
@@ -676,9 +601,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const declaredVerbs = heroActions.filter(
     (verb): verb is ActionVerbId => verb !== "edit" && verb in actionVerbs,
   );
-  const breadcrumbChain = breadcrumbField
-    ? ancestry(record, breadcrumbField)
-    : [];
   // SAFETY: `detailEditOverrideFor` hands back this entity's own override,
   // typed against the record this page received.
   const overrideRecord = record as never;
@@ -735,11 +657,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         summary={<DetailSummary entity={entity} record={record} />}
         heroActions={plateActions}
       >
-        <AncestryBreadcrumb
-          entity={entity}
-          chain={breadcrumbChain}
-          current={title}
-        />
         <NeedsYouProvider>
           <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
             <DetailSuggestions
