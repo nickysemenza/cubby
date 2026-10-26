@@ -225,6 +225,7 @@ export default defineEntity(
         // whose target happens to also be Product — say what's missing
         // instead of what type it is.
         hero: {
+          breadcrumb: "primaryPlacement",
           extraActions: ["addToInventory", "recordSale", "discard"],
         },
         sections: [

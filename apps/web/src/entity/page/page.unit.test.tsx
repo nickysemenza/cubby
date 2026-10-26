@@ -133,4 +133,30 @@ describe("Page workbench", () => {
     // The content owns its width treatment; the plate never duplicates it.
     expect(screen.getAllByRole("button", { name: "Delete" })).toHaveLength(1);
   });
+
+  it("trails the detail read's projected breadcrumb before the record code", () => {
+    render(
+      <Page
+        variant="detail"
+        entity="product"
+        title="Blue mug"
+        heroNo="PRD-4K7M"
+        rawData={{
+          breadcrumb: [
+            { entity: "location", id: "LOC-GAR1", name: "Garage" },
+            { entity: "location", id: "LOC-SHB2", name: "Shelf B" },
+          ],
+        }}
+      >
+        <p>Detail body</p>
+      </Page>,
+    );
+
+    const trail = screen.getByRole("navigation", { name: "Breadcrumb" });
+    expect(trail.textContent).toMatch(/Products.*Garage.*Shelf B.*PRD-4K7M/u);
+    expect(screen.getByRole("link", { name: "Shelf B" })).toHaveAttribute(
+      "href",
+      "/locations/LOC-SHB2",
+    );
+  });
 });
