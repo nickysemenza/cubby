@@ -1,0 +1,31 @@
+apps/apple/ITERATION.md
+  s_f9fa992b09d3a5::t_780096f7e89c03 119-124
+apps/apple/e2e/native-layout.ad
+  s_f9fa992b09d3a5::t_6515e4c9ade936 8,10-11
+apps/web/tooling/scenarios/native-qa.ts
+  s_f9fa992b09d3a5::t_b6116eff8f3f1d 5
+apps/web/tooling/scenarios/simulator-input-journey.ts
+  s_f9fa992b09d3a5::t_e613882646bfca 10,13,15,83-84,314,349,351,375
+apps/web/tooling/sim-e2e.ts
+  s_f9fa992b09d3a5::t_a2812669f9b0a8 71,122,134,164,756-760,762-763,813,1022-1026
+docs/agents/core-journey-e2e.md
+  s_f9fa992b09d3a5::t_e23a41abf2cbb1 126-130,144
+docs/local-development.md
+  s_f9fa992b09d3a5::t_bfed375679f478 356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b0ff220dacb29c8f6a09de6fa306e7cfac87fb36",
+  "prompts": {},
+  "sessions": {
+    "s_f9fa992b09d3a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "07b7a21e-cfad-421d-a3c8-8698f1f442fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
