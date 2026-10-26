@@ -2523,9 +2523,10 @@ them. Existing marks retain their priority through deployment; no queued work
 is discarded or guessed to be background work.
 
 The `derived.drain` Job claims ready marks, member edits first, then
-propagation, then reconciliation. It expands fanout marks, computes each
-target's batch outside the publication transaction through its adapter
-(`workflows/derived-computes.ts`), then publishes in the Job's transaction.
+propagation, then reconciliation. It computes each directly marked target's
+batch outside the publication transaction through its adapter
+(`workflows/derived-computes.ts`). The Job's transaction expands fanout marks
+and publishes prepared values; newly expanded targets compute on a later page.
 Publication writes only marks whose ticket is unchanged since the claim, so an
 edit that lands during compute keeps its record dirty, and a deleted-and-reset
 mark cannot be cleared by an older page. Only changed values propagate to
@@ -2533,17 +2534,19 @@ declared dependents, so cascades stop at the first unchanged hop. Sink adapters
 return only records whose output or readiness changed; a recipe recalculation
 that only advances its computation timestamp does not propagate. A failing
 target backs off (30 seconds doubling to 15 minutes) and other targets publish.
-Each target publishes in its own savepoint: a write the database rejects for
-that target's data (SQLSTATE classes 22, 23, 54) backs off the same way with
-the database's message, while transaction-level failures retry the page.
+Value targets publish together in one savepoint and one statement. Each input
+row carries its target, value key and observed ticket; locks skip busy tickets,
+and publication, removal and clearing all use that locked set. Busy or replaced
+marks keep their previous values and remain pending. If the database rejects
+the batch for its data (SQLSTATE classes 22, 23, 54), the savepoint rolls back
+and the same groups retry in individual savepoints. Only rejected targets back
+off, with the database's message; healthy targets publish. Transaction-level
+failures retry the page. Sink targets keep individual savepoints because they
+publish through their own repository writers.
 Preparation and publication failures retain the same bounded cause chain,
 innermost message first, so a long query wrapper cannot hide the underlying
 database or adapter error in the stored retry diagnostic.
-Value adapters lock the observed mark tickets with `SKIP LOCKED`, upsert or
-remove their `DerivedValue` rows, and clear only those tickets in one statement.
-Busy or replaced marks keep their previous values and remain pending. Each
-target still has its own savepoint, so a rejected value cannot clear its work
-or prevent another target from publishing. Sink adapters retain their source-row
+Sink adapters retain their source-row
 locking and repository writers for their own tables (search documents with
 embedding admission, recipe totals, conversion coverage). Search publication uses one sorted upsert across live documents and
 existing documents marked missing, preserving the latter's content. It then

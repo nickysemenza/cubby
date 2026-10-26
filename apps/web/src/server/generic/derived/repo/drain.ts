@@ -281,84 +281,96 @@ const publishSink = async (
   return [...changed];
 };
 
-/** Write one target's computed values, returning the ids whose value changed. */
+type ValueGroup = {
+  declaration: StoredDerivedDeclaration;
+  marks: readonly Mark[];
+  values: ReadonlyMap<string, DerivedComputed>;
+};
+
+/** Publish all value targets together; each row keeps its own mark and value key. */
 const publishValues = async (
   tx: Executor,
-  declaration: StoredDerivedDeclaration,
-  marks: readonly Mark[],
-  values: ReadonlyMap<string, DerivedComputed>,
-): Promise<string[]> => {
-  const rows = marks.map((mark) => {
-    const computed = values.get(mark.ref);
-    return {
-      entityId: mark.ref,
-      ticket: mark.ticket,
-      hasValue: computed !== undefined,
-      value: computed?.value ?? null,
-      decidedBy: computed?.decidedBy ?? null,
-      inputHash: computed?.inputHash ?? null,
-      ...sortColumns(declaration, computed?.sort ?? null),
-    };
-  });
+  groups: readonly ValueGroup[],
+): Promise<ReadonlyMap<string, readonly string[]>> => {
+  const rows = groups.flatMap(({ declaration, marks, values }) =>
+    marks.map((mark) => {
+      const computed = values.get(mark.ref);
+      return {
+        target: declaration.target,
+        key: declaration.key,
+        entityId: mark.ref,
+        ticket: mark.ticket,
+        hasValue: computed !== undefined,
+        value: computed?.value ?? null,
+        decidedBy: computed?.decidedBy ?? null,
+        inputHash: computed?.inputHash ?? null,
+        ...sortColumns(declaration, computed?.sort ?? null),
+      };
+    }),
+  );
   // Avoid planning a second value-table writer when there is nothing to remove.
   const hasMissing = rows.some((row) => !row.hasValue);
   // Lock, publish and clear the observed tickets in one statement. Every write
   // depends on the locked set, so busy or replaced marks keep both their work
-  // and their previous values. A rejected value rolls this target back as before.
+  // and their previous values. The caller isolates rejected batches by target.
   const result = await tx.execute(sql`
     WITH input AS (
       SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS i(
-        "entityId" uuid, ticket bigint, "hasValue" boolean, value jsonb,
+        target text, key text, "entityId" uuid, ticket bigint, "hasValue" boolean, value jsonb,
         "decidedBy" jsonb, "inputHash" text, "sortNumber" double precision,
         "sortDate" timestamp, "sortText" text)
     ), current AS MATERIALIZED (
-      SELECT i.* FROM input i
-        JOIN "DerivedDirty" d ON d.target = ${declaration.target}
+      SELECT i.*, v."entityId" AS "previousId", v.value AS "previousValue",
+        v."decidedBy" AS "previousDecidedBy", ${entityIdentity.kind} AS kind,
+        (${entityIdentity.id} IS NOT NULL AND ${isNull(entityIdentity.deletedAt)}) AS live
+        FROM input i
+        JOIN "DerivedDirty" d ON d.target = i.target
          AND d.ref = i."entityId" AND d.ticket = i.ticket
-       ORDER BY d.ref
+        LEFT JOIN "DerivedValue" v ON v."entityId" = i."entityId" AND v.key = i.key
+        LEFT JOIN ${entityIdentity} ON ${entityIdentity.id} = i."entityId"
+       ORDER BY d.target, d.ref
        FOR UPDATE OF d SKIP LOCKED
-    ), previous AS (
-      SELECT v."entityId", v.value, v."decidedBy" FROM "DerivedValue" v
-       WHERE v.key = ${declaration.key}
-         AND v."entityId" IN (SELECT "entityId" FROM current)
     ), written AS (
       INSERT INTO "DerivedValue" ("entityId", kind, key, value, "decidedBy",
         "inputHash", "sortNumber", "sortDate", "sortText", "computedAt")
-      SELECT c."entityId", ${entityIdentity.kind}, ${declaration.key}, c.value, c."decidedBy",
+      SELECT c."entityId", c.kind, c.key, c.value, c."decidedBy",
         c."inputHash", c."sortNumber", c."sortDate", c."sortText", now()
         FROM current c
-        JOIN ${entityIdentity} ON ${entityIdentity.id} = c."entityId"
-       WHERE c."hasValue" AND ${isNull(entityIdentity.deletedAt)}
+       WHERE c."hasValue" AND c.live
+       ORDER BY c."entityId", c.key
       ON CONFLICT ("entityId", key) DO UPDATE SET
         value = EXCLUDED.value, "decidedBy" = EXCLUDED."decidedBy",
         "inputHash" = EXCLUDED."inputHash", "sortNumber" = EXCLUDED."sortNumber",
         "sortDate" = EXCLUDED."sortDate", "sortText" = EXCLUDED."sortText",
         "computedAt" = EXCLUDED."computedAt"
-      RETURNING "entityId"
     ), ${
       hasMissing
         ? sql`removed AS (
       DELETE FROM "DerivedValue" v USING current c
-       WHERE NOT c."hasValue" AND v.key = ${declaration.key}
+       WHERE NOT c."hasValue" AND v.key = c.key
          AND v."entityId" = c."entityId"
-      RETURNING v."entityId"
+      RETURNING v."entityId", c.target
     ),`
         : sql``
     } cleared AS (
       DELETE FROM "DerivedDirty" d USING current c
-       WHERE d.target = ${declaration.target}
+       WHERE d.target = c.target
          AND d.ref = c."entityId" AND d.ticket = c.ticket
     )
-    SELECT w."entityId" AS id FROM written w
-      LEFT JOIN previous p ON p."entityId" = w."entityId"
-      JOIN current c ON c."entityId" = w."entityId"
-     WHERE p."entityId" IS NULL OR p.value IS DISTINCT FROM c.value
-        OR p."decidedBy" IS DISTINCT FROM c."decidedBy"
-    ${hasMissing ? sql`UNION ALL SELECT "entityId" AS id FROM removed` : sql``}`);
-  return z
-    .array(z.object({ id: z.string() }))
-    .parse(result.rows)
-    .map((row) => row.id);
+    SELECT c.target, c."entityId" AS id FROM current c
+     WHERE c."hasValue" AND c.live AND (
+       c."previousId" IS NULL OR c."previousValue" IS DISTINCT FROM c.value
+       OR c."previousDecidedBy" IS DISTINCT FROM c."decidedBy")
+    ${hasMissing ? sql`UNION ALL SELECT target, "entityId" AS id FROM removed` : sql``}`);
+  const changed = new Map<string, string[]>();
+  for (const { target, id } of z
+    .array(z.object({ target: z.string(), id: z.string() }))
+    .parse(result.rows)) {
+    const ids = changed.get(target) ?? [];
+    ids.push(id);
+    changed.set(target, ids);
+  }
+  return changed;
 };
 
 /** Source JSON is evidence: malformed references must not fail a drain page. */
@@ -501,7 +513,60 @@ export async function publishDerivedPage(
     const parsed = parseTarget(target);
     if (parsed) touch(parsed.declaration.entity, [ref]);
   }
-  for (const [target, marks] of groupByTarget(plan.marks)) {
+  const groups = groupByTarget(plan.marks);
+  const valueGroups = [...groups].flatMap(([target, marks]) => {
+    const parsed = parseTarget(target);
+    return parsed &&
+      !parsed.fanoutInput &&
+      !plan.failed.has(target) &&
+      !plan.sinks.has(target)
+      ? [
+          {
+            declaration: parsed.declaration,
+            marks,
+            values: plan.computed.get(target) ?? new Map(),
+          },
+        ]
+      : [];
+  });
+  let valueChanges: ReadonlyMap<string, readonly string[]> = new Map();
+  const rejectedValues = new Set<string>();
+  if (valueGroups.length > 0) {
+    try {
+      valueChanges = await withTransactionDatabase(db, (scoped) =>
+        publishValues(unwrapDb(scoped), valueGroups),
+      );
+    } catch (error) {
+      if (!isTargetDataError(error)) throw error;
+      // A rejected batch leaves every ticket and value intact. Retry its targets
+      // separately so one bad value cannot strand unrelated work.
+      const recovered = new Map<string, readonly string[]>();
+      for (const group of valueGroups) {
+        try {
+          const result = await withTransactionDatabase(db, (scoped) =>
+            publishValues(unwrapDb(scoped), [group]),
+          );
+          recovered.set(
+            group.declaration.target,
+            result.get(group.declaration.target) ?? [],
+          );
+        } catch (targetError) {
+          if (!isTargetDataError(targetError)) throw targetError;
+          rejectedValues.add(group.declaration.target);
+          await deferFailed(
+            tx,
+            group.declaration.target,
+            group.marks,
+            targetError instanceof Error
+              ? errorChainMessage(targetError)
+              : String(targetError),
+          );
+        }
+      }
+      valueChanges = recovered;
+    }
+  }
+  for (const [target, marks] of groups) {
     const parsed = parseTarget(target);
     if (!parsed) {
       // A retired declaration's marks have nothing left to compute.
@@ -515,6 +580,7 @@ export async function publishDerivedPage(
       await deferFailed(tx, target, marks, failure);
       continue;
     }
+    if (rejectedValues.has(target)) continue;
     const sink = plan.sinks.get(target);
     // A write the database rejects for one target's data (a value too long
     // for its index, a constraint) rolls back alone and backs off; the rest
@@ -522,16 +588,11 @@ export async function publishDerivedPage(
     // Inside the Job's transaction this is a savepoint.
     let changedIds: readonly string[];
     try {
-      changedIds = await withTransactionDatabase(db, (scoped) =>
-        sink
-          ? publishSink(scoped, declaration, marks, sink)
-          : publishValues(
-              unwrapDb(scoped),
-              declaration,
-              marks,
-              plan.computed.get(target) ?? new Map(),
-            ),
-      );
+      changedIds = sink
+        ? await withTransactionDatabase(db, (scoped) =>
+            publishSink(scoped, declaration, marks, sink),
+          )
+        : (valueChanges.get(target) ?? []);
     } catch (error) {
       if (!isTargetDataError(error)) throw error;
       await deferFailed(
