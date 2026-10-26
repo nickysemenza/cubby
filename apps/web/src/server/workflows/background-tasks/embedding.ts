@@ -101,9 +101,16 @@ export async function enqueueEmbeddingRefs(
       })),
     );
     // Lock overlapping cohorts in one order before retiring any old hashes.
-    // Current Jobs must not pay a transaction and repeated lookups per record.
+    // Match indexed subjects, not JSON identity: the latter scans every
+    // embedding Job even when a small publication admits only one record.
     const existing = await getDb(tx)
-      .select()
+      .select({
+        id: job.id,
+        key: job.key,
+        kind: job.kind,
+        state: job.state,
+        subjectId: job.subjectId,
+      })
       .from(job)
       .where(
         or(
@@ -115,10 +122,14 @@ export async function enqueueEmbeddingRefs(
             eq(job.kind, "embedding.refresh"),
             sql`${job.input}->'config' = ${JSON.stringify(config)}::jsonb`,
             sql`${job.key} NOT LIKE '%:retired:%'`,
-            sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${records}::jsonb)
-          AS i("entityKind" text, "entityId" text, hash text)
-          WHERE ${job.input}->>'entityKind' = i."entityKind"
-            AND ${job.input}->>'entityId' = i."entityId")`,
+            or(
+              ...inputs.map(({ source }) =>
+                and(
+                  eq(job.subjectKind, source.entityKind),
+                  eq(job.subjectId, source.entityId),
+                ),
+              ),
+            ),
           ),
         ),
       )
@@ -132,8 +143,8 @@ export async function enqueueEmbeddingRefs(
       "leaseToken"=NULL, "leaseExpiresAt"=NULL,
       error=coalesce(j.error,'Embedding source superseded'), "updatedAt"=now()
       FROM jsonb_to_recordset(${records}::jsonb) AS i("entityKind" text, "entityId" text, hash text)
-      WHERE j.kind='embedding.refresh' AND j.input->>'entityKind'=i."entityKind"
-        AND j.input->>'entityId'=i."entityId" AND j.input->>'hash'<>i.hash
+      WHERE j.kind='embedding.refresh' AND j."subjectKind"=i."entityKind"
+        AND j."subjectId"=i."entityId" AND j.input->>'hash'<>i.hash
         AND j.input->'config'=${JSON.stringify(config)}::jsonb
         AND j.key NOT LIKE '%:retired:%'`);
     const byKey = new Map(existing.map((row) => [row.key, row]));
