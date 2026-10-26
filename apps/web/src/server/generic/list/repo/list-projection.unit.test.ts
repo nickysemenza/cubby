@@ -12,6 +12,79 @@ import {
 } from "./list-projection";
 
 describe("list projection group execution", () => {
+  it("starts admitted ID batches before rows arrive and reuses transitive loads only within that page", async () => {
+    type Row = { id: string; shortcode: string };
+    const selected = selectedListProjection("plant", ["ingredientName"]);
+    const pageIds = ["private-one"];
+    let loads = 0;
+    const pending = Promise.withResolvers<Map<string, string>>();
+    const plan = listReadPlan<Row>("plant", {
+      bindings: (bind) => {
+        const names = bind.ids(({ ids }) => {
+          loads++;
+          expect(ids).toEqual(pageIds);
+          return pending.promise;
+        });
+        const combined = bind.ids(async (page) => ({
+          names: await names.load(page),
+        }));
+        return [
+          combined.fields(
+            z.object({ ingredientName: z.string().nullable() }),
+            (row, loaded) => ({
+              ingredientName: loaded.names.get(row.id) ?? null,
+            }),
+          ),
+        ];
+      },
+    });
+    const idsOnly = selectedListProjection("plant", ["id"]);
+    plan.prefetch(db, pageIds, idsOnly);
+    plan.prefetch(db, [], selected);
+    expect(loads).toBe(0);
+    const early = plan.prefetch(db, pageIds, selected);
+    expect(loads).toBe(1);
+    pending.resolve(new Map([["private-one", "Synthetic ingredient"]]));
+    const rows = [{ id: "private-one", shortcode: "PLANT-4K7M" }];
+    expect(
+      await plan.read(db, rows, selected, undefined, "stored", early),
+    ).toEqual([{ id: "PLANT-4K7M", ingredientName: "Synthetic ingredient" }]);
+    expect(loads).toBe(1);
+    await plan.read(db, rows, selected);
+    expect(loads).toBe(2);
+  });
+
+  it("surfaces an early ID-batch failure when the complete page is read", async () => {
+    const plan = listReadPlan<{ id: string; shortcode: string }>("plant", {
+      bindings: (bind) => {
+        const names = bind.ids(async () => {
+          throw new Error("Synthetic ID batch failure");
+        });
+        return [
+          names.fields(
+            z.object({ ingredientName: z.string().nullable() }),
+            () => ({ ingredientName: null }),
+          ),
+        ];
+      },
+    });
+    const projection = selectedListProjection("plant", ["ingredientName"]);
+    // A failed row load can abandon a prefetch before hydration observes it.
+    plan.prefetch(db, ["private-abandoned"], projection);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const early = plan.prefetch(db, ["private-one"], projection);
+    await expect(
+      plan.read(
+        db,
+        [{ id: "private-one", shortcode: "PLANT-4K7M" }],
+        projection,
+        undefined,
+        "stored",
+        early,
+      ),
+    ).rejects.toThrow("Synthetic ID batch failure");
+  });
+
   // Skipped FKs, loaded nulls and missing required/defaulted outputs are three
   // distinct states. Shared page dependencies must never run per row.
   it("assembles only admitted canonical fields and memoizes typed page batches", async () => {

@@ -341,16 +341,16 @@ const expenseJoinedRow = (row: ExpenseListRow) => {
 const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
   media: true,
   bindings: (bind) => {
-    const spending = bind.batch(({ rows }) =>
+    const spending = bind.ids(({ ids }) =>
       loadExpenseSpendingAllocations(
         db,
-        rows.map((row) => row.id),
+        ids.map((id) => parseEntityId("expense", id)),
       ),
     );
-    const projects = bind.batch(async ({ rows }) => {
+    const projects = bind.ids(async ({ ids }) => {
       const values = await loadExpenseProjectAllocations(
         db,
-        rows.map((row) => row.id),
+        ids.map((id) => parseEntityId("expense", id)),
       );
       const byExpense = new Map<ExpenseListRow["id"], typeof values>();
       for (const value of values) {
@@ -360,10 +360,13 @@ const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
       }
       return byExpense;
     });
-    const allocations = bind.batch(async (page) => ({
-      projects: await projects.load(page),
-      spending: await spending.load(page),
-    }));
+    const allocations = bind.ids(async (page) => {
+      const [projectValues, spendingValues] = await Promise.all([
+        projects.load(page),
+        spending.load(page),
+      ]);
+      return { projects: projectValues, spending: spendingValues };
+    });
     return [
       allocations.fields(
         expenseListItemOut.pick({
