@@ -36,7 +36,7 @@ import { product as productTable } from "~/server/db/schema";
 import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
 import { loadProductOwners } from "~/server/domains/inventory/repo/ownership";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
-import { productUnitPriceDetailLabel } from "~/server/domains/product/repo/list-enrichment";
+import { productUnitPriceDetailFields } from "~/server/domains/product/repo/list-enrichment";
 import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 import {
   batchEnrichWithFood,
@@ -163,7 +163,7 @@ export const getProductWithFood = async (
 
   return {
     ...product,
-    unitPriceDetailLabel: productUnitPriceDetailLabel({ ...product, food }),
+    ...productUnitPriceDetailFields({ ...product, food }),
     ownershipEvidence: ownership,
     owners: owners.get(id) ?? [],
     nutritionDisplay: buildNutritionDisplay({

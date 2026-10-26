@@ -119,6 +119,12 @@ The `automaticFields` stored value contributes provenance to its listed fields,
 with its refresh state and timestamp; it never creates its own list column.
 Fields absent from that value retain their own or inherited provenance.
 
+Product detail exposes `unitPriceMappings` as list reads do. Its unit-price
+label and the explanation's complete conversion-graph evidence come from one
+shared calculation, including synthesized effective-price and food/nutrition
+edges. Raw stored `unitMappings` alone are not that complete graph. Service
+Products keep their not-applicable unit-price label.
+
 Before adding an inherited value or override, trace an existing field through its
 stored intent, effective read, `fieldResolutions` provenance, and declared
 `resolution` actions. Reuse that contract for edits, Use inherited, and explicit
