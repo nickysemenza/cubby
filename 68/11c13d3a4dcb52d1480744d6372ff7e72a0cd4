@@ -1,0 +1,27 @@
+apps/web/src/entity/entity-detail/detail-summary.tsx
+  s_3e81357a17ae07::t_b0623e6daaff57 1-4,41,48-67,335-337,397,403-410,439-448
+apps/web/src/entity/entity-detail/entity-record-fields.tsx
+  s_3e81357a17ae07::t_383dfa6a6fd727 93-103,114-126,131
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_3e81357a17ae07::t_e2ada11aeb4828 78,185-189
+docs/entities.md
+  s_3e81357a17ae07::t_8bd8c38c03fdfe 228-232
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_3e81357a17ae07::t_9cb7278c813e5e 134-135,141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6811c13d3a4dcb52d1480744d6372ff7e72a0cd4",
+  "prompts": {},
+  "sessions": {
+    "s_3e81357a17ae07": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6e45cef-6a1c-4ffe-81ee-e0d202b7084d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
