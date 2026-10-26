@@ -232,8 +232,11 @@ function settledBeforeBookingGuards(
   // Automatic bookings record each new observation's reference below. A
   // member-reviewed booking stays linked through the accepted charge key.
   const automatic = row.bookingDecisionFingerprint?.startsWith("automatic:");
+  // Null-status evidence has no lifecycle, so its date must agree directly;
+  // a moved date stays review work for dated allocations and Expenses.
   return row.status !== "void" &&
     !(addsReference && automatic) &&
+    [row.transactionDate, row.postedDate].includes(observation.statementDate) &&
     isSameAmount(amount, row.amount) &&
     Object.keys(sourceLifecycle(observation, row)).length === 0
     ? { status: "unchanged", reason: "already_current" }

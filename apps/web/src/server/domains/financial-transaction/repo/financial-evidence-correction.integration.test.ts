@@ -447,6 +447,27 @@ describe("generated booking evidence corrections", () => {
     expect(await money()).toEqual(before);
   });
 
+  it("still reviews a null-status date move on a reviewed booking", async () => {
+    const { input, transaction, money } = await fixture();
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ providerAmount: -25, amount: 25, statementDate: "2026-09-02" })
+      .where(eq(sourceTransactionRecord.externalId, input.externalId));
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ bookingDecisionFingerprint: "synthetic-member-review" })
+      .where(eq(financialTransaction.id, transaction.entityId));
+    const before = await money();
+    expect(
+      await reconcileFinancialEvidenceCorrection(
+        ctx.db,
+        { ...input, amount: 25 },
+        ctx.actor,
+      ),
+    ).toMatchObject({ status: "review" });
+    expect(await money()).toEqual(before);
+  });
+
   it("routes a changed effective funding date to review without rewriting its booking", async () => {
     const { input, money } = await fixture(true);
     await getDb(ctx.db)

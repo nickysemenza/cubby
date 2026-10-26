@@ -580,6 +580,49 @@ describe("statement row ledger", () => {
     ).toHaveLength(2);
   });
 
+  // Before #3395, annotation-only re-pulls stored separate observations. An
+  // exact replay of the older collection keeps its own identity and annotation.
+  it("replays an older annotation-only observation without borrowing the head's annotation", async () => {
+    const evidence = rowInput({
+      providerTransactionId: "synthetic-annotation-history",
+      providerData: { version: 1 },
+    });
+    const older = {
+      fingerprint: "synthetic-annotation-older",
+      rowCountDeclared: 1,
+      observedAt: "2026-06-01T00:00:00Z",
+    };
+    await record(ctx.db, ctx.actor, [evidence], older);
+    await record(
+      ctx.db,
+      ctx.actor,
+      [
+        {
+          ...evidence,
+          providerNotes: "Synthetic",
+          providerData: { version: 2 },
+        },
+      ],
+      {
+        fingerprint: "synthetic-annotation-newer",
+        rowCountDeclared: 1,
+        observedAt: "2026-06-02T00:00:00Z",
+      },
+    );
+    // Recreate the legacy state: the newer head differs only by annotation.
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ providerNotes: null })
+      .where(eq(sourceTransactionRecord.current, true));
+    const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    await expect(
+      record(ctx.db, ctx.actor, [evidence], older),
+    ).resolves.toMatchObject({ inserted: 0, unchanged: 1, revised: 0 });
+    expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
+      before,
+    );
+  });
+
   it("blocks deleting a revised observation when a transaction retains a predecessor reference", async () => {
     const evidence = rowInput({
       providerTransactionId: "synthetic-retained-charge",
