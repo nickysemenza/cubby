@@ -1,0 +1,53 @@
+apps/web/drizzle/0039_job_claimed_index.sql
+  s_0cc53fa46ecbd7::t_f15edf20b96076 1
+apps/web/drizzle/meta/_journal.json
+  s_0cc53fa46ecbd7::t_187ddcf64c159a 277-283
+apps/web/src/server/generic/jobs/repo/jobs.ts
+  s_0cc53fa46ecbd7::t_7c809bb60b9459 181-194,209,212,222,426-428
+apps/web/src/server/workflows/queue-watchdog.integration.test.ts
+  s_672398f43d55a3::t_b38cb181b38901 5,8,39,563-610
+packages/schemas/src/entity-definitions/32-job.entity.ts
+  s_9d09521008a76d::t_4c14a5a1b49a28 321-322
+docs/jobs.md
+  s_2a52c39b9ed37e::t_305e20b7957b24 287-295
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a8a68058eda9cc9276fa159490b07c9975bc08d0",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_2a52c39b9ed37e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a439b0417f1c0f563",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9d09521008a76d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a178c2-a10b-7971-80c6-3985d51fedd9",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
