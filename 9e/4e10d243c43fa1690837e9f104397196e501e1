@@ -1,0 +1,23 @@
+apps/apple/App/Shared/AppShell/DeveloperOverlays.swift
+  s_49ab8ab0a006bb::t_8b1b5d9e48d9bc 11
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_49ab8ab0a006bb::t_0ddf7ff438d1f4 1499-1500
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_49ab8ab0a006bb::t_6af30903539515 452,570-575,747-751,867-868
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9e4e10d243c43fa1690837e9f104397196e501e1",
+  "prompts": {},
+  "sessions": {
+    "s_49ab8ab0a006bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4ba0b41-b28c-4210-8689-abbdf6600a58",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
