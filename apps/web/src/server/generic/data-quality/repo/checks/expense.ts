@@ -10,7 +10,7 @@ import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const EXPENSE_QUALITY_RULES_VERSION = 1;
+export const EXPENSE_QUALITY_RULES_VERSION = 2;
 
 type ExpenseQualityRecord = Awaited<
   ReturnType<typeof loadExpenseQualityRecords>
