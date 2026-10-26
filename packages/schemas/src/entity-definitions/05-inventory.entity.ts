@@ -60,28 +60,16 @@ export default defineEntity(
       detail: {
         summary: [
           {
-            kind: "records",
-            id: "product",
-            title: "Product",
-            viewKey: "relation:product",
-          },
-          {
             kind: "fields",
             id: "placement-amount",
             title: "Placement & amount",
             fields: ["placement", "amount"],
           },
           {
-            kind: "records",
-            id: "location",
-            title: "Location",
-            viewKey: "relation:location",
-          },
-          {
             kind: "fields",
-            id: "ownership",
-            title: "Ownership",
-            fields: ["effectiveOwnership"],
+            id: "last-verified",
+            title: "Last verified",
+            fields: ["verifiedAt"],
           },
           {
             kind: "fields",
@@ -91,9 +79,21 @@ export default defineEntity(
           },
           {
             kind: "fields",
-            id: "last-verified",
-            title: "Last verified",
-            fields: ["verifiedAt"],
+            id: "ownership",
+            title: "Ownership",
+            fields: ["effectiveOwnership"],
+          },
+          {
+            kind: "records",
+            id: "product",
+            title: "Product",
+            viewKey: "relation:product",
+          },
+          {
+            kind: "records",
+            id: "location",
+            title: "Location",
+            viewKey: "relation:location",
           },
           {
             kind: "records",

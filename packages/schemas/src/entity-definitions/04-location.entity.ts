@@ -49,21 +49,15 @@ export default defineEntity(
         summary: [
           {
             kind: "records",
-            id: "parent-location",
-            title: "Parent location",
-            viewKey: "relation:parent",
-          },
-          {
-            kind: "records",
             id: "direct-holdings",
             title: "Direct holdings",
             viewKey: "relation:inventory",
           },
           {
-            kind: "fields",
-            id: "stock-check",
-            title: "Stock check",
-            fields: ["lastBulkInventory"],
+            kind: "records",
+            id: "child-locations",
+            title: "Child locations",
+            viewKey: "relation:children",
           },
           {
             kind: "report",
@@ -72,10 +66,10 @@ export default defineEntity(
             slot: "location.contents-valuation",
           },
           {
-            kind: "records",
-            id: "child-locations",
-            title: "Child locations",
-            viewKey: "relation:children",
+            kind: "fields",
+            id: "stock-check",
+            title: "Stock check",
+            fields: ["lastBulkInventory"],
           },
           {
             kind: "records",
@@ -94,6 +88,12 @@ export default defineEntity(
             id: "space-reference",
             title: "Space reference",
             viewKey: "relation:images",
+          },
+          {
+            kind: "records",
+            id: "parent-location",
+            title: "Parent location",
+            viewKey: "relation:parent",
           },
         ],
 
