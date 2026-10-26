@@ -1,6 +1,7 @@
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import type { PhotoRunReview } from "@cubby/schemas/photo-import-run";
 import { getErrorMessage } from "@cubby/shared";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import pMap from "p-map";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -24,6 +25,7 @@ import { StatusText } from "~/ui/primitives/status-text";
 
 import { runHasAgent } from "./agent-observation";
 import { PhotoGroupReview, usePhotoRunReview } from "./photo-group-review";
+import { RunLink, useRun } from "./run-lineage";
 
 function PhotoRunCost({ run }: { run: RunDetail }) {
   const usage = useQuery({
@@ -243,6 +245,60 @@ function groupingHint(pending: number, analyzing: boolean, external: boolean) {
  * agent's proposed item groups to review and every run photo, rather than an
  * agent transcript. */
 export function PhotoImportRunView({ run }: { run: RunDetail }) {
+  // Retry/restart copies the photos, but proposals belong to the successor.
+  // Mounting the predecessor's review would label those photos ungrouped.
+  return run.successorRunPublicId ? (
+    <PhotoRunContinuation runId={run.successorRunPublicId} />
+  ) : (
+    <CurrentPhotoImportRunView run={run} />
+  );
+}
+
+function PhotoRunContinuation({ runId }: { runId: RunDetail["publicId"] }) {
+  const successor = useRun(runId);
+  return (
+    <Section headingAs="h2" title="Photo grouping">
+      <RunLink
+        label="Grouping continued in"
+        publicId={runId}
+        status={successor.data?.status}
+      />
+      {successor.isError ? (
+        <StatusText tone="destructive">{successor.error.message}</StatusText>
+      ) : successor.data ? (
+        successor.data.successorRunPublicId ? (
+          <RunLink
+            label="Continued again in"
+            publicId={successor.data.successorRunPublicId}
+          />
+        ) : (
+          <ContinuedPhotoGroups run={successor.data} />
+        )
+      ) : (
+        <StatusText>Loading continued Run…</StatusText>
+      )}
+    </Section>
+  );
+}
+
+function ContinuedPhotoGroups({ run }: { run: RunDetail }) {
+  const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
+  if (review.isError)
+    return <StatusText tone="destructive">{review.error.message}</StatusText>;
+  if (!review.data) return <StatusText>Loading photo groups…</StatusText>;
+  const pending = review.data.review.proposals.filter(
+    (proposal) => proposal.state === "proposed",
+  ).length;
+  return (
+    <StatusText>
+      {pending > 0
+        ? `${countLabel(pending, "group")} awaiting approval`
+        : "Open the continued Run to see its photos and grouping progress."}
+    </StatusText>
+  );
+}
+
+function CurrentPhotoImportRunView({ run }: { run: RunDetail }) {
   const review = usePhotoRunReview(run.publicId, run.status, runHasAgent(run));
   const pending = run.targets.filter(
     (target) => target.targetType === "image" && target.state === "pending",
