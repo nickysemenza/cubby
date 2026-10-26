@@ -482,8 +482,11 @@ receipt chains. Explicit member retries retain their `retryEvaluationId` receipt
 Search publication admits embedding demand as one cohort: it locks existing
 Jobs in key order, retires superseded hashes together and checks selected
 artifacts in a batch. Unchanged current Jobs retain their identity and state
-without per-record savepoints or enqueue lookups. New work still uses the
-canonical Job admission; a completed upload no longer selected gets a fresh
+without per-record savepoints or enqueue lookups.
+Indexed `subjectKind`/`subjectId` locate a source's Jobs for cohort locking and
+retirement; JSON supplies only the content hash and embedding configuration.
+Admission reads only identity and state, not retained text and result payloads.
+New work still uses canonical Job admission; a completed upload no longer selected gets a fresh
 physical identity when its text returns.
 
 `embedding.refresh` uses the shared drain's kind-level batch handler. When a
