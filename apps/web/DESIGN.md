@@ -493,3 +493,7 @@ the chain; the Images section also renders it. Both read the record-level
 remains #3310.
 The sidebar shows “Updating N values · Activity” only with a nonempty backlog;
 Activity lists outstanding work once per declared derived kind.
+While Activity is open, it samples the backlog every 15 seconds and shows an
+approximate remaining time after a minute of net decrease, using up to five
+minutes of observations. A gap over a minute resets the estimate. Flat or growing
+work has no ETA; new dependency work can change the estimate.
