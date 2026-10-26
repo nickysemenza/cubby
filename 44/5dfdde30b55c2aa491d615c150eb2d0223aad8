@@ -1,0 +1,71 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_672398f43d55a3::t_06ea5c9f915afe 106
+apps/apple/App/Shared/AppShell/Route.swift
+  s_672398f43d55a3::t_d5e341cc0b4b9a 42,45,52
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_672398f43d55a3::t_0b5cffa0aeab7f 356-359
+apps/apple/DESIGN.md
+  s_c503e493e0915b::t_a92ae0dcea390f 19
+apps/apple/e2e/emoji-review.ad
+  s_3e81357a17ae07::t_6140faadbfe843 6-7
+apps/apple/e2e/native-layout.ad
+  s_3e81357a17ae07::t_8cb91cf6e9c5fc 17-19
+apps/apple/e2e/product-browse.ad
+  s_c503e493e0915b::t_c8060cfa4d9a1f 4-5
+apps/apple/e2e/product-edit.ad
+  s_3e81357a17ae07::t_fa6fb0dba376c2 4-5
+apps/apple/e2e/qa-entity-picker.ad
+  s_c503e493e0915b::t_620f9092e3948e 4
+apps/apple/e2e/qa-hero-discard.ad
+  s_c503e493e0915b::t_126d5e8d482d93 4
+apps/apple/e2e/qa-product-barcode.ad
+  s_c503e493e0915b::t_617349f0829daf 6
+apps/apple/e2e/qa-product-research-history.ad
+  s_c503e493e0915b::t_5d904d30bae35c 4
+apps/apple/e2e/qa-run-browse.ad
+  s_3e81357a17ae07::t_3e80d20fdbdc53 4,10-11
+apps/apple/e2e/qa-run-evidence.ad
+  s_3e81357a17ae07::t_96200348155764 4,10-11
+apps/apple/e2e/qa-save-error.ad
+  s_c503e493e0915b::t_6b75ce89a80f6d 6
+apps/apple/e2e/qa-structured-editor.ad
+  s_c503e493e0915b::t_1ec0d99a543f9f 4
+apps/apple/e2e/qa-structured-keyboard.ad
+  s_c503e493e0915b::t_995d46c5bc2346 6
+apps/apple/e2e/run-stop-live.ad
+  s_c503e493e0915b::t_43fe1d388edcf0 7
+apps/apple/project.yml
+  s_672398f43d55a3::t_50f21c77e83810 213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "445dfdde30b55c2aa491d615c150eb2d0223aad8",
+  "prompts": {},
+  "sessions": {
+    "s_3e81357a17ae07": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6e45cef-6a1c-4ffe-81ee-e0d202b7084d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c503e493e0915b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a61-18fe-7413-9322-d8bc677509bc",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
