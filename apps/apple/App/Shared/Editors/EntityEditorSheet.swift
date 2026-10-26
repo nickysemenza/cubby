@@ -1,15 +1,10 @@
 import CubbyKit
 import SwiftUI
 
-/// The generic create/update editor for any entity the generated client can write: the catalog's
-/// editor sections as a grouped `Form`, a photo block for an image-attachable entity, Cancel →
-/// Discard through `DraftDismissalState`, Save gated on `GenericEntityEditModel.canSave`.
-///
-/// Structured fields the catalog declares that native does not render remain in the web editor
-/// (product `unitMappings`, recipe `sections`/`yield`/`meta`, expense evidence, financial-account
-/// identity, and financial-transaction source refs). Typed generic controls, entity references,
-/// amounts, tags, vendor names, and expense attributions render through `EntityFieldControl`;
-/// image keys render through `EntityImageBlock`.
+/// Generic create/update fields follow the catalog's editor sections. Native structured controls
+/// edit identifiers, aliases, source references, unit mappings and label nutrition; structured-field
+/// editors retain a read-only summary and a named web handoff. Required web-only fields keep create
+/// on web. DraftDismissalState and inline validation preserve edits until Save or explicit discard.
 /// One field's resolution link a detail screen asks the editor to stage.
 struct ResolutionActionRequest: Hashable, Identifiable {
     let field: String
@@ -65,7 +60,7 @@ struct EntityEditorSheet: View {
     private var handoffFields: [FieldDescriptor] {
         descriptor.fields.filter { field in
             let participates = isCreate ? field.inCreate : field.inUpdate
-            return participates && NativePresentationCoverage.controlHandoff(field) != nil
+            return participates && NativePresentationCoverage.controlHandoff(field, entity: key) != nil
         }
     }
 
@@ -202,20 +197,10 @@ struct EntityEditorSheet: View {
             if let context {
                 Section { Text(context.description).foregroundStyle(.secondary) }
             }
-            if !handoffFields.isEmpty {
+            if !handoffRequiredFields.isEmpty {
                 Section {
-                    Text(
-                        handoffRequiredFields.isEmpty
-                            ? "Additional fields are available on web."
-                            : "This record needs additional fields available on web to create it."
-                    )
-                    .foregroundStyle(.secondary)
-                    if case .update(let id) = mode {
-                        OpenOnWebButton(
-                            target: .record(key: key, id: id), label: "Edit \(descriptor.singular) on web"
-                        )
-                        .accessibilityIdentifier("editor.\(key.rawValue).openOnWeb")
-                    }
+                    Text("This record needs additional fields available on web to create it.")
+                        .foregroundStyle(.secondary)
                 }
             }
             if let banner = saveFailure(model) {
@@ -230,18 +215,20 @@ struct EntityEditorSheet: View {
                 LoadingIndicator(label: "Loading \(descriptor.singular)")
             }
             ForEach(model.sections) { section in
-                let fields = section.fields.compactMap(descriptor.field).filter { renders($0) }
+                let fields = section.fields.compactMap(descriptor.field).filter {
+                    renders($0) || NativePresentationCoverage.controlHandoff($0, entity: key) != nil
+                }
                 if !fields.isEmpty {
                     if let title = section.title {
                         Section(title) {
                             ForEach(fields, id: \.key) { field in
-                                EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                                editorField(field, model: model)
                                     .id(field.key)
                             }
                         }
                     } else {
                         ForEach(fields, id: \.key) { field in
-                            EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                            editorField(field, model: model)
                                 .id(field.key)
                         }
                     }
@@ -275,10 +262,37 @@ struct EntityEditorSheet: View {
         .accessibilityIdentifier("editor.\(key.rawValue)")
     }
 
-    /// Whether the field has a native control: everything but the image keys and the specialized
-    /// renderers this file's doc comment lists.
+    @ViewBuilder
+    private func editorField(_ field: FieldDescriptor, model: GenericEntityEditModel) -> some View {
+        if let handoff = NativePresentationCoverage.controlHandoff(field, entity: key) {
+            let raw = model.original ?? .object(model.draft)
+            let value = raw[field.key]
+            let summary =
+                EntityFieldValue.text(in: raw, field: field, surface: "detail")
+                ?? EntityFieldValue.text(value, field: field)
+                ?? (value == nil || value == .null || value?.arrayValue?.isEmpty == true
+                    ? "None" : "Value saved")
+            LabeledContent(field.label) {
+                Text(summary).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            OpenOnWebButton(
+                target: model.recordID.map { handoff.target(key: key, id: $0) }
+                    ?? .route(path: "/\(descriptor.basePath)/new"),
+                label: handoff.label
+            )
+            .accessibilityIdentifier("editor.\(key.rawValue).\(field.key).openOnWeb")
+        } else {
+            EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+        }
+    }
+
+    /// Image keys belong to the photo block; web-only fields have summaries rather than inputs.
     private func renders(_ field: FieldDescriptor) -> Bool {
-        if Self.imageKeys.contains(field.key) { return false }
+        if Self.imageKeys.contains(field.key)
+            || NativePresentationCoverage.controlHandoff(field, entity: key) != nil
+        {
+            return false
+        }
         guard field.controlKind == .specialized else { return true }
         guard let renderer = field.controlRenderer else { return false }
         switch NativePresentationCoverage.control(renderer) {
@@ -371,7 +385,7 @@ struct EntityEditorSheet: View {
     }
 
     private func save() async {
-        guard let model, model.canSave else { return }
+        guard let model, model.canSave, handoffRequiredFields.isEmpty else { return }
         if !selections.isEmpty {
             isUploading = true
             defer { isUploading = false }

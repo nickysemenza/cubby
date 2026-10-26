@@ -1,5 +1,5 @@
 import { structuredValueSchemas } from "@cubby/schemas/structured-value-schemas";
-import vectorFile from "@cubby/shared/golden-vectors/structured-roundtrip.json";
+import nativeVectors from "@cubby/shared/golden-vectors/structured-roundtrip.json";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ import {
   project,
   wireValue,
 } from "./structured-value";
+import webVectors from "./structured-value.fixtures.json";
 
 const vectors = z
   .array(
@@ -20,7 +21,7 @@ const vectors = z
       input: z.json(),
     }),
   )
-  .parse(vectorFile.vectors);
+  .parse([...nativeVectors.vectors, ...webVectors.vectors]);
 
 const schemaFor = (id: string) => {
   const schema = Object.entries(structuredValueSchemas).find(

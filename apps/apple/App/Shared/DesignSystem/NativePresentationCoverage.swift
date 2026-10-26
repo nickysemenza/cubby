@@ -62,8 +62,11 @@ enum NativePresentationCoverage {
         }
     }
 
-    static func controlHandoff(_ field: FieldDescriptor) -> NativeWebHandoff? {
-        field.controlRenderer.flatMap { control($0).handoff }
+    static func controlHandoff(_ field: FieldDescriptor, entity: EntityKey) -> NativeWebHandoff? {
+        if field.controlRenderer == .structuredField {
+            return coverage.structuredField["\(entity.rawValue).\(field.key)"]?.handoff
+        }
+        return field.controlRenderer.flatMap { control($0).handoff }
     }
 
     static func detailHandoff(_ field: FieldDescriptor) -> NativeWebHandoff? {
@@ -82,8 +85,9 @@ enum NativePresentationCoverage {
             guard case .slot = section.kind else { return nil }
             return DetailSlotRegistry.handoff(slot: section.id, row: row)
         }
+        let controls = descriptor.fields.compactMap { controlHandoff($0, entity: descriptor.key) }
         let actions = descriptor.presentation.heroActions.compactMap(heroActionHandoff)
         var seen = Set<String>()
-        return (fields + slots + actions).filter { seen.insert($0.label).inserted }
+        return (fields + controls + slots + actions).filter { seen.insert($0.label).inserted }
     }
 }

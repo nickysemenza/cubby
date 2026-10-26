@@ -297,7 +297,7 @@ struct EntityFieldControl: View {
     @ViewBuilder
     private var specialized: some View {
         if let schema = field.valueSchema {
-            StructuredValueControl(field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
+            StructuredValueControl(field: field, schema: schema, model: model)
         } else if let renderer = field.controlRenderer, let drawing = Self.drawing(for: renderer) {
             switch drawing {
             case .entityReference:

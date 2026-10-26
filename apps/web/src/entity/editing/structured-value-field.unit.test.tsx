@@ -1,4 +1,4 @@
-import vectorFile from "@cubby/shared/golden-vectors/structured-roundtrip.json";
+import nativeVectors from "@cubby/shared/golden-vectors/structured-roundtrip.json";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { type FieldValues, FormProvider, useForm } from "react-hook-form";
 import { describe, expect, it, vi } from "vitest";
@@ -7,11 +7,12 @@ import { z } from "zod";
 import { collectionDraft, type CollectionDescriptor } from "./collection-edit";
 import { structuredSchemaFor } from "./structured-schema";
 import { StructuredValueField } from "./structured-value-field";
+import webVectors from "./structured-value.fixtures.json";
 
 const inputOf = (entity: string, field: string) =>
   z
     .array(z.object({ entity: z.string(), field: z.string(), input: z.json() }))
-    .parse(vectorFile.vectors)
+    .parse([...nativeVectors.vectors, ...webVectors.vectors])
     .find((vector) => vector.entity === entity && vector.field === field)
     ?.input;
 

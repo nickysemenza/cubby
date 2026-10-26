@@ -67,6 +67,8 @@ public struct NativeCoverageManifest: Decodable, Sendable {
     public let heroAction: [String: NativeCoverageStatus]
     public let detailSlot: [String: NativeCoverageStatus]
     public let listSlot: [String: NativeCoverageStatus]
+    /// Entity-qualified structured fields, whose editors may hand off independently of their renderer.
+    public let structuredField: [String: NativeCoverageStatus]
     /// The verbs a `summary` or `recordList` section offers, keyed by `SectionActionID`.
     public let sectionAction: [String: NativeCoverageStatus]
     /// The runner plan for each `implemented` hero action, keyed by its manifest id.

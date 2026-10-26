@@ -124,7 +124,7 @@ const STRUCTURED_VALUE_RENDERERS = [
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
 
-/** Whether the generator derives a `valueSchema` (and native draws the structured editor) for a field. */
+/** Whether a structured editor needs an input schema, including fields native hands off to web. */
 export const drawsFromValueSchema = (
   entity: string,
   field: {
@@ -138,7 +138,8 @@ export const drawsFromValueSchema = (
     (renderer === "structured-field" &&
       Object.entries<NativeCoverageEntry>(nativeCoverage.structuredField).some(
         ([id, entry]) =>
-          id === `${entity}.${field.key}` && entry.status === "implemented",
+          id === `${entity}.${field.key}` &&
+          (entry.status === "implemented" || entry.status === "handoff"),
       ))
   );
 };
@@ -159,9 +160,7 @@ export const nativeCoverage = {
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
     ...generic(STRUCTURED_VALUE_RENDERERS),
-    // Drawn from the field's `valueSchema` only where `structuredField` marks it implemented
-    // (a golden read-to-input vector proves the round trip); the other fields of this renderer
-    // are read-only, as on web.
+    // Field-level coverage owns the named web handoffs for this shared renderer.
     ...generic(["structured-field"]),
     // Tags and Collections: the split and merge are `splitProductTags`/`mergeProductTags`
     // (`@cubby/shared/collection-tag`), reproduced by `CollectionTag` over the generated
@@ -499,31 +498,56 @@ export const nativeCoverage = {
    * (`apps/apple/App/Shared/Entity/List/SpecialistListViews.swift`) switches over; `ownedElsewhere` ones are
    * covered by the generic list's own affordances and never selectable as a slot.
    */
-  /**
-   * `structured-field` is a shared renderer id, so each field is classified here as
-   * `<entity>.<field>`: `implemented` ones are drawn from a `valueSchema` by the generic
-   * structured-value editor on both clients (each needs a read-to-input vector in
-   * `structured-roundtrip.json`); a `handoff` one is edited on web.
-   * Every field with that renderer must appear (asserted by the unit test).
-   */
+  /** Structured-field editors stay on web; native retains their read-only summaries. */
   structuredField: {
-    // Every field is drawn by the one generic editor on both clients, each with a read-to-input
-    // vector from a real server read. `meal.recipes` has only a create input (an existing meal's
-    // recipes change through the meal composition workflow), so it draws on create alone.
-    ...implemented([
-      "expense.sourceClaims",
-      "financialAccount.cardNumbers",
-      "financialAccount.authorizedUsers",
-      "financialAccount.fundingPeriods",
-      "financialAccount.identity",
-      "financialTransaction.allocations",
-      "ledgerTransfer.sourceClaims",
-      "meal.recipes",
-      "recipe.meta",
-      "recipe.sections",
-      "recipe.yield",
-      "vendor.agentHints",
-    ]),
+    "expense.sourceClaims": handoff(
+      { section: "settlement", label: "Review source claims on web" },
+      "Source evidence and reconciliation are reviewed on web.",
+    ),
+    "financialAccount.cardNumbers": handoff(
+      { section: "overview", label: "Edit card numbers on web" },
+      "Card history affects transaction matching and is edited on web.",
+    ),
+    "financialAccount.authorizedUsers": handoff(
+      { section: "overview", label: "Edit authorized users on web" },
+      "Account authorization periods are edited on web.",
+    ),
+    "financialAccount.fundingPeriods": handoff(
+      { section: "overview", label: "Edit funding periods on web" },
+      "Account funding periods are edited on web.",
+    ),
+    "financialAccount.identity": handoff(
+      { section: "overview", label: "Edit account identity on web" },
+      "Account identity is chosen and reviewed on web.",
+    ),
+    "financialTransaction.allocations": handoff(
+      { section: "overview", label: "Edit allocations on web" },
+      "Transaction allocations are reviewed beside their evidence on web.",
+    ),
+    "ledgerTransfer.sourceClaims": handoff(
+      { section: "evidence", label: "Review transfer source claims on web" },
+      "Transfer source evidence and reconciliation are reviewed on web.",
+    ),
+    "meal.recipes": handoff(
+      { section: "composition", label: "Edit meal recipes on web" },
+      "Meal recipe composition is edited on web.",
+    ),
+    "recipe.meta": handoff(
+      { section: "overview", label: "Edit recipe metadata on web" },
+      "Recipe source metadata and timing are edited on web.",
+    ),
+    "recipe.sections": handoff(
+      { section: "contents", label: "Edit recipe sections on web" },
+      "Recipe ingredients and instructions are edited on web.",
+    ),
+    "recipe.yield": handoff(
+      { section: "overview", label: "Edit recipe yield on web" },
+      "Recipe yield is edited on web.",
+    ),
+    "vendor.agentHints": handoff(
+      { section: "details", label: "Edit agent hints on web" },
+      "Import agent instructions are edited on web.",
+    ),
   },
   listSlot: {
     "project.analytics": handoff(
