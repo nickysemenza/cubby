@@ -1,0 +1,19 @@
+apps/apple/e2e/qa-entity-table.ad
+  s_c503e493e0915b::t_21f169191113d0 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ca7bb9b2fd5c715799de5d60dbaddcdec55673d4",
+  "prompts": {},
+  "sessions": {
+    "s_c503e493e0915b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a61-18fe-7413-9322-d8bc677509bc",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
