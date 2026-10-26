@@ -378,7 +378,10 @@ export async function prepareFencedProductIdentityPairs(
       "Product pair preparation requires a database outside a transaction",
     );
   const ids = expected.map((pair) => pair.productIds);
-  const targets = ids.map((productIds) => ({ key: productIdentityPairKey(productIds), productIds }));
+  const targets = ids.map((productIds) => ({
+    key: productIdentityPairKey(productIds),
+    productIds,
+  }));
   const before = await productIdentityEvidenceFences(db, targets);
   const pairs = await prepareProductIdentityPairs(db, ids);
   const after = await productIdentityEvidenceFences(db, targets);

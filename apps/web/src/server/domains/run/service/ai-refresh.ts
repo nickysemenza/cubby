@@ -85,7 +85,11 @@ import {
   productIdentityPairKey,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
-import { prepareProductPairPublication, prepareProductPairPublications, publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
+import {
+  prepareProductPairPublication,
+  prepareProductPairPublications,
+  publishProductPairPublications,
+} from "~/server/domains/product/repo/match/product-match-candidate";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -966,7 +970,10 @@ export async function executeAiRefreshTarget(
           requestIndex = 0;
         for (const pair of batch) {
           const publish = pair.exact
-            ? ((prepared) => (transactionDb: Database) => publishProductPairPublications(transactionDb, [prepared]))(rulePublications[ruleIndex++]!)
+            ? (
+                (prepared) => (transactionDb: Database) =>
+                  publishProductPairPublications(transactionDb, [prepared])
+              )(rulePublications[ruleIndex++]!)
             : requests[requestIndex++]!;
           await publishAiEvaluation(
             db,

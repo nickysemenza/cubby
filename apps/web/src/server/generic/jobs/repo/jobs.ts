@@ -7,7 +7,12 @@ import {
   type JobPage,
   type JobWaitReason,
 } from "@cubby/schemas/job";
-import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
+import {
+  runStatus,
+  runPurpose,
+  runTrigger,
+  VISIBLE_RUN_PURPOSES,
+} from "@cubby/schemas/run-fields";
 import { generateShortcode } from "@cubby/shared";
 import {
   and,
@@ -469,17 +474,26 @@ const jobCapExempt = () =>
   ).exists()})`;
 
 /** Shared with single claims: a page reserves capacity through its live per-target leases. */
-async function admitJobKind(tx: Database, kind: string, now: Date, pageToken?: string) {
+async function admitJobKind(
+  tx: Database,
+  kind: string,
+  now: Date,
+  pageToken?: string,
+) {
   const policy = jobKindPolicy(kind);
   const cap = policy.maxInFlight;
-  const maxPages = pageToken === undefined ? undefined : policy.maxInFlightPages;
+  const maxPages =
+    pageToken === undefined ? undefined : policy.maxInFlightPages;
   if (cap === undefined && maxPages === undefined) return true;
   // Match #3322's cross-Worker fence. Never wait while holding candidate Jobs.
   const admission = await getDb(tx).execute<{ locked: boolean }>(sql`
     SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${kind}`}, 0)) AS locked`);
   if (!admission.rows[0]?.locked) return false;
   const [live] = await getDb(tx)
-    .select({ count: sql<number>`count(*)::int`, otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${pageToken ?? null}::uuid))::int` })
+    .select({
+      count: sql<number>`count(*)::int`,
+      otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${pageToken ?? null}::uuid))::int`,
+    })
     .from(job)
     .where(
       and(
@@ -489,7 +503,10 @@ async function admitJobKind(tx: Database, kind: string, now: Date, pageToken?: s
         not(jobCapExempt()),
       ),
     );
-  return (cap === undefined || (live?.count ?? 0) < cap) && (maxPages === undefined || (live?.otherPages ?? 0) < maxPages);
+  return (
+    (cap === undefined || (live?.count ?? 0) < cap) &&
+    (maxPages === undefined || (live?.otherPages ?? 0) < maxPages)
+  );
 }
 
 const kindLimits = Object.keys(JOB_KIND_POLICY).map((kind) => {
@@ -514,7 +531,7 @@ const fairlyOrderedDueJobs = (
   { excludeIds = [], excludeKinds = [] }: DueJobSelection = {},
 ) => sql`
   WITH active_runs AS MATERIALIZED (
-    SELECT id, NOT (purpose = 'ai_refresh' AND trigger = 'scheduled') AND purpose IN (${sql.join(
+    SELECT id, NOT (purpose = ${runPurpose.enum.ai_refresh} AND trigger = ${runTrigger.enum.scheduled}) AS member_demand, purpose IN (${sql.join(
       VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
       sql`, `,
     )}) AS visible
@@ -541,7 +558,7 @@ const fairlyOrderedDueJobs = (
     FROM due_source source LEFT JOIN active_runs ON active_runs.id = source."runId"
     LEFT JOIN "AiEvaluation" page_e ON source.kind='ai.evaluation' AND source.key='ai-evaluation:' || page_e.id::text
     LEFT JOIN LATERAL (
-      SELECT true AS visible FROM active_runs requester WHERE requester.visible AND (
+      SELECT true AS visible FROM active_runs requester WHERE requester.visible AND requester.member_demand AND (
         (requester.id=page_e."runId" AND NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" withdrawn WHERE withdrawn."evaluationId"=page_e.id AND withdrawn."runId"=requester.id AND withdrawn."cancelledAt" IS NOT NULL))
         OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" request WHERE request."evaluationId"=page_e.id AND request."runId"=requester.id AND request."cancelledAt" IS NULL)
       ) LIMIT 1
@@ -761,7 +778,10 @@ async function readDrainDueJobs(
       kind: row.kind,
       runOwned: row.run_owned,
       capExempt: row.cap_exempt,
-      pageKey: row.kind === "ai.evaluation" ? JSON.stringify([row.service_key, row.run_owned, row.cap_exempt]) : null,
+      pageKey:
+        row.kind === "ai.evaluation"
+          ? JSON.stringify([row.service_key, row.run_owned, row.cap_exempt])
+          : null,
       classPosition: row.class_position,
     }));
   const anchors = new Set<string>();
@@ -781,7 +801,13 @@ async function readDrainDueJobs(
   const leading = owned.slice(0, Math.max(0, seedLimit - reserved));
   const seeds = [...leading, ...backfill.slice(0, seedLimit - leading.length)];
   const selected = widenDrainSeeds(seeds, pool, limit, selection).map(
-    ({ id, kind, runOwned, capExempt, pageKey }) => ({ id, kind, runOwned, capExempt, pageKey }),
+    ({ id, kind, runOwned, capExempt, pageKey }) => ({
+      id,
+      kind,
+      runOwned,
+      capExempt,
+      pageKey,
+    }),
   );
   return { selected, projected: result.rows.filter((row) => row.projected) };
 }
@@ -938,7 +964,10 @@ export async function claimJob(
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
-    if (!candidate.capExempt && !(await admitJobKind(tx, available.kind, now, pageToken)))
+    if (
+      !candidate.capExempt &&
+      !(await admitJobKind(tx, available.kind, now, pageToken))
+    )
       return null;
     const moved = candidate.pendingCapture;
     const restart =
