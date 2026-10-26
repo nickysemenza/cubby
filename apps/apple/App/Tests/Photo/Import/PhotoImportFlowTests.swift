@@ -9,6 +9,50 @@ import Testing
 @MainActor
 @Suite("Photo import flow", .serialized)
 struct PhotoImportFlowTests {
+    @Test func cameraPreparationRetainsFailedBytesForRetry() async throws {
+        let preparation = CameraPhotoPreparation()
+        let bytes = Data("synthetic camera source".utf8)
+        do {
+            _ = try await preparation.prepare(bytes) { _ in throw CocoaError(.fileReadCorruptFile) }
+            Issue.record("Preparation should fail")
+        } catch {
+            #expect(preparation.pendingData == bytes)
+        }
+        let retryData = try #require(preparation.pendingData)
+        let expected = try selection(filename: "camera-retry.jpg")
+        let result = try await preparation.prepare(retryData) { received in
+            #expect(received == bytes)
+            return expected
+        }
+        #expect(result.id == expected.id)
+        #expect(preparation.pendingData == nil)
+    }
+
+    @Test func destinationUndoUsesTheSystemManagerWithoutRemovingOtherActions() throws {
+        let photo = try selection(filename: "undo-destination.jpg")
+        let manifest = makeManifest(items: [photo])
+        let manager = UndoManager()
+        manager.groupsByEvent = false
+        manifest.undoManager = manager
+        let otherTarget = NSObject()
+        manager.beginUndoGrouping()
+        manager.registerUndo(withTarget: otherTarget) { _ in }
+        manager.endUndoGrouping()
+        manager.beginUndoGrouping()
+        manifest.moveSelected(
+            to: try #require(manifest.destinationOptions.first),
+            row: EntityRow(
+                id: "PRD-2345", title: "Example", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-2345", "name": "Example"]))
+        manager.endUndoGrouping()
+        #expect(manifest.needsDestination.isEmpty)
+        #expect(manager.undoActionName == "Photo destination")
+        manager.undo()
+        #expect(manifest.needsDestination == [photo.id])
+        #expect(!manifest.canUndo)
+        #expect(manager.canUndo)
+    }
+
     @Test func selectedApprovalExcludesSettledOrBlockedGroups() {
         let readyImage = PhotoRunImage(
             id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,

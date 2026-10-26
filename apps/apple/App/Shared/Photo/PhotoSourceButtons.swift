@@ -52,6 +52,7 @@ struct PhotoSourceButtons: View {
     #if os(iOS)
         @State private var showingCamera = false
         @State private var showingCameraPermission = false
+        @State private var cameraPreparation = CameraPhotoPreparation()
     #elseif os(macOS)
         @State private var showingFileImporter = false
         @State private var failedURLs: [URL] = []
@@ -76,7 +77,11 @@ struct PhotoSourceButtons: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Retry failed photos") {
                     #if os(iOS)
-                        preparationTask = Task { await retryPicked() }
+                        if let data = cameraPreparation.pendingData {
+                            preparationTask = Task { await receiveCameraData(data) }
+                        } else {
+                            preparationTask = Task { await retryPicked() }
+                        }
                     #elseif os(macOS)
                         if fileImportActive {
                             handleFileImport(.success(failedURLs), retrying: true)
@@ -120,7 +125,10 @@ struct PhotoSourceButtons: View {
                 )
             }
             .fullScreenCover(isPresented: $showingCamera) {
-                CameraPicker { data in Task { await receiveCameraData(data) } }
+                CameraPicker { data in
+                    preparationTask?.cancel()
+                    preparationTask = Task { await receiveCameraData(data) }
+                }
                 .ignoresSafeArea()
             }
         #elseif os(macOS)
@@ -239,6 +247,8 @@ struct PhotoSourceButtons: View {
             preparing = true
             #if os(macOS)
                 fileImportActive = false
+            #elseif os(iOS)
+                cameraPreparation.pendingData = nil
             #endif
             preparationProgress = 0
             pendingPickedItems = items
@@ -319,13 +329,18 @@ struct PhotoSourceButtons: View {
     #endif
     #if os(iOS)
         private func receiveCameraData(_ data: Data) async {
+            pickError = nil
+            preparing = true
+            pendingPickedItems = []
+            pendingSelections = []
+            failedIndexes = []
+            defer { preparing = false }
             do {
-                let selection = try await Task.detached(priority: .userInitiated) {
-                    let file = try PhotoFile.materialize(
-                        data: data, filename: "camera-photo.jpg", contentType: "image/jpeg", capturedAt: .now)
-                    return PhotoSelectionItem(file: file, preview: try file.thumbnail())
-                }.value
+                let selection = try await cameraPreparation.prepare(data)
+                guard !Task.isCancelled else { return }
                 deliver([selection])
+            } catch is CancellationError {
+                return
             } catch {
                 pickError = error.localizedDescription
                 Diagnostics.report(error, context: "photo.camera.prepare")
@@ -378,6 +393,31 @@ struct PhotoSourceButtons: View {
             if failedIndexes.isEmpty { finishPending(skipFailed: false) }
         }
     #endif
+}
+
+/// Keep the source until preparation succeeds so a camera failure can retry the same photo.
+@MainActor
+@Observable
+final class CameraPhotoPreparation {
+    var pendingData: Data?
+
+    func prepare(
+        _ data: Data,
+        using prepare: (Data) async throws -> PhotoSelectionItem = prepareSelection
+    ) async throws -> PhotoSelectionItem {
+        pendingData = data
+        let selection = try await prepare(data)
+        pendingData = nil
+        return selection
+    }
+
+    private static func prepareSelection(_ data: Data) async throws -> PhotoSelectionItem {
+        try await Task.detached(priority: .userInitiated) {
+            let file = try PhotoFile.materialize(
+                data: data, filename: "camera-photo.jpg", contentType: "image/jpeg", capturedAt: .now)
+            return PhotoSelectionItem(file: file, preview: try file.thumbnail())
+        }.value
+    }
 }
 
 /// Permission recovery belongs beside the blocked photo source, on both platforms.

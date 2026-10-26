@@ -6,6 +6,24 @@ import Testing
 
 @Suite("Entity field values")
 struct EntityFieldValueTests {
+    @MainActor
+    @Test func relationCreationGroupsOfferTheIdenticalProjectDraftOnce() throws {
+        let descriptor = EntityCatalog[.product]
+        let client = CubbyClient(
+            baseURL: URL(string: "https://relations.example.invalid")!,
+            credentials: CredentialProvider(
+                host: "relations.example.invalid", store: InMemorySessionTokenStore()))
+        let relations = descriptor.presentation.detailSections.compactMap {
+            RelationSectionModel(section: $0, source: descriptor, recordID: "PRD-2345", client: client)
+        }
+        let groups = EntityDetailView.relationCreationGroups(relations)
+        let projects = try #require(groups.first { $0.first?.target.key == .project })
+        #expect(relations.filter { $0.target.key == .project }.count == 2)
+        #expect(projects.count == 1)
+        #expect(projects[0].id == relations.first { $0.target.key == .project }?.id)
+        #expect(groups.filter { $0.first?.target.key == .project }.count == 1)
+    }
+
     /// A field a summary slot shows lives there; a later fields section omits it.
     @Test func summarizedFieldsLeaveLaterSections() {
         let product = EntityCatalog[.product]
