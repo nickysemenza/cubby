@@ -5,7 +5,7 @@ import {
   searchableEntitySchema,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -74,7 +74,12 @@ export async function enqueueEmbeddingRefs(
   prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
   config: SemanticEmbeddingConfig,
 ) {
-  const jobs = [];
+  const inputs: {
+    source: (typeof prepared.entries)[number]["source"];
+    text: string;
+    hash: string;
+    key: string;
+  }[] = [];
   for (const { source, body } of prepared.entries) {
     if (!isEmbeddableEntity(source.entityKind)) continue;
     const text = normalizeSearchText(body);
@@ -84,63 +89,121 @@ export async function enqueueEmbeddingRefs(
       text,
     });
     const key = `embedding:${source.entityKind}:${source.entityId}:${hash}`;
-    jobs.push(
-      await withTransactionDatabase(db, async (tx) => {
-        // Returning to earlier text must use a fresh physical upload. Retain
-        // stopped history and reject superseded results before publication.
-        await getDb(tx).execute(sql`UPDATE "Job" SET
-        key=key || ':retired:' || id::text,
-        state=CASE WHEN state IN (${jobState.enum.queued},${jobState.enum.retry_wait},${jobState.enum.running}) THEN ${jobState.enum.cancelled} ELSE state END,
-        "leaseToken"=NULL, "leaseExpiresAt"=NULL,
-        error=coalesce(error,'Embedding source superseded'), "updatedAt"=now()
-        WHERE kind='embedding.refresh' AND input->>'entityKind'=${source.entityKind}
-          AND input->>'entityId'=${source.entityId} AND input->>'hash'<>${hash}
-          AND input->'config'=${JSON.stringify(config)}::jsonb
-          AND key NOT LIKE '%:retired:%'`);
-        const [existing] = await getDb(tx)
-          .select()
-          .from(job)
-          .where(eq(job.key, key))
-          .for("update");
-        if (existing?.state === "completed") {
-          const [selected] = await getDb(tx)
+    inputs.push({ source, text, hash, key });
+  }
+  if (inputs.length === 0) return [];
+  return withTransactionDatabase(db, async (tx) => {
+    const records = JSON.stringify(
+      inputs.map(({ source, hash }) => ({
+        entityKind: source.entityKind,
+        entityId: source.entityId,
+        hash,
+      })),
+    );
+    // Lock overlapping cohorts in one order before retiring any old hashes.
+    // Current Jobs must not pay a transaction and repeated lookups per record.
+    const existing = await getDb(tx)
+      .select()
+      .from(job)
+      .where(
+        or(
+          inArray(
+            job.key,
+            inputs.map((input) => input.key),
+          ),
+          and(
+            eq(job.kind, "embedding.refresh"),
+            sql`${job.input}->'config' = ${JSON.stringify(config)}::jsonb`,
+            sql`${job.key} NOT LIKE '%:retired:%'`,
+            sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${records}::jsonb)
+          AS i("entityKind" text, "entityId" text, hash text)
+          WHERE ${job.input}->>'entityKind' = i."entityKind"
+            AND ${job.input}->>'entityId' = i."entityId")`,
+          ),
+        ),
+      )
+      .orderBy(job.key)
+      .for("update");
+    if (existing.some((row) => row.kind !== "embedding.refresh"))
+      throw new Error("Embedding key belongs to a different Job kind");
+    await getDb(tx).execute(sql`UPDATE "Job" j SET
+      key=j.key || ':retired:' || j.id::text,
+      state=CASE WHEN j.state IN (${jobState.enum.queued},${jobState.enum.retry_wait},${jobState.enum.running}) THEN ${jobState.enum.cancelled} ELSE j.state END,
+      "leaseToken"=NULL, "leaseExpiresAt"=NULL,
+      error=coalesce(j.error,'Embedding source superseded'), "updatedAt"=now()
+      FROM jsonb_to_recordset(${records}::jsonb) AS i("entityKind" text, "entityId" text, hash text)
+      WHERE j.kind='embedding.refresh' AND j.input->>'entityKind'=i."entityKind"
+        AND j.input->>'entityId'=i."entityId" AND j.input->>'hash'<>i.hash
+        AND j.input->'config'=${JSON.stringify(config)}::jsonb
+        AND j.key NOT LIKE '%:retired:%'`);
+    const byKey = new Map(existing.map((row) => [row.key, row]));
+    const completed = inputs.flatMap(({ key }) => {
+      const row = byKey.get(key);
+      return row?.state === "completed" ? [row] : [];
+    });
+    const selected = new Set(
+      (completed.length
+        ? await getDb(tx)
             .select({ id: entityEmbedding.id })
             .from(entityEmbedding)
             .where(
               and(
-                eq(entityEmbedding.id, existing.id),
+                inArray(
+                  entityEmbedding.id,
+                  completed.map((row) => row.id),
+                ),
                 eq(entityEmbedding.artifactState, "selected"),
                 isNull(entityEmbedding.deletedAt),
               ),
             )
-            .limit(1);
-          if (!selected)
-            await getDb(tx)
-              .update(job)
-              .set({ key: `${key}:retired:${existing.id}` })
-              .where(eq(job.id, existing.id));
-        }
-        return enqueueJob(tx, {
-          key,
-          kind: "embedding.refresh",
-          subjectKind: source.entityKind,
-          subjectId: source.entityId,
-          input: {
-            entityKind: source.entityKind,
-            entityId: source.entityId,
-            hash,
-            text,
-            config: {
-              provider: config.provider,
-              model: config.model,
-              dimensions: config.dimensions,
-            },
-          },
-        });
-      }),
+        : []
+      ).map((row) => row.id),
     );
-  }
-  return jobs;
+    const retired = completed.filter((row) => !selected.has(row.id));
+    // A completed upload that is no longer selected needs a fresh physical ID.
+    if (retired.length)
+      await getDb(tx)
+        .update(job)
+        .set({
+          key: sql`${job.key} || ':retired:' || ${job.id}::text`,
+        })
+        .where(
+          inArray(
+            job.id,
+            retired.map((row) => row.id),
+          ),
+        );
+    const jobs = [];
+    for (const { source, text, hash, key } of inputs) {
+      const current = byKey.get(key);
+      if (
+        current &&
+        (current.state !== "completed" || selected.has(current.id))
+      )
+        jobs.push(current);
+      else
+        jobs.push(
+          await enqueueJob(tx, {
+            key,
+            kind: "embedding.refresh",
+            subjectKind: source.entityKind,
+            subjectId: source.entityId,
+            input: {
+              entityKind: source.entityKind,
+              entityId: source.entityId,
+              hash,
+              text,
+              config: {
+                provider: config.provider,
+                model: config.model,
+                dimensions: config.dimensions,
+              },
+            },
+          }),
+        );
+    }
+    return jobs;
+  });
 }
 
 /** OpenAI permits 2,048 inputs and 300,000 total tokens per request. */

@@ -477,6 +477,13 @@ receipt chains. Explicit member retries retain their `retryEvaluationId` receipt
 
 ### Embedding execution
 
+Search publication admits embedding demand as one cohort: it locks existing
+Jobs in key order, retires superseded hashes together and checks selected
+artifacts in a batch. Unchanged current Jobs retain their identity and state
+without per-record savepoints or enqueue lookups. New work still uses the
+canonical Job admission; a completed upload no longer selected gets a fresh
+physical identity when its text returns.
+
 `embedding.refresh` uses the shared drain's kind-level batch handler. When a
 normal fair selection includes embedding work, the drain reselects up to 64
 Jobs with the same run-first, backfill-reserve and weighted kind ordering.
