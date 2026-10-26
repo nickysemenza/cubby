@@ -1,0 +1,67 @@
+apps/apple/App/Shared/Entity/List/EntityFilterSheet.swift
+  s_b1bbc05e2ecd4f::t_e57cbb5804a921 396-397,401-414,416-418
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityListSections.swift
+  s_b1bbc05e2ecd4f::t_74114424fd2edd 99-100,118
+apps/web/generator/entities/compile.ts
+  s_b1bbc05e2ecd4f::t_6c0472a76b43bd 2136
+apps/web/generator/entities/data-quality.ts
+  s_b1bbc05e2ecd4f::t_b7651d73d30b91 255,272
+apps/web/generator/entities/declarations.ts
+  s_b1bbc05e2ecd4f::t_d3b3f8757b41e8 99-100
+apps/web/generator/entities/list-fields.ts
+  s_b1bbc05e2ecd4f::t_f3547c60c55c5d 907-908,922
+apps/web/generator/entities/render/field-schemas.ts
+  s_b1bbc05e2ecd4f::t_cd22236c47feea 253,260
+apps/web/generator/entities/render/search.ts
+  s_b1bbc05e2ecd4f::t_be6a5526019e1a 100,161
+apps/web/generator/entities/render/swift-catalog.ts
+  s_b1bbc05e2ecd4f::t_8c732f76d3622b 583,585
+apps/web/src/entity/filter-manifest.tsx
+  s_b1bbc05e2ecd4f::t_40853afbeada6a 253
+apps/web/src/entity/filters.ts
+  s_b1bbc05e2ecd4f::t_688cc6616f0057 108,110,139
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_b1bbc05e2ecd4f::t_9d60c18f394a3c 87,89,126,128,238,243-246
+apps/web/src/server/domains/inventory/repo/ownership.ts
+  s_b1bbc05e2ecd4f::t_afc06992b21605 1113-1114,1116,1118-1131,1133,1135,1138
+apps/web/src/server/entity-kernel/list-smoke.integration.test.ts
+  s_b1bbc05e2ecd4f::t_668d97f2bc9340 39,129-131,134-135,312-314
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_b1bbc05e2ecd4f::t_199dd661b338bf 197-205,250-251,257,263-265,275,279-282
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_b1bbc05e2ecd4f::t_bd0ed77f7659e8 11-12,26-28,310-336
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_b1bbc05e2ecd4f::t_8e48d37b124835 16,51-52,374,395-396,405-423,425-490
+apps/web/src/server/generic/list/repo/list.ts
+  s_b1bbc05e2ecd4f::t_b80e21605a6e30 194,401,1189-1192,1204,1215,1230,1331-1339
+apps/web/src/server/generic/list/repo/state-values.integration.test.ts
+  s_b1bbc05e2ecd4f::t_6ae2f69e40ebe6 455
+apps/web/src/ui/data-table/filter-bar-core.ts
+  s_b1bbc05e2ecd4f::t_f8c35804b8c8bd 63-64
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_b1bbc05e2ecd4f::t_8b7b60993f4586 198-202,205,217-225,657
+apps/web/src/ui/data-table/table-meta.ts
+  s_b1bbc05e2ecd4f::t_7c3141c519d600 43
+docs/entities.md
+  s_b1bbc05e2ecd4f::t_7204ee2f61ea99 2194-2200,2205,2335
+packages/schemas/src/entity-definitions/definition.ts
+  s_b1bbc05e2ecd4f::t_56e78c054921a6 993-994
+packages/schemas/src/entity-projection-types.ts
+  s_b1bbc05e2ecd4f::t_5fb6b26b419159 456
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e2f0edfc4c29140cb0956416453022c7fd8f1a70",
+  "prompts": {},
+  "sessions": {
+    "s_b1bbc05e2ecd4f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7105a82e-79ca-45bf-a715-40b93b91188f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
