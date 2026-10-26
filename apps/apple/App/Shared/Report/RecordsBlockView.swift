@@ -10,8 +10,54 @@ struct ReportHost {
     var onChanged: () -> Void = {}
 }
 
+/// Where a report row goes (B1): one row is one link, to its record, else to its filtered list.
+/// Everything else the row names (a reference line, a URL, a list beside the record) is reached
+/// from its context menu, never as a second link in the cell.
+struct RecordRowLinks: Equatable {
+    struct Reference: Equatable {
+        let label: String
+        let record: RecordSelection
+    }
+
+    struct Web: Equatable {
+        let label: String
+        let url: URL
+    }
+
+    let destination: Route?
+    let references: [Reference]
+    let urls: [Web]
+    /// A list the row also counts ("12 recipes") when the record is the destination.
+    let list: (label: String, route: Route)?
+
+    init(_ row: ReportPresentation.RecordRow) {
+        let record = row.entity.flatMap { entity in row.recordID.map { Route.entityDetail(entity, id: $0) } }
+        let list = row.listLink.map { Route.entityList($0.entity, filters: $0.filterState) }
+        destination = record ?? list
+        self.list = record == nil ? nil : list.map { (row.trailing ?? "View records", $0) }
+        references = row.lines.compactMap { line in
+            guard let ref = line.ref, let entity = EntityKey(rawValue: ref.entity) else { return nil }
+            return Reference(label: line.text, record: RecordSelection(key: entity, id: ref.id))
+        }
+        urls =
+            row.lines.compactMap { line in line.url.map { Web(label: line.text, url: $0) } }
+            + [
+                row.externalLinkLabel.flatMap { label in
+                    row.externalLinkURL.map { Web(label: label, url: $0) }
+                }
+            ]
+            .compactMap { $0 }
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.destination == rhs.destination && lhs.references == rhs.references && lhs.urls == rhs.urls
+            && lhs.list?.label == rhs.list?.label && lhs.list?.route == rhs.list?.route
+    }
+}
+
 /// One server-composed row: an optional thumbnail, the title, its lines, badges, the trailing
-/// figure and instant. Opens the record it names.
+/// figure and instant. The whole row is the one link to what it names; its commands sit beside
+/// it, outside the link, so a tap on Done never also opens the record.
 struct RecordRowView: View {
     let row: ReportPresentation.RecordRow
     var large = false
@@ -19,28 +65,57 @@ struct RecordRowView: View {
     /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
     var model: ReportSlotModel?
 
+    @Environment(AppModel.self) private var appModel
+
     var body: some View {
+        let links = RecordRowLinks(row)
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            if let destination = links.destination {
+                NavigationLink(value: destination) { content(linked: true) }
+                    // Several rows share one list cell: each link takes only its own tap.
+                    .buttonStyle(.plain)
+                    .contextMenu { menu(links) }
+            } else {
+                content(linked: false)
+            }
+            if !informational, let model, !row.commands.isEmpty {
+                ReportCommandBar(commands: row.commands, model: model)
+            }
+        }
+    }
+
+    /// The row's other targets, ahead of nothing else: a long press never navigates.
+    @ViewBuilder private func menu(_ links: RecordRowLinks) -> some View {
+        ForEach(links.references, id: \.record) { reference in
+            Button(reference.label, systemImage: EntityCatalog[reference.record.key].sfSymbol) {
+                appModel.navigator.openRecord(reference.record)
+            }
+        }
+        if let list = links.list {
+            Button(list.label, systemImage: "list.bullet") { appModel.navigator.push(list.route) }
+        }
+        ForEach(links.urls, id: \.url) { web in
+            Link(destination: web.url) { Label(web.label, systemImage: "safari") }
+        }
+    }
+
+    private func content(linked: Bool) -> some View {
         RecordListRow(
             title: row.title,
-            titleDestination: row.entity.flatMap { entity in
-                row.recordID.map { Route.entityDetail(entity, id: $0) }
-            },
             imageURL: row.imageURL,
             symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "square.dashed",
             thumbnailSize: large ? 112 : 36
         ) {
             ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
-                if let ref = line.ref, let entity = EntityKey(rawValue: ref.entity) {
-                    NavigationLink(line.text, value: Route.entityDetail(entity, id: ref.id))
-                } else if let url = line.url {
-                    Link(line.text, destination: url)
+                if !linked, line.ref == nil, let url = line.url {
+                    Link(line.text, destination: url).buttonStyle(.borderless)
                 } else {
                     Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
                         .textSelection(.enabled)
                 }
             }
         } rail: {
-            if row.listLink == nil || informational, let trailing = row.trailing, !trailing.isEmpty {
+            if let trailing = row.trailing, !trailing.isEmpty {
                 Text(trailing)
             }
             if let time = row.time {
@@ -68,20 +143,14 @@ struct RecordRowView: View {
                 DateDisplay(date: at)
             }
         } supplement: {
-            extras
+            extras(linked: linked)
             if !row.paths.isEmpty { RecordPathView(paths: row.paths) }
-            if informational, let link = row.listLink {
-                NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
-                    Text(row.trailing ?? "View records").font(.caption)
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
-            }
         }
         .accessibilityElement(children: .contain)
     }
 
-    /// Toned badges, the raw block and commands a row carries beyond its title and lines.
-    @ViewBuilder private var extras: some View {
+    /// Toned badges, the raw block and an external link a row carries beyond its title and lines.
+    @ViewBuilder private func extras(linked: Bool) -> some View {
         if !row.badges.isEmpty {
             WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
                 ForEach(Array(row.badges.enumerated()), id: \.offset) { _, badge in
@@ -97,13 +166,15 @@ struct RecordRowView: View {
             .font(.caption)
         }
         if let label = row.externalLinkLabel, let url = row.externalLinkURL {
-            Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
+            if linked {
+                Text(label).font(.fieldGuideLabel)
+            } else {
+                Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
+                    .buttonStyle(.borderless)
+            }
             if let hint = row.externalLinkHint {
                 Text(hint).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
-        }
-        if !informational, let model, !row.commands.isEmpty {
-            ReportCommandBar(commands: row.commands, model: model)
         }
     }
 }
@@ -496,11 +567,6 @@ struct RecordsBlockView: View {
             if let choice = row.choice {
                 ReportChoiceView(
                     choice: choice, answers: $answers, disabled: model?.busyActionID != nil)
-            }
-            if let link = row.listLink, let trailing = row.trailing {
-                NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
-                    Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
-                }
             }
             ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
                 if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }

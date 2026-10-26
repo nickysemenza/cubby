@@ -140,13 +140,21 @@ struct DetailActivitySection: View {
     @ViewBuilder
     private func activityRow(_ event: DetailActivityEvent) -> some View {
         let isRecord = event.kind.rawValue == "record"
+        if isRecord, let shortcode = event.shortcode {
+            NavigationLink(value: Route.entityDetail(event.entity, id: shortcode)) { activityContent(event) }
+                .buttonStyle(.plain)
+        } else {
+            activityContent(event)
+        }
+    }
+
+    private func activityContent(_ event: DetailActivityEvent) -> some View {
+        let isRecord = event.kind.rawValue == "record"
         let entity = EntityCatalog[event.entity]
-        let destination = isRecord ? event.shortcode.map { Route.entityDetail(event.entity, id: $0) } : nil
         let title = isRecord ? event.title : changeVerb(event.title)
         let subtitle = isRecord ? event.subtitle : changedFieldLabels(event)
-        RecordListRow(
+        return RecordListRow(
             title: title,
-            titleDestination: destination,
             symbol: entity.sfSymbol,
             thumbnailSize: 22
         ) {

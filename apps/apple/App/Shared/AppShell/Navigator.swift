@@ -95,6 +95,15 @@ final class Navigator {
         #endif
     }
 
+    /// Pushes `route` on the visible stack: a row's context-menu target that is not a record.
+    func push(_ route: Route) {
+        #if os(macOS)
+            paths[section, default: []].append(route)
+        #else
+            paths[phoneTab.rootSection, default: []].append(route)
+        #endif
+    }
+
     /// Replaces a detail whose mutation coalesced it into another record, so Back never exposes
     /// the deleted source. macOS can host the current detail in the split selection or a push.
     func replaceCurrentRecord(with record: RecordSelection) {

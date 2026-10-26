@@ -318,6 +318,33 @@ struct NavigationTests {
         }
     #endif
 
+    // B1: a briefing row nested its title link inside the row link, and one tap pushed two
+    // screens. The row is now exactly one link to its task; the project it mentions is a menu
+    // reference and Done is a command beside the link.
+    @Test func aBriefingRowIsExactlyOneLinkToItsTask() throws {
+        let report = try JSONDecoder().decode(
+            EntityReportOut.self,
+            from: Data(
+                #"""
+                {"blocks":[{"kind":"records","empty":"No tasks","rows":[{"entity":"task","id":"TSK-2345",
+                 "title":"Water seedlings","trailing":null,
+                 "lines":[{"text":"Garden refresh","ref":{"entity":"project","id":"PRJ-2345"}}],
+                 "commands":[{"id":"complete","label":"Done","prominent":true,"confirm":null,
+                  "request":{"kind":"operation","operation":"entity.mutate","body":{"action":"update",
+                  "entity":"task","id":"TSK-2345","data":{"status":"done"}}}}]}]}]}
+                """#.utf8))
+        let rows = ReportPresentation(report).blocks.flatMap { block -> [ReportPresentation.RecordRow] in
+            if case .records(let records) = block { return records.rows }
+            return []
+        }
+        let row = try #require(rows.first)
+        let links = RecordRowLinks(row)
+        #expect(links.destination == .entityDetail(.task, id: "TSK-2345"))
+        #expect(links.references == [.init(label: "Garden refresh", record: record(.project, "PRJ-2345"))])
+        #expect(links.list == nil && links.urls.isEmpty)
+        #expect(row.commands.map(\.id) == ["complete"])
+    }
+
     private func record(_ key: EntityKey, _ id: String) -> RecordSelection {
         RecordSelection(key: key, id: id)
     }

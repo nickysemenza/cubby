@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// One visual row for entity records and event projections. Callers own data and navigation;
-/// the row owns thumbnail fallback, identity/context, the trailing rail, and wrapping geometry.
+/// One visual row for entity records and event projections. Callers own data and navigation:
+/// a navigable row wraps the whole row in its one link, never a link on the title (B1). The row
+/// owns thumbnail fallback, identity/context, the trailing rail, and wrapping geometry.
 struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
     let title: String
-    var titleDestination: Route? = nil
     var imageURL: URL? = nil
     var symbol: String = "square.dashed"
     var emoji: String? = nil
@@ -41,18 +41,12 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                     : AnyLayout(RecordRowColumns(spacing: FieldGuideTokens.Space.sm))
                 layout {
                     VStack(alignment: .leading, spacing: 2) {
-                        Group {
-                            if let titleDestination {
-                                NavigationLink(title, value: titleDestination)
-                            } else {
-                                Text(title)
-                            }
-                        }
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(textSize.isAccessibilitySize ? nil : 1)
-                        .truncationMode(.tail)
-                        .accessibilityIdentifier(titleIdentifier)
-                        .fixedSize(horizontal: false, vertical: true)
+                        Text(title)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(textSize.isAccessibilitySize ? nil : 1)
+                            .truncationMode(.tail)
+                            .accessibilityIdentifier(titleIdentifier)
+                            .fixedSize(horizontal: false, vertical: true)
                         context().font(.caption).foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
