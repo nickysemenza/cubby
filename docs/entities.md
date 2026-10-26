@@ -2415,7 +2415,10 @@ that target's data (SQLSTATE classes 22, 23, 54) backs off the same way with
 the database's message, while transaction-level failures retry the page.
 Value adapters write `DerivedValue`; sink adapters write their own tables
 (search documents with embedding admission, recipe totals, conversion
-coverage). Publication rings the existing reader notifications for every kind
+coverage). Search publication batches consecutive live documents in stable
+record order, retaining that lock order across missing-document updates;
+it does not issue an upsert per document in a backfill page.
+Publication rings the existing reader notifications for every kind
 it touched. `derived.reconcile` marks one of 24 id buckets each hour at the
 lowest priority, so every stored value is rechecked daily without recomputing
 the corpus hourly, and logs `derived.drift` when a recompute changes a value:
