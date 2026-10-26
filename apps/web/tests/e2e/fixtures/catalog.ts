@@ -1,3 +1,4 @@
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { EntityOverrides } from "#web/tooling/factories/build.ts";
 import { taxonomyShortcode } from "#web/tooling/product-category-fixtures.ts";
@@ -71,18 +72,23 @@ export const seedPlantingPrerequisite = (
     taskId: opts.taskId,
   });
 
-export const seedProductPrerequisite = (
+export const seedProductPrerequisite = async (
   page: Page,
   opts: EntityOverrides<"product"> & { name: string; brandName?: string },
-) =>
-  createFixtureGraph(page, async (create) => {
-    const { brandName, brandId, ...product } = opts;
-    const reference =
-      brandId !== undefined
-        ? brandId
-        : (await create("vendor", { name: brandName ?? "E2E fixture" })).id;
-    return create("product", { ...product, brandId: reference });
+) => {
+  const { brandName, brandId, ...product } = opts;
+  const reference =
+    brandId !== undefined
+      ? brandId
+      : await resolveProductBrandName(
+          getFixtureDb(),
+          brandName ?? "E2E fixture",
+        );
+  return createEntityFixture(page, "product", {
+    ...product,
+    brandId: reference,
   });
+};
 
 export const seedProjectPrerequisite = (page: Page, name: string) =>
   createEntityFixture(page, "project", { name });

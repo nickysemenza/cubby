@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getDb,
+  databaseForTransaction,
   unwrapDb,
   uuidArrayParam,
   withTransaction,
@@ -399,6 +400,48 @@ describe("stored derived values", () => {
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
     expect((await valuation(entry))?.meta.state).toBe("fresh");
+  });
+
+  it("leaves a writer's busy fanout mark pending without blocking publication", async () => {
+    const location = await makeLocation("Synthetic fanout shelf");
+    const item = await makeProduct("Synthetic fanout item", 2);
+    await makeEntry(item, location, 1);
+    await drain();
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 3 })
+      .where(eq(product.id, item));
+    const plan = await prepareDerivedPage(
+      ctx.db,
+      derivedComputes,
+      (await claimDerivedMarks(ctx.db)).filter((mark) =>
+        mark.target.startsWith("inventory.valuation@"),
+      ),
+    );
+    expect(plan.marks.length).toBeGreaterThan(0);
+    const held = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const writer = withTransaction(ctx.db, async (tx) => {
+      await tx.execute(sql`SELECT ref FROM "DerivedDirty"
+        WHERE target LIKE 'inventory.valuation@%' AND ref = ${item}::uuid FOR UPDATE`);
+      held.resolve();
+      await release.promise;
+    });
+    await held.promise;
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx.execute(sql`SET LOCAL statement_timeout = '500ms'`);
+        await publishDerivedPage(databaseForTransaction(tx), plan);
+      });
+      expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
+        0,
+      );
+    } finally {
+      release.resolve();
+      await writer;
+    }
+    await drain();
+    expect(await fanoutMarks("inventory.valuation")).toEqual([]);
   });
 
   it("marks inheriting subtasks when their parent's subject changes", async () => {
