@@ -228,7 +228,10 @@ several drains. Free lanes refill fair selections while sibling pages are
 still running, so a blocked page cannot hold the next selection behind a
 batch-wide wait. Selected groups are reserved within the invocation until
 execution finishes, including the unclaimed members of a batch. Page and time
-budgets still bound new starts. A skipped claim stays excluded for the entire
+budgets still bound new starts. An escaped lane error stops new selection, but
+the drain still joins active lanes before returning the original error. The
+invocation's database pools therefore remain open until claimed work settles.
+A skipped claim stays excluded for the entire
 invocation, so locked expired rows cannot repeatedly consume its budget ahead
 of unlocked work; the next invocation may retry them. Completed Jobs are not
 excluded, so immediately runnable successive pages still progress. Every Job

@@ -48,6 +48,94 @@ async function drainRounds(
 describe("fair drain under a flood", () => {
   const ctx = withTestDb();
 
+  it("settles an already claimed lane before returning another lane's failure", async () => {
+    const active = await enqueueJob(ctx.db, {
+      key: "synthetic.lane-lifetime.active",
+      kind: "synthetic.active",
+      input: {},
+      priority: 10,
+    });
+    const unstarted = await enqueueJob(ctx.db, {
+      key: "synthetic.lane-lifetime.unstarted",
+      kind: "synthetic.active",
+      input: {},
+      priority: 0,
+    });
+    const state = async (id: typeof active.id) => {
+      const [row] = await getDb(ctx.db)
+        .select({ state: job.state })
+        .from(job)
+        .where(eq(job.id, id));
+      return row?.state;
+    };
+    await enqueueJob(ctx.db, {
+      key: "synthetic.lane-lifetime.failure",
+      kind: "ai.evaluation",
+      input: {},
+    });
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let failed = false;
+    const failure = new Error("Synthetic page executor failure");
+    let settled = false;
+    let returnedEarly = false;
+    const draining = drainDueJobs(
+      ctx.db,
+      {
+        "synthetic.active": {
+          prepare: async () => {
+            started.resolve();
+            await release.promise;
+            return { page: { done: true } };
+          },
+        },
+        "ai.evaluation": {
+          prepare: async () => {
+            throw new Error("Expected the page executor");
+          },
+          advancePage: async () => {
+            await started.promise;
+            failed = true;
+            throw failure;
+          },
+        },
+      },
+      3,
+      10_000,
+      2,
+    ).then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      },
+    );
+    try {
+      await expect.poll(() => failed, { timeout: 10_000 }).toBe(true);
+      // Let rejection microtasks run while the other real claim stays held.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      returnedEarly = settled;
+      expect(returnedEarly).toBe(false);
+      expect(await state(active.id)).toBe("running");
+      release.resolve();
+      expect(await draining).toBe(failure);
+      expect(await state(active.id)).toBe("completed");
+      expect(await state(unstarted.id)).toBe("queued");
+    } finally {
+      started.resolve();
+      release.resolve();
+      await draining;
+      await expect.poll(() => state(active.id)).toBe("completed");
+      // Clean up work started by the old fail-fast implementation on red runs.
+      await expect
+        .poll(() => state(unstarted.id))
+        .toBe(returnedEarly ? "completed" : "queued");
+    }
+  });
+
   it(
     "scans past locked expired evaluations for the rest of the invocation",
     { timeout: 30_000 },

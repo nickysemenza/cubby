@@ -14,6 +14,7 @@ import { manifestPreviewCard } from "./entity-preview-content";
 
 const withMedia = <T,>(value: T, url?: string) => ({
   ...value,
+  derived: {},
   displayImages: url
     ? [{ id: testShortcode("image", "IMG-PREVIEW"), url }]
     : [],

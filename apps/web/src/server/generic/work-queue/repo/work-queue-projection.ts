@@ -25,7 +25,12 @@ type Candidate = Pick<
 export type WorkQueueScope = {
   /** Any-of; problem branches outside these drop out. */
   sources?: readonly WorkQueueRow["source"][];
+  sourceExclude?: readonly WorkQueueRow["source"][];
   kinds?: readonly WorkQueueRow["kind"][];
+  kindExclude?: readonly WorkQueueRow["kind"][];
+  reasons?: readonly string[];
+  reasonExclude?: readonly string[];
+  query?: string;
   /** Only gap-carrying branches survive, narrowed to these checks. */
   gapChecks?: readonly DataCheck[];
   /** Predicate memberships only; page hydration supplies all failing checks. */
@@ -127,6 +132,29 @@ export const workRecordFactColumns = (
 };
 
 export const NO_FACT_COLUMNS = factColumns(NO_FACTS);
+
+/** Reject impossible branches before their loaders run. Row predicates still
+ * enforce dynamic kind/reason combinations and any overlapping exclusions. */
+export const workQueueAdmits = (
+  scope: WorkQueueScope,
+  branch: {
+    source: WorkQueueRow["source"];
+    kinds: readonly WorkQueueRow["kind"][];
+    reasons: readonly string[];
+  },
+) =>
+  (!scope.sources?.length || scope.sources.includes(branch.source)) &&
+  !scope.sourceExclude?.includes(branch.source) &&
+  branch.kinds.some(
+    (kind) =>
+      (!scope.kinds?.length || scope.kinds.includes(kind)) &&
+      !scope.kindExclude?.includes(kind),
+  ) &&
+  branch.reasons.some(
+    (reason) =>
+      (!scope.reasons?.length || scope.reasons.includes(reason)) &&
+      !scope.reasonExclude?.includes(reason),
+  );
 
 /** Whether a branch without its own record id or gaps survives this scope. */
 export const scopeAdmitsUnrecorded = (scope: WorkQueueScope) =>

@@ -127,7 +127,7 @@ import {
 import { loadCategoryStockTracking } from "~/server/domains/inventory/repo/stock-tracking";
 import {
   enrichProductRowsWithInventoryValuations,
-  loadInventoryValuations,
+  loadStoredInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
 import { loadLocationAncestorsWithIds } from "~/server/domains/location/repo/tree";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
@@ -1322,7 +1322,10 @@ const loadProductListRelations = async (
   for (const row of unitMappings ?? []) {
     result.get(row.productId)?.unitMappings.push(row);
   }
-  const valuations = await loadInventoryValuations(db, inventoryEntries ?? []);
+  const valuations = await loadStoredInventoryValuations(
+    db,
+    (inventoryEntries ?? []).map((row) => row.id),
+  );
   for (const row of inventoryEntries ?? []) {
     result.get(row.productId)?.inventoryEntry.push({
       ...row,

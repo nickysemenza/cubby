@@ -53,7 +53,7 @@ import {
   assertIndividualOwner,
   loadInventoryOwnershipTraces,
 } from "./ownership";
-import { loadInventoryValuations } from "./valuation";
+import { loadStoredInventoryValuations } from "./valuation";
 
 export type ResolvedBulkMovePayload = {
   sourceLocationId: LocationId;
@@ -425,7 +425,10 @@ export const addInventoryEntries = async (
       "location",
       processed.results.map((entry) => entry.location.id),
     ),
-    loadInventoryValuations(db, processed.results),
+    loadStoredInventoryValuations(
+      db,
+      processed.results.map((row) => row.id),
+    ),
     resolveEntityDisplayImageLists(
       db,
       processed.results.map((entry) => ({
@@ -818,7 +821,10 @@ export const moveInventoryEntries = async (
       "location",
       processedItems.map((entry) => entry.location.id),
     ),
-    loadInventoryValuations(db, processedItems),
+    loadStoredInventoryValuations(
+      db,
+      processedItems.map((row) => row.id),
+    ),
     resolveEntityDisplayImageLists(
       db,
       processedItems.map((entry) => ({
@@ -1202,7 +1208,10 @@ export const reconcileLocationSession = async (
       "location",
       processed.map((entry) => entry.location.id),
     ),
-    loadInventoryValuations(db, processed),
+    loadStoredInventoryValuations(
+      db,
+      processed.map((row) => row.id),
+    ),
     resolveEntityDisplayImageLists(
       db,
       processed.map((entry) => ({

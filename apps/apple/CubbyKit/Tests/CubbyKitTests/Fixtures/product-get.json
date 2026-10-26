@@ -103,5 +103,6 @@
   "brandName": "Sample Manufacturer",
   "growsPlantId": null,
   "labelNutrition": null,
-  "unitPriceMappings": []
+  "unitPriceMappings": [],
+  "derived": {}
 }

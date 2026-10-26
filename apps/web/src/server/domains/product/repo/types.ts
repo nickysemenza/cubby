@@ -49,7 +49,7 @@ export type ProductDeepDB = ProductSelect & {
   externalIds: MappableProductExternalId[];
   inventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
-      // Computed on read and attached by the caller (`attachInventoryValuations`).
+      // Published valuation attached by the caller (`attachInventoryValuations`).
       valuation: number | null;
       location: LocationSelect & {
         ancestors?: ProductLocationAncestor[];

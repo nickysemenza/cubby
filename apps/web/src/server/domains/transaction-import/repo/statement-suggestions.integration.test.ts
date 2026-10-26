@@ -1527,6 +1527,18 @@ describe("statement Transaction suggestions", () => {
       status: "pending",
       active: true,
     });
+    const remainingWork = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        reason: "suggestions:statement_transaction",
+      }),
+      false,
+    );
+    expect(remainingWork.items).toHaveLength(1);
+    expect(remainingWork.items[0]?.reason).toBe(
+      "1 transaction suggestion (0 ready to accept)",
+    );
   });
 
   // A bounded key batch can contain only ignored identities; that must not
