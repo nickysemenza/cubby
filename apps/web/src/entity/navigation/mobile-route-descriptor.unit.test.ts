@@ -11,7 +11,6 @@ describe("mobile route descriptors", () => {
     ["/inventory", "inventory"],
     ["/products/PRD-TEST", "inventory"],
     ["/locations/new", "inventory"],
-    ["/collections/CLR-TEST", "inventory"],
     ["/pantry-view", "inventory"],
     ["/search", "search"],
     ["/recipes/RCP-TEST", "more"],

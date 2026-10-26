@@ -9,7 +9,7 @@ import {
   recipeUsageItems,
   runHistoryItems,
   runRowState,
-} from "./collection-items";
+} from "./record-items";
 
 const cookbookId = testShortcode("cookbook", "weeknight");
 const imageId = testShortcode("image", "panel");

@@ -4,7 +4,6 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
  * Category distribution, duplicate detection, and backfill operations.
  */
 import type { ProductCategory } from "@cubby/schemas/product";
-import { isCollectionTag } from "@cubby/shared/collection-tag";
 import { and, arrayOverlaps, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -153,7 +152,7 @@ export const getProductTagOptions = async (
       count: sql<number>`count(*)::int`,
     })
     .from(sql`${product}, unnest(${product.tags}) AS tag`)
-    .where(and(notDeleted(product), sql`tag NOT LIKE 'collection:%'`))
+    .where(notDeleted(product))
     .groupBy(sql`tag`)
     .orderBy(sql`count(*) DESC, tag ASC`);
 
@@ -213,7 +212,7 @@ export const getProductsSharingTags = async (
     .where(and(eq(product.id, id), notDeleted(product)))
     .limit(1);
 
-  const tags = (source[0]?.tags ?? []).filter((tag) => !isCollectionTag(tag));
+  const tags = source[0]?.tags ?? [];
   if (tags.length === 0) return [];
 
   return await getDb(db)

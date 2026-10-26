@@ -11,7 +11,7 @@ import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 
 /**
- * Rows for `collection` detail sections (`presentation.detail.sections`, kind `collection`).
+ * Rows for declared record detail sections.
  * Each backs one section: web and native list exactly these rows, so a count, a role or a line
  * of text is worded once, here. Kept free of the formatting/WASM modules so the repositories that
  * attach the rows to a record stay light on the request path.

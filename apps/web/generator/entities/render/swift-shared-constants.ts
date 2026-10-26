@@ -1,10 +1,6 @@
 import { swiftCaseName } from "./swift-catalog.ts";
 import { SIDEBAR_SECTIONS } from "@cubby/schemas/sidebar-manifest";
 import {
-  COLLECTION_TAG_PREFIX,
-  collectionSlugPattern,
-} from "@cubby/shared/collection-tag";
-import {
   ACTIVE_RUN_STATUSES,
   DISTINCT_FROM_QUOTE_MAX,
   DISTINCT_FROM_URL_MAX,
@@ -159,7 +155,7 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         generatedHeader +
         "// swift-format-ignore-file\n\n" +
         "/// Constants declared once in TypeScript (`packages/shared/src/client-constants.ts`,\n" +
-        "/// `collection-tag.ts`, `apps/web/cloudflare.config.ts`) and shared with the web client.\n" +
+        "/// `apps/web/cloudflare.config.ts`) and shared with the web client.\n" +
         "public enum SharedConstants {\n" +
         "    /// Cloudflare image-transform rungs (`IMAGE_WIDTHS`).\n" +
         `    public static let imageWidths: [Int] = [${IMAGE_WIDTHS.join(", ")}]\n` +
@@ -171,10 +167,6 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         `    public static let taskBoardInboxLabel = ${swiftString(TASK_BOARD_INBOX_LABEL)}\n` +
         "    /// A board lane's title for a project with no name (`TASK_BOARD_UNTITLED_PROJECT_LABEL`).\n" +
         `    public static let taskBoardUntitledProjectLabel = ${swiftString(TASK_BOARD_UNTITLED_PROJECT_LABEL)}\n` +
-        "    /// The prefix of a product tag that names a Collection (`COLLECTION_TAG_PREFIX`).\n" +
-        `    public static let collectionTagPrefix = ${swiftString(COLLECTION_TAG_PREFIX)}\n` +
-        "    /// What a Collection slug must match (`collectionSlugPattern`).\n" +
-        `    public static let collectionSlugPattern = ${swiftString(collectionSlugPattern.source)}\n` +
         "    /// Run purposes with import report presentation (`IMPORT_REPORT_RUN_PURPOSES`).\n" +
         `    public static let importReportRunPurposes: [String] = [${IMPORT_REPORT_RUN_PURPOSES.map(swiftString).join(", ")}]\n` +
         "    /// Run statuses in which a run is still moving (`ACTIVE_RUN_STATUSES`).\n" +

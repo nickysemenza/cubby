@@ -19,7 +19,6 @@ const INVENTORY_PREFIXES = [
   "/inventory",
   "/products",
   "/locations",
-  "/collections",
   "/pantry-view",
 ] as const;
 

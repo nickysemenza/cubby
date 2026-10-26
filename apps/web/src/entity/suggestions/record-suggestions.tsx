@@ -388,8 +388,7 @@ function basisForFingerprint(
 
 /** Generic over whichever text-array field the prune target names: re-reads
  * the field's current entries and only patches when every proposed removal
- * is still present — `collection:*` entries always survive since a removal
- * never names one. */
+ * is still present. */
 function removeFieldPatch(
   entity: StandardEntity,
   field: string,

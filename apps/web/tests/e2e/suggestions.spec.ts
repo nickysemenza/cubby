@@ -921,7 +921,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
   const product = await seedProductPrerequisite(page, {
     name,
     brandName: "Synthetic brand",
-    tags: ["synthetic-brand", "collection:favorites", "mount"],
+    tags: ["synthetic-brand", "ecosystem", "mount"],
   });
   const id = await resolveOrThrow(db, "product", product.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
@@ -1007,7 +1007,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
             .where(eq(productTable.id, id))
         )[0]?.tags,
     )
-    .toEqual(["collection:favorites", "mount"]);
+    .toEqual(["ecosystem", "mount"]);
   await expect
     .poll(
       async () =>

@@ -46,7 +46,7 @@ import type { RunStepRead } from "~/server/domains/run/repo/run-step";
 import {
   phaseLabel,
   runRowState,
-} from "~/server/generic/collection/repo/collection-items";
+} from "~/server/generic/entity-report/repo/record-items";
 
 /**
  * The Run detail's report blocks: progress, findings, transcript, log, AI usage and

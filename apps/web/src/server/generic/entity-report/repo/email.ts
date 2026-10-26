@@ -54,7 +54,7 @@ import {
 } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { runRowState } from "~/server/generic/collection/repo/collection-items";
+import { runRowState } from "~/server/generic/entity-report/repo/record-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type { ReportViewer } from "./records";

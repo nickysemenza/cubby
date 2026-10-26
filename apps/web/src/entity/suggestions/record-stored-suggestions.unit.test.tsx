@@ -483,7 +483,6 @@ describe("stored suggestions in generic list cells", () => {
     );
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Type")).toBeInTheDocument();
-    expect(screen.queryByText("Collections")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
       expect(review).toHaveBeenCalledWith(

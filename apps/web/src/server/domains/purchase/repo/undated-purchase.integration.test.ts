@@ -14,7 +14,6 @@ import {
   listKitMembership,
 } from "~/server/domains/product/repo/product-components";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { getCollectionDetail } from "~/server/generic/collection/repo/collection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
@@ -35,7 +34,6 @@ describe("undated Purchase readers", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic undated kit",
-        tags: ["collection:undated-history"],
       }),
       ctx.actor,
     );
@@ -102,21 +100,6 @@ describe("undated Purchase readers", () => {
         (row) => row.purchaseId,
       ),
     ).toEqual([dated.shortcode, undated.shortcode]);
-    const collection = await getCollectionDetail(
-      ctx.db,
-      "undated-history",
-      undefined,
-      { pageIndex: 0, pageSize: 20 },
-    );
-    expect(
-      collection?.products[0]?.purchases.map((row) => ({
-        id: row.id,
-        date: row.date,
-      })),
-    ).toEqual([
-      { id: dated.shortcode, date: "2026-03-04" },
-      { id: undated.shortcode, date: null },
-    ]);
     expect(
       (await listKitMembership(ctx.db, component.entityId))[0]?.purchase
         ?.purchaseId,

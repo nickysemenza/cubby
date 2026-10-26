@@ -7,7 +7,6 @@ import {
 import type { TagPropagationRecommendationOut } from "@cubby/schemas/recommendations";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import type { SimilarEntitiesOut } from "@cubby/schemas/search";
-import { isCollectionTag } from "@cubby/shared/collection-tag";
 
 import type { Database } from "~/server/db";
 import { getProductsSharingTags } from "~/server/domains/product/repo/analytics";
@@ -197,7 +196,7 @@ const productTagPropagationWorkflowDefinition = workflow<
           for (const candidate of input.evidence.rows) {
             if (candidate.id === input.input) continue;
             for (const tag of new Set(candidate.tags)) {
-              if (sourceTags.has(tag) || isCollectionTag(tag)) continue;
+              if (sourceTags.has(tag)) continue;
               votes.set(tag, (votes.get(tag) ?? 0) + 1);
             }
           }

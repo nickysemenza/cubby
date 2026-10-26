@@ -156,7 +156,7 @@ const purchaseRipple = rippleTags(
     ["project"],
   ],
   costAndStock,
-  [["dashboard"], ["calendar"], ["householdContribution"], ["collection"]],
+  [["dashboard"], ["calendar"], ["householdContribution"]],
 );
 
 /**
@@ -198,7 +198,6 @@ export const ripple = {
   settledSuggestions: exactRippleTags([["ai", "settledSuggestionQuestion"]]),
   /** The cross-family Suggestion list and its counts. */
   suggestions: exactRippleTags([["suggestions"]]),
-  collection: exactRippleTags([["collection"]]),
   connectedApps: exactRippleTags([["oauth", "connectedApps"]]),
   orphanedOAuth: exactRippleTags([["oauth", "orphaned"]]),
   calendarFeed: exactRippleTags([["calendar", "feed"]]),
@@ -273,14 +272,7 @@ export const ripple = {
   // The broad `image` prefix, not an image-list tag: a list-only invalidation
   // doesn't refresh the image DETAIL page after a rename.
   image: rippleTags(
-    [
-      ["image"],
-      ["dashboard"],
-      ["problems"],
-      ["maintenance"],
-      ["search"],
-      ["collection"],
-    ],
+    [["image"], ["dashboard"], ["problems"], ["maintenance"], ["search"]],
     entityKeys
       .filter((entity) => imagePolicyCatalog[entity].displaySources.length > 0)
       .map((entity): OperationCacheTag => [entity]),
@@ -352,7 +344,6 @@ export const ripple = {
     ["task"],
     ["expense"],
     ["product"],
-    ["collection"],
     ["householdContribution"],
     ["search"],
     ["relatedData"],

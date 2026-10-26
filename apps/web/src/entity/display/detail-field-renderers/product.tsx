@@ -1,7 +1,3 @@
-import {
-  collectionSlugFromTag,
-  formatCollectionLabel,
-} from "@cubby/shared/collection-tag";
 import { Link } from "@tanstack/react-router";
 
 import {
@@ -96,39 +92,23 @@ export const productDetailFields = {
         <ProductExternalIds identifiers={product.externalIds} />
       ) : undefined,
   }),
-  // A collection tag links to its collection page; every other tag is a
-  // cohort link into the product list.
   "product-tags": (product) => ({
     filterAction: null,
     value:
       product.tags.length > 0 ? (
         <Row gap="xs" wrap justify="end">
-          {product.tags.map((tag) => {
-            const collection = collectionSlugFromTag(tag);
-            return collection ? (
-              <Link
-                key={tag}
-                to="/collections/$collection"
-                params={{ collection }}
-                aria-label={`Open ${formatCollectionLabel(collection)} Collection`}
-              >
-                <Badge variant="secondary">
-                  {formatCollectionLabel(collection)}
-                </Badge>
-              </Link>
-            ) : (
-              <EntityFilterLink
-                key={tag}
-                to="/products"
-                search={{ tags: tag }}
-                label={`Show all products tagged ${tag}`}
-                display="value"
-                className="no-underline"
-              >
-                <Badge variant="outline">{tag}</Badge>
-              </EntityFilterLink>
-            );
-          })}
+          {product.tags.map((tag) => (
+            <EntityFilterLink
+              key={tag}
+              to="/products"
+              search={{ tags: tag }}
+              label={`Show all products tagged ${tag}`}
+              display="value"
+              className="no-underline"
+            >
+              <Badge variant="outline">{tag}</Badge>
+            </EntityFilterLink>
+          ))}
         </Row>
       ) : undefined,
   }),

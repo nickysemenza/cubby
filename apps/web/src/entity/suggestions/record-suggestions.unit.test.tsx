@@ -1271,13 +1271,13 @@ describe("record suggestions", () => {
     expect(commands).toHaveLength(1);
   });
 
-  it("saves a remove (prune) suggestion by patching the array field, preserving collection:* tags", async () => {
+  it("saves a remove (prune) suggestion by patching the array field, preserving other tags", async () => {
     const record = {
       id: testShortcode("product", "tag-remove"),
       name: "Rain shell",
       brandName: "Jacquemus",
       categoryId: null,
-      tags: ["jacquemus", "collection:favorites", "mount"],
+      tags: ["jacquemus", "ecosystem", "mount"],
     };
     const removeSuggestion = {
       assessmentId: "00000000-0000-4000-8000-000000000002",
@@ -1307,7 +1307,7 @@ describe("record suggestions", () => {
       seed: 1,
       overrides: {
         id: record.id,
-        tags: ["collection:favorites", "mount"],
+        tags: ["ecosystem", "mount"],
       },
     });
     render(
@@ -1345,7 +1345,7 @@ describe("record suggestions", () => {
       action: "update",
       entity: "product",
       id: record.id,
-      data: { tags: ["collection:favorites", "mount"] },
+      data: { tags: ["ecosystem", "mount"] },
     });
   });
 
