@@ -24,7 +24,9 @@ export type BacklogMatrix = {
  * Entity x derived-field pivot. Rows keep declaration order; fields shared by
  * the most entities lead so common kinds line up in the leftmost columns.
  */
-export function pivotDerivedBacklog(backlog: DerivedBacklog): BacklogMatrix {
+export function pivotDerivedBacklog(
+  backlog: Pick<DerivedBacklog, "total" | "kinds">,
+): BacklogMatrix {
   const rows = new Map<Entity, Map<string, number>>();
   const fieldTotals = new Map<string, number>();
   const fieldEntities = new Map<string, number>();
