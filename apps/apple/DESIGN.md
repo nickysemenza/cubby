@@ -90,7 +90,7 @@ Photo import interaction, recovery, and device-work rules live in
 
 ## Density and feedback
 
-Today leads with Next up task rows and their Done commands, then Activity inbox → Meals → Nutrition → Recent changes → Your views. Compact Today omits summary stats; iPad bounds the list to a readable width. Mac uses two columns: tasks first, then only Overdue and Due this week stats, Activity inbox and Your views on the left; Meals, Nutrition and Recent changes on the right. Problems is a named web handoff. New task (due today), Log meal and Capture live in the toolbar + menu. Re-tapping the Today tab returns to its root. A total load failure shows one raw diagnostic and Retry; partial failures stay beside their loaded siblings.
+Today leads with Next up task rows and their Done commands, then Meals → Nutrition → Your views. Phone and iPad Today have no audit feed or activity inbox; the Activity tab owns them. Compact Today omits summary stats; iPad bounds the list to a readable width. Mac uses two columns: tasks first, then only Overdue and Due this week stats, Activity inbox and Your views on the left; Meals, Nutrition and Recent changes on the right. Problems is a named web handoff. New task (due today), Log meal and Capture live in the toolbar + menu. Re-tapping the Today tab returns to its root. A total load failure shows one raw diagnostic and Retry; partial failures stay beside their loaded siblings.
 
 Cooking is full-screen, prevents swipe dismissal, restores the current position, and uses large type and paging for steps.
 

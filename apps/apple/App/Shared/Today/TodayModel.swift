@@ -8,13 +8,12 @@ enum TodaySectionState<Value> {
     case failed(String)
 }
 
-/// Reading order is shared by the compact and readable-width Today lists.
+/// The phone and readable-width Today reading order: tasks, meals, then views. Activity and the
+/// audit feed live on the Activity tab there (DESIGN.md Today order); only the Mac dashboard adds them.
 enum TodaySection: String, CaseIterable, Identifiable {
     case tasks = "Next up"
-    case activity = "Activity inbox"
     case meals = "Meals today"
     case nutrition = "Nutrition today"
-    case changes = "Recent changes"
     case views = "Your views"
 
     var id: Self { self }

@@ -384,10 +384,8 @@ struct TodayContent: View {
                     Section(section.rawValue) {
                         switch section {
                         case .tasks: taskContent
-                        case .activity: activityLinks.accessibilityIdentifier("work.activityInbox")
                         case .meals: mealContent
                         case .nutrition: nutritionContent
-                        case .changes: recentChanges.accessibilityIdentifier("work.auditFeed")
                         case .views: PinnedViewLinks()
                         }
                     }
