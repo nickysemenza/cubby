@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { formatText } from "~/lib/display-format";
 import { cn } from "~/lib/utils";
 
 interface NoneValueProps {
@@ -10,7 +11,7 @@ export const NoneValue: FC<NoneValueProps> = ({ className }) => {
     <span
       className={cn("select-none text-muted-foreground/50", className)}
     >
-      —
+      {formatText(undefined)}
     </span>
   );
 };

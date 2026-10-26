@@ -105,7 +105,7 @@ export function formatCompactCurrency(value: number): string {
 
 /** Format a plain integer with thousands separators (e.g. "1,240"). */
 export function formatCount(value: number, decimals = 0): string {
-  return cachedNumberFormat({ maximumFractionDigits: decimals }).format(value);
+  return wasmFormat.format_count(value, decimals);
 }
 
 /** Format a count in compact notation (e.g. "1.2K"). */

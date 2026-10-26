@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
-import { formatCurrency, formatCurrencyRange } from "~/lib/number-format";
+import { formatText } from "~/lib/display-format";
+import {
+  formatCount,
+  formatCurrency,
+  formatCurrencyRange,
+} from "~/lib/number-format";
 import {
   compactEstimateText,
   formatEstimate,
@@ -17,7 +22,7 @@ const estimateMeasure = z.enum(["cost", "kcal", "macro", "share"]);
 // Currency, number, kcal, and estimates are formatted by one Rust
 // implementation (recipebridge `display_format`, which also reads this file);
 // these cases check the web bindings. Native reads the file too (CubbyKit
-// DisplayFormatTests). Dates are platform code, pinned only by the vectors.
+// DisplayFormatTests). Plain dates and empty text use that same Rust owner.
 describe("display-format golden vectors", () => {
   it.each(vectors.currency)("currency $value -> $out", ({ value, out }) => {
     expect(formatCurrency(value)).toBe(out);
@@ -32,6 +37,17 @@ describe("display-format golden vectors", () => {
 
   it.each(vectors.plainDate)("plainDate $in -> $out", (vector) => {
     expect(formatCalendarDay(vector.in, "dateShort")).toBe(vector.out);
+  });
+
+  it.each(vectors.text)(
+    "text $value -> $out",
+    ({ value, emptyLabel, detail, out }) => {
+      expect(formatText(value, emptyLabel ?? undefined, detail)).toBe(out);
+    },
+  );
+
+  it.each(vectors.count)("count $value -> $out", ({ value, decimals, out }) => {
+    expect(formatCount(value, decimals)).toBe(out);
   });
 
   // The generic renderer hands a bare number field to React, which prints

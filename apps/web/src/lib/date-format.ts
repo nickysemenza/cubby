@@ -3,6 +3,7 @@ import { format, formatDistance } from "date-fns";
 
 import { HOUSEHOLD_TIMEZONE } from "~/lib/household-date";
 import { parsePlainDate } from "~/lib/plain-date";
+import { wasmFormat } from "~/lib/wasm";
 
 /**
  * The app's display date/time shapes, as date-fns patterns. Every date shown
@@ -97,6 +98,7 @@ export function formatCalendarDay(
   preset: DatePreset,
 ): string {
   if (value instanceof Date) return format(value, DATE_PRESETS[preset]);
+  if (preset === "dateShort") return wasmFormat.format_plain_date(value);
   if (!PLAIN_DATE.test(value)) return value;
   const day = parsePlainDate(value);
   // parsePlainDate rolls "2026-13-45" over into a later real date; a round

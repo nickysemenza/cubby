@@ -21,6 +21,7 @@ import { formatEstimate } from "~/lib/nutrition-format";
 import type { PerUnitPrices } from "~/lib/price-mapping-utils";
 import { formatRecipeTime } from "~/lib/recipe-time";
 import { formatPerUnitPrice } from "~/lib/unit-price-format";
+import { wasmFormat } from "~/lib/wasm";
 
 /**
  * Server-owned list-cell text for figures a client would otherwise re-derive.
@@ -44,7 +45,7 @@ export const expectedQuantityLabel = (
   >,
 ): string =>
   [
-    String(ledger.expectedQuantity),
+    wasmFormat.format_number(ledger.expectedQuantity),
     ledger.unknownAcquisitionLines > 0
       ? `+${ledger.unknownAcquisitionLines}?`
       : null,
@@ -57,7 +58,9 @@ export const expectedQuantityLabel = (
 export const quantityVarianceLabel = (
   variance: number | null,
 ): string | null =>
-  variance === null ? null : variance > 0 ? `+${variance}` : String(variance);
+  variance === null
+    ? null
+    : `${variance > 0 ? "+" : ""}${wasmFormat.format_number(variance)}`;
 
 /** A recipe or meal total, with its range and confidence language intact. */
 export const estimateLabel = (

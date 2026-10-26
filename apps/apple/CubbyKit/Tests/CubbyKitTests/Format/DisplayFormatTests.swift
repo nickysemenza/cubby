@@ -20,6 +20,17 @@ struct DisplayFormatTests {
         let `in`: String
         let out: String
     }
+    private struct TextVector: Decodable {
+        let value: String?
+        let emptyLabel: String?
+        let detail: Bool
+        let out: String
+    }
+    private struct CountVector: Decodable {
+        let value: Double
+        let decimals: UInt32
+        let out: String
+    }
     private struct EstimateVector: Decodable {
         let unit: String
         let estimate: MeasureEstimate
@@ -35,6 +46,8 @@ struct DisplayFormatTests {
         let currency: [MoneyVector]
         let signedCurrency: [MoneyVector]
         let plainDate: [DateVector]
+        let text: [TextVector]
+        let count: [CountVector]
         let number: [MoneyVector]
         let compactEstimate: [EstimateVector]
         let estimate: [LabelVector]
@@ -65,6 +78,20 @@ struct DisplayFormatTests {
     @Test func numberMatchesTheSharedVectors() throws {
         for vector in try vectors().number {
             #expect(DisplayFormat.number(vector.value) == vector.out, "value \(vector.value)")
+        }
+    }
+
+    @Test func textMatchesTheSharedVectors() throws {
+        for vector in try vectors().text {
+            #expect(
+                DisplayFormat.text(vector.value, emptyLabel: vector.emptyLabel, detail: vector.detail)
+                    == vector.out)
+        }
+    }
+
+    @Test func countMatchesTheSharedVectors() throws {
+        for vector in try vectors().count {
+            #expect(ValueFormat.count(vector.value, maxFractionDigits: vector.decimals) == vector.out)
         }
     }
 

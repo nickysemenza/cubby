@@ -82,7 +82,7 @@ nonisolated enum EntityFieldValue {
         }
         switch field.format {
         case "currency", "signedCurrency": return money(value)
-        case "plainDate": return value.stringValue.map { DatePresentation.plainDate($0)?.absolute ?? $0 }
+        case "plainDate": return value.stringValue.map { DisplayFormat.plainDate($0) }
         case "timestamp": return date(value)
         case "amount": return amount(value)
         case "resolvedList":
@@ -98,7 +98,7 @@ nonisolated enum EntityFieldValue {
         case .null: return nil
         case .string(let string):
             if string.isEmpty { return nil }
-            if field.kind == .date { return DatePresentation.plainDate(string)?.absolute ?? string }
+            if field.kind == .date { return DisplayFormat.plainDate(string) }
             if field.kind == .timestamp { return date(value) ?? string }
             if field.kind == .enum { return enumLabel(string, field: field) }
             // A non-enum field (a nested kind, a derived status) names its choices in `valueOptions`.
@@ -182,7 +182,7 @@ nonisolated enum EntityFieldValue {
 
     static func dateRange(_ value: JSONValue, semantics: String?) -> String? {
         func day(_ key: String) -> String? {
-            value[key]?.stringValue.map { DatePresentation.plainDate($0)?.absolute ?? $0 }
+            value[key]?.stringValue.map { DisplayFormat.plainDate($0) }
         }
         switch (day("start"), day("end")) {
         case (let start?, let end?): return start == end ? start : "\(start) – \(end)"

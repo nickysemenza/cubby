@@ -121,6 +121,21 @@ pub fn format_number(value: f64) -> String {
     recipebridge::format_number(value)
 }
 
+#[uniffi::export]
+pub fn format_count(value: f64, max_fraction_digits: u32) -> String {
+    recipebridge::format_count(value, max_fraction_digits)
+}
+
+#[uniffi::export]
+pub fn format_plain_date(value: String) -> String {
+    recipebridge::format_plain_date(&value)
+}
+
+#[uniffi::export]
+pub fn format_text(value: Option<String>, empty_label: Option<String>, detail: bool) -> String {
+    recipebridge::format_text(value, empty_label, detail)
+}
+
 /// The one-line macro/cost cell: a partial figure ends in `+`, unknown is `—`.
 #[uniffi::export]
 pub fn format_compact_estimate(figure: EstimateFigure, unit: CompactUnit) -> String {

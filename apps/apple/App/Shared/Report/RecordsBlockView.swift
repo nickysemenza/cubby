@@ -122,7 +122,7 @@ struct RecordRowView: View {
                 switch time {
                 case .instant(let date): DateDisplay(date: date)
                 case .date(let value):
-                    Text("\(DatePresentation.plainDate(value)?.absolute ?? value) (date only)")
+                    Text(DisplayFormat.plainDate(value))
                 case .local(let value, let timezone): Text("\(value) (\(timezone ?? "timezone unknown"))")
                 case .unknown(let receipt):
                     VStack(alignment: .trailing) {
