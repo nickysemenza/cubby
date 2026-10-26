@@ -79,6 +79,21 @@ struct EntityManifestTests {
         #expect(EntityCatalog[.vendor].presentation.listQuickActionIDs.isEmpty)
     }
 
+    // Native list empty states read the declared copy; a create label is optional. Browse drops
+    // declared web-only roots, and long prose carries the `xl` width bucket.
+    @Test func emptyStateBrowseAndWidthArriveOnTheWire() throws {
+        let product = EntityCatalog[.product].emptyState
+        #expect(product.title == "Nothing on the shelves yet")
+        #expect(product.actionLabel == "Add Product")
+        #expect(!EntityCatalog[.job].emptyState.description.isEmpty)
+        #expect(EntityCatalog[.job].emptyState.actionLabel == nil)
+        #expect(EntityCatalog[.product].nativeBrowse)
+        #expect(!EntityCatalog[.job].nativeBrowse)
+        #expect(EntityCatalog.browsable.contains { $0.key == .inventory })
+        #expect(!EntityCatalog.browsable.contains { $0.key == .job })
+        #expect(EntityCatalog[.purchase].field("notes")?.width == "xl")
+    }
+
     @Test func schemaDerivedReadOnlyPaletteSurvivesTheCatalog() throws {
         let field = try #require(EntityCatalog[.image].fields.first { $0.key == "captureAttribution" })
         let options = try #require(field.valueOptions)

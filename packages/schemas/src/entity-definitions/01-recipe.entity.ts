@@ -299,7 +299,7 @@ export default defineEntity(
           // Hidden by default (`listHidden`) but toggleable via the View menu —
           // never actually shown by default before this field went through
           // `createEntityDisplayColumns`.
-          display: { columnGroup: "Recipe", listHidden: true },
+          display: { columnGroup: "Recipe", listHidden: true, width: "xl" },
           validation: {
             read: recipeTopLevelFields.notes,
             create: recipeNotes.nullable().optional(),

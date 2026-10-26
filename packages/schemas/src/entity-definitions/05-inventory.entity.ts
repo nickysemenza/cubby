@@ -321,6 +321,8 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "amount" },
           display: {
             columnGroup: "Stock",
+            // "1 each" on most rows; owner and valuation lead instead.
+            listHidden: true,
             format: "amount",
             mobile: { slot: "trailing", priority: 0 },
           },
@@ -351,6 +353,8 @@ export default defineEntity(
           },
           display: {
             columnGroup: "Stock",
+            // "Stock" on most rows.
+            listHidden: true,
             optionRole: "category",
             optionColor: "domain-pantry",
           },
@@ -403,6 +407,8 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "entity-select" },
           display: {
             columnGroup: "Ownership",
+            // Owner leads; the Stock band (valuation, verified) follows it.
+            listOrderOverride: 2,
             columnLabel: "Owner",
             width: "md",
             labelPath: "effectiveOwnership.effectiveOwner.name",

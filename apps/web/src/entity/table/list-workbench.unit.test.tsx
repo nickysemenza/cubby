@@ -8,6 +8,10 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entity/display/entity-display";
 import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type {
@@ -21,7 +25,7 @@ import {
   useCubbyTable,
 } from "../../ui/data-table/table-features";
 import { createImageColumn } from "./column-helpers";
-import { ListWorkbench } from "./list-workbench";
+import { ListWorkbench, useBoundedListWorkbench } from "./list-workbench";
 import { useChildListWorkbench } from "./use-child-list-workbench";
 import { useTableState } from "./use-table-state";
 
@@ -280,5 +284,30 @@ describe("child workbench selection scopes", () => {
       child.result.current.model.table.getFilteredSelectedRowModel().rows,
     ).toHaveLength(1);
     oldBar.unmount();
+  });
+});
+
+// Default columns are the declarations' `listHidden` and field order; there is
+// no separate default-column list to drift from them.
+describe("declared default columns", () => {
+  it("starts near-constant columns hidden and leads with the informative ones", () => {
+    const inventoryHelper = createCubbyColumnHelper<{ id: string }>();
+    const { result } = renderHook(() =>
+      useBoundedListWorkbench({
+        entity: "inventory",
+        data: [],
+        columns: createEntityDisplayColumns("inventory", inventoryHelper),
+        initialColumnVisibility: entityListHiddenColumns("inventory"),
+        getRowId: (row) => row.id,
+      }),
+    );
+    const visible = result.current.table
+      .getVisibleLeafColumns()
+      .map((column) => column.id);
+    for (const id of ["amount", "placement"]) expect(visible).not.toContain(id);
+    const informative = ["ownerLedgerPartyId", "valuation", "verifiedAt"];
+    expect(visible.filter((id) => informative.includes(id))).toEqual(
+      informative,
+    );
   });
 });

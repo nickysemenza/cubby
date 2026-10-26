@@ -465,6 +465,8 @@ Rules:
           display: {
             columnGroup: "Place",
             detail: false,
+            // Empty except for furniture recorded as a product.
+            listHidden: true,
             labelPath: "product.name",
             renderer: { list: "product-link" },
           },
@@ -518,7 +520,7 @@ Rules:
             columnGroup: "Place",
             detail: false,
             listHidden: true,
-            width: "lg",
+            width: "xl",
             mobile: { slot: "meta", priority: 70 },
           },
           validation: {

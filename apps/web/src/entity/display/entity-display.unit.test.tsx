@@ -918,12 +918,12 @@ describe("declared entity displays", () => {
       const byId = Object.fromEntries(
         buildProductColumnMeta().map((d) => [d.id, d]),
       );
-      // width: "sm" -> "w-28", width: "md" -> "w-40"
+      // width: "sm" -> "w-28", "md" -> "w-40", "xl" (long prose) -> "w-80"
       expect(byId.fdc_id?.className).toBe("w-28");
       expect(byId.categoryId?.className).toBe("w-40");
       expect(byId.brandId?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");
-      expect(byId.notes?.className).toBe("w-40");
+      expect(byId.notes?.className).toBe("w-80");
       // No declared width (e.g. usdaUnavailable) stays unset.
       expect(byId.usdaUnavailable?.className).toBeUndefined();
       expect(byId.ledgerExpectedQuantity?.className).toBe("w-28");

@@ -696,7 +696,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Plan" },
+        display: { columnGroup: "Plan", width: "xl" },
         validation: {
           read: z.string().describe("Freeform markdown").nullable(),
           create: z.string().nullable().default(null),

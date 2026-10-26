@@ -454,7 +454,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Evidence" },
+        display: { columnGroup: "Evidence", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

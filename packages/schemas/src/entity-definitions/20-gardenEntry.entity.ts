@@ -196,7 +196,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Observation" },
+        display: { columnGroup: "Observation", width: "xl" },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
