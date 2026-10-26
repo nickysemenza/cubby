@@ -1,0 +1,29 @@
+apps/apple/App/Shared/AppShell/Route.swift
+  s_49ab8ab0a006bb::t_5978e39ca76f20 75-76,116
+apps/apple/App/Shared/Entity/List/BrowseRootView.swift
+  s_49ab8ab0a006bb::t_41f5954670c179 4-26,28-29,33-46,48,50-53,55-56,76-95,99-108,111,118,120-126,128-132,134-137,140,169-186,189,211-215
+apps/apple/App/Shared/Search/ScanLookupSheet.swift
+  s_49ab8ab0a006bb::t_6ce9389ed18bf2 4-15,17-26,28-31,33-41,43-44,47-49,51-61,64-66,68,84-92,95-114,118-138,142-153,155-162,164-175,177-179,183-194,198-200,202-210,212,214-219
+apps/apple/App/Shared/Search/SearchView.swift
+  s_49ab8ab0a006bb::t_619f759780ad32 5-6,52-54,131-137,139,144-148,219,226-228
+apps/apple/App/macOS/RootSplitView.swift
+  s_49ab8ab0a006bb::t_a7ddb1c1ba0545 149,287-291
+apps/apple/DESIGN.md
+  s_49ab8ab0a006bb::t_b39ae141706a39 17,35,103,123-124,155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "052f1780644e3898667f13f4253c879ccaf1c401",
+  "prompts": {},
+  "sessions": {
+    "s_49ab8ab0a006bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4ba0b41-b28c-4210-8689-abbdf6600a58",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
