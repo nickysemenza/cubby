@@ -2,7 +2,7 @@ import type { VectorizeVector } from "@cloudflare/workers-types";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv, type getAiGateway } from "~/server/cf-env";
@@ -44,6 +44,68 @@ import { getStoredEmbeddingHashes } from "./entity-embedding-refresh";
 describe("immutable embedding artifacts", () => {
   const ctx = withTestDb();
   afterEach(() => setCfEnv(undefined));
+
+  it("readmits a page of current Jobs without per-record transactions", async () => {
+    const refs: Parameters<typeof prepareSearchDocuments>[1][number][] = [];
+    for (let index = 0; index < 8; index++) {
+      const subject = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: `Synthetic admission ${index}` }),
+        ctx.actor,
+      );
+      refs.push({ entityKind: "product", entityId: subject.entityId });
+    }
+    const prepared = await prepareSearchDocuments(ctx.db, refs);
+    const config = getSemanticEmbeddingConfig();
+    const original = await enqueueEmbeddingRefs(ctx.db, prepared, config);
+    const paused = original[0];
+    const failed = original[1];
+    if (!paused || !failed)
+      throw new Error("Missing synthetic admission cohort");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "paused" })
+      .where(eq(job.id, paused.id));
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "failed" })
+      .where(eq(job.id, failed.id));
+    const single = await countTestDbQueries(() =>
+      enqueueEmbeddingRefs(
+        ctx.db,
+        { entries: prepared.entries.slice(0, 1), missing: [] },
+        config,
+      ),
+    );
+    const page = await countTestDbQueries(() =>
+      enqueueEmbeddingRefs(ctx.db, prepared, config),
+    );
+    expect(page.result.map((row) => row.id)).toEqual(
+      original.map((row) => row.id),
+    );
+    expect(page.queryCount).toBe(single.queryCount);
+    expect(page.result.map((row) => row.state)).toEqual([
+      "paused",
+      "failed",
+      "queued",
+      "queued",
+      "queued",
+      "queued",
+      "queued",
+      "queued",
+    ]);
+    const [, reversed] = await Promise.all([
+      enqueueEmbeddingRefs(ctx.db, prepared, config),
+      enqueueEmbeddingRefs(
+        ctx.db,
+        { entries: [...prepared.entries].reverse(), missing: [] },
+        config,
+      ),
+    ]);
+    expect(reversed.map((row) => row.id)).toEqual(
+      original.map((row) => row.id).reverse(),
+    );
+  });
 
   it("never reuses an earlier physical identity when text changes and returns", async () => {
     const index = createInMemoryVectorizeIndex();
