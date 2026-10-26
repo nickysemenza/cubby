@@ -24,6 +24,10 @@ final class TodayModel {
     private(set) var mealsError: String?
     private(set) var problemsError: String?
 
+    /// Runs the briefing rows' commands (a task's Done) on the shared report-command path; a
+    /// finished command reloads the briefing.
+    let taskCommands: ReportSlotModel
+
     private let client: CubbyClient
     private var tasksGeneration = 0
     private var mealsGeneration = 0
@@ -34,6 +38,8 @@ final class TodayModel {
 
     init(client: CubbyClient) {
         self.client = client
+        taskCommands = ReportSlotModel(slot: .taskBriefing, id: "", service: client)
+        taskCommands.reload = { [weak self] in await self?.refreshTasks() }
     }
 
     /// Starts all sections together, while each publishes at its own completion point.

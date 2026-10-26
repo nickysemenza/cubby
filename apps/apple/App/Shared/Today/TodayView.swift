@@ -200,6 +200,7 @@ struct TodayView: View {
                 TodayContent(
                     dateText: displayDate,
                     tasks: today.tasks, meals: today.meals, problems: today.problems,
+                    taskCommands: today.taskCommands,
                     nutrition: nutrition?.state ?? .loading,
                     nutritionDay: householdDay,
                     onRefresh: {
@@ -297,6 +298,8 @@ struct TodayContent: View {
     let tasks: TodaySectionState<EntityReportOut>
     let meals: TodaySectionState<[EntityRow]>
     let problems: TodaySectionState<ProblemsCount>
+    /// Runs the briefing rows' commands; nil (previews) draws them inert.
+    var taskCommands: ReportSlotModel? = nil
     var nutrition: TodaySectionState<MealNutritionOut> = .loading
     var nutritionDay = HouseholdDay.string(for: .now)
     let onRefresh: @Sendable () async -> Void
@@ -359,11 +362,14 @@ struct TodayContent: View {
                         InlineLoadFailure(
                             message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
-                        ReportBlocksView(report: ReportPresentation(briefing))
+                        ReportBlocksView(report: ReportPresentation(briefing), model: taskCommands)
                     }
                     if let tasksError {
                         InlineLoadFailure(
                             message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                    }
+                    if let failure = taskCommands?.actionError {
+                        Text(failure).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
                     }
                 }
                 Section("Meals today") {
@@ -593,11 +599,14 @@ struct TodayContent: View {
                         InlineLoadFailure(
                             message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     case .loaded(let briefing):
-                        ReportBlocksView(report: ReportPresentation(briefing))
+                        ReportBlocksView(report: ReportPresentation(briefing), model: taskCommands)
                     }
                     if let tasksError {
                         InlineLoadFailure(
                             message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                    }
+                    if let failure = taskCommands?.actionError {
+                        Text(failure).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
                     }
                 }
 

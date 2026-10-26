@@ -34,8 +34,10 @@ import {
 } from "@cubby/schemas/meal";
 import { mealRecipeOut } from "@cubby/schemas/meal-fields";
 import { nutritionEstimate } from "@cubby/schemas/nutrition";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { problemsCountSchema } from "@cubby/schemas/problems";
 import { taskTodayBriefingItemOut } from "@cubby/schemas/project";
+import { completeTaskCommand } from "../../src/server/domains/task/repo/briefing-commands";
 import { taskBriefingReport } from "../../src/server/generic/entity-report/repo/task";
 
 import { mock } from "../../src/lib/test/mock-schema";
@@ -206,7 +208,15 @@ function buildTodayTasks(): z.infer<typeof taskTodayBriefingItemOut>[] {
     },
   ];
   return items.map((overrides, index) =>
-    mock(taskTodayBriefingItemOut, { seed: 200 + index, overrides }),
+    mock(taskTodayBriefingItemOut, {
+      seed: 200 + index,
+      overrides: {
+        ...overrides,
+        commands: [
+          completeTaskCommand(parseShortcodeFor("task", overrides.id)),
+        ],
+      },
+    }),
   );
 }
 

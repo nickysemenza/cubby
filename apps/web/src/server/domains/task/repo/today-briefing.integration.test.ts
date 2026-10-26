@@ -26,6 +26,21 @@ describe("task today briefing", () => {
           projectId: project.output.id,
           projectName: "Workshop",
           projectEmoji: "🔧",
+          // Done is the row's one command, run through the generic report
+          // command path on web and native.
+          commands: [
+            expect.objectContaining({
+              id: "complete",
+              label: "Done",
+              request: expect.objectContaining({
+                operation: "entity.mutate",
+                body: expect.objectContaining({
+                  id: task.output.id,
+                  data: { status: "done" },
+                }),
+              }),
+            }),
+          ],
         }),
       ]),
     );
