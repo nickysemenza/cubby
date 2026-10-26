@@ -70,7 +70,7 @@ describe("fair drain under a flood", () => {
         expired.push(row.id);
       }
       const healthy = await enqueueJob(ctx.db, {
-        key: "synthetic.unlocked-evaluation",
+        key: "ai-evaluation:synthetic-unlocked-evaluation",
         kind: "ai.evaluation",
         input: {},
       });

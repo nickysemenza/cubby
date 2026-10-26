@@ -525,6 +525,11 @@ type DueJobSelection = {
   batchSizes?: ReadonlyMap<string, number>;
 };
 
+// Match the canonical key before casting: unmatched historical or synthetic
+// keys had no evaluation in the text join and must still produce NULL.
+const evaluationIdFromJobKey = (key: SQL) =>
+  sql`substring(${key} FROM '^ai-evaluation:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$')::uuid`;
+
 const fairlyOrderedDueJobs = (
   now: Date,
   perKind: number,
@@ -556,7 +561,7 @@ const fairlyOrderedDueJobs = (
       coalesce(page_e.feature, source.kind) AS service_key,
       (source.kind = 'run.execute' OR active_runs.id IS NOT NULL) AS cap_exempt
     FROM due_source source LEFT JOIN active_runs ON active_runs.id = source."runId"
-    LEFT JOIN "AiEvaluation" page_e ON source.kind='ai.evaluation' AND source.key='ai-evaluation:' || page_e.id::text
+    LEFT JOIN "AiEvaluation" page_e ON source.kind='ai.evaluation' AND page_e.id=${evaluationIdFromJobKey(sql`source.key`)}
     LEFT JOIN LATERAL (
       SELECT true AS visible FROM active_runs requester WHERE requester.visible AND requester.member_demand AND (
         (requester.id=page_e."runId" AND NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" withdrawn WHERE withdrawn."evaluationId"=page_e.id AND withdrawn."runId"=requester.id AND withdrawn."cancelledAt" IS NOT NULL))
@@ -615,7 +620,7 @@ const fairlyOrderedDueJobs = (
     SELECT services.*, latest."lastClaimedAt" AS feature_last_served
     FROM services LEFT JOIN LATERAL (
       SELECT claimed."lastClaimedAt" FROM "Job" claimed
-      JOIN "AiEvaluation" evaluation ON claimed.key='ai-evaluation:' || evaluation.id::text
+      JOIN "AiEvaluation" evaluation ON evaluation.id=${evaluationIdFromJobKey(sql`claimed.key`)}
       WHERE services.kind='ai.evaluation' AND claimed.kind=services.kind
         AND evaluation.feature=services.service_key AND claimed."lastClaimedAt" IS NOT NULL
       ORDER BY claimed."lastClaimedAt" DESC LIMIT 1
