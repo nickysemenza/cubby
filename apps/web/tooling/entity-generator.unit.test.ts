@@ -1964,8 +1964,13 @@ describe("typed entity compiler", () => {
         },
       ],
     };
+    // A case's `detail` keeps the authored Overview unless it declares sections.
+    type PresentationCase = Omit<
+      Partial<EntityDeclaration["presentation"]>,
+      "detail"
+    > & { detail?: Partial<EntityDeclaration["presentation"]["detail"]> };
     const compile = (
-      presentation: Partial<EntityDeclaration["presentation"]>,
+      presentation: PresentationCase,
       capabilities: Partial<EntityDeclaration["capabilities"]> = {},
     ) =>
       compileEntityDeclarations([
@@ -1989,9 +1994,7 @@ describe("typed entity compiler", () => {
           capabilities: { ...base.capabilities, ...capabilities },
         },
       ]);
-    const fields = (
-      keys: string[],
-    ): Partial<EntityDeclaration["presentation"]> => ({
+    const fields = (keys: string[]): PresentationCase => ({
       detail: {
         sections: [
           { kind: "fields", id: "overview", title: "Overview", fields: keys },
@@ -2007,11 +2010,7 @@ describe("typed entity compiler", () => {
       images: false,
       actions: [],
     });
-    const rejected: [
-      string,
-      Partial<EntityDeclaration["presentation"]>,
-      string,
-    ][] = [
+    const rejected: [string, PresentationCase, string][] = [
       [
         "a non-detail field in a fields section",
         fields(["name"]),
