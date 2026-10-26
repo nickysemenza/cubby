@@ -8,12 +8,10 @@ import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 /**
  * Project analytics: batched cost/progress rollups and dependency-edge reads.
  *
- * Both `projectRollups` and `projectDependencyIds` take a *set* of project ids
- * and return a lookup keyed by id — one query per underlying relation (two for
- * the rollup: expenses + tasks; two for dependencies: blocked-by + blocking),
- * never one query per project. Callers (crud.ts's reader, lookup.ts's list)
- * always batch the ids of the page/row they're mapping, so a list of 50
- * projects costs 4 queries total, not 200.
+ * Rollup inputs are grouped across the household so they can load beside the
+ * tree; subtree.ts applies the requested descendant scope afterward.
+ * Dependencies batch the requested project ids. Neither reader queries once
+ * per project.
  */
 import {
   actualExpenseSql,
@@ -62,7 +60,7 @@ const projectExpenseStats = async (
     `)
     .then((result) => result.rows);
 
-const projectTaskRollupRows = (db: Database, projectIds: ProjectId[]) =>
+const projectTaskRollupRows = (db: Database) =>
   getDb(db)
     .select({
       projectId: effectiveFieldSql<ProjectId | null>(
@@ -76,7 +74,9 @@ const projectTaskRollupRows = (db: Database, projectIds: ProjectId[]) =>
     .from(task)
     .where(
       and(
-        sql`${effectiveFieldSql<ProjectId | null>("task", "projectId", "Task")} = ANY(${uuidArrayParam(projectIds)})`,
+        isNotNull(
+          effectiveFieldSql<ProjectId | null>("task", "projectId", "Task"),
+        ),
         notDeleted(task),
       ),
     )
@@ -156,22 +156,25 @@ const mergeProjectContentDates = (
  * Share one allocation pass when a subtree reader needs money and dates.
  * `spent` includes future expenses, matching the project's own rollup contract.
  */
-export async function projectRollupsAndContentDates(
-  db: Database,
-  rollupIds: ProjectId[],
-): Promise<{
+export async function projectRollupsAndContentDates(db: Database): Promise<{
   ownRollups: Map<ProjectId, ProjectOwnRollup>;
   contentDates: Map<ProjectId, ProjectContentDates>;
 }> {
   const [expenseRows, taskRows, taskDateRows] = await Promise.all([
     projectExpenseStats(db),
-    rollupIds.length > 0
-      ? projectTaskRollupRows(db, rollupIds)
-      : Promise.resolve([]),
+    projectTaskRollupRows(db),
     projectTaskDateRows(db),
   ]);
   return {
-    ownRollups: mergeProjectOwnRollups(rollupIds, expenseRows, taskRows),
+    ownRollups: mergeProjectOwnRollups(
+      uniq(
+        [...expenseRows, ...taskRows].flatMap(({ projectId }) =>
+          projectId ? [projectId] : [],
+        ),
+      ),
+      expenseRows,
+      taskRows,
+    ),
     contentDates: mergeProjectContentDates(taskDateRows, expenseRows),
   };
 }

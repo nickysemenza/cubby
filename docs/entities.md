@@ -1898,6 +1898,13 @@ custom selectors/counts and group summaries
 retain their existing paths. Tracing reports the combined page/count phase as
 `entity.list.core.pageWithCount`, without invented separate timings.
 
+Project subtree reads load the tree beside household-grouped Expense and Task
+inputs, then apply the selected descendant scope in memory. A shared in-flight
+tree is reused by settings and rollups. The Expense and date aggregates already
+read the household; task counts also group once across it so the tree does not
+add another dependent SQL stage. Count and unrequested rollup reads still skip
+these bindings.
+
 Create/update responses are bounded receipts across browser, native and MCP,
 including `entity.commands` batches. They return the stable shortcode, canonical
 saved scalar values limited to explicitly submitted fields, `appliedFields`,

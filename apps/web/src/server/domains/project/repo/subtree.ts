@@ -1,16 +1,14 @@
 /**
- * Sub-project (WBS) tree helpers: descendant-set computation + subtree
- * rollup aggregation, pure and computed in TS at read time (never
- * denormalized). See packages/schemas/src/project.ts's `projectRollup` doc
- * comment for the own-vs-subtree distinction.
+ * Sub-project (WBS) tree helpers: descendant-set computation and subtree
+ * rollup aggregation. See packages/schemas/src/project.ts's `projectRollup`
+ * doc comment for the own-vs-subtree distinction.
  *
  * The load pattern every caller (crud.ts's reader, lookup.ts's list, the two
  * dashboard reads, attention.ts) follows: fetch ALL live projects' `{id,
  * name, parentProjectId, costEstimate}` via `allProjectParentRows` — cheap,
- * single query, single-user scale — build the parent→children map once,
- * compute the page's descendant id set in TS, then fetch OWN rollups (the one
- * relatively expensive aggregate) only for the page ids + their descendants
- * via the shared batched project aggregates. Never one query per project.
+ * single query, household scale — beside the grouped rollup inputs. Build the
+ * parent→children map once and scope OWN rollups to the page's descendants in
+ * memory. Never one query per project or a tree-dependent SQL stage.
  *
  * That whole sequence is {@link loadProjectSubtreeRollups} — call it rather
  * than re-assembling the four steps by hand (it was copy-pasted across five
@@ -433,14 +431,13 @@ export async function loadProjectDateWindows(
 }
 
 /**
- * The whole load pattern in one call: tree → descendant ids → batched OWN
- * rollups + content dates → subtree aggregation. Four queries total (one for
+ * The whole load pattern in one call: tree and grouped inputs in parallel,
+ * then descendant scoping and subtree aggregation. Four queries total (one for
  * the tree, one shared expense allocation aggregate, and two task aggregates),
  * regardless of how many projects are involved.
  *
- * `ids` scopes the (relatively expensive) OWN-rollup fetch to those projects
- * plus every live descendant — the minimum set whose subtree totals are then
- * exact. **Omit it** for the whole-tree variant (`computeAttentionItems`, and
+ * `ids` scopes returned OWN rollups to those projects plus every live
+ * descendant. **Omit it** for the whole-tree variant (`computeAttentionItems`, and
  * `projectDashboardSummary` which feeds it): every id is already covered, so
  * the descendant walk is skipped entirely.
  *
@@ -449,14 +446,19 @@ export async function loadProjectDateWindows(
  * can share one whole-tree load with attention instead of running the pipeline
  * twice.
  *
- * `tree` accepts an already-loaded {@link loadProjectTree} result.
+ * `tree` accepts an already-loaded or in-flight {@link loadProjectTree} result.
  */
 export async function loadProjectSubtreeRollups(
   db: Database,
   ids?: ProjectId[],
-  tree?: ProjectTree,
+  tree?: ProjectTree | Promise<ProjectTree>,
 ): Promise<ProjectSubtreeRollups> {
-  const loaded = tree ?? (await loadProjectTree(db));
+  // Rollup inputs do not need the tree. Read them beside it, then apply the
+  // descendant scope in memory so a list does not add a third SQL stage.
+  const [loaded, inputs] = await Promise.all([
+    tree ?? loadProjectTree(db),
+    projectRollupsAndContentDates(db),
+  ]);
   const rollupIds =
     ids === undefined
       ? loaded.allRows.map((r) => r.id)
@@ -467,10 +469,13 @@ export async function loadProjectSubtreeRollups(
           ),
         ]);
 
-  const { ownRollups, contentDates } = await projectRollupsAndContentDates(
-    db,
-    rollupIds,
+  const ownRollups = new Map(
+    rollupIds.map((id) => [
+      id,
+      inputs.ownRollups.get(id) ?? { ...EMPTY_PROJECT_OWN_ROLLUP },
+    ]),
   );
+  const contentDates = inputs.contentDates;
   return {
     ...loaded,
     ownRollups,

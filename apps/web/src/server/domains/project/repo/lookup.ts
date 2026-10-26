@@ -370,7 +370,7 @@ export const projectListRead = async (
               loadProjectSubtreeRollups(
                 db,
                 page.rows.map((row) => row.id),
-                await hierarchy.load(page),
+                hierarchy.load(page),
               ),
             );
             const dependencies = bind.batch(({ rows }) =>
