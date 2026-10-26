@@ -11,6 +11,10 @@ shelf, drawer, or room and compare what is physically present with what Cubby
 expects there. The native app ([native design](../apps/apple/DESIGN.md)) owns the
 phone-first walk: scan, recount/audit, sweep, and the location photo pass.
 
+The **Walk the Shelf** Shortcut accepts any Location, including an empty one.
+Ambiguous location names prompt for a choice. A connected or saved non-location
+pick prompts for a Location; only an omitted Location starts a household-wide audit.
+
 Cubby is a personal, single-user app. The flow favors speed and recoverability
 over multi-user coordination, under four rules:
 
