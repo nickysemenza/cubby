@@ -39,6 +39,11 @@ import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { countedGroupPage } from "~/ui/data-table/counted-group-page";
+import {
+  selectedValues,
+  sideValues,
+  withSideValues,
+} from "~/ui/data-table/filter-bar-core";
 import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
@@ -460,16 +465,26 @@ function QuickFilters({
               onOpenChange={(open) => {
                 if (open)
                   config.onActivate?.(
-                    tableState.getColumnFilterValues(columnId),
+                    selectedValues(
+                      tableState.getColumnFilterValues(columnId) ?? [],
+                    ),
                   );
               }}
-              values={tableState.getColumnFilterValues(columnId) ?? []}
-              onValuesChange={(values) =>
+              values={sideValues(
+                tableState.getColumnFilterValues(columnId) ?? [],
+                "is",
+              )}
+              onValuesChange={(values) => {
+                const next = withSideValues(
+                  tableState.getColumnFilterValues(columnId) ?? [],
+                  "is",
+                  values,
+                );
                 tableState.setColumnFilters((previous) => [
                   ...previous.filter((filter) => filter.id !== columnId),
-                  ...(values.length ? [{ id: columnId, value: values }] : []),
-                ])
-              }
+                  ...(next.length ? [{ id: columnId, value: next }] : []),
+                ]);
+              }}
             />
           );
         },

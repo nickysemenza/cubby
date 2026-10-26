@@ -2,6 +2,7 @@ import { formatConfidence } from "@cubby/schemas/ai";
 import { connectionRelation } from "@cubby/schemas/entity-connections";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { splitExcluded } from "@cubby/schemas/filter-sentinel-fields";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import {
   suggestionStrength,
@@ -70,10 +71,14 @@ type ColumnFilterSpec = FilterSpecCore & {
   value: "string" | "boolean" | "range";
 };
 
-const multiselect = (columnId: string): ColumnFilterSpec => ({
+const multiselect = (
+  columnId: string,
+  value: "string" | "boolean" = "string",
+): ColumnFilterSpec => ({
   columnId,
   kind: "multiselect",
-  value: "string",
+  value,
+  exclude: { field: `${columnId}Exclude` },
 });
 const text = (columnId: string): ColumnFilterSpec => ({
   columnId,
@@ -89,10 +94,7 @@ const range = (columnId: string): ColumnFilterSpec => ({
 /** Every view's filters; `entity`/`record`/`runId` scopes ride the route. */
 const VIEW_FILTERS = {
   // The family chips own the family scope (the route's `family`).
-  all: [
-    multiselect("strength"),
-    { columnId: "clean", kind: "multiselect", value: "boolean" },
-  ],
+  all: [multiselect("strength"), multiselect("clean", "boolean")],
   field: [
     multiselect("entity"),
     multiselect("field"),
@@ -109,7 +111,7 @@ const VIEW_FILTERS = {
     multiselect("action"),
     multiselect("kind"),
     multiselect("kindSource"),
-    { columnId: "clean", kind: "multiselect", value: "boolean" },
+    multiselect("clean", "boolean"),
     text("providerCategory"),
     multiselect("providerStatus"),
     multiselect("candidate"),
@@ -128,7 +130,7 @@ const VIEW_FILTERS = {
     range("amount"),
     range("dateGapDays"),
     multiselect("strength"),
-    { columnId: "clean", kind: "multiselect", value: "boolean" },
+    multiselect("clean", "boolean"),
   ],
 } satisfies Partial<Record<SuggestionView, readonly ColumnFilterSpec[]>>;
 
@@ -163,7 +165,7 @@ const NUMERIC_RANGES = new Set(["amount", "confidence"]);
 /** The table's column filters as the server's `where`, one condition per column. */
 export function buildWhere(
   view: SuggestionView,
-  state: TableStateReturn,
+  state: Pick<TableStateReturn, "getColumnFilter" | "getColumnFilterValues">,
 ): SuggestionListFilters["where"] {
   const where: SuggestionListFilters["where"] = {};
   for (const spec of viewSetting(VIEW_FILTERS, view) ?? []) {
@@ -192,10 +194,12 @@ export function buildWhere(
     }
     const values = state.getColumnFilterValues(spec.columnId);
     if (!values?.length) continue;
+    const { included, excluded } = splitExcluded(values);
+    const parseValue = (value: string): SuggestionColumnValue =>
+      spec.value === "boolean" ? value === "true" : value;
     where[spec.columnId] = {
-      in: values.map((value): SuggestionColumnValue =>
-        spec.value === "boolean" ? value === "true" : value,
-      ),
+      ...(included.length ? { in: included.map(parseValue) } : {}),
+      ...(excluded.length ? { notIn: excluded.map(parseValue) } : {}),
     };
   }
   return where;
@@ -240,6 +244,7 @@ const multiFilter = (
 ): FilterConfig => ({
   placeholder,
   filterType: "multiselect",
+  exclude: true,
   options: choices,
 });
 const textFilter = (placeholder: string): FilterConfig => ({
@@ -576,6 +581,7 @@ function fieldColumns() {
           filterConfig: {
             placeholder: "Filter field",
             filterType: "multiselect",
+            exclude: true,
             freeText: true,
           },
         }),
@@ -730,6 +736,7 @@ function rosterFilterConfig(
   return {
     placeholder,
     filterType: "multiselect",
+    exclude: true,
     options: source?.options ?? [],
     ...deferredRosterControls(source),
   };

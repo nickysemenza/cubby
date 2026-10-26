@@ -292,6 +292,49 @@ describe("cross-family Suggestion list", () => {
     }
   });
 
+  it("excludes matching column values while keeping null and absent values", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic exclusion product" }),
+      ctx.actor,
+    );
+    await fieldSuggestion(ctx, product, "model", 0.95, new Date());
+    const page = await listSuggestionPage(ctx.db, {});
+    expect(page.items).toHaveLength(2);
+    expect(
+      page.items.find((row) => row.family === "statement_transaction")?.columns
+        .owner,
+    ).toBeNull();
+    expect(
+      page.items.find((row) => row.family === "field")?.columns.owner,
+    ).toBeUndefined();
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          where: { owner: { notIn: [null, "LPR-2A2A"] } },
+        })
+      ).items.map((row) => row.id),
+    ).toEqual(page.items.map((row) => row.id));
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          where: { account: { notIn: [account.id] } },
+        })
+      ).items.map((row) => row.family),
+    ).toEqual(["field"]);
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          where: { account: { in: [account.id], notIn: [account.id] } },
+        })
+      ).items,
+    ).toEqual([]);
+  });
+
   // Failure modes: one family's rows sort as a block instead of interleaving
   // by readiness; a weak row outranks a clean one; paging repeats or skips.
   it("orders every family clean first, then by Strength, then newest", async () => {
@@ -395,6 +438,25 @@ describe("cross-family Suggestion list", () => {
         ],
       });
     }
+    // Excluding either value in a multi-valued column removes the row.
+    for (const entityKind of ["product", "expense"]) {
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            family: "recommendation",
+            where: { entityKind: { notIn: [entityKind] } },
+          })
+        ).items,
+      ).toEqual([]);
+    }
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "recommendation",
+          where: { entityKind: { notIn: ["task"] } },
+        })
+      ).items.map((row) => row.id),
+    ).toEqual([proposal.review.assessmentId]);
   });
 
   // Failure mode: the uniform row recomputes clean and drifts from the

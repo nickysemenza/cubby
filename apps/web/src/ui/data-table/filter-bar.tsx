@@ -549,18 +549,16 @@ function NumberRangeBounds({
  * A rosterless multiselect (an external id): values typed comma-separated.
  * The input keeps what was typed (spacing, a trailing comma); the filter
  * holds the values it separates, which the URL codec writes and a reload
- * decodes back unchanged. Excluded values ride along untouched.
+ * decodes back unchanged. Each side preserves the other side's values.
  */
 function TypedValuesEditor({
   field,
   filter,
+  side: initialSide = "is",
   setValues,
-}: {
-  field: FilterBarField;
-  filter: Filter | undefined;
-  setValues: (values: string[]) => void;
-}) {
-  const values = sideValues(filter?.values ?? [], "is");
+}: FieldEditorProps) {
+  const [side, setSide] = useState<FilterSide>(initialSide);
+  const values = sideValues(filter?.values ?? [], side);
   const key = values.join(FILTER_LIST_SEPARATOR);
   const [draft, setDraft] = useState(() => values.join(", "));
   // A change from outside (reload, Clear, a saved view) replaces the text.
@@ -569,6 +567,9 @@ function TypedValuesEditor({
   const label = field.label ?? field.key;
   return (
     <>
+      {field.exclude && (
+        <SideControl label={label} side={side} onSideChange={setSide} />
+      )}
       <Input
         ref={focusOnMount}
         value={draft}
@@ -577,7 +578,7 @@ function TypedValuesEditor({
           setValues(
             withSideValues(
               filter?.values ?? [],
-              "is",
+              side,
               splitTypedList(event.target.value),
             ),
           );
@@ -815,9 +816,7 @@ function FieldValueEditor(props: FieldEditorProps) {
     );
   }
   if (field.type === "multiselect" && field.freeText)
-    return (
-      <TypedValuesEditor field={field} filter={filter} setValues={setValues} />
-    );
+    return <TypedValuesEditor {...props} />;
   if (field.type === "multiselect") return <ChecklistEditor {...props} />;
   if (isTriState(field)) return <TriStateEditor {...props} />;
   const value = filter?.values[0];
