@@ -67,6 +67,28 @@ const graphReader =
   };
 
 describe("entity graph path search", () => {
+  it("continues beyond a saturated intermediate node and still proves shortest distance", async () => {
+    const start = ref("CAPSTART");
+    const hub = ref("CAPHUB");
+    const next = ref("CAPNEXT");
+    const destination = ref("CAPEND");
+    const result = await searchEntityGraphPaths(
+      start,
+      destination,
+      graphReader([
+        ...Array.from({ length: 4 }, (_, i) =>
+          edge(`parallel-${i}`, start, hub),
+        ),
+        edge("continue", hub, next),
+        edge("finish", next, destination),
+      ]),
+    );
+    expect(result.paths).toHaveLength(3);
+    expect(result.paths.every((path) => path.edgeIds.length === 3)).toBe(true);
+    expect(result.completion).toBe("budget-limit");
+    expect(result.shortestPathCertain).toBe(true);
+  });
+
   it("retains distinct evidence paths over the same record sequence", async () => {
     const [start, middle, destination] = [
       ref("START"),
@@ -149,6 +171,7 @@ describe("entity graph path search", () => {
 
     expect(result.paths).toHaveLength(3);
     expect(result.completion).toBe("budget-limit");
+    expect(result.shortestPathCertain).toBe(true);
     expect(
       new Set(result.paths.map((path) => path.nodeRefs[1]?.entityId)).size,
     ).toBe(3);

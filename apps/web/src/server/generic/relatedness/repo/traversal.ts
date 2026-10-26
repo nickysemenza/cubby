@@ -392,9 +392,11 @@ export const compileTraversal = (
         index === steps.length - 1 && aliases?.leaf
           ? aliases.leaf
           : `${aliasPrefix}${index + 1}`;
-      const candidateRows = outgoing
-        ? relationshipQueryTargets(key, currentAlias)
-        : undefined;
+      const candidateRows = relationshipQueryTargets(
+        key,
+        currentAlias,
+        outgoing,
+      );
       hops.push({
         table: nextTable,
         candidateRows,
