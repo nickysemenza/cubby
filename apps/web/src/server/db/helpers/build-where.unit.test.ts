@@ -517,7 +517,9 @@ describe("buildMealWhere", () => {
 
   it("recipeCostCoverage=true reads the stored recipe-cost gap", async () => {
     const rendered = await where({ recipeCostCoverage: true });
-    expect(rendered).toContain('FROM "EntityQualityCheck" dq_check');
+    // Stored quality lives in DerivedValue (ADR 0021).
+    expect(rendered).toContain(`dq.value->'checks'->>`);
+    expect(rendered).toContain('FROM "DerivedValue" dq');
     expect(rendered).toContain("= 'gap'");
   });
 });

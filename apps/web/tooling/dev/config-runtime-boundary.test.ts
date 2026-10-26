@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { typeChecker } from "cubby/tooling/type-checker";
 import { productionWorker } from "../../cloudflare.config.ts";
 import { test } from "vitest";
@@ -12,6 +18,8 @@ import { isFileLoadingAllowed, resolveConfig } from "vite";
 // type-only import of list hydration would pull Env consumers into that graph.
 test("repository list tracing stays independent of Worker Env consumers", () => {
   const root = path.resolve(import.meta.dirname, "../..");
+  // `artifacts/` is ignored and absent on a fresh CI checkout.
+  mkdirSync(path.join(root, "artifacts"), { recursive: true });
   const directory = mkdtempSync(path.join(root, "artifacts/list-types-"));
   try {
     const config = path.join(directory, "tsconfig.json");
