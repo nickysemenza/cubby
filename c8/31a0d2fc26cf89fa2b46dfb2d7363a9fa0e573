@@ -1,0 +1,31 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_7667243984c2e9::t_6076a36fb9dd8f 114
+apps/apple/App/Shared/Entity/Detail/ConnectedSectionView.swift
+  s_7667243984c2e9::t_d11325ae169c32 180
+apps/apple/App/Shared/Photo/Library/PhotosRootView.swift
+  s_7667243984c2e9::t_4e404e2b872050 263
+apps/apple/App/Shared/Run/RunConsoleView.swift
+  s_7667243984c2e9::t_c0295bf92986d4 129
+apps/apple/App/Tests/DesignSystem/SceneRefreshTests.swift
+  s_7667243984c2e9::t_bbac8daa28230a 1-26
+apps/apple/project.yml
+  s_7667243984c2e9::t_93e645fd876788 311
+apps/apple/App/Shared/DesignSystem/RefreshControl.swift
+  s_7667243984c2e9::t_316b56882a8156 4-6,11-15,21-33,36-39,44-45,49-53,60-62,64-72,74-78,80-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c831a0d2fc26cf89fa2b46dfb2d7363a9fa0e573",
+  "prompts": {},
+  "sessions": {
+    "s_7667243984c2e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b9721aa1-95df-48cd-9b7c-c3998129dc3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
