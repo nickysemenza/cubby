@@ -10,6 +10,7 @@ import {
   expenseShortcode,
   purchaseShortcode,
   taskShortcode,
+  ledgerPartyShortcode,
 } from "./identifiers";
 import { mealFilterFields, type MealOut } from "./meal";
 import { plantingFilterFields } from "./planting";
@@ -108,7 +109,13 @@ export const calendarTaskItem = z.object({
 
 const calendarSpendingContext = z.object({
   projectNames: z.array(z.string()),
-  partyNames: z.array(z.string()),
+  parties: z.array(
+    z.object({
+      id: ledgerPartyShortcode,
+      name: z.string(),
+      inherited: z.boolean(),
+    }),
+  ),
 });
 
 export const calendarExpenseItem = z.object({

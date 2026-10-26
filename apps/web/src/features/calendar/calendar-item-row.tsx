@@ -3,7 +3,9 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { capitalize } from "@cubby/shared";
 
 import { EntityCover } from "~/entity/components/entity-cover";
+import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
+import { InheritedMarker } from "~/entity/fields/field-resolution";
 import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
@@ -14,6 +16,39 @@ import { calendarItemPresentation } from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";
 
 type CalendarItemPresentationVariant = "month" | "detail" | "rich";
+
+function CalendarBeneficiaries({
+  item,
+  announceNames = false,
+}: {
+  item: CalendarItem;
+  announceNames?: boolean;
+}) {
+  if (item.kind !== "expense" && item.kind !== "purchase") return null;
+  const parties = item.spendingContext?.parties ?? [];
+  if (!parties.length) return null;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1">
+      {parties.map((party) => (
+        <span
+          key={party.id}
+          className="inline-flex shrink-0 items-center gap-1"
+          title={party.name}
+        >
+          <EntityIdentityMark
+            entity="ledgerParty"
+            id={party.id}
+            name={party.name}
+            displayImage={null}
+            size="inline"
+          />
+          {announceNames && <span className="sr-only">{party.name}</span>}
+          {party.inherited && <InheritedMarker />}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 function calendarItemCost(item: CalendarItem) {
   if (
@@ -93,7 +128,7 @@ function CalendarItemCompact({
       kind: "party",
       label:
         item.kind === "expense" || item.kind === "purchase"
-          ? item.spendingContext?.partyNames.join(", ")
+          ? item.spendingContext?.parties.map((party) => party.name).join(", ")
           : null,
     },
   ].filter(({ label }) => Boolean(label));
@@ -110,17 +145,27 @@ function CalendarItemCompact({
       {context.length > 0 && (
         <span
           className={cn(
-            "flex min-w-0 gap-1 text-muted-foreground",
-            context.length > 1 ? "flex-[2]" : "flex-1",
+            "flex min-w-0 items-center gap-1 overflow-hidden text-muted-foreground",
+            context.length > 1
+              ? "flex-[2]"
+              : context[0]?.kind === "party"
+                ? "shrink-0"
+                : "flex-1",
           )}
         >
           {context.map(({ kind, label }) => (
             <span
               key={kind}
-              className="min-w-0 flex-1 truncate"
+              className={cn(
+                kind === "party" ? "flex shrink-0" : "min-w-0 flex-1 truncate",
+              )}
               title={label ?? undefined}
             >
-              {label}
+              {kind === "party" ? (
+                <CalendarBeneficiaries item={item} announceNames />
+              ) : (
+                label
+              )}
             </span>
           ))}
         </span>
@@ -213,6 +258,7 @@ function CalendarItemRich({
               {presentation.richBadge.label}
             </Badge>
           )}
+          <CalendarBeneficiaries item={item} />
           <span className="min-w-0 flex-1 truncate" title={metadata}>
             {metadata}
           </span>

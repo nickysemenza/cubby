@@ -36,12 +36,16 @@ describe("calendar day membership", () => {
       vendorId: seller.output.id,
       date,
     });
+    const beneficiary = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic calendar beneficiary",
+    });
     await createRepoEntity(ctx, "expense", {
       name: "Synthetic calendar charge",
       trade: "other",
       purchaseId: purchase.output.id,
       date,
       cost: 5,
+      beneficiaries: [{ partyId: beneficiary.output.id, weight: 1 }],
     });
     const { entityId: mealId, output: meal } = await createMealWithEntityId(
       ctx.db,
@@ -80,12 +84,29 @@ describe("calendar day membership", () => {
       range.items.find((item) => item.id === task.output.id),
     ).toMatchObject({ assignedProjectName: "Synthetic garden season" });
     expect(covers.get(purchase.output.id)).toBe(expected.get(seller.output.id));
+    expect(
+      range.items.find((item) => item.id === purchase.output.id),
+    ).toMatchObject({
+      spendingContext: {
+        parties: [
+          {
+            id: beneficiary.output.id,
+            name: "Synthetic calendar beneficiary",
+            inherited: false,
+          },
+        ],
+      },
+    });
     expect(covers.get(meal.id)).toBe(expected.get(meal.id));
   });
 
   it("coalesces purchase lines and keeps later refunds, standalone charges and plans", async () => {
     const seller = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic rollup seller",
+    });
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
     });
     const purchase = await createRepoEntity(ctx, "purchase", {
       vendorId: seller.output.id,
@@ -134,6 +155,13 @@ describe("calendar day membership", () => {
       projectId: project.output.id,
       beneficiaries: [{ partyId: beneficiary.output.id, weight: 1 }],
     });
+    const unknown = await createRepoEntity(ctx, "expense", {
+      name: "Synthetic explicitly unknown beneficiary",
+      date: "2026-09-19",
+      cost: 0,
+      trade: "other",
+      beneficiaries: [{ partyId: null, weight: 1 }],
+    });
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic discarded item" }),
@@ -173,7 +201,19 @@ describe("calendar day membership", () => {
       cost: 11,
       ledgerAmount: 11,
       startDate: "2026-09-19",
+      spendingContext: {
+        parties: [
+          {
+            id: household.output.id,
+            name: "Synthetic household",
+            inherited: true,
+          },
+        ],
+      },
     });
+    expect(
+      range.items.find((item) => item.id === unknown.output.id),
+    ).toMatchObject({ spendingContext: { parties: [] } });
     const later = await getCalendarRange(
       ctx.db,
       calendarRangeInput.parse({
@@ -184,11 +224,24 @@ describe("calendar day membership", () => {
     );
     expect(later.items).toHaveLength(3);
     expect(
+      later.items.find((item) => item.id === plan.output.id),
+    ).toMatchObject({
+      spendingContext: {
+        parties: [{ id: household.output.id, inherited: true }],
+      },
+    });
+    expect(
       later.items.find((item) => item.id === standalone.output.id),
     ).toMatchObject({
       spendingContext: {
         projectNames: ["Synthetic direct project"],
-        partyNames: ["Synthetic beneficiary"],
+        parties: [
+          {
+            id: beneficiary.output.id,
+            name: "Synthetic beneficiary",
+            inherited: false,
+          },
+        ],
       },
     });
     expect(later.items.find((item) => item.kind === "purchase")).toMatchObject({

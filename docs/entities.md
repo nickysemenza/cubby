@@ -2086,8 +2086,15 @@ membership. Garden feed UIDs are unchanged.
 Calendar pills show explicitly assigned Projects (excluding inherited defaults)
 and spending beneficiary LedgerParty names, including the contributing lines
 of Purchase occurrences.
-Absent context has no placeholder. Spending omits discards (zero or unknown
-cost with negative product quantity); refunds and sales remain visible.
+Beneficiaries use the effective spending allocation resolver, including its
+Household default and recorded overrides. They carry LedgerParty identities
+and inheritance state in the range batch; every calendar density renders their
+shared initials avatars and inherited markers without per-row lookups. Explicit
+unknown attribution stays blank; unpriced lines retain any recorded beneficiary
+identities without fabricating monetary allocations. Absent project context has
+no placeholder.
+Spending omits discards (zero or unknown cost with negative product quantity);
+refunds and sales remain visible.
 
 Spending is computed from existing relationships, not stored. Batched Purchase
 evidence loaders feed pure TypeScript calculation functions; the calendar consumes

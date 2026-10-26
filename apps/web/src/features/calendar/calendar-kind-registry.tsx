@@ -173,7 +173,7 @@ const calendarKindRegistry = {
         item.vendor,
         item.productName,
         ...(item.spendingContext?.projectNames ?? []),
-        ...(item.spendingContext?.partyNames ?? []),
+        ...(item.spendingContext?.parties.map((party) => party.name) ?? []),
         item.trade ? TRADE_LABELS[item.trade] : "Unassigned trade",
       ]
         .filter(Boolean)
@@ -227,7 +227,7 @@ const calendarKindRegistry = {
       [
         item.vendor ?? "Purchase",
         ...(item.spendingContext?.projectNames ?? []),
-        ...(item.spendingContext?.partyNames ?? []),
+        ...(item.spendingContext?.parties.map((party) => party.name) ?? []),
       ].join(" · "),
     compactBadge: (item) =>
       item.occurrence === "refund"

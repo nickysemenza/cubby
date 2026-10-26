@@ -53,6 +53,7 @@ import {
   plantingScaffold,
   getPlanting,
 } from "~/server/domains/garden/repo/garden";
+import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import {
   mealScaffold,
   getMealsByDateRange,
@@ -561,8 +562,11 @@ export async function getCalendarRange(
     ? await getDb(db)
         .select({
           shortcode: expense.shortcode,
+          expenseId: expense.id,
+          cost: expense.cost,
           projectName: project.name,
           partyName: ledgerParty.name,
+          partyShortcode: ledgerParty.shortcode,
         })
         .from(expense)
         .leftJoin(
@@ -597,6 +601,48 @@ export async function getCalendarRange(
     rows.push(row);
     spendingByLine.set(row.shortcode, rows);
   }
+  type SpendingParty = NonNullable<
+    Extract<CalendarItem, { kind: "expense" }>["spendingContext"]
+  >["parties"][number];
+  const allocations = (
+    await loadExpenseAllocations(db, {
+      expenseIds: [...new Set(spendingRows.map((row) => row.expenseId))],
+      includeFuture: true,
+    })
+  ).filter((row) => row.role === "beneficiary");
+  const partyCodes = [
+    ...new Set(
+      allocations
+        .map((row) => row.allocationKey)
+        .filter((key) => !key.startsWith("~")),
+    ),
+  ];
+  const effectiveParties = new Map(
+    (partyCodes.length
+      ? await getDb(db)
+          .select({ shortcode: ledgerParty.shortcode, name: ledgerParty.name })
+          .from(ledgerParty)
+          .where(
+            and(
+              inArray(ledgerParty.shortcode, partyCodes),
+              notDeleted(ledgerParty),
+            ),
+          )
+      : []
+    ).map((party) => [party.shortcode, party]),
+  );
+  const partiesByLine = new Map<string, SpendingParty[]>();
+  for (const allocation of allocations) {
+    const parties = partiesByLine.get(allocation.expenseShortcode) ?? [];
+    const party = effectiveParties.get(allocation.allocationKey);
+    if (party)
+      parties.push({
+        id: parseShortcodeFor("ledgerParty", party.shortcode),
+        name: party.name,
+        inherited: allocation.basis !== "recorded",
+      });
+    partiesByLine.set(allocation.expenseShortcode, parties);
+  }
   const covers = await resolvePublicEntityDisplayImageLists(
     db,
     items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
@@ -609,6 +655,28 @@ export async function getCalendarRange(
           ? item.lines.map((line) => line.id)
           : []
     ).flatMap((code) => spendingByLine.get(code) ?? []);
+    const parties = new Map<string, SpendingParty>();
+    for (const row of rows) {
+      // Monetary allocations omit unpriced rows; their explicit identities
+      // remain usable without inventing a zero-cost allocation.
+      const resolved =
+        partiesByLine.get(row.shortcode) ??
+        (row.cost === null && row.partyShortcode && row.partyName
+          ? [
+              {
+                id: parseShortcodeFor("ledgerParty", row.partyShortcode),
+                name: row.partyName,
+                inherited: false,
+              },
+            ]
+          : []);
+      for (const party of resolved)
+        parties.set(party.id, {
+          ...party,
+          inherited:
+            party.inherited && (parties.get(party.id)?.inherited ?? true),
+        });
+    }
     return {
       ...item,
       ...((item.kind === "expense" || item.kind === "purchase") && {
@@ -618,11 +686,9 @@ export async function getCalendarRange(
               rows.flatMap((row) => (row.projectName ? [row.projectName] : [])),
             ),
           ].sort(),
-          partyNames: [
-            ...new Set(
-              rows.flatMap((row) => (row.partyName ? [row.partyName] : [])),
-            ),
-          ].sort(),
+          parties: [...parties.values()].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
         },
       }),
       displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],

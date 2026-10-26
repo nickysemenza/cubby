@@ -59,7 +59,7 @@ const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
   vendor: "Target",
   trade: "other",
   projectName: "Kitchen",
-  spendingContext: { projectNames: ["Kitchen"], partyNames: [] },
+  spendingContext: { projectNames: ["Kitchen"], parties: [] },
   productName: "Souper Cubes",
   displayImages: [
     {
