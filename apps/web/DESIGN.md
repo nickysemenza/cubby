@@ -317,7 +317,14 @@ for every item.
 The dedicated Work queue is a workbench table across record types. Its
 workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
 with each view's server total in mono; a tab presets the View filter, beside
-the Type, Waiting for, Kind, Source, Check and Vendor any-of filters. Filters,
+the Type, Waiting for, Kind, Source, Reason and Vendor any-of filters. Each
+offers is and is not through the shared filter editor, including Filter… in
+the column header menu. Type includes Problem for rows without a record type.
+Reason choices use stable branch or Problem keys and the cell's declared
+labels; a gap row belongs to each failing check, labelled by its message.
+Excluding a check removes rows carrying it while keeping unrelated work and
+the remaining rows' complete explanations. Finding summaries stay in Record
+and their Reason is Finding. Filters,
 sort and Group by (Type, Waiting for or Next action, sectioned by the server
 ahead of the sort) are URL state, and the shared infinite pager loads more
 work on scroll. Columns are the record's image, Type, Record (the record's

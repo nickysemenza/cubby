@@ -66,6 +66,11 @@ and Assessments retain unresolved decisions; Runs record execution; domain
 commands own writes. Extend their shared projections rather than introducing
 another task ledger, workflow engine, or entity-specific queue state.
 Queue reads explain current work without launching inference or mutations.
+The Reason filter selects stable `reasonKeys`, including data-check keys,
+Problem keys and branch keys such as `reconciliation:purchase-unsettled`.
+`reasonExclude` keeps rows with none of the selected reasons; other failed
+checks remain visible in each retained row's explanation. Kind, Source and
+Vendor also accept their corresponding `Exclude` inputs on the member queue.
 The current queue's work kind describes its category, not its execution state;
 keep those meanings separate when adding automatic and waiting views.
 

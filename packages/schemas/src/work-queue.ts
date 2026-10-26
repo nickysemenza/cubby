@@ -3,7 +3,12 @@ import { z } from "zod";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
 
 import { plainDate } from "./base-entity";
-import { dataCheck, type DataCheck, dataQuality } from "./data-quality";
+import {
+  dataCheck,
+  dataCheckMessage,
+  type DataCheck,
+  dataQuality,
+} from "./data-quality";
 import { displayImagesField } from "./display-images";
 import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
@@ -147,6 +152,43 @@ export const workQueueGapSchema = z.object({
   message: z.string().min(1),
 });
 
+/** Stable branch labels; dynamic counts and evidence do not become choices. */
+export const workQueueReasonLabels = {
+  "reconciliation:purchase-unsettled": "No settlement evidence",
+  "awaiting_posting:reconciliation:purchase-unsettled":
+    "Awaiting posting; no settlement evidence",
+  "awaiting_posting:purchaseFinancialSettlementMismatches":
+    "Awaiting posting; recorded settlement amounts differ.",
+  "reconciliation:transfer":
+    "Account transfer has no confirmed transfer evidence.",
+  "awaiting_posting:reconciliation:transfer":
+    "Awaiting posting of transfer evidence.",
+  "suggestions:statement_transaction": "Transaction suggestions",
+  "suggestions:recommendation": "Connection suggestions",
+  "suggestions:field": "Field suggestions",
+  "suggestions:transfer_pair": "Transfer suggestions",
+  "image-suggestions": "Image descriptions",
+  "execution:run": "Authorized execution or prerequisite wait",
+  "account:run": "Run needs attention",
+  finding: "Finding",
+} as const;
+
+export const workQueueReasonOptions = [
+  ...[...new Set(workQueueGapViews.flatMap(workQueueGapChecks))].map(
+    (check) => ({ value: check, label: dataCheckMessage[check] }),
+  ),
+  ...Object.entries(workQueueReasonLabels).map(([value, label]) => ({
+    value,
+    label,
+  })),
+];
+const reasonKey = z
+  .string()
+  .min(1)
+  .describe(
+    "Stable Reason key: a data check, problem definition key, or branch key (for example reconciliation:purchase-unsettled, suggestions:field, finding). Awaiting-posting branches prefix awaiting_posting:.",
+  );
+
 export const workQueueVendorSchema = z.object({
   id: vendorShortcode,
   name: z.string(),
@@ -176,6 +218,8 @@ export const workQueueRowSchema = problemRowSchema
     kind: workQueueKindSchema,
     /** Plain text; a gap row's is its gap messages as sentences. */
     reason: z.string(),
+    /** Any-of memberships; a gap row carries every failing saved-view check. */
+    reasonKeys: z.array(reasonKey),
     /** The saved view's checks this record currently fails; empty for rows
      * that are not data-quality gaps. */
     gaps: z.array(workQueueGapSchema),
@@ -234,15 +278,18 @@ export const workQueueSortSchema = createSortParamsSchema(
   "kind",
 );
 
-export const workQueuePageInput = z.object({
+export const workQueuePageInput = z.strictObject({
   ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
   query: z.string().max(500).optional(),
   view: z.enum(["automatic", "research", "review", "waiting"]).optional(),
   kind: oneOrMany(workQueueKindSchema).optional(),
+  kindExclude: oneOrMany(workQueueKindSchema).optional(),
   source: oneOrMany(workQueueSourceSchema).optional(),
-  /** Gap rows failing any of these checks; every other row drops out. */
-  check: oneOrMany(dataCheck).optional(),
+  sourceExclude: oneOrMany(workQueueSourceSchema).optional(),
+  reason: oneOrMany(reasonKey).optional(),
+  reasonExclude: oneOrMany(reasonKey).optional(),
   vendor: oneOrMany(vendorShortcode).optional(),
+  vendorExclude: oneOrMany(vendorShortcode).optional(),
   sort: workQueueSortSchema.optional(),
 });
 
@@ -265,22 +312,34 @@ export const workQueueRecordTypeOptions = shortcodeEntities.map((value) => ({
  */
 export const workQueueList = defineSourceList({
   filters: [
-    { columnId: "name", urlKey: "query", kind: "text" },
+    { columnId: "name", field: "query", urlKey: "query", kind: "text" },
     { columnId: "view", kind: "text" },
-    { columnId: "entity", kind: "multiselect" },
+    {
+      columnId: "entity",
+      kind: "multiselect",
+      choices: { options: workQueueRecordTypeOptions },
+      nullable: { field: "entityPresence", label: "type" },
+    },
     {
       columnId: "waitingFor",
       kind: "multiselect",
       currentMember: true,
       nullable: { field: "waitingForPresence", label: "waiting for" },
     },
-    { columnId: "source", kind: "multiselect" },
-    { columnId: "kind", kind: "multiselect" },
+    {
+      columnId: "source",
+      kind: "multiselect",
+      choices: { options: workQueueSourceOptions },
+    },
+    {
+      columnId: "kind",
+      kind: "multiselect",
+      choices: { options: workQueueKindOptions },
+    },
     {
       columnId: "reason",
-      field: "check",
-      urlKey: "check",
       kind: "multiselect",
+      choices: { options: workQueueReasonOptions, source: "problems" },
     },
     { columnId: "vendor", kind: "multiselect" },
   ],
@@ -289,7 +348,7 @@ export const workQueueList = defineSourceList({
       key: "recordType",
       label: "Type",
       noValueLabel: "Problem",
-      filter: { columnId: "entity", noValue: false },
+      filter: { columnId: "entity", noValue: true },
       options: workQueueRecordTypeOptions,
     }),
     sourceGroupChoice({
@@ -322,10 +381,10 @@ export const workQueueList = defineSourceList({
       filter: null,
     }),
     unsupportedGroupChoice({
-      key: "check",
-      label: "Check",
+      key: "reason",
+      label: "Reason",
       reason:
-        "A row can fail several checks, and each row belongs to one section.",
+        "A row can have several reasons, and each row belongs to one section.",
     }),
     unsupportedGroupChoice({
       key: "date",
@@ -364,12 +423,19 @@ export const workQueueHouseholdInput = workQueuePageInput.extend({
     .register(repositoryCurrentMember, {
       reason: "Me also matches Either work; a member code is member-only.",
     }),
+  waitingForExclude: partyFilterList(ledgerPartyShortcode, ["either"])
+    .optional()
+    .register(repositoryCurrentMember, {
+      reason: "Me also matches Either work; a member code is member-only.",
+    }),
   /** `none` is Unresolved routing; `has` is resolved (members or Either). */
   waitingForPresence: presenceFilter.describe(
     "has/none waiting for, ORed with picked members",
   ),
   /** Rows about any of these record types; Problems rows have none. */
   entity: oneOrMany(z.enum(shortcodeEntities)).optional(),
+  entityExclude: oneOrMany(z.enum(shortcodeEntities)).optional(),
+  entityPresence: presenceFilter,
   group: workQueueGroupSchema.optional(),
 });
 

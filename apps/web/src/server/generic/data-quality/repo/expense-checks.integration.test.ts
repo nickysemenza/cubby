@@ -152,7 +152,7 @@ describe("stored Expense quality", () => {
         null,
         workQueueHouseholdInput.parse({
           query: line.output.name,
-          check: "expense_product_resolution",
+          reason: "expense_product_resolution",
         }),
         false,
       );

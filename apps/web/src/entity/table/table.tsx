@@ -843,6 +843,45 @@ export default function RTable<TItem extends RowData>(
   props: RTableProps<TItem>,
 ) {
   const { entity, subjectEntity, rowActions, actionDialogs } = props;
+  const table = props.table;
+  const filterWarnings = useRef(new Set<string>());
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    // Inspect a bounded loaded sample only when data or choice declarations change.
+    const rows = table.getCoreRowModel().flatRows.slice(0, 100);
+    for (const column of table.getAllLeafColumns()) {
+      const config = column.columnDef.meta?.filterConfig;
+      if (
+        config?.filterType !== "multiselect" ||
+        config.options === undefined ||
+        config.onActivate ||
+        config.onSearchChange ||
+        config.records ||
+        config.referenceEntity ||
+        config.isLoading ||
+        config.freeText ||
+        !column.accessorFn ||
+        filterWarnings.current.has(column.id)
+      )
+        continue;
+      const choices = new Set(
+        config.options.flatMap(({ value, label }) => [value, label]),
+      );
+      const missing = rows.some((row) => {
+        const value = row.getValue(column.id);
+        return (Array.isArray(value) ? value : [value]).some(
+          (item) =>
+            typeof item === "string" && item !== "" && !choices.has(item),
+        );
+      });
+      if (missing) {
+        filterWarnings.current.add(column.id);
+        console.warn(
+          `RTable column ${column.id} displays a value absent from its multiselect choices.`,
+        );
+      }
+    }
+  }, [table, table.options.data, table.options.columns]);
   if (
     import.meta.env.DEV &&
     props.withoutImages === undefined &&

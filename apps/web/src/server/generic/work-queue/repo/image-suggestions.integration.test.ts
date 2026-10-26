@@ -65,7 +65,6 @@ describe("image Suggestions in Work", () => {
   const input = () =>
     workQueueHouseholdInput.parse({
       source: "suggestion",
-      recordType: "image",
       pageSize: 20,
     });
 

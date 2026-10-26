@@ -483,7 +483,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     }
   });
 
-  it("filters by check before counting and paging, and carries check ids", async () => {
+  it("filters Reason memberships across gaps and settlement before counting and paging", async () => {
     const prefix = "Synthetic check filter";
     await merchandiseOrder(prefix);
     await createProductIdentityFixture(
@@ -496,7 +496,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
 
     const lines = await read({
       query: prefix,
-      check: "expense_product_resolution",
+      reason: "expense_product_resolution",
     });
     expect(lines.meta.totalCount).toBe(3);
     for (const row of lines.items) {
@@ -508,13 +508,13 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     }
     const page = await read({
       query: prefix,
-      check: ["expense_product_resolution"],
+      reason: ["expense_product_resolution"],
       pageSize: 1,
     });
     expect(page.meta.totalCount).toBe(3);
     expect(page.items).toHaveLength(1);
 
-    const product = await read({ query: prefix, check: ["product_category"] });
+    const product = await read({ query: prefix, reason: ["product_category"] });
     expect(product.meta.totalCount).toBe(1);
     expect(product.items[0]).toMatchObject({
       entity: "product",
@@ -522,6 +522,47 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     });
     const checks = product.items[0]?.gaps.map((gap) => gap.check) ?? [];
     expect(checks).toContain("product_category");
+    expect(product.items[0]?.reasonKeys).toEqual(checks);
+    const mixed = await read({
+      query: prefix,
+      reason: ["product_category", "reconciliation:purchase-unsettled"],
+    });
+    expect(mixed.meta.totalCount).toBe(2);
+    expect(mixed.items).toContainEqual(
+      expect.objectContaining({
+        source: "reconciliation",
+        gaps: [],
+        reasonKeys: ["reconciliation:purchase-unsettled"],
+        reason: "No settlement evidence",
+      }),
+    );
+    const excluded = await read({
+      query: prefix,
+      reasonExclude: "product_category",
+    });
+    expect(excluded.items.map((row) => row.key)).toEqual(
+      all.items
+        .filter((row) => !row.reasonKeys.includes("product_category"))
+        .map((row) => row.key),
+    );
+    const onlyGap = await read({
+      query: prefix,
+      reason: ["product_category", "reconciliation:purchase-unsettled"],
+      reasonExclude: "reconciliation:purchase-unsettled",
+    });
+    expect(onlyGap.items).toEqual(product.items);
+    const otherCheck = checks.find((check) => check !== "product_category");
+    if (!otherCheck)
+      throw new Error("Synthetic product must fail a second check");
+    expect(
+      (
+        await read({
+          query: prefix,
+          reason: otherCheck,
+          reasonExclude: "product_category",
+        })
+      ).items,
+    ).toEqual([]);
     // Several gaps read as sentences, never the old "; " join.
     expect(product.items[0]?.reason).not.toContain(".;");
     expect(product.items[0]?.reason).toBe(
@@ -537,7 +578,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     );
     const byGenericReason = await read({
       query: "Research queue",
-      check: ["product_category"],
+      reason: ["product_category"],
     });
     expect(byGenericReason.meta.totalCount).toBe(0);
     // A scored source record's own score rides on its row, so the table can
@@ -562,7 +603,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     const other = await merchandiseOrder("Synthetic other vendor sort");
     const base = {
       query: "Synthetic",
-      check: "expense_product_resolution" as const,
+      reason: "expense_product_resolution" as const,
     };
     const sorted = (orderBy: "amount" | "date", direction: "asc" | "desc") =>
       read({
@@ -653,7 +694,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       .where(eq(expense.purchaseId, purchase.id));
     const filters = {
       query: prefix,
-      check: "expense_product_resolution" as const,
+      reason: "expense_product_resolution" as const,
       sort: [{ orderBy: "name" as const, direction: "asc" as const }],
     };
     const whole = await read(filters);
@@ -776,6 +817,21 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     expect(queue.items).toContainEqual(
       expect.objectContaining({ suggestionFamily: "field", entity: null }),
     );
+    const problems = await read({
+      entityPresence: "none",
+      reason: "suggestions:field",
+    });
+    expect(problems.items).toEqual([
+      expect.objectContaining({
+        entity: null,
+        suggestionFamily: "field",
+        reasonKeys: ["suggestions:field"],
+      }),
+    ]);
+    expect(
+      (await read({ entityPresence: "has", reason: "suggestions:field" }))
+        .items,
+    ).toEqual([]);
     const productStrip = await publishedRecordWorkQueue(
       ctx.db,
       null,
