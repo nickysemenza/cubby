@@ -3,9 +3,12 @@ import {
   MAIL_RUN_ROSTER_LIMIT,
   mailResearchRunInput,
   runInputsErased,
+  runTargetOutcomeReceipt,
 } from "@cubby/schemas/run-fields";
-import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
+import { runOperation } from "~/server/db/generated/entity-table-definitions.gen";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -304,9 +307,19 @@ export async function releaseUnsettledMailRunSources(
     (source) => source.owned && source.email.status === "researching",
   );
   if (!held.length) return [];
-  const earlierFailures = await tx
-    .select({ input: run.input })
+  const [current] = await tx
+    .select({ startedAt: run.startedAt })
     .from(run)
+    .where(eq(run.id, runId));
+  if (!current) throw new Error("Mail import Run was not found");
+  const earlierFailures = await tx
+    .select({
+      runId: runOperation.runId,
+      kind: runOperation.kind,
+      result: runOperation.result,
+    })
+    .from(run)
+    .innerJoin(runOperation, eq(runOperation.runId, run.id))
     .where(
       and(
         eq(run.purpose, "mail_import"),
@@ -318,6 +331,9 @@ export async function releaseUnsettledMailRunSources(
           eq(run.status, "needs_review"),
         ),
         ne(run.id, runId),
+        lt(run.startedAt, current.startedAt),
+        eq(runOperation.state, "completed"),
+        inArray(runOperation.kind, ["target_outcome", "claim_next_work"]),
         or(
           ...held.map(
             (source) =>
@@ -325,13 +341,46 @@ export async function releaseUnsettledMailRunSources(
           ),
         ),
       ),
-    );
+    )
+    .orderBy(runOperation.startedAt, runOperation.id);
+  // A roster is admission, not evidence that its coordinator reached an Email.
+  // A later settled outcome supersedes that Run's claim or unresolved outcome.
+  const attempts = new Map<
+    string,
+    { orderMailId: string; unsettled: boolean }
+  >();
+  for (const row of earlierFailures) {
+    if (row.kind === "target_outcome") {
+      const receipt = runTargetOutcomeReceipt.safeParse(row.result);
+      if (!receipt.success) continue;
+      for (const source of held)
+        if (
+          receipt.data.target.workKey === source.orderMailId ||
+          (receipt.data.target.entityKind === "email" &&
+            receipt.data.target.entityId === source.email.id)
+        )
+          attempts.set(`${row.runId}:${source.orderMailId}`, {
+            orderMailId: source.orderMailId,
+            unsettled: receipt.data.target.state !== "completed",
+          });
+    } else {
+      const claim = claimedMail.safeParse(row.result);
+      if (!claim.success) continue;
+      for (const source of held)
+        if (
+          source.email.mailboxId === claim.data.email.mailboxId &&
+          source.email.messageId === claim.data.email.messageId
+        )
+          attempts.set(`${row.runId}:${source.orderMailId}`, {
+            orderMailId: source.orderMailId,
+            unsettled: true,
+          });
+    }
+  }
   const failedBefore = new Set(
-    earlierFailures
-      .flatMap(
-        (row) => mailResearchRunInput.safeParse(row.input).data?.sources ?? [],
-      )
-      .map((source) => source.orderMailId),
+    [...attempts.values()]
+      .filter((attempt) => attempt.unsettled)
+      .map((attempt) => attempt.orderMailId),
   );
   const released = held.filter(
     (source) => !failedBefore.has(source.orderMailId),
@@ -358,3 +407,8 @@ export async function releaseUnsettledMailRunSources(
 
 /** Failures the Run reached on its own; a member's cancel keeps its Emails. */
 const SELF_FAILURE_CODES = ["agent_failed", "agent_aborted"] as const;
+
+const claimedMail = z.object({
+  kind: z.literal("email"),
+  email: z.object({ mailboxId: z.string(), messageId: z.string() }),
+});
