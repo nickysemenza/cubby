@@ -225,7 +225,11 @@ the record's glance: native lays them two across under the hero (one column at
 accessibility sizes) and web fills the first grid row; the rest follow. There is
 no separate glance declaration, so order the slots so the first four answer the
 record's main question. A field a `fields` slot shows is omitted from later
-field sections and relation context fields on both clients.
+field sections and relation context fields on both clients, so on web the cell
+carries that field's domain renderer or inline editor. A one-field cell with no
+value is omitted and its field stays in the field sections. Keep fields whose
+renderer is a workflow form (Financial Transaction allocations' booking review)
+out of the web summary with `surfaces: ["native"]`.
 
 Summary slots and detail sections accept an optional `surfaces: ["web"]` or
 `["native"]` that limits the entry to one client; omitted, both render it. The

@@ -75,7 +75,7 @@ import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
-import { DetailSummary } from "./detail-summary";
+import { DetailSummary, isEmptySummaryCell } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   EntityRelationTable,
@@ -182,7 +182,11 @@ function declaredSections<E extends GenericDetailEntity>(
   // A field a summary slot shows is not repeated by a later section.
   const summarized = new Set(
     detail.summary.flatMap((slot) =>
-      slot.kind === "fields" && onDetailSurface(slot, "web") ? slot.fields : [],
+      slot.kind === "fields" &&
+      onDetailSurface(slot, "web") &&
+      !isEmptySummaryCell(entity, record, slot)
+        ? slot.fields
+        : [],
     ),
   );
   const unsummarized = (keys: readonly string[]) =>

@@ -131,11 +131,14 @@ export default defineEntity(
             title: "Purchase",
             viewKey: "relation:purchase",
           },
+          // Web renders unallocated lines with the booking review form, which
+          // belongs in the Record section rather than a glance cell.
           {
             kind: "fields",
             id: "reconciliation",
             title: "Reconciliation",
             fields: ["allocations"],
+            surfaces: ["native"],
           },
           {
             kind: "records",
