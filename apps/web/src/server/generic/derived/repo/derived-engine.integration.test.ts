@@ -397,6 +397,71 @@ describe("stored derived values", () => {
     expect(await marks("recipe.totals")).toEqual([]);
   });
 
+  it("publishes available value marks and removals while a writer holds another mark", async () => {
+    const busy = await makeProduct("Synthetic busy value", 2);
+    const available = await makeProduct("Synthetic available value", 3);
+    const removed = await makeProduct("Synthetic removed value", 4);
+    await drain();
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 5 })
+      .where(eq(product.id, busy));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 6 })
+      .where(eq(product.id, available));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, removed));
+    const plan = await prepareDerivedPage(
+      ctx.db,
+      derivedComputes,
+      (await claimDerivedMarks(ctx.db)).filter(
+        (mark) => mark.target === "product.price",
+      ),
+    );
+    expect(plan.marks).toHaveLength(3);
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const writer = withTransaction(ctx.db, async (tx) => {
+      await tx.execute(
+        sql`SELECT ref FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${busy}::uuid FOR UPDATE`,
+      );
+      locked.resolve();
+      await release.promise;
+    });
+    await locked.promise;
+    const prices = async () =>
+      await loadStoredDerived(
+        ctx.db,
+        "product",
+        [busy, available, removed],
+        ["price"],
+      );
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx.execute(sql`SET LOCAL statement_timeout = '500ms'`);
+        await publishDerivedPage(databaseForTransaction(tx), plan);
+      });
+      const stored = await prices();
+      expect(stored.get(busy)?.get("price")?.value).toBe(2);
+      expect(stored.get(available)?.get("price")?.value).toBe(6);
+      expect(stored.get(removed)?.get("price")?.meta.state).toBe("missing");
+      expect(await marks("product.price")).toEqual([busy]);
+    } finally {
+      release.resolve();
+      await writer;
+    }
+    // Replaying the plan may publish the skipped ticket, but cannot restore cleared values.
+    await publishDerivedPage(ctx.db, plan);
+    const stored = await prices();
+    expect(stored.get(busy)?.get("price")?.value).toBe(5);
+    expect(stored.get(available)?.get("price")?.value).toBe(6);
+    expect(stored.get(removed)?.get("price")?.meta.state).toBe("missing");
+    expect(await marks("product.price")).toEqual([]);
+  });
+
   it("marks nothing for a save that changes no declared input", async () => {
     const beans = await makeProduct("Synthetic lentils", 3);
     await drain();
