@@ -104,7 +104,9 @@ import SwiftUI
             }
             .listRowInsets(
                 EdgeInsets(
-                    top: 0, leading: FieldGuideTokens.Space.lg, bottom: 0, trailing: FieldGuideTokens.Space.lg)
+                    top: 0, leading: FieldGuideTokens.Space.lg,
+                    bottom: 0, trailing: FieldGuideTokens.Space.lg
+                )
             )
         }
 
