@@ -1,5 +1,9 @@
--- Fail safely for replay instead of queueing behind a writer (see the runbook).
-SET LOCAL lock_timeout = '2s';--> statement-breakpoint
+-- Outwait the running Worker's short transactions on the dropped and locked
+-- tables; a longer wait still fails the whole transaction for replay (see the runbook).
+SET LOCAL lock_timeout = '30s';--> statement-breakpoint
+-- Take every lock up front: acquiring them statement by statement deadlocked
+-- against the running Worker (production, CREATE TRIGGER on AiAnalysis vs Entity).
+LOCK TABLE "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Assessment", "AssessmentState", "AuditLog", "Cookbook", "DataException", "Device", "Email", "EmailCandidateObservation", "EmailClassificationObservation", "Entity", "EntityAttachment", "EntityExternalId", "EntityLink", "EntityQuality", "EntityQualityCheck", "Expense", "Feedback", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Image", "ImageProcessingJob", "ImageSighting", "ImportSourceClaim", "ImportSourceOrder", "ImportSourceProduct", "Ingredient", "InventoryEntry", "Job", "JobInvalidation", "JobInvalidationCapture", "LedgerParty", "LedgerTransfer", "Location", "Meal", "MealFoodEntry", "MealRecipe", "OrderMail", "OrderMailAttachment", "OrderMailEvent", "PhotoGroupProposal", "PhotoRunImage", "Plant", "Planting", "Product", "ProductCategory", "ProductUnitMapping", "Project", "Purchase", "PurchasePaymentEvidence", "Recipe", "RecipeSection", "RecipeSectionIngredient", "Run", "RunOperation", "Shipment", "ShipmentObservation", "SourceTransactionRecord", "SpendingCategory", "Task", "TransactionImport", "Vendor", "VendorAccount", "Wish" IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
 CREATE SEQUENCE "public"."DerivedTicket" INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START WITH 1 CACHE 1;--> statement-breakpoint
 CREATE TABLE "DerivedDirty" (
 	"target" text NOT NULL,
