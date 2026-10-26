@@ -24,6 +24,12 @@ export type JobKindPolicy = {
   readonly maxQueued: number | null;
   /** Jobs one kind handler can prepare together inside a single drain lane. */
   readonly batchSize?: number;
+  /** Background claims across all drains, counted only while their leases are live. */
+  readonly maxInFlight?: number;
+  /** Background pages in one drain; active Run work bypasses this limit. */
+  readonly maxConcurrentPages?: number;
+  /** Start these background page slots before other backfill when due. */
+  readonly reservedConcurrentPages?: number;
 };
 
 const IMAGE_RETRY = {
@@ -76,9 +82,20 @@ export const JOB_KIND_POLICY = {
   // Derived refresh passes never restart on capture, so no capture can wake
   // a failed one; they back off instead of failing.
   "refresh.family": { ...SERVER, retry: MAINTENANCE_RETRY },
-  "ai.evaluation": { ...SERVER, lane: "frontier_ai", maxQueued: 2_000 },
+  "ai.evaluation": {
+    ...SERVER,
+    lane: "frontier_ai",
+    maxQueued: 2_000,
+    // One blocked evaluation must leave the other drain lanes available.
+    maxInFlight: 1,
+  },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
-  "embedding.refresh": { ...SERVER, batchSize: 64 },
+  "embedding.refresh": {
+    ...SERVER,
+    batchSize: 100,
+    maxConcurrentPages: 1,
+    reservedConcurrentPages: 1,
+  },
   "purchase.dispatch": { ...SERVER, lane: "external" },
 } as const satisfies Record<string, JobKindPolicy>;
 

@@ -12,6 +12,7 @@ import {
   JobDeferredError,
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
   claimJob,
@@ -272,9 +273,9 @@ async function advanceBatch(
 }
 
 /**
- * Reselect after each fair batch; a wake can advance multiple bounded pages.
- * Distinct Jobs of one batch run up to `concurrency` at a time: every claim
- * is its own row lock and lease, so pages never share execution state.
+ * Free lanes reselect fair work without waiting for a slow sibling. Selected
+ * groups stay reserved locally until execution finishes; live leases and
+ * atomic kind admission protect claims across independent drains.
  */
 export async function drainDueJobs(
   db: Database,
@@ -285,31 +286,39 @@ export async function drainDueJobs(
 ) {
   const outcomes: string[] = [];
   const deadline = Date.now() + timeBudgetMs;
-  const spent = () => outcomes.length >= limit || Date.now() >= deadline;
-  while (!spent()) {
-    let candidates = await dueJobs(
-      db,
-      Math.min(JOB_DRAIN.batch, limit - outcomes.length),
-    );
-    if (!candidates.length) return outcomes;
-    const batchSize = Math.max(
-      JOB_DRAIN.batch,
-      ...candidates.map(
-        (candidate) => handlers[candidate.kind]?.batch?.size ?? 1,
-      ),
-    );
-    if (batchSize > JOB_DRAIN.batch)
-      candidates = await dueJobs(
-        db,
-        Math.min(batchSize, limit - outcomes.length),
-      );
+  let scheduled = 0;
+  const reserved = new Set<string>();
+  const activePages = new Map<string, number>();
+  const batchSizes = new Map(
+    Object.entries(handlers).flatMap(([kind, handler]) =>
+      handler.batch ? [[kind, handler.batch.size] as const] : [],
+    ),
+  );
+  type Candidates = Awaited<ReturnType<typeof dueJobs>>;
+  const groups: Candidates[] = [];
+  let selecting: Promise<boolean> | undefined;
+  const spent = () => scheduled >= limit || Date.now() >= deadline;
+  const refill = async () => {
+    const remaining =
+      limit -
+      scheduled -
+      groups.reduce((total, group) => total + group.length, 0);
+    if (remaining <= 0) return false;
+    const candidates = await dueJobs(db, remaining, {
+      excludeIds: [...reserved],
+      excludeKinds: [...activePages].flatMap(([kind, active]) => {
+        const cap = jobKindPolicy(kind).maxConcurrentPages;
+        return cap !== undefined && active >= cap ? [kind] : [];
+      }),
+      batchSizes,
+    });
     // Keep the fair selector's first service for each kind. A kind batch owns
     // one of the same three lanes; it never fans out publication transactions.
-    const groups: (typeof candidates)[] = [];
-    const batches = new Map<string, typeof candidates>();
+    const batches = new Map<string, Candidates>();
     for (const candidate of candidates) {
+      reserved.add(candidate.id);
       const batch = handlers[candidate.kind]?.batch;
-      const key = `${candidate.kind}:${candidate.runOwned}`;
+      const key = `${candidate.kind}:${candidate.runOwned}:${candidate.capExempt}`;
       const existing = batches.get(key);
       if (batch && existing && existing.length < batch.size)
         existing.push(candidate);
@@ -319,12 +328,60 @@ export async function drainDueJobs(
         if (batch) batches.set(key, group);
       }
     }
-    let next = 0;
-    const lane = async () => {
-      while (next < groups.length && !spent()) {
-        const group = groups[next++]!;
-        const candidate = group[0]!;
-        const batch = handlers[candidate.kind]?.batch;
+    return candidates.length > 0;
+  };
+  const nextGroup = async () => {
+    while (!spent()) {
+      const available = (group: Candidates) => {
+        const first = group[0]!;
+        const cap = jobKindPolicy(first.kind).maxConcurrentPages;
+        return (
+          first.capExempt ||
+          cap === undefined ||
+          (activePages.get(first.kind) ?? 0) < cap
+        );
+      };
+      const leading = groups.findIndex(
+        (group) => group[0]!.runOwned && available(group),
+      );
+      const reservedPage = groups.findIndex((group) => {
+        const first = group[0]!;
+        return (
+          available(group) &&
+          (activePages.get(first.kind) ?? 0) <
+            (jobKindPolicy(first.kind).reservedConcurrentPages ?? 0)
+        );
+      });
+      const index =
+        leading >= 0
+          ? leading
+          : reservedPage >= 0
+            ? reservedPage
+            : groups.findIndex(available);
+      const group = index >= 0 ? groups.splice(index, 1)[0] : undefined;
+      if (group) {
+        scheduled += group.length;
+        const first = group[0]!;
+        if (!first.capExempt)
+          activePages.set(first.kind, (activePages.get(first.kind) ?? 0) + 1);
+        return group;
+      }
+      // Share selection, not execution: an idle lane can refill while another
+      // still prepares a page, without selecting its unclaimed batch members.
+      selecting ??= refill().finally(() => {
+        selecting = undefined;
+      });
+      if (!(await selecting)) return undefined;
+    }
+    return undefined;
+  };
+  const lane = async () => {
+    for (;;) {
+      const group = await nextGroup();
+      if (!group) return;
+      const candidate = group[0]!;
+      const batch = handlers[candidate.kind]?.batch;
+      try {
         if (batch)
           outcomes.push(
             ...(await advanceBatch(
@@ -335,15 +392,19 @@ export async function drainDueJobs(
             )),
           );
         else outcomes.push(await advanceJob(db, candidate.id, handlers));
+      } finally {
+        for (const entry of group) reserved.delete(entry.id);
+        if (!candidate.capExempt)
+          activePages.set(
+            candidate.kind,
+            (activePages.get(candidate.kind) ?? 1) - 1,
+          );
       }
-    };
-    await Promise.all(
-      Array.from(
-        { length: Math.max(1, Math.min(concurrency, groups.length)) },
-        lane,
-      ),
-    );
-  }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(concurrency, limit)) }, lane),
+  );
   if ((await dueJobs(db, 1)).length) {
     await (
       await import("~/server/workflows/background-tasks/publish")
