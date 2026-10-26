@@ -160,7 +160,6 @@ describe("entity_read field selection", () => {
           deleted.shortcode,
           location.shortcode,
           product.id,
-          "not-a-code",
         ],
       },
       kernelRequestContext(entityKernel),
@@ -173,7 +172,6 @@ describe("entity_read field selection", () => {
       deleted.shortcode,
       location.shortcode,
       product.id,
-      "not-a-code",
     ]);
     expect(items[0]).toMatchObject({
       status: "available",
@@ -189,13 +187,17 @@ describe("entity_read field selection", () => {
       name: "Synthetic preview cupboard",
     });
     expect(items[3]).toEqual(items[0]);
-    expect(items[4]).toMatchObject({
-      status: "unavailable",
-      reason: "invalid_shortcode",
-    });
     expect(JSON.stringify(result)).not.toMatch(
       /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
     );
+    const invalid = await callMcpTool(
+      createMcpServer(),
+      "entity_preview",
+      { action: "show", shortcodes: [product.id, "not-a-code"] },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+    expect(invalid.isError).toBe(true);
   });
   const read = async (command: ToolArguments) => {
     const entityKernel = entityKernelContextSchema.parse(

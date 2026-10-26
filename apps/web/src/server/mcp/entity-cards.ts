@@ -44,12 +44,8 @@ export async function readEntityCards(
   for (const requested of input.shortcodes) {
     const parsed = parseShortcode(requested);
     if (!parsed) {
-      items.push({
-        status: "unavailable",
-        shortcode: requested,
-        reason: "invalid_shortcode",
-      });
-      continue;
+      // Admission and entity inference share the canonical shortcode registry.
+      throw new Error("Validated shortcode has no entity type");
     }
     const { type: entity, shortcode } = parsed;
     const cached = reads.get(shortcode);

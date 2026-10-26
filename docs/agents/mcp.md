@@ -37,7 +37,9 @@ shape. The `entity` and `entity_read` kernel tools keep their current
 existing records; it is separate from `entity_read.preview`, which previews
 proposed creates and relation changes. The tool accepts 1–20 mixed shortcodes,
 preserves caller order and repeated positions, and shows unavailable identities
-individually. Reads and errors pass through the existing MCP operation runner.
+individually. Input and output identities use the shared shortcode schema;
+malformed codes fail input validation before any record reads. Reads and errors
+pass through the existing MCP operation runner.
 
 The MCP Apps resource `ui://cubby/entity-preview.html` displays a 32px canonical
 display image (or record glyph), name linked to Cubby, muted shortcode and up to

@@ -1,9 +1,12 @@
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { anyShortcodeSchema, nonEmptyTuple } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 export const ENTITY_PREVIEW_RESOURCE = "ui://cubby/entity-preview.html";
+const entityShortcode = anyShortcodeSchema(nonEmptyTuple(shortcodeEntities));
 
 export const entityCardsInput = z.strictObject({
-  shortcodes: z.array(z.string().trim().min(1).max(40)).min(1).max(20),
+  shortcodes: z.array(entityShortcode).min(1).max(20),
 });
 
 const fact = z.object({ label: z.string(), value: z.string() });
@@ -13,7 +16,7 @@ export const entityCardsOutput = z.object({
     z.discriminatedUnion("status", [
       z.object({
         status: z.literal("available"),
-        shortcode: z.string(),
+        shortcode: entityShortcode,
         name: z.string(),
         entityLabel: z.string(),
         href: z.string().url().nullable(),
@@ -22,12 +25,8 @@ export const entityCardsOutput = z.object({
       }),
       z.object({
         status: z.literal("unavailable"),
-        shortcode: z.string(),
-        reason: z.enum([
-          "invalid_shortcode",
-          "unsupported_entity",
-          "not_found",
-        ]),
+        shortcode: entityShortcode,
+        reason: z.enum(["unsupported_entity", "not_found"]),
       }),
     ]),
   ),
