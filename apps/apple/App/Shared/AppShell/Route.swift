@@ -6,7 +6,6 @@ enum Route: Hashable, Codable {
     case activityList
     case auditHistory
     case photosLibrary
-    case browseCatalog
     case graph(EntityRef?)
     case nutrition(day: String)
     /// A device-local `BackgroundActivity`'s own detail, resolved by id against whatever is
