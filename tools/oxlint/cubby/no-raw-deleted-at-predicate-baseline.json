@@ -39,7 +39,7 @@
   "apps/web/src/server/domains/financial-transaction/repo/transfer-pair-input.ts": 2,
   "apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts": 9,
   "apps/web/src/server/domains/garden/repo/garden.ts": 2,
-  "apps/web/src/server/domains/household-contribution/repo/allocation.ts": 10,
+  "apps/web/src/server/domains/household-contribution/repo/allocation.ts": 9,
   "apps/web/src/server/domains/household-contribution/repo/reports.ts": 2,
   "apps/web/src/server/domains/image-job/repo.ts": 2,
   "apps/web/src/server/domains/image-processing/repo/image-processing-issues.ts": 3,
