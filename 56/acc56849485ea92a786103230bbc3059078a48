@@ -1,0 +1,23 @@
+apps/apple/AGENTS.md
+  s_7133750c57d103::t_9768e46bd15636 150-154
+apps/apple/DESIGN.md
+  s_7133750c57d103::t_dce61a83c339b4 21-23,42
+docs/entities.md
+  s_7133750c57d103::t_c16610b7b01857 662-673,1453
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "56acc56849485ea92a786103230bbc3059078a48",
+  "prompts": {},
+  "sessions": {
+    "s_7133750c57d103": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb423621-4957-46f1-b462-5fe4475fd57a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
