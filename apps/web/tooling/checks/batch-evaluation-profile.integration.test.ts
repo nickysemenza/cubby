@@ -612,7 +612,9 @@ describe("Product identity page preparation", () => {
         measured.result.every(
           (outcome) =>
             outcome.valid &&
-            !outcome.row.actionable &&
+            // Publication retains the explicit agent judgment; the historical
+            // conflict remains an independent verification guard.
+            outcome.row.actionable &&
             outcome.row.verification === "pending_verification",
         ),
       ).toBe(true);
