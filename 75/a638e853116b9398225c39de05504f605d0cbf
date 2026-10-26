@@ -1,0 +1,85 @@
+.agents/skills/product-enrichment/SKILL.md
+  s_672398f43d55a3::t_237de0d67e2366 130-131
+.agents/skills/purchase-import/SKILL.md
+  s_672398f43d55a3::t_7df02e6e2b639c 326-329
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_672398f43d55a3::t_b75744f5388493 106-107
+apps/web/docs/web-runtime.md
+  s_672398f43d55a3::t_1e04c28cc3f649 387-401
+apps/web/drizzle/0042_connection_target_projection.sql
+  s_672398f43d55a3::t_6373795dea68ad 1-11
+apps/web/drizzle/meta/_journal.json
+  s_672398f43d55a3::t_f81a6f5f7aca38 298-304
+apps/web/src/entity/components/entity-preview-content.unit.test.tsx
+  s_672398f43d55a3::t_740a25b23c3dee 17
+apps/web/src/server/domains/connection/repo/entity-connections.ts
+  s_672398f43d55a3::t_fa3b088b571fad 171-172
+apps/web/src/server/domains/inventory/repo/bulk.ts
+  s_672398f43d55a3::t_37aee4dd81efff 56,428-431,824-827,1211-1214
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_672398f43d55a3::t_7cb3e6aa47260c 131,201,622,907-910
+apps/web/src/server/domains/inventory/repo/inventory-valuation.integration.test.ts
+  s_672398f43d55a3::t_26690c6c947d69 25,55,71-72,74-76
+apps/web/src/server/domains/inventory/repo/valuation.ts
+  s_672398f43d55a3::t_5b7f627147e067 2,6-11,148,165,167-169,204
+apps/web/src/server/domains/product/repo/crud.ts
+  s_672398f43d55a3::t_5dc8a085f46ab7 130,1325-1328
+apps/web/src/server/domains/product/repo/lookup.ts
+  s_672398f43d55a3::t_f439f3ea3aea3c 34,349-352
+apps/web/src/server/domains/product/repo/types.ts
+  s_672398f43d55a3::t_2a6b64f71860ec 52
+apps/web/src/server/domains/transaction-import/repo/statement-charge.ts
+  s_672398f43d55a3::t_9e7723f4939008 5,81,83-86,90-103,105-107,117-126,130-131,133-152
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.integration.test.ts
+  s_672398f43d55a3::t_e5a8c9fb39bf7c 1530-1541
+apps/web/src/server/entity-kernel/repo/entity-display-image.ts
+  s_672398f43d55a3::t_59b7c86cd03c72 1,21,62-66,817-820,915,934,942-944,946-962,973
+apps/web/src/server/generic/assessment/repo/correction-propagation.integration.test.ts
+  s_672398f43d55a3::t_8f5f85abba092b 1409-1422
+apps/web/src/server/generic/assessment/repo/correction-receipt.ts
+  s_672398f43d55a3::t_2b222de1732f06 32-38,43-44
+apps/web/src/server/generic/derived/repo/derived-engine.integration.test.ts
+  s_672398f43d55a3::t_6a2e4f41fcda1b 6,17,41-42,54,159-214
+apps/web/src/server/generic/jobs/repo/fairness.integration.test.ts
+  s_672398f43d55a3::t_bdf6b3be75741f 51-138
+apps/web/src/server/generic/jobs/service/jobs.ts
+  s_672398f43d55a3::t_0b5602ab727e26 319-321,445-446,448-452,454
+apps/web/src/server/generic/work-queue/repo/work-queue-projection.ts
+  s_672398f43d55a3::t_ff6d141d9b0ed1 28,30-33,136-158
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_672398f43d55a3::t_2dfa967317beec 20,27,207-233,350,547-564
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_672398f43d55a3::t_1b2c67c8397dcc 94,113,212-213,283,292-319,364,384-393,413,430-432,450-452,471-479,500-503,512-513,515-518,529,531,557-560,575,581-589,621-627,698-740,744,747-761,763-771,820,835-842,849-858,1052-1056,1088,1155,1202-1204,1212,1214-1215
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_672398f43d55a3::t_7114d27848b115 60,262-264,310-317,456-463
+apps/web/src/server/mcp/mcp-protocol.unit.test.ts
+  s_672398f43d55a3::t_3cca60da891fd4 417,462,587,600
+apps/web/tooling/connection-target-projection-migration.integration.test.ts
+  s_672398f43d55a3::t_a39f15a673ddc6 1-75
+docs/entities.md
+  s_672398f43d55a3::t_168c5488556f4f 1193-1195,2644-2647,2669-2672
+docs/guide/work-queue.md
+  s_672398f43d55a3::t_7c57f5a8190d7f 74-78
+docs/jobs.md
+  s_672398f43d55a3::t_4a89766df16632 231-234
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_672398f43d55a3::t_1f731c9a9bf8a5 509,523
+packages/schemas/src/entity-read-media.ts
+  s_672398f43d55a3::t_fbac5669a8f8e2 4,20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "75a638e853116b9398225c39de05504f605d0cbf",
+  "prompts": {},
+  "sessions": {
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
