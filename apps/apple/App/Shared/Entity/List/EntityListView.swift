@@ -336,6 +336,7 @@ struct EntityListView: View {
                     }
                     .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
                 }
+                listHandoffItems
                 if !offersNativeTable {
                     OpenOnWebButton(
                         target: .route(path: "/\(descriptor.basePath)"), label: "Open table on web"
@@ -380,6 +381,7 @@ struct EntityListView: View {
                 if !allTableFields.isEmpty {
                     columnsMenu
                 }
+                listHandoffItems
             }
             .accessibilityIdentifier("browse.\(key.rawValue).view-menu")
         }
@@ -433,6 +435,19 @@ struct EntityListView: View {
             .accessibilityIdentifier("browse.\(key.rawValue).columns")
         }
     #endif
+
+    @ViewBuilder
+    private var listHandoffItems: some View {
+        ForEach(descriptor.presentation.listViews, id: \.id) { view in
+            if case .slot(let id, _, _) = view,
+                let web = NativePresentationCoverage.listSlot(id).handoff
+            {
+                OpenOnWebButton(
+                    target: .route(path: "/\(descriptor.basePath)", query: web.query),
+                    label: web.label)
+            }
+        }
+    }
 
     /// Every declared Group by choice; one that cannot group stays listed, disabled, with its
     /// reason as the subtitle. While the list cannot group (Timeline, search), every choice
@@ -599,6 +614,9 @@ struct EntityListView: View {
         let filters = specialistFilters(model)
         if let slot = ImplementedListSlotID(rawValue: id) {
             ListSlotRegistry.view(slot, client: appModel.client, filters: filters)
+        } else if let web = NativePresentationCoverage.listSlot(id).handoff {
+            OpenOnWebButton(
+                target: .route(path: "/\(descriptor.basePath)", query: web.query), label: web.label)
         } else {
             ContentUnavailableView("View unavailable", systemImage: "square.dashed")
         }

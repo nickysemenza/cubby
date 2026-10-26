@@ -43,10 +43,6 @@ enum DetailSlotRegistry {
             return reportSlot(.projectBudget, row)
         case .projectContribution:
             return reportSlot(.projectContribution, row)
-        case .projectAnalytics:
-            return reportSlot(.projectAnalytics, row)
-        case .projectSchedule:
-            return reportSlot(.projectSchedule, row)
         case .locationContentsValuation:
             return reportSlot(.locationContentsValuation, row)
         case .vendorMailSearch:
