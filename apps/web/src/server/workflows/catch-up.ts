@@ -44,8 +44,8 @@ export async function recoverMissedWork(
   coordinatorRetireBefore?: Date,
 ) {
   await (
-    await import("~/server/generic/derived-refresh/repo/families")
-  ).scheduleRefreshFamilies(db, { invalidate: false });
+    await import("~/server/generic/derived/service/drain-job")
+  ).scheduleDerivedJobs(db);
   await (
     await import("~/server/domains/run/service/derived-discovery")
   ).scheduleDerivedDiscovery(db);

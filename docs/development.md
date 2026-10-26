@@ -293,6 +293,13 @@ ports, while relational queries and workflows stay in the remaining server.
 Each group retains its declarations' custom column-type imports, deduplicated
 against the built-in column vocabulary.
 
+Repository tracing imports list binding types from `list-contracts.ts`, never
+the hydration implementation, even through `import type`. Repository programs
+deliberately omit `worker-environment.d.ts`; pulling Worker binding consumers
+into them reports missing `Env` properties rather than an inference cycle.
+`config-runtime-boundary.test.ts` checks this resolved import closure without
+running a full typecheck.
+
 The HTTP/reverse-boundary emitter uses `isolatedDeclarations`, `noResolve` and
 `noCheck` for syntax-based production of annotated exports; the strict server
 checks their bodies. Repositories instead use ordinary strict declaration emission,

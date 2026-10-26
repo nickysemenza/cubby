@@ -177,7 +177,7 @@ describe("MobileCardView", () => {
 
     render(<MobileCardView table={table} />);
 
-    expect(screen.getByText("3")).toHaveClass("tabular-nums");
+    expect(screen.getByText("3").closest(".tabular-nums")).not.toBeNull();
   });
 
   it("renders the row as a link to its details href", () => {

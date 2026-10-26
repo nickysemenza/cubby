@@ -25,8 +25,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
  * Authoritative changes remain durable when wake-ups are lost. The generic
- * recipe Job recomputes the corpus in bounded pages; cyclic graphs must
- * remain truthful and terminate without relying on queue delivery.
+ * drain propagates changed totals in bounded pages; cyclic graphs must
+ * remain truthful and stop at unchanged totals without relying on queue delivery.
  */
 describe("recipe totals cascade", () => {
   const ctx = withTestDb();
@@ -59,19 +59,22 @@ describe("recipe totals cascade", () => {
     );
     const child = await createRecipe(
       ctx.db,
-      makeRecipeInput({
-        name: "Child",
-        sections: [
-          {
-            instructions: [{ instruction: "Mix" }],
-            ingredients: [
-              ingredientRef(ingredient.shortcode, {
-                amounts: [{ value: 2, unit: "cup" }],
-              }),
-            ],
-          },
-        ],
-      }),
+      {
+        ...makeRecipeInput({
+          name: "Child",
+          sections: [
+            {
+              instructions: [{ instruction: "Mix" }],
+              ingredients: [
+                ingredientRef(ingredient.shortcode, {
+                  amounts: [{ value: 2, unit: "each" }],
+                }),
+              ],
+            },
+          ],
+        }),
+        yield: { value: 1, unit: "each" },
+      },
       ctx.actor,
     );
     const subRecipe = (id: RecipeShortcode) => ({
@@ -82,28 +85,34 @@ describe("recipe totals cascade", () => {
     });
     const parent = await createRecipe(
       ctx.db,
-      makeRecipeInput({
-        name: "Parent",
-        sections: [
-          {
-            instructions: [{ instruction: "Use child" }],
-            ingredients: [subRecipe(child.id)],
-          },
-        ],
-      }),
+      {
+        ...makeRecipeInput({
+          name: "Parent",
+          sections: [
+            {
+              instructions: [{ instruction: "Use child" }],
+              ingredients: [subRecipe(child.id)],
+            },
+          ],
+        }),
+        yield: { value: 1, unit: "each" },
+      },
       ctx.actor,
     );
     const grandparent = await createRecipe(
       ctx.db,
-      makeRecipeInput({
-        name: "Grandparent",
-        sections: [
-          {
-            instructions: [{ instruction: "Use parent" }],
-            ingredients: [subRecipe(parent.id)],
-          },
-        ],
-      }),
+      {
+        ...makeRecipeInput({
+          name: "Grandparent",
+          sections: [
+            {
+              instructions: [{ instruction: "Use parent" }],
+              ingredients: [subRecipe(parent.id)],
+            },
+          ],
+        }),
+        yield: { value: 1, unit: "each" },
+      },
       ctx.actor,
     );
     const resolve = async (code: string) => {
@@ -146,10 +155,12 @@ describe("recipe totals cascade", () => {
     await drainRecipes();
     queue.messages.length = 0;
     const before = await getRecipeTotalsState(ctx.db, tree.grandparent);
+    expect(before?.totals).toMatchObject({ cost: { lower: 8 } });
     await changePrice(tree.product, 9);
     queue.messages.length = 0;
     await drainRecipes();
     const after = await getRecipeTotalsState(ctx.db, tree.grandparent);
+    expect(after?.totals).toMatchObject({ cost: { lower: 18 } });
     expect(after?.totalsComputedAt?.getTime()).toBeGreaterThan(
       before?.totalsComputedAt?.getTime() ?? 0,
     );

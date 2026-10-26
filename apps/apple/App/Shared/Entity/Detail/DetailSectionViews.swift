@@ -167,7 +167,15 @@ struct FieldsSectionView: View {
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 118, alignment: .trailing)
                                 .frame(minHeight: 20)
-                                macGridValue(field).frame(minHeight: 20)
+                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                    HStack(spacing: FieldGuideTokens.Space.xs) {
+                                        macGridValue(field)
+                                        DerivedValueStatus(raw: row.raw, field: field.key)
+                                    }
+                                    DerivedProvenanceCaption(
+                                        raw: row.raw, field: field.key,
+                                        includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
+                                }.frame(minHeight: 20)
                             }
                         }
                     }
@@ -243,11 +251,19 @@ struct FieldsSectionView: View {
     }
 
     private func fieldRowWithResolutionActions(_ field: FieldDescriptor) -> some View {
-        fieldRow(field)
-            .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
-            .contextMenu {
-                resolutionActions(field)
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                fieldRow(field)
+                DerivedValueStatus(raw: row.raw, field: field.key)
             }
+            DerivedProvenanceCaption(
+                raw: row.raw, field: field.key,
+                includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
+        }
+        .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
+        .contextMenu {
+            resolutionActions(field)
+        }
     }
 
     private var listRowMinimumHeight: CGFloat {
@@ -301,6 +317,10 @@ struct FieldsSectionView: View {
                     field: field, subject: EntityRef(entity: descriptor.key, id: row.id)
                 )
                 .font(.caption)
+                DerivedValueStatus(raw: row.raw, field: field.key)
+                DerivedProvenanceCaption(
+                    raw: row.raw, field: field.key,
+                    includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
                 Text(value).font(.body).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),

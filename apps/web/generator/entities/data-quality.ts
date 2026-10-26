@@ -279,6 +279,7 @@ export const compileDataQuality = (
       displayImage: raw.displayImage,
       exceptions: raw.exceptions,
       related: [...raw.related],
+      inputs: raw.inputs.map((input) => ({ ...input })),
     },
     fieldModel: {
       ...fieldModel,

@@ -12,9 +12,10 @@ import {
 } from "~/entity/generated/entity-lists.gen";
 import {
   listReadRowSchema,
+  isListMediaField,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
-import { listReadFields } from "~/entity/model/list-read-schema";
+import { listReadSchema } from "~/entity/model/list-read-schema";
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
@@ -195,8 +196,8 @@ function compactKeys(entity: string): string[] {
   const listEntity = listEntityOf(entity);
   // Media URLs and image rows are the bulk of a list row; compact omits them.
   const declared = listEntity
-    ? (["core", "relations", "derived", "quality"] as const).flatMap(
-        (group) => listReadFields(listEntity)[group],
+    ? Object.keys(listReadSchema(listEntity).shape).filter(
+        (key) => !isListMediaField(key),
       )
     : list
       ? schemaKeys(list)
@@ -251,7 +252,7 @@ export function selectionListFields(
   entity: ListEntity,
   selection: ReadSelection,
 ): string[] | null {
-  const declared = new Set(Object.values(listReadFields(entity)).flat());
+  const declared = new Set(Object.keys(listReadSchema(entity).shape));
   const keys =
     selection.kind === "compact"
       ? [...selection.keys]

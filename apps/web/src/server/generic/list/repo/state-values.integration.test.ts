@@ -25,10 +25,6 @@ import {
   vendorUnpricedExpenseCount,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
-import {
-  inventoryValuationSql,
-  loadLiveInventoryValuations,
-} from "~/server/domains/inventory/repo/valuation";
 import { productList } from "~/server/domains/product/repo/crud";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import {
@@ -47,8 +43,10 @@ import {
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -105,12 +103,14 @@ describe("state predicates re-declared as values", () => {
       value: 1,
       unit: "each",
     });
+    await drainStoredDerived(ctx.db);
     const fixture = [valued, priceable, unpriceable].map(({ id }) => id);
 
     // The retired predicate: `missing` is every NULL valuation, so it
     // overlapped `missing_with_priced_product`.
-    const valuation = inventoryValuationSql(
-      await loadLiveInventoryValuations(ctx.db),
+    const valuation = storedDerivedSql(
+      "inventory",
+      "valuation",
       inventoryEntry.id,
     );
     const retired = async (condition: SQL) =>
@@ -225,6 +225,7 @@ describe("state predicates re-declared as values", () => {
       ]),
       await seed("Parity untouched", []),
     ];
+    await drainStoredDerived(ctx.db);
     const fixture = all.map(({ id }) => id);
     const fixtureIds = all.map(({ entityId }) => entityId);
 
@@ -478,6 +479,7 @@ describe("state predicates re-declared as values", () => {
           })
           .map((row) => row.shortcode),
       );
+    await drainStoredDerived(ctx.db);
     const listed = async (
       filters: Parameters<typeof projectList>[1],
       sorts: Parameters<typeof projectList>[2] = [],

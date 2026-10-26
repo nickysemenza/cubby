@@ -28,3 +28,4 @@ rewriting its decision.
 | [0018](0018-current-member-filter-token.md)                   | `@me` is a declared value of Ledger Party filters                      |
 | [0019](0019-domain-first-server-layout.md)                    | Domain-first server layout                                             |
 | [0020](0020-cache-routed-ci.md)                               | Start every Linux lane and let the cache route                         |
+| [0021](0021-derived-values.md)                                | Derived values: one declaration, one cache, one drain                  |

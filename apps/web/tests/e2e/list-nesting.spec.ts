@@ -109,10 +109,10 @@ test("an expanded category retries a failed read and loads more children", async
     });
   let failChildren = true;
   await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (await unbatchFor(route, ["entity.listBase"])) return;
+    if (await unbatchFor(route, ["entity.list"])) return;
     const childrenRead = dispatchesOperation(
       route.request(),
-      "entity.listBase",
+      "entity.list",
       (item) => JSON.stringify(item.input).includes('"children"'),
     );
     if (!childrenRead) {

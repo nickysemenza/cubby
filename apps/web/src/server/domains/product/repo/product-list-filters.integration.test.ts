@@ -13,6 +13,7 @@ import { createProductCategory } from "~/server/domains/product-category/repo/pr
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { projectList } from "~/server/domains/project/repo/lookup";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -321,6 +322,7 @@ describe("product list declared filters", () => {
 
   it("narrows by each declared filter", async () => {
     const w = await world();
+    await drainStoredDerived(ctx.db);
     const all = [w.driver, w.flour, w.misc, w.kit, w.bit, w.tote];
     const listIds = async (filters: ProductFilters) => {
       const { data } = await productList(

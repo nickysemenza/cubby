@@ -1036,7 +1036,6 @@ export const compilePresentation = (
       viewAliases: list.viewAliases,
       totals: list.totals,
       metrics: list.metrics,
-      read: list.read,
       shelf: { subtitle: shelfSubtitle },
       titleSubtitle: list.titleSubtitle,
       initialFilter: list.initialFilter,

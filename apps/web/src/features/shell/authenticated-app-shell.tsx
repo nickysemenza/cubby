@@ -20,6 +20,7 @@ import { MainNav } from "~/features/shell/main-nav";
 import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
+import { DerivedBacklogStatus } from "~/ui/derived/backlog";
 import {
   BackgroundRefreshStatus,
   ShellStatusSlot,
@@ -319,11 +320,14 @@ function WorkspaceSidebar({
       </nav>
       <ShellStatusSlot>
         <span className={cn("flex", expanded && "lg:hidden")}>
-          <BackgroundRefreshStatus compact />
+          <BackgroundRefreshStatus
+            compact
+            idle={<DerivedBacklogStatus compact />}
+          />
         </span>
         {expanded && (
           <span className="hidden lg:flex">
-            <BackgroundRefreshStatus />
+            <BackgroundRefreshStatus idle={<DerivedBacklogStatus />} />
           </span>
         )}
       </ShellStatusSlot>

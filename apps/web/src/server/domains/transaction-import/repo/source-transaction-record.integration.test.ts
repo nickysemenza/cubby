@@ -461,7 +461,11 @@ describe("statement row ledger", () => {
       {},
       [],
       { pageIndex: 0, pageSize: 10 },
-      { kind: "base" },
+      selectedListProjection("sourceTransactionRecord", [
+        "id",
+        "source",
+        "matchState",
+      ]),
     );
     expect(base.data[0]).toMatchObject({
       id: row!.id,

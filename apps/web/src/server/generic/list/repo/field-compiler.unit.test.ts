@@ -192,6 +192,7 @@ describe("list field compiler", () => {
           derived: {
             inventoryEntries: sql`0`,
             valuation: listPrepare(async () => null).value(() => sql`0`),
+            valuationRollup: sql`0`,
             hasInventory: sql`false`,
             hasImage: sql`false`,
             hasChildren: sql`false`,

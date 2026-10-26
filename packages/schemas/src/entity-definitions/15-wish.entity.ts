@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { defineEntity } from "./definition.js";
 import { displayItemsField } from "./label-field.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
@@ -80,12 +81,6 @@ export default defineEntity({
           filters: [{ id: "acquiredAt", value: "false" }],
         },
       ],
-      read: {
-        relations: ["candidates", "candidateItems"],
-        derived: ["candidateCount", "priceRange"],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       extraActions: ["markPurchased"],
       totals: [
         {
@@ -431,7 +426,45 @@ export default defineEntity({
       },
     },
   ],
-  search: "semantic",
+  search: {
+    mode: "semantic",
+    inputs: [
+      ...imageDescriptionInputs("wish"),
+
+      {
+        table: "EntityLink",
+        match: { fromEntityId: "id" },
+        where: { kind: "wishCandidate" },
+      },
+      {
+        table: "Product",
+        match: { id: "id" },
+        columns: ["name", "model", "brandId", "deletedAt"],
+        path: [
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "wishCandidate" },
+          },
+        ],
+      },
+      {
+        table: "Vendor",
+        match: { id: "id" },
+        columns: ["name", "deletedAt"],
+        path: [
+          { table: "Product", from: "brandId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "wishCandidate" },
+          },
+        ],
+      },
+    ],
+  },
   capabilities: {
     images: {
       storage: false,
@@ -467,6 +500,133 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "EntityLink",
+          match: { fromEntityId: "id" },
+          columns: ["deletedAt", "toEntityId"],
+          path: [{ table: "Wish", from: "id", to: "id" }],
+          where: { kind: "wishCandidate" },
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "wishCandidate" },
+            },
+            { table: "Wish", from: "id", to: "id" },
+          ],
+        },
+      ],
+
       checks: [
         {
           id: "wish_candidate",

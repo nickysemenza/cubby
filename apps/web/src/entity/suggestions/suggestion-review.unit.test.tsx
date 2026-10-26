@@ -1,5 +1,11 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -83,7 +89,7 @@ describe("inline suggestion review", () => {
   });
   it.each([false, true])(
     "keeps evidence collapsed until Review without hiding the actionable proposal (phone=%s)",
-    (phone) => {
+    async (phone) => {
       vi.stubGlobal("matchMedia", (media: string) => ({
         matches: phone,
         media,
@@ -102,8 +108,14 @@ describe("inline suggestion review", () => {
       expect(screen.getByRole("button", { name: "Accept" })).toBeVisible();
       expect(screen.queryByText("Evidence from the record")).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Review" }));
-      expect(screen.getByText("Evidence from the record")).toBeVisible();
-      fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+      await waitFor(() =>
+        expect(screen.getByText("Evidence from the record")).toBeVisible(),
+      );
+      fireEvent.click(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Accept",
+        }),
+      );
       expect(save).toHaveBeenCalledOnce();
     },
   );

@@ -19,7 +19,6 @@ export default defineEntity({
     },
     icons: { phosphor: "Files", sfSymbol: "tray.full", emoji: "📥" },
     list: {
-      read: { media: ["displayImages"], derived: ["rowCountStored"] },
       savedViews: [],
     },
     detail: {

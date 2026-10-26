@@ -5,10 +5,10 @@
  * the queue-watchdog integration test checks the installed function.
  */
 export const jobNeverExhaustedDdl = () => `
-CREATE FUNCTION job_never_exhausted_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION job_never_exhausted_failure() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF NEW.kind IN ('image.cloud', 'image.device', 'image.device.wake',
-    'jobs.retention', 'queue.watchdog', 'refresh.family') THEN
+  IF NEW.kind IN ('derived.drain', 'derived.reconcile', 'image.cloud',
+    'image.device', 'image.device.wake', 'jobs.retention', 'queue.watchdog') THEN
     NEW.state := 'retry_wait';
     NEW."leaseToken" := NULL;
     NEW."leaseExpiresAt" := NULL;

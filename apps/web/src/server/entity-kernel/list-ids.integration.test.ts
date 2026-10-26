@@ -9,6 +9,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -86,6 +87,7 @@ describe("kernel list restricted to ids", () => {
       makeProductInput({ name: "Unselected item", price: 999 }),
       ctx.actor,
     );
+    await drainStoredDerived(ctx.db);
     for (const pageIndex of [0, 1]) {
       const result = await executeEntity(context(), {
         action: "list",
@@ -125,6 +127,7 @@ describe("kernel list restricted to ids", () => {
         ),
       );
     }
+    await drainStoredDerived(ctx.db);
     for (const pageIndex of [0, 1]) {
       const result = await executeEntity(context(), {
         action: "list",

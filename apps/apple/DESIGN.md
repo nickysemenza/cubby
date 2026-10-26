@@ -131,3 +131,8 @@ Generic date-range fields edit Start and End with independent toggles and calend
 pickers. Removing the last endpoint clears the whole field. Saves replace the complete
 range and reject reversed endpoints. Periods with one endpoint display “From” or “Through”;
 a deadline with only a start displays that date. Calendar days never become UTC instants.
+
+Derived envelope states share an immediate info-colored Updating dot on lists
+and detail fields, pulsing only when Reduce Motion is off. Inherited values
+retain their linked provenance caption; auto suggestions say Auto suggestion.
+The full derived decision chain remains a native follow-up to ADR 0021.

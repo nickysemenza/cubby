@@ -30,7 +30,7 @@ function parseOptions(args: string[]) {
       entities: { type: "string", default: "product,recipe,planting,plant" },
       samples: { type: "string", default: "30" },
       input: { type: "string" },
-      mode: { type: "string", default: "progressive" },
+      mode: { type: "string", default: "list" },
       concurrent: { type: "boolean", default: false },
       "first-invocation": { type: "boolean", default: false },
       caldav: { type: "boolean", default: false },
@@ -51,9 +51,7 @@ function parseOptions(args: string[]) {
     .min(1)
     .max(1000)
     .parse(values.samples);
-  const mode = z
-    .enum(["progressive", "complete", "operations"])
-    .parse(values.mode);
+  const mode = z.enum(["list", "complete", "operations"]).parse(values.mode);
   if (mode === "operations" && (values.concurrent || values.caldav))
     throw new Error(
       "Operations mode takes its batch from --input; omit --concurrent and --caldav",
@@ -129,13 +127,6 @@ export async function readPerformance(
           .filter(Boolean)
           .map((entity) => z.enum(listEntities).parse(entity));
   const rowSchema = z.object({ id: z.string() }).passthrough();
-  const baseSchema = z.object({
-    data: z.array(rowSchema),
-    groups: z.array(z.object({ id: z.string(), fields: z.array(z.string()) })),
-  });
-  const patchSchema = z.object({
-    groups: z.array(z.object({ state: z.enum(["ready", "error"]) })),
-  });
   const requests: {
     operation: string;
     version: string | null;
@@ -227,7 +218,7 @@ export async function readPerformance(
     const started = performance.now();
     const measurements: typeof requests = [];
     const read = async (path: string, body?: ReadInput, method = "POST") => {
-      // Artifacts keep the bare kernel verb (`listBase`) they always recorded.
+      // Artifacts keep the bare kernel verb.
       const operation =
         mode === "complete"
           ? "resource.list"
@@ -246,6 +237,21 @@ export async function readPerformance(
       measurements.push(value.measurement);
       return value.result;
     };
+    if (mode === "list") {
+      const rows = z
+        .object({ items: z.array(rowSchema) })
+        .parse(await read("entity.list", { ...readInput, entity }));
+      const elapsed = performance.now() - started;
+      observations.push({
+        entity,
+        sample,
+        usableMs: elapsed,
+        completeMs: elapsed,
+        rows: rows.items.length,
+        requests: measurements,
+      });
+      return;
+    }
     if (mode === "complete") {
       // The existing resource path is supplied by the caller; no singular/plural inference.
       const resource = z
@@ -266,37 +272,6 @@ export async function readPerformance(
       });
       return;
     }
-    const base = baseSchema.parse(
-      await read("entity.listBase", { ...readInput, entity }),
-    );
-    const usableMs = performance.now() - started;
-    const enrichment =
-      base.groups.length && base.data.length
-        ? read("entity.listEnrichment", {
-            entity,
-            ids: base.data.map((row) => row.id),
-            fields: base.groups.flatMap((group) => group.fields),
-          }).then((result) => {
-            if (
-              patchSchema
-                .parse(result)
-                .groups.some((group) => group.state !== "ready")
-            )
-              throw new Error(`Enrichment failed for ${entity}`);
-          })
-        : Promise.resolve();
-    await Promise.all([
-      enrichment,
-      read("entity.listSummary", { ...readInput, entity }),
-    ]);
-    observations.push({
-      entity,
-      sample,
-      usableMs,
-      completeMs: performance.now() - started,
-      rows: base.data.length,
-      requests: measurements,
-    });
   }
   if (!values["first-invocation"]) {
     for (const entity of entities) await list(entity, -1);

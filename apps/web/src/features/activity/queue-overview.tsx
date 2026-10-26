@@ -30,6 +30,7 @@ import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { roundTo } from "~/lib/round-to";
+import { DerivedBacklogOverview } from "~/ui/derived/backlog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -297,7 +298,6 @@ const JOB_COLUMNS = [
 ];
 const JOB_DETAIL = {
   label: "Explain",
-  readFields: ["error"],
   render: (row: BaseListRow) => (
     <div className="grid gap-2 px-2 py-2" data-testid="job-explain">
       <JobExplain
@@ -344,6 +344,9 @@ export function QueueOverview({
       <QueueHealthNotice health={health.data?.snapshot} />
       <DeviceBacklogNotice />
       <QueueSummary search={search} onSearchChange={onSearchChange} />
+      <Section headingAs="h2" title="Derived values" id="derived-values">
+        <DerivedBacklogOverview />
+      </Section>
       <Section headingAs="h2" title="Runs needing attention">
         <EmbeddedEntityList
           entity="run"

@@ -1,5 +1,6 @@
 import {
   aiRefreshActivation,
+  aiProvenance,
   aiRefreshRunInput,
   suggestionSupersessionReceipt,
   suggestionAcceptanceReceipt,
@@ -27,6 +28,10 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  availableEvaluationWorkKey,
+  evaluationSlotKey,
+} from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -45,14 +50,13 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import { currentJobExecution } from "~/server/generic/jobs/context";
-import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
-import { cancelJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 import {
   hasAiRefreshRunCapacity,
   tryLockAiRefreshScheduling,
 } from "./ai-refresh-admission";
+import { recordAiEvaluationAttemptFailure } from "./ai-work-state";
 import { ensureRun } from "./ensure-run";
 
 export type AssessmentStateRow = typeof suggestion.$inferSelect;
@@ -74,181 +78,75 @@ type EvaluationTargetInput = {
 const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
   sha256Hex(
     JSON.stringify({
-      entity: target.entity,
-      recordId: target.recordId,
-      field: target.field,
+      slotKey: evaluationSlotKey({ feature: targetFeature(target), target }),
       provenance: { ...provenance, model: null },
     }),
   );
 
-// Work that settled without publishing (a declined publication, Mail import
-// off, a fenced attempt) reopens when discovery finds it again: a replacement
-// row `<workKey>:reopen:<n>` carries the work, and the settled row keeps its
-// Run, receipt and error, linked by `retryEvaluationId` (the operator-retry
-// shape). The bound stops a persistently declined source from re-spending
-// every pass; failed and cancelled work stays with the operator's retry.
+// Persistently declined input gets a bounded number of automatic attempts.
 const MAX_REOPENS = 3;
 /** failureCode of a Run whose queued work was cleared as redundant, not refused. */
 export const SUPERSEDED_RUN_FAILURE = "superseded";
-const REOPEN_SEPARATOR = ":reopen:";
-const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
-/**
- * Cancelled because the record changed before it ran, not by a member: the
- * record can change back, so this work key may reopen.
- */
-const supersededReceipt = z.object({ supersededBy: z.uuid() });
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
-/**
- * Safety bound on a work key's chain walk. Reopens after a supersession do
- * not use the reopen budget (an input can change back and forth before
- * anything runs), so a chain can be longer than the budget; reaching this
- * bound is a fault, never a tip.
- */
-const MAX_CHAIN_HOPS = 10_000;
+const targetFeature = (target: AiEvaluationTarget) =>
+  target.kind === "connection"
+    ? "entity-connections"
+    : target.kind === "field"
+      ? "field-suggestion"
+      : target.kind === "product" || target.kind === "product_pair"
+        ? "product-identity"
+        : "mailbox-triage";
 
-/**
- * The row a work key's retries and reopens currently end at, with its reopen
- * count against the budget and the number of reopen rows (which names the
- * next one).
- */
-async function workKeyTip(
-  db: Database,
-  workKey: string,
-  base: typeof aiEvaluation.$inferSelect | undefined,
-) {
-  let tip = base;
-  let reopens = 0;
-  for (let hop = 0; tip; hop++) {
-    const next = retryReceipt.safeParse(tip.receipt).data?.retryEvaluationId;
-    if (!next) break;
-    if (hop >= MAX_CHAIN_HOPS)
-      throw new Error(
-        `Evaluation chain for ${workKey} exceeds ${MAX_CHAIN_HOPS} links`,
-      );
-    const [row] = await getDb(db)
-      .select()
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, next));
-    if (!row) break;
-    const previous = tip;
-    tip = row;
-    // An operator retry of a reopen (`<workKey>:reopen:<n>:operator-retry:<k>`)
-    // also counts toward the cap; a reopen of superseded work does not.
-    if (
-      row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`) &&
-      !supersededReceipt.safeParse(previous.receipt).success
-    )
-      reopens++;
-  }
-  // The next reopen key follows the highest one that exists, so it never
-  // collides with a row the walk did not reach.
-  const reopenKeys = await getDb(db)
-    .select({ workKey: aiEvaluation.workKey })
-    .from(aiEvaluation)
-    .where(
-      sql`starts_with(${aiEvaluation.workKey}, ${`${workKey}${REOPEN_SEPARATOR}`})`,
-    );
-  const reopenRows = Math.max(
-    0,
-    ...reopenKeys.map(
-      (row) =>
-        Number.parseInt(
-          row.workKey.slice(`${workKey}${REOPEN_SEPARATOR}`.length),
-          10,
-        ) || 0,
-    ),
-  );
-  const [owner] =
-    tip && ["blocked", "obsolete", "cancelled"].includes(tip.state)
-      ? await getDb(db)
-          .select({ failureCode: run.failureCode })
-          .from(run)
-          .where(eq(run.id, tip.runId))
-      : [];
-  return {
-    tip,
-    reopens,
-    reopenRows,
-    reopenable:
-      tip !== undefined &&
-      reopens < MAX_REOPENS &&
-      // A member's cancel of the owning Run vetoes every reopen, also of work
-      // superseded before that cancel.
-      owner?.failureCode !== "user_cancelled" &&
-      // A Run stopped as superseded (backlog cleared, not a member's decision)
-      // leaves its cancelled work for paced discovery to re-admit.
-      (tip.state === "cancelled"
-        ? owner?.failureCode === SUPERSEDED_RUN_FAILURE ||
-          supersededReceipt.safeParse(tip.receipt).success
-        : ["blocked", "obsolete"].includes(tip.state)),
-  };
-}
-
-/**
- * A changed record's new fingerprint replaces its older queued evaluation:
- * that one can only end obsolete, and keeping it doubles the backlog.
- */
-async function supersedeQueuedRecordWork(
-  db: Database,
-  feature: string,
-  target: EvaluationTargetInput["target"],
-  keepId: string,
-) {
-  // Record-scoped work only: a newer connection or product-identity
-  // evaluation of a record replaces the older one. Field and mailbox
-  // evaluations key on more than the record.
-  if (target.kind !== "connection" && target.kind !== "product") return;
-  const stale = await getDb(db)
-    .update(aiEvaluation)
-    .set({
-      state: "cancelled",
-      error: "Superseded by a newer evaluation of the changed record",
-      receipt: { supersededBy: keepId },
-      updatedAt: new Date(),
+async function slotAdmission(db: Database, item: EvaluationTargetInput) {
+  const slotKey = evaluationSlotKey({
+    feature: targetFeature(item.target),
+    target: item.target,
+  });
+  const rows = await getDb(db)
+    .select({
+      item: aiEvaluation,
+      failureCode: run.failureCode,
+      sameInput: sql<boolean>`(${aiEvaluation.provenance} - ${aiProvenance.keyof().enum.model}::text) = (${JSON.stringify(item.provenance)}::jsonb - ${aiProvenance.keyof().enum.model}::text)`,
     })
-    .where(
-      and(
-        eq(aiEvaluation.feature, feature),
-        inArray(aiEvaluation.state, ["queued", "retry_wait"]),
-        // Same target kind: a Product's catalog evaluation never replaces a
-        // shared pair evaluation (`product_pair`) other Runs may request.
-        sql`${aiEvaluation.target} @> ${JSON.stringify({ kind: target.kind })}::jsonb`,
-        sql`${aiEvaluation.id} <> ${keepId}::uuid`,
-        sql`${aiEvaluation.target}->>'entity' = ${target.entity}`,
-        sql`${aiEvaluation.target}->>'recordId' = ${target.recordId}`,
-      ),
-    )
-    .returning({ id: aiEvaluation.id });
-  if (!stale.length) return;
-  const executions = await getDb(db).execute<{ id: string }>(
-    sql`SELECT id FROM "Job" WHERE key IN (${sql.join(
-      stale.map((row) => sql`${`ai-evaluation:${row.id}`}`),
-      sql`, `,
-    )})`,
+    .from(aiEvaluation)
+    .innerJoin(run, eq(run.id, aiEvaluation.runId))
+    .where(eq(aiEvaluation.slotKey, slotKey))
+    .orderBy(desc(aiEvaluation.createdAt), desc(aiEvaluation.id));
+  const open = rows.find(
+    ({ item }) => item.state === "queued" || item.state === "retry_wait",
   );
-  for (const execution of executions.rows) await cancelJob(db, execution.id);
+  if (open)
+    return !open.sameInput &&
+      !item.blockedReason &&
+      open.failureCode !== "user_cancelled"
+      ? { kind: "update" as const, row: open.item }
+      : { kind: "unchanged" as const };
+  const same = rows.filter((row) => row.sameInput);
+  const declined = (row: (typeof rows)[number]) =>
+    row.item.state === "blocked" ||
+    row.item.state === "obsolete" ||
+    (row.item.state === "cancelled" &&
+      row.failureCode === SUPERSEDED_RUN_FAILURE);
+  if (
+    same[0]?.failureCode === "user_cancelled" ||
+    same.some(
+      ({ item }) => item.state === "running" || item.state === "result_ready",
+    ) ||
+    same.filter(declined).length >= MAX_REOPENS ||
+    (rows[0]?.sameInput && (item.blockedReason || !declined(rows[0])))
+  )
+    return { kind: "unchanged" as const };
+  return { kind: "insert" as const };
 }
 
-/** Whether any target would insert a new row or reopen a settled one. */
+/** Whether a slot needs new input or a new attempt, without walking receipts. */
 export async function hasAdmissibleTarget(
   db: Database,
   targets: readonly EvaluationTargetInput[],
 ) {
-  const keys = await Promise.all(targets.map(targetWorkKey));
-  const bases = keys.length
-    ? await getDb(db)
-        .select()
-        .from(aiEvaluation)
-        .where(inArray(aiEvaluation.workKey, keys))
-    : [];
-  for (const [index, item] of targets.entries()) {
-    const base = bases.find((row) => row.workKey === keys[index]);
-    if (!base) return true;
-    if (item.blockedReason) continue;
-    const chain = await workKeyTip(db, keys[index]!, base);
-    if (chain.reopenable) return true;
-  }
+  for (const item of targets)
+    if ((await slotAdmission(db, item)).kind !== "unchanged") return true;
   return false;
 }
 
@@ -256,87 +154,81 @@ async function insertTarget(
   db: Database,
   runId: string,
   item: EvaluationTargetInput,
-) {
+): Promise<number> {
   const { target, provenance, blockedReason } = item;
-  const workKey = await targetWorkKey(item);
-  const feature =
-    target.kind === "connection"
-      ? "entity-connections"
-      : target.kind === "field"
-        ? "field-suggestion"
-        : target.kind === "product"
-          ? "product-identity"
-          : "mailbox-triage";
-  const insert = (key: string, client: Database) =>
-    withTransactionDatabase(client, async (tx) => {
-      const rows = await getDb(tx)
-        .insert(aiEvaluation)
-        .values({
-          runId: runEntityId.parse(runId),
-          feature,
-          workKey: key,
-          target,
+  const feature = targetFeature(target);
+  const slotKey = evaluationSlotKey({ feature, target });
+  const baseKey = await targetWorkKey(item);
+  return withTransactionDatabase(db, async (tx) => {
+    // Serialize admission even when the slot has no row yet. The partial unique
+    // index also fences producers outside this path and concurrent member retries.
+    await getDb(tx).execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${slotKey}, 0))`,
+    );
+    const admission = await slotAdmission(tx, item);
+    if (admission.kind === "unchanged") return 0;
+    const workKey = await availableEvaluationWorkKey(tx, {
+      baseKey,
+      slotKey,
+      updatingId: admission.kind === "update" ? admission.row.id : undefined,
+    });
+    if (admission.kind === "update") {
+      // A Job may claim the row after the admission read. Never overwrite an
+      // executing snapshot; rediscovery will queue current input beside it.
+      const updated = await getDb(tx)
+        .update(aiEvaluation)
+        .set({
           provenance,
           snapshot: jsonSnapshot(item.snapshot),
-          ...(blockedReason
-            ? {
-                state: "blocked" as const,
-                error: blockedReason,
-                receipt: { reason: "mailbox_authorization_unavailable" },
-              }
-            : {}),
+          workKey,
+          target,
+          // Retry-wait rows can retain a prior provider result. New input must
+          // never publish that result under its replacement provenance.
+          result: null,
+          receipt: null,
+          error: null,
+          updatedAt: new Date(),
         })
-        .onConflictDoNothing()
+        .where(
+          and(
+            eq(aiEvaluation.id, admission.row.id),
+            inArray(aiEvaluation.state, ["queued", "retry_wait"]),
+          ),
+        )
         .returning({ id: aiEvaluation.id });
-      if (!blockedReason)
-        for (const row of rows) {
-          await enqueueJob(tx, {
-            key: `ai-evaluation:${row.id}`,
-            kind: "ai.evaluation",
-            input: { evaluationId: row.id },
-          });
-          await supersedeQueuedRecordWork(tx, feature, target, row.id);
-        }
-      return rows;
-    });
-  if ((await insert(workKey, db)).length) return 1;
-  if (blockedReason) return 0;
-  // The replacement and its link commit together (connection sweeps pass a plain pool).
-  return withTransactionDatabase(db, async (tx) => {
-    const [base] = await getDb(tx)
-      .select()
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.workKey, workKey));
-    const chain = await workKeyTip(tx, workKey, base);
-    if (!chain.reopenable || !chain.tip) return 0;
-    const [replacement] = await insert(
-      `${workKey}${REOPEN_SEPARATOR}${chain.reopenRows + 1}`,
-      tx,
-    );
-    if (!replacement) return 0;
-    await getDb(tx)
-      .update(aiEvaluation)
-      .set({
-        receipt: {
-          ...z
-            .record(z.string(), z.unknown())
-            .catch({})
-            .parse(chain.tip.receipt),
-          retryEvaluationId: replacement.id,
-        },
-        updatedAt: new Date(),
+      return updated.length || insertTarget(tx, runId, item);
+    }
+    const [row] = await getDb(tx)
+      .insert(aiEvaluation)
+      .values({
+        runId: runEntityId.parse(runId),
+        feature,
+        workKey,
+        target,
+        provenance,
+        snapshot: jsonSnapshot(item.snapshot),
+        ...(blockedReason
+          ? {
+              state: "blocked" as const,
+              error: blockedReason,
+              receipt: { reason: "mailbox_authorization_unavailable" },
+            }
+          : {}),
       })
-      .where(eq(aiEvaluation.id, chain.tip.id));
+      .onConflictDoNothing()
+      .returning({ id: aiEvaluation.id });
+    if (!row) return 0;
+    if (!blockedReason)
+      await enqueueJob(tx, {
+        key: `ai-evaluation:${row.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: row.id },
+      });
     return 1;
   });
 }
 
-/**
- * Adds evaluation rows to an existing Run. A target whose work key (record,
- * field and input fingerprint) was already evaluated or is in flight under
- * any Run is not inserted again, while a reopenable settled one gets a
- * replacement row in this Run; the count is what is new or reopened.
- */
+/** Admit current input once per slot; queued input updates retain their row and Job. */
 export async function insertEvaluationTargets(
   db: Database,
   runId: string,
@@ -371,6 +263,21 @@ export async function scheduleEvaluationRun(
       return { kind: "deferred", reason: "scheduling_busy" };
     // Do not create empty Runs for terminal, cancelled or already queued work.
     if (!(await hasAdmissibleTarget(tx, targets))) return { kind: "unchanged" };
+    // Updating a queued slot keeps its original owner, even when a mailbox
+    // roster is full or the caller would otherwise open a new Run.
+    let updatedOwner: RunId | undefined;
+    for (const item of targets) {
+      const admission = await slotAdmission(tx, item);
+      if (
+        admission.kind === "update" &&
+        (await insertTarget(tx, admission.row.runId, item))
+      )
+        updatedOwner = admission.row.runId;
+    }
+    if (!(await hasAdmissibleTarget(tx, targets)))
+      return updatedOwner
+        ? { kind: "scheduled", runId: updatedOwner }
+        : { kind: "unchanged" };
     const lockRun = async (id: string) =>
       (
         await getDb(tx)
@@ -617,38 +524,14 @@ export async function assessmentStatesById(
     .where(inArray(suggestion.id, [...ids]));
 }
 
-/** Settles a failed refresh attempt only while that attempt still owns the evaluation. */
+/** Automatic and requested evaluations share the same slot-safe failure transition. */
 export async function recordAiRefreshAttemptFailure(
   db: Database,
   id: string,
   attemptToken: string,
-  set: {
-    state: (typeof aiEvaluation.$inferSelect)["state"];
-    error: string;
-  },
+  set: { state: (typeof aiEvaluation.$inferSelect)["state"]; error: string },
 ) {
-  const execution = currentJobExecution();
-  if (
-    !execution ||
-    execution.claim.kind !== "ai.evaluation" ||
-    execution.claim.key !== `ai-evaluation:${id}` ||
-    execution.claim.leaseToken !== attemptToken
-  )
-    throw new Error(
-      "AI evaluation failure requires its current universal Job claim",
-    );
-  await withTransactionDatabase(db, async (tx) => {
-    await assertCurrentJob(tx);
-    await getDb(tx)
-      .update(aiEvaluation)
-      .set({ state: set.state, error: set.error, updatedAt: new Date() })
-      .where(
-        and(
-          eq(aiEvaluation.id, id),
-          inArray(aiEvaluation.state, ["running", "result_ready"]),
-        ),
-      );
-  });
+  await recordAiEvaluationAttemptFailure(db, { id, attemptToken }, set);
 }
 
 /**

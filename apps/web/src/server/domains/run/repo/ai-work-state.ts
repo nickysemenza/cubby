@@ -162,10 +162,34 @@ export async function recordAiEvaluationAttemptFailure(
     // A funding/auth stop may have paused the requester after inference.
     // Only execution ownership fences this diagnostic; publication still
     // checks the requester's current domain authority separately.
+    const [current] = await getDb(tx)
+      .select({ slotKey: aiEvaluation.slotKey })
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, item.id));
+    if (!current) return;
+    // Admission and failure serialize before Job/evaluation locks. A running
+    // snapshot cannot return to retry_wait beside its queued successor.
+    await getDb(tx).execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${current.slotKey}, 0))`,
+    );
     await assertCurrentJob(tx);
+    const [successor] =
+      set.state === "retry_wait"
+        ? await getDb(tx)
+            .select({ id: aiEvaluation.id })
+            .from(aiEvaluation)
+            .where(
+              and(
+                eq(aiEvaluation.slotKey, current.slotKey),
+                inArray(aiEvaluation.state, ["queued", "retry_wait"]),
+                sql`${aiEvaluation.id} <> ${item.id}::uuid`,
+              ),
+            )
+            .limit(1)
+        : [];
     await getDb(tx)
       .update(aiEvaluation)
-      .set({ state: set.state, error: set.error })
+      .set({ state: successor ? "obsolete" : set.state, error: set.error })
       .where(
         and(
           eq(aiEvaluation.id, item.id),

@@ -29,7 +29,8 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
-import * as refreshFamilies from "~/server/generic/derived-refresh/repo/families";
+import * as changes from "~/server/generic/changes/repo/change";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
@@ -198,7 +199,12 @@ describe("statement spending review and re-import", () => {
       (SELECT count(*)::int FROM "Feedback" WHERE "assessmentId" = ${suggestion.id}::uuid AND "operationId" IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
         ).rows[0]!;
       const before = await read();
-      const invalidate = refreshFamilies.invalidateRefreshFamily;
+      await enqueueJob(ctx.db, {
+        key: "synthetic:statement-contention",
+        kind: "synthetic.contention",
+        input: {},
+      });
+      const invalidate = changes.recordChange;
       let calls = 0;
       let external = false;
       const current = statementApplication.currentStatementApplication;
@@ -224,9 +230,14 @@ describe("statement spending review and re-import", () => {
           return proposal;
         });
       const racing = vi
-        .spyOn(refreshFamilies, "invalidateRefreshFamily")
-        .mockImplementation(async (db, family) => {
-          if (family === "search" && !external) {
+        .spyOn(changes, "recordChange")
+        .mockImplementation(async (db, changeEvent) => {
+          if (
+            changeEvent.kind === "source" &&
+            changeEvent.categories.includes("financialTransaction") &&
+            changeEvent.categories.includes("expense") &&
+            !external
+          ) {
             calls++;
             if (mode === "exhausted" || (mode !== "committed" && calls === 1)) {
               // A synthetic stale-row fence keeps real PostgreSQL retry and
@@ -234,11 +245,11 @@ describe("statement spending review and re-import", () => {
               await getDb(ctx.db)
                 .update(job)
                 .set({ generation: sql`${job.generation} + 1` })
-                .where(eq(job.key, "refresh:search"));
+                .where(eq(job.key, "synthetic:statement-contention"));
               await repositoryQueries(db)
                 .select()
                 .from(job)
-                .where(eq(job.key, "refresh:search"))
+                .where(eq(job.key, "synthetic:statement-contention"))
                 .for("update");
             }
             if (mode === "committed" && calls === 1) {
@@ -249,7 +260,7 @@ describe("statement spending review and re-import", () => {
               });
             }
           }
-          return invalidate(db, family);
+          return invalidate(db, changeEvent);
         });
       try {
         const scenarios = {

@@ -1,14 +1,11 @@
 /**
- * Location valuation — computed on read.
+ * Location valuation computed from live inputs.
  *
- * There is no persisted rollup and no persisted inventory valuation:
  * `computeLocationValuations` re-derives the whole tree's valuation (a few
  * hundred locations, about a thousand entries) from live inventory + location
  * data, via the pure rollup in `services/location-valuation-rollup`, pricing
- * every entry through `inventory/valuation`. `directValuationSql` hands one
- * location's `directValuation` back to SQL as a lookup over that same
- * computed figure — usable in a WHERE/ORDER BY on the `location` table — for
- * the list filter/sort, which has no whole-tree rollup to read from.
+ * every entry through `inventory/valuation`. Lists read the stored
+ * `location.valuationRollup` and stored inventory valuations instead (ADR 0021).
  */
 
 import {
@@ -20,7 +17,7 @@ import type {
   LocationValuation,
   LocationValuationSummaryOut,
 } from "@cubby/schemas/location";
-import { and, eq, type SQL, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -76,20 +73,6 @@ const directValuationsByLocation = (
     );
   }
   return direct;
-};
-
-/**
- * SQL for one location's `directValuation`, for the `locationList` filter and
- * sort (a WHERE/ORDER BY on the `location` table). The whole computed map
- * travels as one jsonb parameter and each row does a key lookup — see
- * `inventoryValuationSql` for why. `location.id` is the primary table's own
- * typed column, which survives the relational-query layer's alias rewriting.
- */
-export const directValuationSql = (
-  entries: readonly ValuationInventoryRow[],
-): SQL<number> => {
-  const direct = Object.fromEntries(directValuationsByLocation(entries));
-  return sql<number>`COALESCE((${JSON.stringify(direct)}::jsonb ->> ${location.id}::text)::double precision, 0)`;
 };
 
 /** Top locations by direct value, for Home; computed, no tree or relation hydration. */

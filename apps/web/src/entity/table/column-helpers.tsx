@@ -45,6 +45,7 @@ import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
+import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -594,15 +595,27 @@ export function createImageColumn<T extends object>(
     // before the images query resolved.
     cell: (info) => {
       const ref = options.imageRef?.(info.row.original);
-      return ref ? (
+      const thumbnail = ref ? (
         <RefImageThumbnail imageRef={ref} />
       ) : (
         <ImageThumbnail
           images={getImages(info.row.original)}
           alt="Image"
+          preview={false}
           lazyPreview={true}
           entity={rowEntity(info.row.original)}
         />
+      );
+      const imageEntity = ref?.entityKind ?? rowEntity(info.row.original);
+      const imageId =
+        ref?.entityId ??
+        z.object({ id: z.string() }).safeParse(info.row.original).data?.id;
+      return imageEntity && imageId ? (
+        <ImageChainPopover entity={imageEntity} id={imageId}>
+          {thumbnail}
+        </ImageChainPopover>
+      ) : (
+        thumbnail
       );
     },
   });
@@ -623,6 +636,7 @@ function RefImageThumbnail({ imageRef }: { imageRef: EntityRef }) {
           : []
       }
       alt="Image"
+      preview={false}
       lazyPreview={true}
       entity={imageRef.entityKind}
     />

@@ -246,7 +246,7 @@ describe("Run data quality", () => {
       args[0],
       [...args[1]],
       args[2],
-      { kind: "enrichment", groups: ["quality"] },
+      { kind: "selected", fields: ["dataQuality"] },
     );
     expect(
       base.data.find((row) => row.id === run.shortcode)?.dataQuality,

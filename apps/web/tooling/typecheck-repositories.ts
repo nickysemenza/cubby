@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/generic/derived/repo/backlog.ts",
   "src/server/lib/purchase-spending.ts",
   "src/server/domains/purchase/repo/purchase-spending.ts",
   "src/server/domains/purchase/repo/settlement-predicates.ts",
@@ -21,7 +22,8 @@ export const repositoryOwners = [
   "src/server/db/job-schema.ts",
   "src/server/db/assessment-correction-lock-schema.ts",
   "src/server/generic/assessment/repo/correction-lock.ts",
-  "src/server/db/entity-quality-schema.ts",
+  "src/server/db/derived-value-schema.ts",
+  "src/server/db/derived-declarations.ts",
   "src/server/lib/canonical-json.ts",
   "src/server/db/computed/product-classification-evidence.ts",
   "src/server/db/computed/image-description-confirmation.ts",
@@ -40,7 +42,6 @@ export const repositoryOwners = [
   "src/server/generic/jobs/context.ts",
   "src/server/generic/jobs/repo/execution.ts",
   "src/server/generic/jobs/repo/device-admission.ts",
-  "src/server/generic/derived-refresh/repo/families.ts",
   "src/server/errors/db-errors.ts",
   "src/server/operation-runtime/start-operation.contract.ts",
 

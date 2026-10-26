@@ -7,8 +7,7 @@ import { page, userEvent } from "vitest/browser";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
-
-import { FieldExplanation } from "./field-explanation";
+import { WhyValue } from "~/ui/derived/why-value";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 let restoreTransport: (() => void) | undefined;
@@ -87,7 +86,7 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
     return { ok: true, data: explanation };
   });
   render(
-    <FieldExplanation
+    <WhyValue
       entity="product"
       id={productId}
       field="dataQuality"
@@ -154,4 +153,42 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
       surface: "summary",
     },
   ]);
+});
+
+it("compares the published stored value with the live value on demand", async () => {
+  harness = createBrowserTestHarness();
+  restoreTransport = overrideStartDispatch(async () => ({
+    ok: true,
+    data: {
+      ...explanation,
+      value: 18,
+      qualityBreakdown: undefined,
+      sources: [],
+      derived: {
+        meta: {
+          state: "stale",
+          decidedBy: { level: "computed" },
+          asOf: "2026-10-25T12:00:00Z",
+        },
+        stored: 18,
+        live: 24,
+      },
+    },
+  }));
+  render(
+    <WhyValue
+      entity="product"
+      id={productId}
+      field="price"
+      label="Price"
+      surface="list"
+    />,
+    { wrapper: harness.wrapper },
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "How price is determined" }),
+  );
+  await waitFor(() => expect(screen.getByText("24")).toBeVisible());
+  expect(screen.getByRole("dialog")).toHaveTextContent("Stored 18 → live 24");
+  expect(screen.getByLabelText("Updating")).toBeVisible();
 });

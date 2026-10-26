@@ -61,7 +61,7 @@ struct GenericEntityListModelTests {
         let unassigned = try #require(descriptor.presentation.savedViews.first { $0.id == "unassigned" })
         let model = GenericEntityListModel(
             descriptor: descriptor, client: try makeClient(),
-            filters: EntityFilterState(["search": ["old scope"]]), progressive: false)
+            filters: EntityFilterState(["search": ["old scope"]]))
         await model.apply(savedView: mine)
         #expect(model.activeSavedView?.id == mine.id)
         #expect(requests.withLock { $0.count } == 1)
@@ -94,7 +94,7 @@ struct GenericEntityListModelTests {
         let wardrobe = try #require(descriptor.presentation.savedViews.first { $0.id == "wardrobe" })
         #expect(wardrobe.listView(in: descriptor) == .shelf)
         let model = GenericEntityListModel(
-            descriptor: descriptor, client: try makeClient(), view: .table, progressive: false)
+            descriptor: descriptor, client: try makeClient(), view: .table)
         await model.apply(savedView: wardrobe)
         #expect(model.view == .shelf)
         #expect(model.activeSavedView?.id == wardrobe.id)
@@ -126,7 +126,7 @@ struct GenericEntityListModelTests {
         }
         let model = GenericEntityListModel(
             descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1,
-            filters: EntityFilterState(["upcFilter": ["000000000000"]]), progressive: false)
+            filters: EntityFilterState(["upcFilter": ["000000000000"]]))
         await model.loadInitial()
         await model.loadNextPage()
         await model.apply(sort: "undeclaredField")
@@ -165,7 +165,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false,
+            descriptor: EntityCatalog[.product], client: try makeClient(),
             searchDebounceNanoseconds: 0)
         await model.loadInitial()
         model.setSearchQuery("sample")
@@ -186,7 +186,7 @@ struct GenericEntityListModelTests {
         ListStub.handler.withLock { $0 = { _ in (200, page) } }
         let model = GenericEntityListModel(
             descriptor: EntityCatalog[.product], client: try makeClient(), groupBy: "categoryId",
-            progressive: false, searchDebounceNanoseconds: 0)
+            searchDebounceNanoseconds: 0)
         await model.loadInitial()
         #expect(model.groupChoice?.id == "categoryId")
         #expect(model.groupByUnavailableReason == nil)
@@ -217,7 +217,7 @@ struct GenericEntityListModelTests {
         }
         let model = GenericEntityListModel(
             descriptor: EntityCatalog[.product], client: try makeClient(), groupBy: "categoryId",
-            groupLevel: 2, progressive: false, searchDebounceNanoseconds: 0)
+            groupLevel: 2, searchDebounceNanoseconds: 0)
         await model.loadInitial()
         #expect(model.activeGroupLevel == 2)
         #expect(model.groupLevelUnavailableReason == nil)
@@ -244,7 +244,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient())
         await model.loadInitial()
         await model.loadInitial()
         #expect(model.phase == .loaded)
@@ -270,7 +270,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
 
         await model.loadInitial()
         let firstTrigger = Task.immediate { await model.loadNextPage() }
@@ -303,7 +303,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
 
         await model.loadInitial()
         await model.loadNextPage()
@@ -327,7 +327,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
 
         await model.loadInitial()
         #expect(model.hasMore)
@@ -353,7 +353,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient())
 
         await model.loadInitial()
         await model.refresh()
@@ -381,7 +381,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient())
         await model.loadInitial()
         #expect(model.meta?.sums?["price"] == 25)
 
@@ -414,7 +414,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1, progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
         await model.loadInitial()
 
         let loadMore = Task { await model.loadNextPage() }
@@ -447,7 +447,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false,
+            descriptor: EntityCatalog[.product], client: try makeClient(),
             searchDebounceNanoseconds: 0)
         await model.loadInitial()
         let searchModel = try #require(model.searchModel)
@@ -525,46 +525,6 @@ struct GenericEntityListModelTests {
         #expect(searchModel.phase == .loaded)
     }
 
-    /// A source that builds its own rows opts out of deferred enrichment: deferred work carried on
-    /// its pages never starts (the enabled control proves the same page would start it).
-    @Test func sourceWithoutEnrichmentNeverRunsDeferredWork() async throws {
-        for enrichesRows in [false, true] {
-            let calls = Mutex<[String]>([])
-            let deferred = EntityListDeferred(
-                groups: [.init(id: "detail", fields: ["name"])],
-                enrich: { ids, _ in
-                    calls.withLock { $0.append("enrich:\(ids.joined(separator: ","))") }
-                    return []
-                },
-                summary: {
-                    calls.withLock { $0.append("summary") }
-                    return ["price": "$1.00"]
-                })
-            let source = EntityListPageSource(id: "shelf", enrichesRows: enrichesRows) { page in
-                ListPage(
-                    items: [Self.row("row-\(page)")],
-                    meta: ListPageMeta(pageIndex: page, pageSize: 1, totalCount: 2),
-                    deferred: deferred)
-            }
-            let model = GenericEntityListModel(
-                descriptor: EntityCatalog[.product], client: try makeClient(), source: source)
-            await model.loadInitial()
-            await model.loadNextPage()
-            await model.enrichment.waitForBackground()
-
-            #expect(model.rows.map(\.id) == ["PRD-row-1", "PRD-row-2"])
-            let recorded = calls.withLock { $0 }
-            if enrichesRows {
-                #expect(recorded.contains("summary"))
-                #expect(recorded.contains("enrich:PRD-row-2"))
-            } else {
-                #expect(recorded.isEmpty)
-                #expect(model.enrichment.totalLabels == nil)
-                #expect(model.enrichment.isLoadingSummary == false)
-            }
-        }
-    }
-
     /// Swapping in a source drops a loaded declared timeline, and a declared timeline response
     /// still in flight at the swap never populates the newly scoped model.
     @Test func sourceChangeDropsTheDeclaredTimelineAndItsLateResponse() async throws {
@@ -587,7 +547,7 @@ struct GenericEntityListModelTests {
             }
         }
         let model = GenericEntityListModel(
-            descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
+            descriptor: EntityCatalog[.product], client: try makeClient())
         await model.loadInitial()
         await model.select(view: .timeline)
         #expect(model.timeline != nil)

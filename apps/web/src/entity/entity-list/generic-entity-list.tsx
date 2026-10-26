@@ -27,7 +27,7 @@ import {
 } from "~/entity/display/entity-display";
 import { entities } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
-import { entityListBaseFor } from "~/entity/entity-list";
+import { entityListFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
 import { getEntityFilters } from "~/entity/filter-manifest";
@@ -68,14 +68,13 @@ import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import { ListQueryProvider } from "~/entity/table/list-query-context";
 import { ListWorkbench } from "~/entity/table/list-workbench";
-import { getAppErrorDetails } from "~/lib/error-utils";
 import { formatCount } from "~/lib/number-format";
 import { DataTablePagination } from "~/ui/data-table/data-table-pagination";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
-import { ErrorDetails } from "~/ui/feedback/error-details";
+import { DerivedSidecarProvider } from "~/ui/derived/sidecar-context";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -298,7 +297,6 @@ export function EmbeddedEntityList({
   allLink?: boolean;
   detail?: {
     label: string;
-    readFields?: readonly string[];
     render: (row: BaseListRow) => ReactNode;
   };
   actions?: (list: UseEntityListReturn<BaseListRow>) => ReactNode;
@@ -377,11 +375,10 @@ export function EmbeddedEntityList({
   );
   const list = useEntityList<BaseListRow, object>({
     entity,
-    queryOptions: operations?.list ?? entityListBaseFor(entity).listQueryPlan,
+    queryOptions: operations?.list ?? entityListFor(entity).listQueryPlan,
     columns,
     scopeFilters: filters,
     tableStateOptions,
-    additionalReadFields: detail?.readFields,
     preview: {},
     selectable: Boolean(actions),
   });
@@ -538,7 +535,7 @@ function ServerListBody({
   const queryOptions = useMemo((): ListQueryOptionsFn<object, BaseListRow> => {
     if (operations?.list) return operations.list;
     if (!isListEntity(entity)) throw new Error(`${entity} has no list read`);
-    return entityListBaseFor(entity).listQueryPlan;
+    return entityListFor(entity).listQueryPlan;
   }, [entity, operations?.list]);
 
   // `deletable` defaults ON: a top-level list page owns its entity's rows,
@@ -546,24 +543,6 @@ function ServerListBody({
   const initialColumnVisibility = useListInitialColumnVisibility(
     entity,
     listOptions?.initialColumnVisibility,
-  );
-  const additionalReadFields = useMemo(
-    () => [
-      ...(parts.wrapReadFields ?? []),
-      ...(listOptions?.additionalReadFields ?? []),
-      ...(renderedView === "shelf"
-        ? [
-            "displayImages",
-            ...(entitySummary[entity].list.shelf?.subtitle ?? []),
-          ]
-        : []),
-    ],
-    [
-      entity,
-      parts.wrapReadFields,
-      listOptions?.additionalReadFields,
-      renderedView,
-    ],
   );
   const list = useEntityList<BaseListRow, object, BaseListRow>({
     entity,
@@ -573,7 +552,6 @@ function ServerListBody({
     preview: DEFAULT_PREVIEW,
     ...listOptions,
     initialColumnVisibility,
-    additionalReadFields,
     filterOptions,
     // SAFETY: the flat and tree overloads only differ in whether `tree` is
     // present; the hook branches on it at runtime.
@@ -642,34 +620,12 @@ function ServerListBody({
             <ListTotalSummary
               totals={entitySummary[entity].list.totals}
               labels={list.totalLabels}
-              state={list.summaryState}
-              onRetry={list.retrySummary}
             />
             {sweepAction}
             <div data-workbench-status className="min-w-0" />
             {contextualStatus}
           </div>
         </div>
-        {list.enrichmentFailures?.map(({ pageIndex, group, state }) => (
-          <div key={`${pageIndex}:${group}`} className="min-w-0 text-sm">
-            <p role="alert" className="text-destructive">
-              {state.error}
-            </p>
-            {getAppErrorDetails(state.cause).code && (
-              <p className="font-mono text-xs">
-                {getAppErrorDetails(state.cause).code}
-              </p>
-            )}
-            <ErrorDetails error={state.cause} />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void list.retryEnrichment?.(pageIndex, group)}
-            >
-              Retry {group}
-            </Button>
-          </div>
-        ))}
         <Stack gap="sm">
           {renderedView !== "table" && (
             <DataTableToolbar
@@ -715,7 +671,6 @@ function ServerListBody({
                     // tree nesting and synthetic grouping rows reach the table.
                     // A shelf must never turn either into cards.
                     items={list.data}
-                    enrichmentState={list.enrichmentState}
                     isLoading={list.workbench.isLoading}
                     error={list.workbench.error}
                     infiniteScroll={list.workbench.infiniteScroll}
@@ -793,20 +748,21 @@ function ServerListBody({
       }
     : null;
   const provided = listQuery ? (
-    <ListQueryProvider value={listQuery}>{body}</ListQueryProvider>
+    <ListQueryProvider value={listQuery}>
+      <DerivedSidecarProvider value={list.derived ?? EMPTY_DERIVED}>
+        {body}
+      </DerivedSidecarProvider>
+    </ListQueryProvider>
   ) : (
-    body
+    <DerivedSidecarProvider value={list.derived ?? EMPTY_DERIVED}>
+      {body}
+    </DerivedSidecarProvider>
   );
   return (
     <>
       {parts.wrap
         ? parts.wrap(provided, {
-            data: list.data.filter((row) =>
-              (parts.wrapReadFields ?? []).every((field) => {
-                const state = list.enrichmentState?.(row.id, field);
-                return !state || state.state === "ready";
-              }),
-            ),
+            data: list.data,
           })
         : provided}
     </>
@@ -855,3 +811,5 @@ function ListTimeline({
     />
   );
 }
+
+const EMPTY_DERIVED = {};

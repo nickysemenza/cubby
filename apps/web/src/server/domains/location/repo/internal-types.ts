@@ -39,10 +39,12 @@ export type LocationListDB = LocationSelect & {
   children: Array<LocationSelect>;
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
-      // Computed on read and attached by the caller.
+      // The stored valuation (ADR 0021), attached by the caller.
       valuation: number | null;
       product: ProductSelect & {
         category: ProductCategorySummary | null;
+        /** The stored effective price JSON, or the explicit price before publication. */
+        effectivePrice: unknown;
         externalIds?: MappableProductExternalId[];
       };
     }

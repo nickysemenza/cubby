@@ -1,3 +1,4 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
 import { recipeReadSchemas } from "../recipe-fields";
 import { recipeChildren } from "../child-tables/recipe.js";
@@ -150,24 +151,6 @@ export default defineEntity(
             },
           },
         ],
-        read: {
-          relations: ["forkedFromRecipeId", "forkedFromRecipeName", "meals"],
-          derived: [
-            "fieldResolutions",
-            "totals",
-            "costTotalLabel",
-            "caloriesTotalLabel",
-            "totalMinutesLabel",
-            "cost",
-            "calories",
-            "protein",
-            "carbs",
-            "fat",
-            "sectionCount",
-          ],
-          media: ["displayImages"],
-          quality: ["dataQuality"],
-        },
         links: [
           { label: "Compare", path: "/recipes/compare" },
           { label: "Import", path: "/recipes/import" },
@@ -813,6 +796,132 @@ export default defineEntity(
         "cookbookId",
       ],
       audit: ["name", "forkedFromRecipeId"],
+      // Stored derived values that are not list fields (ADR 0021).
+      stored: {
+        totals: {
+          compute: "recipe.totals",
+          inputs: [
+            {
+              table: "EntityExternalId",
+              match: { entityId: "id" },
+              path: [
+                { table: "Product", from: "id", to: "ingredientId" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+              where: { entityKind: "product" },
+            },
+            {
+              table: "Ingredient",
+              match: { id: "id" },
+              path: [
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+            {
+              table: "Product",
+              match: { ingredientId: "id" },
+              columns: [
+                "name",
+                "shortcode",
+                "ingredientId",
+                "categoryId",
+                "fdc_id",
+                "labelNutrition",
+                "usdaUnavailable",
+                "price",
+                "deletedAt",
+              ],
+              path: [
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+
+            {
+              table: "Recipe",
+              match: { id: "id" },
+              // Its own output: publishing totals must not re-mark them.
+              except: ["totals", "totalsComputedAt"],
+            },
+            // A deleted sub-recipe publishes no totals, so mark its parents from the source row.
+            {
+              table: "Recipe",
+              match: { id: "id" },
+              columns: ["deletedAt"],
+              path: [
+                { table: "Ingredient", from: "recipeId", to: "id" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+            { table: "RecipeSection", match: { recipeId: "id" } },
+            {
+              table: "RecipeSectionIngredient",
+              match: { recipeSectionId: "id" },
+              path: [{ table: "RecipeSection", from: "id", to: "recipeId" }],
+            },
+            {
+              table: "ProductUnitMapping",
+              match: { productId: "id" },
+              path: [
+                { table: "Product", from: "id", to: "ingredientId" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+          ],
+          dependsOn: [
+            {
+              entity: "product",
+              key: "price",
+              path: [
+                { table: "Product", from: "id", to: "ingredientId" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+            {
+              entity: "recipe",
+              key: "totals",
+              path: [
+                { table: "Ingredient", from: "recipeId", to: "id" },
+                {
+                  table: "RecipeSectionIngredient",
+                  from: "ingredientId",
+                  to: "recipeSectionId",
+                },
+                { table: "RecipeSection", from: "id", to: "recipeId" },
+              ],
+            },
+          ],
+        },
+      },
       derived: {
         cookbook: { via: "cookbook" },
         // Totals order only once computed; until then they read as absent.
@@ -1310,7 +1419,36 @@ export default defineEntity(
         ],
       },
     ],
-    search: "semantic",
+    search: {
+      mode: "semantic",
+      inputs: [
+        ...imageDescriptionInputs("recipe"),
+
+        {
+          table: "RecipeSection",
+          match: { recipeId: "id" },
+          columns: ["deletedAt", "instructions"],
+        },
+        {
+          table: "RecipeSectionIngredient",
+          match: { recipeSectionId: "id" },
+          path: [{ table: "RecipeSection", from: "id", to: "recipeId" }],
+        },
+        {
+          table: "Ingredient",
+          match: { id: "id" },
+          columns: ["name", "deletedAt"],
+          path: [
+            {
+              table: "RecipeSectionIngredient",
+              from: "ingredientId",
+              to: "recipeSectionId",
+            },
+            { table: "RecipeSection", from: "id", to: "recipeId" },
+          ],
+        },
+      ],
+    },
     capabilities: {
       images: {
         storage: imageAssociationStorage.shape.recipe.value,
@@ -1363,6 +1501,74 @@ export default defineEntity(
       delete: { mode: "soft", bulk: true },
       merge: false,
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [
+          {
+            table: "MealRecipe",
+            match: { recipeId: "id" },
+            columns: ["deletedAt", "mealId"],
+            path: [{ table: "Recipe", from: "id", to: "id" }],
+          },
+          {
+            table: "Meal",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [
+              { table: "MealRecipe", from: "mealId", to: "recipeId" },
+              { table: "Recipe", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Meal", from: "id", to: "id" },
+              { table: "MealRecipe", from: "mealId", to: "recipeId" },
+              { table: "Recipe", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Meal", from: "id", to: "id" },
+              { table: "MealRecipe", from: "mealId", to: "recipeId" },
+              { table: "Recipe", from: "id", to: "id" },
+            ],
+          },
+          {
+            table: "RecipeSection",
+            match: { recipeId: "id" },
+            columns: ["deletedAt", "instructions"],
+          },
+          {
+            table: "RecipeSectionIngredient",
+            match: { recipeSectionId: "id" },
+            path: [{ table: "RecipeSection", from: "id", to: "recipeId" }],
+          },
+          {
+            table: "Ingredient",
+            match: { id: "id" },
+            columns: ["name", "deletedAt"],
+            path: [
+              {
+                table: "RecipeSectionIngredient",
+                from: "ingredientId",
+                to: "recipeSectionId",
+              },
+              { table: "RecipeSection", from: "id", to: "recipeId" },
+            ],
+          },
+          { table: "RecipeSection", match: { recipeId: "id" } },
+        ],
         checks: [
           {
             id: "recipe_ingredients",

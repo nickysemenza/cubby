@@ -16,13 +16,11 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
-import type {
-  ListReadRow,
-  ListEnrichmentGroup,
+import {
+  isListMediaField,
+  type ListReadRow,
 } from "~/entity/model/list-read-fields";
 import {
-  listGroupsForFields,
-  listReadFields,
   listReadSchema,
   projectListRows,
 } from "~/entity/model/list-read-schema";
@@ -33,7 +31,10 @@ import {
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import type {
+  ListBindingGroup,
+  ListProjection,
+} from "~/server/generic/list/repo/list-contracts";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { traceListGroup } from "~/server/observability/list-read-tracing";
 
@@ -42,48 +43,25 @@ import { loadRelationProjection } from "./relation-projection";
 
 export const wantsListGroup = (
   projection: ListProjection,
-  group: ListEnrichmentGroup,
+  group: ListBindingGroup,
 ): boolean => {
-  switch (projection.kind) {
-    case "full":
-      return true;
-    case "base":
-      return false;
-    case "enrichment":
-    case "selected":
-      return projection.groups?.includes(group) === true;
-    default: {
-      const unhandled: never = projection;
-      throw new Error(`Unsupported list projection: ${unhandled}`);
-    }
-  }
+  if (projection.kind === "base") return false;
+  if (projection.kind === "full") return true;
+  if (group === "media") return projection.fields.some(isListMediaField);
+  if (group === "quality") return projection.fields.includes("dataQuality");
+  return true;
 };
 
-/** Validate demand before reading even an empty page, using canonical ownership. */
+/** Validate explicit field demand before reading even an empty page. */
 export function selectedListProjection(
   entity: ListEntity,
   requested: readonly string[],
 ): Extract<ListProjection, { kind: "selected" }> {
-  const ownership = listReadFields(entity);
-  const known = new Set([
-    ...ownership.core,
-    ...ownership.media,
-    ...ownership.quality,
-    ...ownership.relations,
-    ...ownership.derived,
-  ]);
+  const schema = listReadSchema(entity);
   for (const field of requested)
-    if (!known.has(field))
+    if (!(field in schema.shape))
       throw new Error(`Unknown list field: ${entity}.${field}`);
-  const fields = [...new Set(requested)];
-  return {
-    kind: "selected",
-    fields,
-    groups: expandListGroups(
-      listGroupsForFields(entity, fields),
-      ownership.dependencies,
-    ),
-  };
+  return { kind: "selected", fields: [...new Set(requested)] };
 }
 
 /** Selected reads can gate a shared loader by all its consumer fields,
@@ -91,7 +69,7 @@ export function selectedListProjection(
  * full/group reads still load every dependency belonging to their groups. */
 export const loadListGroup = async <T>(
   projection: ListProjection,
-  groups: ListEnrichmentGroup | readonly ListEnrichmentGroup[],
+  groups: ListBindingGroup | readonly ListBindingGroup[],
   load: () => Promise<T>,
   consumerFields?: readonly string[],
 ): Promise<T | undefined> =>
@@ -105,7 +83,7 @@ export const loadListGroup = async <T>(
 /** Build only the selected group's columns or canonical fields; omitted groups stay absent. */
 export const listGroupFields = <T extends object>(
   projection: ListProjection,
-  groups: ListEnrichmentGroup | readonly ListEnrichmentGroup[],
+  groups: ListBindingGroup | readonly ListBindingGroup[],
   build: () => T,
 ): Partial<T> => {
   if ([groups].flat().some((group) => wantsListGroup(projection, group)))
@@ -115,30 +93,6 @@ export const listGroupFields = <T extends object>(
 
 const scored = new Set<string>(scoredEntities);
 const isScored = (entity: string): entity is ScoredEntity => scored.has(entity);
-
-/** Dependencies precede consumers, even when several consumers share them. */
-export function expandListGroups(
-  groups: readonly ListEnrichmentGroup[],
-  dependencies: Partial<
-    Record<ListEnrichmentGroup, readonly ListEnrichmentGroup[]>
-  >,
-): ListEnrichmentGroup[] {
-  const ordered: ListEnrichmentGroup[] = [];
-  const visited = new Set<ListEnrichmentGroup>();
-  const active = new Set<ListEnrichmentGroup>();
-  const visit = (group: ListEnrichmentGroup) => {
-    if (active.has(group))
-      throw new Error(`List loader dependency cycle: ${group}`);
-    if (visited.has(group)) return;
-    active.add(group);
-    for (const dependency of dependencies[group] ?? []) visit(dependency);
-    active.delete(group);
-    visited.add(group);
-    ordered.push(group);
-  };
-  for (const group of groups) visit(group);
-  return ordered;
-}
 
 /** Id-only page loads started before the rows arrive; see `prefetch`. */
 export type ListPagePrefetch = {
@@ -244,7 +198,6 @@ export function listReadPlan<Row>(
   options: ListReadOptions<Row> = {},
 ) {
   const schema = listReadSchema(entity);
-  const fields = listReadFields(entity);
   const bind: BindListFields<Row> = Object.assign(
     <Fields extends z.ZodRawShape>(
       picked: z.ZodObject<Fields>,
@@ -384,11 +337,7 @@ export function listReadPlan<Row>(
       case "selected":
         return projection.fields.includes(key);
       case "base":
-        return fields.core.includes(key);
-      case "enrichment":
-        return (projection.groups ?? []).some((group) =>
-          fields[group].includes(key),
-        );
+        return false;
     }
   };
   const validate = (projection: ListProjection) => {
@@ -701,10 +650,8 @@ export function listReadPlan<Row>(
             projection.kind === "selected"
               ? projection.fields
               : projection.kind === "base"
-                ? fields.core
-                : projection.kind === "full"
-                  ? Object.keys(schema.shape)
-                  : (projection.groups ?? []).flatMap((group) => fields[group]);
+                ? []
+                : Object.keys(schema.shape);
           for (const key of requested)
             if (
               key !== "displayImages" &&

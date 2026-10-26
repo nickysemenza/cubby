@@ -4,9 +4,6 @@ import type { ExpandedState, OnChangeFn, RowData } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
-import { readListEnrichmentGroup } from "~/ui/hooks/list-enrichment";
-
 import type {
   ListQueryPlan,
   ListQueryResponse,
@@ -52,69 +49,11 @@ export const serverTreeStatusOf = (
 ): ServerTreeChildStatus | undefined =>
   typeof row === "object" && row !== null ? statusRows.get(row) : undefined;
 
-type ChildPage<TData> = ListQueryResponse<TData> & {
-  /** A deferred group that did not arrive; its fields would read as empty. */
-  enrichmentError?: Error;
-};
-
-/**
- * One children page with its deferred groups merged in, so a nested row reads
- * as complete as a root row the progressive list enriched. A group that fails
- * keeps the base rows but surfaces its error.
- */
-async function completeChildPage<TData extends { id: string }>(
-  plan: ListQueryPlan<TData>,
-  signal: AbortSignal,
-): Promise<ChildPage<TData>> {
-  const page = await plan.execute(signal);
-  const groups = page.deferredGroups ?? [];
-  if (!plan.progressive || groups.length === 0 || page.items.length === 0)
-    return page;
-  const enrichment = await plan.progressive.enrich(
-    page.items.map((row) => row.id),
-    groups.flatMap((group) => group.fields),
-    signal,
-  );
-  const patches = new Map<string, object>();
-  let enrichmentError: Error | undefined;
-  for (const requested of groups) {
-    const group = enrichment.groups.find((entry) => entry.id === requested.id);
-    if (group?.state !== "ready") {
-      enrichmentError ??=
-        group?.state === "error"
-          ? new StartOperationError(group.error)
-          : new Error(`No ${requested.id} enrichment returned`);
-      continue;
-    }
-    try {
-      for (const patch of readListEnrichmentGroup({
-        ids: page.items.map((row) => row.id),
-        requested,
-        result: group,
-        missingIds: enrichment.missingIds,
-      }).values())
-        patches.set(patch.id, { ...patches.get(patch.id), ...patch });
-    } catch (error) {
-      enrichmentError ??=
-        error instanceof Error ? error : new Error(String(error));
-    }
-  }
-  if (enrichment.missingIds.length)
-    enrichmentError ??= new Error(
-      "Child records disappeared during enrichment",
-    );
-  return {
-    ...page,
-    items: page.items.map((row) => ({ ...row, ...patches.get(row.id) })),
-    ...(enrichmentError ? { enrichmentError } : {}),
-  };
-}
-
 const NO_PAGES: Readonly<Record<string, number>> = {};
 const NO_EXPANDED: Readonly<Record<string, boolean>> = {};
 
 type ChildResult<TData> = {
-  data?: ChildPage<TData>;
+  data?: ListQueryResponse<TData>;
   error: Error | null;
   isPending: boolean;
   refetch: () => Promise<object>;
@@ -173,8 +112,7 @@ export function useServerTreeChildren<TData extends { id: string }>({
     queries: requests.map(({ plan }) => ({
       queryKey: [...plan.queryKey, "__tree_children__"],
       meta: plan.meta,
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        completeChildPage(plan, signal),
+      queryFn: ({ signal }: { signal: AbortSignal }) => plan.execute(signal),
     })),
     combine,
   });
@@ -207,9 +145,7 @@ export function useServerTreeChildren<TData extends { id: string }>({
     });
     for (const [parentId, pages] of pagesByParent) {
       const items = pages.flatMap((page) => page.data?.items ?? []);
-      const failed = pages.filter(
-        (page) => page.error || page.data?.enrichmentError,
-      );
+      const failed = pages.filter((page) => page.error);
       const last = pages.at(-1);
       // Every page of one scope reports the same total.
       const meta = pages.find((page) => page.data)?.data?.meta;
@@ -219,9 +155,7 @@ export function useServerTreeChildren<TData extends { id: string }>({
           ? {
               kind: "error",
               error:
-                failed[0]?.error ??
-                failed[0]?.data?.enrichmentError ??
-                new Error("Nested rows failed to load"),
+                failed[0]?.error ?? new Error("Nested rows failed to load"),
               retry: () => {
                 for (const page of failed) void page.refetch();
               },

@@ -12,19 +12,14 @@ import {
 } from "react";
 import { z } from "zod";
 
-import { FieldExplanation } from "~/entity/fields/field-explanation";
 import { isInspectableFieldProvenance } from "~/entity/fields/field-provenance";
-import {
-  FieldResolutionBadge,
-  fieldResolutionFor,
-  InheritedMarker,
-  resolutionIsDerived,
-  resolutionIsInherited,
-} from "~/entity/fields/field-resolution";
+import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
+import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { WhyValue } from "~/ui/derived/why-value";
 import { Button } from "~/ui/primitives/button";
 import { TableCell, TableRow } from "~/ui/primitives/table";
 
@@ -128,20 +123,19 @@ function explainedCellContent<TItem extends RowData>(
   const rowIdentity = dataRowIdentitySchema.safeParse(cell.row.original);
   // Every rail overlays the active row; a derived value reads muted, and an
   // inherited one keeps its marker visible without hovering.
-  const value =
-    resolution && resolutionIsDerived(resolution) ? (
-      <span className="inline-flex max-w-full min-w-0 items-center gap-1 text-muted-foreground">
-        <span className="min-w-0 truncate">{content}</span>
-        {resolutionIsInherited(resolution) ? <InheritedMarker /> : null}
-      </span>
-    ) : (
-      content
-    );
+  const value = (
+    <DerivedRecordValue
+      record={cell.row.original}
+      field={explanation?.field ?? cell.column.id}
+    >
+      {content}
+    </DerivedRecordValue>
+  );
   return explanation && rowIdentity.success ? (
     <CellFrame
       overlay
       trailing={
-        <FieldExplanation
+        <WhyValue
           entity={explanation.entity}
           id={rowIdentity.data.id}
           field={explanation.field}
@@ -153,22 +147,8 @@ function explainedCellContent<TItem extends RowData>(
     >
       {value}
     </CellFrame>
-  ) : resolution ? (
-    <CellFrame
-      overlay
-      trailing={
-        <FieldResolutionBadge
-          record={cell.row.original}
-          field={cell.column.id}
-          interactive={false}
-          compact
-        />
-      }
-    >
-      {value}
-    </CellFrame>
   ) : (
-    content
+    value
   );
 }
 

@@ -337,7 +337,7 @@ export const mapDbProductToInventoryEmbed = (
   productData: typeof product.$inferSelect & {
     brandName: string | null;
     category: ProductCategorySummary | null;
-    pricing: ProductPricing;
+    effectivePrice: number | null;
     primaryGtin: string | null;
   },
 ): ProductInventoryEmbedOut => ({
@@ -350,7 +350,7 @@ export const mapDbProductToInventoryEmbed = (
   notes: productData.notes,
   expectedQuantity: productData.expectedQuantity,
   category: productData.category,
-  price: productData.pricing.effectivePrice,
+  price: productData.effectivePrice,
   usdaUnavailable: productData.usdaUnavailable,
   createdAt: productData.createdAt,
   updatedAt: productData.updatedAt,
@@ -360,7 +360,7 @@ export const mapDbProductToInventoryList = (
   productData: typeof product.$inferSelect & {
     brandName: string | null;
     category: ProductCategorySummary | null;
-    pricing?: ProductPricing;
+    effectivePrice: number | null;
     primaryGtin: string | null;
   },
 ): InventoryListProductOut => ({
@@ -372,9 +372,7 @@ export const mapDbProductToInventoryList = (
   category: productData.category,
   expectedQuantity: productData.expectedQuantity,
   model: productData.model,
-  price:
-    productData.pricing?.effectivePrice ??
-    resolveProductPricing(productData.price).effectivePrice,
+  price: productData.effectivePrice,
   usdaUnavailable: productData.usdaUnavailable,
 });
 

@@ -7,6 +7,17 @@ import Testing
 struct EntityRowTests {
     private let product = EntityCatalog[.product]
 
+    @Test func attachesOnlyTheRecordsPublishedDerivedEnvelope() {
+        let input: JSONValue = ["id": "PRD-2345", "name": "Synthetic Product"]
+        let sidecars: JSONValue = [
+            "PRD-2345": ["price": ["state": "stale", "asOf": .null, "decidedBy": ["level": "computed"]]],
+            "PRD-6789": ["price": ["state": "fresh"]],
+        ]
+        let row = product.row(from: EntityRow.attachingDerived(to: input, sidecars: sidecars))
+        #expect(row?.raw["derived"]?["price"]?["state"]?.stringValue == "stale")
+        #expect(EntityRow.attachingDerived(to: input, sidecars: nil) == input)
+    }
+
     @Test func nilWhenIdIsMissing() {
         let object: JSONValue = ["name": "Sample Product"]
         #expect(product.row(from: object) == nil)

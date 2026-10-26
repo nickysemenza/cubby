@@ -1,21 +1,25 @@
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { unwrapDb } from "~/server/db/helpers";
-import { entityQuality, job, jobInvalidationCapture } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import * as allocation from "~/server/domains/expense/repo/expense-project-allocation";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
+import {
+  storedQuality,
+  storedQualityIds,
+} from "~/server/testing/quality.fixtures";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { expenseChecks, EXPENSE_QUALITY_RULES_VERSION } from "./checks/expense";
 import { setDataException } from "./exceptions";
@@ -26,35 +30,10 @@ import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
 // evidence changes reopen a member waiver or leave queue membership stale.
 describe("stored Expense quality", () => {
   const ctx = withTestDb();
-  const refresh = async () => {
-    for (let page = 0; page < 8; page++) {
-      const [intent] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent) throw new Error("Expected quality intent from source write");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic Expense quality pass exceeded page budget");
-  };
-  // A source write appends capture input without replacing the Job row.
-  const generation = async () => {
-    const [intent] = await unwrapDb(ctx.db)
-      .select({ revision: sql<number>`count(*)::int` })
-      .from(jobInvalidationCapture)
-      .where(eq(jobInvalidationCapture.key, "refresh:quality"));
-    if (!intent) throw new Error("Missing quality invalidation");
-    return intent.revision;
-  };
+  const refresh = () => drainStoredDerived(ctx.db);
+  // A source write marks stored Expense quality with a fresh ticket.
+  const generation = async () =>
+    Math.max(0, ...(await derivedMarkTickets(ctx.db, "expense.dataQuality")));
 
   it("batch-loads scoped facts and preserves incurred, zero, quantity and role rules", async () => {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
@@ -194,12 +173,9 @@ describe("stored Expense quality", () => {
     );
     await queue();
     await list();
-    expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
+    expect(await storedQualityIds(ctx.db)).toEqual([]);
     await refresh();
-    const [published] = await unwrapDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.entityId, line.entityId));
+    const published = await storedQuality(ctx.db, line.entityId);
     expect(published?.rulesVersion).toBe(EXPENSE_QUALITY_RULES_VERSION);
     expect((await queue()).items).toEqual([]);
     const before = await generation();

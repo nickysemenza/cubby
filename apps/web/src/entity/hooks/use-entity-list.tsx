@@ -9,7 +9,7 @@ import type {
 } from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
-import { constructRow, flexRender } from "@tanstack/react-table";
+import { constructRow } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
@@ -29,8 +29,6 @@ import {
   summarizeListState,
 } from "~/entity/filters";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
-import type { ListGroupState } from "~/entity/hooks/progressive-list";
 import { loadSelectionRecords } from "~/entity/hooks/selection-records";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
@@ -49,12 +47,7 @@ import {
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
 import { reconcileRowSelection } from "~/ui/data-table/row-selection";
-import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import type { CubbyColumnCollection } from "~/ui/data-table/table-features";
-import {
-  attachCubbyColumnMeta,
-  type CubbyColumnMeta,
-} from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
 import { showErrorToast } from "~/ui/feedback/error-details";
@@ -68,16 +61,7 @@ import {
   useServerTreeChildren,
 } from "~/ui/hooks/use-server-tree-children";
 
-import {
-  type EntityActionSubject,
-  rowActionReadFields,
-} from "../actions/entity-actions";
-import { DeferredListValue } from "../entity-list/deferred-list-value";
-import { listColumnReadFields } from "../entity-list/list-column-read-fields";
-import {
-  suggestionReadFields,
-  visibleSuggestTargets,
-} from "../suggestions/suggestion-targets";
+import { type EntityActionSubject } from "../actions/entity-actions";
 import {
   type DeletableConfig,
   useContractDeletable,
@@ -174,8 +158,6 @@ export interface UseEntityListOptions<
   TRow extends BaseListRow = TData,
 > {
   entity: BrowserRoutedEntity;
-  /** Fields required by an alternate renderer in addition to visible columns. */
-  additionalReadFields?: readonly string[];
   /** The descriptor-bound plan that supplies this table's exact row type. */
   queryOptions: ListQueryOptionsFn<TFilters, TRow>;
   buildFilters?: (tableState: TableStateReturn) => TFilters;
@@ -191,7 +173,6 @@ export interface UseEntityListOptions<
   /** Runtime roster options; must be referentially stable. */
   filterOptions?: RuntimeFilterOptions;
   getMappings?: (item: TRow) => UnitMapping[];
-  mappingsReadFields?: readonly string[];
   tableStateOptions?: Parameters<typeof useTableState>[0];
   bulkActions?: BulkActionsConfig<TData>;
   /** Presentation-only Inspect action for one checked canonical row. */
@@ -269,14 +250,7 @@ export interface UseEntityListReturn<
   totalCount: number | undefined;
   sums: Record<string, number> | undefined;
   totalLabels: Record<string, string> | undefined;
-  summaryState?: ListGroupState;
-  enrichmentFailures?: import("~/entity/hooks/progressive-list").ListEnrichmentFailure[];
-  retryEnrichment?: (
-    pageIndex: number,
-    group: import("~/entity/hooks/progressive-list").ListReadGroup,
-  ) => Promise<void>;
-  retrySummary?: () => void;
-  enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
+  derived: import("~/ui/hooks/use-paginated-table-core").ListQueryResponse<TData>["meta"]["derived"];
   inspection: ReturnType<typeof useEntityPreview>;
 }
 
@@ -344,43 +318,6 @@ function listReadColumnId(column: { id?: string }): string {
   return accessor?.success ? accessor.data : "";
 }
 
-const columnReadFieldsSchema = z.object({
-  readFields: z.array(z.string()).optional(),
-});
-function listReadColumnFields(
-  entity: BrowserRoutedEntity,
-  column: { id?: string; meta?: unknown },
-): string[] {
-  const metadata = columnReadFieldsSchema.safeParse(column.meta);
-  return [
-    ...new Set([
-      ...listColumnReadFields(entity, listReadColumnId(column)),
-      ...(metadata.success ? (metadata.data.readFields ?? []) : []),
-    ]),
-  ];
-}
-
-/** AI basis joins loading demand without delaying the cell's own display. */
-function listReadColumnDemand(
-  entity: BrowserRoutedEntity,
-  column: { id?: string; meta?: unknown },
-): string[] {
-  const suggestionEntity = generatedBrowserCrudEntities.find(
-    (candidate) => candidate === entity,
-  );
-  return [
-    ...new Set([
-      ...listReadColumnFields(entity, column),
-      ...(suggestionEntity
-        ? suggestionReadFields(
-            suggestionEntity,
-            visibleSuggestTargets(suggestionEntity, [listReadColumnId(column)]),
-          )
-        : []),
-    ]),
-  ];
-}
-
 export function useEntityList<
   TData extends BaseListRow,
   TFilters extends object,
@@ -402,14 +339,12 @@ export function useEntityList<
 >({
   entity,
   queryOptions,
-  additionalReadFields,
   buildFilters,
   scopeFilters,
   columns: customColumns,
   filters,
   filterOptions,
   getMappings,
-  mappingsReadFields,
   tableStateOptions,
   bulkActions,
   onInspectRow,
@@ -550,38 +485,12 @@ export function useEntityList<
     entityListDocumentTitle(entity, routeSearch, presentationState.urlSync),
   );
 
-  const [visibleReadFields, setVisibleReadFields] = useState(() =>
-    customColumns
-      .visit((column) =>
-        initialColumnVisibility?.[listReadColumnId(column)] === false
-          ? []
-          : listReadColumnDemand(entity, column),
-      )
-      .flat(),
-  );
-  const requestedReadFields = useMemo(
-    () => [
-      ...visibleReadFields,
-      ...rowActionReadFields(entity),
-      ...(additionalReadFields ?? []),
-      ...(subject?.readFields ?? []),
-      ...(mappingsReadFields ?? []),
-    ],
-    [
-      additionalReadFields,
-      entity,
-      mappingsReadFields,
-      subject?.readFields,
-      visibleReadFields,
-    ],
-  );
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
-    visibleFields: requestedReadFields,
   });
 
   const {
@@ -761,20 +670,9 @@ export function useEntityList<
     [totalCount, sums],
   );
 
-  const enrichmentState = infiniteResult.enrichmentState;
   const mappingsMap = useMemo(
-    () =>
-      buildMappingsMap(
-        data.filter((row) =>
-          (mappingsReadFields ?? []).every((field) => {
-            const state = enrichmentState(row.id, field);
-            return !state || state.state === "ready";
-          }),
-        ),
-        getMappings,
-        hasUnitMappings,
-      ),
-    [data, getMappings, hasUnitMappings, enrichmentState, mappingsReadFields],
+    () => buildMappingsMap(data, getMappings, hasUnitMappings),
+    [data, getMappings, hasUnitMappings],
   );
 
   const shouldUseMappings = hasUnitMappings && getMappings;
@@ -787,13 +685,7 @@ export function useEntityList<
     ((row: TData) => EntityActionSubject | null) | null
   >(null);
   resolveSubject.current = subject
-    ? (row: TData) =>
-        (subject.readFields ?? []).every((field) => {
-          const state = enrichmentState(row.id, field);
-          return !state || state.state === "ready";
-        })
-          ? subject.resolve(row)
-          : null
+    ? (row: TData) => subject.resolve(row)
     : null;
   const stableSubject = useCallback(
     (row: TData) => resolveSubject.current?.(row) ?? null,
@@ -865,78 +757,6 @@ export function useEntityList<
     resolvedFilterOptions,
     scopeKeys,
   ]);
-
-  useEffect(() => {
-    const fields = allColumns
-      .visit((column) =>
-        columnVisibility[listReadColumnId(column)] === false
-          ? []
-          : listReadColumnDemand(entity, column),
-      )
-      .flat();
-    setVisibleReadFields((current) =>
-      JSON.stringify(current) === JSON.stringify(fields) ? current : fields,
-    );
-  }, [allColumns, columnVisibility, entity]);
-
-  const deferredFieldKey = JSON.stringify(infiniteResult.deferredFields);
-  const progressiveCellCache = useRef(
-    new Map<string, { source: unknown; fields: string; cell: unknown }>(),
-  );
-  const progressiveColumns = useMemo(() => {
-    const deferredFields = new Set(
-      z.array(z.string()).parse(JSON.parse(deferredFieldKey)),
-    );
-    if (deferredFields.size === 0) return allColumns;
-    return createCubbyColumnCollection<TData>((add) =>
-      allColumns.visit((column) => {
-        const fields = listReadColumnFields(entity, column);
-        if (!fields.some((field) => deferredFields.has(field))) {
-          add(column);
-          return;
-        }
-        // SAFETY: the column and its metadata carry the same table row type.
-        const meta = column.meta as CubbyColumnMeta<TData> | undefined;
-        const stateFor = (row: TData) =>
-          fields
-            .map((field) => enrichmentState(row.id, field))
-            .find((state) => state && state.state !== "ready");
-        const id = listReadColumnId(column);
-        const fieldsKey = JSON.stringify(fields);
-        const cached = progressiveCellCache.current.get(id);
-        // SAFETY: reuse requires the same source renderer and field signature
-        // for the same column, preserving its captured accessor value type.
-        const cell: typeof column.cell =
-          cached && cached.source === column.cell && cached.fields === fieldsKey
-            ? (cached.cell as typeof column.cell)
-            : (info) => (
-                <DeferredListValue state={stateFor(info.row.original)}>
-                  {flexRender(column.cell, info)}
-                </DeferredListValue>
-              );
-        progressiveCellCache.current.set(id, {
-          source: column.cell,
-          fields: fieldsKey,
-          cell,
-        });
-        add({
-          ...column,
-          meta: attachCubbyColumnMeta<TData>({
-            ...meta,
-            valueUnavailable: (row) => Boolean(stateFor(row)),
-            entityRefs: meta?.entityRefs
-              ? (row) => (stateFor(row) ? [] : meta.entityRefs!(row))
-              : undefined,
-          }),
-          cell,
-        });
-      }),
-    );
-  }, [allColumns, entity, enrichmentState, deferredFieldKey]);
-  const progressiveContentVersion = useMemo(
-    () => [rowContentVersion, infiniteResult.enrichmentVersion],
-    [rowContentVersion, infiniteResult.enrichmentVersion],
-  );
 
   // Row identity is independent of whether selection happens to be enabled.
   // Index ids transfer virtualizer measurements and row state to the wrong
@@ -1039,7 +859,7 @@ export function useEntityList<
       : undefined;
   const table = useTableConfig({
     data: tableData,
-    columns: progressiveColumns,
+    columns: allColumns,
     tableState,
     totalCount: tableData.length,
     manualPagination: true,
@@ -1058,7 +878,7 @@ export function useEntityList<
     scrollRestorationId: entity,
     serverTotals,
     filterFields,
-    rowContentVersion: progressiveContentVersion,
+    rowContentVersion,
     grouping: tableGrouping || undefined,
   });
 
@@ -1186,7 +1006,6 @@ export function useEntityList<
   return {
     workbench: {
       entity,
-      isFieldReady: infiniteResult.isFieldReady,
       table,
       isLoading,
       error,
@@ -1214,11 +1033,7 @@ export function useEntityList<
     totalCount: isLoading ? undefined : totalCount,
     sums,
     totalLabels: infiniteResult.totalLabels,
-    summaryState: infiniteResult.summaryState,
-    enrichmentFailures: infiniteResult.enrichmentFailures,
-    retryEnrichment: infiniteResult.retryEnrichment,
-    retrySummary: infiniteResult.retrySummary,
-    enrichmentState: infiniteResult.enrichmentState,
+    derived: infiniteResult.derived,
     inspection,
   };
 }

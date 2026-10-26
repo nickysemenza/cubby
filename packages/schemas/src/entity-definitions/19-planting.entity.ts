@@ -1,3 +1,5 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -127,27 +129,6 @@ export default defineEntity({
       ],
     },
     list: {
-      read: {
-        relations: [
-          "plantId",
-          "sourceProductId",
-          "locationId",
-          "taskId",
-          "plantName",
-          "sourceProductName",
-          "locationName",
-          "taskName",
-        ],
-        derived: [
-          "expectedHarvestStart",
-          "expectedHarvestEnd",
-          "expectedHarvest",
-          "guideSowWindow",
-          "guideTransplantWindow",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       views: [
         "table",
         {
@@ -181,6 +162,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("planting", "Planting") },
     fields: [
       {
         key: "plantId",
@@ -815,7 +797,16 @@ export default defineEntity({
   ],
   // `displayName` is a non-null projected title (the plant's), so
   // Cmd-K / `/search` can index plantings like every other named entity.
-  search: "semantic",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "semantic",
+    inputs: [
+      ...imageDescriptionInputs("planting"),
+
+      { table: "Plant", match: { id: "plantId" } },
+      { table: "Location", match: { id: "locationId" } },
+    ],
+  },
   capabilities: {
     timeline: "custom",
     images: {
@@ -882,6 +873,137 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "EntityLink",
+          match: { toEntityId: "id" },
+          columns: ["deletedAt", "fromEntityId"],
+          path: [{ table: "Planting", from: "id", to: "id" }],
+          where: { kind: "gardenEntryPlanting" },
+        },
+        {
+          table: "GardenEntry",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "fromEntityId",
+              to: "toEntityId",
+              where: { kind: "gardenEntryPlanting" },
+            },
+            { table: "Planting", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "GardenEntry", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "fromEntityId",
+              to: "toEntityId",
+              where: { kind: "gardenEntryPlanting" },
+            },
+            { table: "Planting", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "GardenEntry", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "fromEntityId",
+              to: "toEntityId",
+              where: { kind: "gardenEntryPlanting" },
+            },
+            { table: "Planting", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Planting", from: "sourceProductId", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            { table: "Planting", from: "sourceProductId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            { table: "Planting", from: "sourceProductId", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [{ table: "Planting", from: "sourceProductId", to: "id" }],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Planting", from: "sourceProductId", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Planting", from: "sourceProductId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Planting", from: "sourceProductId", to: "id" },
+          ],
+        },
+      ],
+
       checks: [
         {
           id: "planting_location",

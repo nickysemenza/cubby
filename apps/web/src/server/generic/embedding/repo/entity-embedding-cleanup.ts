@@ -8,7 +8,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { entityEmbedding, searchDocument } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
@@ -76,9 +75,8 @@ export async function softDeleteEntitySearchArtifactsTx(
   entityIds: string[],
 ): Promise<void> {
   if (entityIds.length === 0) return;
-  // Publication owns this Job before artifact rows. Removal must use that same
-  // order before its eventual capture updates the Job again at commit.
-  await lockRefreshFamily(tx, "search");
+  // Removal re-tickets the record's search mark through its trigger, so a
+  // drain page prepared before it cannot republish the record (ADR 0021).
   await retireSearchArtifactsTx(tx, entityKind, entityIds);
 }
 

@@ -201,14 +201,13 @@ export const ingredientListOverride = defineListOverride<
     );
 
     const list = useMemo(
-      () => ({ deletable, getMappings, mappingsReadFields: ["product"] }),
+      () => ({ deletable, getMappings }),
       [deletable, getMappings],
     );
 
     return {
       compose,
       list,
-      wrapReadFields: ["product"],
       wrap: (children, { data }) => (
         <IngredientFoodHydration
           data={data}

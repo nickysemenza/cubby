@@ -64,6 +64,7 @@ test("explains allocated trades with expandable contributor precedence", async (
   await trigger.click();
   const panel = await inlineExplanation(page, trigger);
   await expect(panel.getByText("Mixed", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/No value was determined/)).toHaveCount(0);
   await expect(
     panel.getByRole("heading", { name: "Resolution order", exact: true }),
   ).toBeVisible();
@@ -136,7 +137,9 @@ test("shows owner rollup evidence once without nested wire fields", async ({
       .filter({ visible: true }),
   ).toHaveCount(1);
   await expect(panel.getByText("Entity Kind", { exact: true })).toHaveCount(0);
-  await expect(panel.getByText("Inherited", { exact: true })).toHaveCount(0);
+  await expect(
+    panel.getByText("Inherited · Decides this value", { exact: true }),
+  ).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);

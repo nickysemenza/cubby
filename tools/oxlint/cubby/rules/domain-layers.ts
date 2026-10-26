@@ -124,6 +124,8 @@ export function violation(
   if (typeOnly) return;
   if (
     from.startsWith(`${SRC}ui/`) &&
+    // ADR 0021's derived UI composes entity links and existing decision actions.
+    !(from.startsWith(`${SRC}ui/derived/`) && to.startsWith(`${SRC}entity/`)) &&
     /^apps\/web\/src\/(?:features|entity)\//u.test(to)
   )
     return "uiUpward";

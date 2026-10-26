@@ -32,6 +32,10 @@ import {
   orderMailEvent,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages as acquireGmailMessages } from "../../service/gmail/ingest";
@@ -227,7 +231,7 @@ describe("Gmail ingestion and attachment storage", () => {
     const jobs = async () =>
       (
         await getDb(ctx.db).execute(
-          sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'refresh.family' ORDER BY key`,
+          sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'derived.drain' ORDER BY key`,
         )
       ).rows;
     const invalidations = async () =>
@@ -236,15 +240,15 @@ describe("Gmail ingestion and attachment storage", () => {
           sql`SELECT key, id, observed, "capturedAt" FROM "JobInvalidationCapture" ORDER BY key, id`,
         )
       ).rows;
-    const searchGeneration = async () =>
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT count(*)::int AS revision FROM "JobInvalidationCapture" WHERE key = 'refresh:search'`,
-        )
-      ).rows[0]?.revision;
-    expect(await searchGeneration()).toBe(0);
+    const qualityTickets = () =>
+      derivedMarkTickets(ctx.db, "email.dataQuality");
+    // Seeding the party marks Email quality through its declared input;
+    // this test follows the Email's own marks only.
+    await drainStoredDerived(ctx.db);
+    expect(await qualityTickets()).toEqual([]);
     await saveMailboxMetadata(ctx.db, metadata);
-    expect(await searchGeneration()).toBe(1);
+    const createdTickets = await qualityTickets();
+    expect(createdTickets).toHaveLength(1);
     const originalEmail = await readEmail(ctx.db, identity);
     expect(originalEmail).not.toBeNull();
     const originalJobs = await jobs();
@@ -267,7 +271,8 @@ describe("Gmail ingestion and attachment storage", () => {
       subject: "Synthetic changed receipt",
       updatedAt: expect.any(Date),
     });
-    expect(await searchGeneration()).toBe(2);
+    const changedTickets = await qualityTickets();
+    expect(changedTickets).not.toEqual(createdTickets);
     expect(await jobs()).toEqual(originalJobs);
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
@@ -283,7 +288,8 @@ describe("Gmail ingestion and attachment storage", () => {
       searchOrigin: "member_search",
       searchExpiresAt: expect.any(Date),
     });
-    expect(await searchGeneration()).toBe(3);
+    const searchedTickets = await qualityTickets();
+    expect(searchedTickets).not.toEqual(changedTickets);
 
     // A later search changes only expiry; that remains source metadata and
     // must retain refresh intent even after the search origin is established.
@@ -303,7 +309,7 @@ describe("Gmail ingestion and attachment storage", () => {
       expect((await readEmail(ctx.db, identity))?.searchExpiresAt).toEqual(
         expiresAt,
       );
-      expect(await searchGeneration()).toBe(4);
+      expect(await qualityTickets()).not.toEqual(searchedTickets);
     } finally {
       clock.mockRestore();
     }

@@ -1,10 +1,63 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { typeChecker } from "cubby/tooling/type-checker";
 import { productionWorker } from "../../cloudflare.config.ts";
 import { test } from "vitest";
 import { cloudflare } from "@cloudflare/vite-plugin";
 import { isFileLoadingAllowed, resolveConfig } from "vite";
+
+// Repository programs deliberately omit worker-environment.d.ts. Even a
+// type-only import of list hydration would pull Env consumers into that graph.
+test("repository list tracing stays independent of Worker Env consumers", () => {
+  const root = path.resolve(import.meta.dirname, "../..");
+  // `artifacts/` is ignored and absent on a fresh CI checkout.
+  mkdirSync(path.join(root, "artifacts"), { recursive: true });
+  const directory = mkdtempSync(path.join(root, "artifacts/list-types-"));
+  try {
+    const config = path.join(directory, "tsconfig.json");
+    writeFileSync(
+      config,
+      JSON.stringify({
+        extends: path.join(root, "tsconfig.json"),
+        files: [
+          path.join(root, "src/server/observability/list-read-tracing.ts"),
+        ],
+        include: [],
+        compilerOptions: { incremental: false },
+      }),
+    );
+    const files = execFileSync(
+      process.execPath,
+      [typeChecker, "--listFilesOnly", "-p", config],
+      { encoding: "utf8", maxBuffer: 4 * 1024 * 1024 },
+    ).split("\n");
+    const server = path.join(root, "src/server/");
+    const contracts = new Set([
+      "observability/list-read-tracing.ts",
+      "observability/tracing.ts",
+      "generic/list/repo/list-contracts.ts",
+    ]);
+    const leaks = files
+      .filter((file) => file.startsWith(server))
+      .map((file) => file.slice(server.length))
+      .filter((file) => !contracts.has(file));
+    assert.deepEqual(
+      leaks.slice(0, 10),
+      [],
+      "repository tracing must import list contracts without server composition",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 // Config imports become denied runtime modules. Startup must still be able to
 // load the shared Job page limits and Worker identity without exposing

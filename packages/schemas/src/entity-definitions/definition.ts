@@ -17,14 +17,25 @@ import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 
-const entityReadCapability = z.enum([
-  "media",
-  "quality",
-  "relations",
-  "derived",
-]);
-
 /** The scalar shapes the entity compiler can persist and project. */
+/** One `model.derived.<key>.stored.inputs` row (ADR 0021), for shared input lists. */
+export type DerivedStoredInput = {
+  table: string;
+  match: Record<string, string>;
+  columns?: string[];
+  where?: Record<string, string>;
+  except?: string[];
+  path?: {
+    table: string;
+    from: string;
+    to: string;
+    jsonKey?: string;
+    fromJsonKey?: string;
+    where?: Record<string, string>;
+  }[];
+  json?: { array?: string[]; key: string };
+};
+
 export const entityFieldKinds = [
   "text",
   "text-array",
@@ -982,6 +993,114 @@ const buildMetadataSchemas = () => {
    * `negatable` declares that its SQL reads only the values it receives, so
    * a value filter's generated Exclude key is its negation.
    */
+  /**
+   * A stored derived value (ADR 0021): the drain recomputes it through the
+   * server compute adapter `compute` and lists read it from `DerivedValue`.
+   * `inputs` are the rows whose changes mark it dirty: `match` pairs one
+   * column of `table` with the entity column it equals (`{ id: "id" }` is
+   * the entity's own row; `{ productId: "id" }` marks the referenced record;
+   * `{ id: "productId" }` marks every record whose `productId` is the changed
+   * row, expanded by the drain, never inside the save). `columns` limits the
+   * columns that matter; absent, any change except `updatedAt` does.
+   * `dependsOn` names other stored values it reads, matched the same way.
+   */
+  const derivedMatchSchema = z
+    .record(nonEmptyString(), nonEmptyString())
+    .refine((match) => Object.keys(match).length === 1, "one column pair");
+  /**
+   * A join path the drain walks from changed values to the records to mark:
+   * each step selects `to` from `table` rows whose `from` is in the previous
+   * step's values. Walked set-based outside the save, never in a trigger.
+   */
+  const derivedPathSchema = z
+    .array(
+      z
+        .object({
+          table: nonEmptyString(),
+          from: nonEmptyString(),
+          to: nonEmptyString(),
+          /** Read a UUID from this key of the `to` JSON object. */
+          jsonKey: nonEmptyString().optional(),
+          /** Compare a UUID from this key of the `from` JSON object. */
+          fromJsonKey: nonEmptyString().optional(),
+          /** Only rows holding these column values continue the path. */
+          where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+        })
+        .strict(),
+    )
+    .min(1);
+  const derivedInputSchema = z
+    .object({
+      table: nonEmptyString(),
+      match: derivedMatchSchema,
+      columns: z.array(nonEmptyString()).min(1).optional(),
+      /** Only rows whose column holds this value count (a link kind). */
+      where: z.record(nonEmptyString(), nonEmptyString()).optional(),
+      /**
+       * Without `columns`: columns whose change never matters besides
+       * `updatedAt`, such as a value's own output column on its own row.
+       */
+      except: z.array(nonEmptyString()).min(1).optional(),
+      /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
+      path: derivedPathSchema.optional(),
+      /**
+       * The matched column is JSON: read `key` from the object, or from each
+       * element at `array` (a mail-import Run's `input.sources`).
+       */
+      json: z
+        .object({
+          array: z.array(nonEmptyString()).min(1).optional(),
+          key: nonEmptyString(),
+        })
+        .strict()
+        .optional(),
+    })
+    .strict();
+  const derivedStoreSchema = z
+    .object({
+      compute: nonEmptyString(),
+      inputs: z.array(derivedInputSchema).min(1),
+      dependsOn: z
+        .array(
+          z.union([
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                match: derivedMatchSchema,
+              })
+              .strict(),
+            /** From the changed record's id along a join path to the records to mark. */
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                path: derivedPathSchema,
+              })
+              .strict(),
+            /** Through a link table: `source` holds the changed record, `dependent` the record to mark. */
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                through: z
+                  .object({
+                    table: nonEmptyString(),
+                    source: nonEmptyString(),
+                    dependent: nonEmptyString(),
+                    where: z
+                      .record(nonEmptyString(), nonEmptyString())
+                      .optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+          ]),
+        )
+        .optional()
+        .default([]),
+    })
+    .strict();
   const entityDerivedFieldMetadataSchema = z.union([
     z.object({ via: nonEmptyString() }).strict(),
     /**
@@ -1003,6 +1122,7 @@ const buildMetadataSchemas = () => {
         ]),
         via: nonEmptyString(),
         absent: z.array(nonEmptyString()).min(1).optional(),
+        stored: derivedStoreSchema.optional(),
       })
       .strict(),
     z
@@ -1016,6 +1136,7 @@ const buildMetadataSchemas = () => {
           "enum",
         ]),
         options: z.array(nonEmptyString()).min(1).optional(),
+        stored: derivedStoreSchema.optional(),
       })
       .strict(),
     z
@@ -1116,6 +1237,22 @@ const buildMetadataSchemas = () => {
       sort: entityFieldModelSortMetadataSchema.optional(),
       derived: z
         .record(derivedKey, entityDerivedFieldMetadataSchema)
+        .optional()
+        .default({}),
+      /**
+       * Stored derived values that are not list fields (ADR 0021): outputs a
+       * sink adapter writes to its own table, or a published value without a column.
+       */
+      stored: z
+        .record(
+          derivedKey,
+          derivedStoreSchema.extend({
+            publishes: z
+              .enum(["derivedValue", "ownTable"])
+              .optional()
+              .default("ownTable"),
+          }),
+        )
         .optional()
         .default({}),
       rows: z
@@ -1507,29 +1644,6 @@ const buildMetadataSchemas = () => {
         ),
       list: z
         .object({
-          /** Deferred ownership; remaining canonical list fields are core. */
-          read: z
-            .object({
-              media: z.array(nonEmptyString()).default([]),
-              quality: z.array(nonEmptyString()).default([]),
-              relations: z.array(nonEmptyString()).default([]),
-              derived: z.array(nonEmptyString()).default([]),
-              dependencies: z
-                .partialRecord(
-                  entityReadCapability,
-                  z.array(entityReadCapability),
-                )
-                .default({}),
-            })
-            .strict()
-            .optional()
-            .default({
-              media: [],
-              quality: [],
-              relations: [],
-              derived: [],
-              dependencies: {},
-            }),
           /** The first view is the default; `table` when omitted. */
           views: z.array(listViewSchema).min(1).optional().default(["table"]),
           /** URL-compatible aliases for retired view ids, mapped before rendering. */
@@ -1782,7 +1896,6 @@ const buildMetadataSchemas = () => {
             viewAliases,
             totals,
             metrics,
-            read,
             shelfSubtitleOverride,
             titleSubtitle,
             initialFilter,
@@ -1799,7 +1912,6 @@ const buildMetadataSchemas = () => {
             viewAliases,
             totals,
             metrics,
-            read,
             shelf:
               shelfSubtitleOverride === undefined
                 ? null
@@ -2235,6 +2347,12 @@ const buildMetadataSchemas = () => {
         .default(false),
       /** Scored entities whose gaps roll up into this one (`relatedGaps`). */
       related: z.array(nonEmptyString()).optional().default([]),
+      /**
+       * Rows the stored quality evaluation reads beyond the record's own row,
+       * its waivers and its attachments (ADR 0021): a change marks the
+       * record's stored quality for recompute.
+       */
+      inputs: z.array(derivedInputSchema).optional().default([]),
       /** Where the synthesized `dataQuality` list column sits; unordered = last. */
       listOrder: z.number().int().nonnegative().optional(),
     })
@@ -2880,11 +2998,29 @@ const buildMetadataSchemas = () => {
        * `false`: not searchable.
        */
       search: z
-        .union([z.enum(["semantic", "lexical"]), z.literal(false)])
-        .transform((search) => ({
-          enabled: search !== false,
-          embedding: search === "semantic",
-        })),
+        .union([
+          z.enum(["semantic", "lexical"]),
+          z.literal(false),
+          /**
+           * With `inputs`: the related rows whose text the search document
+           * also reads (ADR 0021), beyond the record's own row, attachments
+           * and attached images.
+           */
+          z
+            .object({
+              mode: z.enum(["semantic", "lexical"]),
+              inputs: z.array(derivedInputSchema).min(1),
+            })
+            .strict(),
+        ])
+        .transform((search) => {
+          const mode = typeof search === "object" ? search.mode : search;
+          return {
+            enabled: mode !== false,
+            embedding: mode === "semantic",
+            inputs: typeof search === "object" ? search.inputs : [],
+          };
+        }),
       capabilities: entityCapabilitiesMetadataSchema,
       extensions: entityExtensionsMetadataSchema,
     })

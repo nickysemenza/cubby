@@ -67,7 +67,7 @@ extension EntityKey {
 }
 
 extension EntityDescriptor {
-    /// The kernel list body (`entity.list`, `entity.listBase`, `entity.listSummary`): flat
+    /// The kernel list body (`entity.list`): flat
     /// filter names re-nested and typed from the catalog, a 1-based page as the 0-based
     /// `pageIndex`, `sort` (`name,-createdAt`) as `[{orderBy, direction}]`, and the
     /// ordered `groupBy` dimensions, each with its own ancestor level or calendar bucket.
@@ -111,7 +111,10 @@ extension EntityDescriptor {
             page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
         let response = try await client.native_entity_list(body: body)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }
-        return ListPage(items: response["items"]?.arrayValue ?? [], meta: try meta.decoded())
+        return ListPage(
+            items: (response["items"]?.arrayValue ?? []).map {
+                EntityRow.attachingDerived(to: $0, sidecars: meta["derived"])
+            }, meta: try meta.decoded())
     }
 
     /// `entity.timeline` over the same filter state as `listPage`, plus `ids`, `from`, `to` and

@@ -1136,7 +1136,7 @@ describe("expense repository — expenseAnalytics", () => {
       { search: "synthetic award departure" },
       [],
       { pageIndex: 0, pageSize: 50 },
-      { kind: "enrichment", groups: ["derived"] },
+      { kind: "selected", fields: ["fieldResolutions"] },
     );
     expect(derived.data[0]?.fieldResolutions).toMatchObject({
       trade: { mode: "allocated", value: "travel" },

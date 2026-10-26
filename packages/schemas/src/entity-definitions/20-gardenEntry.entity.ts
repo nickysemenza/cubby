@@ -1,3 +1,5 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -81,15 +83,11 @@ export default defineEntity({
       ],
     },
     list: {
-      read: {
-        relations: ["locationId", "plantingIds", "locationName", "plantings"],
-        media: ["images", "displayImages"],
-        quality: ["dataQuality"],
-      },
       timeline: { fields: ["observedOn"] },
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("gardenEntry", "GardenEntry") },
     fields: [
       {
         key: "locationId",
@@ -536,7 +534,48 @@ export default defineEntity({
   ],
   // `displayName` is a non-null projected title (kind · date · location), so
   // Cmd-K / `/search` can index garden entries like every other named entity.
-  search: "semantic",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "semantic",
+    inputs: [
+      ...imageDescriptionInputs("gardenEntry"),
+
+      {
+        table: "Planting",
+        match: { id: "id" },
+        columns: ["plantId", "deletedAt"],
+        path: [
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "gardenEntryPlanting" },
+          },
+        ],
+      },
+      {
+        table: "Plant",
+        match: { id: "id" },
+        columns: ["name", "gardenGuideKey", "deletedAt"],
+        path: [
+          { table: "Planting", from: "plantId", to: "id" },
+          {
+            table: "EntityLink",
+            from: "toEntityId",
+            to: "fromEntityId",
+            where: { kind: "gardenEntryPlanting" },
+          },
+        ],
+      },
+
+      { table: "Location", match: { id: "locationId" } },
+      {
+        table: "EntityLink",
+        match: { fromEntityId: "id" },
+        where: { kind: "gardenEntryPlanting" },
+      },
+    ],
+  },
   capabilities: {
     timeline: "default",
     images: {

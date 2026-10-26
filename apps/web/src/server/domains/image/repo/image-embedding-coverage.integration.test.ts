@@ -4,9 +4,10 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { searchDocument, job } from "~/server/db/schema";
+import { searchDocument } from "~/server/db/schema";
 import {
   captureBackgroundQueue,
+  derivedMarkTickets,
   drainDerivedRefreshFrontier,
 } from "~/server/testing/background-queue";
 
@@ -41,14 +42,8 @@ describe("image create paths project and enqueue embedding", () => {
         )
     ).length;
 
-  const searchRefreshQueued = async () =>
-    (
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(and(eq(job.key, "refresh:search"), eq(job.state, "queued")))
-        .limit(1)
-    ).length > 0;
+  const searchRefreshQueued = async (id: string) =>
+    (await derivedMarkTickets(ctx.db, "image.searchDocument", id)).length > 0;
 
   it("createPendingImageRecord", async () => {
     const row = await createPendingImageRecord(ctx.db, {
@@ -58,7 +53,7 @@ describe("image create paths project and enqueue embedding", () => {
       size: 1024,
     });
     expect(await liveDocumentFor(row.id)).toBe(0);
-    expect(await searchRefreshQueued()).toBe(true);
+    expect(await searchRefreshQueued(row.id)).toBe(true);
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
   });
@@ -71,7 +66,7 @@ describe("image create paths project and enqueue embedding", () => {
       size: 1024,
     });
     expect(await liveDocumentFor(row.id)).toBe(0);
-    expect(await searchRefreshQueued()).toBe(true);
+    expect(await searchRefreshQueued(row.id)).toBe(true);
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
   });
@@ -91,7 +86,7 @@ describe("image create paths project and enqueue embedding", () => {
       { entity: "project", id: projectId },
     );
     expect(await liveDocumentFor(row.id)).toBe(0);
-    expect(await searchRefreshQueued()).toBe(true);
+    expect(await searchRefreshQueued(row.id)).toBe(true);
     await drainDerivedRefreshFrontier(ctx.db);
     expect(await liveDocumentFor(row.id)).toBe(1);
   });

@@ -1746,7 +1746,7 @@ describe("targeted prompt refresh", () => {
     ).toBe("unrelated");
   });
 
-  it("reopens a blocked Email target under its work key once Mail import allows it", async () => {
+  it("admits a new attempt in a blocked Email slot once Mail import allows it", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic reopen member",
       kind: "member",
@@ -1783,19 +1783,19 @@ describe("targeted prompt refresh", () => {
     expect(rows).toHaveLength(2);
     const replacement = rows.find((row) => row.id !== blocked!.id)!;
     expect(replacement).toMatchObject({
-      workKey: `${blocked!.workKey}:reopen:1`,
+      workKey: `${blocked!.workKey}:attempt:1`,
+      slotKey: blocked!.slotKey,
       state: "queued",
       error: null,
       receipt: null,
     });
-    // The settled row keeps its Run, receipt and error, linked to its replacement.
+    // Historical refusal evidence stays intact; no automatic retry link is written.
     expect(rows.find((row) => row.id === blocked!.id)).toMatchObject({
       runId: blocked!.runId,
       state: "blocked",
       error: blocked!.error,
       receipt: {
         reason: "mailbox_authorization_unavailable",
-        retryEvaluationId: replacement.id,
       },
     });
     expect(discovered).toContain(replacement.runId);

@@ -32,13 +32,6 @@ struct HouseholdQueueOverviewTests {
                         #"{"counts":[{"lane":"server","reason":"due","count":3}],"total":3,"leases":[],"jobs":[]}"#
                 case "job.health": payload = #"{"snapshot":null}"#
                 case "job.retryNow": payload = #"{"retried":1}"#
-                case "entity.listBase":
-                    let entity = input["entity"]?.stringValue ?? "job"
-                    payload = """
-                        {"entity":"\(entity)","data":[],"groups":[],"meta":{"pageIndex":0,"pageSize":10,"totalCount":0}}
-                        """
-                case "entity.listSummary":
-                    payload = #"{"entity":"job","sums":{},"totalLabels":{}}"#
                 default: payload = #"{"items":[],"meta":{"pageIndex":0,"pageSize":10,"totalCount":0}}"#
                 }
                 return (200, Data(payload.utf8))
@@ -57,7 +50,7 @@ struct HouseholdQueueOverviewTests {
         let queueRead = try #require(requests.withLock { $0.first { $0.0 == "job.queue" } })
         #expect(queueRead.1["filter"]?["entityFilters"] == .object([:]))
         let runRead = try #require(
-            requests.withLock { $0.first { $0.0 == "entity.listBase" && $0.1["entity"] == "run" } })
+            requests.withLock { $0.first { $0.0 == "entity.list" && $0.1["entity"] == "run" } })
         #expect(runRead.1["pagination"]?["pageSize"] == 10)
         #expect(runRead.1["filters"]?["needsAttention"] == true)
         #expect(runRead.1["sort"]?.arrayValue?.first?["orderBy"] == "stalled")

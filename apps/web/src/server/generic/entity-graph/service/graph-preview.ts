@@ -8,7 +8,7 @@ import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { listReadFields } from "~/entity/model/list-read-schema";
+import { listReadSchema } from "~/entity/model/list-read-schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 
@@ -27,7 +27,7 @@ export async function withGraphPreviews<
         ...(presentation.hero.chip ? [presentation.hero.chip] : []),
       ];
       const fields = entityFieldModels[entity].fields;
-      const allowed = new Set(Object.values(listReadFields(entity)).flat());
+      const allowed = new Set(Object.keys(listReadSchema(entity).shape));
       const keys = [
         ...new Set(
           roster.flatMap((key) => {

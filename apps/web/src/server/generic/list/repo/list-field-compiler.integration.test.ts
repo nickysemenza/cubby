@@ -21,6 +21,7 @@ import { listSpendingCategories } from "~/server/domains/spending-category/repo/
 import { taskList } from "~/server/domains/task/repo/lookup";
 import { vendorList } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -589,6 +590,7 @@ describe("compiled list fields", () => {
           page,
         )
       ).data.map((row) => row.id);
+    await drainStoredDerived(ctx.db);
     expect(await order("asc")).toEqual([short, matched, surplus, uncounted]);
     expect(await order("desc")).toEqual([surplus, matched, short, uncounted]);
   });

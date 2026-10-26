@@ -6,11 +6,7 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
  */
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { entityRefKey } from "@cubby/schemas/entity";
-import {
-  type LocationId,
-  type ProductId,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
+import { type LocationId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationListRefOut,
@@ -18,6 +14,7 @@ import type {
   LocationValuation,
 } from "@cubby/schemas/location";
 import { sumBy } from "es-toolkit";
+import { z } from "zod";
 
 import {
   isNotDeleted,
@@ -27,7 +24,6 @@ import {
   parseInventoryAmount,
 } from "~/server/db/helpers";
 import type { location } from "~/server/db/schema";
-import { requireLoadedProductPricing } from "~/server/domains/inventory/repo/mappers";
 import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import type {
   LocationIdentityProductRow,
@@ -39,7 +35,6 @@ import {
   mapDbProductToInventoryEmbed,
   primaryGtinOf,
 } from "~/server/domains/product/repo/mappers";
-import type { ProductPricing } from "~/server/domains/product/repo/pricing";
 
 /**
  * Transform a location DB record to API format.
@@ -94,7 +89,6 @@ export const locationReferenceFields = (
 
 export const locationInventoryFields = (
   locationData: Pick<LocationListDB, "inventoryEntries">,
-  pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
 ) => ({
   inventoryEntries: mapRelation(
     locationData.inventoryEntries.filter((entry) =>
@@ -108,10 +102,10 @@ export const locationInventoryFields = (
       updatedAt: entry.updatedAt,
       product: mapDbProductToInventoryEmbed({
         ...entry.product,
-        pricing: requireLoadedProductPricing(
-          pricingByProductId,
-          entry.product.id,
-        ),
+        effectivePrice: z
+          .number()
+          .nullable()
+          .parse(entry.product.effectivePrice),
         primaryGtin: primaryGtinOf(entry.product.externalIds),
       }),
     }),

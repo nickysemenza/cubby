@@ -58,71 +58,27 @@ beforeEach(async () => {
     initialPath: "/?kind=foreign&sort=-date",
   });
   restore = overrideStartDispatch(async (operation, input) => {
-    if (operation === "entity.listBase") {
+    if (operation === "entity.list") {
       reads.push(input);
       const { entity } = inputSchema.parse(input);
       return {
         ok: true,
         data: {
-          entity,
-          data: entity === "run" ? [run] : [work],
+          // Complete rows carry their media.
+          items: (entity === "run" ? [run] : [work]).map((row) => ({
+            ...row,
+            displayImages: [],
+          })),
           meta: {
             pageIndex: 0,
             pageSize: entity === "run" ? 10 : 25,
             totalCount: entity === "run" ? 12 : 31,
           },
-          groups:
-            entity === "run"
-              ? [
-                  {
-                    id: "derived",
-                    fields: [
-                      "stalled",
-                      "waitingOn",
-                      "displayStatus",
-                      "chargedCost",
-                    ],
-                  },
-                ]
-              : [],
         },
       };
     }
-    if (operation === "entity.listEnrichment") {
-      const { entity } = inputSchema.parse(input);
-      return {
-        ok: true,
-        data: {
-          entity,
-          missingIds: [],
-          groups: [
-            {
-              id: "derived",
-              fields: ["stalled", "waitingOn", "displayStatus", "chargedCost"],
-              state: "ready",
-              data: [run],
-            },
-          ],
-        },
-      };
-    }
-    if (operation === "entity.listSummary")
-      return {
-        ok: true,
-        data: {
-          entity: inputSchema.parse(input).entity,
-          sums: {},
-          totalLabels: {},
-        },
-      };
-    if (operation === "entity.list")
-      return {
-        ok: true,
-        data: {
-          items: [],
-          meta: { pageIndex: 0, pageSize: 50, totalCount: 0 },
-        },
-      };
+    if (operation === "derived.backlog")
+      return { ok: true, data: { total: 0, kinds: [] } };
     if (operation === "entity.detail")
       return {
         ok: true,

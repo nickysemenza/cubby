@@ -1,7 +1,9 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
-import { defineEntity } from "./definition.js";
+import { type DerivedStoredInput, defineEntity } from "./definition.js";
 import { selectControlOptions } from "./select-control-options.js";
 import {
   ledgerPartyShortcode,
@@ -25,6 +27,92 @@ import {
 import { z } from "zod";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+
+/** Rows a project's folded dates read (stored derived inputs, ADR 0021). */
+const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["startDate", "endDate", "status", "parentProjectId", "deletedAt"],
+  },
+  {
+    table: "Project",
+    match: { parentProjectId: "id" },
+    columns: ["startDate", "endDate", "status", "parentProjectId", "deletedAt"],
+  },
+  {
+    table: "Task",
+    match: { projectId: "id" },
+    columns: ["dueDate", "dueEndDate", "status", "projectId", "deletedAt"],
+  },
+  {
+    table: "Expense",
+    match: { projectId: "id" },
+    columns: ["date", "projectId", "purchaseId", "deletedAt"],
+  },
+  {
+    table: "Purchase",
+    match: { defaultProjectId: "id" },
+    columns: ["date", "defaultProjectId", "deletedAt"],
+  },
+  {
+    table: "Product",
+    match: { id: "id" },
+    columns: ["categoryId", "deletedAt"],
+    path: [{ table: "Expense", from: "productId", to: "projectId" }],
+  },
+  {
+    table: "ProductCategory",
+    match: { id: "id" },
+    columns: ["feature", "parentId", "deletedAt"],
+    path: [
+      { table: "Product", from: "categoryId", to: "id" },
+      { table: "Expense", from: "productId", to: "projectId" },
+    ],
+  },
+  {
+    table: "SpendingCategory",
+    match: { id: "id" },
+    columns: ["deletedAt"],
+    path: [
+      {
+        table: "Expense",
+        from: "spendingCategoryId",
+        to: "projectId",
+      },
+    ],
+  },
+  // A subtask's effective project belongs to its parent, not its null projectId.
+  {
+    table: "Task",
+    match: { parentTaskId: "id" },
+    columns: [
+      "dueDate",
+      "dueEndDate",
+      "status",
+      "parentTaskId",
+      "projectId",
+      "deletedAt",
+    ],
+    path: [{ table: "Task", from: "id", to: "projectId" }],
+  },
+  {
+    table: "Task",
+    match: { id: "id" },
+    columns: [
+      "dueDate",
+      "dueEndDate",
+      "status",
+      "parentTaskId",
+      "projectId",
+      "deletedAt",
+    ],
+    path: [
+      { table: "Task", from: "id", to: "parentTaskId" },
+      { table: "Task", from: "id", to: "projectId" },
+    ],
+  },
+];
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export default defineEntity({
   key: "project",
@@ -208,30 +296,6 @@ export default defineEntity({
           filters: [{ id: "status", value: ["done"] }],
         },
       ],
-      read: {
-        relations: [
-          "locations",
-          "parentProjectId",
-          "parentProjectName",
-          "childProjectIds",
-          "blockedByIds",
-          "blockingIds",
-          "googleDriveFolderUrl",
-          "notionPageUrl",
-        ],
-        derived: [
-          "defaultTrade",
-          "assigneeId",
-          "assigneeName",
-          "fieldResolutions",
-          "rollup",
-          "spent",
-          "taskProgress",
-          "dates",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       totals: [
         {
           id: "costEstimate",
@@ -268,6 +332,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("project", "Project") },
     hierarchy: {
       parentField: "parentProjectId",
       maxDepth: MAX_PROJECT_TREE_DEPTH,
@@ -906,8 +971,22 @@ Rules:
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
       // The effective start: the stored date, else the earliest task or
-      // expense date in the subtree below an unset start.
-      startDate: { type: "date" },
+      // expense date in the subtree below an unset start. Stored (ADR 0021):
+      // the recursive fold per row made start-date sorts ~430-630 ms.
+      startDate: {
+        type: "date",
+        stored: {
+          compute: "project.startDate",
+          inputs: PROJECT_DATE_INPUTS,
+          dependsOn: [
+            {
+              entity: "project",
+              key: "startDate",
+              match: { parentProjectId: "id" },
+            },
+          ],
+        },
+      },
       // A displayable image (PDF attachments don't count).
       image: { type: "boolean" },
       // Tracker membership, from the attention rules over tasks and budgets.
@@ -917,8 +996,21 @@ Rules:
         reason:
           "A project matches by its own dates or by any dated task or expense under it",
       },
-      // The year of the subtree's effective end, folded in TS.
-      completionYear: { type: "text" },
+      // The year of the subtree's effective end, folded in TS and stored.
+      completionYear: {
+        type: "text",
+        stored: {
+          compute: "project.completionYear",
+          inputs: PROJECT_DATE_INPUTS,
+          dependsOn: [
+            {
+              entity: "project",
+              key: "completionYear",
+              match: { parentProjectId: "id" },
+            },
+          ],
+        },
+      },
     },
     sort: {
       fields: [
@@ -1543,7 +1635,7 @@ Rules:
       },
     },
   ],
-  search: "semantic",
+  search: { mode: "semantic", inputs: [...imageDescriptionInputs("project")] },
   capabilities: {
     images: {
       storage: imageAssociationStorage.shape.project.value,
@@ -1592,6 +1684,366 @@ Rules:
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "Purchase",
+          match: { defaultProjectId: "id" },
+          columns: ["defaultProjectId", "deletedAt"],
+        },
+        {
+          table: "Purchase",
+          match: { id: "id" },
+          columns: ["vendorId", "defaultProjectId", "deletedAt"],
+          path: [{ table: "Expense", from: "purchaseId", to: "projectId" }],
+        },
+        {
+          table: "ProductCategory",
+          match: { id: "id" },
+          columns: ["feature", "parentId", "deletedAt"],
+          path: [
+            { table: "Product", from: "categoryId", to: "id" },
+            { table: "Expense", from: "productId", to: "projectId" },
+          ],
+        },
+
+        {
+          table: "Task",
+          match: { projectId: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Project", from: "id", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Task", from: "id", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Task", from: "id", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Task",
+          match: { projectId: "id" },
+          columns: ["deletedAt", "subjectProductId"],
+          path: [{ table: "Project", from: "id", to: "id" }],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Expense",
+          match: { projectId: "id" },
+          columns: [
+            "deletedAt",
+            "productId",
+            "purchaseId",
+            "projectId",
+            "lineKind",
+          ],
+          path: [{ table: "Project", from: "id", to: "id" }],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityLink",
+          match: { fromEntityId: "id" },
+          columns: ["deletedAt", "toEntityId"],
+          path: [{ table: "Project", from: "id", to: "id" }],
+          where: { kind: "projectTool" },
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Task", from: "subjectProductId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Expense", from: "productId", to: "projectId" },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "projectTool" },
+            },
+            { table: "Project", from: "id", to: "id" },
+          ],
+        },
+      ],
+
       checks: [
         {
           id: "project_kind",

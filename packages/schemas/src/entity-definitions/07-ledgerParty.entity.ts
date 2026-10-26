@@ -10,7 +10,7 @@ export default defineEntity({
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
-    list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
+    list: {},
     titleField: "name",
     domain: "finance",
     description: "People represented in the contribution ledger.",
@@ -488,6 +488,14 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: true,
     dataQuality: {
+      inputs: [
+        {
+          table: "FinancialAccount",
+          match: { ledgerPartyId: "id" },
+          columns: ["deletedAt"],
+        },
+      ],
+
       checks: [
         {
           id: "ledger_party_financial_account",

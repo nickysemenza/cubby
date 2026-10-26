@@ -4,6 +4,8 @@ import {
 } from "../../shared/src/filter.ts";
 import { z } from "zod";
 
+import { derivedSidecar } from "./derived-value";
+
 /** The one page-size ceiling and default every list boundary shares. */
 export const MAX_PAGE_SIZE = 500;
 export const DEFAULT_PAGE_SIZE = 10;
@@ -350,6 +352,7 @@ export function buildPaginatedResponse<T>(
     totalLabels?: Record<string, string>;
     groups?: ListGroupSummary[];
     memberships?: ListGroupMembership[];
+    derived?: z.infer<typeof paginatedMetaSchema>["derived"];
     membershipCount?: number;
   } = {},
 ) {
@@ -359,6 +362,7 @@ export function buildPaginatedResponse<T>(
     pageSize: pagination.pageSize,
     totalCount: count,
   };
+  if (aggregates.derived) meta.derived = aggregates.derived;
   if (aggregates.sums) meta.sums = aggregates.sums;
   if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
   if (aggregates.groups) meta.groups = aggregates.groups;
@@ -382,6 +386,11 @@ export const paginatedMetaSchema = z
     groups: z.array(listGroupSummarySchema).optional(),
     memberships: z.array(listGroupMembershipSchema).optional(),
     membershipCount: z.number().int().nonnegative().optional(),
+    /**
+     * Per row id, each derived field's state, deciding level and computation
+     * time (ADR 0021). Fields absent here are ordinary stored values.
+     */
+    derived: z.record(z.string(), derivedSidecar).optional(),
   })
   .meta({ id: "ListPageMeta" });
 

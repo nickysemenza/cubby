@@ -675,6 +675,7 @@ describe("MCP catalog schemas", () => {
       "ai.resume_suggestion_sweep.runId",
       "ai_read.suggest_fields.entityId",
       "field_explanation.explain.entityId",
+      "field_explanation.image_chain.entityId",
       "maintenance.classify_image_provenance.afterId",
       "maintenance_read.logs.jobId",
       "nutrition.remove_food.id",

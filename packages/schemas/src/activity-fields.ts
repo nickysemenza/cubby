@@ -241,10 +241,11 @@ export const RUN_KINDS = {
       },
       {
         key: "derived-refresh",
-        label: "Derived work admission",
-        purpose: "Admits a fresh pass of every derived refresh family.",
-        action: "Admitting derived refresh",
-        unit: "families",
+        label: "Search artifact cleanup",
+        purpose:
+          "Retires search documents of removed records and queues retired embedding vectors for deletion.",
+        action: "Cleaning search artifacts",
+        unit: "artifacts",
         input: once,
       },
       {
@@ -290,15 +291,6 @@ export const RUN_KINDS = {
         // One COUNT over every searchable table under the pass's cutoff.
         input: counted,
         family: "search",
-      },
-      {
-        key: "quality",
-        label: "Data quality",
-        purpose: "Recomputes stored entity quality checks and scores.",
-        action: "Checking quality",
-        unit: "records",
-        input: counted,
-        family: "quality",
       },
       {
         key: "recipes",

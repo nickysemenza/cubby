@@ -138,11 +138,12 @@ export const renderEntityMetadataArtifacts = (
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {
       // `derived`/`rows`/`hierarchy`/`grouping` are emitted compiled, in
-      // entity-list-fields.gen.ts.
+      // entity-list-fields.gen.ts; `stored` in entity-stored-derived.gen.ts.
       const {
         sort: _sort,
         intents: _intents,
         derived: _derived,
+        stored: _stored,
         rows: _rows,
         hierarchy: _hierarchy,
         grouping: _grouping,
@@ -386,6 +387,144 @@ export const renderEntityMetadataArtifacts = (
           )
           .join("") +
         "} as const;\n",
+    },
+    {
+      relativePath:
+        "packages/schemas/src/generated/entity-stored-derived.gen.ts",
+      source:
+        generatedHeader +
+        "/**\n" +
+        " * Every stored derived value (ADR 0021): `model.derived.<key>.stored`\n" +
+        " * with its entity, table and value type, for the server drain,\n" +
+        " * generated triggers and list reads.\n" +
+        " */\n" +
+        `export const generatedStoredDerived = ${JSON.stringify(
+          entities.flatMap((entity) => [
+            ...Object.entries(entity.fieldModel.derived).flatMap(
+              ([key, entry]) =>
+                "stored" in entry && entry.stored
+                  ? [
+                      {
+                        entity: entity.key,
+                        key,
+                        table: entity.descriptor.dbTable ?? null,
+                        type: "type" in entry ? entry.type : "number",
+                        publishes: "derivedValue",
+                        stored: entry.stored,
+                      },
+                    ]
+                  : [],
+            ),
+            ...Object.entries(entity.fieldModel.stored).map(
+              ([key, stored]) => ({
+                entity: entity.key,
+                key,
+                table: entity.descriptor.dbTable ?? null,
+                type: "text",
+                // Non-list values may publish to the cache without a list column.
+                publishes: stored.publishes,
+                stored,
+              }),
+            ),
+            // Search documents (ADR 0021): the record's own row, its
+            // attachments and attached images, plus declared related rows.
+            ...(entity.descriptor.searchable === true &&
+            typeof entity.descriptor.dbTable === "string"
+              ? [
+                  {
+                    entity: entity.key,
+                    key: "searchDocument",
+                    table: entity.descriptor.dbTable,
+                    type: "text",
+                    publishes: "ownTable",
+                    stored: {
+                      compute: `search.${entity.key}`,
+                      inputs: [
+                        {
+                          table: entity.descriptor.dbTable,
+                          match: { id: "id" },
+                        },
+                        {
+                          table: "EntityAttachment",
+                          match: { entityId: "id" },
+                          where: { entityKind: entity.key },
+                        },
+                        {
+                          table: "Image",
+                          match: { id: "id" },
+                          columns: ["deletedAt", "shortcode"],
+                          path: [
+                            {
+                              table: "EntityAttachment",
+                              from: "imageId",
+                              to: "entityId",
+                              where: { entityKind: entity.key },
+                            },
+                          ],
+                        },
+                        ...entity.searchInputs,
+                      ],
+                    },
+                  },
+                ]
+              : []),
+            // Stored quality (ADR 0021): the record's own row, its waivers and
+            // its attachments, plus the declared reads of its evaluator.
+            ...(entity.dataQuality && entity.descriptor.dbTable
+              ? [
+                  {
+                    entity: entity.key,
+                    key: "dataQuality",
+                    table: entity.descriptor.dbTable,
+                    type: "number",
+                    publishes: "derivedValue",
+                    stored: {
+                      compute: `quality.${entity.key}`,
+                      inputs: [
+                        {
+                          table: entity.descriptor.dbTable,
+                          match: { id: "id" },
+                        },
+                        {
+                          table: "DataException",
+                          match: { entityId: "id" },
+                          where: { entityKind: entity.key },
+                        },
+                        {
+                          table: "EntityAttachment",
+                          match: { entityId: "id" },
+                          where: { entityKind: entity.key },
+                        },
+                        // An attached image's integrity changes the
+                        // displayable-image checks of every record it is on.
+                        {
+                          table: "Image",
+                          match: { id: "id" },
+                          columns: [
+                            "renderStatus",
+                            "storageStatus",
+                            "detectedContentType",
+                            "deletedAt",
+                          ],
+                          path: [
+                            {
+                              table: "EntityAttachment",
+                              from: "imageId",
+                              to: "entityId",
+                              where: { entityKind: entity.key },
+                            },
+                          ],
+                        },
+                        ...entity.dataQuality.inputs,
+                      ],
+                    },
+                  },
+                ]
+              : []),
+          ]),
+          null,
+          2,
+        )} as const;\n`,
     },
     {
       relativePath: "packages/schemas/src/generated/entity-list-fields.gen.ts",

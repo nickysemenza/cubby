@@ -271,7 +271,6 @@ export const inventoryListOverride = defineListOverride<
       overrides,
       compose,
       list,
-      wrapReadFields: ["product", "location"],
       wrap: (children, { data }) => (
         <EntityDisplayImagesProvider
           refs={data.flatMap((row) => [

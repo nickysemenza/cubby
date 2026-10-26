@@ -19,6 +19,7 @@ import {
   executeProblem,
   findProblemByType,
 } from "~/server/generic/problems/service/problem-execution.service";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   publishAllQualityFixtures,
@@ -224,6 +225,7 @@ describe("Problems card read projections", () => {
       makeRecipeInput({ name: "Projection recipe" }),
       ctx.actor,
     );
+    await drainStoredDerived(ctx.db);
     await getDb(ctx.db)
       .update(recipe)
       .set({
@@ -589,6 +591,8 @@ describe("problems — understated meal cost", () => {
         ctx.actor,
       ),
     ]);
+    // Settle creation before installing deliberately persisted coverage fixtures.
+    await drainStoredDerived(ctx.db);
     await Promise.all([
       getDb(ctx.db)
         .update(recipe)
@@ -692,6 +696,8 @@ describe("problems — understated meal cost", () => {
         ctx.actor,
       ),
     ]);
+    // Settle creation before installing deliberately persisted coverage fixtures.
+    await drainStoredDerived(ctx.db);
     await Promise.all([
       getDb(ctx.db)
         .update(recipe)

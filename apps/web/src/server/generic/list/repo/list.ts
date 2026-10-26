@@ -6,6 +6,7 @@ import { suggestionStatus } from "@cubby/schemas/ai";
  * dates, lexical search, the generated sort roster and paging.
  */
 import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
+import type { DerivedSidecar } from "@cubby/schemas/derived-value";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -97,12 +98,17 @@ import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
+import {
+  loadPageStoredMeta,
+  type PageStoredMeta,
+} from "~/server/generic/derived/repo/sidecar";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
   type HierarchyEntity,
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { withPageDerived } from "~/server/generic/list/repo/page-derived";
 import { listTermExpanders } from "~/server/generic/list/repo/terms";
 import {
   lexicalEligibility,
@@ -141,7 +147,6 @@ import {
 } from "./field-compiler";
 import { readGroupedQuery } from "./grouped-query";
 import {
-  wantsListGroup,
   listReadPlan,
   selectedListProjection,
   type ListPagePrefetch,
@@ -1389,6 +1394,7 @@ interface ListHydration<Row, Out> {
    * Rows → API items, batched over the page (quality, images, labels).
    * `context` holds the request's prepared derived-field data.
    */
+  derived?: boolean;
   hydrate: (
     rows: Row[],
     projection: ListProjection,
@@ -1658,21 +1664,11 @@ export function listScaffold<
       return [{ via: scope.via, nested, value }];
     });
   const fieldModel = fieldModelFor(entity);
-  const readGroups = Object.entries(entitySummary).find(
-    ([key]) => key === entity,
-  )?.[1].list.read;
-  /** Whether a projection reads the derived model field `key`. */
-  const projects = (key: string, projection: ListProjection): boolean => {
-    if (!fieldModel?.fields.some((field) => field.key === key)) return false;
-    const group = (["quality", "media", "relations", "derived"] as const).find(
-      (name) => readGroups?.[name]?.some((field) => field === key) === true,
-    );
-    return group === undefined
-      ? projection.kind === "selected"
-        ? projection.fields.includes(key)
-        : projection.kind !== "enrichment"
-      : wantsListGroup(projection, group);
-  };
+  // Internal filter-only rows can require tokens absent from an ordinary page.
+  const projects = (key: string, projection: ListProjection): boolean =>
+    fieldModel?.fields.some((field) => field.key === key) === true &&
+    (projection.kind === "full" ||
+      (projection.kind === "selected" && projection.fields.includes(key)));
   const searchable = isSearchableEntity(entity);
   // A scored entity's `dataStatus`/`dataGap` filters and `dataQualityScore`
   // sort are declared by the manifest block, so they bind here for every
@@ -2184,6 +2180,7 @@ export function listScaffold<
       plan.validate(request.projection ?? { kind: "full" });
       return scaffold.list(db, request, {
         ...spec,
+        derived: true,
         hydrate: (rows, projection, context, prefetched) =>
           plan.read(db, rows, projection, context, "stored", prefetched),
         prefetch: (ids, projection) => plan.prefetch(db, ids, projection),
@@ -2215,6 +2212,7 @@ export function listScaffold<
       spec: ListSpec<Row, Out>,
     ): Promise<{
       data: Out[];
+      derived?: Record<string, DerivedSidecar>;
       count: number;
       groups?: ListGroupSummary[];
       memberships?: ListGroupMembership[];
@@ -2329,6 +2327,9 @@ export function listScaffold<
               .offset(clauses.offset)) as Row[];
           }));
       let prefetched: ListPagePrefetch | undefined;
+      let storedMeta: Promise<PageStoredMeta> | undefined;
+      // The id/count projection binds no fields, so it carries no envelope.
+      const withEnvelope = Boolean(spec.derived) && projection.kind !== "base";
       const readLoadedPageWithCount =
         loadIds && !spec.count
           ? () =>
@@ -2354,6 +2355,12 @@ export function listScaffold<
                     : await countWhere(db, table, where, source));
                 const pageIds = ids.map((row) => row.id);
                 prefetched = spec.prefetch?.(pageIds, projection);
+                // The envelope's stored meta needs only ids: read it beside the rows.
+                storedMeta = withEnvelope
+                  ? loadPageStoredMeta(db, entity, pageIds)
+                  : undefined;
+                // Awaited after hydration; this only keeps an early failure handled.
+                storedMeta?.catch(() => undefined);
                 const data = await loadIds(pageIds, projection);
                 span.setAttributes({
                   "db.result_count": data.length,
@@ -2440,13 +2447,14 @@ export function listScaffold<
           if (readIntent === "count" || data.length === 0)
             return { data: [], count, ...grouped };
           return withListReadTracing({ rows: data.length }, async () => {
-            const hydrated = await spec.hydrate(
-              data,
-              projection,
-              await hydrationContext,
-              prefetched,
-            );
-            if (!parent) return { data: hydrated, count, ...grouped };
+            const context = await hydrationContext;
+            const hydrate = () =>
+              spec.hydrate(data, projection, context, prefetched);
+            const complete = withEnvelope
+              ? await withPageDerived(db, entity, data, hydrate, storedMeta)
+              : { data: await hydrate(), derived: undefined };
+            const hydrated = complete.data;
+            if (!parent) return { ...complete, count, ...grouped };
             const codeOf = (row: Out) => {
               const { id } = listRowIdSchema.parse(row);
               return parseShortcode(id)?.shortcode ?? id;
@@ -2466,6 +2474,7 @@ export function listScaffold<
                     childCount: counts.get(codeOf(row)) ?? 0,
                   }) as Out,
               ),
+              derived: complete.derived,
               count,
               ...grouped,
             };

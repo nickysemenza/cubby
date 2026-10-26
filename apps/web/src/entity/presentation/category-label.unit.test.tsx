@@ -17,6 +17,18 @@ const root = {
   parentId: null,
   sortOrder: 0,
   stockTracked: false,
+  parentName: null,
+  productCount: 0,
+  dataQuality: {
+    status: "not_assessed",
+    score: null,
+    facets: [],
+    gaps: [],
+    exceptions: [],
+    relatedGaps: [],
+    relatedExceptions: [],
+  },
+  displayImages: [],
   createdAt: new Date("2024-01-01T00:00:00Z"),
   updatedAt: new Date("2024-01-01T00:00:00Z"),
   feature: "tools",
@@ -78,35 +90,13 @@ describe("CategoryLabelById", () => {
     let fail = false;
     const restore = overrideStartDispatch(async (operation) => {
       if (fail) throw new Error("Synthetic vocabulary refresh failed");
-      if (operation === "entity.listBase")
+      if (operation === "entity.list")
         return {
           ok: true,
           data: {
             entity: "productCategory",
-            data: [root],
-            groups: [
-              {
-                id: "relations",
-                fields: ["parentId", "path", "effectiveFeature"],
-              },
-            ],
+            items: [root],
             meta: { pageIndex: 0, pageSize: 500, totalCount: 1 },
-          },
-        };
-      if (operation === "entity.listEnrichment")
-        return {
-          ok: true,
-          data: {
-            entity: "productCategory",
-            groups: [
-              {
-                id: "relations",
-                fields: ["parentId", "path", "effectiveFeature"],
-                state: "ready",
-                data: [root],
-              },
-            ],
-            missingIds: [],
           },
         };
       throw new Error(`Unexpected category operation: ${operation}`);
@@ -154,23 +144,7 @@ describe("CategoryLabelById", () => {
 
   it("links an unresolved reference when a later vocabulary page fails", async () => {
     const restore = overrideStartDispatch(async (operation, input) => {
-      if (operation === "entity.listEnrichment")
-        return {
-          ok: true,
-          data: {
-            entity: "productCategory",
-            groups: [
-              {
-                id: "relations",
-                fields: ["parentId", "path", "effectiveFeature"],
-                state: "ready",
-                data: firstPage,
-              },
-            ],
-            missingIds: [],
-          },
-        };
-      if (operation !== "entity.listBase")
+      if (operation !== "entity.list")
         throw new Error(`Unexpected category operation: ${operation}`);
       const { pagination } = z
         .object({ pagination: z.object({ pageIndex: z.number() }) })
@@ -181,13 +155,7 @@ describe("CategoryLabelById", () => {
         ok: true,
         data: {
           entity: "productCategory",
-          data: firstPage,
-          groups: [
-            {
-              id: "relations",
-              fields: ["parentId", "path", "effectiveFeature"],
-            },
-          ],
+          items: firstPage,
           meta: { pageIndex: 0, pageSize: 500, totalCount: 501 },
         },
       };
@@ -218,29 +186,7 @@ describe("CategoryLabelById", () => {
     const pageIndexes: number[] = [];
     const restore = overrideStartDispatch(async (operation, input) => {
       operations.push(operation);
-      if (operation === "entity.listEnrichment") {
-        const { ids, fields } = z
-          .object({ ids: z.array(z.string()), fields: z.array(z.string()) })
-          .parse(input);
-        return {
-          ok: true,
-          data: {
-            entity: "productCategory",
-            groups: [
-              {
-                id: "relations",
-                fields,
-                state: "ready",
-                data: [...firstPage, child].filter((row) =>
-                  ids.includes(row.id),
-                ),
-              },
-            ],
-            missingIds: [],
-          },
-        };
-      }
-      if (operation !== "entity.listBase")
+      if (operation !== "entity.list")
         throw new Error(`Unexpected category operation: ${operation}`);
       const { pagination } = z
         .object({
@@ -252,13 +198,7 @@ describe("CategoryLabelById", () => {
         ok: true,
         data: {
           entity: "productCategory",
-          data: pagination.pageIndex === 0 ? firstPage : [child],
-          groups: [
-            {
-              id: "relations",
-              fields: ["parentId", "path", "effectiveFeature"],
-            },
-          ],
+          items: pagination.pageIndex === 0 ? firstPage : [child],
           meta: {
             pageIndex: pagination.pageIndex,
             pageSize: 500,
@@ -284,12 +224,7 @@ describe("CategoryLabelById", () => {
         expect(screen.getByRole("status")).toHaveTextContent("501"),
       );
       expect(pageIndexes).toEqual([0, 1]);
-      expect(operations).toEqual([
-        "entity.listBase",
-        "entity.listEnrichment",
-        "entity.listBase",
-        "entity.listEnrichment",
-      ]);
+      expect(operations).toEqual(["entity.list", "entity.list"]);
       // An inherited tools feature must retain the same category icon as its root.
       expect(link.querySelector("svg")?.outerHTML).toBe(
         screen.getByRole("link", { name: "Workshop" }).querySelector("svg")

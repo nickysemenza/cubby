@@ -18,18 +18,7 @@ export default defineEntity({
   table: "Device",
   identifiers: { brand: "DeviceId", shortcode: "DEV-" },
   presentation: {
-    list: {
-      read: {
-        relations: [
-          "ledgerPartyId",
-          "productId",
-          "ledgerPartyName",
-          "productName",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
-    },
+    list: {},
     titleField: "name",
     domain: null,
     description: "One install of the native companion app.",
@@ -549,6 +538,80 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Device", from: "productId", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            { table: "Device", from: "productId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            { table: "Device", from: "productId", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [{ table: "Device", from: "productId", to: "id" }],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Device", from: "productId", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Device", from: "productId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Device", from: "productId", to: "id" },
+          ],
+        },
+      ],
+
       checks: [
         {
           id: "device_owner_missing",

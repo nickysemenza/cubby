@@ -143,7 +143,6 @@ export async function upsertAiAnalysis<T>(
     await recordChange(db, {
       kind: "projection",
       categories: [key.entityKind],
-      refresh: key.entityKind === "location" ? ["quality"] : [],
     });
     return parsed;
   }
@@ -160,7 +159,6 @@ export async function upsertAiAnalysis<T>(
   await recordChange(db, {
     kind: "projection",
     categories: [key.entityKind],
-    refresh: key.entityKind === "location" ? ["quality"] : [],
   });
   return parsed;
 }

@@ -41,7 +41,6 @@ import {
   fieldQualityChecks,
   useFieldQuality,
   QualityResult,
-  QualityCheckDetails,
 } from "~/entity/entity-detail/record-quality";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { NotApplicableField } from "~/entity/fields/field-applicability";
@@ -97,6 +96,8 @@ import {
   type MobileColumnMeta,
 } from "~/ui/data-table/table-meta";
 import { CellMagnitudeBar } from "~/ui/data-table/visuals/cell-visual";
+import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { WhyValueContents } from "~/ui/derived/why-value";
 import { ExternalLinkText } from "~/ui/external-link";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -115,9 +116,7 @@ import {
   readReferenceField,
   type ReferenceItem,
 } from "../entity-references";
-import { FieldExplanationContents } from "../fields/field-explanation";
 import {
-  FieldResolutionBadge,
   fieldResolutionFor,
   InheritedMarker,
   resolutionPolicyFor,
@@ -374,6 +373,7 @@ function renderFormattedScalar(
                   item.inherited && "text-muted-foreground",
                 )}
               >
+                {item.inherited ? <InheritedMarker /> : null}
                 {item.ref ? (
                   referenceLink(
                     item.ref.entityKind,
@@ -383,7 +383,6 @@ function renderFormattedScalar(
                 ) : (
                   <span className="truncate">{item.label}</span>
                 )}
-                {item.inherited ? <InheritedMarker /> : null}
               </span>
             </Fragment>
           ))}
@@ -1231,16 +1230,18 @@ export function EntityBasicInfo<TRecord extends object>({
               ? cohortFilterAction(entity, record, field)
               : undefined;
         const explanation =
-          field.explanation && explainedRecord.success ? (
-            <FieldExplanationContents
+          (field.explanation || checks.length > 0) &&
+          explainedRecord.success ? (
+            <WhyValueContents
               entity={entity}
               id={explainedRecord.data.id}
-              field={field.key}
+              field={field.explanation ? field.key : "dataQuality"}
               label={field.label}
+              qualityChecks={checks}
               surface="detail"
+              onSet={!refusal ? (onAdd ?? undefined) : undefined}
             />
           ) : undefined;
-        const resolution = fieldResolutionFor(record, field.key);
         // Keep suggestion and resolution with the value; the fact list's separate
         // action rail owns the controls regardless of caption wrapping.
         const decoratedValue = field.control?.suggest ? (
@@ -1257,14 +1258,11 @@ export function EntityBasicInfo<TRecord extends object>({
             label: field.label,
             fullWidth: isProseField(field.key, field.control),
             ...rendered,
-            value: decoratedValue,
-            caption: resolution ? (
-              <FieldResolutionBadge
-                record={record}
-                field={field.key}
-                interactive={!refusal}
-              />
-            ) : undefined,
+            value: (
+              <DerivedRecordValue record={record} field={field.key}>
+                {decoratedValue}
+              </DerivedRecordValue>
+            ),
             anchor: quality
               ? `${quality.prefix}-field-${field.key}`
               : undefined,
@@ -1276,21 +1274,7 @@ export function EntityBasicInfo<TRecord extends object>({
                   ))}
                 </span>
               ) : undefined,
-            explanation:
-              checks.length > 0 && explainedRecord.success ? (
-                <div className="grid gap-3">
-                  {checks.map((check) => (
-                    <QualityCheckDetails
-                      key={check.check}
-                      check={check}
-                      entityId={explainedRecord.data.id}
-                    />
-                  ))}
-                  {explanation}
-                </div>
-              ) : (
-                explanation
-              ),
+            explanation,
             filterAction,
           },
           ...(afterFields[field.key] ?? []),

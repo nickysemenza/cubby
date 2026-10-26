@@ -1,5 +1,9 @@
 import { type AnyColumn, and, asc, eq, sql } from "drizzle-orm";
 
+import {
+  storedSortNumberSql,
+  storedValueOrSql,
+} from "~/server/db/computed/derived-value-sql";
 /**
  * Predefined relation loaders for common query patterns.
  * Reduces verbosity when fetching entities with their related data.
@@ -525,11 +529,25 @@ export const relations = {
           // the note in `product/crud.ts`. Same column helper, opposite correct
           // answer per direction.
           where: and(notDeleted(inventoryEntry), stockOnly()),
+          // Stored values ride the page's one relational read (ADR 0021).
+          extras: {
+            storedValuation: storedSortNumberSql(
+              inventoryEntry.id,
+              "valuation",
+            ).as("storedValuation"),
+          },
           with: {
             // See the `inventory.list` note below: the embedded product's
             // barcode is derived from its primary `gtin` identifier row.
             product: {
-              extras: productCategoryProjection,
+              extras: {
+                ...productCategoryProjection,
+                effectivePrice: storedValueOrSql(
+                  product.id,
+                  "price",
+                  sql`${product.price}`,
+                ).as("effectivePrice"),
+              },
               with: { externalIds: { where: notDeleted(entityExternalId) } },
             },
           },

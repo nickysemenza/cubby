@@ -103,7 +103,7 @@ export default defineEntity(
         ],
       },
       // An uploaded image displays itself; it loads as list media.
-      list: { read: { media: ["displayImages"], quality: ["dataQuality"] } },
+      list: {},
     },
     model: {
       fields: [
@@ -1053,13 +1053,43 @@ export default defineEntity(
     ],
     // Image filenames and the current preferred description/correction are
     // searchable. The shared search document loader adds only direct owners.
-    search: "semantic",
+    search: {
+      mode: "semantic",
+      inputs: [
+        {
+          table: "AiAnalysis",
+          match: { entityId: "id" },
+          where: { entityKind: "image", feature: "image-description" },
+        },
+        {
+          table: "Assessment",
+          match: { subject: "id" },
+          json: { key: "recordId" },
+          where: { family: "image_description" },
+        },
+        { table: "AssessmentState", match: { recordId: "id" } },
+        {
+          table: "Feedback",
+          match: { assessmentId: "id" },
+          path: [{ table: "AssessmentState", from: "id", to: "recordId" }],
+        },
+      ],
+    },
     capabilities: {
       auditable: false,
       images: { storage: false },
       delete: { mode: "hard", bulk: true },
       merge: false,
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [
+          {
+            table: "ImageSighting",
+            match: { imageId: "id" },
+            columns: ["deletedAt"],
+          },
+          { table: "EntityAttachment", match: { imageId: "id" } },
+        ],
         checks: [
           {
             id: "image_provenance_unknown",

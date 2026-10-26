@@ -511,7 +511,7 @@ _Avoid_: image processing job, individual attempt, search job
 **Run kind**:
 A Run purpose declared once in `RUN_KINDS`: its label, trigger, whether it is
 routine or historical, how it executes, and its ordered steps. Routine kinds
-(refresh families, connection discovery) are hidden from the Runs list by
+(connection discovery; historical derived refresh passes) are hidden from the Runs list by
 default and create their Run only when a pass has work.
 _Avoid_: workflow purpose, step-run purpose
 

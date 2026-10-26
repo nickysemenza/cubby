@@ -9,6 +9,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 
+import { derivedMarkTickets } from "~/server/testing/background-queue";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
@@ -22,7 +23,7 @@ afterEach(() => backgroundQueue.restore());
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { job, searchDocument } from "~/server/db/schema";
+import { searchDocument } from "~/server/db/schema";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import {
   entityKernelContextSchema,
@@ -328,14 +329,16 @@ describe("entity kernel search projections", () => {
         await expect(
           rename(category.id, "Projected awnings"),
         ).resolves.toMatchObject({ action: "update" });
-        await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toThrow(
-          "synthetic projection failure",
+        await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toMatchObject(
+          {
+            cause: expect.objectContaining({
+              message: "synthetic projection failure",
+            }),
+          },
         );
-        const [failed] = await db
-          .select({ error: job.error })
-          .from(job)
-          .where(eq(job.key, "refresh:search"));
-        expect(failed?.error).toContain("synthetic projection failure");
+        expect(
+          await derivedMarkTickets(ctx.db, "product.searchDocument", productId),
+        ).not.toEqual([]);
       } finally {
         await db.execute(
           sql`DROP TRIGGER reject_projection ON "SearchDocument"`,

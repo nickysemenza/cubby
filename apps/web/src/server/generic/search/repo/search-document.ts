@@ -19,6 +19,11 @@ import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
 import {
+  fanoutTarget,
+  isFanoutInput,
+  storedDerived,
+} from "~/server/db/derived-declarations";
+import {
   unwrapDb,
   uuidArrayParam,
   withTransactionOn,
@@ -27,7 +32,6 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
@@ -257,8 +261,9 @@ function searchDocumentSourceSql(
     vendor: () => sql`
       SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
       FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)} AND ${bounded(sql`v."createdAt"`)}`,
+    // An orderless Purchase with an unknown date still has its Vendor as a title.
     purchase: () => sql`
-      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), v."name" || ' · ' || pu."date"::text), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
+      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), concat_ws(' · ', v."name", pu."date"::text)), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
       WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)} AND ${bounded(sql`pu."createdAt"`)}`,
     financialAccount: () => sql`
@@ -635,6 +640,14 @@ async function markSearchDocumentMissing(
   return { status: "missing", entityKind, entityId };
 }
 
+/**
+ * PostgreSQL rejects a tsvector over 1 MB, which a record carrying a large
+ * encoded payload (an import's coverage digest, in its keywords or body) can
+ * exceed; the full-text index reads a bounded prefix of each weighted part
+ * (three parts stay under the limit together) while stored text stays complete.
+ */
+const SEARCH_VECTOR_PART_CHARS = 100_000;
+
 async function upsertSearchDocumentBatch(
   db: Database | DrizzleTransaction,
   entries: ReadonlyArray<{ source: SearchDocumentSource; body: string }>,
@@ -662,9 +675,9 @@ async function upsertSearchDocumentBatch(
     SELECT input."entityKind", input."entityId", input.title,
       input.subtitle, input."typeHint", input.aliases, input.keywords,
       input.body, input.body, input."normalizedText",
-      setweight(to_tsvector('simple', input.title), 'A') ||
-      setweight(to_tsvector('simple', concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' '))), 'B') ||
-      setweight(to_tsvector('simple', input.body), 'D'), input."sourceHash"
+      setweight(to_tsvector('simple', left(input.title, ${SEARCH_VECTOR_PART_CHARS})), 'A') ||
+      setweight(to_tsvector('simple', left(concat_ws(' ', input.subtitle, array_to_string(input.aliases, ' '), array_to_string(input.keywords, ' ')), ${SEARCH_VECTOR_PART_CHARS})), 'B') ||
+      setweight(to_tsvector('simple', left(input.body, ${SEARCH_VECTOR_PART_CHARS})), 'D'), input."sourceHash"
     FROM (VALUES ${sql.join(rows, sql`, `)}) AS input(
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "normalizedText", "sourceHash"
@@ -790,9 +803,6 @@ export async function refreshSearchDocuments(
 ): Promise<SearchDocumentRefreshResult[]> {
   if (refs.length === 0) return [];
   return withTransactionOn(db, async (tx) => {
-    // Standalone explicit refresh holds the same family row through current
-    // authoritative reads and publication. Later edits retain their Job intent.
-    await lockRefreshFamily(tx, "search");
     const prepared = await prepareSearchDocuments(tx, refs);
     return publishPreparedSearchDocuments(tx, prepared);
   });
@@ -904,13 +914,41 @@ const unembeddedDocumentsSql = (
 `;
 
 /** Eligibility witness only: ANN recall is not an exhaustive similarity proof. */
-export async function hasUnembeddedSearchDocuments(
+/**
+ * Semantic coverage is incomplete for these kinds while one of their search
+ * documents awaits recompute (direct or fanout marks, ADR 0021) or lacks a
+ * current embedding. One statement; the marks probe uses exact targets so it
+ * stays a primary-key lookup.
+ */
+export async function searchCoverageIncomplete(
   db: Database | DrizzleTransaction,
   config: SemanticEmbeddingConfig,
   kinds: readonly SearchableEntity[],
 ): Promise<boolean> {
   if (!kinds.length) return false;
-  const result = await unwrapDb(db).execute(sql`SELECT EXISTS (
+  const targets = kinds.flatMap((kind) => {
+    const declaration = storedDerived(kind, "searchDocument");
+    return declaration
+      ? [
+          declaration.target,
+          ...declaration.inputs.flatMap((input, index) =>
+            isFanoutInput(input)
+              ? [fanoutTarget(declaration.target, index)]
+              : [],
+          ),
+        ]
+      : [];
+  });
+  const result = await unwrapDb(db).execute(sql`SELECT ${
+    targets.length
+      ? sql`EXISTS (
+          SELECT 1 FROM "DerivedDirty" d WHERE d.target IN (${sql.join(
+            targets.map((target) => sql`${target}`),
+            sql`, `,
+          )}) LIMIT 1
+        ) OR `
+      : sql``
+  }EXISTS (
     SELECT 1 ${unembeddedDocumentsSql(config)}
       AND sd."entityKind" IN (${sql.join(
         kinds.map((kind) => sql`${kind}`),

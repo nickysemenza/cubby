@@ -367,18 +367,6 @@ export default defineEntity({
     list: {
       links: [{ label: "Run types", path: "/runs/types" }],
       // Display images borrow from the vendor; they load as list media.
-      read: {
-        derived: [
-          "workProgress",
-          "activityAt",
-          "waitingOn",
-          "stalled",
-          "displayStatus",
-          "successorRunId",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       tree: { toggle: true, defaultNested: false },
       savedViews: [
         {
@@ -1491,6 +1479,41 @@ export default defineEntity({
     // The run service and import writers own every write.
     lifecycle: "readOnly",
     dataQuality: {
+      // Rows the stored evaluator reads beyond its own row (ADR 0021).
+      inputs: [
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Run", from: "vendorId", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Run", from: "vendorId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Run", from: "vendorId", to: "id" },
+          ],
+        },
+        { table: "PhotoRunImage", match: { runId: "id" } },
+        { table: "RunOperation", match: { runId: "id" } },
+      ],
       checks: [
         {
           id: "run_attribution",

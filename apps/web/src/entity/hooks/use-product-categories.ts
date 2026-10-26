@@ -1,23 +1,11 @@
-import { productCategoryOut } from "@cubby/schemas/product-category";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { entityListBaseFor, type EntityListParams } from "~/entity/entity-list";
+import { entityListFor, type EntityListParams } from "~/entity/entity-list";
 import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
 import { flattenUniquePageItems } from "~/ui/hooks/infinite-page-utils";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 
-const vocabulary = productCategoryOut.pick({
-  id: true,
-  name: true,
-  parentId: true,
-  aliases: true,
-  description: true,
-  path: true,
-  feature: true,
-  effectiveFeature: true,
-});
-const groups = ["relations"] as const;
 const input = {
   filters: {},
   pagination: { pageIndex: 0, pageSize: 500 },
@@ -28,11 +16,7 @@ const input = {
  * broad parents that a relevance-ranked first page might omit. */
 export function useProductCategories() {
   const query = useInfiniteQuery(
-    entityListBaseFor("productCategory").projectedInfiniteQueryOptions(
-      input,
-      groups,
-      vocabulary,
-    ),
+    entityListFor("productCategory").infiniteQueryOptions(input),
   );
   useLoadAllPages(query);
   const categories = useMemo(

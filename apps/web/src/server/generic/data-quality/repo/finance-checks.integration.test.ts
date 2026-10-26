@@ -1,12 +1,11 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
 import {
   createGardenEntry,
   createPlanting,
@@ -20,9 +19,9 @@ import {
   updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { createWish } from "~/server/domains/wish/repo";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
@@ -32,7 +31,6 @@ import {
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
@@ -44,26 +42,7 @@ import { loadDataQualities } from "./hydrate";
  */
 describe("data quality: finance and project entities", () => {
   const ctx = withTestDb();
-  const refreshQuality = async () => {
-    for (let page = 0; page < 8; page++) {
-      const [intent] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent) throw new Error("Expected quality intent from source write");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic finance quality pass exceeded page budget");
-  };
+  const refreshQuality = () => drainStoredDerived(ctx.db);
 
   it("project: kind, and a start date only once work has begun", async () => {
     const gap = await createRepoEntity(ctx, "project", {

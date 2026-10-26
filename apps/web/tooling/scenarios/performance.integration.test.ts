@@ -10,10 +10,8 @@ import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-re
 import { countTestDbQueries, withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
 import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
-import { eq } from "drizzle-orm";
-import { job, run } from "~/server/db/schema";
+import { drainStoredDerived } from "~/server/testing/background-queue";
+import { run } from "~/server/db/schema";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 
 // Failure modes: scale adds disconnected filler instead of kit/ledger fanout;
@@ -107,26 +105,14 @@ it("seeds connected performance history readable by the real Work queue", async 
       completedAt: "2026-01-15T12:01:00.000Z",
     }),
   ]);
-  // Each advance publishes one page; the seed spans several scored kinds.
-  for (let page = 0; ; page++) {
-    const [qualityIntent] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, "refresh:quality"));
-    if (!qualityIntent) throw new Error("Missing quality refresh intent");
-    if (qualityIntent.state === "completed") break;
-    if (page === 50) throw new Error("Quality pass exceeded page budget");
-    await advanceJob(ctx.db, qualityIntent.id, {
-      "refresh.family": refreshFamilyHandler,
-    });
-  }
+  await drainStoredDerived(ctx.db);
   const parcels = await countTestDbQueries(() =>
     listShipmentsRead(
       ctx.db,
       { dataStatus: ["needs_data"] },
       [{ orderBy: "dataQuality", direction: "asc" }],
       { pageIndex: 0, pageSize: 25 },
-      { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+      { kind: "selected", fields: ["dataQuality"] },
     ),
   );
   expect(parcels.result.count).toBe(1);

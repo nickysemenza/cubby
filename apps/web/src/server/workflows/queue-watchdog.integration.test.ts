@@ -25,10 +25,6 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  invalidateRefreshFamily,
-  scheduleRefreshFamilies,
-} from "~/server/generic/derived-refresh/repo/families";
 import { NEVER_EXHAUSTED_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import {
@@ -36,7 +32,12 @@ import {
   readRunRollups,
   retryJobSet,
 } from "~/server/generic/jobs/repo/job-queue";
-import { claimJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import {
+  claimJob,
+  enqueueJob,
+  repeatJob,
+  recordJobInvalidation,
+} from "~/server/generic/jobs/repo/jobs";
 import {
   JOB_RETENTION_MS,
   measureQueueHealth,
@@ -448,6 +449,8 @@ describe("queue watchdog, explain and retention", () => {
         }),
       );
     const [owner, requester, withdrawn] = runs as [RunId, RunId, RunId];
+    // Shared work names one target: its slot holds one open evaluation.
+    const recordId = crypto.randomUUID();
     const evaluation = (runId: RunId) =>
       enqueueAiEvaluation(ctx.db, {
         runId,
@@ -457,7 +460,7 @@ describe("queue watchdog, explain and retention", () => {
         target: {
           kind: "field",
           entity: "product",
-          recordId: crypto.randomUUID(),
+          recordId,
           field: "categoryId",
           assessmentIds: [],
         },
@@ -516,9 +519,9 @@ describe("queue watchdog, explain and retention", () => {
   // its kind and raised no alert.
   it("counts an invalidation-woken Job as due in health and alerts when nothing claims it", async () => {
     const search = await enqueueJob(ctx.db, {
-      key: "refresh:search",
-      kind: "refresh.family",
-      input: { family: "search" },
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
     });
     const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
     await getDb(ctx.db)
@@ -532,41 +535,41 @@ describe("queue watchdog, explain and retention", () => {
       .where(eq(job.id, search.id));
     await getDb(ctx.db)
       .insert(jobInvalidation)
-      .values({ key: "refresh:search", restartsPass: true })
+      .values({ key: "derived:drain", restartsPass: true })
       .onConflictDoNothing();
     await getDb(ctx.db)
       .insert(jobInvalidationCapture)
       .values({
-        key: "refresh:search",
+        key: "derived:drain",
         capturedAt: new Date(Date.now() - 40 * 60_000),
       });
     const health = await measureQueueHealth(ctx.db, {
       previous: null,
       imageDisagreement: 0,
     });
-    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    const family = health.kinds.find((kind) => kind.kind === "derived.drain");
     expect(family).toMatchObject({ due: 1, claimsPerMinute: 0 });
     // Pending since the capture, not since the old availableAt.
     expect(family?.oldestDueSeconds).toBeGreaterThanOrEqual(39 * 60);
     expect(family?.oldestDueSeconds).toBeLessThan(60 * 60);
     expect(health.alerts).toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "no_claims" }),
+      expect.objectContaining({ kind: "derived.drain", code: "no_claims" }),
     );
     expect(health.alerts).toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+      expect.objectContaining({ kind: "derived.drain", code: "oldest_due" }),
     );
   });
 
   // Review finding: every capture moved the marker's updatedAt, so a family
   // pending for 45 minutes read as just due after one more capture, and a
-  // recent claim of another family of the kind also hid no_claims.
+  // recent claim of another drain of the kind also hid no_claims.
   it("keeps the start of a long-pending invalidation across later captures", async () => {
     const families = await Promise.all(
-      (["search", "quality"] as const).map((name) =>
+      (["drain", "synthetic-other-drain"] as const).map((name) =>
         enqueueJob(ctx.db, {
-          key: `refresh:${name}`,
-          kind: "refresh.family",
-          input: { family: name },
+          key: `derived:${name}`,
+          kind: "derived.drain",
+          input: {},
         }),
       ),
     );
@@ -593,7 +596,12 @@ describe("queue watchdog, explain and retention", () => {
     try {
       for (const at of captures) {
         vi.setSystemTime(at);
-        await invalidateRefreshFamily(ctx.db, "search");
+        await recordJobInvalidation(ctx.db, {
+          key: "derived:drain",
+          kind: "derived.drain",
+          input: {},
+          restartsPass: false,
+        });
       }
     } finally {
       vi.useRealTimers();
@@ -602,34 +610,39 @@ describe("queue watchdog, explain and retention", () => {
       previous: null,
       imageDisagreement: 0,
     });
-    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    const family = health.kinds.find((kind) => kind.kind === "derived.drain");
     expect(family).toMatchObject({ due: 1 });
     expect(family?.claimsPerMinute).toBeGreaterThan(0);
     // Pending since the first unobserved capture, not the latest one.
     expect(family?.oldestDueSeconds).toBeGreaterThanOrEqual(44 * 60);
     expect(family?.oldestDueSeconds).toBeLessThan(50 * 60);
     expect(health.alerts).toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+      expect.objectContaining({ kind: "derived.drain", code: "oldest_due" }),
     );
     expect(health.alerts).toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "no_claims" }),
+      expect.objectContaining({ kind: "derived.drain", code: "no_claims" }),
     );
   });
 
-  // Review finding: a family pass in progress keeps its cursor through
+  // Review finding: a derived pass in progress keeps its cursor through
   // captures and is served on its availability, yet health dated it from the
   // oldest capture it will absorb, so a family publishing pages every minute
   // read as stalled.
-  it("dates a family pass in progress by its availability", async () => {
+  it("dates a derived pass in progress by its availability", async () => {
     const search = await enqueueJob(ctx.db, {
-      key: "refresh:search",
-      kind: "refresh.family",
-      input: { family: "search" },
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
     });
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.now() - 40 * 60_000);
-      await invalidateRefreshFamily(ctx.db, "search");
+      await recordJobInvalidation(ctx.db, {
+        key: "derived:drain",
+        kind: "derived.drain",
+        input: {},
+        restartsPass: false,
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -646,11 +659,11 @@ describe("queue watchdog, explain and retention", () => {
       previous: null,
       imageDisagreement: 0,
     });
-    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    const family = health.kinds.find((kind) => kind.kind === "derived.drain");
     expect(family).toMatchObject({ due: 1 });
     expect(family?.oldestDueSeconds).toBeLessThan(5 * 60);
     expect(health.alerts).not.toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+      expect.objectContaining({ kind: "derived.drain", code: "oldest_due" }),
     );
   });
 
@@ -660,14 +673,19 @@ describe("queue watchdog, explain and retention", () => {
   // oldest_due 40 minutes after a pass that finished 3 minutes ago.
   it("keeps a follow-up pass dated from completion through the catch-up", async () => {
     const search = await enqueueJob(ctx.db, {
-      key: "refresh:search",
-      kind: "refresh.family",
-      input: { family: "search" },
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
     });
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.now() - 40 * 60_000);
-      await invalidateRefreshFamily(ctx.db, "search");
+      await recordJobInvalidation(ctx.db, {
+        key: "derived:drain",
+        kind: "derived.drain",
+        input: {},
+        restartsPass: false,
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -679,16 +697,20 @@ describe("queue watchdog, explain and retention", () => {
         updatedAt: new Date(Date.now() - 3 * 60_000),
       })
       .where(eq(job.id, search.id));
-    // The catch-up also enqueues the other families, each due now.
-    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    // The catch-up also enqueues the other drains, each due now.
+    await repeatJob(ctx.db, {
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
+    });
     const health = await measureQueueHealth(ctx.db, {
       previous: null,
       imageDisagreement: 0,
     });
-    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    const family = health.kinds.find((kind) => kind.kind === "derived.drain");
     expect(family?.oldestDueSeconds).toBeLessThan(5 * 60);
     expect(health.alerts).not.toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+      expect.objectContaining({ kind: "derived.drain", code: "oldest_due" }),
     );
   });
 
@@ -696,14 +718,19 @@ describe("queue watchdog, explain and retention", () => {
   // due since it finished, not since the capture it ran through.
   it("dates a follow-up pass from the finish of the pass it follows", async () => {
     const search = await enqueueJob(ctx.db, {
-      key: "refresh:search",
-      kind: "refresh.family",
-      input: { family: "search" },
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
     });
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.now() - 40 * 60_000);
-      await invalidateRefreshFamily(ctx.db, "search");
+      await recordJobInvalidation(ctx.db, {
+        key: "derived:drain",
+        kind: "derived.drain",
+        input: {},
+        restartsPass: false,
+      });
     } finally {
       vi.useRealTimers();
     }
@@ -719,7 +746,7 @@ describe("queue watchdog, explain and retention", () => {
       previous: null,
       imageDisagreement: 0,
     });
-    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    const family = health.kinds.find((kind) => kind.kind === "derived.drain");
     expect(family).toMatchObject({ due: 1 });
     expect(family?.oldestDueSeconds).toBeLessThan(5 * 60);
   });
@@ -727,11 +754,11 @@ describe("queue watchdog, explain and retention", () => {
   // Review finding: the periodic catch-up (`repeatJob`) requeues a finished
   // family with availability "now" without serving it, which erased the
   // pending age of a capture the family had not observed yet.
-  it("keeps a woken family's pending age through the catch-up", async () => {
+  it("keeps a woken drain's pending age through the catch-up", async () => {
     const search = await enqueueJob(ctx.db, {
-      key: "refresh:search",
-      kind: "refresh.family",
-      input: { family: "search" },
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
     });
     const longAgo = new Date(Date.now() - 2 * 60 * 60_000);
     await getDb(ctx.db)
@@ -746,11 +773,20 @@ describe("queue watchdog, explain and retention", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.now() - 45 * 60_000);
-      await invalidateRefreshFamily(ctx.db, "search");
+      await recordJobInvalidation(ctx.db, {
+        key: "derived:drain",
+        kind: "derived.drain",
+        input: {},
+        restartsPass: false,
+      });
     } finally {
       vi.useRealTimers();
     }
-    await scheduleRefreshFamilies(ctx.db, { invalidate: false });
+    await repeatJob(ctx.db, {
+      key: "derived:drain",
+      kind: "derived.drain",
+      input: {},
+    });
     // Already due through the capture, so the catch-up leaves it as it is.
     const [kept] = await getDb(ctx.db)
       .select()
@@ -761,11 +797,11 @@ describe("queue watchdog, explain and retention", () => {
       previous: null,
       imageDisagreement: 0,
     });
-    const family = health.kinds.find((kind) => kind.kind === "refresh.family");
+    const family = health.kinds.find((kind) => kind.kind === "derived.drain");
     // The capture, 45 minutes ago, still dates the work past the deadline.
     expect(family?.oldestDueSeconds).toBeGreaterThanOrEqual(44 * 60);
     expect(health.alerts).toContainEqual(
-      expect.objectContaining({ kind: "refresh.family", code: "oldest_due" }),
+      expect.objectContaining({ kind: "derived.drain", code: "oldest_due" }),
     );
   });
 
@@ -801,19 +837,29 @@ describe("queue watchdog, explain and retention", () => {
 
   it("prunes acknowledged captures while preserving later pending input", async () => {
     for (let capture = 0; capture < 2; capture++)
-      await invalidateRefreshFamily(ctx.db, "search");
+      await recordJobInvalidation(ctx.db, {
+        key: "synthetic:derived-retention",
+        kind: "derived.drain",
+        input: {},
+        restartsPass: false,
+      });
     const [search] = await getDb(ctx.db)
       .select()
       .from(job)
-      .where(eq(job.key, "refresh:search"));
+      .where(eq(job.key, "synthetic:derived-retention"));
     if (!search) throw new Error("Expected search Job");
     expect(await claimJob(ctx.db, search.id)).not.toBeNull();
-    await invalidateRefreshFamily(ctx.db, "search");
+    await recordJobInvalidation(ctx.db, {
+      key: "synthetic:derived-retention",
+      kind: "derived.drain",
+      input: {},
+      restartsPass: false,
+    });
     const pending = await getDb(ctx.db)
       .select()
       .from(jobInvalidationCapture)
       .where(
-        sql`${jobInvalidationCapture.key} = 'refresh:search' AND NOT ${jobInvalidationCapture.observed}`,
+        sql`${jobInvalidationCapture.key} = 'synthetic:derived-retention' AND NOT ${jobInvalidationCapture.observed}`,
       );
     expect(pending).toHaveLength(1);
     expect(
@@ -823,7 +869,7 @@ describe("queue watchdog, explain and retention", () => {
       await getDb(ctx.db)
         .select()
         .from(jobInvalidationCapture)
-        .where(eq(jobInvalidationCapture.key, "refresh:search")),
+        .where(eq(jobInvalidationCapture.key, "synthetic:derived-retention")),
     ).toEqual(pending);
   });
 });

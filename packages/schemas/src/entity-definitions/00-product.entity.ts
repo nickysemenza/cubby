@@ -1,7 +1,10 @@
+import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
+import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { productReadSchemas } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
-import { defineEntity } from "./definition.js";
+import { type DerivedStoredInput, defineEntity } from "./definition.js";
 import {
   CURRENT_MEMBER_FILTER,
   OWNER_FILTER_HOUSEHOLD,
@@ -42,6 +45,60 @@ import { fdcId, foodSummary } from "@cubby/usda";
 import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
 import { productCategorySummary } from "../product-category-fields";
+
+/** Kit links: a component's price and quantities read its kits' lines. */
+const KIT_LINK_INPUTS: DerivedStoredInput[] = [
+  {
+    table: "EntityLink",
+    match: { fromEntityId: "id" },
+    where: { kind: "productComponent" },
+  },
+  {
+    table: "EntityLink",
+    match: { toEntityId: "id" },
+    where: { kind: "productComponent" },
+  },
+];
+
+/** A kit's value changes its components': propagate kit → component. */
+const KIT_COMPONENT_LINK = {
+  table: "EntityLink",
+  source: "fromEntityId",
+  dependent: "toEntityId",
+  where: { kind: "productComponent" },
+};
+
+/** Rows the ledger quantities read: acquisition lines, stock and locations. */
+const QUANTITY_INPUTS: DerivedStoredInput[] = [
+  {
+    table: "Product",
+    match: { id: "id" },
+    columns: ["categoryId", "expectedQuantity", "deletedAt"],
+  },
+  {
+    table: "Expense",
+    match: { productId: "id" },
+    columns: ["productQuantity", "lineKind", "future", "deletedAt"],
+  },
+  {
+    table: "InventoryEntry",
+    match: { productId: "id" },
+    columns: [
+      "amountValue",
+      "amountUnit",
+      "placement",
+      "locationId",
+      "deletedAt",
+    ],
+  },
+  {
+    table: "Location",
+    match: { productId: "id" },
+    columns: ["deletedAt"],
+  },
+  ...KIT_LINK_INPUTS,
+  { table: "ProductCategory", match: { id: "categoryId" } },
+];
 import { productKindSchema } from "../product-fields";
 import { labelField, displayItemsField } from "./label-field";
 import { selectControlOptions } from "./select-control-options";
@@ -612,55 +669,6 @@ export default defineEntity(
             },
           },
         ],
-        read: {
-          media: [
-            "images",
-            "labelImages",
-            "itemImageCount",
-            "labelImageCount",
-            "displayImages",
-          ],
-          quality: [
-            "dataQuality",
-            "classificationEvidence",
-            "dataGaps",
-            "modelPresence",
-            "notesPresence",
-          ],
-          relations: [
-            "categoryId",
-            "growsPlantId",
-            "category",
-            "ingredient",
-            "inventoryEntry",
-            "externalIds",
-            "unitMappings",
-            "primaryGtin",
-            "upcPresence",
-          ],
-          derived: [
-            "price",
-            "pricing",
-            "fieldResolutions",
-            "owners",
-            "usdaUnavailable",
-            "unitPrice",
-            "unitPriceMappings",
-            "food",
-            "expenseCount",
-            "componentCount",
-            "expenseTotal",
-            "purchaseDate",
-            "quantityLedger",
-            "stockStatus",
-            "stockStatusItems",
-            "onHandUnits",
-            "quantityVariance",
-            "ledgerExpectedQuantityLabel",
-            "quantityVarianceLabel",
-            "unitPriceLabel",
-          ],
-        },
         metrics: ["expenseTotal"],
         totals: [
           {
@@ -2181,6 +2189,89 @@ Rules:
         // Tasks whose effective subject is the product.
         subjectTasks: { label: "Tasks", relation: "tasks" },
       },
+      // Stored derived values that are not list fields (ADR 0021).
+      stored: {
+        automaticFields: automaticFields("product", "Product"),
+        conversionCoverage: {
+          compute: "product.conversionCoverage",
+          inputs: [
+            {
+              table: "Product",
+              match: { id: "id" },
+              columns: ["price", "categoryId", "deletedAt"],
+              path: [
+                {
+                  table: "EntityLink",
+                  from: "fromEntityId",
+                  to: "toEntityId",
+                  where: { kind: "productComponent" },
+                },
+              ],
+            },
+
+            {
+              table: "Ingredient",
+              match: { id: "ingredientId" },
+              columns: ["naKinds"],
+            },
+            {
+              table: "EntityExternalId",
+              match: { entityId: "id" },
+              where: { entityKind: "product" },
+            },
+            {
+              table: "ProductCategory",
+              match: { id: "categoryId" },
+              columns: ["name", "parentId", "feature", "deletedAt"],
+            },
+            {
+              table: "Expense",
+              match: { productId: "id" },
+              columns: [
+                "cost",
+                "productQuantity",
+                "lineKind",
+                "future",
+                "date",
+                "deletedAt",
+              ],
+            },
+            {
+              table: "EntityLink",
+              match: { fromEntityId: "id" },
+              where: { kind: "productComponent" },
+            },
+            {
+              table: "EntityLink",
+              match: { toEntityId: "id" },
+              where: { kind: "productComponent" },
+            },
+            {
+              table: "Expense",
+              match: { productId: "id" },
+              columns: [
+                "cost",
+                "productQuantity",
+                "lineKind",
+                "future",
+                "date",
+                "deletedAt",
+              ],
+              path: [
+                {
+                  table: "EntityLink",
+                  from: "fromEntityId",
+                  to: "toEntityId",
+                  where: { kind: "productComponent" },
+                },
+              ],
+            },
+
+            { table: "Product", match: { id: "id" } },
+            { table: "ProductUnitMapping", match: { productId: "id" } },
+          ],
+        },
+      },
       derived: {
         brandId: { type: "text" },
         brandName: { via: "brand.name" },
@@ -2189,14 +2280,50 @@ Rules:
         ingredient: { via: "ingredient" },
         // Orders by the category's full path, as its section headers read.
         categoryId: { type: "text" },
-        // The effective price: the stored price, else the derived one.
-        price: { type: "number" },
+        // The effective price: the stored price, else the derived one. Stored
+        // (ADR 0021): the kit walk is too slow to sort a page by.
+        price: {
+          type: "number",
+          stored: {
+            compute: "product.price",
+            inputs: PRODUCT_PRICING_INPUTS,
+            dependsOn: [
+              { entity: "product", key: "price", through: KIT_COMPONENT_LINK },
+            ],
+          },
+        },
         // The primary live GTIN, else the oldest.
         primaryGtin: { type: "text" },
         expenseTotal: { type: "number" },
         expenseCount: { type: "number" },
-        ledgerExpectedQuantity: { type: "number" },
-        quantityVariance: { type: "number" },
+        ledgerExpectedQuantity: {
+          type: "number",
+          stored: {
+            compute: "product.ledgerExpectedQuantity",
+            inputs: QUANTITY_INPUTS,
+            dependsOn: [
+              {
+                entity: "product",
+                key: "ledgerExpectedQuantity",
+                through: KIT_COMPONENT_LINK,
+              },
+            ],
+          },
+        },
+        quantityVariance: {
+          type: "number",
+          stored: {
+            compute: "product.quantityVariance",
+            inputs: QUANTITY_INPUTS,
+            dependsOn: [
+              {
+                entity: "product",
+                key: "ledgerExpectedQuantity",
+                through: KIT_COMPONENT_LINK,
+              },
+            ],
+          },
+        },
         // Shelf against ledger, only where stock and comparable ledger history
         // both exist; no value otherwise.
         quantityVarianceState: {
@@ -3575,7 +3702,20 @@ Rules:
         },
       },
     ],
-    search: "semantic",
+    // Related rows the search document reads (ADR 0021).
+    search: {
+      mode: "semantic",
+      inputs: [
+        ...imageDescriptionInputs("product"),
+        {
+          table: "EntityExternalId",
+          match: { entityId: "id" },
+          where: { entityKind: "product" },
+        },
+        { table: "Vendor", match: { id: "brandId" } },
+        { table: "ProductCategory", match: { id: "categoryId" } },
+      ],
+    },
     capabilities: {
       timeline: "custom",
       // Identity carries the weight: `dataQualityScore asc` is the enrichment
@@ -3585,6 +3725,159 @@ Rules:
       // included, so a named catalog entry scores instead of reading as not
       // assessed.
       dataQuality: {
+        // Rows the stored evaluator reads beyond its own row (ADR 0021).
+        inputs: [
+          {
+            table: "Product",
+            match: { id: "id" },
+            columns: ["price", "categoryId", "deletedAt"],
+            path: [
+              {
+                table: "EntityLink",
+                from: "fromEntityId",
+                to: "toEntityId",
+                where: { kind: "productComponent" },
+              },
+            ],
+          },
+
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["deletedAt", "id"],
+            path: [{ table: "Product", from: "brandId", to: "id" }],
+          },
+          {
+            table: "EntityAttachment",
+            match: { entityId: "id" },
+            columns: ["deletedAt", "imageId", "purpose", "role"],
+            path: [
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+            ],
+          },
+          {
+            table: "Image",
+            match: { id: "id" },
+            columns: [
+              "deletedAt",
+              "renderStatus",
+              "storageStatus",
+              "detectedContentType",
+            ],
+            path: [
+              { table: "EntityAttachment", from: "imageId", to: "entityId" },
+              { table: "Vendor", from: "id", to: "id" },
+              { table: "Product", from: "brandId", to: "id" },
+            ],
+          },
+          {
+            table: "Cookbook",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Device",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          { table: "ImportSourceProduct", match: { productId: "id" } },
+          {
+            table: "Location",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "MealFoodEntry",
+            match: { productId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Planting",
+            match: { sourceProductId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "Task",
+            match: { subjectProductId: "id" },
+            columns: ["deletedAt"],
+          },
+          {
+            table: "PhotoGroupProposal",
+            match: { productId: "id" },
+            columns: ["state"],
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "projectTool" },
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "wishCandidate" },
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            columns: ["vendorId", "deletedAt"],
+            path: [{ table: "Expense", from: "purchaseId", to: "productId" }],
+          },
+          {
+            table: "Purchase",
+            match: { id: "id" },
+            columns: ["vendorId", "deletedAt"],
+            path: [
+              {
+                table: "EntityLink",
+                from: "fromEntityId",
+                to: "toEntityId",
+                where: { kind: "purchaseProduct" },
+              },
+            ],
+          },
+          {
+            table: "Vendor",
+            match: { id: "id" },
+            columns: ["name", "deletedAt"],
+            path: [
+              { table: "Purchase", from: "vendorId", to: "id" },
+              { table: "Expense", from: "purchaseId", to: "productId" },
+            ],
+          },
+
+          { table: "InventoryEntry", match: { productId: "id" } },
+          { table: "Expense", match: { productId: "id" } },
+          // A kit's acquisition lines price its components.
+          {
+            table: "Expense",
+            match: { productId: "id" },
+            path: [
+              { table: "EntityLink", from: "fromEntityId", to: "toEntityId" },
+            ],
+          },
+          {
+            table: "EntityLink",
+            match: { fromEntityId: "id" },
+            where: { kind: "productComponent" },
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "productComponent" },
+          },
+          {
+            table: "EntityExternalId",
+            match: { entityId: "id" },
+            where: { entityKind: "product" },
+          },
+          {
+            table: "EntityLink",
+            match: { toEntityId: "id" },
+            where: { kind: "purchaseProduct" },
+          },
+          { table: "ProductCategory", match: { id: "categoryId" } },
+        ],
         exceptions: true,
         listOrder: 7,
         checks: [
