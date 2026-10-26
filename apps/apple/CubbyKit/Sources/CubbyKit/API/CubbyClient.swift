@@ -568,41 +568,10 @@ public actor CubbyClient {
         _ = try await native_task_bulkReorder(body: input)
     }
 
-    public func projectAnalytics(filters: EntityFilterState) async throws -> EntityReportOut {
-        var values: [String: JSONValue] = [:]
-        for (source, target) in [("status", "statusScope"), ("kind", "kinds"), ("location", "locations")] {
-            if let selected = filters[source], !selected.isEmpty {
-                values[target] = .array(selected.map { .string($0) })
-            }
-        }
-        for key in ["search", "dateFrom", "dateTo", "completionYear"] {
-            if let value = filters[key]?.first { values[key] = .string(value) }
-        }
-        return try await entityReport(
-            slot: .projectAnalytics,
-            scope: .object([
-                "kind": .string("list"), "entity": .string("project"), "filters": .object(values),
-            ]))
-    }
-
     public func todayBriefing() async throws -> EntityReportOut {
         try await entityReport(
             slot: .taskBriefing,
             scope: .object(["kind": .string("list"), "entity": .string("task"), "filters": .object([:])]))
-    }
-
-    public func expenseAnalytics(filters: EntityFilterState) async throws -> ExpenseAnalyticsOut {
-        let input = try Self.decodeFilters(ExpenseFilters.self, entity: .expense, filters: filters)
-        return try await native_expense_analytics(body: input)
-    }
-
-    /// The entity's list filters typed by its kernel parameters (`EntityKernel.swift`), so a
-    /// scalar parameter decodes as a scalar and a nested one (`projectScope`) nests.
-    private static func decodeFilters<T: Decodable>(
-        _ type: T.Type, entity: EntityKey, filters: EntityFilterState
-    ) throws -> T {
-        let fields = try EntityCatalog[entity].filterBody(filters, includeWindow: false)
-        return try JSONDecoder().decode(T.self, from: JSONEncoder().encode(JSONValue.object(fields)))
     }
 
     /// Every location, by name, for the sweep's bin picker.

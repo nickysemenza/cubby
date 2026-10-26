@@ -370,11 +370,9 @@ export const nativeCoverage = {
       "cookbook.toc",
       "cookbook.import-progress",
       // One generic report view draws these from the server-composed
-      // `entityReport.get` blocks (stats, chart, table, schedule, note).
+      // `entityReport.get` blocks (stats, chart, table, note).
       "project.budget",
       "project.contribution",
-      "project.analytics",
-      "project.schedule",
       "location.contents-valuation",
       "vendor.mail-search",
       // The server's recipes (scale, cost) and portions, edited with report commands that carry
@@ -427,6 +425,14 @@ export const nativeCoverage = {
     // The agent conversation is web-only on purpose: it streams from the import-run agent route (SSE
     // plus prompt and abort over its own protocol), not a Cubby operation, and CubbyKit has no
     // client, reconnect or transcript model for it.
+    "project.schedule": handoff(
+      { section: "schedule", label: "Open schedule on web" },
+      "Project schedules are reviewed on web.",
+    ),
+    "project.analytics": handoff(
+      { section: "analytics", label: "Open analytics on web" },
+      "Project analytics are explored on web; budget summaries stay native.",
+    ),
     "run.import-agent-live": handoff(
       { section: "import-agent-live", label: "Open live agent on web" },
       "The live agent conversation streams from the import-run agent route, which native has no client for. Prompt and stop the agent on web.",
@@ -520,12 +526,15 @@ export const nativeCoverage = {
     ]),
   },
   listSlot: {
-    ...implemented([
-      "location.gallery",
-      "meal.calendar",
-      "project.analytics",
-      "expense.analytics",
-    ]),
+    "project.analytics": handoff(
+      { query: { view: "analytics" }, label: "Open project analytics on web" },
+      "Portfolio analytics are explored on web.",
+    ),
+    "expense.analytics": handoff(
+      { query: { view: "analytics" }, label: "Open expense analytics on web" },
+      "Expense analytics are explored on web.",
+    ),
+    ...implemented(["location.gallery", "meal.calendar"]),
     ...ownedElsewhere([
       "location.visualizations",
       "meal.nutrition",
