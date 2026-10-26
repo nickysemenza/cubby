@@ -771,6 +771,12 @@ const entityJSON = (
     recordEmojiField: entity.inspector.recordEmojiField,
     recordIconEntityField: entity.inspector.recordIconEntityField,
     searchable,
+    nativeBrowse: entity.inspector.nativeBrowse,
+    emptyState: {
+      title: entity.inspector.emptyState.title,
+      description: entity.inspector.emptyState.description,
+      actionLabel: entity.inspector.emptyState.actionLabel,
+    },
     primarySearch,
     timeline: entity.timeline,
     fields: entity.fieldModel.fields.map((field) =>

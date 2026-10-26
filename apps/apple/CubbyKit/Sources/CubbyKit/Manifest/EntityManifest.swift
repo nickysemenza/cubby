@@ -106,6 +106,10 @@ public enum EntityCatalog {
         byKey[key]!
     }
 
+    /// The entities native Browse and the sidebar list, in declaration order. A declared
+    /// `nativeBrowse: false` root (operator plumbing) stays reachable through record links.
+    public static var browsable: [EntityDescriptor] { all.filter(\.nativeBrowse) }
+
     /// The descriptor whose canonical shortcode prefix a code carries (`PRD-…` → product).
     /// Prefix match only: the server resolves legacy `P-`/`L-` labels and validates the body.
     public static func descriptor(forShortcode code: String) -> EntityDescriptor? {

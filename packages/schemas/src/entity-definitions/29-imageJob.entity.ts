@@ -88,6 +88,8 @@ export default defineEntity({
     domain: null,
     description:
       "Image processing work: subject lifts, descriptions and identifications, with every attempt.",
+    // Queue attempts for operators; images open from their owning records.
+    nativeBrowse: false,
     emptyState: {
       title: "No image jobs yet",
       description:

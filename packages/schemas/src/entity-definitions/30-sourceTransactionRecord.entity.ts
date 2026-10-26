@@ -23,6 +23,8 @@ export default defineEntity({
     titleField: "displayName",
     domain: "finance",
     description: "One retained version of a source-reported transaction.",
+    // Retained source versions; members review the reconciled transactions.
+    nativeBrowse: false,
     emptyState: {
       title: "No source transaction records yet",
       description: "Record financial evidence through the intake workflow.",
