@@ -1,5 +1,6 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
+import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -8,6 +9,8 @@ import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
+import { executeEntity } from "~/server/entity-kernel";
+import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -17,6 +20,7 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { buildProductWhere } from "./crud";
 import { attachProductComponents } from "./product-components";
@@ -654,6 +658,54 @@ describe("primary placement", () => {
       onHandUnits: 5,
     });
     expect(facts.get(absent.entityId)).toBeUndefined();
+    // The detail read's hero breadcrumb walks the same placement (Product), the
+    // entry's location (Inventory) and the parent (Location).
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    const names = (item: unknown) =>
+      z
+        .object({ breadcrumb: z.array(z.object({ name: z.string() })) })
+        .parse(item)
+        .breadcrumb.map((crumb) => crumb.name);
+    const read = async (
+      command: Parameters<typeof executeEntity>[1] & { action: "get" },
+    ) => names((await executeEntity(kernel, command)).item);
+    const path = ["Home", "Synthetic older shelf"];
+    expect(
+      await read({
+        action: "get",
+        entity: "product",
+        id: prod.id,
+        missing: "error",
+      }),
+    ).toEqual(path);
+    expect(
+      await read({
+        action: "get",
+        entity: "product",
+        id: absent.id,
+        missing: "error",
+      }),
+    ).toEqual([]);
+    expect(
+      await read({
+        action: "get",
+        entity: "inventory",
+        id: older.id,
+        missing: "error",
+      }),
+    ).toEqual(path);
+    expect(
+      await read({
+        action: "get",
+        entity: "location",
+        id: shelves[0]!.id,
+        missing: "error",
+      }),
+    ).toEqual(["Home"]);
     const [empty] = await enrichProductRowsWithQuantityLedger(ctx.db, [
       { id: absent.entityId },
     ]);

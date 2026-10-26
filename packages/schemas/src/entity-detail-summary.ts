@@ -51,3 +51,12 @@ export const detailSummarySlotSchema = z.discriminatedUnion("kind", [
 ]);
 export type DetailSummarySlot = z.infer<typeof detailSummarySlotSchema>;
 export const detailSummarySchema = z.array(detailSummarySlotSchema).max(8);
+
+/**
+ * The detail read's `breadcrumb`: the records above this one, outermost
+ * first, projected from the declared `hero.breadcrumb` field.
+ */
+export const detailBreadcrumbSchema = z.array(
+  z.strictObject({ entity: z.string(), id: z.string(), name: z.string() }),
+);
+export type DetailBreadcrumb = z.infer<typeof detailBreadcrumbSchema>;
