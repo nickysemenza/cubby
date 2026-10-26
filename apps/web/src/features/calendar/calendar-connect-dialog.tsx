@@ -380,7 +380,7 @@ export function CalendarConnectDialog() {
       trigger={
         <DialogTrigger
           render={
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="xs" className="text-xs">
               <ArrowsClockwiseIcon className="size-3" aria-hidden />
               Connect Calendar
             </Button>

@@ -20,19 +20,31 @@ type CalendarItemPresentationVariant = "month" | "detail" | "rich";
 function CalendarBeneficiaries({
   item,
   announceNames = false,
+  compact = false,
 }: {
   item: CalendarItem;
   announceNames?: boolean;
+  compact?: boolean;
 }) {
   if (item.kind !== "expense" && item.kind !== "purchase") return null;
   const parties = item.spendingContext?.parties ?? [];
   if (!parties.length) return null;
   return (
-    <span className="inline-flex shrink-0 items-center gap-1">
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center",
+        compact
+          ? "gap-0.5 [&_[data-slot=inherited-marker]_svg]:size-3"
+          : "gap-1",
+      )}
+    >
       {parties.map((party) => (
         <span
           key={party.id}
-          className="inline-flex shrink-0 items-center gap-1"
+          className={cn(
+            "inline-flex shrink-0 items-center",
+            compact ? "gap-0.5" : "gap-1",
+          )}
           title={party.name}
         >
           <EntityIdentityMark
@@ -40,7 +52,7 @@ function CalendarBeneficiaries({
             id={party.id}
             name={party.name}
             displayImage={null}
-            size="inline"
+            size={compact ? "compact" : "inline"}
           />
           {announceNames && <span className="sr-only">{party.name}</span>}
           {party.inherited && <InheritedMarker />}
@@ -135,7 +147,7 @@ function CalendarItemCompact({
   return (
     <>
       {image ? (
-        <EntityCover images={[image]} entity={item.kind} size={18} alt="" />
+        <EntityCover images={[image]} entity={item.kind} size={14} alt="" />
       ) : (
         <Icon className="size-3 shrink-0" aria-hidden />
       )}
@@ -162,7 +174,7 @@ function CalendarItemCompact({
               title={label ?? undefined}
             >
               {kind === "party" ? (
-                <CalendarBeneficiaries item={item} announceNames />
+                <CalendarBeneficiaries item={item} announceNames compact />
               ) : (
                 label
               )}
@@ -173,7 +185,7 @@ function CalendarItemCompact({
       {presentation.compactBadge && (
         <Badge
           variant={presentation.compactBadge.variant}
-          className="h-4 max-w-24 px-1 text-3xs"
+          className="h-3.5 max-w-24 px-1 text-3xs"
           title={presentation.compactBadge.label}
         >
           {presentation.compactBadge.label}

@@ -303,8 +303,12 @@ A unique supported merchant suggestion supplies a later decorative Vendor logo
 fallback; ambiguous and insufficient history retain the semantic mark.
 
 Calendar grids, span chips, agenda rows and the day sheet share one display-image
-provider for the loaded range. The server resolves `displayImages` for every item type in one range batch;
-the grid and day sheet seed the shared context from that response.
+provider for the loaded range. The server resolves `displayImages` for every item type in one range batch.
+The month grid uses compact single-line pills, identity marks and desktop
+controls with caption-sized labels. Its lane CSS variables also drive placement
+and drag geometry; density changes never scale painted chips separately from
+their slots. Phone navigation keeps the shared touch-target floor.
+The grid and day sheet seed the shared context from that response.
 Compact span rows show a small thumbnail when available; missing images retain
 the kind icon. Opening the day sheet does not create a separate image query.
 

@@ -100,10 +100,15 @@ const PERIOD_OPTIONS = [
   ...GRID_PERIOD_OPTIONS,
   { value: "schedule", label: "Schedule" },
 ] as const;
+// SAFETY: the calendar's custom properties also drive lane placement and drag
+// geometry; compact styling must not scale the painted chips independently.
+const MONTH_DENSITY = {
+  "--ec-month-row-min-h": "6rem",
+  "--ec-month-bar-h": "1.375rem",
+} as CSSProperties;
 /**
- * Fortnight density, built on ONE vertical unit: 1.75rem, the month's bar
- * height and the system's control height. A crossing bar is one line of text
- * and takes one unit; a single-day chip carries two lines and takes two. The
+ * Fortnight keeps a taller unit for two-line metadata. A crossing bar is one
+ * line of text and takes one unit; a single-day chip carries two lines and takes two. The
  * row floor is four chip lanes, so a quiet fortnight is not two screens of
  * empty paper and a busy one still grows.
  */
@@ -528,7 +533,7 @@ export function UnifiedCalendar({
           <Button
             type="button"
             variant="outline"
-            size="icon"
+            size="icon-xs"
             aria-label={`Previous ${period}`}
             onClick={() => shiftAnchor(-1)}
           >
@@ -537,7 +542,8 @@ export function UnifiedCalendar({
           <Button
             type="button"
             variant="outline"
-            size="sm"
+            size="xs"
+            className="text-xs"
             onClick={() => onDateChange(undefined)}
           >
             Today
@@ -545,19 +551,18 @@ export function UnifiedCalendar({
           <Button
             type="button"
             variant="outline"
-            size="icon"
+            size="icon-xs"
             aria-label={`Next ${period}`}
             onClick={() => shiftAnchor(1)}
           >
             <CaretRightIcon />
           </Button>
-          <h2 className="font-heading text-base font-semibold">
-            {periodTitle}
-          </h2>
+          <h2 className="font-heading text-sm font-semibold">{periodTitle}</h2>
           <Row align="center" gap="xs" className="ml-auto">
             <PeriodActions render={periodActions} range={activePeriod} />
             <Picker
               mode="segmented"
+              className="md:[&_[data-slot=toggle-group-item]]:h-6 md:[&_[data-slot=toggle-group-item]]:px-2"
               label="Calendar period"
               options={lockedKinds ? GRID_PERIOD_OPTIONS : PERIOD_OPTIONS}
               value={period}
@@ -618,7 +623,8 @@ export function UnifiedCalendar({
               <MonthEventCalendar<CalendarItem>
                 {...calendarInteractionProps}
                 renderEvent={CalendarMonthChip}
-                className="hidden min-h-[620px] overflow-hidden border md:block"
+                className="hidden min-h-[620px] overflow-hidden border md:block [&_[data-slot=event-calendar-event]]:gap-1 [&_[data-slot=event-calendar-event]]:px-1 [&_[data-slot=event-calendar-event]]:py-0.5 [&_[data-slot=event-calendar-event]]:leading-4 [&_[data-slot=event-calendar-month-bar-overlay]]:pt-1 [&_[data-slot=event-calendar-month-cell-content]]:min-h-0 [&_[data-slot=event-calendar-month-cell-content]]:pt-1 [&_[data-slot=event-calendar-month-day-number]]:size-4 [&_[data-slot=event-calendar-month-day-number]]:text-2xs [&_[role=columnheader]]:py-1 [&_[role=columnheader]]:text-2xs"
+                style={MONTH_DENSITY}
                 onMoreClick={openDay}
               />
             ) : period === "fortnight" ? (
