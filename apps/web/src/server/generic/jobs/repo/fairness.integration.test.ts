@@ -11,7 +11,6 @@ import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
 import {
   claimJob,
-  dueJobPositions,
   dueJobs,
   enqueueJob,
   releaseJobClaim,
@@ -596,120 +595,6 @@ describe("fair drain under a flood", () => {
     },
   );
 
-  // Review finding: diagnostics ranked every run-owned Job ahead of all
-  // backfill, but selection reserves backfill a share of each batch, so the
-  // reported "ahead" (and the ETA from it) disagreed with the drain.
-  it("reports queue positions in the drain's own selection order", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const ids: string[] = [];
-    for (let index = 0; index < 25; index++)
-      ids.push(
-        (
-          await enqueueJob(ctx.db, {
-            key: `synthetic.owned.${index}`,
-            kind: "synthetic.owned",
-            input: {},
-            runId,
-          })
-        ).id,
-      );
-    for (let index = 0; index < 10; index++)
-      ids.push(
-        (
-          await enqueueJob(ctx.db, {
-            key: `synthetic.backfill.${index}`,
-            kind: "synthetic.backfill",
-            input: {},
-          })
-        ).id,
-      );
-    const predicted = await dueJobPositions(ctx.db, ids);
-    const served: string[] = [];
-    // Other due work (the Run's own bookkeeping Jobs) is served too; each
-    // position counts every Job the drain serves first.
-    await drainRounds(ctx.db, 4, (batch) => {
-      served.push(...batch.map((row) => row.id));
-    });
-    expect(ids.every((id) => served.includes(id))).toBe(true);
-    // Exact within the first batch; later batches re-rank kinds by their
-    // last service, so a projection is exact to the batch.
-    const batchOf = (index: number) => Math.floor(index / JOB_DRAIN.batch);
-    expect(
-      Object.fromEntries(
-        [...predicted].map(([id, ahead]) => [
-          id,
-          ahead < JOB_DRAIN.batch ? ahead : `batch ${batchOf(ahead)}`,
-        ]),
-      ),
-    ).toEqual(
-      Object.fromEntries(
-        ids.map((id) => {
-          const index = served.indexOf(id);
-          return [
-            id,
-            index < JOB_DRAIN.batch ? index : `batch ${batchOf(index)}`,
-          ];
-        }),
-      ),
-    );
-  });
-
-  it("projects the widened embedding selection with the same Run reserve as the drain", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const ids: string[] = [];
-    for (let index = 0; index < 21; index++)
-      ids.push(
-        (
-          await enqueueJob(ctx.db, {
-            key: `synthetic.member-batch.${index}`,
-            kind: "synthetic.member",
-            input: {},
-            runId,
-          })
-        ).id,
-      );
-    for (let index = 0; index < 6; index++)
-      ids.push(
-        (
-          await enqueueJob(ctx.db, {
-            key: `synthetic.embedding-batch.${index}`,
-            kind: "embedding.refresh",
-            input: {},
-          })
-        ).id,
-      );
-    const predicted = await dueJobPositions(ctx.db, ids);
-    const selected = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, {
-      batchSizes: new Map([["embedding.refresh", 100]]),
-    });
-    const selectedIds = new Set<string>(selected.map((row) => row.id));
-    expect(
-      selected.filter((row) => row.kind === "synthetic.member"),
-    ).toHaveLength(20);
-    expect(
-      selected.filter((row) => row.kind === "embedding.refresh"),
-    ).toHaveLength(6);
-    expect(
-      Object.fromEntries([...predicted].filter(([id]) => selectedIds.has(id))),
-    ).toEqual(
-      Object.fromEntries(
-        selected.flatMap((row, index) =>
-          ids.includes(row.id) ? [[row.id, index]] : [],
-        ),
-      ),
-    );
-    for (const id of ids.filter((id) => !selectedIds.has(id)))
-      expect(predicted.get(id)).toBeGreaterThanOrEqual(JOB_DRAIN.batch);
-  });
-
   // Widening needs its own prefix in each exemption class. A top-N over the
   // merged backfill would hide low-priority ordinary siblings behind routine
   // Run work after both classes already won seeds.
@@ -761,19 +646,11 @@ describe("fair drain under a flood", () => {
       expect(new Set(embeddings.map((row) => row.id)).size).toBe(200);
       expect(embeddings.map((row) => row.id)).not.toContain(excluded);
       expect(embeddings.every((row) => !row.runOwned)).toBe(true);
-      const predicted = await dueJobPositions(ctx.db, [
-        ...ordinary,
-        ...routine,
-      ]);
-      const admitted = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, selection);
-      for (const [index, row] of admitted.entries())
-        expect(predicted.get(row.id)).toBe(index);
     },
   );
 
-  // Review finding: beyond the first batch the drain re-ranks kinds by their
-  // last service, so a position there is a projection, not a promise.
-  it("flags queue positions beyond the first batch as estimates", async () => {
+  // Kind-local positions cannot promise the drain's interleaved service order.
+  it("flags kind-local queue positions as estimates", async () => {
     const rows = [];
     for (let index = 0; index < JOB_DRAIN.batch + 5; index++)
       rows.push(
@@ -790,7 +667,7 @@ describe("fair drain under a flood", () => {
     expect(byAhead).toHaveLength(rows.length);
     for (const entry of byAhead)
       expect(entry).toMatchObject({
-        aheadIsEstimate: entry.aheadCount >= JOB_DRAIN.batch,
+        aheadIsEstimate: true,
       });
   });
 });

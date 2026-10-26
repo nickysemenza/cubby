@@ -47,7 +47,7 @@ const jobFacts = z.object({
   subject: z.object({ kind: z.string(), id: z.string() }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  /** Due Jobs the fair drain serves first; null when not due. */
+  /** Earlier due Jobs of the same kind and Run class; null when not due. */
   ahead: z.number().int().nonnegative().nullable(),
   lane: jobLane,
   /** What the Job waits on now (`generic/jobs/repo/waiting-on.ts`); null when terminal. */

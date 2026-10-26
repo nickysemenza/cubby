@@ -81,12 +81,13 @@ Reads rank only the queues needed by the displayed statuses: device work does
 not rank the server drain, and leased or backing-off work needs no queue rank.
 `jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
 
-- `due`: claimable now; `aheadCount` in the drain's own selection order (the
-  fair service order per class, interleaved per batch with backfill's reserve:
-  `drainSelectionIndex`) and `etaSeconds` from claims over the last 30
-  minutes. Only the next batch is exact: later batches re-rank kinds by their
-  last service, so beyond `JOB_DRAIN.batch` the position is a projection and
-  `aheadIsEstimate` is true (shown as "behind about N").
+- `due`: claimable now; `aheadCount` counts earlier due Jobs of the same kind
+  and active member-Run class, ordered by priority then update/availability time
+  and identity. The list performs one batched indexed count for its visible IDs;
+  unrelated kinds never enter its ranking. This is always an estimate of service
+  order (shown as "behind about N"): the drain interleaves other kinds and
+  reserves backfill capacity. `etaSeconds` uses observed claims over the last
+  30 minutes; it is not a completion promise.
 - `waiting_device`: parked device work; position in device claim order
   (`deviceSelectionIndex`, with backfill's turn), exact apart from a
   device's preference for work another device last ran.
@@ -150,10 +151,9 @@ compute the logarithmic weight once per kind. Each kind and ownership/exemption
 class contributes a bounded priority prefix before window ranking; an exempt routine Run cannot hide
 ordinary siblings needed to widen another selected page. The latest claim comes
 from the existing `(kind, lastClaimedAt)` index, including completed Jobs so that
-finishing a page never erases its service history. Queue positions reuse the same
-due snapshot and admitted selection; only their later-round projection ranks the
-full due backlog. Claim-time admission remains authoritative across concurrent
-drains.
+finishing a page never erases its service history. List positions use their own
+visible-kind counts rather than rerunning selection. Claim-time admission remains
+authoritative across concurrent drains.
 
 Job source writes also respect the derived drain's member-first ordering:
 root transactions in Job execution (including shared evaluation batches) mark

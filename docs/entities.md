@@ -584,6 +584,23 @@ fields. Its hydration batches step receipts across the page and reuses the
 detail calculation; other purposes use their persisted samples, so row counters
 can lag the detail's live counters. The list never
 requests a work snapshot per row or infers throughput from timeline frequency.
+Web detail report blocks and Activity's Run Work cells share the Base UI Progress
+primitive. Known totals show processed / total; unknown totals retain work text
+without a percentage bar. Producers fill the existing `runWorkItems` contract:
+`{ phase, label, unit, processed, total: number | null, failures, activity? }`.
+`processed` is an absolute completed count, including failures and skips. Persist
+compatible samples through `sampleRunWork` into `liveProgress.work` (or the step's
+`meta.work`): `{ current: { ...items, sampledAt, ratePerSecond, finished,
+intervals: [{ processed, elapsedMs }] }, completed: [...] }`. The intervals are
+bounded to 12; rates include queue delays, and ETA needs at least three intervals.
+Use a new phase/unit or reset on a restarted population. Connection discovery's
+`{ completed, total }` checkpoint maps to `processed: completed`; its owning lane
+must adapt that checkpoint to this existing projection. Existing AI-owned
+checkpoint writers use `aiRefreshProgress.selected` for the denominator; a new
+`total` key alone is not that schema's count source. `progressHistory` retains
+phase events, not numeric samples; timeline event frequency is never throughput.
+Apple still uses the shared report's counts and estimates; the new Base UI bar
+presentation is web-only.
 Activity is the latest recorded progress, step update, or heartbeat. A missing
 sample remains unavailable, and stale/paused samples do not read as live rates.
 Other Run checkpoints and progress events retain samples in live-progress
