@@ -111,7 +111,7 @@ struct ActivityView: View {
             }
         }
         .navigationTitle("Activity")
-        .refreshable { await load() }
+        .refreshControl { await load() }
         // Reload when this device's own phase changes (a job finished, a reconnect).
         .task(id: appModel.companionImageActivity.phase) { await load() }
         .task {

@@ -260,7 +260,7 @@ private struct PhotoLibraryBrowser: View {
                         }
                         .padding(.vertical, 12)
                     }
-                    .refreshControl(identifier: "photos.refresh") {
+                    .refreshControl {
                         await library.refresh(matches: matches, client: appModel.client, forceRematch: true)
                     }
                     .onAppear {

@@ -1,67 +1,93 @@
 import SwiftUI
 
 /// `.refreshable` everywhere, plus a way to fire it without a finger. macOS has no pull-to-refresh
-/// gesture, so on that platform this also adds a toolbar Refresh button (⌘R) — the only way to
-/// trigger `.refreshable`'s action there.
+/// gesture, so there every visible control joins its window's `SceneRefresh`: View › Refresh (⌘R)
+/// and the window's one toolbar Refresh reload list, detail and any other joined view together,
+/// instead of one toolbar button per column whose ⌘R depended on keyboard focus.
 private struct RefreshControl: ViewModifier {
     let action: @Sendable () async -> Void
-    /// Set on the macOS toolbar button only — iOS never shows a Refresh button, since pull-to-
-    /// refresh is `.refreshable`'s own gesture there, so an identifier meant for that button would
-    /// otherwise have nowhere to land on iOS.
-    let identifier: String?
 
     @State private var refreshing = false
+    #if os(macOS)
+        @Environment(\.sceneRefresh) private var sceneRefresh
+        @State private var member = UUID()
+        @State private var visible = false
+    #endif
 
     func body(content: Content) -> some View {
         content
             .refreshable { await runIfNeeded() }
             #if os(macOS)
+                .onAppear {
+                    visible = true
+                    sceneRefresh?.join(member)
+                }
+                .onDisappear {
+                    visible = false
+                    sceneRefresh?.leave(member)
+                }
+                // A view kept alive beneath a pushed screen stays out of the window's refresh.
+                .onChange(of: sceneRefresh?.request) {
+                    if visible { Task { await runIfNeeded() } }
+                }
+                // Windows without a split root (Connections) keep the focused menu command.
                 .focusedValue(
                     \.nativeRefresh,
-                    NativeRefreshAction(
-                        isEnabled: !refreshing, run: { Task { await runIfNeeded() } }
-                    )
+                    sceneRefresh == nil
+                        ? NativeRefreshAction(
+                            isEnabled: !refreshing, run: { Task { await runIfNeeded() } })
+                        : nil
                 )
-                .toolbar {
-                    ToolbarItem(placement: .secondaryAction) {
-                        Button("Refresh", systemImage: "arrow.clockwise") {
-                            Task { await runIfNeeded() }
-                        }
-                        .disabled(refreshing)
-                        .accessibilityIdentifier(ifPresent: identifier)
-                    }
-                }
             #endif
     }
 
-    /// A trigger that lands while one is already in flight — the button tapped twice, or tapped
-    /// mid pull-to-refresh — is dropped instead of starting a second, overlapping load.
+    /// A trigger that lands while one is already in flight — ⌘R pressed twice, or mid
+    /// pull-to-refresh — is dropped instead of starting a second, overlapping load.
     private func runIfNeeded() async {
         guard !refreshing else { return }
         refreshing = true
+        #if os(macOS)
+            let scene = sceneRefresh
+            scene?.begin()
+            defer { scene?.end() }
+        #endif
         defer { refreshing = false }
         await action()
     }
 }
 
 extension View {
-    /// Refresh gesture on iOS, toolbar action on Mac, and a focused menu command. `identifier` names
-    /// the macOS toolbar button for a UI test to find; leave it `nil` where nothing needs to.
-    func refreshControl(
-        identifier: String? = nil, _ action: @escaping @Sendable () async -> Void
-    ) -> some View {
-        modifier(RefreshControl(action: action, identifier: identifier))
+    /// Refresh gesture on iOS; on Mac, membership in the window's View › Refresh (⌘R).
+    func refreshControl(_ action: @escaping @Sendable () async -> Void) -> some View {
+        modifier(RefreshControl(action: action))
+    }
+}
+
+/// One window's refresh. Each visible `.refreshControl` joins while on screen; `refresh()` asks
+/// all of them to reload, and stays disabled while any reload is in flight.
+@Observable
+final class SceneRefresh {
+    private(set) var request = 0
+    private var members: Set<UUID> = []
+    private var running = 0
+
+    var isEnabled: Bool { !members.isEmpty && running == 0 }
+
+    func refresh() {
+        guard isEnabled else { return }
+        request += 1
     }
 
-    /// `.accessibilityIdentifier(identifier ?? "")` would set an empty identifier when `identifier`
-    /// is `nil`, which is not the same as leaving it unset — this leaves the view untouched instead.
-    @ViewBuilder fileprivate func accessibilityIdentifier(ifPresent identifier: String?) -> some View {
-        if let identifier {
-            accessibilityIdentifier(identifier)
-        } else {
-            self
-        }
-    }
+    func join(_ member: UUID) { members.insert(member) }
+    func leave(_ member: UUID) { members.remove(member) }
+    func begin() { running += 1 }
+    func end() { running = max(0, running - 1) }
+
+    var action: NativeRefreshAction { NativeRefreshAction(isEnabled: isEnabled, run: refresh) }
+}
+
+extension EnvironmentValues {
+    @Entry var sceneRefresh: SceneRefresh?
 }
 
 struct NativeRefreshAction {

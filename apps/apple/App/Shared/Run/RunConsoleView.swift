@@ -126,7 +126,7 @@ struct RunConsoleView: View {
         .environment(photoReview)
         // Popovers anchored to the list, so each presents once for the whole review.
         .photoReviewConfirmations(photoReview, session: session, runID: runID)
-        .refreshable {
+        .refreshControl {
             await refresh()
             await batch?.refresh()
         }
