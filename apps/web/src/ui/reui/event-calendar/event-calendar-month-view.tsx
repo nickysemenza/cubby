@@ -736,6 +736,7 @@ function EventCalendarMonthCell({
     <>
       <div
         ref={contentRef}
+        data-slot="event-calendar-month-cell-content"
         className={cn(
           // gap-0.5 pairs with the 0.125rem subtraction in the lane spacer
           // below; changing the gap requires renderMonthCell

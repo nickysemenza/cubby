@@ -8,9 +8,15 @@ import { PersonAvatar } from "~/ui/common/person-avatar";
 
 import { RecordEmoji } from "./record-emoji";
 
-export type EntityIdentityMarkSize = "inline" | "pill" | "row" | "card";
+export type EntityIdentityMarkSize =
+  | "compact"
+  | "inline"
+  | "pill"
+  | "row"
+  | "card";
 
 const MARK_SIZE = {
+  compact: 14,
   inline: 16,
   pill: 18,
   row: 24,
@@ -47,13 +53,17 @@ export function EntityIdentityMark({
   const pixels = MARK_SIZE[size];
   const fallbackMark =
     entity === "ledgerParty" && id && name ? (
-      <PersonAvatar id={id} name={name} />
+      <PersonAvatar
+        id={id}
+        name={name}
+        className={size === "compact" ? "size-3.5" : undefined}
+      />
     ) : (
       (fallback ?? (
         <RecordEmoji
           entity={entity}
           emoji={emoji}
-          size={size === "inline" ? 12 : 16}
+          size={size === "compact" ? 10 : size === "inline" ? 12 : 16}
         />
       ))
     );

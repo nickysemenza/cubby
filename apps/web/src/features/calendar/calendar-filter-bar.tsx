@@ -30,6 +30,7 @@ export function CalendarFilterBar({
 
   return (
     <ManifestFilterBar
+      className="md:[&_button]:h-6 md:[&_button]:min-h-0"
       specs={
         mode === "schedule" ? calendarScheduleFilterSpecs : calendarFilterSpecs
       }
