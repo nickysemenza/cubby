@@ -1633,7 +1633,6 @@ const buildMetadataSchemas = () => {
             .default({}),
         })
         .strict()
-        .prefault({})
         .transform(
           ({
             sections,
