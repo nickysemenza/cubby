@@ -676,6 +676,8 @@ publish. Candidate publication locks live endpoints in domain parent order,
 recomputes dependency bases and acquisition eligibility in sets, and compares
 each locked basis against its original retrieval evidence. It then uses one
 immutable Assessment batch and one supersession transition for the chunk.
+Supersession first scopes indexed live subjects, then joins the chunk's slots
+to immutable Assessment evidence once, rather than scanning history per slot.
 Repeated edges retain the last publication's active fingerprint, preserving
 sequential publication semantics; member suppression and review are unchanged.
 Canonical Product pairs retrieved by multiple source owners publish once per

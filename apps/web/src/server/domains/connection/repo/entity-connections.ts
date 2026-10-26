@@ -14,7 +14,7 @@ import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, notExists, or, sql } from "drizzle-orm";
+import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -193,22 +193,38 @@ export async function publishPreparedEntityConnections(
         { entry, index },
       ]),
     );
+    const slots = [...latest.values()];
+    const wanted = sql.join(
+      slots.map(
+        ({ entry, index }) =>
+          sql`(${entry.entity}::text, ${entry.recordId}::uuid, ${entry.scope}::text, ${entry.candidateKey}::text, ${predictions[index]!.id}::uuid)`,
+      ),
+      sql`, `,
+    );
     await transitionAssessmentStates(
       db,
       and(
         eq(assessmentState.family, "recommendation"),
         eq(assessmentState.active, true),
         sql`${assessmentState.suppression} IS NULL`,
-        or(
-          ...[...latest.values()].map(({ entry, index }) =>
-            and(
-              eq(assessmentState.entity, entry.entity),
-              eq(assessmentState.recordId, entry.recordId),
-              sql`${assessmentState.id} <> ${predictions[index]!.id}`,
-              sql`${assessmentState.id} IN (SELECT prior.id FROM "Assessment" prior WHERE prior.subject->>'scope'=${entry.scope} AND prior.subject->>'candidateKey'=${entry.candidateKey})`,
-            ),
-          ),
-        ),
+        inArray(assessmentState.entity, [
+          ...new Set(entries.map((entry) => entry.entity)),
+        ]),
+        inArray(assessmentState.recordId, [
+          ...new Set(entries.map((entry) => entry.recordId)),
+        ]),
+        // Scope the indexed live subjects first, then join immutable evidence
+        // once. An OR of per-slot Assessment subqueries replans/scans history
+        // for every candidate and dominated production-copy publication time.
+        sql`EXISTS (
+          SELECT 1 FROM (VALUES ${wanted}) wanted(entity, record_id, scope, candidate_key, current_id)
+          JOIN "Assessment" prior ON prior.id = ${assessmentState.id}
+          WHERE wanted.entity = ${assessmentState.entity}
+            AND wanted.record_id = ${assessmentState.recordId}
+            AND prior.id <> wanted.current_id
+            AND prior.subject->>'scope' = wanted.scope
+            AND prior.subject->>'candidateKey' = wanted.candidate_key
+        )`,
       ),
       { active: false, status: "superseded" },
       { kind: "superseded_by_publication" },
