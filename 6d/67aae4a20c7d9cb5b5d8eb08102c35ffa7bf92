@@ -1,0 +1,37 @@
+apps/apple/App/Shared/AppShell/Route.swift
+  s_7667243984c2e9::t_9671d8222d8eeb 109-110,115
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_7667243984c2e9::t_eb98ceac04f6d4 38,40-46,141-145,147,151-156
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_7667243984c2e9::t_801b75dbce39c4 25-26,35,37-39,72,189-191,805-810,851-856,1051
+apps/apple/App/Shared/Search/SearchView.swift
+  s_7667243984c2e9::t_db265d49d51f74 252-254,257-268
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_7667243984c2e9::t_f6e598c5f3ff57 283-284,288-310
+apps/apple/App/Tests/DesignSystem/WebHandoffTests.swift
+  s_7667243984c2e9::t_08c10d7e30e854 30-34
+apps/apple/App/macOS/RootSplitView.swift
+  s_7667243984c2e9::t_abe61a8cd95688 17-18,60-78
+apps/apple/DESIGN.md
+  s_7667243984c2e9::t_6ec2da121e0e14 35,105
+apps/apple/App/Shared/AppShell/SceneCommands.swift
+  s_7667243984c2e9::t_69450183d40309 1-96
+apps/apple/App/Shared/DesignSystem/CubbyCommands.swift
+  s_7667243984c2e9::t_d6b81632a075e2 1,4-12,15-17,21-22,36-40,42-60,66-67,69-81,83-94,96,98-131
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6d67aae4a20c7d9cb5b5d8eb08102c35ffa7bf92",
+  "prompts": {},
+  "sessions": {
+    "s_7667243984c2e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b9721aa1-95df-48cd-9b7c-c3998129dc3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
