@@ -340,6 +340,8 @@ Narrow pickers and internal target readers use `listScaffold.raw` and keep their
 own output contract. Both methods share authoritative filtering, sorting,
 pagination, exact counts, prepared context and selected-ID order restoration.
 There is no public full-row hydration callback.
+Detail route loaders retain a query observer while awaiting a shared record
+read, so closing an inspector cannot cancel the incoming route's request.
 Reference lookup targets come from declared read fields as well as storage
 fields: table-only lineage columns can still expose declared public references.
 Photo receipt recovery captures the requested current revision even when a

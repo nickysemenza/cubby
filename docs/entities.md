@@ -3550,8 +3550,10 @@ share the generic related-preview rendering and loading pipeline.
 its **Seller**. Product create/update inputs accept the Vendor reference,
 and reads expose the joined nullable `brandName` through the declared
 reference's label path. A physical factory or a descriptive manufacturer claim
-is source evidence, not a second Product identity field. Duplicate display
-names remain possible, so strong same-Brand comparisons use the reference;
+is source evidence, not a second Product identity field. Live Vendor names
+are unique ignoring case and surrounding spaces; deleted names can be reused.
+Automatic name creation uses the same database constraint to resolve races.
+Strong same-Brand comparisons still use the reference;
 name and alias text can retrieve candidates but cannot prove identity. Product manufacturer-spelling diagnostics are retired; duplicate identity review belongs to the shared Vendor roster.
 
 Null Brand means unknown. The system-designated **Generic / Unbranded** Vendor

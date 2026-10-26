@@ -12,7 +12,7 @@ import {
 import { vendor } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 export const GENERIC_BRAND_SYSTEM_KEY = "generic-unbranded";
 
@@ -43,10 +43,6 @@ export async function resolveProductBrandName(
   const { name, generic } = claim;
   return withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
-    // Serialize name resolution so concurrent imports cannot mint the same new brand twice.
-    await database.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${name.toLowerCase()}, 0))`,
-    );
     const matches = await database
       .select({ id: vendor.id, shortcode: vendor.shortcode })
       .from(vendor)
@@ -69,8 +65,15 @@ export async function resolveProductBrandName(
         "CONSTRAINT_VIOLATION",
         "The system Generic / Unbranded brand is missing.",
       );
-    const created = await insertWithShortcode(tx, "vendor", { name });
-    return parseShortcodeFor("vendor", created.shortcode);
+    const { row } = await findOrCreateWithShortcode(tx, "vendor", {
+      where: and(
+        notDeleted(vendor),
+        isNull(vendor.systemKey),
+        vendorNamedSql(name),
+      ),
+      values: () => ({ name }),
+    });
+    return parseShortcodeFor("vendor", row.shortcode);
   });
 }
 

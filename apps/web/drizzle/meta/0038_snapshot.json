@@ -1,6 +1,6 @@
 {
-  "id": "e6009169-e75a-4c63-8f85-389a1833fa43",
-  "prevId": "602d81bd-06e1-4858-ae76-08e199e82ee8",
+  "id": "d4dca184-6e02-4829-980a-036309d366c0",
+  "prevId": "e6009169-e75a-4c63-8f85-389a1833fa43",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -21985,6 +21985,22 @@
             }
           ],
           "isUnique": false,
+          "where": "\"Vendor\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Vendor_name_live_key": {
+          "name": "Vendor_name_live_key",
+          "columns": [
+            {
+              "expression": "lower(btrim(\"name\"))",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "where": "\"Vendor\".\"deletedAt\" IS NULL",
           "concurrently": false,
           "method": "btree",
