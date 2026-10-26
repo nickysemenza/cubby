@@ -581,13 +581,15 @@ struct EntityDetailContent: View {
                     }
                 }
             case .relation:
-                if let model = relationSections.first(where: { $0.id == section.id }),
-                    !(model.list.phase == .loaded && model.list.rows.isEmpty)
-                {
-                    DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                if let model = relationSections.first(where: { $0.id == section.id }) {
+                    if model.isLoadedEmpty {
                         RelationSectionView(model: model, row: row, macLayout: true)
-                    } label: {
-                        Text(section.title ?? model.target.plural).font(.headline)
+                    } else {
+                        DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                            RelationSectionView(model: model, row: row, macLayout: true)
+                        } label: {
+                            Text(model.countedTitle).font(.headline)
+                        }
                     }
                 }
             case .timeline:
@@ -758,9 +760,7 @@ struct EntityDetailContent: View {
             }
         case .relation:
             if let model = relationSections.first(where: { $0.id == section.id }) {
-                if !(model.list.phase == .loaded && model.list.rows.isEmpty) {
-                    RelationSectionView(model: model, row: row)
-                }
+                RelationSectionView(model: model, row: row)
             }
         case .timeline:
             if !timelineIsEmpty {
@@ -809,7 +809,7 @@ struct EntityDetailContent: View {
                 }
             case .relation:
                 guard let relation = relationSections.first(where: { $0.id == section.id }),
-                    !(relation.list.phase == .loaded && relation.list.rows.isEmpty)
+                    !relation.isLoadedEmpty
                 else { return nil }
             case .timeline:
                 guard !timelineIsEmpty else { return nil }

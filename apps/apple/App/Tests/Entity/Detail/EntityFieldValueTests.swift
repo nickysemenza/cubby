@@ -6,6 +6,16 @@ import Testing
 
 @Suite("Entity field values")
 struct EntityFieldValueTests {
+    /// A field a summary slot shows lives there; a later fields section omits it.
+    @Test func summarizedFieldsLeaveLaterSections() {
+        let product = EntityCatalog[.product]
+        let row = PreviewFixtures.sampleDetailRow
+        #expect(product.presentation.summaryFieldKeys.contains("brandId"))
+        #expect(!FieldsSectionView(descriptor: product, row: row, keys: ["brandId"]).hasVisibleRows)
+        #expect(
+            FieldsSectionView(descriptor: product, row: row, keys: ["brandId"], summary: true).hasVisibleRows)
+    }
+
     /// A `yyyy-MM-dd` column keeps its calendar day regardless of the device zone.
     @Test func dateOnlyValueKeepsItsCalendarDay() {
         let rendered = EntityFieldValue.formattedDate("2039-05-10")

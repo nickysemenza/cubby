@@ -54,6 +54,19 @@ struct EntityManifestTests {
         #expect(inProgress.glyph?.sfSymbol == "circle.lefthalf.filled")
     }
 
+    // Authored sections and summary slots reach native in declared order under readable ids;
+    // the first four slots are the glance.
+    @Test func authoredSectionsAndGlanceArriveInDeclaredOrder() {
+        let product = EntityCatalog[.product].presentation
+        #expect(product.summarySlots.prefix(4).map(\.id) == ["stock", "brand", "uses", "bought-from"])
+        #expect(product.detailSections.prefix(2).map(\.id) == ["stocked-at", "identity"])
+        #expect(product.heroBreadcrumb == "primaryPlacement")
+        #expect(
+            !EntityCatalog.all.contains { descriptor in
+                descriptor.presentation.detailSections.contains { $0.id.hasPrefix("fields-") }
+            })
+    }
+
     // Declared quick actions reach native in order; an entity that declares none omits the keys
     // and reads as empty.
     @Test func quickActionsArriveOnTheWireAndDefaultToNone() throws {
