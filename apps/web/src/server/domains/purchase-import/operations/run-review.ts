@@ -58,7 +58,12 @@ import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";
-import { publishRunFinding, runFindingData } from "../repo/run-finding";
+import {
+  isRunFinding,
+  publishRunFinding,
+  runFindingColumns,
+  runFindingData,
+} from "../repo/run-finding";
 import {
   loadRunScope,
   STALE_RUN_MS,
@@ -123,6 +128,28 @@ async function reconcileSettledRunOnce(
     : null;
   if (scope.public.dispatchEventId !== input.generation)
     return { reconciled: false as const, status: scope.public.status };
+  if (
+    scope.public.status === "needs_review" &&
+    scope.public.purpose === "mail_import"
+  ) {
+    await withTransaction(db, async (tx) => {
+      const [current] = await tx
+        .select({
+          status: runTable.status,
+          generation: runTable.dispatchEventId,
+          input: runTable.input,
+        })
+        .from(runTable)
+        .where(eq(runTable.id, scope.public.runId))
+        .for("no key update");
+      if (
+        current?.status === "needs_review" &&
+        current.generation === input.generation &&
+        current.input !== null
+      )
+        await releaseUnsettledMailRunSources(tx, scope.public.runId);
+    });
+  }
   if (scope.public.status !== "running")
     return { reconciled: false as const, status: scope.public.status };
   if (input.receivedEventIds && unreceivedWake(scope, input.receivedEventIds))
@@ -208,10 +235,13 @@ async function reconcileSettledRunOnce(
   }
   // A Mail import has no explicit finish tool: once every admitted Email is
   // imported, linked, excluded or resolved unresolved, Pi's settled submission
-  // completes it, or reviews it under one finding naming each unresolved
-  // Email. Only an Email still being researched means the coordinator ended
-  // without finishing.
+  // completes it after auditing every batch, or reviews its open findings
+  // and unresolved Emails. Researching Emails mean the coordinator ended early.
   if (scope.public.purpose === "mail_import") {
+    await auditAllImportBatches(db, {
+      runId: input.runId,
+      operationId: `${input.operationId}:required-audit`,
+    });
     const settled = await withTransaction(db, async (tx) => {
       const [locked] = await tx
         .select({
@@ -245,7 +275,21 @@ async function reconcileSettledRunOnce(
       const unresolved = sources.filter(
         (source) => source.email.status === "blocked",
       );
-      if (unresolved.length)
+      const findings = await tx
+        .select({
+          id: runFindingColumns.id,
+          kind: runFindingColumns.kind,
+          summary: runFindingColumns.summary,
+        })
+        .from(assessmentState)
+        .where(
+          and(
+            isRunFinding,
+            eq(assessmentState.runId, scope.public.runId),
+            eq(runFindingColumns.status, "open"),
+          ),
+        );
+      if (unresolved.length || findings.length)
         return {
           unresolved: unresolved.map(({ email }) => email),
           reasons: await unresolvedMailReasons(
@@ -253,19 +297,25 @@ async function reconcileSettledRunOnce(
             scope.public.runId,
             unresolved.map(({ email }) => email.id),
           ),
+          findings,
         };
       await tx
         .update(runTable)
         .set({
           status: "completed",
+          auditedAt: new Date(),
           endedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.public.runId));
       await recordChange(tx, { kind: "source", categories: ["email"] });
-      return { unresolved: [], reasons: new Map<string, string>() };
+      return {
+        unresolved: [],
+        reasons: new Map<string, string>(),
+        findings: [],
+      };
     });
-    if (settled && !settled.unresolved.length)
+    if (settled && !settled.unresolved.length && !settled.findings.length)
       return { reconciled: true as const, status: "completed" as const };
     if (settled) {
       await stopRunForReview(db, {
@@ -273,7 +323,11 @@ async function reconcileSettledRunOnce(
         operationId: input.operationId,
         kind: "unresolved_targets",
         dispatchEventId: input.generation,
-        summary: unresolvedTargetsSummary(settled.unresolved, settled.reasons),
+        summary: unresolvedTargetsSummary(
+          settled.unresolved,
+          settled.reasons,
+          settled.findings,
+        ),
         staleBefore: input.staleBefore,
       });
       const status = (await loadRunScope(db, input.runId)).public.status;
@@ -591,12 +645,22 @@ function unresolvedTargetsSummary(
     messageId: string;
   }[],
   reasons: ReadonlyMap<string, string>,
+  findings: readonly { id: string; kind: string; summary: string }[] = [],
 ) {
   const lines = emails.map(
     (email) =>
       `${email.shortcode} (${email.subject ?? email.messageId}): ${reasons.get(email.id) ?? "no reason recorded"}`,
   );
-  const summary = `${countLabel(emails.length, "admitted Email")} unresolved; settle each with purchase_import.mail_resolve. ${lines.join("; ")}`;
+  const summary = [
+    findings.length
+      ? `${countLabel(findings.length, "open finding")}: ${findings.map((finding) => `${finding.id} (${finding.kind}): ${finding.summary}`).join("; ")}`
+      : null,
+    emails.length
+      ? `${countLabel(emails.length, "admitted Email")} unresolved; settle each with purchase_import.mail_resolve. ${lines.join("; ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
   return summary.length > 1_000 ? `${summary.slice(0, 999)}…` : summary;
 }
 
@@ -646,6 +710,8 @@ async function stopRunForReviewOnce(
         generation: runTable.dispatchEventId,
         status: runTable.status,
         failureCode: runTable.failureCode,
+        purpose: runTable.purpose,
+        input: runTable.input,
       })
       .from(runTable)
       .where(eq(runTable.id, runId))
@@ -705,7 +771,7 @@ async function stopRunForReviewOnce(
       await recordChange(tx, { kind: "source", categories: ["run"] });
     // A Run without a roster (erased, or a legacy/manual Mail import) has no
     // Email to return, and stopping it for review must never fail on parsing one.
-    if (stopped?.purpose === "mail_import" && stopped.input !== null)
+    if (current.purpose === "mail_import" && current.input !== null)
       await releaseUnsettledMailRunSources(tx, runId);
     return { findingId: finding.open ? finding.id : null };
   });

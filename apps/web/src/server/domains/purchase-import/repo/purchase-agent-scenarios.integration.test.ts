@@ -653,6 +653,10 @@ describe("current purchase-agent system boundaries", () => {
     await scenario.wake();
     await waitForStatus(parent.id, "needs_review");
     expect(await scenario.violations()).toEqual([]);
+    expect(await scenario.gatewayCalls()).toContainEqual({
+      feature: "purchase-import-audit",
+      matched: "audit",
+    });
 
     const targetsOf = async (runId: string) => {
       const detail = await loadRunDetail(
@@ -1140,6 +1144,10 @@ describe("current purchase-agent system boundaries", () => {
     scenarioRunId = admitted!.id;
     await waitForStatus(admitted!.id, "completed");
     expect(await scenario.violations()).toEqual([]);
+    expect(await scenario.gatewayCalls()).toContainEqual({
+      feature: "purchase-import-audit",
+      matched: "audit",
+    });
     const importRun = await runRow(admitted!.id);
     expect(importRun).toMatchObject({
       trigger: "discovery",

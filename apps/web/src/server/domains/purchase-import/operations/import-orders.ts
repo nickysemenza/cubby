@@ -35,6 +35,7 @@ import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   getDb,
   notDeleted,
+  withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
@@ -76,6 +77,7 @@ import {
   retainedMailSource,
   readUnchangedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
+import { releaseUnsettledMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import {
   MODEL_STYLE_MATCH_REASON,
   modelStyleTokens,
@@ -936,20 +938,25 @@ async function finalizeReviewRun(
     runId,
     operationId: `${operationId}:required-audit`,
   });
-  await getDb(db)
-    .update(runTable)
-    .set({
-      status: "needs_review",
-      auditedAt: new Date(),
-      endedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(runTable.id, runEntityId.parse(runId)),
-        eq(runTable.status, "running"),
-      ),
-    );
+  await withTransaction(db, async (tx) => {
+    const [stopped] = await tx
+      .update(runTable)
+      .set({
+        status: "needs_review",
+        auditedAt: new Date(),
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(runTable.id, runEntityId.parse(runId)),
+          eq(runTable.status, "running"),
+        ),
+      )
+      .returning({ purpose: runTable.purpose, input: runTable.input });
+    if (stopped?.purpose === "mail_import" && stopped.input !== null)
+      await releaseUnsettledMailRunSources(tx, runEntityId.parse(runId));
+  });
 }
 
 /**
@@ -1188,7 +1195,9 @@ export async function commitPurchaseImport(
                 lineIndex: line.position,
               });
             } else {
-              requiresReview ||= parsedLine.lineKind === "principal";
+              requiresReview ||=
+                scope.purpose !== "mail_import" &&
+                parsedLine.lineKind === "principal";
               productResolutions.push({
                 kind: "unresolved" as const,
                 lineIndex: line.position,

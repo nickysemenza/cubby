@@ -85,6 +85,56 @@ function respondWithToolCall(output: unknown) {
   );
 }
 
+/** The funding ladder starts structured calls on Claude's Messages wire. */
+function respondWithMessages(output: unknown) {
+  callSequence += 1;
+  const events = [
+    {
+      type: "message_start",
+      message: {
+        id: `gateway-message-${callSequence}`,
+        type: "message",
+        role: "assistant",
+        model: "scripted",
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 0 },
+      },
+    },
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: {
+        type: "tool_use",
+        id: `call_${callSequence}`,
+        name: "respond",
+        input: {},
+      },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "input_json_delta", partial_json: JSON.stringify(output) },
+    },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "message_delta",
+      delta: { stop_reason: "tool_use", stop_sequence: null },
+      usage: { output_tokens: 1 },
+    },
+    { type: "message_stop" },
+  ];
+  return new Response(
+    events
+      .map(
+        (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+      )
+      .join(""),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+}
+
 /** Known synthetic defaults for the closed-set features exercised by the harness. */
 const JEV_DEFAULT_LABEL = new Map([
   ["kit-detection", "single"],
@@ -227,16 +277,23 @@ export default {
           : { result: choice.response },
       );
     }
-    if (url.pathname !== "/openai/responses") {
+    if (
+      url.pathname !== "/openai/responses" &&
+      url.pathname !== "/anthropic/v1/messages"
+    ) {
       calls.push({ feature, matched: null });
       return new Response(`Unscripted gateway route ${url.pathname}`, {
         status: 501,
       });
     }
     const raw = await request.text();
+    const respond = (output: unknown) =>
+      url.pathname === "/anthropic/v1/messages"
+        ? respondWithMessages(output)
+        : respondWithToolCall(output);
     if (feature === "purchase-import-audit") {
       calls.push({ feature, matched: "audit" });
-      return respondWithToolCall(fixture.audit);
+      return respond(fixture.audit);
     }
     if (
       feature === "purchase-import-extraction" ||
@@ -246,7 +303,7 @@ export default {
         raw.includes(match),
       );
       calls.push({ feature, matched: extraction?.match ?? null });
-      if (extraction) return respondWithToolCall(extraction.output);
+      if (extraction) return respond(extraction.output);
     } else calls.push({ feature, matched: null });
     return new Response(`Unscripted gateway feature ${feature}`, {
       status: 501,

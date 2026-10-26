@@ -746,7 +746,13 @@ configured against the purpose's declared model and effort; derive ordinary
 inference expectations from `importRunAgentManifest` so policy changes do not
 leave stale model pins in browser journeys. Explicit escalation scenarios
 still name the expected transition.
-It is
+The structured-feature gateway answers both OpenAI Responses and Anthropic
+Messages tool streams: the household funding ladder can start an import audit
+on Claude even when the feature declares an OpenAI model. Mail settlement
+scenarios require the audit response before asserting the terminal Run status.
+Completed Mail report fixtures assign their Emails to the Run; another Run's
+current Email status does not prove this Run's recorded outcome.
+This project is
 excluded from the required desktop shards and runs in CI as an optional job
 (`pnpm --dir apps/web test:e2e:ci:purchase-import`). Hold the model with a
 `{ gate }` step to observe a live Run instead of racing it; a Run the browser

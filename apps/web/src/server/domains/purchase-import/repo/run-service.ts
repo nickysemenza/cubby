@@ -163,7 +163,20 @@ async function selectNonPhotoTargets(
   const mail = await readMailRunRoster(client, runId);
   const receipts = await listRunTargetOutcomes(client, [runId]);
   // An erased Mail import Run has no targets; its outcome receipts never stand in for the roster.
-  if (mail)
+  if (mail) {
+    const ownerIds = [
+      ...new Set(
+        mail.flatMap(({ email, owned }) =>
+          !owned && email.runId ? [email.runId] : [],
+        ),
+      ),
+    ];
+    const owners = ownerIds.length
+      ? await client
+          .select({ id: runTable.id, shortcode: runTable.shortcode })
+          .from(runTable)
+          .where(inArray(runTable.id, ownerIds))
+      : [];
     return mail.map(({ email, orderMailId, checksum, position, owned }) => {
       const outcome = receipts
         .filter(
@@ -196,27 +209,34 @@ async function selectNonPhotoTargets(
         entityCode: parseShortcodeFor("email", email.shortcode),
         state:
           outcome?.state ??
-          (email.status === "completed"
+          (owned && email.status === "completed"
             ? ("completed" as const)
             : owned && email.status === "researching"
               ? ("pending" as const)
               : ("unresolved" as const)),
-        outcome:
-          outcome?.outcome ??
-          (email.status === "completed" ? ("verified" as const) : null),
-        warning:
-          outcome?.warning ??
-          (!owned && email.status === "pending" && !email.runId
-            ? "Returned to Mail discovery after this Run ended."
-            : email.classificationReason),
+        outcome: outcome
+          ? outcome.outcome
+          : owned && email.status === "completed"
+            ? ("verified" as const)
+            : null,
+        warning: outcome
+          ? outcome.warning
+          : !owned
+            ? email.runId
+              ? `Moved to ${owners.find((owner) => owner.id === email.runId)?.shortcode ?? "another Run"}.`
+              : "Returned to Mail discovery after this Run ended."
+            : email.classificationReason,
         diff: null,
-        completedAt: outcome?.completedAt
-          ? new Date(outcome.completedAt)
-          : email.status === "completed"
+        completedAt: outcome
+          ? outcome.completedAt
+            ? new Date(outcome.completedAt)
+            : null
+          : owned && email.status === "completed"
             ? email.updatedAt
             : null,
       };
     });
+  }
   const identities = receipts.length
     ? await client
         .select({ id: entityIdentity.id, shortcode: entityIdentity.shortcode })
