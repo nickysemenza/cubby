@@ -31,6 +31,32 @@ shape. The `entity` and `entity_read` kernel tools keep their current
 `{action, ...fields}` form; their full schemas are available from
 `entities://catalog`.
 
+## Inline entity previews
+
+`entity_preview.show({shortcodes: ["PRD-…", "PUR-…"]})` deliberately renders
+existing records; it is separate from `entity_read.preview`, which previews
+proposed creates and relation changes. The tool accepts 1–20 mixed shortcodes,
+preserves caller order and repeated positions, and shows unavailable identities
+individually. Reads and errors pass through the existing MCP operation runner.
+
+The MCP Apps resource `ui://cubby/entity-preview.html` displays a 32px canonical
+display image (or record glyph), name linked to Cubby, muted shortcode and up to
+three declared preview facts. A separate disclosure expands up to eight facts.
+It reuses the declaration-owned `entityPreviewFieldKeys` roster, effective
+field values, reference labels and server-resolved `displayImages`; it never
+guesses structured summaries or exposes raw reference ids. One and many records
+use the same compact row, with separators between records and no header/footer.
+The resource uses host theme variables, contains no household data, and receives
+authenticated snapshots through tool results. It makes no direct API requests,
+writes or automatic refreshes. Image loading is restricted to the configured
+R2 public origin. Text/structured results retain facts and links for hosts that
+do not render MCP Apps.
+
+Hosts must support both Cubby's current MCP transport revision and MCP Apps.
+Publishing the resource does not establish ChatGPT, Claude or Dot acceptance;
+verify each signed-in host before claiming support. Older MCP handshakes remain
+rejected under the existing transport policy.
+
 ## Runs and Burn-down
 
 Run-delegated mutations execute permitted writes without a separate approval.

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: var(--font-sans, system-ui, sans-serif);
+        font-size: 13px;
+        color: var(--color-text-primary, light-dark(#333, #eee));
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      #records {
+        display: grid;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr) 28px;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 0;
+      }
+      .row + .row {
+        border-top: 1px solid
+          var(--color-border-primary, light-dark(#ebebeb, #333));
+      }
+      .image {
+        width: 32px;
+        height: 32px;
+        border-radius: 4px;
+        object-fit: cover;
+        background: var(
+          --color-background-secondary,
+          light-dark(#f5f5f5, #222)
+        );
+      }
+      .fallback {
+        display: grid;
+        place-items: center;
+        color: var(--color-text-secondary, #888);
+      }
+      .identity {
+        display: flex;
+        gap: 8px;
+        align-items: baseline;
+        min-width: 0;
+        line-height: 16px;
+      }
+      .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+        color: inherit;
+        text-decoration: none;
+      }
+      a.name:hover {
+        text-decoration: underline;
+      }
+      code {
+        font: 10px var(--font-mono, monospace);
+        color: var(--color-text-secondary, #888);
+        flex-shrink: 0;
+      }
+      .facts {
+        margin-top: 2px;
+        color: var(--color-text-secondary, #888);
+        font-size: 12px;
+        line-height: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      button {
+        width: 28px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      button:hover {
+        background: var(
+          --color-background-secondary,
+          light-dark(#f5f5f5, #222)
+        );
+      }
+      :focus-visible {
+        outline: 2px solid var(--color-ring-primary, #0077e6);
+        outline-offset: 2px;
+      }
+      button[aria-expanded="true"] svg {
+        transform: rotate(180deg);
+      }
+      dl {
+        grid-column: 2 / -1;
+        display: grid;
+        grid-template-columns: minmax(80px, 1fr) 2fr;
+        gap: 6px 12px;
+        margin: 4px 0;
+        font-size: 12px;
+      }
+      dt {
+        color: var(--color-text-secondary, #888);
+      }
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+        white-space: pre-wrap;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      #message {
+        margin: 8px 0;
+        color: var(--color-text-secondary, #888);
+      }
+    </style>
+  </head>
+  <body>
+    <p id="message" role="status">Loading records…</p>
+    <div id="records" aria-label="Cubby records"></div>
+    <script>
+      const records = document.getElementById("records");
+      const message = document.getElementById("message");
+      let requestId = 1;
+      const pendingLinks = new Set();
+      const send = (data) =>
+        window.parent.postMessage({ jsonrpc: "2.0", ...data }, "*");
+      const node = (tag, className, text) => {
+        const element = document.createElement(tag);
+        element.className = className;
+        if (text !== undefined) element.textContent = text;
+        return element;
+      };
+      const safeUrl = (value) => {
+        try {
+          const url = new URL(value);
+          return url.protocol === "https:" || url.protocol === "http:"
+            ? url.href
+            : null;
+        } catch {
+          return null;
+        }
+      };
+      const icon =
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M4 7h16v13H4zM3 4h18v3H3zm6 7h6"/></svg>';
+      const status = (text) => {
+        message.hidden = false;
+        message.textContent = text;
+      };
+      function render(result) {
+        records.replaceChildren();
+        if (result?.isError) {
+          status("Preview unavailable. See the tool response for details.");
+          return;
+        }
+        const items = result?.structuredContent?.items;
+        if (!Array.isArray(items)) {
+          status("Preview unavailable: invalid response.");
+          return;
+        }
+        message.hidden = items.length > 0;
+        if (!items.length) status("No records to show.");
+        for (const item of items) {
+          if (!item || typeof item.shortcode !== "string") continue;
+          const row = node("article", "row");
+          const fallback = node("span", "image fallback");
+          fallback.innerHTML = icon;
+          const imageUrl = safeUrl(item.imageUrl);
+          if (item.status === "available" && imageUrl) {
+            const image = node("img", "image");
+            image.alt = "";
+            image.src = imageUrl;
+            image.addEventListener("error", () => image.replaceWith(fallback), {
+              once: true,
+            });
+            row.append(image);
+          } else row.append(fallback);
+          const body = node("div", "body");
+          const identity = node("div", "identity");
+          const href = item.status === "available" ? safeUrl(item.href) : null;
+          const name = node(
+            href ? "a" : "span",
+            "name",
+            item.status === "available" ? item.name : "Record unavailable",
+          );
+          name.title = name.textContent;
+          if (href) {
+            name.href = href;
+            name.target = "_blank";
+            name.rel = "noopener noreferrer";
+            name.addEventListener("click", (event) => {
+              event.preventDefault();
+              const id = ++requestId;
+              pendingLinks.add(id);
+              send({ id, method: "ui/open-link", params: { url: href } });
+            });
+          }
+          identity.append(name, node("code", "", item.shortcode));
+          body.append(identity);
+          const facts = Array.isArray(item.facts)
+            ? item.facts.filter(
+                (fact) =>
+                  typeof fact?.label === "string" &&
+                  typeof fact?.value === "string",
+              )
+            : [];
+          if (facts.length) {
+            const text = facts
+              .slice(0, 3)
+              .map((fact) => fact.label + ": " + fact.value)
+              .join(" · ");
+            const line = node("div", "facts", text);
+            line.title = text;
+            body.append(line);
+          }
+          row.append(body);
+          if (facts.length) {
+            const details = node("dl", "");
+            details.hidden = true;
+            details.id = "facts-" + records.childElementCount;
+            for (const fact of facts)
+              details.append(
+                node("dt", "", fact.label),
+                node("dd", "", fact.value),
+              );
+            const toggle = node("button", "");
+            toggle.type = "button";
+            toggle.setAttribute("aria-label", "Details for " + item.name);
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.setAttribute("aria-controls", details.id);
+            toggle.innerHTML =
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+            toggle.addEventListener("click", () => {
+              details.hidden = !details.hidden;
+              toggle.setAttribute("aria-expanded", String(!details.hidden));
+            });
+            row.append(toggle, details);
+          }
+          records.append(row);
+        }
+      }
+      function applyContext(context) {
+        if (context?.theme === "dark" || context?.theme === "light")
+          document.documentElement.style.colorScheme = context.theme;
+        for (const [key, value] of Object.entries(
+          context?.styles?.variables ?? {},
+        )) {
+          if (key.startsWith("--") && typeof value === "string")
+            document.documentElement.style.setProperty(key, value);
+        }
+      }
+      const observer = new ResizeObserver(() =>
+        send({
+          method: "ui/notifications/size-changed",
+          params: {
+            width: document.documentElement.clientWidth,
+            height: document.body.scrollHeight,
+          },
+        }),
+      );
+      window.addEventListener("message", (event) => {
+        if (event.source !== window.parent || event.data?.jsonrpc !== "2.0")
+          return;
+        const data = event.data;
+        if (data.id === 1) {
+          if (data.error) {
+            status("Preview could not connect to this host.");
+            return;
+          }
+          applyContext(data.result?.hostContext);
+          send({ method: "ui/notifications/initialized", params: {} });
+          observer.observe(document.body);
+        }
+        if (
+          pendingLinks.delete(data.id) &&
+          (data.error || data.result?.isError)
+        )
+          status("Could not open Cubby. Use the link in the tool response.");
+        if (data.method === "ui/notifications/tool-result") render(data.params);
+        if (data.method === "ui/notifications/host-context-changed")
+          applyContext(data.params);
+        if (data.method === "ui/notifications/tool-cancelled") {
+          records.replaceChildren();
+          status("Preview cancelled.");
+        }
+        if (data.method === "ui/resource-teardown") {
+          observer.disconnect();
+          send({ id: data.id, result: {} });
+        }
+      });
+      send({
+        id: 1,
+        method: "ui/initialize",
+        params: {
+          protocolVersion: "2026-01-26",
+          appInfo: { name: "Cubby entity preview", version: "1.0.0" },
+          appCapabilities: {},
+        },
+      });
+    </script>
+  </body>
+</html>

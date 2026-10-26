@@ -617,6 +617,7 @@ function compileAction(
 }
 
 type CompiledTool = {
+  uiResourceUri?: string;
   name: string;
   declaration: string;
   description: string;
@@ -782,8 +783,23 @@ function compileTools(
       ...new Set([...actions.values()].map((action) => action.output)),
     ];
     const declaration = descriptions[name]?.description ?? name;
+    const uiResources = [
+      ...new Set(
+        Object.values(tool.actions).flatMap(({ spec }) =>
+          spec.uiResourceUri ? [spec.uiResourceUri] : [],
+        ),
+      ),
+    ];
+    if (
+      uiResources.length > 1 ||
+      (uiResources.length && Object.keys(tool.actions).length !== 1)
+    )
+      throw new Error(
+        `MCP render tool ${name} must own one action and one UI resource`,
+      );
     return {
       name,
+      uiResourceUri: uiResources[0],
       declaration,
       ...toolSchema(declaration, withJson, true, compact),
       annotations: annotationsFor(tool),
@@ -1047,6 +1063,9 @@ function registerCompiledTool(
       inputSchema: registeredInput,
       outputSchema: sdkOutputSchema(tool.output),
       annotations: tool.annotations,
+      ...(tool.uiResourceUri
+        ? { _meta: { ui: { resourceUri: tool.uiResourceUri } } }
+        : {}),
     },
     // SAFETY: the SDK's conditional ToolCallback type does not reduce for a
     // loose object. This callback accepts that argument bag, parses each
