@@ -92,7 +92,7 @@ graph, path inspector, and connection review UI; do not rebuild those in SwiftUI
 Entity details retain native fields and navigation, with a scoped full-screen
 Connections entry. iPhone/iPad use a full-screen cover; Mac uses a resizable
 workspace window. The global graph route hosts the same React workspace directly.
-Run overview, actions, photo review, and record routing remain native.
+Run overview, actions, photo progress, and record routing remain native.
 The browser-session POST is the explicit exception to generated entity routes;
 never send the bearer to WebKit or ambient cookies to bootstrap. Use a fresh
 nonpersistent store, exact-origin main-frame checks, and captured credential

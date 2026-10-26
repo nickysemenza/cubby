@@ -99,13 +99,7 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     method: "renewCompanionImageProcessing",
     doc: null,
   },
-  "photoImport.candidates": { method: "photoProductCandidates", doc: null },
-  "photoImport.chooseExisting": {
-    method: "choosePhotoGroupProduct",
-    doc: null,
-  },
   "photoImport.commit": { method: "commitPhotoImport", doc: null },
-  "photoImport.discardGroup": { method: "discardPhotoGroup", doc: null },
   "photoImport.admitBatch": { method: "admitPhotoImportBatch", doc: null },
   "photoImport.sealBatch": { method: "sealPhotoImportBatch", doc: null },
   "photoImport.registerLiveActivity": {

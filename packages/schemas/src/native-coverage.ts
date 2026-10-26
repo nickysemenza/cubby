@@ -351,7 +351,6 @@ export const nativeCoverage = {
     ...implemented([
       "meal.nutrition",
       "run.import-controls",
-      "run.photo-batch",
       "purchase.receiving",
       "product.ownership",
       "product.nutrition",
@@ -435,6 +434,12 @@ export const nativeCoverage = {
     "run.import-agent-stopped": handoff(
       { section: "import-agent-stopped", label: "Open agent history on web" },
       "The agent conversation streams from the import-run agent route, which native has no client for. Review the agent's history on web.",
+    ),
+    // The Run console keeps a photo Run's upload, processing, recovery and attention; deciding
+    // its proposed groups (candidates, Product edits, ownership, approve and discard) is web's.
+    "run.photo-batch": handoff(
+      { section: "photo-batch", label: "Review photo groups on web" },
+      "Comparing candidates, editing proposed Products and ownership, and approving or discarding photo groups are reviewed on web.",
     ),
     // Reconciliation is web's: attaching expenses and products, splitting, and the totals they
     // change are reviewed beside the line evidence web draws.

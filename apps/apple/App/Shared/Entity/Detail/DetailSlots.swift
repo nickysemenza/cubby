@@ -116,9 +116,6 @@ enum DetailSlotRegistry {
                 RunPausedHandoff.pausedStatuses.contains(row.raw["status"]?.stringValue ?? "")
             else { return nil }
             return AnyView(RunPausedHandoff(runID: row.id))
-        case .runPhotoBatch:
-            guard row.raw["purpose"]?.stringValue == "photo_inventory" else { return nil }
-            return AnyView(RunPhotoBatchSlot(runID: row.id))
         }
     }
 
@@ -192,6 +189,9 @@ enum DetailSlotRegistry {
             else { return nil }
             let live = SharedConstants.activeRunStatuses.contains(row.raw["status"]?.stringValue ?? "")
             return live == (slot == "run.import-agent-live") ? handoff : nil
+        // Photo Runs only; the Run console keeps their processing and recovery native.
+        case "run.photo-batch":
+            return row.raw["purpose"]?.stringValue == "photo_inventory" ? handoff : nil
         default:
             return handoff
         }

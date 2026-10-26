@@ -149,11 +149,6 @@ public actor CubbyClient {
         return try await descriptor.bulkUpdate(.object(data), ids: ids, client: self)
     }
 
-    /// A cleared Brand is explicit null; omission would preserve the draft's previous reference.
-    public func updatePhotoGroupDraft(_ body: JSONValue) async throws -> ReviewPhotoGroupsOutput {
-        try await request("photoImport.updateDraft", body: body)
-    }
-
     /// `entity.mutate` delete. Destructive: only `HeroActionRunner` calls it, and only after
     /// the person confirmed behind the connection-impact preview.
     public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
@@ -402,30 +397,6 @@ public actor CubbyClient {
             throw HashIndex.Failure.unsupportedRevision(revision)
         }
         return result
-    }
-
-    public func approvePhotoGroups(
-        runID: RunShortcode, groups: [PhotoGroupProposal]
-    ) async throws -> ReviewPhotoGroupsOutput {
-        for group in groups {
-            if let unsupported = PhotoReviewPolicy.unsupportedAction(group: group) { throw unsupported }
-        }
-        let revisions = try groups.map { group in
-            (
-                groupKey: group.groupKey,
-                updatedAt: try LenientISO8601DateTranscoder().decode(group.updatedAt)
-            )
-        }
-        return try await native_photoImport_approveGroups(
-            body:
-                .init(
-                    runId: runID,
-                    groupKeys: groups.map(\.groupKey),
-                    expectedRevisions: revisions.map {
-                        .init(groupKey: $0.groupKey, updatedAt: $0.updatedAt)
-                    }
-                )
-        )
     }
 
     public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> SetPerceptualHashesOutput {

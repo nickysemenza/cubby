@@ -95,6 +95,7 @@ describe("native presentation coverage", () => {
       "detailSlot purchase.reconciliation",
       "detailSlot run.import-agent-live",
       "detailSlot run.import-agent-stopped",
+      "detailSlot run.photo-batch",
       "detailSlot vendor.spending-classification",
       "sectionAction linkExpenses",
       "sectionAction linkProducts",

@@ -2,37 +2,30 @@ import CubbyKit
 import SwiftUI
 
 /// A Run's detail, for every Run purpose: the manifest-declared hero and `run` detail slots
-/// (progress, controls, approvals, findings, targets, evidence, transcript, log, photo review,
-/// usage, changes) drawn through `DetailSlotRegistry` and `ReportDetailSlot`, the path every
-/// detail screen uses. A Run has no native generic `get` read, so the slot host's row is built
-/// from the Run's work snapshot (read once, for its purpose) and the status its batched report
-/// read returns on every poll — the one poll that keeps the screen live.
+/// (progress, controls, approvals, findings, targets, evidence, transcript, log, usage, changes)
+/// drawn through `DetailSlotRegistry` and `ReportDetailSlot`, the path every detail screen uses.
+/// A Run has no native generic `get` read, so the slot host's row is built from the Run's work
+/// snapshot (read once, for its purpose) and the status its batched report read returns on every
+/// poll — the one poll that keeps the screen live.
 ///
-/// Specialist reviews stay owned flows inside it: a photo Run's review is its `photo-batch`
-/// slot (drawn from this screen's `RunReviewSession`, whose approvals stay exactly the frozen,
-/// selected ready groups), and a purchase validation's corrections review follows the hero.
+/// A photo Run adds its processing section (upload, descriptions, recovery, starting grouping);
+/// reviewing its proposed groups is web's, so its `photo-batch` slot is a handoff row. A purchase
+/// validation's corrections review follows the hero.
 struct RunConsoleView: View {
-    enum InitialSection: String {
-        case photoReview = "photo-review"
-    }
-
     let runID: String
-    private let initialSection: InitialSection?
     private let isPreview: Bool
 
     @Environment(AppModel.self) private var appModel
-    @State private var session: RunReviewSession
-    @State private var photoReview = PhotoReviewWorkspace()
+    @State private var session: RunConsoleSession
     @State private var reportBatches = ReportBatchStore()
     @State private var batch: ReportBatchModel?
 
-    init(runID: String, initialSection: InitialSection? = nil, previewSession: RunReviewSession? = nil) {
+    init(runID: String, previewSession: RunConsoleSession? = nil) {
         self.runID = runID
-        self.initialSection = initialSection
         isPreview = previewSession != nil
         _session = State(
             initialValue: previewSession
-                ?? RunReviewSession(reportDiagnostic: { error, context in
+                ?? RunConsoleSession(reportDiagnostic: { error, context in
                     Diagnostics.report(error, context: context)
                 }))  // state-init-ok: fixture
     }
@@ -56,7 +49,8 @@ struct RunConsoleView: View {
 
     /// The declared slots. A full-width slot is a specialist review — the Run's next action — so
     /// it leads the reports rather than sitting below a long progress log (DESIGN.md: nothing
-    /// pushes the next action off the useful first screen).
+    /// pushes the next action off the useful first screen). A handed-off one keeps that lead as
+    /// its web row.
     private var sections: [DetailSection] {
         let slots = descriptor.presentation.detailSections.filter {
             if case .slot = $0.kind { return true }
@@ -83,10 +77,15 @@ struct RunConsoleView: View {
                 if !descriptor.presentation.summarySlots.isEmpty {
                     Section { DetailSummaryGrid(descriptor: descriptor, row: row) }
                 }
+                if snapshot.purpose == .photoInventory {
+                    RunPhotoProgressSection(runID: runID, session: session)
+                }
                 ForEach(sections) { section in
                     if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
-                        // A full-width slot draws its own sections.
-                        if section.placement == .full {
+                        // A full-width native slot draws its own sections; a handoff is one row.
+                        if section.placement == .full,
+                            NativePresentationCoverage.detailSlot(section.id) == .implemented
+                        {
                             Section {
                             } header: {
                                 Text(section.title ?? section.id)
@@ -111,7 +110,7 @@ struct RunConsoleView: View {
             DetailContentsNavigation(
                 entries: sections.map {
                     .init(id: $0.id, title: $0.title ?? $0.id, group: "Run")
-                }, initialSectionID: session.review == nil ? nil : initialSection?.rawValue)
+                })
         )
         .fieldGuideDetailDensity()
         .fieldGuideScreen()
@@ -122,24 +121,20 @@ struct RunConsoleView: View {
             .navigationBarTitleDisplayMode(.inline)
         #endif
         .environment(\.reportBatchStore, reportBatches)
-        .environment(session)
-        .environment(photoReview)
-        // Popovers anchored to the list, so each presents once for the whole review.
-        .photoReviewConfirmations(photoReview, session: session, runID: runID)
         .refreshControl {
             await refresh()
             await batch?.refresh()
         }
         .task(id: runID) { await follow() }
-        // Each poll of the batch also re-reads the photo review beside the reports: photo
-        // processing and the agent's proposals change while the Run is live.
+        // Each poll of the batch also re-reads photo processing beside the reports: descriptions
+        // and the lifecycle change while the Run is live.
         .onChange(of: batch?.revision) { _, revision in
             guard (revision ?? 0) > 1 else { return }
             Task { await refresh() }
         }
         // Ordinary session refreshes leave actionRevision unchanged, so the batch's photo
-        // refresh cannot feed back into another batch refresh. A stopped Run still redraws
-        // after approval; an action that makes it live again also resumes polling.
+        // refresh cannot feed back into another batch refresh. Starting grouping makes the Run
+        // live again, so it also resumes polling.
         .task(id: session.actionRevision) {
             guard session.actionRevision > 0, session.snapshot?.purpose == .photoInventory,
                 let batch
@@ -156,7 +151,7 @@ struct RunConsoleView: View {
     }
 
     /// Loads the Run, then holds its batched report poll for as long as the screen shows, so the
-    /// status and photo review stay live even when every report row has scrolled away.
+    /// status and photo processing stay live even when every report row has scrolled away.
     private func follow() async {
         guard !isPreview else { return }
         await refresh()
@@ -169,31 +164,15 @@ struct RunConsoleView: View {
 
     private func refresh() async {
         await session.refresh(runID: runID, client: appModel.client)
-        await photoReview.autoStartGroupingWhenAnalyzed(
-            session: session, runID: runID, client: appModel.client)
+        await session.autoStartGroupingWhenAnalyzed(runID: runID, client: appModel.client)
     }
 }
 
-/// `run.photo-batch`: a photo Run's review, drawn from the Run screen's photo session. It is list
-/// content (several sections), so the screen places it without a section of its own and carries
-/// the review's confirmations.
-struct RunPhotoBatchSlot: View {
-    let runID: String
-    @Environment(RunReviewSession.self) private var session: RunReviewSession?
-    @Environment(PhotoReviewWorkspace.self) private var workspace: PhotoReviewWorkspace?
-
-    var body: some View {
-        if let session, let workspace {
-            RunPhotoReviewSections(runID: runID, session: session, workspace: workspace)
-        }
-    }
-}
-// The photo Run the Run, photo-review, candidate and draft previews share.
 #if DEBUG
-    enum RunReviewPreviewFixture {
+    enum RunConsolePreviewFixture {
         static let runID = "RUN-4K7M"
 
-        @MainActor static func model() -> RunReviewSession {
+        @MainActor static func model() -> RunConsoleSession {
             let itemID = ImageCode("IMG-2345")
             let labelID = ImageCode("IMG-2346")
             let group = PhotoGroupProposal(
@@ -260,23 +239,23 @@ struct RunPhotoBatchSlot: View {
                 "runId": .string(runID), "purpose": "photo_inventory", "status": "running",
                 "findings": [], "operations": [],
             ])
-            return RunReviewSession(snapshot: run, review: review)
+            return RunConsoleSession(snapshot: run, review: review)
         }
     }
 
     #Preview("Photo run", traits: .modifier(SignedInPreview())) {
         NavigationStack {
             RunConsoleView(
-                runID: RunReviewPreviewFixture.runID,
-                previewSession: RunReviewPreviewFixture.model())
+                runID: RunConsolePreviewFixture.runID,
+                previewSession: RunConsolePreviewFixture.model())
         }
     }
 
     #Preview("Photo run — wide", traits: .modifier(SignedInPreview())) {
         NavigationStack {
             RunConsoleView(
-                runID: RunReviewPreviewFixture.runID,
-                previewSession: RunReviewPreviewFixture.model())
+                runID: RunConsolePreviewFixture.runID,
+                previewSession: RunConsolePreviewFixture.model())
         }
         .frame(width: 1360, height: 900)
     }

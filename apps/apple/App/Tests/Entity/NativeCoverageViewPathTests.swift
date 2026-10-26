@@ -63,6 +63,11 @@ struct NativeCoverageViewPathTests {
                 == "import-agent-stopped")
         let photoRun = run("photo_inventory", live)
         #expect(DetailSlotRegistry.handoff(slot: "run.import-agent-live", row: photoRun) == nil)
+        // Photo-group review is web's, and only a photo Run takes it.
+        #expect(
+            DetailSlotRegistry.handoff(slot: "run.photo-batch", row: photoRun)?.label
+                == "Review photo groups on web")
+        #expect(DetailSlotRegistry.handoff(slot: "run.photo-batch", row: stoppedImport) == nil)
         #expect(
             NativePresentationCoverage.recordHandoffs(EntityCatalog[.run], row: stoppedImport).map(\.label)
                 == ["Open agent history on web"])

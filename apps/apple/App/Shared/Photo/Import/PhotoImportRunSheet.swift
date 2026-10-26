@@ -650,21 +650,13 @@ private struct RunningView: View {
     let onRetryUpload: () -> Void
     let onRetryAnalysis: () -> Void
     @Environment(AppModel.self) private var appModel
-    @State private var review = RunReviewSession()
 
     private func webReviewURL(_ runID: String) -> URL {
         appModel.webHandoff.url(.record(key: .run, id: runID, section: "photo-batch"))
     }
 
-    private var runLinkTitle: String {
-        review.review?.review.proposals.contains { $0.state == .proposed } == true
-            ? "Review item groups" : "View import"
-    }
-
     private func runDestination(_ runID: String) -> RunConsoleView {
-        RunConsoleView(
-            runID: runID,
-            initialSection: .photoReview)
+        RunConsoleView(runID: runID)
     }
 
     var body: some View {
@@ -682,7 +674,7 @@ private struct RunningView: View {
                 Label(reason, systemImage: "hourglass")
             }
             if let runID = session.runID, session.phase != .complete {
-                NavigationLink(runLinkTitle) { runDestination(runID) }
+                NavigationLink("View import") { runDestination(runID) }
             }
             if let runID = session.runID {
                 ShareLink(item: webReviewURL(runID)) {
@@ -736,13 +728,6 @@ private struct RunningView: View {
         }
         .padding(FieldGuideTokens.Space.md)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .task(id: session.runID) {
-            guard let runID = session.runID else { return }
-            while !Task.isCancelled {
-                await review.refresh(runID: runID, client: appModel.client)
-                do { try await Task.sleep(for: .seconds(3)) } catch { return }
-            }
-        }
     }
 
     private var stageTitle: String {
@@ -776,7 +761,7 @@ private struct RunningView: View {
                 NavigationLink {
                     runDestination(runID)
                 } label: {
-                    Label(runLinkTitle, systemImage: "square.stack.3d.up")
+                    Label("View import", systemImage: "square.stack.3d.up")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)

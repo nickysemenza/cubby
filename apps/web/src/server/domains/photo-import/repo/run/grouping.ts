@@ -18,7 +18,7 @@ import { advancePhotoRun } from "./lifecycle";
 /**
  * A coordinator started before descriptions settle sees bare photos and stops
  * for review instead of grouping them. Matches the Apple app's
- * `PhotoReviewPolicy.groupingReadiness`: a description waiting for a capable
+ * `PhotoGroupingReadiness`: a description waiting for a capable
  * device is not settled either.
  */
 const ANALYSIS_IN_FLIGHT = new Set(["pending", "leased", "waiting_for_device"]);
