@@ -7,7 +7,6 @@
 		<string>com.nickysemenza.cubby.photo-matching</string>
 		<string>com.nickysemenza.cubby.library-sync</string>
 		<string>com.nickysemenza.cubby.image-queue</string>
-		<string>com.nickysemenza.cubby.image-queue.continued.*</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>

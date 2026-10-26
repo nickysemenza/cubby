@@ -99,10 +99,11 @@ struct SettingsView: View {
 
             if model.phase == .signedIn {
                 DeviceParticipationSection(showPauseAnalysis: photosReady)
-                ImageWorkConcurrencySection()
             }
 
             NotificationSettingsSection()
+
+            if model.phase == .signedIn { ImageWorkConcurrencySection() }
 
             if model.phase == .signedIn {
                 Section("Utilities") {
@@ -433,7 +434,7 @@ private struct DeviceParticipationSection: View {
     }
 }
 
-/// Settings › Image work: how many image jobs this device runs at once, one pool shared by
+/// Settings › Advanced: how many image jobs this device runs at once, one pool shared by
 /// descriptions and subject lifts. Stored per device; 0 is Automatic. The worker picks up a
 /// change on its next pull.
 struct ImageWorkConcurrencySection: View {
@@ -442,9 +443,8 @@ struct ImageWorkConcurrencySection: View {
 
     var body: some View {
         Section {
-            ProcessImageQueueButton()
             Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
-                LabeledContent("Jobs at once") {
+                LabeledContent("Image jobs at once") {
                     Text(
                         stored == 0
                             ? "Automatic (\(CompanionImageConcurrency.automatic))"
@@ -456,7 +456,7 @@ struct ImageWorkConcurrencySection: View {
             .frame(minHeight: FieldGuideTokens.touchTarget - 12)
             .accessibilityIdentifier("settings.imageWork.jobs")
         } header: {
-            Eyebrow("Image work")
+            Eyebrow("Advanced")
         } footer: {
             Text(
                 "Image descriptions and subject lifts share these slots. This device pulls new work only while a slot is free. Automatic uses the value measured for this kind of device."
@@ -477,7 +477,7 @@ struct ImageWorkConcurrencySection: View {
     }
 }
 
-#Preview("Image work", traits: .modifier(SignedInPreview())) {
+#Preview("Advanced", traits: .modifier(SignedInPreview())) {
     Form { ImageWorkConcurrencySection() }
         .formStyle(.grouped)
 }

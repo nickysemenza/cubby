@@ -10,7 +10,7 @@ struct SectionView: View {
         Group {
             switch section {
             case .today: TodayView()
-            case .activity: ActivityView().imageQueueProcessingToolbar()
+            case .activity: ActivityView()
             case .capture: CaptureView()
             case .photos: PhotosRootView()
             case .browse: BrowseRootView()
@@ -55,7 +55,7 @@ struct RouteDestinationView: View {
     let route: Route
     var body: some View {
         switch route {
-        case .activityList: ActivityView().imageQueueProcessingToolbar()
+        case .activityList: ActivityView()
         case .auditHistory: AuditHistoryView()
         case .photosLibrary: PhotosRootView()
         case .browseCatalog: BrowseRootView()

@@ -429,8 +429,8 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
   only on hello), device attempt starts per minute (reclaims included) and the
   ETA at that pace.
 
-Activity on web and Apple presents the unhealthy-only health notice, device
-backlog banner, compact lane/reason counts, Runs needing attention, then Jobs.
+Web Activity presents the unhealthy-only health notice, device backlog banner,
+compact lane/reason counts, Runs needing attention, then Jobs.
 Navigable counts use the Job entity population, hiding internal work with the
 table; queue health continues to measure internal kinds. Every supplied retry
 restriction intersects, including mixed entity filters, row IDs and Run scope.
@@ -442,8 +442,11 @@ recorded charged usage. Jobs use the generic In progress view, including image
 subject thumbnails, and a chevron expands Explain, that Job's Worker logs and
 Retry now underneath its row. Closed web rows remain 32 px. There is one
 shared table renderer; the separate image-processing roster and hand-written
-queue rows, pickers and pager are removed. Apple keeps its This device status,
-local work, automatic-work toggle and the shared concurrency setting.
+queue rows, pickers and pager are removed. Apple Activity shows the device
+backlog banner, its This device status, local work and automatic-work toggle,
+then ten-row embeds of the Run `in-progress` and `attention` saved views, and
+hands the household queue off to `/work-queue`; the shared concurrency setting
+is in Settings › Advanced.
 The web audit-log changes feed follows the queue.
 
 The `queue.watchdog` Job re-arms every five minutes from the minute cron. It

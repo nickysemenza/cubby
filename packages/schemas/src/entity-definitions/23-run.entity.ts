@@ -390,6 +390,17 @@ export default defineEntity({
           ],
         },
         {
+          id: "in-progress",
+          label: "In progress",
+          description:
+            "Running Runs a member started or reviews; AI refresh and background passes are left out",
+          filters: [
+            { id: "purpose", value: [...ATTENTION_RUN_PURPOSES] },
+            { id: "status", value: ["running"] },
+          ],
+          sort: [{ id: "startedAt", desc: true }],
+        },
+        {
           id: "attention",
           label: "Needs attention",
           description:
