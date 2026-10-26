@@ -33,10 +33,7 @@ import {
   prepareProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  executeAiRefreshPage,
-  productEvaluationPageAdapter,
-} from "~/server/domains/run/service/ai-refresh";
+import { executeProductAiRefreshPage } from "~/server/domains/run/service/ai-refresh";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import { claimJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
@@ -106,7 +103,7 @@ afterEach(() => {
 describe("Product page transport packing", () => {
   const ctx = withTestDb();
   it.each([1, 100])(
-    "packs %i real pair slots through cache/transport and measures the wrapped adapter",
+    "packs %i real pair slots through cache/transport and measures the Product adapter",
     async (slotCount) => {
       const activation = await activateAiRefresh(
         ctx.db,
@@ -188,11 +185,10 @@ describe("Product page transport packing", () => {
         claimAiEvaluationPage(ctx.db, anchor!.id),
       );
       expect(claim.result).toHaveLength(slotCount);
-      const adapter = productEvaluationPageAdapter({
-        productIdentityPorts: { model: "typesafe/jev" },
-      });
       const execution = await countTestDbQueries(() =>
-        executeAiRefreshPage(ctx.db, claim.result, adapter),
+        executeProductAiRefreshPage(ctx.db, claim.result, {
+          productIdentityPorts: { model: "typesafe/jev" },
+        }),
       );
       expect(requests.length).toBeGreaterThan(slotCount === 1 ? 0 : 1);
       expect(requests.length).toBeLessThanOrEqual(slotCount);
@@ -265,7 +261,7 @@ describe("Product page transport packing", () => {
       const output = resolve(process.cwd(), "../../artifacts/page-execution");
       await mkdir(output, { recursive: true });
       await writeFile(
-        resolve(output, `wrapped-product-page-${slotCount}.json`),
+        resolve(output, `integrated-product-page-${slotCount}.json`),
         JSON.stringify(
           {
             slots: slotCount,

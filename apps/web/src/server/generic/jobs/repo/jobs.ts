@@ -18,6 +18,7 @@ import {
   lte,
   not,
   notInArray,
+  ne,
   or,
   type SQL,
   sql,
@@ -251,21 +252,12 @@ export async function enqueueJobs(
  */
 export const unobservedJobInvalidation = (
   options: { restartsPass?: true } = {},
-) => {
-  const pending = related(
-    jobInvalidationCapture,
-    (c) => sql`${c.key} = ${outer(job.key)} AND NOT ${c.observed}`,
-  );
-  return options.restartsPass
-    ? pending
-        .join(
-          jobInvalidation,
-          (policy, c) =>
-            sql`${policy.key} = ${c.key} AND ${policy.restartsPass}`,
-        )
-        .exists()
-    : pending.exists();
-};
+) =>
+  // OFFSET keeps this finite key set out of a correlated nested-loop plan.
+  // Bulk claims must not rescan every capture for every unrelated Job.
+  sql<boolean>`${job.key} IN (SELECT DISTINCT capture.key FROM "JobInvalidationCapture" capture
+    ${options.restartsPass ? sql`JOIN "JobInvalidation" policy ON policy.key=capture.key AND policy."restartsPass"` : sql``}
+    WHERE NOT capture.observed OFFSET 0)`;
 
 /**
  * `unobservedJobInvalidation` as key membership, for predicates that scan
@@ -457,6 +449,10 @@ export const jobRunOwned = () => {
       and(
         eq(requester.status, runStatus.enum.running),
         inArray(requester.purpose, VISIBLE_RUN_PURPOSES),
+        or(
+          ne(requester.purpose, "ai_refresh"),
+          ne(requester.trigger, "scheduled"),
+        ),
         sql`${requester.retiredAt} IS NULL`,
       )!,
     )
@@ -1207,6 +1203,28 @@ export async function renewJobPage(
     )
     .returning({ id: job.id });
   return rows.map((row) => row.id);
+}
+
+/** Return unadmitted claims without spending attempts; paused authority stays stopped. */
+export async function releaseJobPage(
+  db: Database,
+  claims: readonly JobClaim[],
+  state: "queued" | "paused" = "queued",
+) {
+  if (!claims.length) return;
+  await getDb(db)
+    .update(job)
+    .set({
+      state,
+      attempts: sql`greatest(0, ${job.attempts}-1)`,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      availableAt: new Date(Date.now() + 1000),
+      waitReason: null,
+      waitUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(and(jobClaimSet(claims), eq(job.state, "running")));
 }
 
 /** Lock and validate a set explicitly, independent of AsyncLocal target context. */

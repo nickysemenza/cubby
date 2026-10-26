@@ -30,6 +30,7 @@ import {
   job,
   run,
 } from "~/server/db/schema";
+import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAiRefreshPage } from "~/server/domains/run/service/ai-refresh";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
@@ -46,6 +47,7 @@ import {
   defineJobHandler,
 } from "~/server/generic/jobs/service/jobs";
 import { cancelRunAiWork } from "~/server/workflows/runs/control";
+import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
 
 const receipt = (target: EvaluationPageTarget) => ({
   evaluationId: target.evaluation.id,
@@ -244,7 +246,10 @@ describe("finite AI evaluation pages", () => {
         ?.receipt,
     ).toHaveProperty("retryEvaluationId");
     expect(
-      requests.filter((entry) => entry.receipt && "synthetic" in entry.receipt),
+      requests.filter(
+        (entry) =>
+          z.object({ synthetic: z.boolean() }).safeParse(entry.receipt).success,
+      ),
     ).toHaveLength(2);
     const coordinator = (
       await getDb(ctx.db)
@@ -266,7 +271,6 @@ describe("finite AI evaluation pages", () => {
       purpose: "suggestion_sweep",
       trigger: "scheduled",
       status: "running",
-      input: {},
     });
     await getDb(ctx.db).insert(aiEvaluationRequest).values({
       runId: otherRun,
@@ -485,6 +489,141 @@ describe("finite AI evaluation pages", () => {
       expect(next.id === seeded.rows[0]!.id).toBe(
         executionKind === "ai_refresh",
       );
+    },
+  );
+  it("claims while the coordinator holds its Run progress lock", async () => {
+    const seeded = await seed(4);
+    const held = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const progress = withTransactionDatabase(ctx.db, async (tx) => {
+      await getDb(tx)
+        .select()
+        .from(run)
+        .where(eq(run.id, seeded.runId))
+        .for("no key update");
+      held.resolve();
+      await release.promise;
+    });
+    await held.promise;
+    let targets;
+    try {
+      targets = await claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id);
+    } finally {
+      release.resolve();
+      await progress;
+    }
+    expect(targets).toHaveLength(4);
+    expect(await finish(targets!)).toHaveLength(4);
+  });
+
+  it("summarizes refresh progress without reading frozen inference payloads", async () => {
+    const seeded = await seed(4);
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "completed" })
+      .where(eq(aiEvaluation.id, seeded.rows[0]!.id));
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "failed", error: "Synthetic evaluation failure" })
+      .where(eq(aiEvaluation.id, seeded.rows[1]!.id));
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({
+        state: "obsolete",
+        receipt: { retryEvaluationId: crypto.randomUUID() },
+      })
+      .where(eq(aiEvaluation.id, seeded.rows[2]!.id));
+    const summary = await countTestDbQueries(() =>
+      readAiRefreshWorkSummary(ctx.db, seeded.runId, 2),
+    );
+    expect(summary.result.progress).toMatchObject({
+      attempt: 2,
+      selected: 3,
+      completed: 1,
+      failed: 1,
+      queued: 1,
+      obsolete: 0,
+      errors: ["Synthetic evaluation failure"],
+    });
+    expect(summary.result.pending).toEqual([{ id: seeded.rows[3]!.id }]);
+    expect(summary.result.failureText).toBe("Synthetic evaluation failure");
+    expect(summary.queryCount).toBe(4);
+    expect(
+      summary.statements.some((statement) => statement.includes('"snapshot"')),
+    ).toBe(false);
+  });
+  it("retires queued obsolete generations without inference and preserves paused authority", async () => {
+    const seeded = await seed(2);
+    const activation = await activateAiRefresh(
+      ctx.db,
+      "synthetic-generation-before",
+      { enabled: true },
+    );
+    const manifest = structuredClone(activation.manifest);
+    manifest["product-identity"]!.policyFingerprint += ":changed";
+    await activateAiRefresh(ctx.db, "synthetic-generation-changed", {
+      enabled: true,
+      manifest,
+    });
+    await activateAiRefresh(ctx.db, "synthetic-generation-current", {
+      enabled: true,
+    });
+    expect(await claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id)).toEqual([]);
+    expect(
+      (await getDb(ctx.db).select().from(aiEvaluation)).every(
+        (entry) => entry.state === "obsolete",
+      ),
+    ).toBe(true);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.kind, "ai.evaluation"))
+      ).every((entry) => entry.state === "completed"),
+    ).toBe(true);
+    const paused = await seed(1, "synthetic-paused-feature");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused" })
+      .where(eq(run.id, paused.runId));
+    expect(await claimAiEvaluationPage(ctx.db, paused.jobs[0]!.id)).toEqual([]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.id, paused.jobs[0]!.id))
+      )[0],
+    ).toMatchObject({ state: "paused", attempts: 0, leaseToken: null });
+  });
+
+  it.each(["input", "key"] as const)(
+    "fails a malformed durable Job %s without stranding a fresh sibling",
+    async (field) => {
+      const seeded = await seed(2);
+      await getDb(ctx.db)
+        .update(job)
+        .set(
+          field === "input"
+            ? { input: {} }
+            : { key: "synthetic-invalid-evaluation-key" },
+        )
+        .where(eq(job.id, seeded.jobs[0]!.id));
+      expect(
+        await aiEvaluationJobHandler.advancePage(ctx.db, seeded.jobs[0]!.id),
+      ).toBe("failed");
+      const targets = await claimAiEvaluationPage(ctx.db, seeded.jobs[1]!.id);
+      expect(targets).toHaveLength(1);
+      expect(await finish(targets)).toHaveLength(1);
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(job)
+            .where(eq(job.id, seeded.jobs[0]!.id))
+        )[0]?.state,
+      ).toBe("retry_wait");
     },
   );
 });

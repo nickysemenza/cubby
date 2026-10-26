@@ -47,15 +47,19 @@ import {
   evaluateProductIdentity,
   prepareProductIdentityCatalog,
   evaluatePreparedProductIdentityPair,
-  evaluatePreparedProductIdentityPairs,
+  prepareProductIdentityPage,
+  publishProductIdentityChunk,
+  type PreparedProductIdentityPageOutcome,
 } from "~/server/ai/product-identity";
 import {
   claimAiEvaluation,
   publishAiEvaluation,
   publishAiEvaluationPage,
+  publishAiEvaluationContinuation,
   failAiEvaluationPage,
   type EvaluationPageFailure,
 } from "~/server/ai/repo/ai-evaluation";
+import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import {
   readAiRefreshActivation,
   readAiDiscoveryCursor,
@@ -69,6 +73,7 @@ import type {
 } from "~/server/ai/repo/evaluation-page";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshot,
@@ -76,11 +81,10 @@ import {
   prepareProductIdentityPair,
   prepareProductIdentityPairRequests,
   preparedProductIdentityPair,
+  productIdentityPairKey,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
-import {
-  prepareProductPairPublication,
-  prepareProductPairPublications,
-} from "~/server/domains/product/repo/match/product-match-candidate";
+import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
+import { prepareProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -1234,18 +1238,21 @@ export async function executeAiRefreshTarget(
   return true;
 }
 
-type WrappedProductPreparation =
-  | { kind: "pair"; pair: z.infer<typeof preparedProductIdentityPair> }
+type ProductPagePreparation = PreparedProductIdentityPageOutcome & {
+  enrollment: { rulePairs: number; requestedPairs: number } | null;
+};
+
+type ProductPageOutcome =
+  | {
+      kind: "pair";
+      publication: PreparedProductPairPublication;
+      receipt: z.infer<ReturnType<typeof z.json>>;
+    }
   | {
       kind: "catalog";
-      productId: import("@cubby/schemas/identifiers").ProductId;
-      sourceFence: string;
-      catalog: Awaited<ReturnType<typeof prepareProductIdentityCatalog>>;
+      preparation: PreparedProductIdentityPageOutcome;
+      receipt: z.infer<ReturnType<typeof z.json>>;
     };
-type WrappedProductOutcome = {
-  publish: (tx: Database) => Promise<void>;
-  receipt: z.infer<ReturnType<typeof z.json>>;
-};
 
 function inEvaluationContext<T>(
   db: Database,
@@ -1264,102 +1271,153 @@ function inEvaluationContext<T>(
   );
 }
 
-/** Transitional Product adapter: Lane B replaces its per-target reads/writes with set loaders. */
-export function productEvaluationPageAdapter(
+/** Product preparation and publication stay set-based behind the stable page contract. */
+function productEvaluationPageAdapter(
   ports: AiRefreshPorts = {},
-): EvaluationPageAdapter<WrappedProductPreparation, WrappedProductOutcome> {
+): EvaluationPageAdapter<ProductPagePreparation, ProductPageOutcome> {
   return {
     async prepare(db, targets) {
-      // Transitional reads use four root-handle continuations; Lane B loads the set once.
-      const results = await settleDecisionWorkItems(targets, (target) =>
-        inEvaluationContext(db, target, async () => {
-          const item = target.evaluation;
-          if (target.target.kind === "product_pair") {
-            const pair = preparedProductIdentityPair.parse(item.snapshot);
-            const current = await prepareProductIdentityPair(
-              db,
-              pair.productIds,
-            );
-            if (
-              !current ||
-              current.fingerprint !== item.provenance.inputFingerprint
-            )
-              throw new Error("Product pair evidence changed during inference");
-            return {
-              kind: "ready" as const,
-              target,
-              evidenceDigest: pair.fingerprint,
-              prepared: { kind: "pair" as const, pair },
-            };
-          }
-          if (target.target.kind !== "product")
+      const byId = new Map(
+        targets.map((entry) => [entry.evaluation.id, entry]),
+      );
+      const prepared = await prepareProductIdentityPage(
+        db,
+        targets.map((entry) => {
+          const target = entry.target;
+          if (target.kind !== "product" && target.kind !== "product_pair")
             throw new Error("Unsupported Product page target");
-          const productId = parseEntityId("product", target.target.recordId);
-          const source = await productIdentitySnapshot(db, productId);
-          if (
-            !source ||
-            source.fingerprint !== item.provenance.inputFingerprint
-          )
-            throw new Error("AI evaluation target changed during inference");
-          const catalog = await prepareProductIdentityCatalog(db, productId);
-          const sourceFence = await productIdentityEvidenceFence(db, [
-            productId,
-          ]);
-          const latest = await productIdentitySnapshot(db, productId);
-          if (
-            !latest ||
-            latest.fingerprint !== source.fingerprint ||
-            (await productIdentityEvidenceFence(db, [productId])) !==
-              sourceFence
-          )
-            throw new Error(
-              "Product identity evidence changed during inference",
-            );
-          return {
-            kind: "ready" as const,
-            target,
-            evidenceDigest: source.fingerprint,
-            prepared: {
-              kind: "catalog" as const,
-              productId,
-              sourceFence,
-              catalog,
-            },
-          };
+          return target.kind === "product"
+            ? {
+                key: entry.evaluation.id,
+                kind: target.kind,
+                recordId: parseEntityId("product", target.recordId),
+              }
+            : {
+                key: entry.evaluation.id,
+                kind: target.kind,
+                recordId: parseEntityId("product", target.recordId),
+                otherId: parseEntityId("product", target.otherId),
+              };
         }),
       );
-      return results.map((result, index) =>
-        result.status === "fulfilled"
-          ? result.value
-          : {
-              kind: "failed" as const,
-              target: targets[index]!,
-              error:
-                result.reason instanceof Error
-                  ? result.reason
-                  : new Error(String(result.reason)),
-            },
+      // Lane B returns source snapshots on candidate pairs. Sources without
+      // candidates need one additional set read to preserve their queued input hash.
+      const empty = prepared.filter(
+        (entry) => entry.productIds.length === 1 && !entry.pairs.length,
+      );
+      const emptySnapshots = await productIdentitySnapshots(
+        db,
+        empty.map((entry) => entry.productIds[0]),
+      );
+      const emptyFences = empty.length
+        ? await productIdentityEvidenceFences(
+            db,
+            empty.map((entry) => ({
+              key: entry.key,
+              productIds: entry.productIds,
+            })),
+          )
+        : new Map<string, string>();
+      return Promise.all(
+        prepared.map(
+          async (
+            entry,
+          ): Promise<EvaluationPagePreparation<ProductPagePreparation>> => {
+            const target = byId.get(entry.key);
+            if (!target)
+              throw new Error(
+                "Product preparation returned an unexpected target",
+              );
+            try {
+              if (
+                !entry.valid ||
+                (emptyFences.has(entry.key) &&
+                  emptyFences.get(entry.key) !== entry.fence)
+              )
+                throw new Error(
+                  "Product identity evidence changed during inference",
+                );
+              if (target.target.kind === "product_pair") {
+                const current = entry.pairs[0];
+                const frozen = preparedProductIdentityPair.parse(
+                  target.evaluation.snapshot,
+                );
+                if (
+                  !current ||
+                  current.fingerprint !==
+                    target.evaluation.provenance.inputFingerprint ||
+                  frozen.fingerprint !== current.fingerprint
+                )
+                  throw new Error(
+                    "Product pair evidence changed during inference",
+                  );
+                // Persisted JSONB ordering is part of the existing standalone question.
+                entry = {
+                  ...entry,
+                  pairs: [
+                    { ...current, first: frozen.first, second: frozen.second },
+                  ],
+                };
+              } else {
+                const pair = entry.pairs[0];
+                const source = pair
+                  ? pair.productIds[0] === target.target.recordId
+                    ? pair.first
+                    : pair.second
+                  : emptySnapshots.get(entry.productIds[0])?.snapshot;
+                const fingerprint =
+                  source === undefined
+                    ? null
+                    : await sha256Hex(canonicalJson(source));
+                if (
+                  fingerprint !== target.evaluation.provenance.inputFingerprint
+                )
+                  throw new Error(
+                    "AI evaluation target changed during inference",
+                  );
+              }
+              return {
+                kind: "ready",
+                target,
+                evidenceDigest: entry.fence,
+                prepared: { ...entry, enrollment: null },
+              };
+            } catch (error) {
+              return {
+                kind: "failed",
+                target,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              };
+            }
+          },
+        ),
       );
     },
     async evaluate(db, entry, usage) {
       const item = entry.target.evaluation;
-      if (entry.prepared.kind === "pair") {
-        const pair = entry.prepared.pair;
-        const result = await evaluatePreparedProductIdentityPair(
-          db,
-          pair,
-          item.runId,
-          {
-            ...ports.productIdentityPorts,
-            usage,
-            evaluationId: item.id,
-            provenance: item.provenance,
-          },
-        );
-        const publish = await prepareProductPairPublication(db, result);
+      const prepared = entry.prepared;
+      const evaluate = (pair: z.infer<typeof preparedProductIdentityPair>) =>
+        evaluatePreparedProductIdentityPair(db, pair, item.runId, {
+          ...ports.productIdentityPorts,
+          usage,
+          evaluationId: item.id,
+          provenance: item.provenance,
+          preparedPage: true,
+        });
+      if (entry.target.target.kind === "product_pair") {
+        const pair = prepared.pairs[0]!;
+        const result = await evaluate(pair);
         return {
-          publish: async (tx) => {
-            await publish(tx);
+          kind: "pair",
+          publication: {
+            key: item.id,
+            input: result,
+            pair,
+            fence:
+              prepared.pairFences.get(
+                productIdentityPairKey(pair.productIds),
+              ) ?? "",
           },
           receipt: {
             pair: pair.productIds,
@@ -1370,72 +1428,56 @@ export function productEvaluationPageAdapter(
           },
         };
       }
-      const { productId, sourceFence, catalog } = entry.prepared;
-      let rulePairs = 0,
-        requestedPairs = 0;
-      // Existing single-pair wrappers remain until Lane B's bounded edge writer lands.
-      // Each edge commits idempotently before the source enumeration receipt.
-      for (const pair of catalog.pairs) {
-        const result = pair.exact
-          ? await evaluatePreparedProductIdentityPair(db, pair, item.runId, {
-              ...ports.productIdentityPorts,
-              usage,
-              evaluationId: item.id,
-              provenance: item.provenance,
-            })
-          : null;
-        const publish = result
-          ? await prepareProductPairPublication(db, result)
-          : await prepareProductIdentityPairRequest(
-              db,
-              pair,
-              item.runId,
-              item.provenance,
-            );
-        await publishAiEvaluation(
-          db,
-          item.id,
-          entry.target.claim.leaseToken,
-          async (tx) => {
-            await publish(tx);
-            return null;
-          },
-          "continue",
-        );
-        if (result) rulePairs++;
-        else requestedPairs++;
-      }
-      return {
-        publish: async (tx) => {
-          if (
-            (await productIdentityEvidenceFence(tx, [productId])) !==
-            sourceFence
-          )
-            throw new Error(
-              "Product identity evidence changed during inference",
-            );
-        },
-        receipt: jsonSnapshot({
-          eligible: catalog.eligible,
-          excluded: !catalog.eligible ? "misc_or_deleted" : null,
-          rulePairs,
-          requestedPairs,
-          catalogEnumeration: true,
-          coverage: catalog.coverage,
-        }),
-      };
+      if (prepared.enrollment)
+        return {
+          kind: "catalog",
+          preparation: prepared,
+          receipt: jsonSnapshot({
+            eligible: prepared.eligible,
+            excluded: !prepared.eligible ? "misc_or_deleted" : null,
+            ...prepared.enrollment,
+            catalogEnumeration: true,
+            coverage: prepared.coverage,
+          }),
+        };
+      throw new Error(
+        "Product source enrollment must precede its enumeration receipt",
+      );
     },
     async publish(tx, outcomes) {
-      const publications = [];
-      for (const entry of outcomes) {
-        await entry.outcome.publish(tx);
-        publications.push({
+      const pairs = outcomes.flatMap((entry) =>
+        entry.outcome.kind === "pair" ? [entry.outcome.publication] : [],
+      );
+      const published = pairs.length
+        ? await publishProductIdentityChunk(tx, pairs)
+        : [];
+      const validity = new Map(
+        published.map((entry) => [entry.key, entry.valid]),
+      );
+      const sources = outcomes.flatMap((entry) =>
+        entry.outcome.kind === "catalog"
+          ? [
+              {
+                key: entry.target.evaluation.id,
+                productIds: entry.outcome.preparation.productIds,
+              },
+            ]
+          : [],
+      );
+      const fences = await productIdentityEvidenceFences(tx, sources);
+      return outcomes.map((entry) => {
+        const valid =
+          entry.outcome.kind === "pair"
+            ? validity.get(entry.target.evaluation.id) === true
+            : fences.get(entry.target.evaluation.id) === entry.evidenceDigest;
+        return {
           evaluationId: entry.target.evaluation.id,
-          state: "completed" as const,
-          receipt: entry.outcome.receipt,
-        });
-      }
-      return publications;
+          state: valid ? ("completed" as const) : ("obsolete" as const),
+          receipt: valid
+            ? entry.outcome.receipt
+            : { reason: "Product identity evidence changed during inference" },
+        };
+      });
     },
   };
 }
@@ -1497,6 +1539,10 @@ export async function executeAiRefreshPage<P, O>(
   db: Database,
   targets: readonly EvaluationPageTarget[],
   adapter: EvaluationPageAdapter<P, O>,
+  stage?: (
+    db: Database,
+    ready: readonly Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[],
+  ) => Promise<EvaluationPagePreparation<P>[]>,
 ) {
   const compiled = await compiledRefreshManifest();
   const compatible = targets.filter((entry) =>
@@ -1535,7 +1581,10 @@ export async function executeAiRefreshPage<P, O>(
       continue;
     }
     const bytes = new TextEncoder().encode(
-      JSON.stringify([entry.prepared, entry.target.evaluation.snapshot]),
+      JSON.stringify(
+        [entry.prepared, entry.target.evaluation.snapshot],
+        (_key, value) => (value instanceof Map ? [...value] : value),
+      ),
     ).byteLength;
     if (bytes > 4 * 1024 * 1024) {
       failures.push({
@@ -1557,6 +1606,15 @@ export async function executeAiRefreshPage<P, O>(
     }
     preparedBytes += bytes;
     ready.push(entry);
+  }
+  if (stage) {
+    const staged = await stage(db, ready);
+    ready.length = 0;
+    for (const entry of staged) {
+      if (entry.kind === "failed")
+        failures.push(pageFailure(entry.target, entry.error));
+      else ready.push(entry);
+    }
   }
   // Object identity is the existing DecisionRequestBatch's attribution boundary.
   const groups = new Map<string, AiRunContext>();
@@ -1632,5 +1690,196 @@ export async function executeAiRefreshPage<P, O>(
     publicationChunks: Math.ceil(outcomes.length / 25),
     usageGroups: groups.size,
     preparedBytes,
+  });
+}
+
+/** Source edges share explicit guarded chunks across the page before enumeration settles. */
+export async function executeProductAiRefreshPage(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  ports: AiRefreshPorts = {},
+) {
+  const adapter = productEvaluationPageAdapter(ports);
+  await executeAiRefreshPage(db, targets, adapter, async (database, ready) => {
+    type Ready = (typeof ready)[number];
+    type Edge = {
+      source: Ready;
+      pair: z.infer<typeof preparedProductIdentityPair>;
+      publication: PreparedProductPairPublication | null;
+      request: Parameters<typeof enqueueAiEvaluations>[1][number] | null;
+    };
+    const edges: Edge[] = [];
+    const failures = new Map<string, Error>();
+    for (const source of ready) {
+      if (source.target.target.kind !== "product") continue;
+      source.prepared.enrollment = { rulePairs: 0, requestedPairs: 0 };
+      const item = source.target.evaluation;
+      for (const pair of source.prepared.pairs) {
+        const key = `${item.id}:${productIdentityPairKey(pair.productIds)}`;
+        if (pair.exact) {
+          const input = await evaluatePreparedProductIdentityPair(
+            database,
+            pair,
+            item.runId,
+            {
+              ...ports.productIdentityPorts,
+              evaluationId: item.id,
+              provenance: item.provenance,
+              preparedPage: true,
+            },
+          );
+          edges.push({
+            source,
+            pair,
+            publication: {
+              key,
+              input,
+              pair,
+              fence:
+                source.prepared.pairFences.get(
+                  productIdentityPairKey(pair.productIds),
+                ) ?? "",
+            },
+            request: null,
+          });
+        } else {
+          const provenance = aiProvenance.parse({
+            ...item.provenance,
+            inputFingerprint: pair.fingerprint,
+          });
+          const shareKey = `product-identity:${await sha256Hex(canonicalJson({ productIds: pair.productIds, fingerprint: pair.fingerprint, dependencies: provenance.dependencies, optionFingerprint: provenance.optionFingerprint }))}`;
+          edges.push({
+            source,
+            pair,
+            publication: null,
+            request: {
+              input: {
+                runId: item.runId,
+                executionKind: "ai_refresh",
+                feature: "product-identity",
+                shareKey,
+                target: aiEvaluationTarget.parse({
+                  kind: "product_pair",
+                  entity: "product",
+                  recordId: pair.productIds[0],
+                  otherId: pair.productIds[1],
+                  field: null,
+                  assessmentIds: [],
+                }),
+                provenance,
+                snapshot: jsonSnapshot(pair),
+              },
+            },
+          });
+        }
+      }
+    }
+    const publish = async (submitted: readonly Edge[]): Promise<void> => {
+      const chunk = submitted.filter(
+        (edge) => !failures.has(edge.source.target.evaluation.id),
+      );
+      if (!chunk.length) return;
+      const sources = [
+        ...new Map(
+          chunk.map((edge) => [edge.source.target.evaluation.id, edge.source]),
+        ).values(),
+      ];
+      try {
+        await publishAiEvaluationContinuation(
+          database,
+          sources.map((source) => source.target),
+          async (tx) => {
+            const fences = await productIdentityEvidenceFences(tx, [
+              ...sources.map((source) => ({
+                key: source.target.evaluation.id,
+                productIds: source.prepared.productIds,
+              })),
+              ...chunk.map((edge, index) => ({
+                key: `edge:${index}`,
+                productIds: edge.pair.productIds,
+              })),
+            ]);
+            if (
+              sources.some(
+                (source) =>
+                  fences.get(source.target.evaluation.id) !==
+                  source.evidenceDigest,
+              ) ||
+              chunk.some(
+                (edge, index) =>
+                  fences.get(`edge:${index}`) !==
+                  edge.source.prepared.pairFences.get(
+                    productIdentityPairKey(edge.pair.productIds),
+                  ),
+              )
+            )
+              throw new Error(
+                "Product identity evidence changed during inference",
+              );
+            const exact = chunk.flatMap((edge) =>
+              edge.publication ? [edge.publication] : [],
+            );
+            if (
+              exact.length &&
+              (await publishProductIdentityChunk(tx, exact)).some(
+                (result) => !result.valid,
+              )
+            )
+              throw new Error(
+                "Product identity evidence changed during inference",
+              );
+            await enqueueAiEvaluations(
+              tx,
+              chunk.flatMap((edge) => (edge.request ? [edge.request] : [])),
+            );
+          },
+        );
+        for (const edge of chunk) {
+          const enrollment = edge.source.prepared.enrollment!;
+          if (edge.publication) enrollment.rulePairs++;
+          else enrollment.requestedPairs++;
+        }
+      } catch (error) {
+        if (chunk.length > 1) {
+          const middle = Math.ceil(chunk.length / 2);
+          await publish(chunk.slice(0, middle));
+          await publish(chunk.slice(middle));
+        } else
+          failures.set(
+            chunk[0]!.source.target.evaluation.id,
+            error instanceof Error ? error : new Error(String(error)),
+          );
+      }
+    };
+    // A source is the publication authority. Bound each transaction by 25
+    // sources, 25 business publications and 100 enrollment edges, rather than
+    // spending one guard transaction for every source's sparse candidate set.
+    let chunk: Edge[] = [];
+    let owners = new Set<string>();
+    let publications = 0;
+    for (const edge of edges) {
+      const owner = edge.source.target.evaluation.id;
+      if (
+        chunk.length &&
+        (chunk.length === 100 ||
+          (edge.publication && publications === 25) ||
+          (!owners.has(owner) && owners.size === 25))
+      ) {
+        await publish(chunk);
+        chunk = [];
+        owners = new Set();
+        publications = 0;
+      }
+      chunk.push(edge);
+      owners.add(owner);
+      if (edge.publication) publications++;
+    }
+    await publish(chunk);
+    return ready.map((entry) => {
+      const error = failures.get(entry.target.evaluation.id);
+      return error
+        ? { kind: "failed" as const, target: entry.target, error }
+        : entry;
+    });
   });
 }

@@ -185,6 +185,10 @@ export const runJobHandler = defineJobHandler(
 const singleAiEvaluationJobHandler = defineJobHandler(
   aiEvaluationJobInput,
   async (db, claim, { evaluationId }) => {
+    if (claim.key !== `ai-evaluation:${evaluationId}`)
+      throw new Error(
+        "AI evaluation Job input does not match its execution key",
+      );
     const item = await (
       await import("~/server/domains/run/repo/ai-work-state")
     ).readAiEvaluation(db, evaluationId);
@@ -247,14 +251,22 @@ export const aiEvaluationJobHandler = {
     const { parseEntityId } = await import("@cubby/schemas/identifiers");
     const { sql } = await import("drizzle-orm");
     const [anchor] = await getDb(db)
-      .select({ item: aiEvaluation })
+      .select({ item: aiEvaluation, input: job.input })
       .from(job)
       .innerJoin(
         aiEvaluation,
         sql`${job.key}='ai-evaluation:' || ${aiEvaluation.id}::text`,
       )
       .where(eq(job.id, parseEntityId("job", anchorId)));
-    if (!anchor) return "skipped";
+    if (!anchor)
+      return advanceJob(db, anchorId, {
+        "ai.evaluation": singleAiEvaluationJobHandler,
+      });
+    const input = aiEvaluationJobInput.safeParse(anchor.input);
+    if (!input.success || input.data.evaluationId !== anchor.item.id)
+      return advanceJob(db, anchorId, {
+        "ai.evaluation": singleAiEvaluationJobHandler,
+      });
     if (
       anchor.item.executionKind !== "ai_refresh" ||
       !["product", "product_pair"].includes(anchor.item.target.kind) ||
@@ -287,9 +299,9 @@ export const aiEvaluationJobHandler = {
           });
     }, JOB_HEARTBEAT_MS);
     try {
-      const { executeAiRefreshPage, productEvaluationPageAdapter } =
+      const { executeProductAiRefreshPage } =
         await import("~/server/domains/run/service/ai-refresh");
-      await executeAiRefreshPage(db, targets, productEvaluationPageAdapter());
+      await executeProductAiRefreshPage(db, targets);
       return "succeeded";
     } catch (error) {
       await failAiEvaluationPage(

@@ -5,7 +5,15 @@ import {
   aiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
@@ -19,6 +27,7 @@ import {
   getDb,
   withTransactionDatabase,
   withSnapshotWriteDatabase,
+  runAfterCommit,
 } from "~/server/db/helpers";
 import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import {
@@ -38,7 +47,7 @@ import {
   completeJobPage,
   guardJobPage,
   jobRunOwned,
-  releaseJobClaim,
+  releaseJobPage,
 } from "~/server/generic/jobs/repo/jobs";
 
 import { readAiRefreshActivation } from "./ai-refresh";
@@ -300,10 +309,10 @@ export function aiEvaluationProgress(
 async function pageAuthorizations(
   db: Database,
   targets: readonly EvaluationPageTarget[],
-  skipLocked = false,
+  lock: "share" | false = "share",
 ) {
   const ids = targets.map((entry) => entry.evaluation.id);
-  const owners = await getDb(db)
+  const query = getDb(db)
     .select()
     .from(run)
     .where(
@@ -318,8 +327,8 @@ async function pageAuthorizations(
         )}) AND r."cancelledAt" IS NULL)`,
       ),
     )
-    .orderBy(run.id)
-    .for("share", { skipLocked });
+    .orderBy(run.id);
+  const owners = await (lock ? query.for(lock) : query);
   const requests = await getDb(db)
     .select()
     .from(aiEvaluationRequest)
@@ -385,10 +394,13 @@ export async function claimAiEvaluationPage(
         and(
           eq(job.kind, "ai.evaluation"),
           sql`${jobRunOwned()} = ${anchor.owned}`,
-          sql`EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE ${job.key} = 'ai-evaluation:' || e.id::text
-        AND ${job.input}->>'evaluationId' = e.id::text AND e.feature=${anchor.item.feature}
-        AND e."executionKind"=${anchor.item.executionKind} AND e.target->>${"kind"}=${anchor.item.target.kind}
-        AND e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.retry_wait},${aiEvaluationState.enum.running},${aiEvaluationState.enum.result_ready}))`,
+          sql`${job.key} = 'ai-evaluation:' || (${job.input}->>'evaluationId')`,
+          // OFFSET keeps the eligible set hashed instead of comparing every Job
+          // with a materialized evaluation catalog in a nested loop.
+          sql`${job.key} IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e
+        WHERE e.feature=${anchor.item.feature} AND e."executionKind"=${anchor.item.executionKind}
+        AND e.target->>${"kind"}=${anchor.item.target.kind}
+        AND e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.retry_wait},${aiEvaluationState.enum.running},${aiEvaluationState.enum.result_ready}) OFFSET 0)`,
         ) ?? sql`false`,
     });
     if (!claims.length) return [];
@@ -414,8 +426,10 @@ export async function claimAiEvaluationPage(
           ]
         : [];
     });
-    // Job locks are already held: never wait on cancellation's Run/item locks.
-    const authorization = await pageAuthorizations(tx, targets, true);
+    // Claim reads authority without a Run lock: coordinator progress must not
+    // defer an entire page. Cancellation's item locks are skipped below; final
+    // publication locks and rechecks every authorizing Run before effects.
+    const authorization = await pageAuthorizations(tx, targets, false);
     const locked = await getDb(tx)
       .select()
       .from(aiEvaluation)
@@ -436,14 +450,58 @@ export async function claimAiEvaluationPage(
             dependenciesCurrent(item.provenance, activation.manifest))),
     );
     const eligibleIds = new Set(eligible.map((item) => item.id));
-    const rejected = targets.filter(
-      (entry) => !eligibleIds.has(entry.evaluation.id),
+    const stale = locked.filter(
+      (item) =>
+        item.executionKind === "ai_refresh" &&
+        activation?.enabled &&
+        !dependenciesCurrent(item.provenance, activation.manifest),
     );
-    // Rejections are exceptional (cancellation/activation racing claim), never the normal page path.
-    for (const entry of rejected)
-      await releaseJobClaim(tx, entry.claim, {
-        availableAt: new Date(Date.now() + 30_000),
+    const staleIds = new Set(stale.map((item) => item.id));
+    if (stale.length) {
+      const receipt = { reason: "AI evaluation generation is obsolete" };
+      await getDb(tx)
+        .update(aiEvaluation)
+        .set({ state: "obsolete", receipt, error: null, updatedAt: new Date() })
+        .where(inArray(aiEvaluation.id, [...staleIds]));
+      await getDb(tx)
+        .update(aiEvaluationRequest)
+        .set({ receipt })
+        .where(
+          and(
+            inArray(aiEvaluationRequest.evaluationId, [...staleIds]),
+            isNull(aiEvaluationRequest.cancelledAt),
+            sql`${aiEvaluationRequest.receipt}->>'retryEvaluationId' IS NULL`,
+          ),
+        );
+      await completeJobPage(
+        tx,
+        stale.map((item) => byId.get(item.id)!),
+      );
+      // Claim owns Jobs before items; wake coordinator Jobs only after those locks release.
+      await runAfterCommit(tx, async (committed) => {
+        await (
+          await import("~/server/workflows/runs/wake")
+        ).wakeAiEvaluationRequesters(committed, [...staleIds]);
       });
+    }
+    const rejected = targets.filter(
+      (entry) =>
+        !eligibleIds.has(entry.evaluation.id) &&
+        !staleIds.has(entry.evaluation.id),
+    );
+    await releaseJobPage(
+      tx,
+      rejected
+        .filter((entry) => authorization.has(entry.evaluation.id))
+        .map((entry) => entry.claim),
+    );
+    await releaseJobPage(
+      tx,
+      rejected
+        .filter((entry) => !authorization.has(entry.evaluation.id))
+        .map((entry) => entry.claim),
+      "paused",
+    );
     if (!eligible.length) return [];
     const values = sql.join(
       eligible.map(
@@ -461,7 +519,7 @@ export async function claimAiEvaluationPage(
       })
       .from(sql`(VALUES ${values}) page(id, run_id)`)
       .where(sql`${aiEvaluation.id}=page.id`)
-      .returning();
+      .returning(getTableColumns(aiEvaluation));
     return claimed.map((evaluation) => ({
       evaluation,
       claim: byId.get(evaluation.id)!,
@@ -470,7 +528,7 @@ export async function claimAiEvaluationPage(
   });
 }
 
-/** Slot -> Run -> item -> Job matches admission/failure and cancellation order. */
+/** Run -> slot -> item -> Job matches scheduling and cancellation; failures take no Run lock. */
 export async function guardAiEvaluationPage(
   tx: Database,
   targets: readonly EvaluationPageTarget[],
@@ -486,6 +544,7 @@ export async function guardAiEvaluationPage(
     )
   )
     throw new Error("AI page target requires its exact universal Job claim");
+  const authorization = await pageAuthorizations(tx, targets);
   const keys = [
     ...new Set(targets.map((entry) => entry.evaluation.slotKey)),
   ].sort();
@@ -495,7 +554,6 @@ export async function guardAiEvaluationPage(
       sql`, `,
     )}]::text[]) key ORDER BY key`,
   );
-  const authorization = await pageAuthorizations(tx, targets);
   const rows = await getDb(tx)
     .select()
     .from(aiEvaluation)
@@ -745,11 +803,77 @@ export async function failAiEvaluationPage(
       },
       { phase: "publication" },
     );
-    await (
-      await import("~/server/workflows/runs/wake")
-    ).wakeAiEvaluationRequesters(
-      tx,
-      valid.map((entry) => entry.target.evaluation.id),
-    );
+    // Failure takes no Run lock; release item/Job locks before touching coordinators.
+    await runAfterCommit(tx, async (committed) => {
+      await (
+        await import("~/server/workflows/runs/wake")
+      ).wakeAiEvaluationRequesters(
+        committed,
+        valid.map((entry) => entry.target.evaluation.id),
+      );
+    });
   });
+}
+
+/** Bounded edge progress leaves each source's evaluation/Job running until its final receipt. */
+export async function publishAiEvaluationContinuation<T>(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  work: (tx: Database) => Promise<T>,
+): Promise<T> {
+  if (!targets.length || targets.length > 25)
+    throw new Error("AI continuation requires 1–25 source claims");
+  const context = currentJobExecution();
+  if (
+    context &&
+    (targets.length !== 1 || targets[0]!.claim.id !== context.claim.id)
+  )
+    throw new Error(
+      "AI continuation cannot borrow a sibling's execution context",
+    );
+  return withSnapshotWriteDatabase(
+    db,
+    async (tx) => {
+      const valid = await guardAiEvaluationPage(tx, targets);
+      if (valid.length !== targets.length)
+        throw new Error("AI evaluation generation or Run is obsolete");
+      const output = await work(tx);
+      await repositoryBeforeCommit(
+        tx,
+        async () => {
+          const activation = await readAiRefreshActivation(tx, "share");
+          if (
+            valid.some(
+              (entry) =>
+                entry.evaluation.executionKind === "ai_refresh" &&
+                (!activation?.enabled ||
+                  !dependenciesCurrent(
+                    entry.evaluation.provenance,
+                    activation.manifest,
+                  )),
+            )
+          )
+            throw new Error("AI evaluation generation or Run is obsolete");
+        },
+        { phase: "fence" },
+      );
+      await repositoryBeforeCommit(
+        tx,
+        async (commit) => {
+          if (
+            (
+              await guardJobPage(
+                commit,
+                targets.map((entry) => entry.claim),
+              )
+            ).length !== targets.length
+          )
+            throw new Error("AI evaluation attempt is obsolete");
+        },
+        { phase: "publication" },
+      );
+      return output;
+    },
+    { isolationLevel: "serializable" },
+  );
 }

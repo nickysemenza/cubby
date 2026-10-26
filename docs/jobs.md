@@ -593,7 +593,9 @@ slots: one feature, preparation shape, execution kind and priority class.
 `claimJobPage` locks eligible Jobs with `FOR UPDATE SKIP LOCKED`, assigns
 independent tokens, then `claimAiEvaluationPage` rechecks live authorization,
 activation and pending/result-ready state before adopting the claims. Claim
-never waits on cancellation's Run/item locks. No model work holds a claim
+reads Run authority without a lock and skips cancellation's item locks.
+Queued obsolete generations retire in sets before inference; paused authority
+parks its Jobs without spending attempts. No model work holds a claim
 transaction open. Heartbeats renew the exact token/generation set in one
 statement; replaced tokens are reported separately and cannot publish.
 
@@ -618,7 +620,7 @@ An oversized question fails visibly. Page evidence is limited to 4 MiB; an
 unadmitted suffix stays due rather than completing its enumeration receipt.
 
 Publication commits at most 25 outcomes per SERIALIZABLE transaction, using
-the existing bounded snapshot-write retries. Locks follow slot, Run, item,
+the existing bounded snapshot-write retries. Locks follow Run, slot, item,
 then Job order, compatible with cancellation and admission. The explicit
 claim-set guard authorizes each target without borrowing a sibling's AsyncLocal
 context. The feature adapter revalidates each evidence digest and member
@@ -631,18 +633,23 @@ coordinators wake through one deduplicated update and after-commit signal.
 Preparation/decision failures settle individually. A failed publication chunk
 splits only after its transaction rolls back; committed siblings never replay.
 Capacity/funding waits release affected claims without spending a failure
-attempt. A failed old attempt cannot re-enter retry-wait beside its queued
-successor. Cancelled or replaced claims never gain publication authority from
+attempt. Failure and stale-claim coordinator wakes run after commit, so they
+never reverse cancellation's Run/item/Job lock order. A failed old attempt
+cannot re-enter retry-wait beside its queued successor. Cancelled or replaced claims never gain publication authority from
 a fresh sibling. Source-to-pair enrollment finishes before the source receipt;
-Run completion still includes its requested pair work.
+Run completion still includes its requested pair work. Refresh coordinators
+read state counts, error summaries and bounded pending identities; they never
+reload frozen inference payloads just to update progress.
 
 Product discovery reads snapshots for the scan page and schedules one roster
 transaction, reusing the activation's shared refresh owner. Slot admission,
 evaluation/request insertion and fresh Job/Entity identity insertion use set
-writes. The current Product page adapter wraps the existing single-target
-preparation and pair publication functions; it therefore retains their
-per-target SQL cost. [#3320](https://github.com/nickysemenza/cubby/issues/3320)
-owns the set-based Product adapter and full synthetic throughput acceptance.
+writes. The Product adapter uses `prepareProductIdentityPage` and
+`publishProductIdentityChunk` for shared preparation and publication. Source
+edges enroll in guarded chunks of at most 25 sources, 25 business
+publications and 100 enrollment edges before enumeration receipts, and
+canonical pairs share decision waves. [#3320](https://github.com/nickysemenza/cubby/issues/3320)
+owns full synthetic throughput acceptance.
 Full re-check scheduling remains gated on that acceptance; no production
 throughput improvement is established by the page lifecycle alone.
 
