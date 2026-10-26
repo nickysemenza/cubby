@@ -5,7 +5,7 @@ export const automaticFields = (
   entity: string,
   table: string,
 ): EntityFieldModelMetadata["stored"][string] => ({
-  publishes: "value",
+  publishes: "derivedValue",
   dependsOn: [],
   compute: `${entity}.automaticFields`,
   inputs: [

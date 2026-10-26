@@ -63,7 +63,8 @@ export function loadPageStoredMeta(
   const keys = storedDerivedDeclarations()
     .filter(
       (declaration) =>
-        declaration.entity === entity && declaration.publishes === "value",
+        declaration.entity === entity &&
+        declaration.publishes === "derivedValue",
     )
     .map((declaration) => declaration.key);
   return keys.length

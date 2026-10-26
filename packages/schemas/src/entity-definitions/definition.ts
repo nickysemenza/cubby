@@ -1247,7 +1247,10 @@ const buildMetadataSchemas = () => {
         .record(
           derivedKey,
           derivedStoreSchema.extend({
-            publishes: z.enum(["value", "sink"]).optional().default("sink"),
+            publishes: z
+              .enum(["derivedValue", "ownTable"])
+              .optional()
+              .default("ownTable"),
           }),
         )
         .optional()

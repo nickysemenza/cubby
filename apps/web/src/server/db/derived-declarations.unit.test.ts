@@ -45,7 +45,7 @@ describe("stored derived declarations", () => {
     );
     expect(declarations.map((entry) => entry.entity)).toEqual(expected);
     for (const declaration of declarations) {
-      expect(declaration.publishes).toBe("value");
+      expect(declaration.publishes).toBe("derivedValue");
       expect(
         entityFieldModels[declaration.entity].fields.map((field) => field.key),
       ).not.toContain("automaticFields");

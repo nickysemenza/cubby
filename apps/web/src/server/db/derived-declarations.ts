@@ -69,11 +69,11 @@ export interface StoredDerivedDeclaration {
   readonly table: string;
   readonly compute: string;
   /**
-   * `value`: published as a `DerivedValue` row, with per-row meta in the
-   * envelope. `sink`: written to the value's own table (search documents,
+   * `derivedValue`: published as a `DerivedValue` row, with per-row meta in the
+   * envelope. `ownTable`: written to the value's own table (search documents,
    * recipe totals), so readers read that table.
    */
-  readonly publishes: "value" | "sink";
+  readonly publishes: "derivedValue" | "ownTable";
   readonly sort: DerivedSortType;
   readonly inputs: readonly DerivedInput[];
   readonly dependsOn: readonly DerivedDependency[];
@@ -94,7 +94,7 @@ const storedEntry = z.object({
   key: z.string(),
   table: z.string().nullable(),
   type: z.string(),
-  publishes: z.enum(["value", "sink"]),
+  publishes: z.enum(["derivedValue", "ownTable"]),
   stored: z.object({
     compute: z.string(),
     inputs: z.array(
