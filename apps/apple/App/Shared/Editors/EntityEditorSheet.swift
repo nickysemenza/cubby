@@ -181,8 +181,12 @@ struct EntityEditorSheet: View {
     /// Validation for an image key or web-only control has no input row here. Keep it visible
     /// with non-field failures, without duplicating errors that the native controls draw inline.
     private func saveFailure(_ model: GenericEntityEditModel) -> String? {
-        let hiddenErrors = model.visibleFields.filter { !renders($0) }.compactMap { field in
-            model.fieldErrors[field.key].map { "\(field.label): \($0)" }
+        let hiddenErrors = model.visibleFields.filter { !renders($0) }.flatMap { field in
+            let fieldError = model.fieldErrors[field.key].map { "\(field.label): \($0)" }
+            let nested = (model.nestedErrors[field.key] ?? [:])
+                .sorted { $0.key.lexicographicallyPrecedes($1.key) }
+                .map { "\(field.label).\($0.key.joined(separator: ".")): \($0.value)" }
+            return [fieldError].compactMap { $0 } + nested
         }
         let messages = [model.bannerError].compactMap { $0 } + hiddenErrors
         return messages.isEmpty ? nil : messages.joined(separator: "\n")
@@ -327,7 +331,7 @@ struct EntityEditorSheet: View {
         finishLoad(model, identity: identity)
     }
 
-    /// Baselines the loaded draft, then applies the sheet's staged values and reference names.
+    /// Applies staged values after the model has baselined its loaded draft.
     private func finishLoad(_ loaded: GenericEntityEditModel, identity: EditorIdentity) {
         guard !Task.isCancelled, initializedIdentity == identity, model === loaded else { return }
         if let resolutionAction { loaded.stageResolution(resolutionAction.kind, for: resolutionAction.field) }
