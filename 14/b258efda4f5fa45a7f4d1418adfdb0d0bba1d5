@@ -1,0 +1,19 @@
+apps/web/src/entity/table/table-header-layout.unit.test.tsx
+  s_4f032629b22ae8::t_4a8a72c71a0f35 265
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "14b258efda4f5fa45a7f4d1418adfdb0d0bba1d5",
+  "prompts": {},
+  "sessions": {
+    "s_4f032629b22ae8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "45e3573a-1f3e-4def-b556-d6f649cef913",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
