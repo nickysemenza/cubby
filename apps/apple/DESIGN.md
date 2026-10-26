@@ -59,6 +59,10 @@ real concerns use the server-projected attention state.
 
 Native owns a photo Run's capture, upload, description progress, per-photo recovery, Start grouping, Live Activity and attention state. Deciding proposed groups is web's: comparing candidates, editing proposed Products and ownership, and approving or discarding groups happen at `run/<id>#photo-batch`. The Run console draws that slot as one handoff row, Review photo groups on web, ahead of the reports; the console shows how many groups are ready but no per-group controls.
 
+## Activity hands off the job queue
+
+Native Activity owns this device's work: the device backlog, the companion worker and local activities, Runs in progress and Runs needing attention. The household job queue is web's: lanes, waiting reasons, Job retries, explanations and leases live at `/work-queue`. Activity ends with one handoff row, Open work queue on web; image-work concurrency lives in Settings › Advanced.
+
 ## Hosted workspaces
 
 Connections uses one shared React workspace for the map, four-link exploration,

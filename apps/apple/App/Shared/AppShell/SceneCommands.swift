@@ -39,7 +39,6 @@ extension Navigator {
         case .activity:
             switch selectedActivity {
             case .serverRun(let id): return .record(RecordSelection(key: .run, id: id))
-            case .record(let record): return .record(record)
             case .localActivity, nil: return nil
             }
         case .browse, .search:

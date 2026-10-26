@@ -1,113 +1,29 @@
 import CubbyKit
 import SwiftUI
 
-/// Household Activity uses generic Run and Job lists alongside this device's local work.
+/// Activity shows this device's work, the device backlog, Runs in progress and Runs needing
+/// attention. The household job queue (lanes, retries, leases) is web's `/work-queue`.
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 
     @State private var backlog: DeviceBacklogBanner?
     @State private var backlogError: String?
-    @State private var overview: HouseholdQueueOverview?
-    @State private var selectedJobs: Set<String> = []
+    @State private var inProgress: GenericEntityListModel?
+    @State private var attention: GenericEntityListModel?
 
-    /// Leases renew every 15 s; reloading at that pace keeps the countdowns and groups current
-    /// while Activity is on screen.
+    /// Reloading while Activity is on screen keeps the backlog ETA and both Run sections current.
     private static let refreshInterval = Duration.seconds(15)
 
     var body: some View {
         List {
-            if let overview, let health = overview.health, !health.alerts.isEmpty {
-                Section("Queue unhealthy") {
-                    ForEach(Array(health.alerts.enumerated()), id: \.offset) { _, alert in
-                        Label(alert.evidence, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(FieldGuideTokens.warning)
-                    }
-                }
-            }
             DeviceBacklogBannerSection(
                 backlog: backlog, error: backlogError,
                 thisDeviceProcessing: appModel.companionImageActivity.phase == .processing)
             localExecution()
-            ImageWorkConcurrencySection()
-            if let overview {
-                Section {
-                    ScrollView(.horizontal) {
-                        HStack {
-                            ForEach(Array(overview.counts.enumerated()), id: \.offset) { _, chip in
-                                Button {
-                                    selectedJobs.removeAll()
-                                    Task {
-                                        await overview.filter(
-                                            lane: chip.lane.rawValue, reason: chip.reason.rawValue)
-                                    }
-                                } label: {
-                                    Text(
-                                        "\(queueLabel("lane", chip.lane.rawValue)) · \(queueLabel("reason", chip.reason.rawValue)) \(chip.count)"
-                                    )
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                }
-                Section("Runs needing attention") {
-                    entityRows(
-                        overview.runs, key: .run,
-                        columns: ["purpose", "status", "waitingOn", "stalled", "startedAt", "chargedCost"])
-                    activityDestination(.entityList(.run, savedView: "attention")) {
-                        Text("All \(overview.runs.meta?.totalCount ?? 0)")
-                    }
-                }
-                Section("Jobs") {
-                    Menu("Job view") {
-                        ForEach(EntityCatalog[.job].presentation.savedViews, id: \.id) { view in
-                            Button(view.label) {
-                                selectedJobs.removeAll()
-                                Task { await overview.applyJobView(view) }
-                            }
-                        }
-                    }
-                    Button(selectedJobs.isEmpty ? "Retry matching Jobs now" : "Retry selected Jobs now") {
-                        Task { await overview.retry(codes: Array(selectedJobs)) }
-                    }
-                    .disabled(overview.isRetrying)
-                    .buttonStyle(.borderless)
-                    if let error = overview.error {
-                        Text(error.localizedDescription).foregroundStyle(FieldGuideTokens.warning)
-                            .task { Diagnostics.report(error, context: "activity.queue") }
-                    }
-                    ForEach(overview.jobs.rows) { row in
-                        HStack(alignment: .top) {
-                            Button {
-                                if !selectedJobs.insert(row.id).inserted { selectedJobs.remove(row.id) }
-                            } label: {
-                                Image(
-                                    systemName: selectedJobs.contains(row.id)
-                                        ? "checkmark.circle.fill" : "circle")
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel("Select \(row.id)")
-                            DisclosureGroup {
-                                ActivityJobExplainPanel(code: row.id, overview: overview)
-                            } label: {
-                                activityDestination(.entityDetail(.job, id: row.id)) {
-                                    EntityRowView(
-                                        key: .job, row: row,
-                                        columns: [
-                                            "kind", "lane", "state", "waitingOn", "runId", "attempts",
-                                            "leaseExpiresAt",
-                                        ])
-                                }
-                            }
-                        }
-                    }
-                    listState(overview.jobs)
-                    activityDestination(.entityList(.job, filters: overview.jobs.filters)) {
-                        Text("All \(overview.jobs.meta?.totalCount ?? 0)")
-                    }
-                }
-            } else {
-                ProgressView()
+            runSection("In progress", savedView: "in-progress", model: inProgress)
+            runSection("Runs needing attention", savedView: "attention", model: attention)
+            Section {
+                OpenOnWebButton(target: .route(path: "/work-queue"), label: "Open work queue on web")
             }
         }
         .navigationTitle("Activity")
@@ -147,35 +63,55 @@ struct ActivityView: View {
                 if case .serverRun(let id) = activity.link { return ActivitySelection.serverRun(id) }
                 return ActivitySelection.localActivity(activity.id)
             }
-            return local + (overview?.runs.rows ?? []).map { .serverRun($0.id) }
-                + (overview?.jobs.rows ?? []).map { .record(RecordSelection(key: .job, id: $0.id)) }
+            return local + (inProgress?.rows ?? []).map { .serverRun($0.id) }
+                + (attention?.rows ?? []).map { .serverRun($0.id) }
         }
     #endif
 
     private func load() async {
         guard appModel.phase == .signedIn else { return }
-        if overview == nil { overview = HouseholdQueueOverview(client: appModel.client) }
+        if inProgress == nil { inProgress = Self.runs(savedView: "in-progress", client: appModel.client) }
+        if attention == nil { attention = Self.runs(savedView: "attention", client: appModel.client) }
         async let backlogLoad = Self.attempt { try await DeviceBacklogBanner.load(client: appModel.client) }
-        await overview?.refresh()
+        await inProgress?.refresh()
+        await attention?.refresh()
         switch await backlogLoad {
         case .success(let value): (backlog, backlogError) = (value, nil)
         case .failure(let error): backlogError = report(error, context: "activity.deviceBacklog")
         }
     }
 
-    private func queueLabel(_ field: String, _ value: String) -> String {
-        EntityCatalog[.job].filter(field)?.options?.first { $0.value == value }?.label ?? value
+    /// A Run manifest saved view (both leave out system AI passes), bounded to 10.
+    private static func runs(savedView: String, client: CubbyClient) -> GenericEntityListModel {
+        let run = EntityCatalog[.run]
+        let view = run.presentation.savedViews.first { $0.id == savedView }
+        return GenericEntityListModel(
+            descriptor: run, client: client, pageSize: 10,
+            sort: view?.sortParameter, filters: view?.filterState ?? EntityFilterState())
     }
 
-    @ViewBuilder private func entityRows(_ model: GenericEntityListModel, key: EntityKey, columns: [String])
-        -> some View
-    {
-        ForEach(model.rows) { row in
-            activityDestination(.entityDetail(key, id: row.id)) {
-                EntityRowView(key: key, row: row, columns: columns)
+    @ViewBuilder private func runSection(
+        _ title: String, savedView: String, model: GenericEntityListModel?
+    ) -> some View {
+        Section(title) {
+            if let model {
+                ForEach(model.rows) { row in
+                    activityDestination(.entityDetail(.run, id: row.id)) {
+                        EntityRowView(
+                            key: .run, row: row,
+                            columns: [
+                                "purpose", "status", "waitingOn", "stalled", "startedAt", "chargedCost",
+                            ])
+                    }
+                }
+                listState(model)
+                activityDestination(.entityList(.run, savedView: savedView)) {
+                    Text("All \(model.meta?.totalCount ?? 0)")
+                }
+            } else {
+                ProgressView()
             }
         }
-        listState(model)
     }
 
     @ViewBuilder private func activityDestination<Label: View>(
@@ -183,10 +119,8 @@ struct ActivityView: View {
     ) -> some View {
         #if os(macOS)
             Button {
-                if case .entityDetail(let key, let id) = route {
-                    appModel.navigator.selectedActivity =
-                        key == .run
-                        ? .serverRun(id) : .record(RecordSelection(key: key, id: id))
+                if case .entityDetail(.run, let id) = route {
+                    appModel.navigator.selectedActivity = .serverRun(id)
                     appModel.navigator.paths[.activity] = []
                 } else {
                     appModel.navigator.paths[.activity, default: []].append(route)
@@ -271,7 +205,6 @@ struct ActivitySelectionDetailView: View {
             EntityDetailView(key: .imageJob, id: id).id("imageJob/\(id)")
         case .serverRun(let id): RunConsoleView(runID: id).id(id)
         case .localActivity(let id): LocalActivityDetailView(id: id)
-        case .record(let record): EntityDetailView(key: record.key, id: record.id).id(record)
         }
     }
 }
