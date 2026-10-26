@@ -44,7 +44,9 @@ describe("work progress", () => {
     });
     expect(bar).toHaveAttribute("aria-valuenow", "12400");
     expect(bar).toHaveAttribute("aria-valuemax", "55000");
-    expect(bar).toHaveTextContent("12,400 / 55,000 · 950/min · ~45 min left");
+    expect(bar).toHaveTextContent(
+      "12,400 / 55,000 evaluations; 950 evaluations/min · ~45 min left",
+    );
   });
 
   it("withholds ETA for missing totals, insufficient history, paused and stale samples", () => {
@@ -55,7 +57,7 @@ describe("work progress", () => {
     );
     render(<RunWorkProgress sample={unknown} status="running" />);
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
-    expect(screen.getByText(/12,400 so far/)).toBeVisible();
+    expect(screen.getByText(/12,400 evaluations so far/)).toBeVisible();
     expect(runProgressValue(unknown)).not.toContain("left");
     const collecting = readRunWorkPhase(
       { ...sample, intervals: [] },
@@ -64,13 +66,13 @@ describe("work progress", () => {
     );
     expect(runProgressValue(collecting)).not.toContain("left");
     expect(runProgressValue(readRunWorkPhase(sample, "paused", now))).toBe(
-      "12,400 / 55,000",
+      "12,400 / 55,000 evaluations; Paused",
     );
     expect(
       runProgressValue(
         readRunWorkPhase(sample, "running", new Date(now.getTime() + 121000)),
       ),
-    ).toBe("12,400 / 55,000");
+    ).toBe("12,400 / 55,000 evaluations; Stale sample");
   });
 
   it("clamps determinate values and leaves unknown work indeterminate", () => {

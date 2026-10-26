@@ -13,19 +13,36 @@ import {
 
 import { useDenseCell } from "./stacked-value";
 
-/** Rates and ETA come from the recorded interval history, never browser extrapolation. */
+/**
+ * Rates and ETA come from the recorded interval history, never browser
+ * extrapolation. Counts carry their unit; a paused or stale sample names its
+ * state instead of advertising a live rate, and a finished one its recorded rate.
+ */
 export function runProgressValue(work: RunWorkPhase) {
-  const counts = `${formatCount(work.processed)}${work.total === null ? " so far" : ` / ${formatCount(work.total)}`}`;
+  const counts =
+    work.total === null
+      ? `${formatCount(work.processed)} ${work.unit} so far`
+      : `${formatCount(work.processed)} / ${formatCount(work.total)} ${work.unit}`;
+  const perMinute =
+    work.ratePerSecond === null
+      ? null
+      : `${(work.ratePerSecond * 60).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${work.unit}/min`;
+  const historical = work.state === "completed" || work.state === "failed";
+  const rate = historical
+    ? perMinute && `${perMinute} recorded`
+    : work.estimateState === "paused"
+      ? "Paused"
+      : work.estimateState === "stale"
+        ? "Stale sample"
+        : perMinute;
   const current = work.estimateState === "current" && work.state === "running";
-  const rate =
-    current && work.ratePerSecond !== null
-      ? `${formatCount(Math.round(work.ratePerSecond * 60))}/min`
-      : null;
   const eta =
     current && work.etaSeconds !== null
       ? `~${Math.max(1, Math.ceil(work.etaSeconds / 60))} min left`
       : null;
-  return [counts, rate, eta].filter(Boolean).join(" · ");
+  return [[counts, rate].filter(Boolean).join("; "), eta]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function RunWorkProgress({
@@ -47,7 +64,7 @@ export function RunWorkProgress({
   if (work.total === null)
     return (
       <span className="text-xs text-muted-foreground">
-        {work.label} · {text}
+        {work.label}; {text}
       </span>
     );
   return (
