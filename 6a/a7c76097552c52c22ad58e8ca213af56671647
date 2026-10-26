@@ -1,0 +1,37 @@
+apps/apple/App/Shared/AppShell/AppModel.swift
+  s_6b163ef7edc339::t_521d1921fe3fa8 193-207,361,366,383,402,453,467,501,503-504,507,594
+apps/apple/App/Shared/AppShell/RootView.swift
+  s_6b163ef7edc339::t_ca90c2be48cfef 89-96,124-129
+apps/apple/App/Shared/Capture/CaptureModel.swift
+  s_6b163ef7edc339::t_8fd6c1e5b6b18b 101,116,126
+apps/apple/App/Shared/Search/SearchModel.swift
+  s_6b163ef7edc339::t_4d20981c90f8df 47,117,128,130,178
+apps/apple/App/Shared/Search/SearchView.swift
+  s_6b163ef7edc339::t_c2aae77aa55a53 159-163,303,330
+apps/apple/App/Tests/AppShell/DiagnosticsTests.swift
+  s_6b163ef7edc339::t_b730dcf69a3a80 20-51
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_6b163ef7edc339::t_34800745e2bbb2 170-171,173-174,178,180
+apps/apple/App/Tests/Search/SearchModelTests.swift
+  s_6b163ef7edc339::t_411a4d42008de5 110-129,151,155-171
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyAPIError.swift
+  s_6b163ef7edc339::t_241d7f552ed1d4 184-185,188-191
+apps/apple/DESIGN.md
+  s_6b163ef7edc339::t_c52f19f2309ce6 105-112
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6aa7c76097552c52c22ad58e8ca213af56671647",
+  "prompts": {},
+  "sessions": {
+    "s_6b163ef7edc339": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17945-28c6-7610-a46f-3af0e76941c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
