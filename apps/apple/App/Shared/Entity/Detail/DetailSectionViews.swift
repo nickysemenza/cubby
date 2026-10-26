@@ -429,7 +429,7 @@ struct FieldsSectionView: View {
                 return nil
             }
             if field.displayApplicabilityRefusal(in: row.raw) != nil { return field }
-            if NativePresentationCoverage.unsupportedDetail(field) != nil { return nil }
+            if NativePresentationCoverage.detailHandoff(field) != nil { return field }
             if field.detailRenderer == .expenseSpendingCategory
                 || field.detailRenderer == .spendingCategorySummary
             {
@@ -451,7 +451,11 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
-        if let reason = field.displayApplicabilityRefusal(in: row.raw) {
+        if let handoff = NativePresentationCoverage.detailHandoff(field) {
+            LabeledContent(field.label) {
+                OpenOnWebButton(target: handoff.target(key: descriptor.key, id: row.id), label: handoff.label)
+            }
+        } else if let reason = field.displayApplicabilityRefusal(in: row.raw) {
             LabeledContent(field.label) { inapplicableValue(field, reason: reason) }
         } else if field.reference?.multiple == true {
             RecordReferenceList(

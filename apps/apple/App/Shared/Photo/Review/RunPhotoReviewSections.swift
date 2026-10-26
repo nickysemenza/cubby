@@ -27,7 +27,9 @@ struct RunPhotoReviewSections: View {
                     Text(readiness.message).foregroundStyle(.secondary)
                     switch readiness {
                     case .needsReviewOnWeb:
-                        Link("Group photos on web", destination: appModel.webURL(for: .run, id: runID))
+                        OpenOnWebButton(
+                            target: .record(key: .run, id: runID, section: "photo-batch"),
+                            label: "Group photos on web")
                     case .readyToStart:
                         Button {
                             Task {

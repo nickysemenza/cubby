@@ -324,7 +324,5 @@ extension SidebarManifest.Destination {
         }
     }
 
-    func webURL(serverURL: URL) -> URL? {
-        URL(string: route, relativeTo: serverURL)?.absoluteURL
-    }
+    var webTarget: WebHandoff.Target { .route(path: route) }
 }

@@ -10,14 +10,29 @@ import Testing
 struct NativeCoverageTests {
     private let coverage = NativeCoverageManifest.shared
 
-    @Test func everyUnsupportedIdCarriesAReason() {
+    @Test func handoffDecodesItsWebTargetAndReason() throws {
+        let json = Data(
+            #"""
+            [{"status":"handoff","web":{"section":"import-agent-live","label":"Open live agent on web"},"reason":"Streams on web."},
+             {"status":"handoff","web":{"query":{"view":"analytics"},"label":"Open analytics on web"},"reason":"Charts."}]
+            """#.utf8)
+        let decoded = try JSONDecoder().decode([NativeCoverageStatus].self, from: json)
+        let live = NativeWebHandoff(
+            section: "import-agent-live", label: "Open live agent on web", reason: "Streams on web.")
+        let analytics = NativeWebHandoff(
+            query: ["view": "analytics"], label: "Open analytics on web", reason: "Charts.")
+        #expect(decoded == [.handoff(live), .handoff(analytics)])
+        #expect(coverage.detailSlot["run.import-agent-live"]?.handoff?.section == "import-agent-live")
+    }
+
+    @Test func everyHandoffNamesItsSurfaceAndReason() {
         let all = [
             coverage.control, coverage.list, coverage.detail, coverage.heroAction, coverage.detailSlot,
             coverage.listSlot, coverage.sectionAction,
         ]
         for statuses in all {
-            for case .unsupported(let reason) in statuses.values {
-                #expect(!reason.isEmpty)
+            for case .handoff(let handoff) in statuses.values {
+                #expect(!handoff.label.isEmpty && !handoff.reason.isEmpty)
             }
         }
     }

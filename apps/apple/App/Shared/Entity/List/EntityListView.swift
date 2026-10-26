@@ -976,10 +976,10 @@ struct EntityListView: View {
                 .contextMenu(forSelectionType: String.self) { records in
                     if let id = records.first {
                         Button("Copy link", systemImage: "link") {
-                            Clipboard.copy(appModel.webURL(for: key, id: id).absoluteString)
+                            Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: id)).absoluteString)
                         }
                         Button("Copy shortcode", systemImage: "number") { Clipboard.copy(id) }
-                        ShareLink(item: appModel.webURL(for: key, id: id))
+                        ShareLink(item: appModel.webHandoff.url(.record(key: key, id: id)))
                     }
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
@@ -1074,10 +1074,10 @@ struct EntityListView: View {
                 .contentShape(Rectangle())
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
-                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: key, id: row.id))
+                    ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id)))
                 }
                 Divider()
             }
@@ -1215,10 +1215,10 @@ struct EntityListView: View {
             rowContent(row, columns: columns)
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
-                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: key, id: row.id))
+                    ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id)))
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
         }

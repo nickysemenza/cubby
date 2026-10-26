@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 
 /// Which declared detail slots native fills, and which entity-specific supplements appear.
-/// Unsupported declaration features are surfaced by the detail screen. The slot ids are
+/// A `handoff` slot draws its `OpenOnWebButton` row in the section. The slot ids are
 /// entity-qualified, so no `(entity, slot)` pairing is needed.
 enum DetailSlotRegistry {
     /// One case per slot `packages/schemas/src/native-coverage.ts` marks `implemented`, so a
@@ -161,8 +161,37 @@ enum DetailSlotRegistry {
     /// Section content for `slot` on a detail screen; nil renders nothing (the section is skipped).
     @MainActor
     static func view(slot: String, row: EntityRow) -> AnyView? {
-        guard let slot = ImplementedDetailSlotID(rawValue: slot) else { return nil }
-        return build(slot, row)
+        if let implemented = ImplementedDetailSlotID(rawValue: slot) { return build(implemented, row) }
+        guard let handoff = handoff(slot: slot, row: row),
+            let key = slot.split(separator: ".").first.flatMap({ EntityKey(rawValue: String($0)) })
+        else { return nil }
+        return AnyView(
+            OpenOnWebButton(target: handoff.target(key: key, id: row.id)) {
+                HStack {
+                    Label(handoff.label, systemImage: "safari")
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
+                    Image(systemName: "arrow.up.right").foregroundStyle(.secondary).accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("detail.handoff.\(slot)"))
+    }
+
+    /// The web handoff a `handoff` slot draws for `row`; nil when the slot is native or, like web's
+    /// slot predicate, does not apply to the row.
+    static func handoff(slot: String, row: EntityRow) -> NativeWebHandoff? {
+        guard let handoff = NativePresentationCoverage.detailSlot(slot).handoff else { return nil }
+        switch slot {
+        // Import runs only; live and stopped split on whether the run is still moving, as the
+        // import progress slots do.
+        case "run.import-agent-live", "run.import-agent-stopped":
+            guard SharedConstants.importReportRunPurposes.contains(row.raw["purpose"]?.stringValue ?? "")
+            else { return nil }
+            let live = SharedConstants.activeRunStatuses.contains(row.raw["status"]?.stringValue ?? "")
+            return live == (slot == "run.import-agent-live") ? handoff : nil
+        default:
+            return handoff
+        }
     }
 
     /// Record-specific affordances beside the generic sections; none is a manifest hero action.
@@ -182,7 +211,6 @@ enum DetailSlotRegistry {
 
 private struct ProductJourneySummaryView: View {
     let product: ProductDetail
-    @Environment(AppModel.self) private var appModel
 
     private var ownPhotos: Int { product.attachments.filter { $0.source == .own }.count }
     private var isService: Bool {
@@ -216,9 +244,9 @@ private struct ProductJourneySummaryView: View {
                 )
             }
             if isService || product.ownershipEvidence.state != .exited {
-                Link(
-                    "Review purchase and statement",
-                    destination: appModel.webURL(for: .product, id: product.id.rawValue))
+                OpenOnWebButton(
+                    target: .record(key: .product, id: product.id.rawValue),
+                    label: "Review purchase and statement on web")
             }
         }
         .font(.caption)
@@ -233,13 +261,14 @@ private struct RunPausedHandoff: View {
     static let pausedStatuses: Set<String> = ["paused", "paused_auth", "paused_offline"]
 
     let runID: String
-    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Label("Run paused", systemImage: "pause.circle")
                 .font(.subheadline.weight(.medium))
-            Link("Open run controls", destination: appModel.webURL(for: .run, id: runID))
+            OpenOnWebButton(
+                target: .record(key: .run, id: runID, section: "import-controls"),
+                label: "Open run controls on web")
         }
     }
 }

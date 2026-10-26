@@ -39,7 +39,7 @@ struct NavigationTests {
                 }
             }
             if destination.nativeDestination == nil {
-                let url = try #require(destination.webURL(serverURL: server))
+                let url = WebHandoff(baseURL: server).url(destination.webTarget)
                 #expect(url.scheme == server.scheme)
                 #expect(url.host == server.host)
                 #expect(url.port == server.port)

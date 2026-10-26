@@ -87,10 +87,10 @@ struct EntityShelfView: View {
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
                         Clipboard.copy(
-                            appModel.webURL(for: descriptor.key, id: row.id).absoluteString)
+                            appModel.webHandoff.url(.record(key: descriptor.key, id: row.id)).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: descriptor.key, id: row.id))
+                    ShareLink(item: appModel.webHandoff.url(.record(key: descriptor.key, id: row.id)))
                 }
                 .accessibilityIdentifier(accessibilityIdentifier(for: row))
         }

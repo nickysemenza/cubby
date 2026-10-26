@@ -84,7 +84,7 @@ struct ImageEntityDetailView: View {
             RouteDestinationView(route: route)
         }
         .toolbar {
-            ToolbarItem { ShareLink(item: appModel.webURL(for: id.rawValue)) }
+            ToolbarItem { ShareLink(item: appModel.webHandoff.url(.record(key: .image, id: id.rawValue))) }
             ToolbarItem {
                 CopyDiagnosticsButton {
                     ImageDetailDiagnostics(

@@ -153,9 +153,9 @@ struct ReceiveExpenseSheet: View {
                     .font(.caption)
                     ForEach(match.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
                     // There is no native Product match review yet; the candidate is read-only here.
-                    Link(
-                        "Review this match on web",
-                        destination: appModel.webURL(for: .product, id: match.candidateID.rawValue)
+                    OpenOnWebButton(
+                        target: .record(key: .product, id: match.candidateID.rawValue),
+                        label: "Review this match on web"
                     )
                     .font(.caption)
                 }

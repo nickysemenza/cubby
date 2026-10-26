@@ -12,7 +12,7 @@ struct DetailSummaryGrid: View {
             // Invalid keys must stay visible as diagnostics rather than looking inapplicable.
             if keys.contains(where: { descriptor.field($0) == nil }) { return true }
             if keys.contains(where: { key in
-                descriptor.field(key).flatMap { NativePresentationCoverage.unsupportedDetail($0) } != nil
+                descriptor.field(key).flatMap { NativePresentationCoverage.detailHandoff($0) } != nil
             }) {
                 return true
             }
@@ -44,10 +44,11 @@ struct DetailSummaryGrid: View {
         case .fields(let keys):
             if let missing = keys.first(where: { descriptor.field($0) == nil }) {
                 Text("Unsupported summary field: \(missing)").font(.caption).textSelection(.enabled)
-            } else if let reason = keys.compactMap({ key in
-                descriptor.field(key).flatMap { NativePresentationCoverage.unsupportedDetail($0) }
+            } else if let handoff = keys.compactMap({ key in
+                descriptor.field(key).flatMap { NativePresentationCoverage.detailHandoff($0) }
             }).first {
-                Text(reason).font(.caption).textSelection(.enabled)
+                OpenOnWebButton(target: handoff.target(key: descriptor.key, id: row.id), label: handoff.label)
+                    .font(.caption)
             } else if descriptor.key == .usdaFood {
                 USDASummaryFields(descriptor: descriptor, row: row, keys: keys)
             } else {

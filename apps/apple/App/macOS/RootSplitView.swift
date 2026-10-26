@@ -3,7 +3,6 @@ import SwiftUI
 
 struct RootSplitView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.openURL) private var openURL
     @SceneStorage("cubby.selectedSection") private var storedSection = AppSection.today.rawValue
     /// Manifest section ids; retain existing domain preferences across windows and launches.
     @AppStorage("cubby.sidebar.collapsedDomains") private var collapsedDomains = ""
@@ -160,16 +159,11 @@ struct RootSplitView: View {
                 sidebarLabel(destination, domain: section.domain)
                     .tag(native)
             } else {
-                Button {
-                    if let url = destination.webURL(serverURL: model.client.baseURL) {
-                        openURL(url)
-                    }
-                } label: {
+                OpenOnWebButton(target: destination.webTarget) {
                     sidebarLabel(destination, domain: section.domain)
                 }
                 .buttonStyle(.plain)
                 .selectionDisabled()
-                .accessibilityHint("Opens in the default browser")
             }
         }
     }

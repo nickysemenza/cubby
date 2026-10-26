@@ -5,8 +5,8 @@ import Foundation
 public enum SectionActionError: Error, Equatable, Sendable {
     /// The report does not offer the verb, or offers it with a reason the server gave.
     case unavailable(String)
-    /// Native does not implement the verb (`native-coverage.ts`); carries the reason.
-    case unsupported(String)
+    /// Native hands the verb off to web (`native-coverage.ts`); carries the reason.
+    case handoff(String)
 }
 
 /// Runs the verbs a finance report's `records` block offers, through the same operations web's
@@ -20,15 +20,15 @@ public struct SectionActionRunner: Sendable {
         self.client = client
     }
 
-    /// How native treats a verb: `implemented`, or `unsupported` with the reason to show.
+    /// How native treats a verb: `implemented`, or `handoff` with the web row to show.
     public static func coverage(of action: SectionActionID) -> NativeCoverageStatus {
         NativeCoverageManifest.shared.sectionAction[action.rawValue]
-            ?? .unsupported("This action is available on web.")
+            ?? .handoff(NativeWebHandoff(label: "Open on web", reason: "This action is available on web."))
     }
 
     /// Throws unless `verb` is implemented natively and the report offers it available.
     public static func canOpen(_ verb: SectionActionID, in records: ReportPresentation.Records) throws {
-        if case .unsupported(let reason) = coverage(of: verb) { throw SectionActionError.unsupported(reason) }
+        if let handoff = coverage(of: verb).handoff { throw SectionActionError.handoff(handoff.reason) }
         guard let action = records.verb(verb) else {
             throw SectionActionError.unavailable("This action is not offered here.")
         }

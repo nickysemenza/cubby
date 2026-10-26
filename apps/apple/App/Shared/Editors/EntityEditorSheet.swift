@@ -62,16 +62,16 @@ struct EntityEditorSheet: View {
         return false
     }
 
-    private var unsupportedFields: [FieldDescriptor] {
+    private var handoffFields: [FieldDescriptor] {
         descriptor.fields.filter { field in
             let participates = isCreate ? field.inCreate : field.inUpdate
-            return participates && NativePresentationCoverage.unsupportedControl(field) != nil
+            return participates && NativePresentationCoverage.controlHandoff(field) != nil
         }
     }
 
-    private var unsupportedRequiredFields: [FieldDescriptor] {
+    private var handoffRequiredFields: [FieldDescriptor] {
         guard isCreate else { return [] }
-        return unsupportedFields.filter(\.requiredOnCreate)
+        return handoffFields.filter(\.requiredOnCreate)
     }
 
     /// Keys the photo block owns; they never render as field controls. Derived from
@@ -107,7 +107,7 @@ struct EntityEditorSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { startSave() }
                         .disabled(
-                            !(model?.canSave ?? false) || !unsupportedRequiredFields.isEmpty || isSaving
+                            !(model?.canSave ?? false) || !handoffRequiredFields.isEmpty || isSaving
                         )
                         .accessibilityIdentifier("editor.\(key.rawValue).save")
                 }
@@ -172,18 +172,18 @@ struct EntityEditorSheet: View {
             if let context {
                 Section { Text(context.description).foregroundStyle(.secondary) }
             }
-            if !unsupportedFields.isEmpty {
+            if !handoffFields.isEmpty {
                 Section {
                     Text(
-                        unsupportedRequiredFields.isEmpty
+                        handoffRequiredFields.isEmpty
                             ? "Additional fields are available on web."
                             : "This record needs additional fields available on web to create it."
                     )
                     .foregroundStyle(.secondary)
                     if case .update(let id) = mode {
-                        Link(destination: appModel.webURL(for: key, id: id)) {
-                            Label("Open on web", systemImage: "safari")
-                        }
+                        OpenOnWebButton(
+                            target: .record(key: key, id: id), label: "Edit \(descriptor.singular) on web"
+                        )
                         .accessibilityIdentifier("editor.\(key.rawValue).openOnWeb")
                     }
                 }
@@ -252,7 +252,7 @@ struct EntityEditorSheet: View {
         guard let renderer = field.controlRenderer else { return false }
         switch NativePresentationCoverage.control(renderer) {
         case .implemented, .generic: return true
-        case .ownedElsewhere, .unsupported: return false
+        case .ownedElsewhere, .handoff: return false
         }
     }
 

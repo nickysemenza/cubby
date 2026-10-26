@@ -57,7 +57,7 @@ struct EntityDetailView: View {
             .refreshControl { await refresh() }
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
-                activity.webpageURL = appModel.webURL(for: key, id: row.id)
+                activity.webpageURL = appModel.webHandoff.url(.record(key: key, id: row.id))
                 activity.title = row.title
                 activity.isEligibleForHandoff = true
                 // Spotlight indexing is a separate path (`SpotlightIndexer`); this activity is
@@ -132,14 +132,15 @@ struct EntityDetailView: View {
                 }
             }
             ToolbarItem {
-                ShareLink(item: appModel.webURL(for: key, id: row.id)) {
+                ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
                     Label("Share", systemImage: "square.and.arrow.up")
                 }
             }
             ToolbarItem {
                 Menu {
+                    webMenuItems(row: row)
                     Button {
-                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     } label: {
                         Label("Copy link", systemImage: "link")
                     }
@@ -155,6 +156,16 @@ struct EntityDetailView: View {
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
+            }
+        }
+    }
+
+    /// The record on web, then each surface this record hands off to web, named after it.
+    @ViewBuilder private func webMenuItems(row: EntityRow) -> some View {
+        Section {
+            OpenOnWebButton(target: .record(key: key, id: row.id), label: "Open on web")
+            ForEach(NativePresentationCoverage.recordHandoffs(descriptor, row: row), id: \.label) { handoff in
+                OpenOnWebButton(target: handoff.target(key: key, id: row.id), label: handoff.label)
             }
         }
     }
@@ -259,10 +270,8 @@ struct EntityDetailView: View {
             }
             .buttonStyle(.bordered)
             .accessibilityIdentifier("detail.\(key.rawValue).missing.search")
-            Link(destination: appModel.webURL(for: key, id: id)) {
-                Label("Open on web", systemImage: "safari")
-            }
-            .accessibilityIdentifier("detail.\(key.rawValue).missing.web")
+            OpenOnWebButton(target: .record(key: key, id: id), label: "Open on web")
+                .accessibilityIdentifier("detail.\(key.rawValue).missing.web")
         }
     }
 
@@ -419,20 +428,6 @@ struct EntityDetailContent: View {
             && (!activityLoaded || activityError != nil || !activityEvents.isEmpty || activityCursor != nil)
     }
 
-    private var hasUnsupportedPresentation: Bool {
-        let unsupportedField = descriptor.fields.contains {
-            $0.showInDetail && NativePresentationCoverage.unsupportedDetail($0) != nil
-        }
-        let unsupportedSlot = presentation.detailSections.contains { section in
-            guard case .slot = section.kind else { return false }
-            return NativePresentationCoverage.unsupportedSlot(section.id) != nil
-        }
-        let unsupportedHero = presentation.heroActions.contains {
-            NativePresentationCoverage.unsupportedHeroAction($0) != nil
-        }
-        return unsupportedField || unsupportedSlot || unsupportedHero
-    }
-
     /// The journal variant's leading section: the first declared relation.
     private var journalSection: RelationSectionModel? {
         guard presentation.detailVariant == .journal else { return nil }
@@ -495,16 +490,6 @@ struct EntityDetailContent: View {
                             }
                             ForEach(presentation.detailSections) { section in
                                 if section.id != journalSection?.id { macDeclared(section) }
-                            }
-                            if hasUnsupportedPresentation {
-                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                                    Text("More details").font(.headline)
-                                    Text("Additional details are available on web.").foregroundStyle(
-                                        .secondary)
-                                    Link(
-                                        "Open on web",
-                                        destination: appModel.webURL(for: descriptor.key, id: row.id))
-                                }
                             }
                             if let connectedRecords, connectedHasRows || connectedRecords.error != nil {
                                 DisclosureGroup(isExpanded: $connectedExpanded) {
@@ -677,13 +662,6 @@ struct EntityDetailContent: View {
             }
             if activityInsertionSectionID == nil {
                 phoneActivitySection
-            }
-            if hasUnsupportedPresentation {
-                Section("More details") {
-                    Text("Additional details are available on web.")
-                        .foregroundStyle(.secondary)
-                    Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
-                }
             }
             if let connectedRecords {
                 if connectedHasRows || connectedRecords.error != nil {

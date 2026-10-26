@@ -653,10 +653,7 @@ private struct RunningView: View {
     @State private var review = RunReviewSession()
 
     private func webReviewURL(_ runID: String) -> URL {
-        let url = appModel.webURL(for: .run, id: runID)
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.fragment = "photo-batch"
-        return components?.url ?? url
+        appModel.webHandoff.url(.record(key: .run, id: runID, section: "photo-batch"))
     }
 
     private var runLinkTitle: String {
@@ -689,7 +686,7 @@ private struct RunningView: View {
             }
             if let runID = session.runID {
                 ShareLink(item: webReviewURL(runID)) {
-                    Label("Continue on web", systemImage: "square.and.arrow.up")
+                    Label("Send to computer", systemImage: "square.and.arrow.up")
                 }
                 Text(
                     "Open this same import on your computer to review the items. Your photos and progress stay with the run."

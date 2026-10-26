@@ -23,10 +23,35 @@ struct NativeCoverageViewPathTests {
         }
     #endif
 
-    @Test func nativeCoverageDecodesAndSurfacesUnsupportedReasons() {
+    @Test func nativeCoverageDecodesAndHandsUnknownSlotsOffToTheRecord() {
         #expect(NativePresentationCoverage.detailSlot("purchase.receiving") == .implemented)
+        let unknown = NativePresentationCoverage.detailSlot("not.a-slot").handoff
+        #expect(unknown?.section == nil && unknown?.reason == "Unknown native detail slot.")
+    }
+
+    /// A handoff slot draws its row only where web's slot predicate would draw the slot.
+    @Test func importAgentHandoffFollowsTheRunsPurposeAndLiveness() throws {
+        func run(_ purpose: String, _ status: String) -> EntityRow {
+            EntityRow(
+                id: "RUN-4K7M", title: "Import", subtitle: nil, imageURL: nil,
+                raw: ["id": "RUN-4K7M", "purpose": .string(purpose), "status": .string(status)])
+        }
+        let importPurpose = try #require(SharedConstants.importReportRunPurposes.first)
+        let live = try #require(SharedConstants.activeRunStatuses.first)
+        let liveImport = run(importPurpose, live)
+        let stoppedImport = run(importPurpose, "completed")
+
         #expect(
-            NativePresentationCoverage.detailSlot("not.a-slot")
-                == .unsupported("Unknown native detail slot."))
+            DetailSlotRegistry.handoff(slot: "run.import-agent-live", row: liveImport)?.section
+                == "import-agent-live")
+        #expect(DetailSlotRegistry.handoff(slot: "run.import-agent-stopped", row: liveImport) == nil)
+        #expect(
+            DetailSlotRegistry.handoff(slot: "run.import-agent-stopped", row: stoppedImport)?.section
+                == "import-agent-stopped")
+        let photoRun = run("photo_inventory", live)
+        #expect(DetailSlotRegistry.handoff(slot: "run.import-agent-live", row: photoRun) == nil)
+        #expect(
+            NativePresentationCoverage.recordHandoffs(EntityCatalog[.run], row: stoppedImport).map(\.label)
+                == ["Open agent history on web"])
     }
 }

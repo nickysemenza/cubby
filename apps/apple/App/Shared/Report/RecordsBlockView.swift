@@ -535,16 +535,14 @@ struct RecordsBlockView: View {
         if let verbError {
             Text(verbError).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
         }
-        let unsupported = records.verbs.compactMap { verb -> String? in
-            if case .unsupported(let reason) = SectionActionRunner.coverage(of: verb.verb) { return reason }
-            return nil
-        }
-        if let host, !unsupported.isEmpty {
-            ForEach(unsupported, id: \.self) { reason in
-                Text(reason).font(.caption).foregroundStyle(.secondary)
-            }
-            Link("Open on web", destination: appModel.webURL(for: host.entity, id: host.row.id))
+        if let host {
+            let handoffs = records.verbs.compactMap { SectionActionRunner.coverage(of: $0.verb).handoff }
+            ForEach(handoffs, id: \.label) { handoff in
+                OpenOnWebButton(
+                    target: handoff.target(key: host.entity, id: host.row.id), label: handoff.label
+                )
                 .font(.caption)
+            }
         }
     }
 
@@ -616,7 +614,7 @@ struct RecordsBlockView: View {
         } catch let error as SectionActionError {
             verbError =
                 switch error {
-                case .unavailable(let reason), .unsupported(let reason): reason
+                case .unavailable(let reason), .handoff(let reason): reason
                 }
         } catch {
             verbError = error.userMessage
