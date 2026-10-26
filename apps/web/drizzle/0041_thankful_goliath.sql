@@ -1,0 +1,1 @@
+CREATE INDEX "Job_kind_position_idx" ON "Job" USING btree ("kind",(-"priority"),"updatedAt","availableAt","id");

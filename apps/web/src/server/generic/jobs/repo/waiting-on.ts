@@ -15,7 +15,6 @@ import {
   jobKindPolicy,
   UNDRAINED_JOB_KINDS,
 } from "~/server/generic/jobs/kind-policy";
-import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   deviceOwnedStreak,
   deviceSelectionIndex,
@@ -110,9 +109,7 @@ export function deriveJobWaitingOn(
     reason: "due",
     lane,
     aheadCount: context.aheadCount ?? 0,
-    aheadIsEstimate:
-      job.kind === "ai.evaluation" ||
-      (context.aheadCount ?? 0) >= JOB_DRAIN.batch,
+    aheadIsEstimate: true,
     etaSeconds: eta(context),
   };
 }
@@ -196,7 +193,7 @@ async function queueThroughput(db: Database, now: Date) {
 }
 
 /**
- * Batched waiting-on for listed Jobs: one fair-order read for drain
+ * Batched waiting-on for listed Jobs: one visible-kind read for drain
  * positions, one for device-pull positions, one throughput read and one
  * executor read for leased image work.
  */

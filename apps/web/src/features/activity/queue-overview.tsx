@@ -33,10 +33,16 @@ import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { roundTo } from "~/lib/round-to";
 import { DerivedBacklogOverview } from "~/ui/derived/backlog";
+import { useBacklogProgress } from "~/ui/derived/use-backlog-progress";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
 import { StatusText } from "~/ui/primitives/status-text";
 
 export type QueueSearch = {
@@ -76,6 +82,30 @@ function QueueHealthNotice({
         ))}
       </ul>
     </div>
+  );
+}
+
+function KindBacklogProgress({
+  kind,
+  remaining,
+  at,
+}: {
+  kind: string;
+  remaining: number;
+  at: number;
+}) {
+  const progress = useBacklogProgress(remaining, at);
+  if (!remaining) return null;
+  const text = `${formatCount(remaining)} remaining · ${formatCount(progress.drained)} fewer since opened`;
+  return (
+    <Progress
+      value={progress.drained}
+      max={progress.peak || remaining}
+      aria-valuetext={text}
+    >
+      <ProgressLabel>{kind}</ProgressLabel>
+      <ProgressValue>{() => text}</ProgressValue>
+    </Progress>
   );
 }
 
@@ -272,6 +302,7 @@ function JobActions({ list }: { list: UseEntityListReturn<BaseListRow> }) {
 
 const RUN_COLUMNS = [
   "name",
+  "workProgress",
   "purpose",
   "status",
   "waitingOn",
@@ -368,6 +399,27 @@ export function QueueOverview({
   return (
     <Stack gap="lg">
       <QueueHealthNotice health={health.data?.snapshot} />
+      {health.data?.snapshot?.kinds.some(
+        (kind) => kind.queued > 0 || kind.due > 0,
+      ) && (
+        <div
+          className="grid max-w-2xl gap-2"
+          aria-label="Queue backlog progress"
+        >
+          <p className="text-xs text-muted-foreground">
+            Net backlog since opened · measured{" "}
+            {formatRelative(health.data.snapshot.measuredAt)}
+          </p>
+          {health.data.snapshot.kinds.map((kind) => (
+            <KindBacklogProgress
+              key={kind.kind}
+              kind={kind.kind}
+              remaining={Math.max(kind.queued, kind.due)}
+              at={health.dataUpdatedAt}
+            />
+          ))}
+        </div>
+      )}
       <DeviceBacklogNotice />
       <WorkFeed
         onShowJobs={(kind) =>

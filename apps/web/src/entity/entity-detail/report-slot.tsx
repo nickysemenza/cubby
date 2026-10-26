@@ -31,7 +31,11 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
-import { Progress } from "~/ui/primitives/progress";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   StaticTable,
@@ -332,17 +336,20 @@ export function ReportBlocks({
                 aria-label={block.label}
                 className="space-y-2 py-1"
               >
-                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
-                  <span className="font-medium">{block.label}</span>
-                  <span className="text-xs tabular-nums">{block.summary}</span>
-                </div>
-                <Progress
-                  value={block.processed}
-                  max={block.total ?? undefined}
-                  indeterminate={block.total === null}
-                  aria-label={block.label}
-                  aria-valuetext={block.summary}
-                />
+                {block.total === null ? (
+                  <p className="text-xs text-muted-foreground">
+                    {block.label} · {block.summary}
+                  </p>
+                ) : (
+                  <Progress
+                    value={block.processed}
+                    max={block.total}
+                    aria-valuetext={block.summary}
+                  >
+                    <ProgressLabel>{block.label}</ProgressLabel>
+                    <ProgressValue>{() => block.summary}</ProgressValue>
+                  </Progress>
+                )}
                 <Description size="xs">{block.detail}</Description>
               </section>
             );

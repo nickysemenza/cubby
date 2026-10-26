@@ -508,3 +508,16 @@ While Activity is open, it samples the backlog every 15 seconds and shows an
 approximate remaining time after a minute of net decrease, using up to five
 minutes of observations. A gap over a minute resets the estimate. Flat or growing
 work has no ETA; new dependency work can change the estimate.
+
+Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
+`ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
+values stack on phone widths so long Job kinds retain their own line. Run detail and
+Activity Work cells show the current phase's known processed/total counts;
+unknown totals remain text. Activity queue-kind bars and the expanded sidebar's
+large derived backlog (100 or more observed values) show net depletion from the
+view's high-water mark, never lifetime completion. Incoming work can reduce the
+fill. Idle work or an observation gap over a minute resets the baseline; the
+sidebar samples every 15 seconds and its collapsed rail retains the status dot.
+Queue-kind observations use the watchdog snapshots and their existing measured
+at label; bars do not imply a new live measurement. These observation windows
+are local to the mounted view and are not durable workload totals.

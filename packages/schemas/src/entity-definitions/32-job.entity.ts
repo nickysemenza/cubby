@@ -321,6 +321,17 @@ export default defineEntity({
       // Recent-claim windows (throughput, queue health) across every kind.
       { name: "Job_claimed_idx", on: ["lastClaimedAt"] },
       { name: "Job_kind_state_idx", on: ["kind", "state", "availableAt"] },
+      // Visible-list positions count only the earlier prefix of one kind.
+      {
+        name: "Job_kind_position_idx",
+        on: [
+          "kind",
+          { sql: "(-{priority})" },
+          "updatedAt",
+          "availableAt",
+          "id",
+        ],
+      },
     ],
     checks: [
       { name: "Job_state_check", column: "state", bare: true },
