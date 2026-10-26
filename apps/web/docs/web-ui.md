@@ -311,6 +311,8 @@ their slots. Phone navigation keeps the shared touch-target floor.
 The grid and day sheet seed the shared context from that response.
 Compact span rows show a small thumbnail when available; missing images retain
 the kind icon. Opening the day sheet does not create a separate image query.
+Calendar spending rows convey refunds through their negative amounts without a
+separate Refund badge.
 
 All record identity imagery uses the canonical resolver. Raw attachment galleries,
 Product image summaries, nested identity-product photos, and direct logo/cover
