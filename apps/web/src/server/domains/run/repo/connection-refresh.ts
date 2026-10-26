@@ -19,13 +19,14 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { z } from "zod";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
+import { entityIdentity, job, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import {
   connectionDiscoveryFingerprint,
@@ -311,6 +312,47 @@ const sweepKinds = (entityKinds?: readonly string[]) =>
   entityKinds?.length
     ? discoveryEntities.filter((kind) => entityKinds.includes(kind))
     : [...discoveryEntities];
+
+/**
+ * How far the routine pass that owns `runId` has walked its roster, newest
+ * first: records at or after its cursor, of every record it covers. Null when
+ * no live pass cursor names the Run (a finished pass or another Run).
+ */
+export async function connectionDiscoveryPosition(db: Database, runId: string) {
+  const [pass] = await getDb(db)
+    .select({ cursor: job.cursor })
+    .from(job)
+    .where(
+      and(
+        eq(job.key, "discovery:connections"),
+        sql`${job.cursor}->>'runId' = ${runId}`,
+      ),
+    )
+    .limit(1);
+  const after = z
+    .object({ after: z.string().nullable() })
+    .safeParse(pass?.cursor);
+  if (!after.success) return null;
+  const total = await countConnectionSweepSources(db);
+  const [afterCreatedAt, afterId] = after.data.after?.split("|") ?? [];
+  if (!afterCreatedAt || !afterId) return { walked: 0, total };
+  const [row] = await getDb(db)
+    .select({ remaining: count() })
+    .from(entityIdentity)
+    .where(
+      and(
+        sourcePredicate(),
+        or(
+          sql`${entityIdentity.createdAt} < ${afterCreatedAt}::timestamp`,
+          and(
+            sql`${entityIdentity.createdAt} = ${afterCreatedAt}::timestamp`,
+            sql`${entityIdentity.id} < ${afterId}::uuid`,
+          ),
+        ),
+      ),
+    );
+  return { walked: Math.max(0, total - (row?.remaining ?? 0)), total };
+}
 
 export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
 export const connectionSourceFingerprints = connectionDiscoveryFingerprints;

@@ -2031,6 +2031,7 @@ function connectionEvaluationPageAdapter(
           receipt: jsonSnapshot({
             source: entry.outcome.source,
             discovered: true,
+            candidates: entry.outcome.publications.length,
           }),
         });
       }

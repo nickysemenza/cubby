@@ -4,10 +4,17 @@ import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, email, job, orderMailEvent } from "~/server/db/schema";
+import {
+  aiEvaluation,
+  email,
+  job,
+  orderMailEvent,
+  run,
+} from "~/server/db/schema";
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
@@ -176,6 +183,33 @@ describe("connection evaluation pages", () => {
     });
     expect(proposals.map((proposal) => proposal.source)).toEqual([
       { entityKind: "email", entityId: withEvidence.message.shortcode },
+    ]);
+    const [evaluationRun] = await getDb(ctx.db)
+      .select({ code: run.shortcode })
+      .from(run)
+      .innerJoin(aiEvaluation, eq(aiEvaluation.runId, run.id))
+      .where(inArray(aiEvaluation.id, ids))
+      .limit(1);
+    if (!evaluationRun?.code) throw new Error("Synthetic Run missing");
+    const summary = await readRunEvaluationsByCode(
+      ctx.db,
+      evaluationRun.code,
+      false,
+    );
+    expect(
+      summary.recent.map((outcome) => [
+        outcome.recordCode,
+        outcome.state,
+        outcome.candidates,
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        [withEvidence.message.shortcode, "completed", 1],
+        [deleted.message.shortcode, "obsolete", null],
+      ]),
+    );
+    expect(summary.byKind).toEqual([
+      expect.objectContaining({ entity: "email", completed: 1, obsolete: 1 }),
     ]);
   });
 });
