@@ -229,14 +229,6 @@ const calendarKindRegistry = {
         ...(item.spendingContext?.projectNames ?? []),
         ...(item.spendingContext?.parties.map((party) => party.name) ?? []),
       ].join(" · "),
-    compactBadge: (item) =>
-      item.occurrence === "refund"
-        ? { label: "Refund", variant: "outline" }
-        : undefined,
-    richBadge: (item) =>
-      item.occurrence === "refund"
-        ? { label: "Refund", variant: "outline" }
-        : undefined,
     edit: (_item) => ({
       mode: "read-only",
       entity: "purchase",
