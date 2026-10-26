@@ -2086,6 +2086,23 @@ the agent's. Calendar sources reuse their entity list scaffolds, including
 prepared derived predicates and related scopes. Work queue declares its
 computed-row filters and grouping through `defineSourceList`; it retains its
 staged SQL population rather than inventing a storage entity.
+`defineSourceList` declares static choice options and named declaration rosters
+alongside each filter; cell labels and filter choices consume the same owners.
+A filter whose column differs from its request key declares `field`; `urlKey`
+controls only the URL codec and does not rename the compiled input.
+Its multiselects declare `<columnId>Exclude` by default and use the ordinary
+`FILTER_NOT_PREFIX` URL codec. Work queue compiles include/exclude through one
+predicate helper, negating exclusions with `NOT COALESCE((…), false)`.
+Reason uses each row's `reasonKeys`: branch keys, Problem definition keys, or
+one membership per failing gap check. The routed population applies Reason
+before counts and paging, without trimming displayed gap messages. Only an
+include composed entirely of gap-view checks prunes gap views and skips
+non-gap branches; mixed includes and exclusions retain the combined population.
+The former `check` input and URL key are removed without an alias. Awaiting
+posting has distinct branch keys prefixed with `awaiting_posting:`. Type's
+no-value choice selects Problem rows through `entityPresence`.
+RTable checks a bounded loaded sample in development for multiselect values
+missing from declared choices, skipping deferred and record-backed rosters.
 
 ### Calendar list presentations
 

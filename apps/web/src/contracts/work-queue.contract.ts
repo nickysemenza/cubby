@@ -39,7 +39,7 @@ export const workQueueContract = defineContract(
     forMember: query({
       exposure: "capability",
       description:
-        "Actionable research, review and repair work available to the connected member, including shared work. Private source and account work belonging only to another member is excluded before counts and pagination. Routing follows current evidence ownership; unresolved private ownership requires household review.",
+        "Actionable research, review and repair work available to the connected member, including shared work. Private source and account work belonging only to another member is excluded before counts and pagination. Routing follows current evidence ownership; unresolved private ownership requires household review. Reason filters use stable row reasonKeys (data checks, problem keys or branch keys); reasonExclude keeps rows with none of those memberships. Kind, Source and Vendor also accept their Exclude keys.",
       input: workQueuePageInput,
       output: workQueueOutSchema,
       readPolicy: "strong",

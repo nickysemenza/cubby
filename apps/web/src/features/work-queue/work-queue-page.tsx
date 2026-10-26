@@ -1,10 +1,7 @@
-import { dataCheckLabel } from "@cubby/schemas/data-quality";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
+import { sourceListFilterChoices } from "@cubby/schemas/source-list";
 import {
-  workQueueGapChecks,
-  workQueueGapViews,
   workQueueGroupChoices,
   workQueueHouseholdInput,
   workQueueKindOptions,
@@ -52,6 +49,7 @@ import {
 import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import { Page, usePageWorkbenchTarget } from "~/entity/page/page";
+import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   createCurrencyColumn,
   createImageColumn,
@@ -129,7 +127,14 @@ type QueueFilters = Pick<
   | "waitingForPresence"
   | "source"
   | "kind"
-  | "check"
+  | "reason"
+  | "reasonExclude"
+  | "entityExclude"
+  | "entityPresence"
+  | "waitingForExclude"
+  | "sourceExclude"
+  | "kindExclude"
+  | "vendorExclude"
   | "vendor"
   | "group"
 >;
@@ -175,19 +180,13 @@ const buildQueueFilters = (state: TableStateReturn): QueueFilters => {
     ...buildFiltersFromManifest(FILTER_SPECS, state.getColumnFilterValues),
     query: state.getColumnFilter("name"),
   });
-  const { query, view, entity, waitingFor, waitingForPresence } = parsed;
-  const { source, kind, check, vendor } = parsed;
-  return {
-    query,
-    view,
-    entity,
-    waitingFor,
-    waitingForPresence,
-    source,
-    kind,
-    check,
-    vendor,
-  };
+  const {
+    pageIndex: _pageIndex,
+    pageSize: _pageSize,
+    sort: _sort,
+    ...filters
+  } = parsed;
+  return filters;
 };
 const queueQueryPlan: ListQueryOptionsFn<
   QueueFilters,
@@ -250,14 +249,26 @@ const KIND_OPTIONS = workQueueKindOptions.map((option) => ({
   icon: KIND_ICONS[option.value],
 }));
 
-// The check filter offers exactly the checks a gap row can carry; the entity
-// prefix disambiguates shared labels ("Category", "Name").
-const CHECK_OPTIONS = workQueueGapViews.flatMap((gapView) =>
-  workQueueGapChecks(gapView).map((check) => ({
-    value: check,
-    label: `${entitySummary[gapView.entity].singular} · ${dataCheckLabel[check]}`,
+const CHOICE_SOURCES = {
+  problems: problemQueryDeclarations().map(({ key, title }) => ({
+    value: key,
+    label: title,
   })),
-);
+};
+const queueChoiceFilter = (columnId: string) => ({
+  filterType: "multiselect" as const,
+  options: sourceListFilterChoices(workQueueList, columnId, CHOICE_SOURCES),
+  exclude: FILTER_SPECS.some(
+    (spec) => spec.columnId === columnId && spec.exclude !== undefined,
+  ),
+});
+const TYPE_OPTIONS = [
+  ...nullableSentinelOptions().map((option) => ({
+    ...option,
+    label: option.value === FILTER_NONE ? "Problem" : option.label,
+  })),
+  ...workQueueRecordTypeOptions,
+];
 const VENDOR_ROSTER: readonly DeferredEntityRoster[] = [
   { key: "vendor", target: "vendor" },
 ];
@@ -347,7 +358,8 @@ function queueColumns(
       }),
     );
     add(
-      helper.accessor((row) => workRowType(row) ?? "Problem", {
+      helper.accessor((row) => row.entity ?? FILTER_NONE, {
+        cell: (info) => workRowType(info.row.original) ?? "Problem",
         id: "entity",
         header: "Type",
         size: 120,
@@ -359,8 +371,8 @@ function queueColumns(
           ),
           filterConfig: {
             placeholder: "Filter type",
-            filterType: "multiselect",
-            options: workQueueRecordTypeOptions,
+            ...queueChoiceFilter("entity"),
+            options: TYPE_OPTIONS,
           },
         }),
       }),
@@ -403,7 +415,8 @@ function queueColumns(
           ),
           filterConfig: {
             placeholder: "Filter vendor",
-            filterType: "multiselect",
+            referenceEntity: "vendor",
+            ...queueChoiceFilter("vendor"),
             options: vendorOptions?.options ?? [],
             ...deferredRosterControls(vendorOptions),
           },
@@ -416,7 +429,7 @@ function queueColumns(
       add({ ...column, enableSorting: false }),
     );
     add(
-      helper.accessor((row) => row.reason, {
+      helper.accessor((row) => row.reasonKeys, {
         id: "reason",
         enableSorting: false,
         header: "Reason",
@@ -430,40 +443,46 @@ function queueColumns(
           mobile: { slot: "meta", priority: 0 },
           cellData: textCellData<QueueTableRow>("text", (row) => row.reason),
           filterConfig: {
-            label: "Check",
-            placeholder: "Filter check",
-            filterType: "multiselect",
-            options: CHECK_OPTIONS,
+            placeholder: "Filter reason",
+            ...queueChoiceFilter("reason"),
           },
         }),
       }),
     );
     add(
-      helper.accessor((row) => waitingForLabel(row.waitingFor), {
-        id: "waitingFor",
-        header: "Waiting for",
-        size: 190,
-        cell: (info) => (
-          <WaitingForPill waitingFor={info.row.original.waitingFor} />
-        ),
-        meta: attachCubbyColumnMeta<QueueTableRow>({
-          mobile: { slot: "trailing", priority: 1, interactive: true },
-          cellData: textCellData<QueueTableRow>("text", (row) =>
-            waitingForLabel(row.waitingFor),
+      helper.accessor(
+        (row) =>
+          row.waitingFor.kind === "members"
+            ? row.waitingFor.members.map((member) => member.id)
+            : row.waitingFor.kind === "either"
+              ? "either"
+              : FILTER_NONE,
+        {
+          id: "waitingFor",
+          header: "Waiting for",
+          size: 190,
+          cell: (info) => (
+            <WaitingForPill waitingFor={info.row.original.waitingFor} />
           ),
-          filterConfig: {
-            placeholder: "Filter waiting for",
-            filterType: "multiselect",
-            // Me also matches Either work; No value is Unresolved.
-            options: [
-              ...nullableSentinelOptions(),
-              { value: CURRENT_MEMBER_FILTER, label: "Me" },
-              { value: "either", label: "Either" },
-              ...memberOptions,
-            ],
-          },
-        }),
-      }),
+          meta: attachCubbyColumnMeta<QueueTableRow>({
+            mobile: { slot: "trailing", priority: 1, interactive: true },
+            cellData: textCellData<QueueTableRow>("text", (row) =>
+              waitingForLabel(row.waitingFor),
+            ),
+            filterConfig: {
+              placeholder: "Filter waiting for",
+              ...queueChoiceFilter("waitingFor"),
+              // Me also matches Either work; No value is Unresolved.
+              options: [
+                ...nullableSentinelOptions(),
+                { value: CURRENT_MEMBER_FILTER, label: "Me" },
+                { value: "either", label: "Either" },
+                ...memberOptions,
+              ],
+            },
+          }),
+        },
+      ),
     );
     add(
       helper.accessor((row) => row.nextAction, {
@@ -484,7 +503,7 @@ function queueColumns(
         options: KIND_OPTIONS,
         filterConfig: {
           placeholder: "Filter kind",
-          filterType: "multiselect",
+          ...queueChoiceFilter("kind"),
           options: KIND_OPTIONS,
         },
       }),
@@ -496,8 +515,7 @@ function queueColumns(
         options: workQueueSourceOptions,
         filterConfig: {
           placeholder: "Filter source",
-          filterType: "multiselect",
-          options: workQueueSourceOptions,
+          ...queueChoiceFilter("source"),
         },
       }),
     );

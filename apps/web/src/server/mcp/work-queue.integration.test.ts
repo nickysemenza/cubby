@@ -308,7 +308,10 @@ describe("member actionable Work queue", () => {
             source: "reconciliation",
             kind,
             query: id,
-            check: "settlement_reference",
+            reason:
+              kind === "awaiting_posting"
+                ? "awaiting_posting:reconciliation:purchase-unsettled"
+                : "reconciliation:purchase-unsettled",
           }),
           false,
         );

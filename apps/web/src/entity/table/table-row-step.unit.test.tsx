@@ -7,6 +7,7 @@ import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "~/ui/data-table/table-features";
+import type { FilterConfig } from "~/ui/data-table/table-meta";
 import { useTableRowStep } from "~/ui/overlays/side-panel";
 
 import RTable from "./table";
@@ -36,14 +37,19 @@ function Harness({
   onRowClick,
   embedded = false,
   printable = false,
+  filterConfig,
 }: {
   onRowClick: (id: string) => void;
   embedded?: boolean;
   printable?: boolean;
+  filterConfig?: FilterConfig;
 }) {
   const columns = useMemo(
-    () => helper.columns([helper.accessor("name", { header: "Name" })]),
-    [],
+    () =>
+      helper.columns([
+        helper.accessor("name", { header: "Name", meta: { filterConfig } }),
+      ]),
+    [filterConfig],
   );
   const table = useCubbyTable({
     data: rows,
@@ -80,6 +86,36 @@ describe("docked panel row stepping", () => {
     harness = createBrowserTestHarness();
   });
   afterEach(() => harness.dispose());
+
+  it("warns for missing multiselect choices and skips deferred rosters", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const filterConfig: FilterConfig = {
+      placeholder: "Filter name",
+      filterType: "multiselect",
+      options: [{ value: "known", label: "Known" }],
+    };
+    try {
+      const { unmount } = render(
+        <Harness onRowClick={() => {}} filterConfig={filterConfig} />,
+        { wrapper: harness.wrapper },
+      );
+      expect(warn).toHaveBeenCalledWith(
+        "RTable column name displays a value absent from its multiselect choices.",
+      );
+      unmount();
+      warn.mockClear();
+      render(
+        <Harness
+          onRowClick={() => {}}
+          filterConfig={{ ...filterConfig, onActivate: () => {} }}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
 
   it("keeps offscreen loaded rows in the print projection", () => {
     render(<Harness onRowClick={() => {}} printable />, {

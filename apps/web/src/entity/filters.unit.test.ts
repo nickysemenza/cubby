@@ -1,4 +1,10 @@
 import { splitTypedList } from "@cubby/schemas/filter-sentinel-fields";
+import { sourceListFilterChoices } from "@cubby/schemas/source-list";
+import {
+  workQueueHouseholdInput,
+  workQueueList,
+  workQueuePageInput,
+} from "@cubby/schemas/work-queue";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -33,6 +39,50 @@ const getter =
     state[columnId];
 
 describe("buildFiltersFromManifest", () => {
+  it("uses declared Work queue reasons, exclusions and the Problem no-value choice", () => {
+    const specs = workQueueList.filters;
+    const filters = buildFiltersFromManifest(
+      specs,
+      getter({
+        name: "Synthetic queue",
+        reason: [
+          "product_category",
+          "__not__:reconciliation:purchase-unsettled",
+        ],
+        entity: [FILTER_NONE],
+      }),
+    );
+    expect(workQueueHouseholdInput.parse(filters)).toMatchObject({
+      query: "Synthetic queue",
+      reason: ["product_category"],
+      reasonExclude: ["reconciliation:purchase-unsettled"],
+      entityPresence: "none",
+    });
+    expect(
+      encodeFilters(specs, getter({ reason: ["__not__:product_category"] })),
+    ).toMatchObject({ reason: undefined, reasonExclude: "product_category" });
+    expect(sourceListFilterChoices(workQueueList, "reason")).toContainEqual({
+      value: "reconciliation:purchase-unsettled",
+      label: "No settlement evidence",
+    });
+    expect(
+      workQueueList.grouping.find((choice) => choice.key === "recordType")
+        ?.filter,
+    ).toMatchObject({ columnId: "entity", noValue: true });
+    expect(
+      workQueuePageInput.safeParse({ check: "product_category" }).success,
+    ).toBe(false);
+    expect(
+      workQueuePageInput.parse({
+        reason: "finding",
+        reasonExclude: "product_category",
+      }),
+    ).toMatchObject({ reason: "finding", reasonExclude: "product_category" });
+    for (const spec of specs.filter((spec) => spec.kind === "multiselect"))
+      expect(spec.exclude).toEqual({
+        field: `${spec.columnId}Exclude`,
+      });
+  });
   it("renames a column to its server field, and omits what isn't set", () => {
     const specs: FilterSpecCore[] = [
       { columnId: "name", field: "nameFilter", kind: "text" },
