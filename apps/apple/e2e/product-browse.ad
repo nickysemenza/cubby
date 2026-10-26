@@ -12,13 +12,14 @@ wait text "Synthetic Atlas Lantern" 30000
 
 click "id=detail.contents"
 wait text "Contents" 30000
-scroll down 0.6 --until "id=detail.contents.sources"
-click "id=detail.contents.sources"
-wait text "No sources" 30000
+wait "id=detail.contents.identity" 30000
+click "id=detail.contents.identity"
+wait text "Identity" 30000
 
 # Repeated jumps to the same destination must be delivered after the sheet closes.
+wait "role=Button id=detail.contents" 30000
 click "id=detail.contents"
 wait text "Contents" 30000
-scroll down 0.6 --until "id=detail.contents.sources"
-click "id=detail.contents.sources"
-wait text "No sources" 30000
+wait "id=detail.contents.identity" 30000
+click "id=detail.contents.identity"
+wait text "Identity" 30000
