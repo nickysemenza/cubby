@@ -4,6 +4,7 @@ import {
   hasImportRunReports,
   isExecutedRunPurpose,
   isStepRunPurpose,
+  OWNED_AI_WORK_PURPOSES,
   type RunPurpose,
 } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
@@ -285,6 +286,11 @@ const detailSlots = {
     // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
     // component (`features/run/slots.tsx`). Steps, Decisions and Diagnostics are web's richer
     // fills of the `run.steps`, `run.decisions` and `run.diagnostics` reports native draws.
+    evaluations: slot(
+      () => named(import("~/features/run/run-evaluations"), "RunEvaluations"),
+      (run) =>
+        OWNED_AI_WORK_PURPOSES.some((purpose) => purpose === run.purpose),
+    ),
     steps: slot(
       () => named(import("~/features/run/run-detail"), "RunStepsDetail"),
       (run) => isStepRunPurpose(run.purpose),

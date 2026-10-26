@@ -25,7 +25,9 @@ import type {
   BaseListRow,
   UseEntityListReturn,
 } from "~/entity/hooks/use-entity-list";
+import { WorkFeed } from "~/features/activity/work-feed";
 import { JobLogPanel } from "~/features/job/job-diagnostics";
+import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
@@ -310,6 +312,30 @@ const JOB_DETAIL = {
   ),
 };
 
+/** Values that waited this long are worth a breakdown; a burst that clears sooner is not. */
+const DERIVED_BREAKDOWN_AFTER_SECONDS = 60;
+
+/**
+ * The per-record-type breakdown of waiting derived values, shown only while
+ * some value has waited over a minute. "Now" reports the routine pace, so a
+ * backlog that drains between reads no longer flashes a table in and out.
+ */
+function DerivedBacklogSection() {
+  const backlog = useQuery({
+    ...derived.backlog.queryOptions({}),
+    refetchInterval: 15_000,
+  });
+  if (
+    (backlog.data?.oldestWaitingSeconds ?? 0) < DERIVED_BREAKDOWN_AFTER_SECONDS
+  )
+    return null;
+  return (
+    <Section headingAs="h2" title="Derived values" id="derived-values">
+      <DerivedBacklogOverview />
+    </Section>
+  );
+}
+
 export function QueueOverview({
   search,
   onSearchChange,
@@ -343,10 +369,17 @@ export function QueueOverview({
     <Stack gap="lg">
       <QueueHealthNotice health={health.data?.snapshot} />
       <DeviceBacklogNotice />
-      <QueueSummary search={search} onSearchChange={onSearchChange} />
-      <Section headingAs="h2" title="Derived values" id="derived-values">
-        <DerivedBacklogOverview />
-      </Section>
+      <WorkFeed
+        onShowJobs={(kind) =>
+          onSearchChange({
+            kind,
+            lane: undefined,
+            reason: undefined,
+            page: undefined,
+          })
+        }
+      />
+      <DerivedBacklogSection />
       <Section headingAs="h2" title="Runs needing attention">
         <EmbeddedEntityList
           entity="run"
@@ -359,6 +392,7 @@ export function QueueOverview({
         />
       </Section>
       <Section headingAs="h2" title="Jobs" id="queue-jobs">
+        <QueueSummary search={search} onSearchChange={onSearchChange} />
         <EmbeddedEntityList
           key={JSON.stringify(filters)}
           entity="job"

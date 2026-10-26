@@ -417,6 +417,10 @@ export const nativeCoverage = {
       ["run.import-agent-live", "run.import-agent-stopped"],
       "The live agent conversation is web-only: it streams from the import-run agent route, which native has no client for. Prompt, stop and review the agent on web.",
     ),
+    ...unsupported(
+      ["run.evaluations"],
+      "Evaluation progress (records checked, pace, outcomes by record) is web-only for now; native shows the Run's progress and steps reports.",
+    ),
   },
   /**
    * Finance verbs a report's `records` block offers. Native offers the `implemented` ones;
