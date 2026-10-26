@@ -1,6 +1,6 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -87,7 +87,14 @@ export async function recordEmbeddingDeletion(
     .where(
       and(
         eq(entityEmbedding.id, artifactId),
-        sql`${entityEmbedding.artifactState} <> ${embeddingArtifactState.enum.selected} OR ${entityEmbedding.deletedAt} IS NOT NULL`,
+        // Both retirement cases belong to this artifact, never all deleted rows.
+        or(
+          ne(
+            entityEmbedding.artifactState,
+            embeddingArtifactState.enum.selected,
+          ),
+          isNotNull(entityEmbedding.deletedAt),
+        ),
       ),
     );
 }
