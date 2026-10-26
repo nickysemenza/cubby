@@ -1,0 +1,23 @@
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_672398f43d55a3::t_93b1a319cf62f3 23,79-83,105-106
+apps/web/tooling/entity-generator-date-range.unit.test.ts
+  s_672398f43d55a3::t_a9ce242760a895 13
+apps/web/tooling/entity-generator-suggest-prune.unit.test.ts
+  s_672398f43d55a3::t_8999475b12ff72 17-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "669f2e52a712b2b7270821e1dbe5d2a3991bdf96",
+  "prompts": {},
+  "sessions": {
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
