@@ -7,7 +7,7 @@ import {
   type AiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
-import { entityRefKey } from "@cubby/schemas/entity";
+import { entityRefKey, type EntityRef } from "@cubby/schemas/entity";
 import {
   basisValueOf,
   fieldSuggestionContextKeys,
@@ -71,6 +71,7 @@ import type {
   EvaluationPageTarget,
   EvaluationPagePreparation,
   EvaluationPageOutcome,
+  EvaluationPagePublication,
 } from "~/server/ai/repo/evaluation-page";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
@@ -134,6 +135,7 @@ import {
 } from "../repo/ai-work-state";
 import {
   connectionSourceFingerprint,
+  connectionSourceFingerprintsOrMissing,
   countConnectionSweepSources,
 } from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
@@ -1294,6 +1296,7 @@ function productEvaluationPageAdapter(
   ports: AiRefreshPorts = {},
 ): EvaluationPageAdapter<ProductPagePreparation, ProductPageOutcome> {
   return {
+    operation: "product-identity",
     async prepare(db, targets) {
       const byId = new Map(
         targets.map((entry) => [entry.evaluation.id, entry]),
@@ -1640,7 +1643,7 @@ export async function executeAiRefreshPage<P, O>(
     const key = JSON.stringify([
       target.evaluation.runId,
       target.evaluation.feature,
-      "product-identity",
+      adapter.operation,
       false,
       "default",
     ]);
@@ -1649,19 +1652,22 @@ export async function executeAiRefreshPage<P, O>(
       usage = {
         db,
         runId: target.evaluation.runId,
-        operation: "product-identity",
+        operation: adapter.operation,
       };
       groups.set(key, usage);
     }
     return usage;
   };
   const outcomes: EvaluationPageOutcome<O>[] = [];
-  const settled = await settleDecisionWorkItems(ready, (entry) =>
-    inEvaluationContext(db, entry.target, async () => ({
-      target: entry.target,
-      evidenceDigest: entry.evidenceDigest,
-      outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
-    })),
+  const settled = await settleDecisionWorkItems(
+    ready,
+    (entry) =>
+      inEvaluationContext(db, entry.target, async () => ({
+        target: entry.target,
+        evidenceDigest: entry.evidenceDigest,
+        outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
+      })),
+    adapter.concurrency,
   );
   settled.forEach((result, index) => {
     if (result.status === "fulfilled") outcomes.push(result.value);
@@ -1693,8 +1699,20 @@ export async function executeAiRefreshPage<P, O>(
       } else failures.push(pageFailure(chunk[0]!.target, error));
     }
   };
-  for (let offset = 0; offset < outcomes.length; offset += 25)
-    await publishChunk(outcomes.slice(offset, offset + 25));
+  const chunks: EvaluationPageOutcome<O>[][] = [];
+  let weight = 0;
+  for (const outcome of outcomes) {
+    const cost = Math.max(1, adapter.weight?.(outcome) ?? 1);
+    const last = chunks.at(-1);
+    if (last && last.length < 25 && weight + cost <= 25) {
+      last.push(outcome);
+      weight += cost;
+    } else {
+      chunks.push([outcome]);
+      weight = cost;
+    }
+  }
+  for (const chunk of chunks) await publishChunk(chunk);
   await failAiEvaluationPage(db, failures);
   log.info("evaluation page", {
     claimedSlots: targets.length,
@@ -1705,7 +1723,7 @@ export async function executeAiRefreshPage<P, O>(
         outcomes.some((outcome) => outcome.target === entry.target),
       ).length,
     failed: failures.length,
-    publicationChunks: Math.ceil(outcomes.length / 25),
+    publicationChunks: chunks.length,
     usageGroups: groups.size,
     preparedBytes,
   });
@@ -1900,4 +1918,135 @@ export async function executeProductAiRefreshPage(
         : entry;
     });
   });
+}
+
+type ConnectionPagePreparation = { source: EntityRef };
+type ConnectionPageOutcome = {
+  source: EntityRef;
+  publications: readonly ((transactionDb: Database) => Promise<void>)[];
+};
+
+/**
+ * Connection sources evaluated at once. A Worker invocation holds five strong
+ * connections, so more database-bound sources only queue; the margin overlaps
+ * provider waits such as query embeddings.
+ */
+const CONNECTION_PAGE_CONCURRENCY = 8;
+
+/**
+ * A connection evaluation's cost was its own claim, guard and settlement
+ * (about 30 round trips for a source with no candidates); a page shares them.
+ * Each source still prepares through the single-source path, so candidate
+ * retrieval, model calls and evidence capture are unchanged.
+ */
+function connectionEvaluationPageAdapter(
+  ports: AiRefreshPorts = {},
+): EvaluationPageAdapter<ConnectionPagePreparation, ConnectionPageOutcome> {
+  const changed = () =>
+    new Error("Connection discovery source changed during evaluation");
+  return {
+    operation: "entity-connections",
+    concurrency: CONNECTION_PAGE_CONCURRENCY,
+    async prepare(db, targets) {
+      const { entityGraphRootSchema } =
+        await import("@cubby/schemas/entity-graph");
+      const sources = targets.map((entry) => {
+        const parsed = entityGraphRootSchema.safeParse(
+          entry.evaluation.snapshot,
+        );
+        return parsed.success &&
+          entry.target.kind === "connection" &&
+          parsed.data.entityKind === entry.target.entity
+          ? parsed.data
+          : null;
+      });
+      const present = sources.flatMap((source) => (source ? [source] : []));
+      const fingerprints = await connectionSourceFingerprintsOrMissing(
+        db,
+        present,
+      );
+      const current = new Map(
+        present.map((source, index) => [
+          entityRefKey(source.entityKind, source.entityId),
+          fingerprints[index],
+        ]),
+      );
+      return targets.map((entry, index) => {
+        const source = sources[index];
+        const fingerprint = source
+          ? current.get(entityRefKey(source.entityKind, source.entityId))
+          : null;
+        return source &&
+          fingerprint === entry.evaluation.provenance.inputFingerprint
+          ? {
+              kind: "ready" as const,
+              target: entry,
+              evidenceDigest: fingerprint,
+              prepared: { source },
+            }
+          : { kind: "failed" as const, target: entry, error: changed() };
+      });
+    },
+    async evaluate(db, ready) {
+      const { prepareEntityConnections } =
+        await import("~/server/domains/connection/service/entity-connections");
+      const { source } = ready.prepared;
+      const preparation = await prepareEntityConnections(
+        db,
+        kernel(db, ports, ready.target.evaluation.runId),
+        source,
+        {
+          suggestPorts: ports.suggestPorts,
+          productIdentityPorts: ports.productIdentityPorts,
+        },
+      );
+      // Incomplete coverage retries the whole source rather than publishing
+      // part of its candidates.
+      if (!preparation.complete)
+        throw new Error(
+          `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
+        );
+      return { source, publications: preparation.publications };
+    },
+    weight: (entry) => 1 + entry.outcome.publications.length,
+    async publish(tx, outcomes) {
+      const fingerprints = await connectionSourceFingerprintsOrMissing(
+        tx,
+        outcomes.map((entry) => entry.outcome.source),
+      );
+      const published: EvaluationPagePublication[] = [];
+      for (const [index, entry] of outcomes.entries()) {
+        if (fingerprints[index] !== entry.evidenceDigest) {
+          published.push({
+            evaluationId: entry.target.evaluation.id,
+            state: "obsolete",
+            receipt: { reason: changed().message },
+          });
+          continue;
+        }
+        for (const publish of entry.outcome.publications) await publish(tx);
+        published.push({
+          evaluationId: entry.target.evaluation.id,
+          state: "completed",
+          receipt: jsonSnapshot({
+            source: entry.outcome.source,
+            discovered: true,
+          }),
+        });
+      }
+      return published;
+    },
+  };
+}
+
+export async function executeConnectionAiRefreshPage(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  ports: AiRefreshPorts = {},
+) {
+  await executeAiRefreshPage(
+    db,
+    targets,
+    connectionEvaluationPageAdapter(ports),
+  );
 }

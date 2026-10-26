@@ -499,9 +499,12 @@ A producer must not enqueue faster than the drain can serve. One unbounded
 connection-discovery pass once enqueued an evaluation for every household
 record (~55k), which starved every other kind for days.
 
-- Routine connection discovery (`discovery.connections`) holds its cursor while
-  `CONNECTION_DISCOVERY_PENDING_CAP` connection evaluations wait (`rate_limit`),
-  walks the newest records first, and never appends to a stopped Run. A changed
+- Routine connection discovery (`discovery.connections`) queues one
+  evaluation page (`CONNECTION_ROSTER_PAGE`, 100 records) per pass and holds
+  its cursor for 30 s while `CONNECTION_DISCOVERY_PENDING_CAP` (1,000)
+  connection evaluations wait (`rate_limit`). A full pass over ~55k records
+  is meant to finish within an hour; a longer wait idled the pass, not the
+  queue. It walks the newest records first, and never appends to a stopped Run. A changed
   record updates its queued slot in place, retaining its Job. Cancelled work whose Run
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
   decision) is re-admitted at that pace; a member's cancel stays final.
@@ -594,9 +597,10 @@ the provider's total tokens once. Embeddings remain outside frontier funding cap
 ## AI evaluation pages
 
 `ai.evaluation` keeps its existing `{evaluationId}` Job input and per-target
-slot, input hash, history, token and generation. Product and canonical
-`product_pair` refresh work run as transient pages of up to 100 compatible
-slots: one feature, preparation shape, execution kind and priority class.
+slot, input hash, history, token and generation. Product, canonical
+`product_pair` and connection refresh work run as transient pages of up to 100
+compatible slots: one feature, preparation shape, execution kind and priority
+class.
 `claimJobPage` locks eligible Jobs with `FOR UPDATE SKIP LOCKED`, assigns
 independent tokens, then `claimAiEvaluationPage` rechecks live authorization,
 activation and pending/result-ready state before adopting the claims. Claim
@@ -626,8 +630,9 @@ page services; target counts remain unchanged.
 preparation, decision evaluation and publication results. Every target carries
 its own evidence digest. Each preparation/provider continuation retains its
 own Job/workflow execution context. The executor interns one usage context
-per compatible Run/feature/operation/force/funding group; Product pages use
-`product-identity` with default force/funding policy. The shared context carries
+per compatible Run/feature/operation/force/funding group; each adapter names
+its operation (`product-identity`, `entity-connections`) and uses default
+force/funding policy. The shared context carries
 no target Job/entity id. Distinct Runs remain separate usage groups.
 `settleDecisionWorkItems` supplies finite waves; `DecisionRequestBatch` packs
 up to 64 questions/32,000 text bytes, with four request chunks in flight.
@@ -635,7 +640,17 @@ Routing, response-cache keys and per-question avoided usage stay unchanged.
 An oversized question fails visibly. Page evidence is limited to 4 MiB; an
 unadmitted suffix stays due rather than completing its enumeration receipt.
 
-Publication commits at most 25 outcomes per SERIALIZABLE transaction, using
+Connection pages keep each source's single-source preparation (candidate
+retrieval, model calls, evidence capture) and evaluate 8 sources at once (a Worker invocation holds five strong connections); the
+page shares what made a source slow: its claim, guard and settlement, about 30
+round trips for a source without candidates. One batched fingerprint read
+fences the page before evaluation and each chunk before writes; a changed or
+deleted source is obsolete without writes. Incomplete candidate coverage
+retries the source before any of its candidates publish.
+
+Publication commits at most 25 outcomes per SERIALIZABLE transaction (an
+adapter may weight outcomes, so a connection with many candidates fills its
+chunk sooner), using
 the existing bounded snapshot-write retries. Locks follow Run, slot, item,
 then Job order, compatible with cancellation and admission. The explicit
 claim-set guard authorizes each target without borrowing a sibling's AsyncLocal

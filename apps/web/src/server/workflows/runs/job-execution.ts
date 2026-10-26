@@ -240,7 +240,7 @@ async function assertNotPaused(
     );
 }
 
-/** Other features retain their existing handler until they provide a page adapter. */
+/** Product and connection evaluations run in pages; other features keep the single-Job handler. */
 export const aiEvaluationJobHandler = {
   ...singleAiEvaluationJobHandler,
   async advancePage(
@@ -269,7 +269,9 @@ export const aiEvaluationJobHandler = {
       });
     if (
       anchor.item.executionKind !== "ai_refresh" ||
-      !["product", "product_pair"].includes(anchor.item.target.kind) ||
+      !["product", "product_pair", "connection"].includes(
+        anchor.item.target.kind,
+      ) ||
       !(await readAiRefreshActivation(db))?.enabled
     )
       return advanceJob(db, anchorId, {
@@ -299,9 +301,11 @@ export const aiEvaluationJobHandler = {
           });
     }, JOB_HEARTBEAT_MS);
     try {
-      const { executeProductAiRefreshPage } =
+      const { executeConnectionAiRefreshPage, executeProductAiRefreshPage } =
         await import("~/server/domains/run/service/ai-refresh");
-      await executeProductAiRefreshPage(db, targets);
+      await (anchor.item.target.kind === "connection"
+        ? executeConnectionAiRefreshPage(db, targets)
+        : executeProductAiRefreshPage(db, targets));
       return "succeeded";
     } catch (error) {
       await failAiEvaluationPage(

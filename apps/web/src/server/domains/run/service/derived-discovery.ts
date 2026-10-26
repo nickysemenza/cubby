@@ -19,7 +19,9 @@ import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-const DISCOVERY_BACKPRESSURE_MS = 5 * 60_000;
+// Short: a full backlog drains within about a minute, and a longer wait idles
+// the pass rather than the queue.
+const DISCOVERY_BACKPRESSURE_MS = 30_000;
 
 const cursorSchema = z.object({
   after: z.string().nullable(),

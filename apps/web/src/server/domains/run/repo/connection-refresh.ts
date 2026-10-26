@@ -30,6 +30,7 @@ import { connectionRecord } from "~/server/domains/connection/repo/connection-ev
 import {
   connectionDiscoveryFingerprint,
   connectionDiscoveryFingerprints,
+  connectionDiscoveryFingerprintsOrMissing,
 } from "~/server/domains/connection/repo/discovery-fingerprint";
 
 import {
@@ -249,15 +250,17 @@ export async function prepareConnectionDiscoveryRoster(
   };
 }
 
-/** Records one connection roster page queues, for Sweeps and routine discovery alike. */
-export const CONNECTION_ROSTER_PAGE = 25;
+/** Records one connection roster page queues, for Sweeps and routine discovery alike; one evaluation page. */
+export const CONNECTION_ROSTER_PAGE = 100;
 
 /**
  * Routine discovery pauses while this many connection evaluations wait, so a
- * first pass over every record (~55k once) drains at queue pace instead of
- * flooding it. The pass keeps its cursor and resumes when the backlog drops.
+ * full pass over every record (~55k) drains at queue pace instead of flooding
+ * it. Evaluation pages clear about ten pages of backlog per minute, so the cap
+ * keeps several pages queued; the pass keeps its cursor and resumes when the
+ * backlog drops.
  */
-export const CONNECTION_DISCOVERY_PENDING_CAP = 250;
+export const CONNECTION_DISCOVERY_PENDING_CAP = 1_000;
 
 export async function pendingConnectionEvaluations(db: Database) {
   const [row] = await getDb(db)
@@ -311,6 +314,8 @@ const sweepKinds = (entityKinds?: readonly string[]) =>
 
 export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
 export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
+export const connectionSourceFingerprintsOrMissing =
+  connectionDiscoveryFingerprintsOrMissing;
 
 /** Cursor coverage includes records without stock or prior acquisition. */
 async function connectionDiscoveryRecords(
