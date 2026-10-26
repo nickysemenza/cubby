@@ -531,7 +531,7 @@ final class AppModel {
         Task { await browseCounts.load(client: client, host: host, force: true) }
     }
 
-    /// The master switch: persists, answers the first-sign-in question if it hasn't been answered
+    /// The master switch: persists, answers Photos' participation prompt if it hasn't been answered
     /// yet, fans out to every gate (companion socket, library matching, background analysis), and
     /// mirrors the change onto this install's `Device` row.
     /// `photoAnalysisPaused` (Settings' "Pause analysis" toggle) is a separate, temporary pause
