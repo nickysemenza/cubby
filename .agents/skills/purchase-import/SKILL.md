@@ -323,6 +323,10 @@ Create or update the Vendor deliberately, then configure:
   exact order page;
 - `orderEmailSenders` only for verified senders outside the website domain;
 - `returnWindowDays` only when the policy is known.
+- `agentHints.notes` for anything learned about recovering this Vendor's
+  orders or identifiers (archived order lists, legacy lookups, where item
+  numbers appear, image pitfalls). Vendor-specific findings are household data:
+  they belong on the Vendor, never in repository docs, skills or PRs.
 
 The website domain and configured senders are search hints, not purchase
 relevance gates. A new Vendor or member-owned VendorAccount may be created from

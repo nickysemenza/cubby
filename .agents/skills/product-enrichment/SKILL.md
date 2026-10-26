@@ -127,6 +127,8 @@ member-selected gallery order and unknown historical cover intent;
 `source: catalog` alone never authorizes promotion.
 
 Read [source mechanics](references/sources.md) only for the source in hand.
+Record what you learn about one Vendor's orders or identifiers in that Vendor's
+`agentHints.notes` in Cubby, not in these references ([Learn a vendor](../purchase-import/SKILL.md#learn-a-vendor)).
 Read [write and image rules](references/writes-and-images.md) when preparing a
 write, collision, batch, kit, replacement, or verification.
 
