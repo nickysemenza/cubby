@@ -1,0 +1,58 @@
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_0aa0a32f80fc69::t_4e91200f873007 562,567,569-571,580-587,596,839
+apps/web/src/server/generic/assessment/repo/suggestion-list.integration.test.ts
+  s_bf37338a7891c3::t_a8ad3513f122f1 295-337,441-459
+apps/web/src/entity/suggestions/queue/suggestions-search.ts
+  s_bf37338a7891c3::t_6abc1ac3e29380 45,47,49,51,53,57,59,63,65,68,70,73,75
+packages/schemas/src/suggestion-list.ts
+  s_b1bbc05e2ecd4f::t_b7cb1beaa88e53 291-292
+apps/web/src/entity/suggestions/queue/suggestion-views.tsx
+  s_bf37338a7891c3::t_8197686801ecd5 5,74-77,80-81,97,114,133,168,197-199,201-202,247,584,739
+apps/web/src/entity/suggestions/queue/suggestion-views.unit.test.tsx
+  s_bf37338a7891c3::t_e9ae532a0a6db9 1-44
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_b1bbc05e2ecd4f::t_61d55097e61f5f 101-102
+apps/web/tests/e2e/suggestions.spec.ts
+  s_bf37338a7891c3::t_6b05675d270a5e 392-422
+  s_bf37338a7891c3::t_6d84826c6a8fa5 43
+docs/entities.md
+  s_b1bbc05e2ecd4f::t_a9777a8bb98708 3860-3867
+apps/web/src/contracts/suggestions.contract.ts
+  s_b1bbc05e2ecd4f::t_4e4b1c3fc7a959 53
+apps/web/src/ui/data-table/filter-bar.unit.test.tsx
+  s_bf37338a7891c3::t_0b18609187cf4c 86-129
+apps/web/src/entity/suggestions/queue/suggestions-page.tsx
+  s_bf37338a7891c3::t_44b70bd2dce729 42-46,468-470,473-482,485-487
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "43c52b625c3243f681c939a029d8162580235e0f",
+  "prompts": {},
+  "sessions": {
+    "s_0aa0a32f80fc69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17911-4ae5-7131-b39f-dece7b3aaac4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_b1bbc05e2ecd4f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7105a82e-79ca-45bf-a715-40b93b91188f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_bf37338a7891c3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17917-2eb1-73f0-a160-9eba8c079ab3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
