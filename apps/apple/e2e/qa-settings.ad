@@ -1,0 +1,14 @@
+context platform=ios timeout=240000
+
+# Settings pushes from the Today toolbar and reads Server, Notifications,
+# Advanced, then About with the installed version and the web link.
+open com.nickysemenza.cubby
+wait "role=Button label=Find" 240000
+click "role=Button label=Settings"
+wait "id=settings.serverPicker" 60000
+wait text "Notifications & Live Activities" 30000
+scroll down 0.5 --until "id=settings.device.automaticWork"
+wait "id=settings.imageWork.jobs" 30000
+scroll bottom
+wait text "Version" 30000
+wait "id=settings.openOnWeb" 30000
