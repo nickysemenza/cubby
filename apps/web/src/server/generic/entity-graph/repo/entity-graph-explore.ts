@@ -59,23 +59,17 @@ const addPath = (
   visit: Visit,
   path: EntityGraphPath,
   maxPaths: number,
-): void => {
-  const sequence = pathRecordKey(path);
-  const existingIndex = visit.paths.findIndex(
-    (candidate) => pathRecordKey(candidate) === sequence,
-  );
-  if (existingIndex >= 0) {
-    const existing = visit.paths[existingIndex];
-    if (existing && pathKey(path).localeCompare(pathKey(existing)) < 0) {
-      visit.paths[existingIndex] = path;
-    }
-  } else {
-    visit.paths.push(path);
-  }
+): boolean => {
+  // Equal endpoints can have different evidence (an Expense and a Task).
+  if (visit.paths.some((candidate) => pathKey(candidate) === pathKey(path)))
+    return true;
+  visit.paths.push(path);
   visit.paths.sort((left, right) =>
     pathKey(left).localeCompare(pathKey(right)),
   );
+  const complete = visit.paths.length <= maxPaths;
   visit.paths.splice(maxPaths);
+  return complete;
 };
 
 const branchKey = (branch: EntityGraphBranch): string =>
@@ -247,14 +241,17 @@ export async function exploreEntityGraph(
             ) {
               continue;
             }
-            addPath(
-              visit,
-              {
-                nodeRefs: [...path.nodeRefs, neighbor],
-                edgeIds: [...path.edgeIds, edge.id],
-              },
-              limits.maxPathsPerNode,
-            );
+            if (
+              !addPath(
+                visit,
+                {
+                  nodeRefs: [...path.nodeRefs, neighbor],
+                  edgeIds: [...path.edgeIds, edge.id],
+                },
+                limits.maxPathsPerNode,
+              )
+            )
+              budgetReached = true;
           }
         }
       }

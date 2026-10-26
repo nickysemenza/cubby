@@ -555,6 +555,18 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "lease-device",
+      label: "Current lease device",
+      target: "device",
+      cardinality: "one",
+      provenance: { kind: "query", query: "imageLeaseDevice" },
+      inverse: {
+        steps: [
+          { edge: "Relationship.imageLeaseDevice", direction: "incoming" },
+        ],
+      },
+    },
+    {
       key: "image",
       label: "Image",
       target: "image",

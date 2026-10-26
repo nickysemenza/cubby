@@ -122,6 +122,10 @@ import {
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
 } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
+import {
+  purchasePurchaserSetSql,
+  purchasePurchaserSql,
+} from "~/server/domains/purchase/repo/purchase-purchaser";
 import { resolveSplitPartClassification } from "~/server/domains/purchase/repo/purchase-split-draft";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import {
@@ -177,10 +181,6 @@ import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
 } from "./purchase-evidence-policy";
-import {
-  purchasePurchaserSetSql,
-  purchasePurchaserSql,
-} from "./purchase-purchaser";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "Shipment.purchaseId": {

@@ -14,6 +14,10 @@ import {
   JOB_WAITING_ON_LABEL,
 } from "../job.js";
 import { defineEntity } from "./definition.js";
+import {
+  localRelationshipEntities,
+  queryRelationship,
+} from "../relationship-query-definitions.js";
 
 const readOnly = <T extends z.ZodType>(read: T) => ({
   read,
@@ -136,7 +140,7 @@ export default defineEntity({
         key: "runId",
         kind: "identifier",
         reference: { entity: "run" },
-        display: { labelPath: "runName" },
+        display: { labelPath: "runName", columnLabel: "Owning Run" },
         nullable: true,
         validation: readOnly(runShortcode.nullable()),
       },
@@ -373,7 +377,7 @@ export default defineEntity({
       {
         columnId: "runId",
         kind: "idMulti",
-        placeholder: "Run",
+        placeholder: "Owning Run",
         deriveSchema: true,
         brandRef: { entity: "run" },
       },
@@ -403,6 +407,34 @@ export default defineEntity({
   },
   search: false,
   relations: [
+    queryRelationship({
+      key: "requesting-runs",
+      label: "Requested by Runs",
+      target: "run",
+      query: "evaluationRuns",
+    }),
+    queryRelationship({
+      key: "image-execution",
+      label: "Image processing",
+      target: "imageJob",
+      query: "imageExecution",
+      cardinality: "one",
+    }),
+    ...localRelationshipEntities.flatMap((target) => [
+      queryRelationship({
+        key: `subject-${target}`,
+        label: "Subject",
+        target,
+        query: `jobSubject${target}`,
+        cardinality: "one",
+      }),
+      queryRelationship({
+        key: `evaluation-${target}`,
+        label: "Evaluation target",
+        target,
+        query: `evaluationTarget${target}`,
+      }),
+    ]),
     {
       key: "run",
       label: "Run",

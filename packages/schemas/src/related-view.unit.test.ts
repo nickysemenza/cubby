@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entityManifest } from "./entity-manifest";
+import { connectionCatalog } from "./connected-views";
 import { financialAccountFilterFields } from "./financial-account";
 import { financialTransactionFilterFields } from "./financial-transaction";
 import { ingredientFilterFields } from "./ingredient";
@@ -17,7 +17,7 @@ import { purchaseFilterFields } from "./purchase";
 import { recipeFilterFields } from "./recipe";
 import {
   relatedFilterPrefix,
-  relatedViewPath,
+  relatedViewPaths,
   relatedSummaryInput,
   relatedSummaryOutput,
   relatedSummaryRelationKeys,
@@ -29,12 +29,16 @@ import { vendorAccountFilterFields } from "./vendor-account";
 import { wishFilterFields } from "./wish";
 
 const declaredLocalEdges = new Set(
-  Object.values(entityManifest).flatMap((descriptor) =>
-    descriptor.relationships.flatMap((relationship) =>
-      relationship.provenance.kind === "local-path"
-        ? relationship.provenance.steps.map((step) => step.edge)
-        : [],
-    ),
+  relatedViewRegistry.flatMap((view) =>
+    connectionCatalog
+      .relationships(view.source)
+      .flatMap((relationship) =>
+        relationship.sources.flatMap((source) =>
+          source.provenance.kind === "local-path"
+            ? source.provenance.steps.map((step) => step.edge)
+            : [],
+        ),
+      ),
   ),
 );
 
@@ -116,24 +120,25 @@ describe("relatedViewRegistry", () => {
     const keys = relatedViewRegistry.map((view) => view.key);
     expect(new Set(keys).size).toBe(keys.length);
     for (const view of relatedViewRegistry) {
-      const path = relatedViewPath(view);
-      expect(view.key.startsWith(`${view.source}.`)).toBe(true);
-      expect(path.length).toBeGreaterThanOrEqual(1);
-      // 4, not 3, since FinancialTransactionAllocation landed: a transaction
-      // reaches a Purchase through a join table now, so every path crossing
-      // that relationship costs two hops rather than one. The ceiling still
-      // exists to stop a related view becoming an arbitrary graph walk — it is
-      // just that the shortest honest route across this edge is longer than it
-      // used to be.
-      expect(path.length).toBeLessThanOrEqual(4);
-      expect(view.source).not.toBe("usda-food");
-      expect(view.source).not.toBe("image");
+      for (const path of relatedViewPaths(view)) {
+        expect(view.key.startsWith(`${view.source}.`)).toBe(true);
+        expect(path.length).toBeGreaterThanOrEqual(1);
+        // 4, not 3, since FinancialTransactionAllocation landed: a transaction
+        // reaches a Purchase through a join table now, so every path crossing
+        // that relationship costs two hops rather than one. The ceiling still
+        // exists to stop a related view becoming an arbitrary graph walk — it is
+        // just that the shortest honest route across this edge is longer than it
+        // used to be.
+        expect(path.length).toBeLessThanOrEqual(4);
+        expect(view.source).not.toBe("usda-food");
+        expect(view.source).not.toBe("image");
+      }
     }
   });
 
   it("uses only edges verified by the canonical entity graph", () => {
     for (const view of relatedViewRegistry) {
-      for (const step of relatedViewPath(view)) {
+      for (const step of relatedViewPaths(view).flat()) {
         expect(declaredLocalEdges, `${view.key}: ${step.edge}`).toContain(
           step.edge,
         );

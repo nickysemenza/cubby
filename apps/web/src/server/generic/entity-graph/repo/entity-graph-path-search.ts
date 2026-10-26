@@ -54,24 +54,12 @@ export type GraphPathSearchResult = Omit<EntityGraphPathsOutput, "nodes">;
 const trailKey = (trail: Trail): string =>
   `${trail.nodeRefs.map((ref) => entityRefKey(ref.entityKind, ref.entityId)).join(">")}|${trail.edgeIds.join(">")}`;
 
-const recordSequenceKey = (trail: Trail): string =>
-  trail.nodeRefs
-    .map((ref) => entityRefKey(ref.entityKind, ref.entityId))
-    .join(">");
-
-const addTrail = (visit: Visit, trail: Trail, maxPaths: number): void => {
-  const sequence = recordSequenceKey(trail);
-  const existingIndex = visit.trails.findIndex(
-    (candidate) => recordSequenceKey(candidate) === sequence,
-  );
-  if (existingIndex >= 0) {
-    const existing = visit.trails[existingIndex];
-    if (existing && trailKey(trail).localeCompare(trailKey(existing)) < 0) {
-      visit.trails[existingIndex] = trail;
-    }
-    return;
-  }
-  if (visit.trails.length < maxPaths) visit.trails.push(trail);
+const addTrail = (visit: Visit, trail: Trail, maxPaths: number): boolean => {
+  if (visit.trails.some((candidate) => trailKey(candidate) === trailKey(trail)))
+    return true;
+  if (visit.trails.length >= maxPaths) return false;
+  visit.trails.push(trail);
+  return true;
 };
 
 const reverseTrail = (trail: Trail): Trail => ({
@@ -102,11 +90,7 @@ const joinedPaths = (
           nodeRefs: [...leftTrail.nodeRefs, ...rightTrail.nodeRefs.slice(1)],
           edgeIds: [...leftTrail.edgeIds, ...rightTrail.edgeIds],
         };
-        const sequence = recordSequenceKey(path);
-        const existing = candidates.get(sequence);
-        if (!existing || trailKey(path).localeCompare(trailKey(existing)) < 0) {
-          candidates.set(sequence, path);
-        }
+        candidates.set(trailKey(path), path);
       }
     }
   }
@@ -114,7 +98,7 @@ const joinedPaths = (
     .sort((leftPath, rightPath) =>
       trailKey(leftPath).localeCompare(trailKey(rightPath)),
     )
-    .slice(0, maxPaths);
+    .slice(0, maxPaths + 1);
 };
 
 const pathEdges = (
@@ -201,8 +185,8 @@ export async function searchEntityGraphPaths(
     if (budgetReached || reads >= limits.maxReads || now() >= deadline) {
       const paths = joinedPaths(left, right, limits.maxPaths);
       return {
-        paths,
-        edges: pathEdges(paths, seenEdges),
+        paths: paths.slice(0, limits.maxPaths),
+        edges: pathEdges(paths.slice(0, limits.maxPaths), seenEdges),
         completion: "budget-limit",
         shortestPathCertain: false,
       };
@@ -277,14 +261,17 @@ export async function searchEntityGraphPaths(
             }
             if (neighborVisit.distance !== distance) continue;
             for (const trail of rootVisit.trails) {
-              addTrail(
-                neighborVisit,
-                {
-                  nodeRefs: [...trail.nodeRefs, neighbor],
-                  edgeIds: [...trail.edgeIds, edge.id],
-                },
-                limits.maxPaths,
-              );
+              if (
+                !addTrail(
+                  neighborVisit,
+                  {
+                    nodeRefs: [...trail.nodeRefs, neighbor],
+                    edgeIds: [...trail.edgeIds, edge.id],
+                  },
+                  limits.maxPaths,
+                )
+              )
+                budgetReached = true;
             }
           }
         }
@@ -297,8 +284,8 @@ export async function searchEntityGraphPaths(
     if (budgetReached) {
       const paths = joinedPaths(left, right, limits.maxPaths);
       return {
-        paths,
-        edges: pathEdges(paths, seenEdges),
+        paths: paths.slice(0, limits.maxPaths),
+        edges: pathEdges(paths.slice(0, limits.maxPaths), seenEdges),
         completion: "budget-limit",
         shortestPathCertain: false,
       };
@@ -308,10 +295,11 @@ export async function searchEntityGraphPaths(
     const paths = joinedPaths(left, right, limits.maxPaths);
     if (paths.length > 0) {
       return {
-        paths,
-        edges: pathEdges(paths, seenEdges),
-        completion: "exhausted",
-        shortestPathCertain: true,
+        paths: paths.slice(0, limits.maxPaths),
+        edges: pathEdges(paths.slice(0, limits.maxPaths), seenEdges),
+        completion:
+          paths.length > limits.maxPaths ? "budget-limit" : "exhausted",
+        shortestPathCertain: paths.length <= limits.maxPaths,
       };
     }
   }

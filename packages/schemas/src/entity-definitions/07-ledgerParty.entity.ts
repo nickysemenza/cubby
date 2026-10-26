@@ -336,6 +336,18 @@ export default defineEntity({
   relations: [
     {
       key: "purchases",
+      sources: [
+        {
+          key: "effective-purchaser",
+          label: "Effective purchaser",
+          provenance: { kind: "query", query: "memberPurchases" },
+          inverse: {
+            steps: [
+              { edge: "Relationship.memberPurchases", direction: "incoming" },
+            ],
+          },
+        },
+      ],
       label: "Purchases",
       target: "purchase",
       cardinality: "many",

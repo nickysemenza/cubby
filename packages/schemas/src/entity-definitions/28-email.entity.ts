@@ -833,6 +833,33 @@ export default defineEntity({
   },
   relations: [
     {
+      key: "reviewed-transactions",
+      label: "Reviewed transaction evidence",
+      target: "financialTransaction",
+      cardinality: "many",
+      provenance: { kind: "query", query: "reviewedEmailTransactions" },
+      inverse: {
+        steps: [
+          {
+            edge: "Relationship.reviewedEmailTransactions",
+            direction: "incoming",
+          },
+        ],
+      },
+    },
+    {
+      key: "reviewed-accounts",
+      label: "Account at review",
+      target: "financialAccount",
+      cardinality: "many",
+      provenance: { kind: "query", query: "reviewedEmailAccounts" },
+      inverse: {
+        steps: [
+          { edge: "Relationship.reviewedEmailAccounts", direction: "incoming" },
+        ],
+      },
+    },
+    {
       key: "ledger-party",
       label: "Owner",
       target: "ledgerParty",

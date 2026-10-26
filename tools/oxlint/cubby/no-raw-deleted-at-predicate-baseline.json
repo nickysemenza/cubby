@@ -129,7 +129,7 @@
   "apps/web/src/server/generic/entity-links/repo/connected-records.ts": 1,
   "apps/web/src/server/generic/entity-links/repo/entity-edge-source.ts": 9,
   "apps/web/src/server/generic/entity-links/repo/entity-external-ids.ts": 1,
-  "apps/web/src/server/generic/entity-links/repo/related-view.ts": 36,
+  "apps/web/src/server/generic/entity-links/repo/related-view.ts": 33,
   "apps/web/src/server/generic/entity-report/repo/summary-extensions.ts": 13,
   "apps/web/src/server/generic/entity-report/repo/summary.ts": 6,
   "apps/web/src/server/generic/inheritance/repo/inheritance-validation.ts": 5,

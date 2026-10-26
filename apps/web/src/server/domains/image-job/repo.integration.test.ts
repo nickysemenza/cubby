@@ -15,6 +15,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { readDeviceBacklog } from "~/server/generic/jobs/repo/device-backlog";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -197,5 +198,31 @@ describe("image job cost", () => {
       claimsPerMinute: 0.2,
       etaSeconds: 300,
     });
+    const source = {
+      entityKind: "imageJob" as const,
+      entityId: held.shortcode,
+    };
+    const devices = () =>
+      getConnectedRecords(ctx.db, { source, viewKey: "entity:device" });
+    expect((await devices()).items.map((item) => item.target.entityId)).toEqual(
+      [device.shortcode],
+    );
+    const execution = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "entity:job",
+    });
+    expect(execution.items.map((item) => item.target.entityId)).toEqual([
+      heldExecution.shortcode,
+    ]);
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ leaseExpiresAt: new Date(0) })
+      .where(eq(durableJob.id, heldExecution.id));
+    expect((await devices()).totalCount).toBe(1);
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ state: "queued", leaseToken: null, leaseExpiresAt: null })
+      .where(eq(durableJob.id, heldExecution.id));
+    expect((await devices()).totalCount).toBe(0);
   });
 });

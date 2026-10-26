@@ -104,7 +104,10 @@ describe("entity graph path repository", () => {
       measured.result.nodes.find((node) => node.entityKind === "product")?.image
         ?.url,
     ).toBe(cover.url);
-    expect(measured.result.paths).toHaveLength(1);
+    expect(measured.result.paths).toHaveLength(2);
+    expect(
+      new Set(measured.result.paths.map((path) => path.edgeIds.join("/"))).size,
+    ).toBe(2);
     expect(
       measured.result.paths.every((path) => path.edgeIds.length === 1),
     ).toBe(true);

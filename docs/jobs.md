@@ -25,6 +25,12 @@ by default (`image.device.wake`, `queue.watchdog`, `jobs.retention`,
 In progress, Due, Waiting for Apple, Backing off and Needs attention. Retry now
 uses `job.retryNow` over checked codes or the exact current entity filter.
 
+Owning Run is the optional execution owner. Shared AI evaluations instead expose
+all requesting Runs through their retained request membership, plus every typed
+evaluation target. Product-pair evaluations expose both endpoints. Connected
+records and graph traversal also expose typed entity subjects and the exact
+Image processing record; a calendar origin is not an entity subject.
+
 Job is the sole exception to permanent `Entity` identities: retention deletes
 its identity in the same transaction as its pruned execution row. Retention also
 reconciles a bounded batch of Job identities without a payload, including rows

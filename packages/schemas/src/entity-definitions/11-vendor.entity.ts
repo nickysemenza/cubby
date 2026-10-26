@@ -1505,6 +1505,18 @@ export default defineEntity({
     },
     {
       key: "emails",
+      sources: [
+        {
+          key: "accepted",
+          label: "Accepted or sender-proof Emails",
+          provenance: { kind: "query", query: "vendorEmails" },
+          inverse: {
+            steps: [
+              { edge: "Relationship.vendorEmails", direction: "incoming" },
+            ],
+          },
+        },
+      ],
       label: "Emails",
       target: "email",
       cardinality: "many",

@@ -1663,6 +1663,21 @@ export default defineEntity(
     relations: [
       {
         key: "sourceRecords",
+        sources: [
+          {
+            key: "accepted",
+            label: "Accepted source observations",
+            provenance: { kind: "query", query: "transactionSourceRecords" },
+            inverse: {
+              steps: [
+                {
+                  edge: "Relationship.transactionSourceRecords",
+                  direction: "incoming",
+                },
+              ],
+            },
+          },
+        ],
         label: "Source transaction records",
         target: "sourceTransactionRecord",
         cardinality: "many",

@@ -137,14 +137,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a step-ledger Run's own ordered steps",
   },
-  "PhotoRunImage.runId": {
-    classification: "ownership",
-    reason: "actual photo membership owned by its Run",
-  },
-  "PhotoRunImage.imageId": {
-    classification: "metadata",
-    reason: "a photo Run member references its source Image",
-  },
   "PhotoRunImage.deviceWorkDeviceId": {
     classification: "metadata",
     reason: "the device that last processed the photo",
@@ -247,20 +239,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   "AssessmentState.runId": {
     classification: "metadata",
     reason: "records the Sweep or suggestion Run that computed a Suggestion",
-  },
-  // ImageSighting is a child table of Image, not an entity, so no relation
-  // path can start from it; the Image detail reads its sightings directly.
-  "ImageSighting.imageId": {
-    classification: "ownership",
-    reason: "a sighting is a child row of the Image it reports on",
-  },
-  "ImageSighting.ledgerPartyId": {
-    classification: "metadata",
-    reason: "the member whose photo library reported the sighting",
-  },
-  "ImageSighting.deviceId": {
-    classification: "metadata",
-    reason: "the native install that reported the sighting",
   },
   "PhotoGroupProposal.runId": {
     classification: "ownership",
@@ -499,7 +477,8 @@ function graphPathEdgeKeys(): ReadonlySet<string> {
   const add = (
     steps: readonly { edge: string; direction: "outgoing" | "incoming" }[],
   ) => {
-    for (const step of steps) keys.add(step.edge);
+    for (const step of steps)
+      if (!step.edge.startsWith("Relationship.")) keys.add(step.edge);
   };
   for (const entity of entities) {
     for (const literal of entityManifest[entity].relationships) {

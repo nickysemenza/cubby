@@ -477,6 +477,14 @@ export const deriveRelationSections = (
     for (const relation of entity.relations) {
       if (relation.cardinality !== "many") continue;
       if (declared.has(relation.key) || relation.key in omitRelations) continue;
+      if (
+        relationView.shape.provenance.parse(relation.provenance).kind ===
+        "query"
+      ) {
+        omitRelations[relation.key] =
+          "The generic Connected records section owns this witnessed query relationship.";
+        continue;
+      }
       const target = byKey.get(relation.target);
       if (target === undefined || !feedsRelationTables(target)) {
         omitRelations[relation.key] = missingRelationTableReason(

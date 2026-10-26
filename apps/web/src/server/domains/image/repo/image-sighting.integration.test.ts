@@ -23,6 +23,7 @@ import {
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { setMemberLoginParty } from "~/server/http/member-login";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
@@ -110,6 +111,20 @@ describe("image-sighting", () => {
     expect(await getImageById(ctx.db, image.id)).toMatchObject({
       source: "unknown",
     });
+    const devices = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "image", entityId: image.shortcode },
+      viewKey: "entity:device",
+    });
+    expect(devices.items.map((item) => item.target.entityId)).toEqual([
+      reporter,
+    ]);
+    const observations = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "image", entityId: image.shortcode },
+      viewKey: "entity:ledgerParty",
+    });
+    expect(observations.items.map((item) => item.target.entityId)).toContain(
+      member,
+    );
     const candidates = await selectImagesForProvenanceClassification(
       ctx.db,
       100,

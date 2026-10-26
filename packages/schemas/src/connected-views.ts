@@ -12,8 +12,6 @@ import {
   createConnectionCatalog,
   relationshipSources,
   type RelationshipCatalog,
-  derivedConnectedRelationship,
-  type DerivedConnectedRelationship,
 } from "./connected-view-definitions";
 
 export { relationshipSources };
@@ -23,15 +21,11 @@ const relationshipCatalog: RelationshipCatalog = allEntities.map((key) => ({
   relationships: entityManifest[key].relationships,
 }));
 export const connectionCatalog = createConnectionCatalog(relationshipCatalog);
-export type {
-  ConnectedView,
-  DerivedConnectedRelationship,
-} from "./connected-view-definitions";
+export type { ConnectedView } from "./connected-view-definitions";
 
 export interface ConnectedPathVariant {
   steps: readonly RelationshipPathStep[];
   target: Entity;
-  derived?: DerivedConnectedRelationship;
   witnesses: readonly { stepCount: number; witness: RelationshipWitness }[];
 }
 
@@ -44,7 +38,7 @@ export function connectedPathVariants(
   let variants: readonly ConnectedPathVariant[] = [
     { steps: [], target: source, witnesses: [] },
   ];
-  for (const [index, key] of route.entries()) {
+  for (const key of route) {
     const relationship = connectionCatalog
       .relationships(current)
       .find((item) => item.key === key);
@@ -52,34 +46,6 @@ export function connectedPathVariants(
       throw new Error(`Unknown relationship ${current}.${key}`);
     const primary = relationship.sources[0];
     if (!primary) throw new Error(`No source for ${current}.${key}`);
-    if (primary.provenance.kind === "derived") {
-      const derived = derivedConnectedRelationship(current, key);
-      if (
-        index !== route.length - 1 ||
-        !derived ||
-        derived.target !== relationship.target
-      )
-        throw new Error(`Unsupported derived connection ${current}.${key}`);
-      return variants.map((variant) => ({
-        ...variant,
-        witnesses: [
-          ...variant.witnesses,
-          {
-            stepCount: variant.steps.length,
-            witness: {
-              relationshipKey: key,
-              label: relationship.label,
-              sourceKey: primary.key,
-              provenance: [
-                `derived:${primary.provenance.kind === "derived" ? primary.provenance.filter : key}`,
-              ],
-            },
-          },
-        ],
-        target: relationship.target,
-        derived,
-      }));
-    }
     const sources = relationship.sources.flatMap((item) =>
       item.provenance.kind === "local-path"
         ? [{ ...item, provenance: item.provenance }]

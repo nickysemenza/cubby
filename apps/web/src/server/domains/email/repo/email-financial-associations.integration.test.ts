@@ -18,6 +18,7 @@ import {
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { clearUnrelatedOriginal } from "~/server/domains/purchase-import/repo/gmail/persistence";
+import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { emailReviewReport } from "~/server/generic/entity-report/repo/email";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -102,6 +103,24 @@ describe("reviewed Email financial evidence", () => {
       reviewedAccountDeleted: false,
       accountChanged: false,
     };
+    const associations = () =>
+      getConnectedRecords(ctx.db, {
+        source: { entityKind: "email", entityId: email.shortcode },
+        viewKey: "entity:financialTransaction",
+      });
+    expect(
+      (await associations()).items.map((item) => item.target.entityId),
+    ).toEqual([transaction.shortcode]);
+    const inverse = await getConnectedRecords(ctx.db, {
+      source: {
+        entityKind: "financialTransaction",
+        entityId: transaction.shortcode,
+      },
+      viewKey: "entity:email",
+    });
+    expect(inverse.items.map((item) => item.target.entityId)).toEqual([
+      email.shortcode,
+    ]);
     expect(await readEmailFinancialAssociations(ctx.db, emailId)).toEqual([
       expected,
     ]);
@@ -148,6 +167,16 @@ describe("reviewed Email financial evidence", () => {
       null,
       ctx.actor,
     );
+    expect((await associations()).items[0]?.target.label).toContain(
+      "(deleted)",
+    );
+    const reviewedAccounts = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "email", entityId: email.shortcode },
+      viewKey: "entity:financialAccount",
+    });
+    expect(reviewedAccounts.items.map((item) => item.target.entityId)).toEqual([
+      reviewed.shortcode,
+    ]);
     const rows = blocks.flatMap((block) =>
       block.kind === "records" ? block.rows : [],
     );

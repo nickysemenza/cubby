@@ -8,6 +8,25 @@ import { describe, expect, it } from "vitest";
 
 import { exploreEntityGraph } from "./entity-graph-explore";
 
+it("retains distinct evidence paths between the same records and reports path-budget exhaustion", async () => {
+  const root = ref("EVIDENCE");
+  const target = ref("TARGET");
+  const read = graphReader([
+    edge("expense", root, target),
+    edge("task", root, target),
+  ]);
+  const complete = await exploreEntityGraph(root, 1, read);
+  expect(complete.paths.map((path) => path.edgeIds)).toEqual([
+    ["expense"],
+    ["task"],
+  ]);
+  const bounded = await exploreEntityGraph(root, 1, read, {
+    limits: { maxPathsPerNode: 1 },
+  });
+  expect(bounded.paths).toHaveLength(1);
+  expect(bounded.completion.status).toBe("budget-limit");
+});
+
 const ref = (id: string): EntityRef => ({
   entityKind: "task",
   entityId: `TSK-${id}`,

@@ -67,7 +67,7 @@ const graphReader =
   };
 
 describe("entity graph path search", () => {
-  it("deduplicates record paths while preserving parallel canonical evidence", async () => {
+  it("retains distinct evidence paths over the same record sequence", async () => {
     const [start, middle, destination] = [
       ref("START"),
       ref("MIDDLE"),
@@ -91,6 +91,10 @@ describe("entity graph path search", () => {
       {
         nodeRefs: [start, middle, destination],
         edgeIds: ["parallel-a", "finish"],
+      },
+      {
+        nodeRefs: [start, middle, destination],
+        edgeIds: ["parallel-b", "finish"],
       },
     ]);
     expect(result.edges).toEqual(
@@ -144,6 +148,7 @@ describe("entity graph path search", () => {
     );
 
     expect(result.paths).toHaveLength(3);
+    expect(result.completion).toBe("budget-limit");
     expect(
       new Set(result.paths.map((path) => path.nodeRefs[1]?.entityId)).size,
     ).toBe(3);

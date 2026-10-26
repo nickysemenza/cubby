@@ -16,7 +16,7 @@ import type {
 import {
   relatedFilterPrefix,
   relatedViewKeySchema,
-  relatedViewPath,
+  relatedViewPaths,
   relatedViewRegistry,
 } from "@cubby/schemas/related-view";
 import { parseShortcode } from "@cubby/shared";
@@ -104,9 +104,6 @@ const SQL_RELATED_VIEWS = {
   "meal.recipes": named(),
   "meal.foodProducts": named(),
   "meal.foodIngredients": named(),
-  // The `eaters` list column reads only the primary (food-entry) source; the
-  // `portions` (served-portion) source is graph-only (`relatedViewPath`
-  // compiles `provenance.steps`, never `sources`).
   "meal.eaters": named(),
   // includes-installed: identity/relation views, not a browse/count surface
   // — a fixture's related ingredient must stay reachable either direction.
@@ -189,9 +186,6 @@ const SQL_RELATED_VIEWS = {
   ),
   "financialTransaction.products": named(),
   "wish.candidates": named(),
-  // The `meals` list column reads only the primary (food-entry) source; the
-  // `portions` (served-portion) source is graph-only (`relatedViewPath`
-  // compiles `provenance.steps`, never `sources`).
   "ledgerParty.meals": dated(
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,
@@ -221,35 +215,40 @@ const sqlRelatedView = (key: RelatedViewKey) => {
   };
 };
 
-/**
- * Most curated views compile their primary graph path. Purchase ↔ Product
- * identity unions both evidence sources, matching the detail cards and graph.
- */
+/** Union named evidence sources once so parallel paths do not multiply records. */
 const compileRelatedJoins = (
   view: RelatedViewDefinition,
   materializePrincipalProjects = false,
 ): SQL => {
-  if (view.key === "product.purchases" || view.key === "purchase.products") {
-    const fromProduct = view.key === "product.purchases";
-    const sourceColumn = fromProduct ? "productId" : "purchaseId";
-    const targetColumn = fromProduct ? "purchaseId" : "productId";
-    const targetTable = entityManifest[view.target].dbTable;
-    return sql`INNER JOIN (
-        SELECT "purchaseId", "productId" FROM "Expense"
-          WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL
-        UNION
-        SELECT "fromEntityId" AS "purchaseId", "toEntityId" AS "productId"
-          FROM "EntityLink" WHERE "kind" = 'purchaseProduct' AND "deletedAt" IS NULL
-      ) related_pairs ON ${sql.raw(`related_pairs."${sourceColumn}"`)} = s."id"
-      INNER JOIN ${sql.raw(`"${targetTable}"`)} t
-        ON t."id" = ${sql.raw(`related_pairs."${targetColumn}"`)} AND t."deletedAt" IS NULL`;
-  }
-  return compileTraversal(view.source, relatedViewPath(view), "related", {
-    root: "s",
-    leaf: "t",
-    to: view.target,
-    materializePrincipalProjects,
-  }).joins;
+  const paths = relatedViewPaths(view);
+  const primary = paths[0];
+  if (!primary) throw new Error(`No relationship paths for ${view.key}`);
+  if (paths.length === 1)
+    return compileTraversal(view.source, primary, "related", {
+      root: "s",
+      leaf: "t",
+      to: view.target,
+      materializePrincipalProjects,
+    }).joins;
+  const branches = paths.map((path, index) => {
+    const root = `related_source_${index}`;
+    const leaf = `related_target_${index}`;
+    const traversal = compileTraversal(view.source, path, `related_${index}`, {
+      root,
+      leaf,
+      to: view.target,
+      materializePrincipalProjects,
+    });
+    return sql`SELECT ${sql.raw(`${leaf}."id"`)} AS id
+      FROM ${sql.raw(`"${entityManifest[view.source].dbTable}" ${root}`)}
+      ${traversal.joins}
+      WHERE ${sql.raw(`${root}."id"`)} = s."id"`;
+  });
+  return sql`INNER JOIN LATERAL (
+      SELECT DISTINCT candidates.id FROM (${sql.join(branches, sql` UNION ALL `)}) candidates
+    ) related_pairs ON true
+    INNER JOIN ${sql.raw(`"${entityManifest[view.target].dbTable}"`)} t
+      ON t."id" = related_pairs.id`;
 };
 const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
   relatedViewRegistry.map((view) => [view.key, compileRelatedJoins(view)]),

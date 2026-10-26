@@ -475,7 +475,9 @@ Workers and runtime tests`. Keep every Worker-consuming integration test in
 that project explicitly. The harness's refusal to rebuild missing or
 stale Workers in CI does not enforce project membership. Jobs that need the databases
 declare native GitHub Actions service containers; a YAML anchor reuses the
-pgvector PostgreSQL and pinned IntegreSQL definitions. GitHub owns the network, container
+pgvector PostgreSQL and pinned IntegreSQL definitions. The PostgreSQL service
+pulls its pinned digest directly from Docker Hub; the Google mirror has returned
+`unknown blob` for that same available image. GitHub owns the network, container
 startup, PostgreSQL health wait, logs, and cleanup. PostgreSQL also maps port
 55432 for guarded named-database tests, on loopback only: 55432 is inside
 Linux's ephemeral port range, and an all-interfaces bind failed container
