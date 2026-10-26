@@ -321,8 +321,6 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "amount" },
           display: {
             columnGroup: "Stock",
-            // "1 each" on most rows; owner and valuation lead instead.
-            listHidden: true,
             format: "amount",
             mobile: { slot: "trailing", priority: 0 },
           },

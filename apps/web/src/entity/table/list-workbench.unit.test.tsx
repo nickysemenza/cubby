@@ -304,7 +304,9 @@ describe("declared default columns", () => {
     const visible = result.current.table
       .getVisibleLeafColumns()
       .map((column) => column.id);
-    for (const id of ["amount", "placement"]) expect(visible).not.toContain(id);
+    expect(visible).not.toContain("placement");
+    // Pantry quantities ("3 cans") stay visible on every client.
+    expect(visible).toContain("amount");
     const informative = ["ownerLedgerPartyId", "valuation", "verifiedAt"];
     expect(visible.filter((id) => informative.includes(id))).toEqual(
       informative,
