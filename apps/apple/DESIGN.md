@@ -18,7 +18,9 @@ Mac has one main window with Settings in its sidebar. The sidebar is a native `L
 
 iPhone keeps the Work, Capture, Library, and Find tabs with independent navigation stacks; iPad adapts to a sidebar. A pushed detail remains a complete route. Settings is a selectable sidebar pane on Mac and iPad, using grouped native form sections. The iPhone keeps its existing Settings screen without adding a fifth primary tab. On Mac, the app menu and ⌘, open the main window’s Settings pane; server setup remains reachable before sign-in. Preserve current search, filter, deep-link, and scroll behavior when switching presentation.
 
-`EntityCatalog` and the entity manifest own names, icons, domain, image, fields, sections, relationships, list views, and available actions. A generic renderer uses those declarations for every entity. Specialist import, photo, fieldwork, and editor screens remain in declared slots or their owned flows. `NativePresentationCoverage` prevents unsupported renderers and actions from appearing operational; their existing web disclosure remains visible where needed.
+`EntityCatalog` and the entity manifest own names, icons, domain, image, fields, sections, relationships, list views, and available actions. A generic renderer uses those declarations for every entity. Specialist import, photo, fieldwork, and editor screens remain in declared slots or their owned flows. `NativePresentationCoverage` prevents web-only renderers and actions from appearing operational.
+
+A web-only surface is a reviewed handoff: one `OpenOnWebButton` row where the slot or field stood (safari symbol, label, trailing ↗), and the same item in the record's More menu, which starts with Open on web. Name the row after the web surface ("Open agent history on web"), never a bare "Open on web". It opens the record at the declared section's hash, or the list route with its query. iOS opens a `Link`; Mac opens the default browser. Both offer Copy link.
 
 Report record titles, related-record context links, and row commands are separate accessibility and interaction targets. Never wrap a row containing links or commands in another navigation link.
 
@@ -37,7 +39,7 @@ Native Mac table cells explicitly receive the owning AppModel so sorting and row
 New belongings imports default to owned items and the signed-in member. A storage
 location is optional during capture and required before adding stock during review.
 Keep processor choice under Import options. Carry these defaults in the durable
-Run; Continue on web shares the same Run at its Photos anchor while upload and
+Run; Send to computer shares the same Run at its Photos anchor while upload and
 analysis can continue. Clean identity steps stay folded; missing destinations and
 real concerns use the server-projected attention state.
 

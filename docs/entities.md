@@ -659,14 +659,18 @@ the body those answers assemble (`commitPreparedInput`) with a fresh operation i
 is declared once, in `packages/schemas/src/native-coverage.ts`: every control,
 list, and detail renderer id, hero action, and (entity-qualified) detail and
 list slot has a status (`implemented`, `generic`, `ownedElsewhere`, or
-`unsupported` with a reason). The records are typed against the generated id
-unions, `native-coverage.unit.test.ts` fails when a new declared id is
-unclassified, and `NATIVE_UNSUPPORTED_CEILING` pins the per-kind unsupported
-count so the set only shrinks. `pnpm generate` writes it to the CubbyKit bundle
-as `native-coverage.json`, which `NativePresentationCoverage` reads. To add a
-web-only renderer, slot, or action, classify it `unsupported` and raise the
-ceiling with a justification in review; to close a gap, build the native view
-path, flip the status, and lower the ceiling.
+`handoff`). A `handoff` is a reviewed web-only surface with
+`web: { section?, query?, label }` and a `reason`: native draws one row that opens
+the record at the declared detail `section` (the web hash) or the list route
+with `query`. The records are typed against the generated id unions,
+`native-coverage.unit.test.ts` fails when a new declared id is unclassified, and
+it pins the handoff roster and checks that each handoff names a declared section
+or a query. `pnpm generate` writes it to the CubbyKit bundle as
+`native-coverage.json`, which `NativePresentationCoverage` reads, and refuses a
+detail-slot handoff to an undeclared section; the schema page lists each
+entity's handoffs. To move a surface to web, classify it `handoff` and add it to
+the roster in review; to bring it native, build the view path and flip the
+status.
 
 **Structured values.** A field whose control renderer is in
 `STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
@@ -1446,7 +1450,7 @@ lazy, and compatible union schemas; opaque transforms do not invent properties.
 It validates list labels on lists and detail labels/items on detail. Named
 renderers are classified by the existing `native-coverage.ts` owner during
 shared compilation. Whole-row renderers declare their minimum consumed inputs
-beside that disposition. `unsupported` remains a disclosed native gap; compiler
+beside that disposition. `handoff` remains a disclosed native web row; compiler
 schema checks do not prove executable web or native registration. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
