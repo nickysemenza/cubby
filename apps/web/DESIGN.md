@@ -510,7 +510,8 @@ minutes of observations. A gap over a minute resets the estimate. Flat or growin
 work has no ETA; new dependency work can change the estimate.
 
 Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
-`ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Run detail and
+`ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
+values stack on phone widths so long Job kinds retain their own line. Run detail and
 Activity Work cells show the current phase's known processed/total counts;
 unknown totals remain text. Activity queue-kind bars and the expanded sidebar's
 large derived backlog (100 or more observed values) show net depletion from the

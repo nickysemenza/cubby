@@ -48,9 +48,9 @@ export function Progress({
 }
 
 export function ProgressLabel({ className, ...props }: ComponentProps<typeof BaseProgress.Label>) {
-  return <BaseProgress.Label data-slot="progress-label" className={cn("min-w-0 text-xs text-muted-foreground", className)} {...props} />;
+  return <BaseProgress.Label data-slot="progress-label" className={cn("min-w-0 text-xs text-muted-foreground max-sm:col-span-2", className)} {...props} />;
 }
 
 export function ProgressValue({ className, ...props }: ComponentProps<typeof BaseProgress.Value>) {
-  return <BaseProgress.Value data-slot="progress-value" className={cn("font-mono text-xs text-muted-foreground", className)} {...props} />;
+  return <BaseProgress.Value data-slot="progress-value" className={cn("font-mono text-xs text-muted-foreground max-sm:col-span-2", className)} {...props} />;
 }
