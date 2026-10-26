@@ -469,8 +469,12 @@ journey; their composition with that same OAuth household is a deliberate gap.
 Socket
 lifecycle checks use a warm baseline and two read/write rounds with real idle
 expiry, without a request-load population. Coordinator retirement authorization,
-acknowledgement and operation fences run in PostgreSQL; the cold-host disposal
-rehearsal is a deliberate rare-case coverage tradeoff.
+acknowledgement and operation fences run in PostgreSQL with injected coordinators.
+The removed Worker retirement journey also covered the real Durable Object's
+live-Run disposal refusal, SDK destruction and empty-inventory acknowledgement,
+post-retirement HTTP 410, dispatch refusal and transcript removal. Those real-host
+boundaries are deliberate coverage gaps; PostgreSQL authorization tests do not
+replace them.
 Spending-preview equivalence uses a small explicit graph for inherited and
 explicit categories, split Projects, refunds and signed adjustments. Keep
 the resolver/allocation comparison; do not generate household-sized random
