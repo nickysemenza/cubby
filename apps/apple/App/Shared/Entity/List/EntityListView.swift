@@ -636,16 +636,22 @@ struct EntityListView: View {
                             listSummary(meta: meta, filtered: !model.filters.isEmpty)
                         }
                     #endif
+                    // Unfiltered copy and the create label are the declared `emptyState`, as on web.
+                    let empty = descriptor.emptyState
                     ContentUnavailableView {
                         Label(
-                            model.filters.isEmpty
-                                ? "No \(descriptor.plural) yet" : "No matching \(descriptor.plural)",
+                            model.filters.isEmpty ? empty.title : "No matching \(descriptor.plural)",
                             systemImage: entitySymbol(for: key))
+                    } description: {
+                        if model.filters.isEmpty { Text(empty.description) }
                     } actions: {
                         if !model.filters.isEmpty {
                             Button("Clear filters") {
                                 Task { await model.apply(filters: EntityFilterState()) }
                             }
+                        } else if let actionLabel = empty.actionLabel, key.nativeActions.contains(.create) {
+                            Button(actionLabel) { creating = true }
+                                .accessibilityIdentifier("browse.\(key.rawValue).empty.create")
                         }
                     }
                 }
