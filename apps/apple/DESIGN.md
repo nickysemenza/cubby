@@ -38,6 +38,12 @@ Shelf cards and list rows open records through `Navigator.open(_:from:)`. A root
 
 ## Photo capture and handoff
 
+Capture has one primary Scan action and secondary photo sources that enter the
+existing import-run flow. The sweep location stays visible and editable. Persist
+only its id in device preferences; restore it after a successful location load,
+and silently clear it if the location was deleted. Camera and Photos permission
+denials explain the blocked action and offer Open Settings (System Settings on Mac).
+
 New belongings imports default to owned items and the signed-in member. A storage
 location is optional during capture and required before adding stock during review.
 Keep processor choice under Import options. Carry these defaults in the durable

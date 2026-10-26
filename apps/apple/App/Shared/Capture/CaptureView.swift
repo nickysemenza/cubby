@@ -63,19 +63,25 @@ extension CaptureView {
 
 private struct CaptureContent: View {
     @Environment(AppModel.self) private var appModel
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var capture: CaptureModel
     @Binding var pickingLocation: Bool
     @Binding var showingStrays: Bool
+    @State private var scanning = false
+    @State private var photoImport: PhotoImportRunBatch?
     /// Shared by the location glyph column and the chip dividers so both track Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 20
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                #if os(iOS)
-                    scannerSlot
-                #endif
                 locationRow
+                #if os(iOS)
+                    scanButton
+                    if scanning, capture.location != nil { scannerSlot }
+                #endif
+                // Stop the barcode camera before offering another camera source.
+                if !scanning { photoSources }
                 walkShelf
                 manualEntry
                 tally
@@ -87,6 +93,15 @@ private struct CaptureContent: View {
             .frame(maxWidth: .infinity)
         }
         .fieldGuideScreen()
+        .onChange(of: pickingLocation) { _, picking in
+            if !picking, capture.location == nil { scanning = false }
+        }
+        .sheet(item: $photoImport) { batch in
+            PhotoImportRunSheet(items: batch.items, flow: batch.flow) { _ in
+                appModel.retirePhotoImport(batch.flow)
+                photoImport = nil
+            }
+        }
         // Newest chip first; its status settling is what changes `chips`, so that is the trigger.
         .scanFeedback(
             capture.session.chips.first.flatMap { ScanFeedbackKind(chipStatus: $0.status) },
@@ -124,6 +139,30 @@ private struct CaptureContent: View {
         appModel.navigator.paths[.capture, default: []].append(route)
     }
 
+    private var scanButton: some View {
+        Button {
+            scanning.toggle()
+            if scanning, capture.location == nil { pickingLocation = true }
+        } label: {
+            Label(scanning ? "Stop scanning" : "Scan", systemImage: "barcode.viewfinder")
+                .font(.fieldGuideTitle)
+                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(FieldGuideTokens.interaction)
+        .accessibilityIdentifier("capture.scan")
+    }
+
+    private var photoSources: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            Eyebrow("Photos")
+            PhotoSourceButtons(maxSelectionCount: SharedConstants.photoRunImageLimit, reviewsUploads: false) {
+                items in
+                photoImport = PhotoImportRunBatch(items: items, flow: appModel.makePhotoImportFlow())
+            }
+        }
+    }
+
     /// Walking the shelf is the screen's other main job, so it sits in the body beside the
     /// location it walks rather than among the toolbar glyphs.
     private var walkShelf: some View {
@@ -142,32 +181,19 @@ private struct CaptureContent: View {
         /// A 4:3 slot. On hardware this is the live scanner; on the simulator `ScannerSlot` renders its
         /// own explanation, and the inset tone keeps it reading as a disabled instrument, not an error.
         ///
-        /// With no location chosen the slot stays a placeholder: the camera must not start before
-        /// there is somewhere to put what it reads.
+        /// The slot appears only after Scan and a location choice, so the camera cannot write
+        /// against an unvalidated saved location.
         private var scannerSlot: some View {
             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
                 .fill(FieldGuideTokens.inset)
                 .aspectRatio(4.0 / 3.0, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: 300)
                 .overlay {
-                    if capture.session.location == nil {
-                        VStack(spacing: FieldGuideTokens.Space.sm) {
-                            Image(systemName: "barcode.viewfinder")
-                                .font(.largeTitle.weight(.light))
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            Text("Pick a location to start the scanner")
-                                .font(.fieldGuideBody)
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(FieldGuideTokens.Space.lg)
-                    } else {
-                        // Labels only for codes this sweep already resolved: no request per frame.
-                        ScannerSlot(
-                            onRead: { code in capture.submit(code) },
-                            annotate: { raw in capture.session.annotation(forScanned: raw) }
-                        )
-                    }
+                    // Labels only for codes this sweep already resolved: no request per frame.
+                    ScannerSlot(
+                        onRead: { code in capture.submit(code) },
+                        annotate: { raw in capture.session.annotation(forScanned: raw) }
+                    )
                 }
                 .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                 .overlay(
@@ -194,16 +220,22 @@ private struct CaptureContent: View {
                                     capture.location == nil
                                         ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite
                                 )
-                                .lineLimit(1)
+                                .fixedSize(horizontal: false, vertical: true)
                             if let path = capture.location?.path, !path.isEmpty {
                                 Text(path)
                                     .font(.fieldGuideLabel)
                                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                    .lineLimit(1)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if dynamicTypeSize.isAccessibilitySize, let code = capture.location?.id.rawValue {
+                                Text(code)
+                                    .font(.fieldGuideCode)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             }
                         }
+                        .layoutPriority(1)
                         Spacer(minLength: FieldGuideTokens.Space.sm)
-                        if let code = capture.location?.id.rawValue {
+                        if !dynamicTypeSize.isAccessibilitySize, let code = capture.location?.id.rawValue {
                             Text(code)
                                 .font(.fieldGuideCode)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
@@ -254,15 +286,27 @@ private struct CaptureContent: View {
                             .strokeBorder(
                                 FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
                     )
-                Button("Scan", action: capture.submitManualEntry)
+                Button(manualSubmitTitle, action: capture.submitManualEntry)
                     .font(.fieldGuideTitle)
-                    .buttonStyle(.borderedProminent)
+                    #if os(macOS)
+                        .buttonStyle(.borderedProminent)
+                    #else
+                        .buttonStyle(.bordered)
+                    #endif
                     .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
                     .tint(FieldGuideTokens.interaction)
                     .frame(height: FieldGuideTokens.touchTarget)
                     .disabled(capture.session.location == nil || capture.manualEntry.isEmpty)
             }
         }
+    }
+
+    private var manualSubmitTitle: String {
+        #if os(macOS)
+            "Scan"
+        #else
+            "Submit code"
+        #endif
     }
 
     private var tally: some View {
