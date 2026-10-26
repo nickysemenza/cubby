@@ -384,8 +384,11 @@ const fairlyOrderedDueJobs = (
       }
       ${excludeKinds.length ? sql`AND (${jobCapExempt()} OR ${notInArray(job.kind, [...excludeKinds])})` : sql``}
       ${batch ? sql`AND ${job.kind} = ${batch.kind} AND ${jobRunOwned()} = ${batch.runOwned} AND ${jobCapExempt()} = ${batch.capExempt}` : sql``}
-  ), backlog AS (
-    SELECT kind, count(*) AS size FROM due GROUP BY kind
+  ), backlog AS MATERIALIZED (
+    -- Weight belongs to the kind; materialize so numeric log runs once per kind.
+    SELECT kind,
+      least(${JOB_MAX_KIND_WEIGHT}, 1 + floor(log(count(*)::numeric))) AS weight
+    FROM due GROUP BY kind
   ), capacity AS MATERIALIZED (
     -- Count live leases once, before joining capacity to a potentially large backlog.
     SELECT backlog.kind,
@@ -414,7 +417,7 @@ const fairlyOrderedDueJobs = (
         PARTITION BY due.cap_exempt, due.kind
         ORDER BY due.run_owned DESC, due.priority DESC, due."updatedAt", due."availableAt", due.id
       ) AS kind_position,
-      least(${JOB_MAX_KIND_WEIGHT}, 1 + floor(log(backlog.size::numeric))) AS weight
+      backlog.weight
     FROM due JOIN backlog USING (kind) JOIN served USING (kind)
   ), eligible AS (
     SELECT ranked.*, row_number() OVER (

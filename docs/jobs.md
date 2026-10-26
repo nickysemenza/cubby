@@ -133,10 +133,14 @@ Job budget bounds the expanded selection:
    as connection discovery do not).
 2. Backfill (everything else) keeps `JOB_BACKFILL_SHARE` of every batch.
 3. Within each class, a weighted round-robin across kinds: a kind's share of
-   a round is `1 + log10(backlog)`, at most `JOB_MAX_KIND_WEIGHT`, so a
+   a round is `1 + floor(log10(backlog))`, at most `JOB_MAX_KIND_WEIGHT`, so a
    100k flood gets more slots but never starves another kind. Within a round
    the least recently claimed kind goes first; within a kind, priority, then
    age.
+
+The selector materializes the backlog weight once per kind. Numeric logarithms
+must not be evaluated for every candidate Job in a large backfill; the weight
+and all admission and ordering rules remain shared by selection and queue positions.
 
 `JOB_KIND_POLICY.maxInFlight` optionally caps background claims across all
 drains. Selection admits only the remaining capacity; claim-time admission
