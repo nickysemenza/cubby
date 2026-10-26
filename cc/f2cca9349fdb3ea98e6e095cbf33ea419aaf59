@@ -1,0 +1,63 @@
+apps/web/src/contracts/work-queue.contract.ts
+  s_0aa0a32f80fc69::t_8c0c2909b44c96 42
+apps/web/src/entity/filters.unit.test.ts
+  s_0aa0a32f80fc69::t_2852af64f7846e 2-7,42-84
+apps/web/src/entity/table/table-row-step.unit.test.tsx
+  s_0aa0a32f80fc69::t_405b9f3a74e579 10,40,45,48-52,90-119
+apps/web/src/entity/table/table.tsx
+  s_0aa0a32f80fc69::t_da7d605f809300 846-884
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_0aa0a32f80fc69::t_add0dba8f5611e 3,52,130-137,183-189,252-266,268-269,359-360,372-373,416-417,430,444-445,451-463,465-483,504,516
+apps/web/src/routes/_authenticated/work-queue.tsx
+  s_0aa0a32f80fc69::t_cc8207d1bf7331 17,19,21,23-25,27
+apps/web/src/server/generic/work-queue/repo/work-explanation.unit.test.ts
+  s_0aa0a32f80fc69::t_0d5c85a723893d 18
+apps/web/src/server/generic/work-queue/repo/work-queue-projection.ts
+  s_0aa0a32f80fc69::t_691927416ed540 30-32,133,149,162,165,176,194
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_0aa0a32f80fc69::t_89b7efa240842a 486,499,511,517,525-565,581,606,697,820-834
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_0aa0a32f80fc69::t_3fa1d3a474e6fe 43,199,210-211,253-272,289,316,330,339,369,386,405,424,445,457,468,498,510,519,535,539,569,584,601,618,647,676,698,702,730,733,738,761,774,820,862-881,898-900,904-926,928-934,952-955,961-973,992-998,1019-1035,1040-1047,1050-1057,1136,1162
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_0aa0a32f80fc69::t_e1b997d7e245a9 284-285
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_0aa0a32f80fc69::t_fe023eaa7a848f 311-314
+apps/web/tests/e2e/work-queue.spec.ts
+  s_0aa0a32f80fc69::t_9114c905ff7e80 68-83
+docs/guide/work-queue.md
+  s_bf37338a7891c3::t_680f9ed2354b0b 69-73
+packages/schemas/src/source-list.ts
+  s_0aa0a32f80fc69::t_d9330fea6187dd 19-21,101-124
+packages/schemas/src/work-queue.ts
+  s_0aa0a32f80fc69::t_784d8d12487bef 6-11,155-191,221-222,281,286,288-290,292,317-322,329-338,342,351,384-385,387,426-430,437-438
+apps/web/DESIGN.md
+  s_0aa0a32f80fc69::t_0b9b3df539eee1 320-327
+docs/entities.md
+  s_0aa0a32f80fc69::t_94520a37d39b65 2080-2094
+packages/schemas/package.json
+  s_0aa0a32f80fc69::t_dd52aadd5292b8 180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ccf2cca9349fdb3ea98e6e095cbf33ea419aaf59",
+  "prompts": {},
+  "sessions": {
+    "s_0aa0a32f80fc69": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17911-4ae5-7131-b39f-dece7b3aaac4",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_bf37338a7891c3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17917-2eb1-73f0-a160-9eba8c079ab3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
