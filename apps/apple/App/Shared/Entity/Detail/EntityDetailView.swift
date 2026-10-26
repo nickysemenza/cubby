@@ -204,16 +204,41 @@ struct EntityDetailView: View {
         }
         if !declared.isEmpty {
             Section("Create") {
-                ForEach(declared) { section in
-                    Button(
-                        section.id == journalRelationID ? "Log entry" : "New \(section.target.singular)",
-                        systemImage: "plus"
-                    ) {
-                        creatingRelation = section
+                ForEach(Self.relationCreationGroups(declared), id: \.first!.target.key) { group in
+                    if let first = group.first {
+                        if group.count == 1 {
+                            Button(
+                                first.id == journalRelationID ? "Log entry" : "New \(first.target.singular)",
+                                systemImage: "plus"
+                            ) { creatingRelation = first }
+                        } else {
+                            Menu("New \(first.target.singular)", systemImage: "plus") {
+                                ForEach(group) { section in
+                                    Button(section.section.title ?? section.target.plural) {
+                                        creatingRelation = section
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Identical create drafts appear once; distinct prefills share a target submenu in declaration order.
+    static func relationCreationGroups(_ sections: [RelationSectionModel]) -> [[RelationSectionModel]] {
+        var groups: [[RelationSectionModel]] = []
+        for section in sections {
+            if let index = groups.firstIndex(where: { $0.first?.target.key == section.target.key }) {
+                if !groups[index].contains(where: { $0.createPrefill == section.createPrefill }) {
+                    groups[index].append(section)
+                }
+            } else {
+                groups.append([section])
+            }
+        }
+        return groups
     }
 
     private var journalRelationID: String? {

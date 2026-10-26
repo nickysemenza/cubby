@@ -24,6 +24,8 @@ A web-only surface is a reviewed handoff: one `OpenOnWebButton` row where the sl
 
 Report record titles, related-record context links, and row commands are separate accessibility and interaction targets. Never wrap a row containing links or commands in another navigation link.
 
+The record More menu offers identical create drafts once. Relationships with distinct prefills for the same target share one New submenu, retaining each relationship's label and prefill.
+
 Cached Mac lists and freshly opened lists select their initial layout from the same native coverage filter. If no declared layout can render natively, use the generic List presentation; retain the cached model when switching sidebar sections.
 
 Every entity offers List and Table alongside its declared shelf, timeline, or specialist views. On Mac the List/Table picker is its own toolbar control; one View menu holds sort, grouping, saved views, filters and columns, beside a single refresh (⌘R) and New. The record count and total are the toolbar subtitle. Mac Table rows are about 24 points with an 18-point thumbnail in the title column; a declared `titleSubtitle` shows its subtitle muted in that column and as the second line of list rows. Table uses the same manifest fields and display rules as web, with aligned column headers, column visibility controls, and server sorting only for declared sortable fields. Mac uses a native selectable table with resizable columns; iPhone keeps the columns in a horizontally scrolling table. Switching List and Table retains the loaded records, filters, search, and selection. A header sort restarts server pagination and replays an active search in the new order.
@@ -43,6 +45,8 @@ existing import-run flow. The sweep location stays visible and editable. Persist
 only its id in device preferences; restore it after a successful location load,
 and silently clear it if the location was deleted. Camera and Photos permission
 denials explain the blocked action and offer Open Settings (System Settings on Mac).
+
+Camera preparation retains the captured bytes until it succeeds so Retry prepares the same photo. Scanner startup failures show the raw diagnostic with Retry and the existing manual code entry. Photo destination changes register their undo with the sheet's system UndoManager; the toolbar has no custom Command–Z binding, preserving text editing undo.
 
 New belongings imports default to owned items and the signed-in member. A storage
 location is optional during capture and required before adding stock during review.

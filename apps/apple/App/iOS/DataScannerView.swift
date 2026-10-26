@@ -13,12 +13,31 @@ struct ScannerSlot: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var status = AVCaptureDevice.authorizationStatus(for: .video)
+    @State private var startup = ScannerStartupState()
+    @State private var attempt = 0
 
     var body: some View {
         if DataScannerViewController.isSupported {
             switch status {
             case .authorized:
-                DataScannerView(onRead: onRead, annotate: annotate)
+                ZStack {
+                    DataScannerView(onRead: onRead, annotate: annotate, startup: startup)
+                        .id(attempt)
+                    if let error = startup.error {
+                        ContentUnavailableView {
+                            Label("Camera could not start", systemImage: "camera")
+                        } description: {
+                            Text("\(error)\nType or paste a code below, or try again.")
+                        } actions: {
+                            Button("Retry") {
+                                startup.error = nil
+                                attempt += 1
+                            }
+                            .accessibilityIdentifier("scanner.retry")
+                        }
+                        .background(.background)
+                    }
+                }
             case .denied, .restricted:
                 // The system prompt never reappears once answered; only Settings can grant access.
                 ContentUnavailableView {
@@ -65,6 +84,22 @@ struct ScannerSlot: View {
     }
 }
 
+@MainActor
+@Observable
+final class ScannerStartupState {
+    var error: String?
+
+    func start(_ operation: () throws -> Void) {
+        do {
+            try operation()
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+            Diagnostics.report(error, context: "scanner.start")
+        }
+    }
+}
+
 /// Wraps `DataScannerViewController`. Both `recognizesMultipleItems` and
 /// `isHighFrameRateTrackingEnabled` are init-only, so they are fixed in `makeUIViewController`.
 ///
@@ -73,6 +108,7 @@ struct ScannerSlot: View {
 struct DataScannerView: UIViewControllerRepresentable {
     let onRead: (String) -> Void
     var annotate: ((String) -> ShelfAnnotation?)? = nil
+    let startup: ScannerStartupState
 
     /// Live labels are capped so a dense shelf stays readable; the rest stay highlighted only.
     static let overlayLimit = 6
@@ -90,7 +126,7 @@ struct DataScannerView: UIViewControllerRepresentable {
             isHighlightingEnabled: true
         )
         controller.delegate = context.coordinator
-        try? controller.startScanning()
+        context.coordinator.start(controller, state: startup)
         return controller
     }
 
@@ -99,10 +135,13 @@ struct DataScannerView: UIViewControllerRepresentable {
         context.coordinator.annotate = annotate
         // Session state moved (a row verified, a scan resolved): relabel what is in view.
         context.coordinator.relabel()
-        if !controller.isScanning { try? controller.startScanning() }
+        if !controller.isScanning, startup.error == nil {
+            context.coordinator.start(controller, state: startup)
+        }
     }
 
     static func dismantleUIViewController(_ controller: DataScannerViewController, coordinator: Coordinator) {
+        coordinator.startTask?.cancel()
         controller.stopScanning()
         coordinator.removeAllLabels()
     }
@@ -117,6 +156,8 @@ struct DataScannerView: UIViewControllerRepresentable {
         /// The last `allItems` VisionKit reported; `recognizedItems` on the controller is an
         /// async stream, so the delegate keeps the snapshot a relabel needs.
         private var visible: [RecognizedItem] = []
+        private var starting = false
+        var startTask: Task<Void, Never>?
         private var labels:
             [RecognizedItem.ID: (host: UIHostingController<ShelfLabel>, annotation: ShelfAnnotation)] =
                 [:]
@@ -124,6 +165,17 @@ struct DataScannerView: UIViewControllerRepresentable {
         init(onRead: @escaping (String) -> Void, annotate: ((String) -> ShelfAnnotation?)?) {
             self.onRead = onRead
             self.annotate = annotate
+        }
+
+        func start(_ controller: DataScannerViewController, state: ScannerStartupState) {
+            guard !starting else { return }
+            starting = true
+            // Publish a startup failure after the representable's update has completed.
+            startTask = Task { @MainActor [weak controller] in
+                defer { starting = false }
+                guard !Task.isCancelled, let controller, !controller.isScanning else { return }
+                state.start { try controller.startScanning() }
+            }
         }
 
         func dataScanner(
