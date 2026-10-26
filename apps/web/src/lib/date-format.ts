@@ -97,8 +97,11 @@ export function formatCalendarDay(
   value: string | Date,
   preset: DatePreset,
 ): string {
+  if (preset === "dateShort")
+    return wasmFormat.format_plain_date(
+      value instanceof Date ? format(value, "yyyy-MM-dd") : value,
+    );
   if (value instanceof Date) return format(value, DATE_PRESETS[preset]);
-  if (preset === "dateShort") return wasmFormat.format_plain_date(value);
   if (!PLAIN_DATE.test(value)) return value;
   const day = parsePlainDate(value);
   // parsePlainDate rolls "2026-13-45" over into a later real date; a round
