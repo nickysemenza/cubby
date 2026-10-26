@@ -1,0 +1,25 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_5179a923bdfd2e::t_06ac8bb6020968 63-64,67-69,132-139,141-151,339-344,712,744,1118,1125,1145
+apps/apple/DESIGN.md
+  s_5179a923bdfd2e::t_8d5c5b1dfaa10f 31,35
+apps/apple/ITERATION.md
+  s_5179a923bdfd2e::t_124cb0a8027391 60,63,73
+apps/apple/e2e/qa-entity-table.ad
+  s_5179a923bdfd2e::t_7436fe0dc084b1 3-4,23-25,32-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "15787826c6e595f4bf068532827fa165f320069b",
+  "prompts": {},
+  "sessions": {
+    "s_5179a923bdfd2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a24-b465-7303-96da-d76d9c4ec5dd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
