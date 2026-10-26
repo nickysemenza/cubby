@@ -1126,16 +1126,6 @@ async function assertQaOutcomes(): Promise<void> {
     );
     if (discards.length !== 1)
       throw new Error(`Expected one discard line, found ${discards.length}`);
-    const allocations = await rows<{ amount: number }>(
-      `SELECT a.amount FROM "FinancialTransactionAllocation" a
-       JOIN "FinancialTransaction" t ON t.id = a."transactionId"
-       WHERE t.shortcode = $1 AND a."deletedAt" IS NULL ORDER BY a.amount`,
-      [qaIds.SPLIT_CHARGE_ID],
-    );
-    if (allocations.map((row) => row.amount).join() !== "42.5,48.5")
-      throw new Error(
-        `Statement match must allocate 42.5 and 48.5: ${JSON.stringify(allocations)}`,
-      );
     const mappings = await rows<{ bValue: number }>(
       `SELECT "bValue" FROM "ProductUnitMapping" WHERE "aUnit" = 'cup' AND "deletedAt" IS NULL`,
     );

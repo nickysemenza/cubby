@@ -35,14 +35,14 @@ evidence through the usual QA artifact path. This guard also runs in the full QA
 `pnpm test:e2e:sim -- --qa` seeds the shared connected exploration household
 (`tooling/scenarios/corpus.ts`, also used by dev and browser screenshots), adds
 journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
-every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
-save, approving only the selected ready group of a photo Run, a structured
+every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice,
+approving only the selected ready group of a photo Run, a structured
 unit-mapping edit, external-ID Source/Identifier keyboard entry on an independent
 Product, and formatted barcode Add, additive preservation, explicit primary
 promotion and secondary-barcode sweep confirmation,
 recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
-(one unit from the chosen shelf only, both allocations, the one committed
+(one unit from the chosen shelf only, the one committed
 photo group and its Product, and exactly the selected location and two plantings) before writing the usual checksummed bundle under `artifacts/sim-qa-e2e/`. Add
 `--hold` to skip the scripted journeys and keep the server and simulator up after seeding
 (ids in `qa-ids.json`; `touch qa.stop` ends it) for manual driving. A held session is not

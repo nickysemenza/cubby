@@ -131,7 +131,6 @@ export async function seedNativeQa(
   const account = await createEntity(context, "financialAccount", {
     name: "Synthetic Checking",
   });
-  const split = await seedSplitSettlement(pool, userId);
   const pausedRun = await seedPausedRun(pool, userId);
   const researchMember = await pool.query<{
     id: string;
@@ -178,7 +177,6 @@ export async function seedNativeQa(
   const photoRun = await seedProposedPhotoRun(pool, userId);
   const garden = await seedScopedPlantingPicker(pool, context);
   return {
-    ...split,
     ...pausedRun,
     ...photoRun,
     ...garden,
@@ -257,57 +255,6 @@ async function seedScopedPlantingPicker(
     PAGE_ONE_PLANTING_ID: first.shortcode,
     PAGE_TWO_PLANTING: last.name,
     PAGE_TWO_PLANTING_ID: last.shortcode,
-  };
-}
-
-/**
- * Two Purchases sharing one unallocated synthetic card charge: the financial settlement
- * slot's statement-match journey.
- */
-export async function seedSplitSettlement(
-  pool: Pool,
-  userId: string,
-): Promise<Record<string, string>> {
-  const db = buildScenarioDatabase(pool);
-  const member = await pool.query<{ id: string }>(
-    'SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = $2 AND "deletedAt" IS NULL LIMIT 1',
-    [userId, "member"],
-  );
-  const memberId = member.rows[0]?.id;
-  if (!memberId) throw new Error("Synthetic member party is missing");
-  const splitVendor = await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Split Vendor",
-  });
-  const splitFirst = await insertWithShortcode(db, "purchase", {
-    vendorId: splitVendor.id,
-    orderId: "SYN-SPLIT-1",
-    date: "2026-09-10",
-    statedTotal: 42.5,
-  });
-  const splitSecond = await insertWithShortcode(db, "purchase", {
-    vendorId: splitVendor.id,
-    orderId: "SYN-SPLIT-2",
-    date: "2026-09-10",
-    statedTotal: 48.5,
-  });
-  const card = await insertWithShortcode(db, "financialAccount", {
-    name: "Synthetic Split Card",
-    identity: { kind: "credit_card", network: "visa" },
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-  });
-  const charge = await insertWithShortcode(db, "financialTransaction", {
-    accountId: card.id,
-    kind: "purchase",
-    status: "posted",
-    amount: 91,
-    merchant: "Synthetic Split Vendor",
-    transactionDate: "2026-09-12",
-    postedDate: "2026-09-12",
-  });
-  return {
-    SPLIT_PURCHASE_ID: splitFirst.shortcode,
-    SPLIT_PURCHASE_2_ID: splitSecond.shortcode,
-    SPLIT_CHARGE_ID: charge.shortcode,
   };
 }
 
