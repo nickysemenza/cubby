@@ -139,6 +139,25 @@ describe("native presentation coverage", () => {
     expect(nativeHeroActionPlans.discard.confirmation).toBe("destructive");
   });
 
+  it("runs the quick-action verbs with the shape each needs", () => {
+    // Done is one tap with a preset option; Adjust amount asks for the one
+    // field; Move to asks for a location and moves the whole entry.
+    expect(nativeHeroActionPlans.complete).toMatchObject({
+      kind: "setField",
+      field: "status",
+      value: "done",
+    });
+    expect(nativeHeroActionPlans.adjustAmount).toMatchObject({
+      kind: "editField",
+      field: "amount",
+    });
+    expect(nativeHeroActionPlans.moveTo).toMatchObject({
+      kind: "operation",
+      operation: "inventory.moveEntries",
+      confirmation: "none",
+    });
+  });
+
   it("opens Record sale in the same disposition editor web shows", () => {
     // Web's expense capture dialog titles and describes itself from the
     // disposition context; the native editor takes the same copy and costType

@@ -327,10 +327,13 @@ export const nativeCoverage = {
   heroAction: {
     ...implemented([
       "addToInventory",
+      "adjustAmount",
+      "complete",
       "delete",
       "discard",
       "markPurchased",
       "fetchLogo",
+      "moveTo",
       "recordSale",
       "setStatus",
     ]),
@@ -615,6 +618,14 @@ export type NativeHeroActionPlan = {
       readonly kind: "setField";
       readonly entities: readonly Entity[];
       readonly field: string;
+      /** Writes this option on one tap instead of asking (a task's Done). */
+      readonly value?: string;
+    }
+  | {
+      /** Edits one update field's current value in the single-field form, then updates the row. */
+      readonly kind: "editField";
+      readonly entities: readonly Entity[];
+      readonly field: string;
     }
   | {
       /** Flips a boolean update field whose current state is read from `stateField`. */
@@ -745,6 +756,36 @@ export const nativeHeroActionPlans = {
       costType: EXPENSE_DISPOSITION_COST_TYPE,
     },
     editor: EXPENSE_DISPOSITION_EDITOR,
+  },
+  complete: {
+    label: "Done",
+    symbol: "checkmark.circle",
+    kind: "setField",
+    entities: ["task"],
+    field: "status",
+    value: "done",
+  },
+  moveTo: {
+    label: "Move to",
+    symbol: "arrow.left.arrow.right",
+    kind: "operation",
+    operation: "inventory.moveEntries",
+    entities: ["inventory"],
+    // The whole entry moves and can move back; a partial move stays on web's Move dialog.
+    confirmation: "none",
+    fields: [{ key: "location", label: "Location", kind: "location" }],
+    body: {
+      items: [
+        { inventoryEntryId: "$row.id", targetLocationId: "$field.location" },
+      ],
+    },
+  },
+  adjustAmount: {
+    label: "Adjust amount",
+    symbol: "plusminus",
+    kind: "editField",
+    entities: ["inventory"],
+    field: "amount",
   },
   setStatus: {
     label: "Set status",

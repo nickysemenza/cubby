@@ -68,6 +68,7 @@ struct EntityListView: View {
     @State private var cardDensity = ListPresentationChoice.cards
     @State private var browsePresentation = BrowsePresentation.list
     @State private var hiddenTableColumns = Set<String>()
+    @State private var quickActions = RowQuickActionRunner()
     private let initialFilters: EntityFilterState
     private let initialSavedView: SavedView?
     private let usesBrowseSelection: Bool
@@ -191,6 +192,7 @@ struct EntityListView: View {
         .refreshControl { [model] in
             if let model { await refreshVisible(model) }
         }
+        .rowQuickActionHost(quickActions)
         .sheet(isPresented: $showingFilters) {
             if let model {
                 EntityFilterSheet(descriptor: descriptor, filters: model.filters) { filters in
@@ -1073,6 +1075,7 @@ struct EntityListView: View {
                 .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
                 .contextMenu {
+                    RowQuickActionButtons(key: key, row: row, runner: quickActions)
                     Button("Copy link", systemImage: "link") {
                         Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     }
@@ -1213,7 +1216,13 @@ struct EntityListView: View {
         let columns = EntityRowPresentation.defaultColumns(descriptor: descriptor)
         return ForEach(rows) { row in
             rowContent(row, columns: columns)
+                #if os(iOS)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        RowQuickActionButtons(key: key, row: row, runner: quickActions)
+                    }
+                #endif
                 .contextMenu {
+                    RowQuickActionButtons(key: key, row: row, runner: quickActions)
                     Button("Copy link", systemImage: "link") {
                         Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     }

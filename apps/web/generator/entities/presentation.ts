@@ -487,7 +487,27 @@ const fieldLookup = (
 const checkHero = (
   hero: EntityPresentation["detail"]["hero"],
   lookup: FieldLookup,
+  quick: Readonly<{
+    detail: readonly string[];
+    list: readonly string[];
+    listActions: readonly string[];
+  }>,
 ) => {
+  // A quick action promotes a declared verb to a leading button; it never adds one.
+  for (const [where, verbs, declared] of [
+    ["detail.quickActions", quick.detail, hero.actions],
+    ["list.quickActions", quick.list, quick.listActions],
+  ] as const) {
+    if (new Set(verbs).size !== verbs.length)
+      throw new EntityDeclarationError(
+        `${lookup.context}.${where} repeats a verb.`,
+      );
+    for (const verb of verbs)
+      if (!declared.includes(verb))
+        throw new EntityDeclarationError(
+          `${lookup.context}.${where} names ${verb}, which is not in ${where === "detail.quickActions" ? "detail.hero.extraActions" : "list.extraActions"}.`,
+        );
+  }
   if (hero.chip !== null) {
     const field = lookup.read(hero.chip, "detail.hero.chip");
     if (field.kind !== "enum" && field.kind !== "boolean")
@@ -926,7 +946,11 @@ export const compilePresentation = (
           },
         ]
       : declaredSections;
-  checkHero(detail.hero, lookup);
+  checkHero(detail.hero, lookup, {
+    detail: detail.quickActions,
+    list: list.quickActions,
+    listActions: list.actions,
+  });
   const summaryIds = new Set<string>();
   for (const slot of detail.summary) {
     if (summaryIds.has(slot.id))
@@ -1011,6 +1035,7 @@ export const compilePresentation = (
           ]),
         ],
       },
+      quickActions: detail.quickActions,
       sections: sections.map((section) => ({
         ...section,
         overview: detailSectionInOverview(detail.overviewSections, section.id),
@@ -1052,6 +1077,7 @@ export const compilePresentation = (
           facts.hasUpdate && fieldModel.bulk.length > 0,
         ),
       ],
+      quickActions: list.quickActions,
       links: list.links,
       timeline:
         list.timeline === null

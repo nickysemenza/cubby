@@ -647,6 +647,10 @@ const presentationJSON = (
       : null,
     heroImages: detail.hero.images,
     heroActions: [...detail.hero.actions],
+    // Omitted when none are declared; CubbyKit reads an absent list as [].
+    detailQuickActions: detail.quickActions.length
+      ? [...detail.quickActions]
+      : undefined,
     activityRelations: detail.activityRelations.map((entry) => ({
       relation: entry.relation,
       dateField: entry.dateField,
@@ -670,6 +674,9 @@ const presentationJSON = (
     shelfSubtitle: [...(list.shelf?.subtitle ?? [])],
     titleSubtitle: list.titleSubtitle,
     listActions: [...list.actions],
+    listQuickActions: list.quickActions.length
+      ? [...list.quickActions]
+      : undefined,
     timelineFields: [...(list.timeline?.fields ?? [])],
     lifecycle:
       list.timeline?.lifecycle == null

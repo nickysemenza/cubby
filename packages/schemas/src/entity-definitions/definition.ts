@@ -1562,6 +1562,11 @@ const buildMetadataSchemas = () => {
               when,
               actions: extraActions,
             })),
+          /**
+           * One or two `hero.extraActions` verbs every client offers as the
+           * record's leading buttons, ahead of the More menu.
+           */
+          quickActions: z.array(actionKey).max(2).optional().default([]),
           /** Only these relations contribute dated records to merged activity. */
           activityRelations: z
             .array(
@@ -1628,11 +1633,13 @@ const buildMetadataSchemas = () => {
             relationFilterOverrides,
             variantOverride,
             hero,
+            quickActions,
             omitRelations,
           }) => ({
             variant: variantOverride,
             summary,
             hero,
+            quickActions,
             sections: sectionOverrides,
             activityRelations,
             overviewSections,
@@ -1850,6 +1857,11 @@ const buildMetadataSchemas = () => {
            * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
            */
           extraActions: z.array(actionKey).optional().default([]),
+          /**
+           * One or two `extraActions` verbs a row offers first: the leading
+           * swipe and the first row-menu items.
+           */
+          quickActions: z.array(actionKey).max(2).optional().default([]),
           links: z
             .array(
               z
@@ -1891,6 +1903,7 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             extraActions,
+            quickActions,
             views,
             viewAliases,
             totals,
@@ -1922,6 +1935,7 @@ const buildMetadataSchemas = () => {
             scopes,
             tree,
             actions: extraActions,
+            quickActions,
             links,
             timeline,
           }),

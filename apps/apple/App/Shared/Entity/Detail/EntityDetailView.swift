@@ -237,7 +237,9 @@ struct EntityDetailView: View {
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
                     connectedRecords: connectedRecords,
-                    onChanged: { Task { await refresh() } }
+                    onChanged: { Task { await refresh() } },
+                    onQuickAction: startHeroAction,
+                    quickActionsBusy: heroBusy
                 )
             }
         } else if let model {
@@ -309,9 +311,11 @@ struct EntityDetailView: View {
     }
 
     /// The manifest's hero actions this entity declares and native implements, from the one
-    /// generic runner (`edit` stays the toolbar's Edit; `bulkEdit` is a list verb).
+    /// generic runner (`edit` stays the toolbar's Edit; `bulkEdit` is a list verb). Quick actions
+    /// are the buttons under the hero, not More items.
     @ViewBuilder private var heroActionButtons: some View {
-        let plans = descriptor.presentation.heroActions.compactMap { verb in
+        let quick = descriptor.presentation.detailQuickActionIDs
+        let plans = descriptor.presentation.heroActions.filter { !quick.contains($0) }.compactMap { verb in
             HeroActionRunner.plan(for: verb, on: key).map { (verb, $0) }
         }
         let routine = plans.filter { $0.1.confirmation != .destructive }
@@ -346,7 +350,7 @@ struct EntityDetailView: View {
         guard let row = model?.row else { return }
         let runner = HeroActionRunner(client: appModel.client)
         switch plan.kind {
-        case .toggleField, .create:
+        case .toggleField, .create, .setField(_, _?):
             // No input and nothing destructive: one explicit tap runs it. The flag flips before
             // the task is scheduled so a second tap cannot start a second write.
             guard !heroBusy else { return }
@@ -362,7 +366,7 @@ struct EntityDetailView: View {
                     appModel.handle(error)
                 }
             }
-        case .delete, .operation, .setField:
+        case .delete, .operation, .setField, .editField:
             heroAction = HeroActionModel(plan: plan, entity: key, row: row, runner: runner)
         }
     }
@@ -400,6 +404,9 @@ struct EntityDetailContent: View {
     var relationSections: [RelationSectionModel] = []
     var connectedRecords: ConnectedRecordsPreviewModel? = nil
     var onChanged: () -> Void = {}
+    /// Runs a declared quick action; nil (previews) draws none.
+    var onQuickAction: ((HeroActionPlan) -> Void)? = nil
+    var quickActionsBusy = false
 
     @Environment(AppModel.self) private var appModel
     @State private var timeline: EntityTimelineOut?
@@ -446,6 +453,28 @@ struct EntityDetailContent: View {
         #endif
     }
 
+    /// The declared quick actions (at most two) as the record's only filled buttons; every other
+    /// verb stays in More.
+    @ViewBuilder private var quickActionButtons: some View {
+        let actions = HeroActionRunner.quickActions(
+            presentation.detailQuickActionIDs, on: descriptor.key, row: row)
+        if let onQuickAction, !actions.isEmpty {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                ForEach(actions, id: \.0) { verb, plan in
+                    Button {
+                        onQuickAction(plan)
+                    } label: {
+                        Label(plan.label, systemImage: plan.symbol)
+                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(quickActionsBusy)
+                    .accessibilityIdentifier("detail.\(descriptor.key.rawValue).quick.\(verb.rawValue)")
+                }
+            }
+        }
+    }
+
     #if os(macOS)
         private var macBody: some View {
             ScrollView {
@@ -465,6 +494,7 @@ struct EntityDetailContent: View {
                             supplement
                         }
                     }
+                    quickActionButtons
                     DetailSummaryGrid(descriptor: descriptor, row: row)
                     HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
@@ -629,6 +659,9 @@ struct EntityDetailContent: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                quickActionButtons
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 if !row.previousShortcodes.isEmpty {
                     LabeledContent(
                         "Previous shortcodes", value: row.previousShortcodes.joined(separator: ", "))

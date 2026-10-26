@@ -81,19 +81,31 @@ const checkFieldPlan = (
   verb: string,
   plan: Extract<
     NativeHeroActionPlan,
-    { kind: "create" | "setField" | "toggleField" }
+    { kind: "create" | "setField" | "editField" | "toggleField" }
   >,
 ): string[] => {
   const targets = plan.kind === "create" ? [plan.entity] : plan.entities;
   const names = plan.kind === "create" ? Object.keys(plan.seed) : [plan.field];
   return targets.flatMap((entity) => {
-    const writable: readonly string[] = [
-      ...generatedEntityFieldModels[entity].create,
-      ...generatedEntityFieldModels[entity].update,
-    ];
-    return names
+    const model = generatedEntityFieldModels[entity];
+    // An edit of an existing record writes through the update contract only.
+    const writable: readonly string[] =
+      plan.kind === "editField"
+        ? model.update
+        : [...model.create, ...model.update];
+    const problems = names
       .filter((name) => !writable.includes(name))
       .map((name) => `${verb}: ${entity} has no writable field ${name}`);
+    if (plan.kind === "setField" && plan.value !== undefined) {
+      const options: readonly { value: string }[] =
+        model.fields.find((field) => field.key === plan.field)?.control
+          ?.options ?? [];
+      if (!options.some((option) => option.value === plan.value))
+        problems.push(
+          `${verb}: ${plan.value} is not a ${entity}.${plan.field} option`,
+        );
+    }
+    return problems;
   });
 };
 

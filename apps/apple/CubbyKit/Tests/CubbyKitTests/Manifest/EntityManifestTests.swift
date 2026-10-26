@@ -54,6 +54,18 @@ struct EntityManifestTests {
         #expect(inProgress.glyph?.sfSymbol == "circle.lefthalf.filled")
     }
 
+    // Declared quick actions reach native in order; an entity that declares none omits the keys
+    // and reads as empty.
+    @Test func quickActionsArriveOnTheWireAndDefaultToNone() throws {
+        #expect(EntityCatalog[.task].presentation.detailQuickActionIDs == [.complete])
+        #expect(EntityCatalog[.task].presentation.listQuickActionIDs == [.complete])
+        #expect(EntityCatalog[.inventory].presentation.detailQuickActionIDs == [.moveTo, .adjustAmount])
+        #expect(EntityCatalog[.inventory].presentation.listQuickActionIDs == [.moveTo])
+        #expect(EntityCatalog[.vendor].presentation.detailQuickActions == nil)
+        #expect(EntityCatalog[.vendor].presentation.detailQuickActionIDs.isEmpty)
+        #expect(EntityCatalog[.vendor].presentation.listQuickActionIDs.isEmpty)
+    }
+
     @Test func schemaDerivedReadOnlyPaletteSurvivesTheCatalog() throws {
         let field = try #require(EntityCatalog[.image].fields.first { $0.key == "captureAttribution" })
         let options = try #require(field.valueOptions)

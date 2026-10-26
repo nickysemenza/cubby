@@ -328,6 +328,60 @@ struct HeroActionRunnerTests {
         #expect(recorder.requests.last?.body["data"]?["acquired"] == false)
     }
 
+    /// A preset write (a task's Done) runs on the tap: no form, exactly the plan's value, and it is
+    /// not offered on a record that already carries it.
+    @Test func completeWritesTheDoneStatusWithoutAForm() async throws {
+        let recorder = capture { _ in
+            (
+                200,
+                Data(#"{"action":"update","entity":"task","item":{"id":"TSK-4K7M"},"sideEffects":{}}"#.utf8)
+            )
+        }
+        let runner = try makeRunner()
+        let plan = try #require(HeroActionRunner.plan(for: .complete, on: .task))
+        #expect(plan.runsOnTap)
+        _ = try await runner.perform(
+            plan, on: .task, row: Self.row("TSK-4K7M", raw: ["status": "todo"]), values: [:],
+            confirmed: false)
+        let sent = try #require(recorder.requests.first)
+        #expect(sent.path == "/api/operations/entity.mutate")
+        #expect(sent.body["entity"] == "task")
+        #expect(sent.body["data"] == ["status": "done"])
+        #expect(
+            HeroActionRunner.quickActions(
+                [.complete], on: .task, row: Self.row("TSK-4K7M", raw: ["status": "done"])
+            ).isEmpty)
+    }
+
+    /// An edit-field plan opens on the record's current value, cannot submit an empty amount, and
+    /// writes only that field.
+    @MainActor @Test func adjustAmountEditsTheCurrentAmount() async throws {
+        let recorder = capture { _ in
+            (
+                200,
+                Data(
+                    #"{"action":"update","entity":"inventory","item":{"id":"INV-4K7M"},"sideEffects":{}}"#
+                        .utf8)
+            )
+        }
+        let plan = try #require(HeroActionRunner.plan(for: .adjustAmount, on: .inventory))
+        #expect(!plan.runsOnTap)
+        let current: JSONValue = ["value": 3, "unit": "count"]
+        let model = HeroActionModel(
+            plan: plan, entity: .inventory, row: Self.row("INV-4K7M", raw: ["amount": current]),
+            runner: try makeRunner())
+        #expect(model.values["amount"] == current)
+        model.setValue("amount", ["value": 0, "unit": "count"])
+        #expect(!model.canSubmit)
+        model.setValue("amount", ["value": 2, "unit": "count"])
+        #expect(model.canSubmit)
+        model.submit(confirmed: false) { _ in }
+        await model.submission?.waitUnlessCancelled()
+        let sent = try #require(recorder.requests.first)
+        #expect(sent.body["entity"] == "inventory")
+        #expect(sent.body["data"] == ["amount": ["value": 2, "unit": "count"]])
+    }
+
     @Test func recordSaleOpensTheExpenseEditorSeededWithTheProduct() async throws {
         let runner = try makeRunner()
         let plan = try #require(HeroActionRunner.plan(for: .recordSale, on: .product))

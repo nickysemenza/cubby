@@ -106,8 +106,11 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         case operation(HeroOperationPlan)
         /// Opens the generic create editor with `seed` (`$row.id` filled) pre-set.
         case create(entity: EntityKey, seed: [String: JSONValue], editor: HeroEditorContext?)
-        /// Picks a value for one declared enum field, then updates the row.
-        case setField(field: String)
+        /// Picks a value for one declared enum field, then updates the row. With a `value` it
+        /// writes that option on one tap instead (a task's Done).
+        case setField(field: String, value: String?)
+        /// Edits one update field's current value in the single-field form, then updates the row.
+        case editField(field: String)
         /// Flips a boolean update field whose current state is read from `stateField`.
         case toggleField(field: String, stateField: String)
     }
@@ -130,22 +133,27 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
         return nil
     }
 
-    /// One explicit tap runs it: an operation with no form, no preview and nothing destructive.
+    /// One explicit tap runs it: an operation with no form, no preview and nothing destructive,
+    /// or a field set to a preset value.
     public var runsOnTap: Bool {
-        guard let plan = operation else { return false }
-        return plan.fields.isEmpty && plan.preview == nil && plan.confirmation == .none
+        switch kind {
+        case .operation(let plan):
+            return plan.fields.isEmpty && plan.preview == nil && plan.confirmation == .none
+        case .setField(_, let value): return value != nil
+        case .delete, .create, .editField, .toggleField: return false
+        }
     }
 
     public var confirmation: HeroActionConfirmation {
         switch kind {
         case .delete: .destructive
         case .operation(let plan): plan.confirmation
-        case .create, .setField, .toggleField: .none
+        case .create, .setField, .editField, .toggleField: .none
         }
     }
 
     private enum CodingKeys: String, CodingKey {
-        case kind, label, symbol, entities, entity, seed, editor, field, stateField
+        case kind, label, symbol, entities, entity, seed, editor, field, value, stateField
     }
 
     public init(from decoder: Decoder) throws {
@@ -164,7 +172,11 @@ public struct HeroActionPlan: Decodable, Sendable, Hashable {
                 seed: try container.decode([String: JSONValue].self, forKey: .seed),
                 editor: try container.decodeIfPresent(HeroEditorContext.self, forKey: .editor))
         case "setField":
-            kind = .setField(field: try container.decode(String.self, forKey: .field))
+            kind = .setField(
+                field: try container.decode(String.self, forKey: .field),
+                value: try container.decodeIfPresent(String.self, forKey: .value))
+        case "editField":
+            kind = .editField(field: try container.decode(String.self, forKey: .field))
         case "toggleField":
             kind = .toggleField(
                 field: try container.decode(String.self, forKey: .field),

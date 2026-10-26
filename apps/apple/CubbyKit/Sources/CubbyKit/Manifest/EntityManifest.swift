@@ -116,6 +116,17 @@ public enum EntityCatalog {
     }
 }
 
+// Quick actions are omitted from the wire when none are declared.
+extension EntityPresentation {
+    /// The declared `detail.quickActions`: the record's leading buttons, at most two.
+    public var detailQuickActionIDs: [EntityHeroActionID] { detailQuickActions ?? [] }
+
+    /// The declared `list.quickActions` that are hero verbs, the only ones a row can run.
+    public var listQuickActionIDs: [EntityHeroActionID] {
+        (listQuickActions ?? []).compactMap(EntityHeroActionID.init(rawValue:))
+    }
+}
+
 // Summary fields also seed the inspector/header when a preview has no list subtitle.
 extension EntityPresentation {
     public var summaryFieldKeys: [String] {

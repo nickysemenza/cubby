@@ -92,7 +92,7 @@ struct HeroActionSheet: View {
     }
 
     @ViewBuilder private var inputSection: some View {
-        if case .setField(let field) = model.plan.kind {
+        if case .setField(let field, nil) = model.plan.kind {
             Section(EntityCatalog[model.entity].fields.first { $0.key == field }?.label ?? field) {
                 Picker("Value", selection: stringBinding(field)) {
                     ForEach(
@@ -105,6 +105,20 @@ struct HeroActionSheet: View {
                 .pickerStyle(.inline)
                 .labelsHidden()
             }
+        } else if case .editField(let field) = model.plan.kind {
+            let descriptor = EntityCatalog[model.entity].fields.first { $0.key == field }
+            let label = descriptor?.label ?? field
+            Section {
+                if descriptor?.controlRenderer == .amount {
+                    amountControl(key: field, label: label)
+                } else if descriptor?.kind == .number {
+                    numberControl(key: field, label: label)
+                } else {
+                    LabeledContent(label) {
+                        TextField(label, text: stringBinding(field)).multilineTextAlignment(.trailing)
+                    }
+                }
+            }
         } else if !model.visibleFields.isEmpty {
             Section {
                 ForEach(model.visibleFields) { field in control(for: field) }
@@ -112,17 +126,43 @@ struct HeroActionSheet: View {
         }
     }
 
+    // A filled number field loses its placeholder, so the label has to be visible beside it.
+    private func numberControl(key: String, label: String) -> some View {
+        LabeledContent(label) {
+            TextField(label, value: numberBinding(key), format: .number)
+                .multilineTextAlignment(.trailing)
+                #if os(iOS)
+                    .keyboardType(.decimalPad)
+                #endif
+        }
+    }
+
+    @ViewBuilder private func amountControl(key: String, label: String) -> some View {
+        LabeledContent(label) {
+            TextField(label, value: amountValueBinding(key), format: .number, prompt: Text("0"))
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                #if os(iOS)
+                    .keyboardType(.decimalPad)
+                #endif
+        }
+        LabeledContent("Unit") {
+            TextField("Unit", text: amountUnitBinding(key), prompt: Text("unit"))
+                .multilineTextAlignment(.trailing)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .autocorrectionDisabled()
+                #if os(iOS)
+                    .textInputAutocapitalization(.never)
+                #endif
+        }
+    }
+
     @ViewBuilder private func control(for field: HeroActionField) -> some View {
         switch field.kind {
         case .number:
-            // A filled number field loses its placeholder, so the label has to be visible beside it.
-            LabeledContent(field.label) {
-                TextField(field.label, value: numberBinding(field.key), format: .number)
-                    .multilineTextAlignment(.trailing)
-                    #if os(iOS)
-                        .keyboardType(.decimalPad)
-                    #endif
-            }
+            numberControl(key: field.key, label: field.label)
         case .text:
             LabeledContent(field.label) {
                 TextField(field.label, text: stringBinding(field.key))
@@ -146,27 +186,7 @@ struct HeroActionSheet: View {
             if let existing = model.existingStock {
                 Text(existing).font(.caption).foregroundStyle(.secondary)
             }
-            LabeledContent(field.label) {
-                TextField(
-                    field.label, value: amountValueBinding(field.key), format: .number, prompt: Text("0")
-                )
-                .multilineTextAlignment(.trailing)
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
-                #if os(iOS)
-                    .keyboardType(.decimalPad)
-                #endif
-            }
-            LabeledContent("Unit") {
-                TextField("Unit", text: amountUnitBinding(field.key), prompt: Text("unit"))
-                    .multilineTextAlignment(.trailing)
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                        .textInputAutocapitalization(.never)
-                    #endif
-            }
+            amountControl(key: field.key, label: field.label)
         case .shelf:
             Picker(field.label, selection: stringBinding(field.key)) {
                 Text("Choose a shelf").tag("")

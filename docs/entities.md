@@ -387,6 +387,11 @@ Copy code independently of the hero allowlist. Merge remains a list/selection
 workflow rather than a universal detail action. A list gets `bulkEdit` (bulk update),
 `merge` (kernel merge), and `delete` (kernel delete). `hero.extraActions` and
 `list.extraActions` add workflow verbs; list extras precede the derived list actions.
+`detail.quickActions` and `list.quickActions` promote one or two of those
+declared verbs (generation fails on any other): web renders detail quick
+actions as filled header buttons and puts list quick actions first in row
+menus; native shows them as filled buttons under the hero and as the leading
+swipe (iOS) and first context-menu items (Mac). They leave the More menu.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 Collection verbs derive from the declared sections and `reportSlotActions`;
@@ -726,7 +731,9 @@ the server refuses a change too) locks it on edit, and `.meta({ notice })` shows
 An `implemented` hero action also needs a plan in `nativeHeroActionPlans` (same
 file, emitted as `heroActionPlan`): the declared verb maps to one generated
 operation from its contract, an input form, and a
-confirmation (`destructive` for delete and discard). The native
+confirmation (`destructive` for delete and discard). A `setField` plan with a
+`value` writes that option on one tap (a task's Done); `editField` asks for one
+updatable field seeded from the record (an inventory amount). The native
 `HeroActionRunner` executes every plan, and `pnpm generate` fails when the
 operation is not on the generated client or the body names a field the
 operation does not declare. A server `*Preview` query supplies any

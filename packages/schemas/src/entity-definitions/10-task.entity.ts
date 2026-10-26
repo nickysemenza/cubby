@@ -131,8 +131,9 @@ export default defineEntity({
       },
       hero: {
         chip: "status",
-        extraActions: ["bulkEdit", "delete"],
+        extraActions: ["complete", "bulkEdit", "delete"],
       },
+      quickActions: ["complete"],
       additionalSections: [
         {
           kind: "fields",
@@ -228,6 +229,8 @@ export default defineEntity({
         },
         "timeline",
       ],
+      extraActions: ["complete"],
+      quickActions: ["complete"],
       timeline: {
         fields: ["due.start", "due.end"],
         lifecycle: {

@@ -102,6 +102,9 @@ export default defineEntity(
             viewKey: "purchases",
           },
         ],
+        hero: { extraActions: ["moveTo", "adjustAmount"] },
+        // A deliberate member edit of the count, not a recount: verifiedAt is untouched.
+        quickActions: ["moveTo", "adjustAmount"],
       },
       list: {
         titleSubtitle: true,
@@ -252,6 +255,7 @@ export default defineEntity(
           },
         ],
         extraActions: ["moveTo"],
+        quickActions: ["moveTo"],
         links: [{ label: "Suggestions", path: "/meals/suggestions" }],
       },
     },

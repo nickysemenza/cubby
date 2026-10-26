@@ -699,6 +699,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         // "Start planting" once it has started).
         record={{ ...record, id: bag.id }}
         verbs={declaredVerbs}
+        quickVerbs={detail.quickActions}
         overflow="panel"
         additionalActions={
           <DetailActionTarget entity={entity} record={record} />
