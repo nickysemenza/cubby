@@ -8,6 +8,8 @@ import {
 } from "@modelcontextprotocol/server";
 import { type JSONType, z } from "zod";
 
+import { ENTITY_PREVIEW_RESOURCE } from "~/contracts/entity-preview";
+import { env } from "~/env";
 import { purchaseAgentRunActions } from "~/server/domains/purchase-import/repo/capabilities";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import {
@@ -18,6 +20,7 @@ import {
   PLAYBOOK_FILES,
   PLAYBOOK_SKILLS,
 } from "~/server/generated/playbooks.gen";
+import entityPreviewHtml from "~/server/mcp/entity-preview.html?raw";
 
 import { purchaseAgentTools } from "./agent-tool-catalog";
 import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";
@@ -175,10 +178,37 @@ export function createMcpServer() {
     },
     {
       instructions: MCP_SERVER_INSTRUCTIONS,
+      capabilities: { extensions: { "io.modelcontextprotocol/ui": {} } },
     },
   );
   registerMcpTools(server, MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS);
   registerEntityCatalog(server);
+  server.registerResource(
+    "entity_preview",
+    ENTITY_PREVIEW_RESOURCE,
+    {
+      description: "Compact, read-only Cubby entity previews.",
+      mimeType: "text/html;profile=mcp-app",
+    },
+    async () => ({
+      contents: [
+        {
+          uri: ENTITY_PREVIEW_RESOURCE,
+          mimeType: "text/html;profile=mcp-app",
+          text: entityPreviewHtml,
+          _meta: {
+            ui: {
+              prefersBorder: false,
+              csp: {
+                connectDomains: [],
+                resourceDomains: [new URL(env.R2_PUBLIC_URL).origin],
+              },
+            },
+          },
+        },
+      ],
+    }),
+  );
   registerPlaybookResources(server);
   installToolCallTelemetryHandler(server);
   installMockStrippedListToolsHandler(server, purchaseAgentCatalogView);

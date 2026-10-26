@@ -18,6 +18,7 @@ type Kind = "query" | "mutation";
 
 /** Entity-kernel verbs; their schemas and executor live in `server/mcp/kernel-actions.ts`. */
 export const kernelActionName = z.enum([
+  "renderCards",
   "get",
   "list",
   "search",
@@ -101,6 +102,8 @@ export interface McpActionSpec<
   readonly modelBacked?: true;
   /** Selects the authoritative database for queries that require current data. */
   readonly readPolicy?: QueryContract["readPolicy"];
+  /** A dedicated render tool's MCP Apps resource; never attach to data tools. */
+  readonly uiResourceUri?: string;
   readonly batch?: McpBatchSpec<Projected>;
   /**
    * The entity a call acted on, for `McpToolCall.entityKind` (a batch passes

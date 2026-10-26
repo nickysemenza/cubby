@@ -185,6 +185,14 @@ beforeAll(async () => {
 });
 
 describe("MCP catalog schemas", () => {
+  it("attaches the UI resource only to the dedicated render tool", () => {
+    expect(
+      catalog.tools.find((tool) => tool.name === "entity_preview")?._meta,
+    ).toMatchObject({ ui: { resourceUri: "ui://cubby/entity-preview.html" } });
+    expect(
+      catalog.tools.find((tool) => tool.name === "entity_read")?._meta ?? {},
+    ).not.toHaveProperty("ui");
+  });
   // Physical QR labels must remain valid while the catalog advertises canonical IDs.
   it("accepts legacy graph labels without accepting another entity's label", () => {
     expect(
@@ -827,7 +835,11 @@ describe("MCP catalog schemas", () => {
  * and return a selected member schema through progressive disclosure. */
 const KERNEL_SCHEMA_BUDGET = 143_360;
 const WORKFLOW_SCHEMA_BUDGET = 2_048;
-const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
+const KERNEL_TOOLS = new Set(
+  compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS)
+    .filter((tool) => !tool.compact)
+    .map((tool) => tool.name),
+);
 
 function isObject(value: JSONType | undefined): value is JsonObject {
   return value !== null && typeof value === "object" && !Array.isArray(value);

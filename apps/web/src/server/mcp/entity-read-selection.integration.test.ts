@@ -3,6 +3,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { entityCardsOutput } from "~/contracts/entity-preview";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { isListMediaField } from "~/entity/model/list-read-fields";
 import { listReadSchema } from "~/entity/model/list-read-schema";
@@ -129,6 +130,75 @@ function compactViolations(
 // selection and the compact preset keep reads bounded without per-entity lists.
 describe("entity_read field selection", () => {
   const ctx = withTestDb();
+  it("renders mixed shortcode snapshots in order without leaking storage ids", async () => {
+    const location = await insertWithShortcode(ctx.db, "location", {
+      name: "Synthetic preview cupboard",
+      type: "room",
+    });
+    const product = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic preview coffee" }),
+      TEST_ACTOR,
+    );
+    const deleted = await insertWithShortcode(ctx.db, "location", {
+      name: "Synthetic unavailable location",
+      type: "room",
+      deletedAt: new Date(),
+    });
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    const result = await callMcpTool(
+      createMcpServer(),
+      "entity_preview",
+      {
+        action: "show",
+        shortcodes: [
+          product.id.toLowerCase(),
+          deleted.shortcode,
+          location.shortcode,
+          product.id,
+        ],
+      },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+    expect(result.isError).not.toBe(true);
+    const { items } = entityCardsOutput.parse(result.structuredContent);
+    expect(items.map((item) => item.shortcode)).toEqual([
+      product.id,
+      deleted.shortcode,
+      location.shortcode,
+      product.id,
+    ]);
+    expect(items[0]).toMatchObject({
+      status: "available",
+      name: "Synthetic preview coffee",
+      imageUrl: null,
+    });
+    expect(items[1]).toMatchObject({
+      status: "unavailable",
+      reason: "not_found",
+    });
+    expect(items[2]).toMatchObject({
+      status: "available",
+      name: "Synthetic preview cupboard",
+    });
+    expect(items[3]).toEqual(items[0]);
+    expect(JSON.stringify(result)).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
+    const invalid = await callMcpTool(
+      createMcpServer(),
+      "entity_preview",
+      { action: "show", shortcodes: [product.id, "not-a-code"] },
+      kernelRequestContext(entityKernel),
+      { entityKernel },
+    );
+    expect(invalid.isError).toBe(true);
+  });
   const read = async (command: ToolArguments) => {
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {
