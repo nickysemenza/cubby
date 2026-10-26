@@ -17,7 +17,9 @@ test("explains inapplicable account fields without offering edits", async ({
   const explanations = page.getByRole("note", {
     name: "Not applicable. Only applies to credit-card accounts.",
   });
-  await expect(explanations).toHaveCount(4);
+  // Network reads once, in the Account identity summary cell; the two
+  // cardholder fields read in the record facts.
+  await expect(explanations).toHaveCount(3);
   await expect(explanations.first()).toBeVisible();
   await explanations.first().focus();
   await page.keyboard.press("Shift+Tab");

@@ -48,6 +48,9 @@ function inlineEditableKeys(
     model.fields
       .filter(
         (field) =>
+          // A summary cell may name a field hidden from detail; it stays
+          // read-only there.
+          field.display.detail &&
           updateRoster.includes(field.key) &&
           field.control !== null &&
           (field.reference === null
