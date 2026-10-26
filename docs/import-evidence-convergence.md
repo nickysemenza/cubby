@@ -453,7 +453,10 @@ the skill itself installs no scheduler.
 
 Keep every source observation and original description. Provider identity is
 scoped to its source and account; immutable revisions retain one explicit
-charge key. Provider status is optional metadata. ID-less file occurrences
+charge key. A revision changes a fact (account, dates, amount, merchant,
+description, category, status or notes). `providerData` is an annotation: a
+re-observation with unchanged facts reuses the current head and its first
+annotation, so it is unchanged and reopens nothing. Provider status is optional metadata. ID-less file occurrences
 retain physical positions, including distinct identical rows and zero-value
 records. Separate ID-less observations remain independent across collections;
 content equality alone cannot establish that they are one charge. Zero evidence cannot create spending. Historical reference strings
@@ -550,13 +553,18 @@ changes never silently overwrites them. A source date revision that changes the
 booking's effective funding date requires individual review of dated allocations
 and Expenses. Status/date-only refusals remain durable Suggestions even when the
 amount is unchanged; supported posting updates may proceed when the effective
-funding date stays unchanged.
+funding date stays unchanged. Current evidence that already agrees with the
+booked amount and lifecycle needs no write and opens no review, whatever the
+booking's decision provenance.
 
 Suggestions remain one per actionable charge. Matching a source observation is
 separate from booking Expenses. Existing candidates must be rejected before a
 new transaction can be created. Historical collection membership may include surplus or mispositioned evidence.
 It cannot by itself dismiss an existing settlement candidate during Suggestions
-discovery; ambiguous identity remains review work before new spending. Descriptor/amount/date coincidence is advisory;
+discovery; ambiguous identity remains review work before new spending. A nearby
+transaction (same account, ±3 days) is a candidate only for the same amount, a
+matching non-empty description or a matching non-empty merchant; two missing
+descriptions are absent evidence, not a match. Descriptor/amount/date coincidence is advisory;
 a different source's observation does not become a second charge merely because
 its text differs. Existing clean-booking and measured attach rules retain their
 own authority and revalidate current evidence before writing.

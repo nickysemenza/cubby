@@ -218,13 +218,31 @@ describe("statement row ledger", () => {
       expect(
         await getDb(ctx.db).select().from(sourceTransactionRecord),
       ).toEqual(before);
-      for (const changed of [
-        { ...input, providerAmount: -129 },
-        { ...input, providerData: { original: "synthetic altered evidence" } },
-      ])
-        await expect(
-          record(ctx.db, ctx.actor, [changed], importScope),
-        ).rejects.toThrow("original evidence");
+      await expect(
+        record(
+          ctx.db,
+          ctx.actor,
+          [{ ...input, providerAmount: -129 }],
+          importScope,
+        ),
+      ).rejects.toThrow("original evidence");
+      // An annotation-only replay keeps the first annotation (#3395).
+      await expect(
+        record(
+          ctx.db,
+          ctx.actor,
+          [
+            {
+              ...input,
+              providerData: { original: "synthetic altered evidence" },
+            },
+          ],
+          importScope,
+        ),
+      ).resolves.toMatchObject({ inserted: 0, unchanged: 1, revised: 0 });
+      expect(
+        await getDb(ctx.db).select().from(sourceTransactionRecord),
+      ).toEqual(before);
       const later = await record(
         ctx.db,
         ctx.actor,
@@ -590,7 +608,7 @@ describe("statement row ledger", () => {
     await record(
       ctx.db,
       ctx.actor,
-      [{ ...evidence, providerData: { version: 2 } }],
+      [{ ...evidence, providerNotes: "Synthetic revised note" }],
       {
         fingerprint: "synthetic-charge-revision",
         rowCountDeclared: 1,
@@ -654,7 +672,7 @@ describe("statement row ledger", () => {
           fingerprint: "synthetic-position-revision",
           observedAt: "2026-06-03T00:00:00Z",
         },
-        rows: [{ ...first.rows[0]!, providerData: { version: 2 } }],
+        rows: [{ ...first.rows[0]!, providerNotes: "Synthetic revision" }],
       },
       ctx.actor,
     );

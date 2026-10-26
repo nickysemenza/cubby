@@ -54,9 +54,13 @@ surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL
    use `providerStatus: null` when unavailable. Observed MCP responses included
    pending transactions without a status label; absence of that label never
    establishes posting and does not by itself make enumeration incomplete.
-5. Preserve the unmodified provider response fields in `providerData`, including
-   notes, tags, category, original amount/currency, timestamps, revision tokens,
-   split relationships and raw IDs. Pass attested `providerTransactionId` and
+5. Preserve the unmodified provider response in `providerData`. For Monarch
+   MCP it is exactly `{"transaction": <GetTransactions row>, "account":
+   {"id", "displayName"}}`: the raw row with its notes, tags, category,
+   amounts, timestamps and IDs. Do not add derived keys such as description
+   kind, date meaning, currency or pending flags. `providerData` is an
+   annotation: a re-observation whose facts are unchanged keeps the first
+   stored annotation and records as `unchanged`. Pass attested `providerTransactionId` and
    `providerAccountId` separately. Keep provider/account/connection scope with
    them; an ID is not globally unique merely because it looks unique. Unknown
    scope, reused IDs and conflicting revisions require review. Never replace a
@@ -71,8 +75,8 @@ surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL
   combine currencies or invent an exchange rate.
 - Keep the provider account descriptor and full mask, raw description, merchant,
   category and notes. When bank-original description is unavailable, use an
-  empty `rawDescription` and retain available cleansed text in `providerData`
-  under its original field name, explicitly identifying the missing original.
+  empty `rawDescription`; the cleansed text stays in `providerData` under its
+  original field name.
   Set `dateKind` only from established date semantics; a
   date-shaped string alone establishes none. Unknown provider status is null,
   never an invented `posted` value. Include zero-value observations.

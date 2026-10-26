@@ -393,6 +393,60 @@ describe("generated booking evidence corrections", () => {
 
   // A later posted date can cross funding periods; the original accepted
   // attribution fingerprint cannot authorize money under the projected date.
+  // Regression #3395: each agent session wrapped providerData differently, so
+  // re-pulling an unchanged member-reviewed charge reopened a correction review.
+  it("keeps an annotation-only re-observation of a reviewed booking unchanged", async () => {
+    const { input, transaction, money } = await fixture();
+    const providerTransactionId = "synthetic-annotation-replay";
+    const providerAccountId = "synthetic-annotation-account";
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ providerTransactionId, providerAccountId })
+      .where(eq(sourceTransactionRecord.chargeKey, "synthetic-charge"));
+    // The current head is a later observation that agrees with the booking
+    // but is not the reference the booking accepted.
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ providerAmount: -25, amount: 25 })
+      .where(eq(sourceTransactionRecord.externalId, input.externalId));
+    // A member-reviewed booking carries a plain, non-automatic fingerprint.
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ bookingDecisionFingerprint: "synthetic-member-review" })
+      .where(eq(financialTransaction.id, transaction.entityId));
+    const before = await money();
+    const replay = recordSourceTransactionRecordsInput.parse({
+      import: {
+        source: input.source,
+        label: "Synthetic annotation replay",
+        fingerprint: "synthetic-annotation-replay",
+        observedAt: "2026-11-01T00:00:00Z",
+        rowCountDeclared: 1,
+      },
+      rows: [
+        {
+          providerTransactionId,
+          providerAccountId,
+          providerData: { transaction: { id: providerTransactionId } },
+          accountDescriptor: "Synthetic cash",
+          statementDate: "2026-09-01",
+          providerAmount: -25,
+          rawDescription: "Synthetic store",
+          providerStatus: null,
+        },
+      ],
+    });
+    expect(
+      await recordSourceTransactionRecords(ctx.db, replay, ctx.actor),
+    ).toMatchObject({
+      inserted: 0,
+      unchanged: 1,
+      revised: 0,
+      correctionReviews: [],
+    });
+    expect(await money()).toEqual(before);
+  });
+
   it("routes a changed effective funding date to review without rewriting its booking", async () => {
     const { input, money } = await fixture(true);
     await getDb(ctx.db)
