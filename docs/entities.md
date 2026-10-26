@@ -206,7 +206,17 @@ when a required state is missing rather than adding a parallel override path.
 
 `presentation.detail.summary` owns the ordered header cells for every entity.
 The generic header renders up to eight applicable cells beneath the identity
-and actions; it does not add another Overview section. Entries have stable
+and actions; it does not add another Overview section. The first four cells are
+the record's glance: native lays them two across under the hero (one column at
+accessibility sizes) and web fills the first grid row; the rest follow. There is
+no separate glance declaration, so order the slots so the first four answer the
+record's main question. A field a `fields` slot shows is omitted from later
+field sections and relation context fields on both clients.
+
+Summary slots and detail sections accept an optional `surfaces: ["web"]` or
+`["native"]` that limits the entry to one client; omitted, both render it. The
+native manifest drops the other surface's entries at generation and web filters
+them at render, so the shared declaration keeps one order. Entries have stable
 `id` and `title` values and one of four kinds:
 
 - `fields` groups one to four readable field keys, using the same effective
@@ -372,15 +382,21 @@ normal-update roster and the exclusions in the bulk edit contract below. Identit
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A `*Override` name is reserved for a
 value that replaces a default the compiler computes; an additive or required
-declaration (`detail.additionalSections`, `list.views`, `list.totals`,
+declaration (`detail.sections`, `list.views`, `list.totals`,
 `route.list`, `route.detail`) takes a plain name. The generator compiles each
 override without it and refuses one that changes nothing, so the Schema tab's
 override table lists only live deviations. `detail.hero` names the chip (an
-enum/boolean field), stat fields, a breadcrumb reference field, and `when` (a
+enum/boolean field), stat fields, a breadcrumb field, and `when` (a
 date or timestamp field, optional `label`) for when the thing happened, shown
 through the field's own renderer ahead of the ingest `createdAt`, which it
 replaces as the leading time and falls back to when empty; hero images follow
-the gallery capability. Actions derive from capabilities: the hero gets
+the gallery capability. The breadcrumb field is a reference or a placement
+(`{ locationId }`); the kernel detail read projects it as
+`breadcrumb: [{ entity, id, name }]`, outermost first: a location or placement
+yields the location and its ancestors, any other reference the one record, and
+Product supplies its primary placement's path. Web trails it in the header
+before the record code; native captions the hero with it and the `when`, and
+keeps the record code in More → Copy shortcode. Actions derive from capabilities: the hero gets
 `edit` with an update contract and `delete` for a mutable entity with kernel-owned
 deletion. Shared and additional hero actions are deduplicated. Web always offers
 Copy code independently of the hero allowlist. Merge remains a list/selection
@@ -415,14 +431,16 @@ Vendor search and product indexing controls observe the same cached job/readines
 state as their worklists. Stored URLs, source mail links, map coordinates, and
 linked entity/identifier values remain facts rather than header actions.
 
-`detail.sectionOverrides` replaces the inferred Overview section with an ordered list of
-`fields` (a named subset of the `display.detail` fields — every such field is
-placed exactly once), `relation` (the target entity's list filtered by an
+`detail.sections` is required on every entity and lists the detail page's
+sections in reading order, under readable ids: `fields` (a named subset of the
+`display.detail` fields — every such field is placed exactly once, in a
+section, a `fields` summary slot or a relation's context fields, unless it is
+`listHidden`; the generator fails on an unplaced field), `relation` (the target entity's list filtered by an
 id/idMulti descriptor on the target whose `brandRef` points back here, with
 optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
 capability) and `slot` (the one per-platform hand-written fill, rendered
 only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
-`entity-manifest.ts` type those registries). Full record relation sections stay visible after an empty first read on web and Apple, with a secondary heading, explicit Empty cue and usable create action. Full-detail visibility and folding flags are absent from the declaration and generated catalogs. Pagination and show-more behavior remain declaration-owned.
+`entity-manifest.ts` type those registries). A loaded relation's heading carries its list total (`Photos · 12`) from the first page's `meta.totalCount`; at zero the section collapses to one quiet row showing the declared `empty` copy or `Title · 0`, and its create action stays reachable. Full-detail visibility and folding flags are absent from the declaration and generated catalogs. Pagination and show-more behavior remain declaration-owned.
 
 Run import report eligibility comes from `IMPORT_REPORT_RUN_PURPOSES` in the
 shared Run schema, including `mail_import`. Web and server use its shared
