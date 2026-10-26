@@ -26,12 +26,6 @@ and normalized statement workflow. Statement evidence is recorded through
 The wardrobe journey checks exact replay, overlapping evidence, decoy charges,
 reviewed settlement, and preservation of Expense and inventory during convergence.
 
-`pnpm test:e2e:sim -- --qa-photo-completion` checks that approving the final selected
-ready group of a stopped `needs_review` photo Run updates the same open console’s
-hero and Progress report to completed without manual refresh. The fixture is synthetic;
-the runner reads the completed Run and committed proposal back and saves checksummed
-evidence through the usual QA artifact path. This guard also runs in the full QA lane.
-
 `pnpm test:e2e:sim -- --qa` seeds the shared connected exploration household
 (`tooling/scenarios/corpus.ts`, also used by dev and browser screenshots), adds
 journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
@@ -122,11 +116,12 @@ tests for file selection, navigation, sign-in controls, and review/save actions;
 use the longer composed Mac journey when a change crosses those UI boundaries.
 CLI/server workflows do not need an unlocked screen.
 
-`pnpm test:e2e:sim -- --headless --photo` uploads through Swift, saves the shared
-Run review, and approves those exact proposals through the CLI. It checks the
-resulting Products and item/label attachments without launching a browser or app.
-Web batch approval, image rendering, processing failures, and restart navigation
-remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
+`pnpm test:e2e:sim -- --headless --photo` uploads through Swift, reads the Run
+back through the console session, and approves the proposals through the web
+operation (group decisions are web's). It checks the resulting Products and
+item/label attachments without launching a browser or app. Web selection and batch
+approval, image rendering, processing failures, and restart navigation remain
+covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
 
 ## Recommended loop
 

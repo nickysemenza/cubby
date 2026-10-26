@@ -5,10 +5,10 @@ wait text "All activity" 60000
 click "label=\"All activity\""
 wait "id=activity.run.${RUN_ID}" 60000
 click "id=activity.run.${RUN_ID}"
-wait text "Review photos and proposed items" 60000
-click "label=\"Review photos and proposed items\""
+wait "id=run.console" 60000
 wait text "Photo processing" 60000
-wait text "Waiting for photos to upload" 60000
+# Group review is web's: the console's photo slot is one handoff row.
+wait "id=detail.handoff.run.photo-batch" 60000
 click "label=Library"
 wait text "All photos" 60000
 click "label=\"All photos\""

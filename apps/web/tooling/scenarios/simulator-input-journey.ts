@@ -7,19 +7,12 @@ import { eq, inArray } from "drizzle-orm";
 import { pollUntil } from "@cubby/shared/retry";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
-import { imageId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { imageId } from "@cubby/schemas/identifiers";
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  listPhotoGroupProposals,
-  listPhotoRunImages,
-  proposePhotoGroups,
-} from "~/server/domains/photo-import/repo/run/proposals";
+import { listPhotoRunImages } from "~/server/domains/photo-import/repo/run/proposals";
 import { listImageSightings } from "~/server/domains/image/repo/image";
-import {
-  completeDescribeImageJobs,
-  listDescribeImageJobs,
-} from "../convergence-harness";
+import { listDescribeImageJobs } from "../convergence-harness";
 import { buildScenarioDatabase } from "./context";
 
 type Run = (
@@ -87,8 +80,8 @@ function syntheticPhotoPNG(index: number, batchIdentity: string): Buffer {
   ]);
 }
 
-/** The authorized Photos Library contains synthetic inputs. Image stage/PUT/finalize,
- * proposed-group review and approval all execute in the installed iOS app. */
+/** The authorized Photos Library contains synthetic inputs. Image stage/PUT/finalize execute in
+ * the installed iOS app; reviewing the proposed groups is web's (`photo-group-review.spec.ts`). */
 export async function createSimulatorInputJourney(input: {
   pool: Pool;
   userId: string;
@@ -98,7 +91,6 @@ export async function createSimulatorInputJourney(input: {
   session: string;
   common: string[];
   agentDeviceCommand?: string;
-  photoOnly?: boolean;
   run: Run;
 }) {
   const db = buildScenarioDatabase(input.pool);
@@ -319,7 +311,7 @@ export async function createSimulatorInputJourney(input: {
         throw new Error(
           `Native PhotosLibrary import retained ${sightedImages.length} of 25 capture-date Sightings`,
         );
-      const jobs = await eventually(async () => {
+      await eventually(async () => {
         const found = await listDescribeImageJobs(
           db,
           stored.map((image) => imageId.parse(image.id)),
@@ -345,68 +337,18 @@ export async function createSimulatorInputJourney(input: {
         );
         return found.length === 25 && coveredImages === 25 ? found : undefined;
       }, "native finalization cloud description jobs");
-      await completeDescribeImageJobs(
-        db,
-        jobs,
-        "Supplied synthetic model response: distinct synthetic crew-shirt illustrations.",
-      );
-      await proposePhotoGroups(db, {
-        runId: parseShortcodeFor("run", run.shortcode),
-        groups: [
-          {
-            groupKey: "synthetic-input-shirt",
-            images: images.map((image) => ({
-              id: image.id,
-              purpose: "item" as const,
-            })),
-            product: {
-              kind: "create",
-              create: { name: "Synthetic Input Crew Shirt" },
-            },
-            evidence:
-              "Supplied external grouping response for the actual native-uploaded synthetic photo.",
-          },
-        ],
-      });
-      if (
-        (
-          await database.query.product.findMany({
-            where: notDeleted(schema.product),
-          })
-        ).length ||
-        (
-          await database.query.inventoryEntry.findMany({
-            where: notDeleted(schema.inventoryEntry),
-          })
-        ).length
-      )
-        throw new Error(
-          "Native photo proposals wrote Product or Inventory before approval",
-        );
-      await replay("input-photo-approval");
-      await eventually(async () => {
-        const review = await listPhotoGroupProposals(db, run.shortcode);
-        return review.proposals[0]?.state === "committed" ? true : undefined;
-      }, "native Product approval");
       const products = await database.query.product.findMany({
         where: notDeleted(schema.product),
       });
-      if (
-        products.length !== 1 ||
-        products[0]?.name !== "Synthetic Input Crew Shirt"
-      )
-        throw new Error(
-          "Native approval did not commit the reviewed Product exactly once",
-        );
       const expenses = await database.query.expense.findMany({
         where: notDeleted(schema.expense),
       });
       const inventory = await database.query.inventoryEntry.findMany({
         where: notDeleted(schema.inventoryEntry),
       });
-      if (expenses.length || inventory.length)
+      if (products.length || expenses.length || inventory.length)
         throw new Error(
-          "Native photo import or approval auto-booked Expense or Inventory",
+          "Native photo import auto-created a Product, Expense or Inventory",
         );
       if (
         (
@@ -430,12 +372,10 @@ export async function createSimulatorInputJourney(input: {
               (image) => image.capturedAt !== null,
             ).length,
             sightedImageCount: sightedImages.length,
-            products: products.length,
+            productAutoWrites: 0,
             expenseAutoWrites: 0,
             inventoryAutoWrites: 0,
             input: "actual authorized Photos Library grid",
-            decision: "actual native review + approval",
-            model: "supplied external descriptions/grouping",
           },
           null,
           2,

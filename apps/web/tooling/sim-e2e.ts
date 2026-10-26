@@ -68,13 +68,12 @@ Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
-  --input-journey [--photo-only] [--video]
+  --input-journey [--video]
                              PhotosPicker input acceptance
   --emoji-review [--video]   category emoji review replay
   --qa [--hold] [--video] [--journey qa-a,qa-b]
                              seeded synthetic household QA pass; --hold keeps it
                              up; --journey replays only the named scripts
-  --qa-photo-completion     stopped photo Run final approval updates hero and reports
 
 Environment:
   CUBBY_SIM_DEVICE           simulator name or UDID to prefer
@@ -103,9 +102,6 @@ const headless = flags.includes("--headless");
 const photo = flags.includes("--photo");
 const purchase = flags.includes("--purchase");
 const inputJourney = flags.includes("--input-journey");
-const photoOnly = flags.includes("--photo-only");
-if (photoOnly && !inputJourney)
-  throw new Error("--photo-only requires --input-journey");
 const video = flags.includes("--video");
 const layout = flags.includes("--layout");
 const extendedJourney = flags.includes("--extended-journey");
@@ -123,8 +119,7 @@ if (process.env.CUBBY_E2E_AGENT_DEVICE) {
     throw new Error("Shared driver targets a different device");
   process.env.CUBBY_SIM_DEVICE = udid;
 }
-const qaPhotoCompletion = flags.includes("--qa-photo-completion");
-const qa = flags.includes("--qa") || qaPhotoCompletion;
+const qa = flags.includes("--qa");
 const qaHold = flags.includes("--hold");
 if (
   extendedJourney &&
@@ -136,11 +131,7 @@ if (
 if (
   (qa &&
     flags.some(
-      (flag) =>
-        flag !== "--qa" &&
-        flag !== "--qa-photo-completion" &&
-        flag !== "--hold" &&
-        flag !== "--video",
+      (flag) => flag !== "--qa" && flag !== "--hold" && flag !== "--video",
     )) ||
   (qaHold && !qa) ||
   (emojiReview &&
@@ -158,7 +149,6 @@ if (
         "--extended-journey",
         "--emoji-review",
         "--input-journey",
-        "--photo-only",
         "--headless",
         "--video",
         "--photo",
@@ -166,13 +156,12 @@ if (
         "--layout",
         "--product-clarity",
         "--qa",
-        "--qa-photo-completion",
         "--hold",
       ].includes(argument),
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase]]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--video] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase]]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -764,38 +753,14 @@ async function runHeadlessPhotoScenario(
     }
     const proposedAt = performance.now();
     await exercisePhotoProcessingJobs(imageIDs);
-    const reviewPath = path.join(artifacts, "native-photo-reviewed.json");
-    await run(
-      nativeBuildBinary,
-      [
-        "run-review",
-        "--base-url",
-        url.origin,
-        runID,
-        "--save-review",
-        reviewPath,
-      ],
-      repoRoot,
-      path.join(artifacts, "native-photo-review-output.json"),
+    // Group decisions are web's (`run/<id>#photo-batch`), so approval uses the web operation.
+    const approved = await startOperation(
+      context,
+      "photoImport.approveGroups",
+      { runId: runID, groupKeys: ["synthetic-shirt", "synthetic-boots"] },
     );
-    // Commit exactly the proposals saved by the shared native review session.
-    await run(
-      nativeBuildBinary,
-      [
-        "run-review",
-        "--base-url",
-        url.origin,
-        runID,
-        "--review-file",
-        reviewPath,
-        "--approve-group",
-        "synthetic-shirt",
-        "--approve-group",
-        "synthetic-boots",
-      ],
-      repoRoot,
-      path.join(artifacts, "native-photo-approved.json"),
-    );
+    if (!approved.ok())
+      throw new Error(`Photo approval failed: ${await approved.text()}`);
     const reviewedAt = performance.now();
     const pool = createPostgresPool({ connectionString: databaseURL });
     try {
@@ -845,7 +810,7 @@ async function runHeadlessPhotoScenario(
       await pool.end();
     }
     console.log(
-      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; backend proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and CLI review ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
+      `[${lane}] Photo stages: native upload ${(nativeReady - scenarioStarted).toFixed(0)}ms; backend proposal ${(proposedAt - nativeReady).toFixed(0)}ms; processing and approval ${(reviewedAt - proposedAt).toFixed(0)}ms; final checks ${(performance.now() - reviewedAt).toFixed(0)}ms`,
     );
     console.log(`[${lane}] Proposal submission and reviewer approval verified`);
   } finally {
@@ -966,7 +931,6 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
     "fixture-app-settings.json",
     "input-photo.xml",
     "input-photo.json",
-    "input-photo-approval.json",
     "input-driver-close.json",
   ]) {
     const evidence = path.join(artifacts, name);
@@ -1055,12 +1019,11 @@ async function seedNativeScenario(
     await seedSimulatorPhotoActor(seedPool, userId);
     if (qa) {
       const { seedCorpus } = await import("./scenarios/corpus");
-      if (!qaPhotoCompletion)
-        await seedCorpus(seedPool, userId, {
-          storageOrigin: objectStorageUrl,
-          bucket: "e2e-bucket",
-          keyPrefix: "e2e",
-        });
+      await seedCorpus(seedPool, userId, {
+        storageOrigin: objectStorageUrl,
+        bucket: "e2e-bucket",
+        keyPrefix: "e2e",
+      });
       const { seedNativeQa } = await import("./scenarios/native-qa");
       qaIds = await seedNativeQa(seedPool, userId);
       qaUserId = userId;
@@ -1133,24 +1096,6 @@ async function assertQaOutcomes(): Promise<void> {
       throw new Error(
         `Unit mapping edit must update the one cup row in place: ${JSON.stringify(mappings)}`,
       );
-    const groups = await rows<{ groupKey: string; state: string }>(
-      `SELECT g."groupKey", g.state FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
-       WHERE r.shortcode = $1 ORDER BY g."groupKey"`,
-      [qaIds.PHOTO_RUN_ID],
-    );
-    const photoProducts = await rows<{ name: string }>(
-      `SELECT p.name FROM "PhotoGroupProposal" g JOIN "Run" r ON r.id = g."runId"
-       JOIN "Product" p ON p.id = g."productId" WHERE r.shortcode = $1`,
-      [qaIds.PHOTO_RUN_ID],
-    );
-    if (
-      groups.map((row) => `${row.groupKey}:${row.state}`).join() !==
-        "synthetic-qa-a-unselected-mug:proposed,synthetic-qa-b-selected-shirt:committed" ||
-      photoProducts.map((row) => row.name).join() !== qaIds.PHOTO_SELECTED_NAME
-    )
-      throw new Error(
-        `Approving the selection must commit only the selected ready group: ${JSON.stringify({ groups, photoProducts })}`,
-      );
     const entryLocations = await rows<{ shortcode: string }>(
       `SELECT l.shortcode FROM "GardenEntry" e JOIN "Location" l ON l.id = e."locationId"
        WHERE e.shortcode = $1`,
@@ -1178,21 +1123,6 @@ async function assertQaOutcomes(): Promise<void> {
     console.log(`[${lane}] Native QA writes verified in ${simName}`);
   } finally {
     await checkPool.end();
-  }
-}
-
-/**
- * A journey that commits before its last checks (photo approval) may have written already when it
- * fails, so its retry gets a freshly seeded subject; the outcome check reads the latest one.
- */
-async function reseedQaJourney(journey: string): Promise<void> {
-  if (journey !== "qa-photo-selected-approval.ad") return;
-  const { seedProposedPhotoRun } = await import("./scenarios/native-qa");
-  const seedPool = createPostgresPool({ connectionString: databaseURL });
-  try {
-    Object.assign(qaIds, await seedProposedPhotoRun(seedPool, qaUserId));
-  } finally {
-    await seedPool.end();
   }
 }
 
@@ -1264,29 +1194,7 @@ async function runQaJourneys(
       ],
       repoRoot,
     );
-  const completePhotoRun = async () => {
-    const { runNativePhotoCompletionJourney } =
-      await import("./scenarios/native-photo-completion");
-    const pool = createPostgresPool({ connectionString: databaseURL });
-    try {
-      await relaunch();
-      scenarioEvidence.push(
-        await runNativePhotoCompletionJourney({
-          pool,
-          userId: qaUserId,
-          artifacts,
-          replay: (journey, variables) => replay(journey, 1, variables),
-        }),
-      );
-    } finally {
-      await pool.end();
-    }
-  };
   try {
-    if (qaPhotoCompletion) {
-      await completePhotoRun();
-      return;
-    }
     for (const journey of journeys) {
       // A scroll can land short while a detail page is still laying out; a journey only
       // writes after its last scroll, so one retry from a relaunched app is a clean replay.
@@ -1301,7 +1209,6 @@ async function runQaJourneys(
           console.log(
             `[${lane}] ${journey} attempt ${attempt} failed; retrying`,
           );
-          await reseedQaJourney(journey);
         }
       }
     }
@@ -1338,7 +1245,6 @@ async function runQaJourneys(
       } finally {
         await stopPool.end();
       }
-      await completePhotoRun();
     }
   } finally {
     await stopRecording?.();
@@ -1826,7 +1732,6 @@ async function main(): Promise<void> {
               session,
               common: inputDriverSessionArgs ?? common,
               agentDeviceCommand: sharedInputDriver?.command,
-              photoOnly,
               run: (command, args, stdoutFile) =>
                 run(command, args, repoRoot, stdoutFile),
             });
