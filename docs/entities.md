@@ -3091,6 +3091,9 @@ association in `relationship-query-definitions.ts`; `relationship-query.ts`
 owns its SQL condition. The shared traversal compiler follows these sources in
 either direction and at any supported depth. They store no second graph or
 membership. Query sources distinguish retained history from current references.
+Expensive association queries enumerate a bounded candidate relation before
+joining targets; Purchase Email discovery must not run acceptance policy for
+every unrelated mailbox record.
 
 Shared AI Jobs expose every requesting Run and both Product-pair endpoints;
 their optional owning Run is separate. Job subjects exclude non-entity origins.

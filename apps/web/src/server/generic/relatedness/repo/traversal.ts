@@ -18,7 +18,10 @@ import {
   effectiveExpenseProjectSql,
   principalExpenseInheritanceSql,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { relationshipQueryCondition } from "~/server/generic/relatedness/repo/relationship-query";
+import {
+  relationshipQueryCondition,
+  relationshipQueryTargets,
+} from "~/server/generic/relatedness/repo/relationship-query";
 
 interface EdgeSpec {
   edgeKey: string;
@@ -37,6 +40,7 @@ interface EdgeSpec {
 
 interface TraversalHop {
   table: string;
+  candidateRows?: SQL;
   relation?: string;
   alias: string;
   fromAlias: string;
@@ -388,13 +392,18 @@ export const compileTraversal = (
         index === steps.length - 1 && aliases?.leaf
           ? aliases.leaf
           : `${aliasPrefix}${index + 1}`;
+      const candidateRows = outgoing
+        ? relationshipQueryTargets(key, currentAlias)
+        : undefined;
       hops.push({
         table: nextTable,
+        candidateRows,
         alias,
         fromAlias: currentAlias,
         fromColumn: "id",
         toColumn: "id",
         softDelete: !query.history && softDeleteForTable(nextTable),
+        // Keep the predicate for scalar consumers that select the first hop directly.
         condition: relationshipQueryCondition(
           key,
           outgoing ? currentAlias : alias,
@@ -504,7 +513,7 @@ export const renderJoins = (traversal: Pick<Traversal, "hops">): SQL =>
   sql.join(
     traversal.hops.map(
       (hop) =>
-        sql`JOIN ${sql.raw(`"${hop.relation ?? hop.table}"`)} ${sql.raw(hop.alias)} ON (${hop.condition}${
+        sql`JOIN ${hop.candidateRows ? sql`LATERAL (${hop.candidateRows})` : sql.raw(`"${hop.relation ?? hop.table}"`)} ${sql.raw(hop.alias)} ON (${hop.candidateRows ? sql`true` : hop.condition}${
           hop.softDelete
             ? sql` AND ${sql.raw(`${hop.alias}."deletedAt"`)} IS NULL`
             : sql``

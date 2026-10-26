@@ -89,3 +89,14 @@ export function relationshipQueryCondition(
       );
   }
 }
+
+/** Scope expensive association policies to their candidate set before joining targets. */
+export function relationshipQueryTargets(
+  key: string,
+  source: string,
+): SQL | undefined {
+  const query = relationshipQueryDefinition(key);
+  if (query.kind !== "purchaseEmails") return undefined;
+  return sql`SELECT candidate.* FROM (${purchaseAssociatedEmailsSql(sql`${sql.identifier(source)}."id"`)}) associated
+    JOIN "Email" candidate ON candidate."id" = associated."id"`;
+}
