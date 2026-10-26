@@ -1919,6 +1919,9 @@ media payloads and their counters, long text and nested collections; full reads 
 Problems and other narrow consumers retain explicit field projections over the
 same repository readers. External USDA data remains a bounded batch inside the
 Product page read; no list declares a separate lazy column request.
+Location identity and stock Product embeds load brand and category summaries;
+they do not compute classification evidence, brand codes or category stock policy
+that their response mappers do not read.
 
 SQL-backed diagnostics carry the sample/count intent to their canonical
 repository: count membership without loading presentation payloads, and limit
