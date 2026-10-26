@@ -482,11 +482,9 @@ recorded charged usage. Jobs use the generic In progress view, including image
 subject thumbnails, and a chevron expands Explain, that Job's Worker logs and
 Retry now underneath its row. Closed web rows remain 32 px. There is one
 shared table renderer; the separate image-processing roster and hand-written
-queue rows, pickers and pager are removed. Apple Activity shows the device
-backlog banner, its This device status, local work and automatic-work toggle,
-then ten-row embeds of the Run `in-progress` and `attention` saved views, and
-hands the household queue off to `/work-queue`; the shared concurrency setting
-is in Settings › Advanced.
+queue rows, pickers and pager are removed. Apple Activity hands the household
+queue off to `/work-queue`
+([native Activity](../apps/apple/README.md#activity)).
 The web audit-log changes feed follows the queue.
 
 The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
