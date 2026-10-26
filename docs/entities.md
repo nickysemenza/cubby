@@ -2393,7 +2393,9 @@ writer's transaction. A trigger upserts `DerivedDirty` for the saved row and its
 own old and new matched values, with a fresh `DerivedTicket` sequence value; it
 never queries dependents. A save that changes no watched column marks nothing.
 A mark whose dependents are other rows is a fanout mark (`<target>@<input>`)
-the drain expands set-based; the dependents keep the fanout mark's priority and
+the drain expands all fanout groups in a page in one set-based statement;
+overlapping dependents receive the highest priority, and only the observed
+fanout tickets clear. The dependents keep the fanout mark's priority and
 the expansion notifies their readers, so they show Updating until published. The mark function captures the `derived:drain`
 Job once per transaction, so the Job is due whenever marks exist. A writer
 whose input no column path reaches (a member's Email review, a selected image

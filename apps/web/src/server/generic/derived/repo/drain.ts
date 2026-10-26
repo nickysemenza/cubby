@@ -11,7 +11,6 @@ import { z } from "zod";
 import type { DatabaseChanges } from "~/lib/doorbell";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  type DerivedInput,
   type DerivedPathStep,
   dependentsOf,
   parseTarget,
@@ -391,35 +390,56 @@ const pathSql = (path: readonly DerivedPathStep[], start: SQL): SQL =>
     start,
   );
 
-/** Expand fanout marks into their dependents' marks, then clear them. */
-const expandFanout = async (
-  tx: Executor,
-  declaration: StoredDerivedDeclaration,
-  input: DerivedInput,
-  target: string,
-  marks: readonly Mark[],
-): Promise<string[]> => {
-  const refs = sql`SELECT unnest(${uuidArrayParam(marks.map((mark) => mark.ref))})`;
-  const dependents = input.path
-    ? pathSql(input.path, refs)
-    : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
-  // Dependents keep the triggering mark's priority, so a member edit's
-  // dependents are not queued behind a backfill.
-  const priority = Math.min(...marks.map((mark) => mark.priority));
+/** Expand the page's fanout groups and clear their observed tickets in one round trip. */
+const expandFanouts = async (tx: Executor, marks: readonly Mark[]) => {
+  const groups = [...groupByTarget(marks)].flatMap(([target, group]) => {
+    const parsed = parseTarget(target);
+    return parsed?.fanoutInput
+      ? [
+          {
+            target,
+            marks: group,
+            declaration: parsed.declaration,
+            input: parsed.fanoutInput,
+          },
+        ]
+      : [];
+  });
+  if (!groups.length) return [];
+  const selections = groups.map(({ declaration, input, marks: group }) => {
+    const refs = sql`SELECT unnest(${uuidArrayParam(group.map((mark) => mark.ref))})`;
+    const dependents = input.path
+      ? pathSql(input.path, refs)
+      : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+    return sql`SELECT ${declaration.target}::text AS target, r.id AS ref,
+      ${Math.min(...group.map((mark) => mark.priority))}::int AS priority
+      FROM (${dependents}) r(id) WHERE r.id IS NOT NULL`;
+  });
+  const observed = groups.flatMap(({ target, marks: group }) =>
+    group.map(({ ref, ticket }) => ({ target, ref, ticket })),
+  );
   const result = await tx.execute(sql`
-    INSERT INTO "DerivedDirty" (target, ref, priority)
-    SELECT DISTINCT ${declaration.target}, r.id, ${priority}::int
-      FROM (${dependents}) AS r(id) WHERE r.id IS NOT NULL
-    ON CONFLICT (target, ref) DO UPDATE SET
-      ticket = nextval('"DerivedTicket"'),
-      priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
-      "readyAt" = now()
-    RETURNING ref::text AS ref`);
-  await clearMarks(tx, target, marks);
+    WITH dependents AS (${sql.join(selections, sql` UNION ALL `)}),
+    written AS (
+      INSERT INTO "DerivedDirty" (target, ref, priority)
+      SELECT target, ref, min(priority) FROM dependents GROUP BY target, ref
+      ORDER BY target, ref
+      ON CONFLICT (target, ref) DO UPDATE SET
+        ticket = nextval('"DerivedTicket"'),
+        priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
+        "readyAt" = now()
+      RETURNING target, ref::text AS ref
+    ), cleared AS (
+      DELETE FROM "DerivedDirty" d
+      USING jsonb_to_recordset(${JSON.stringify(observed)}::jsonb)
+        AS m(target text, ref uuid, ticket bigint)
+      WHERE d.target = m.target AND d.ref = m.ref AND d.ticket = m.ticket
+    ) SELECT target, ref FROM written`);
+  // Several inputs can reach the same dependent. Grouping above both keeps the
+  // highest priority and avoids updating one conflict row twice in a statement.
   return z
-    .array(z.object({ ref: z.string() }))
-    .parse(result.rows)
-    .map((row) => row.ref);
+    .array(z.object({ target: z.string(), ref: z.string() }))
+    .parse(result.rows);
 };
 
 /** SQLSTATE data exception, integrity violation or program limit: the target's own data. */
@@ -474,6 +494,12 @@ export async function publishDerivedPage(
     affected.set(entity, set);
   };
   const drift: { target: string; count: number }[] = [];
+  const fanouts = await expandFanouts(tx, plan.marks);
+  expanded += fanouts.length;
+  for (const { target, ref } of fanouts) {
+    const parsed = parseTarget(target);
+    if (parsed) touch(parsed.declaration.entity, [ref]);
+  }
   for (const [target, marks] of groupByTarget(plan.marks)) {
     const parsed = parseTarget(target);
     if (!parsed) {
@@ -482,19 +508,7 @@ export async function publishDerivedPage(
       continue;
     }
     const { declaration, fanoutInput } = parsed;
-    if (fanoutInput) {
-      const created = await expandFanout(
-        tx,
-        declaration,
-        fanoutInput,
-        target,
-        marks,
-      );
-      expanded += created.length;
-      // Readers learn the dependents are now updating.
-      if (created.length > 0) touch(declaration.entity, created);
-      continue;
-    }
+    if (fanoutInput) continue;
     const failure = plan.failed.get(target);
     if (failure !== undefined) {
       await deferFailed(tx, target, marks, failure);

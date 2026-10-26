@@ -6,7 +6,12 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
+import {
+  countTestDbQueries,
+  seedEntity,
+  TEST_ACTOR,
+  withTestDb,
+} from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -370,6 +375,27 @@ describe("stored derived values", () => {
     const fanout = await fanoutMarks("inventory.valuation");
     expect(fanout.map((mark) => mark.ref)).toEqual([twine]);
     expect(await marks("inventory.valuation")).toEqual([]);
+    // Price and unit mapping inputs reach the same dependent in one page.
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 7 })
+      .where(eq(product.id, twine));
+    expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
+      1,
+    );
+    const plan = await prepareDerivedPage(
+      ctx.db,
+      derivedComputes,
+      (await claimDerivedMarks(ctx.db)).filter((mark) =>
+        mark.target.includes("@"),
+      ),
+    );
+    const expansion = await countTestDbQueries(() =>
+      publishDerivedPage(ctx.db, plan),
+    );
+    // One expansion statement and one shortcode lookup for reader notifications.
+    expect(expansion.statements).toHaveLength(2);
+    expect(await marks("inventory.valuation")).toContain(entry);
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
     expect((await valuation(entry))?.meta.state).toBe("fresh");
