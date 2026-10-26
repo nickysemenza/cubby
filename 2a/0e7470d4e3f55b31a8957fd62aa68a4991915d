@@ -1,0 +1,21 @@
+apps/apple/App/Tests/Entity/List/EntityRowPresentationTests.swift
+  s_2ebd3393cbe81b::t_993c614b0c9951 308
+apps/web/src/lib/date-format.ts
+  s_2ebd3393cbe81b::t_b5185ecf218907 100-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2a0e7470d4e3f55b31a8957fd62aa68a4991915d",
+  "prompts": {},
+  "sessions": {
+    "s_2ebd3393cbe81b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a68-c8da-7023-bf1d-bbea50b02f05",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
