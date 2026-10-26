@@ -125,6 +125,11 @@ index is partial. The `settlement_reference` predicate
 `FINANCIAL_TRANSACTION_SOURCE_REF_CONFLICT` refusal stays a repository
 pre-check, with the unique violation mapped to it as a backstop.
 
+Accepted settlement lookup compares canonical and legacy observation references
+with an explicit `= ANY(ARRAY[...])`. This keeps all three keys of the existing
+live `(source, kind, externalId)` index searchable; a column-valued `IN` list
+expands to an `OR` and repeatedly scans references for the source and kind.
+
 ## Rejected alternatives
 
 - Keep seven tables and share code only. The duplication was in the behavior
