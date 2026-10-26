@@ -114,6 +114,8 @@ const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
 };
 
 export interface SuggestFieldsPorts {
+  /** The caller already resolved this saved subject in its finite batch. */
+  recordId?: string;
   /** Pure model evaluations and isolated unit mechanics may bypass correction lookup. */
   resolveCorrections?: boolean;
   /** One accounting group per operation within a finite list batch. */
@@ -1155,9 +1157,13 @@ export async function suggestFields(
         supportsFieldCorrection(input.entity, target) &&
         (await hasFieldCorrectionSources(db, input.entity, target))
       ) {
-        const record = input.entityId
-          ? (await resolveShortcodes(db, [input.entityId])).get(input.entityId)
-          : null;
+        const record = ports?.recordId
+          ? { entity: input.entity, id: ports.recordId }
+          : input.entityId
+            ? (await resolveShortcodes(db, [input.entityId])).get(
+                input.entityId,
+              )
+            : null;
         const targetInputFingerprint =
           record?.entity === input.entity
             ? await fieldInputFingerprint(db, input.entity, record.id, target)

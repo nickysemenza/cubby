@@ -109,7 +109,12 @@ export async function guardAiEvaluation(
   // Match cancellation's Run-before-item lock order. A shared item's original
   // requester may stop while another live requester still wants publication.
   const owners = await getDb(tx)
-    .select()
+    .select({
+      id: run.id,
+      status: run.status,
+      deletedAt: run.deletedAt,
+      retiredAt: run.retiredAt,
+    })
     .from(run)
     .where(
       read.executionKind === "ai_refresh"

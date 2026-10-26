@@ -89,16 +89,28 @@ export async function historicalConflictInputsChanged(
   );
 }
 
-/** Historical conflict is a guard, not a claim that stale source evidence is current. */
-export async function readVariantVerification(
+/** History and lineage are shared by all pairs in one bounded preparation. */
+export async function readVariantVerifications(
   db: Database,
-  sides: readonly [
+  pairs: readonly (readonly [
     z.infer<typeof productIdentitySide>,
     z.infer<typeof productIdentitySide>,
-  ],
+  ])[],
 ) {
+  const result = new Map<
+    string,
+    ReturnType<typeof variantVerificationForHistory>
+  >();
+  if (!pairs.length) return result;
   const history = await getDb(db)
-    .select({ id: assessment.id, evidence: assessment.evidence })
+    .select({
+      id: assessment.id,
+      evidence: assessment.evidence,
+      subjectId: sql<string>`${assessment.subject}->>'recordId'`,
+      subjectOtherId: sql<string>`${assessment.subject}->>'otherId'`,
+      stateId: assessmentState.recordId,
+      stateOtherId: sql<string>`${assessmentState.data}->>'otherId'`,
+    })
     .from(assessment)
     .leftJoin(assessmentState, eq(assessmentState.id, assessment.id))
     .where(
@@ -106,13 +118,17 @@ export async function readVariantVerification(
         eq(assessment.family, "product_pair"),
         eq(assessment.served, true),
         or(
-          and(
-            sql`${assessment.subject}->>'recordId' = ${sides[0].id}`,
-            sql`${assessment.subject}->>'otherId' = ${sides[1].id}`,
-          ),
-          and(
-            eq(assessmentState.recordId, sides[0].id),
-            sql`${assessmentState.data}->>'otherId' = ${sides[1].id}`,
+          ...pairs.map((sides) =>
+            or(
+              and(
+                sql`${assessment.subject}->>'recordId' = ${sides[0].id}`,
+                sql`${assessment.subject}->>'otherId' = ${sides[1].id}`,
+              ),
+              and(
+                eq(assessmentState.recordId, sides[0].id),
+                sql`${assessmentState.data}->>'otherId' = ${sides[1].id}`,
+              ),
+            ),
           ),
         ),
       ),
@@ -126,17 +142,19 @@ export async function readVariantVerification(
         .optional(),
     })
     .passthrough();
-  const ancestorIds = [
+  const idsInLineage = (rows: readonly { evidence: unknown }[]) => [
     ...new Set(
-      history.flatMap(
+      rows.flatMap(
         (row) =>
           lineage.safeParse(row.evidence).data?.signals?.conflictLineage ?? [],
       ),
     ),
-  ].filter((id) => !history.some((row) => row.id === id));
-  if (ancestorIds.length)
-    history.push(
-      ...(await getDb(db)
+  ];
+  const ancestorIds = idsInLineage(history).filter(
+    (id) => !history.some((row) => row.id === id),
+  );
+  const loadedAncestors = ancestorIds.length
+    ? await getDb(db)
         .select({ id: assessment.id, evidence: assessment.evidence })
         .from(assessment)
         .where(
@@ -144,8 +162,38 @@ export async function readVariantVerification(
             eq(assessment.family, "product_pair"),
             inArray(assessment.id, ancestorIds),
           ),
-        )),
+        )
+    : [];
+  const ancestors = [...history, ...loadedAncestors];
+  for (const sides of pairs) {
+    const key = `${sides[0].id}|${sides[1].id}`;
+    if (result.has(key)) continue;
+    const own = history.filter(
+      (row) =>
+        (row.subjectId === sides[0].id && row.subjectOtherId === sides[1].id) ||
+        (row.stateId === sides[0].id && row.stateOtherId === sides[1].id),
     );
+    const missing = new Set(
+      idsInLineage(own).filter((id) => !own.some((row) => row.id === id)),
+    );
+    result.set(
+      key,
+      variantVerificationForHistory(sides, [
+        ...own,
+        ...ancestors.filter((row) => missing.has(row.id)),
+      ]),
+    );
+  }
+  return result;
+}
+
+function variantVerificationForHistory(
+  sides: readonly [
+    z.infer<typeof productIdentitySide>,
+    z.infer<typeof productIdentitySide>,
+  ],
+  history: readonly { id: string; evidence: unknown }[],
+) {
   const historicalEvidence = z
     .object({
       conflict: z.boolean().optional(),

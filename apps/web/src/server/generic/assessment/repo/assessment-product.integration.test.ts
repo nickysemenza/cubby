@@ -42,7 +42,7 @@ import {
 } from "~/server/domains/expense/repo/crud";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
-  prepareProductIdentityPairRequest,
+  prepareProductIdentityPairRequests,
   productIdentitySnapshot,
   prepareProductIdentityPair,
   preparedProductIdentityPair,
@@ -106,14 +106,18 @@ async function publishProductIdentity(
 async function requestProductIdentityPair(
   db: Parameters<typeof prepareProductIdentityPair>[0],
   ids: Parameters<typeof prepareProductIdentityPair>[1],
-  runId: Parameters<typeof prepareProductIdentityPairRequest>[2],
-  provenance: Parameters<typeof prepareProductIdentityPairRequest>[3],
+  runId: Parameters<typeof prepareProductIdentityPairRequests>[2],
+  provenance: Parameters<typeof prepareProductIdentityPairRequests>[3],
 ) {
   const pair = await prepareProductIdentityPair(db, ids);
   if (!pair) throw new Error("Synthetic Product pair is missing");
-  return (await prepareProductIdentityPairRequest(db, pair, runId, provenance))(
+  const [publish] = await prepareProductIdentityPairRequests(
     db,
+    [pair],
+    runId,
+    provenance,
   );
+  return publish!(db);
 }
 
 describe("stored Product identity pairs", () => {
@@ -537,6 +541,14 @@ describe("stored Product identity pairs", () => {
     );
     expect(result).toHaveLength(2);
     expect(queryCount).toBeLessThanOrEqual(3);
+    const batch = await countTestDbQueries(() =>
+      loadProductIdentifierClaims(ctx.db, ids),
+    );
+    expect(batch.result).toEqual(result);
+    expect(batch.queryCount).toBe(queryCount);
+    expect(await loadProductIdentifierClaims(ctx.db, [ids[0]!])).toEqual(
+      result.filter((claim) => claim.productId === ids[0]),
+    );
     await getDb(ctx.db)
       .update(externalSource)
       .set({ vendorId: null })

@@ -1,7 +1,7 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -55,11 +55,12 @@ export type DroppedProductIdentifierClaim = {
  * raw resolution error instead of failing every Product's catalog scan. */
 export async function loadProductIdentifierClaims(
   db: Database,
-  targetId?: ProductId,
+  targetId?: ProductId | readonly ProductId[],
   options: {
     onDropped?: (dropped: DroppedProductIdentifierClaim) => void;
   } = {},
 ) {
+  if (Array.isArray(targetId) && targetId.length === 0) return [];
   const rows = await getDb(db)
     .select({
       bindingId: importSourceProduct.id,
@@ -113,7 +114,11 @@ export async function loadProductIdentifierClaims(
       and(
         notDeleted(product),
         notDeleted(purchase),
-        targetId ? eq(product.id, targetId) : undefined,
+        targetId
+          ? typeof targetId === "string"
+            ? eq(product.id, targetId)
+            : inArray(product.id, [...targetId])
+          : undefined,
       ),
     )
     .orderBy(importSourceProduct.id);

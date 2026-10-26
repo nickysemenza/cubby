@@ -287,6 +287,10 @@ once per entity and bounded page. An inventory-location suggestion reads its
 Product source by shortcode and carries that source's ID into the candidate
 aggregates, avoiding a separate identity query for every roster. This keeps
 live-row and legacy-code handling at the read boundary.
+Field suggestion batches carry those resolved subject IDs into correction checks.
+Product report slots share their request's identity dependency, including stock,
+pricing, use and evidence summaries; standalone summary reads still resolve their
+own subject.
 
 `RecordSuggestionsProvider` keeps stored review/bulk-action scope over loaded
 records while mounted `RecordSuggestionBoundary` rows admit automatic work

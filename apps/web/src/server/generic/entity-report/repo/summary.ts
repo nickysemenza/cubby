@@ -104,8 +104,9 @@ function connectedBlock(
 export async function productStockSummary(
   db: Database,
   code: string,
+  resolvedId?: ProductId,
 ): Promise<ReportBlock[]> {
-  await resolveOrThrow(db, "product", code);
+  if (!resolvedId) await resolveOrThrow(db, "product", code);
   const products = await listProductsRead(
     db,
     { ids: [parseShortcodeFor("product", code)] },
@@ -161,8 +162,9 @@ export async function productContextSummary(
   db: Database,
   code: string,
   kind: "uses" | "evidence",
+  resolvedId?: ProductId,
 ): Promise<ReportBlock[]> {
-  await resolveOrThrow(db, "product", code);
+  if (!resolvedId) await resolveOrThrow(db, "product", code);
   const views =
     kind === "uses"
       ? [
@@ -295,8 +297,9 @@ export async function transactionSourcesSummary(
 export async function productPricingSummary(
   db: Database,
   code: string,
+  resolvedId?: ProductId,
 ): Promise<ReportBlock[]> {
-  const productId = await resolveOrThrow(db, "product", code);
+  const productId = resolvedId ?? (await resolveOrThrow(db, "product", code));
   // Exact ids are canonical shortcodes; Product declares no static list scope. Saved-view
   // defaults are UI filters and are not applied to this explicit repository request.
   const result = await listProductsRead(

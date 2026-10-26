@@ -31,7 +31,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
   getDb,
-  isTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
@@ -46,6 +45,7 @@ import { productIdentityEvidenceFence } from "./product-identity-fence";
 import {
   pairFingerprint,
   prepareProductIdentityPair,
+  prepareFencedProductIdentityPairs,
   productIdentitySnapshots,
 } from "./product-identity-snapshot";
 
@@ -118,34 +118,33 @@ export async function prepareProductPairPublication(
   db: Database,
   input: Parameters<typeof publishProductPair>[1],
 ) {
-  if (isTransaction(getDb(db)))
-    throw new Error(
-      "Product pair preparation requires a database outside a transaction",
-    );
-  const fence = await productIdentityEvidenceFence(db, input.productIds);
-  const guard = await prepareProductIdentityPair(db, input.productIds);
-  if (
-    !guard ||
-    (input.fingerprint && guard.fingerprint !== input.fingerprint) ||
-    (await productIdentityEvidenceFence(db, input.productIds)) !== fence
-  )
-    throw new Error("Product pair evidence changed during inference");
-  return (tx: Database) =>
-    publishProductPairWithGuard(
-      tx,
-      input,
-      async (transactionDb) => {
-        if (
-          (await productIdentityEvidenceFence(
-            transactionDb,
-            input.productIds,
-          )) !== fence
-        )
-          throw new Error("Product pair evidence changed during inference");
-        return guard;
-      },
-      { isolationLevel: "serializable" },
-    );
+  return (await prepareProductPairPublications(db, [input]))[0]!;
+}
+
+export async function prepareProductPairPublications(
+  db: Database,
+  inputs: readonly Parameters<typeof publishProductPair>[1][],
+) {
+  const prepared = await prepareFencedProductIdentityPairs(db, inputs);
+  return prepared.map(({ pair: guard, fence }, index) => {
+    const input = inputs[index]!;
+    return (tx: Database) =>
+      publishProductPairWithGuard(
+        tx,
+        input,
+        async (transactionDb) => {
+          if (
+            (await productIdentityEvidenceFence(
+              transactionDb,
+              input.productIds,
+            )) !== fence
+          )
+            throw new Error("Product pair evidence changed during inference");
+          return guard;
+        },
+        { isolationLevel: "serializable" },
+      );
+  });
 }
 
 async function publishProductPairWithGuard(

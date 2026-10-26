@@ -478,6 +478,10 @@ describe("entity report", () => {
       "product.labels",
       "product.cookbooks",
       "product.recipe-appearances",
+      "product.pricing-summary",
+      "product.stock-summary",
+      "product.use-summary",
+      "product.evidence-summary",
     ] as const;
     const singles: Awaited<
       ReturnType<typeof countTestDbQueries<EntityReportOut>>

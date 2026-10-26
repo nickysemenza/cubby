@@ -294,6 +294,7 @@ export const inferFieldAssessments = async (
   const captured = await withAiInputs(false, () =>
     suggestFields(context.db, runId, input, {
       ...ports,
+      ...(recordId ? { recordId } : {}),
       ...(input.decisionModel ? { decisionModel: input.decisionModel } : {}),
     }),
   );
