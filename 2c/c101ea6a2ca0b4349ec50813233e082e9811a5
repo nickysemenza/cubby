@@ -1,0 +1,31 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_d8d8be46d31521::t_ce7ef9e31b25a4 57,93,105,123-137,139,141,144-154,174,181-202,238-240,274
+apps/apple/App/Shared/AppShell/Navigator.swift
+  s_d8d8be46d31521::t_4305ab706caee4 149-178,330,333,339,344
+apps/apple/App/Shared/AppShell/Route.swift
+  s_d8d8be46d31521::t_36dc67cbd6a200 5,76
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_d8d8be46d31521::t_6d4fce30d8aae5 70-104
+apps/apple/App/macOS/RootSplitView.swift
+  s_d8d8be46d31521::t_32d24a033df006 1,11-14,23-32,34-35,37-41,43-44,48-58,70-75,77,80-114,273-275,314-365
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityFilterState.swift
+  s_d8d8be46d31521::t_820902b1f0aa99 8
+apps/apple/DESIGN.md
+  s_d8d8be46d31521::t_c8d5c847b6a9e2 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2cc101ea6a2ca0b4349ec50813233e082e9811a5",
+  "prompts": {},
+  "sessions": {
+    "s_d8d8be46d31521": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1797e-ad2a-7603-aa0c-a8cbd94efe21",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
