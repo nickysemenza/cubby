@@ -850,6 +850,7 @@ export default defineEntity(
           display: {
             width: "md",
             readPath: "primaryPlacement.path",
+            detailLabelPath: "primaryPlacement.path",
             mobile: { slot: "trailing", priority: 6 },
           },
           validation: {
