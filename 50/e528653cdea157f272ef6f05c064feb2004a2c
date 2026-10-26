@@ -1,0 +1,59 @@
+apps/apple/AGENTS.md
+  s_c503e493e0915b::t_69a526f05ad290 191-194
+apps/apple/App/Shared/Entity/Detail/EntityFieldValue.swift
+  s_c503e493e0915b::t_9891684d09a497 85,101,185
+apps/apple/App/Shared/Entity/List/EntityRowPresentation.swift
+  s_2ebd3393cbe81b::t_ddaaac04733c5a 188-190
+apps/apple/App/Shared/Report/RecordsBlockView.swift
+  s_c503e493e0915b::t_6ccde7938c3444 125
+apps/apple/CubbyKit/Sources/CubbyKit/FFI/IngredientParser.swift
+  s_c503e493e0915b::t_0eddb058d52738 100-111
+apps/apple/CubbyKit/Sources/CubbyKit/Format/DisplayFormat.swift
+  s_c503e493e0915b::t_859728fdecb12b 3-4,14-18
+apps/apple/CubbyKit/Tests/CubbyKitTests/Format/DisplayFormatTests.swift
+  s_c503e493e0915b::t_baaca59aec718e 23-33,49-50,84-97
+apps/web/src/lib/date-format.ts
+  s_c503e493e0915b::t_a9c136c4d3976d 6,101
+apps/web/src/lib/display-format.ts
+  s_c503e493e0915b::t_ff39142fe66d10 1-10
+apps/web/src/lib/display-format.unit.test.ts
+  s_2ebd3393cbe81b::t_502a95e48cdb49 7-12,25,42-52
+apps/web/src/lib/number-format.ts
+  s_c503e493e0915b::t_1db71862f3767f 108
+apps/web/src/server/generic/list/repo/list-display-labels.ts
+  s_c503e493e0915b::t_cc2c03825e366a 24,48,61-63
+apps/web/src/ui/primitives/none-value.tsx
+  s_c503e493e0915b::t_b4cd565dff302a 2,14
+cubby-ffi/src/display.rs
+  s_c503e493e0915b::t_bbae76acbbb485 124-138
+packages/shared/golden-vectors/display-format.json
+  s_2ebd3393cbe81b::t_b8cde0f319e044 2,91-134,637-713
+recipebridge/src/display_format.rs
+  s_2ebd3393cbe81b::t_685b9e3e0ab253 7-8,145-233,401-423,430-433,470-490
+apps/web/src/lib/wasm.ts
+  s_c503e493e0915b::t_0140012b092726 12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "50e528653cdea157f272ef6f05c064feb2004a2c",
+  "prompts": {},
+  "sessions": {
+    "s_2ebd3393cbe81b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a68-c8da-7023-bf1d-bbea50b02f05",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c503e493e0915b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a61-18fe-7413-9322-d8bc677509bc",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
