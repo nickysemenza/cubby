@@ -161,10 +161,9 @@ const lockPublishableMarks = async (
   tx: Executor,
   declaration: StoredDerivedDeclaration,
   marks: readonly Mark[],
-  recordRowsFirst: boolean,
 ): Promise<Mark[]> => {
   let candidates: readonly Mark[] = marks;
-  if (recordRowsFirst && marks.length > 0) {
+  if (marks.length > 0) {
     const refs = marks.map((mark) => mark.ref);
     const idRows = z.array(z.object({ id: z.string() }));
     const held = new Set(
@@ -274,7 +273,7 @@ const publishSink = async (
   { sink, prepared }: { sink: DerivedSink; prepared: unknown },
 ): Promise<string[]> => {
   const tx = unwrapDb(db);
-  const held = await lockPublishableMarks(tx, declaration, marks, true);
+  const held = await lockPublishableMarks(tx, declaration, marks);
   const ids = held.map((mark) => mark.ref);
   // Sinks reuse repository writers, which take the Database handle.
   const changed = ids.length ? await sink.publish(db, ids, prepared) : [];
@@ -289,84 +288,77 @@ const publishValues = async (
   marks: readonly Mark[],
   values: ReadonlyMap<string, DerivedComputed>,
 ): Promise<string[]> => {
-  const held = await lockPublishableMarks(tx, declaration, marks, false);
-  const rows = held
-    .filter((mark) => values.has(mark.ref))
-    .map((mark) => {
-      // SAFETY: filtered to ids present in `values` just above.
-      const computed = values.get(mark.ref)!;
-      return {
-        entityId: mark.ref,
-        ticket: mark.ticket,
-        value: computed.value ?? null,
-        decidedBy: computed.decidedBy ?? null,
-        inputHash: computed.inputHash ?? null,
-        ...sortColumns(declaration, computed.sort),
-      };
-    });
-  const missing = held
-    .filter((mark) => !values.has(mark.ref))
-    .map(({ ref, ticket }) => ({ ref, ticket }));
-  const changed: string[] = [];
-  if (rows.length > 0) {
-    const result = await tx.execute(sql`
-      WITH input AS (
-        SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS i(
-          "entityId" uuid, ticket bigint, value jsonb, "decidedBy" jsonb,
-          "inputHash" text, "sortNumber" double precision, "sortDate" timestamp,
-          "sortText" text)
-      ), current AS (
-        SELECT i.* FROM input i
-          JOIN "DerivedDirty" d ON d.target = ${declaration.target}
-           AND d.ref = i."entityId" AND d.ticket = i.ticket
-      ), previous AS (
-        SELECT v."entityId", v.value, v."decidedBy" FROM "DerivedValue" v
-         WHERE v.key = ${declaration.key}
-           AND v."entityId" IN (SELECT "entityId" FROM current)
-      ), written AS (
-        INSERT INTO "DerivedValue" ("entityId", kind, key, value, "decidedBy",
-          "inputHash", "sortNumber", "sortDate", "sortText", "computedAt")
-        SELECT c."entityId", ${entityIdentity.kind}, ${declaration.key}, c.value, c."decidedBy",
-          c."inputHash", c."sortNumber", c."sortDate", c."sortText", now()
-          FROM current c
-          JOIN ${entityIdentity} ON ${entityIdentity.id} = c."entityId"
-         WHERE ${isNull(entityIdentity.deletedAt)}
-        ON CONFLICT ("entityId", key) DO UPDATE SET
-          value = EXCLUDED.value, "decidedBy" = EXCLUDED."decidedBy",
-          "inputHash" = EXCLUDED."inputHash", "sortNumber" = EXCLUDED."sortNumber",
-          "sortDate" = EXCLUDED."sortDate", "sortText" = EXCLUDED."sortText",
-          "computedAt" = EXCLUDED."computedAt"
-        RETURNING "entityId"
-      )
-      SELECT w."entityId" AS id FROM written w
-        LEFT JOIN previous p ON p."entityId" = w."entityId"
-        JOIN current c ON c."entityId" = w."entityId"
-       WHERE p."entityId" IS NULL OR p.value IS DISTINCT FROM c.value
-          OR p."decidedBy" IS DISTINCT FROM c."decidedBy"`);
-    changed.push(
-      ...z
-        .array(z.object({ id: z.string() }))
-        .parse(result.rows)
-        .map((row) => row.id),
-    );
-  }
-  if (missing.length > 0) {
-    const removed = await tx.execute(sql`
-      DELETE FROM "DerivedValue" v
-       USING jsonb_to_recordset(${JSON.stringify(missing)}::jsonb) AS m(ref uuid, ticket bigint),
-             "DerivedDirty" d
-       WHERE v.key = ${declaration.key} AND v."entityId" = m.ref
-         AND d.target = ${declaration.target} AND d.ref = m.ref AND d.ticket = m.ticket
-      RETURNING v."entityId" AS id`);
-    changed.push(
-      ...z
-        .array(z.object({ id: z.string() }))
-        .parse(removed.rows)
-        .map((row) => row.id),
-    );
-  }
-  await clearMarks(tx, declaration.target, held);
-  return changed;
+  const rows = marks.map((mark) => {
+    const computed = values.get(mark.ref);
+    return {
+      entityId: mark.ref,
+      ticket: mark.ticket,
+      hasValue: computed !== undefined,
+      value: computed?.value ?? null,
+      decidedBy: computed?.decidedBy ?? null,
+      inputHash: computed?.inputHash ?? null,
+      ...sortColumns(declaration, computed?.sort ?? null),
+    };
+  });
+  // Avoid planning a second value-table writer when there is nothing to remove.
+  const hasMissing = rows.some((row) => !row.hasValue);
+  // Lock, publish and clear the observed tickets in one statement. Every write
+  // depends on the locked set, so busy or replaced marks keep both their work
+  // and their previous values. A rejected value rolls this target back as before.
+  const result = await tx.execute(sql`
+    WITH input AS (
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS i(
+        "entityId" uuid, ticket bigint, "hasValue" boolean, value jsonb,
+        "decidedBy" jsonb, "inputHash" text, "sortNumber" double precision,
+        "sortDate" timestamp, "sortText" text)
+    ), current AS MATERIALIZED (
+      SELECT i.* FROM input i
+        JOIN "DerivedDirty" d ON d.target = ${declaration.target}
+         AND d.ref = i."entityId" AND d.ticket = i.ticket
+       ORDER BY d.ref
+       FOR UPDATE OF d SKIP LOCKED
+    ), previous AS (
+      SELECT v."entityId", v.value, v."decidedBy" FROM "DerivedValue" v
+       WHERE v.key = ${declaration.key}
+         AND v."entityId" IN (SELECT "entityId" FROM current)
+    ), written AS (
+      INSERT INTO "DerivedValue" ("entityId", kind, key, value, "decidedBy",
+        "inputHash", "sortNumber", "sortDate", "sortText", "computedAt")
+      SELECT c."entityId", ${entityIdentity.kind}, ${declaration.key}, c.value, c."decidedBy",
+        c."inputHash", c."sortNumber", c."sortDate", c."sortText", now()
+        FROM current c
+        JOIN ${entityIdentity} ON ${entityIdentity.id} = c."entityId"
+       WHERE c."hasValue" AND ${isNull(entityIdentity.deletedAt)}
+      ON CONFLICT ("entityId", key) DO UPDATE SET
+        value = EXCLUDED.value, "decidedBy" = EXCLUDED."decidedBy",
+        "inputHash" = EXCLUDED."inputHash", "sortNumber" = EXCLUDED."sortNumber",
+        "sortDate" = EXCLUDED."sortDate", "sortText" = EXCLUDED."sortText",
+        "computedAt" = EXCLUDED."computedAt"
+      RETURNING "entityId"
+    ), ${
+      hasMissing
+        ? sql`removed AS (
+      DELETE FROM "DerivedValue" v USING current c
+       WHERE NOT c."hasValue" AND v.key = ${declaration.key}
+         AND v."entityId" = c."entityId"
+      RETURNING v."entityId"
+    ),`
+        : sql``
+    } cleared AS (
+      DELETE FROM "DerivedDirty" d USING current c
+       WHERE d.target = ${declaration.target}
+         AND d.ref = c."entityId" AND d.ticket = c.ticket
+    )
+    SELECT w."entityId" AS id FROM written w
+      LEFT JOIN previous p ON p."entityId" = w."entityId"
+      JOIN current c ON c."entityId" = w."entityId"
+     WHERE p."entityId" IS NULL OR p.value IS DISTINCT FROM c.value
+        OR p."decidedBy" IS DISTINCT FROM c."decidedBy"
+    ${hasMissing ? sql`UNION ALL SELECT "entityId" AS id FROM removed` : sql``}`);
+  return z
+    .array(z.object({ id: z.string() }))
+    .parse(result.rows)
+    .map((row) => row.id);
 };
 
 /** Source JSON is evidence: malformed references must not fail a drain page. */

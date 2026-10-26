@@ -2514,9 +2514,13 @@ the database's message, while transaction-level failures retry the page.
 Preparation and publication failures retain the same bounded cause chain,
 innermost message first, so a long query wrapper cannot hide the underlying
 database or adapter error in the stored retry diagnostic.
-Value adapters write `DerivedValue`; sink adapters write their own tables
-(search documents with embedding admission, recipe totals, conversion
-coverage). Search publication uses one sorted upsert across live documents and
+Value adapters lock the observed mark tickets with `SKIP LOCKED`, upsert or
+remove their `DerivedValue` rows, and clear only those tickets in one statement.
+Busy or replaced marks keep their previous values and remain pending. Each
+target still has its own savepoint, so a rejected value cannot clear its work
+or prevent another target from publishing. Sink adapters retain their source-row
+locking and repository writers for their own tables (search documents with
+embedding admission, recipe totals, conversion coverage). Search publication uses one sorted upsert across live documents and
 existing documents marked missing, preserving the latter's content. It then
 retires the observed missing documents in one update within the same transaction.
 This retains stable lock order without splitting mixed backfill pages into
