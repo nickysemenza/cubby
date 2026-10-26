@@ -1,0 +1,19 @@
+apps/apple/App/Shared/Editors/EntityEditorSheet.swift
+  s_3d5778384758c7::t_1f6bdf435cd843 184-189,334
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6c7b7b0c00445bb28af34771b251d6f56fc6a906",
+  "prompts": {},
+  "sessions": {
+    "s_3d5778384758c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a2f-ac7e-72a3-9bd0-f7a7b2303131",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
