@@ -1,3 +1,4 @@
+import { humanize } from "@cubby/shared/text-case";
 import { z } from "zod";
 import {
   shortcodeSchema,
@@ -34,7 +35,7 @@ const reasonOptions = jobWaitingOnReason.options.map((value) => ({
 }));
 const stateOptions = jobState.options.map((value) => ({
   value,
-  label: value.replaceAll("_", " "),
+  label: humanize(value),
 }));
 
 /** Execution records are read-only; their owning queue controls their lifecycle. */

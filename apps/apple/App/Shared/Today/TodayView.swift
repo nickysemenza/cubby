@@ -392,11 +392,7 @@ struct TodayContent: View {
                 }
                 Section { problemsLink }
             }
-            .listRowInsets(
-                EdgeInsets(
-                    top: 0, leading: FieldGuideTokens.Space.md,
-                    bottom: 0, trailing: FieldGuideTokens.Space.md)
-            )
+            .fieldGuideSectionStyle()
             .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
