@@ -180,6 +180,7 @@ export async function searchEntityGraphPaths(
   const seenEdges = new Map<string, EntityGraphEdge>();
   let reads = 0;
   let budgetReached = seenNodes.size > limits.maxNodes;
+  let pathBudgetReached = false;
 
   while (left.frontier.length > 0 && right.frontier.length > 0) {
     if (budgetReached || reads >= limits.maxReads || now() >= deadline) {
@@ -271,7 +272,7 @@ export async function searchEntityGraphPaths(
                   limits.maxPaths,
                 )
               )
-                budgetReached = true;
+                pathBudgetReached = true;
             }
           }
         }
@@ -298,8 +299,11 @@ export async function searchEntityGraphPaths(
         paths: paths.slice(0, limits.maxPaths),
         edges: pathEdges(paths.slice(0, limits.maxPaths), seenEdges),
         completion:
-          paths.length > limits.maxPaths ? "budget-limit" : "exhausted",
-        shortestPathCertain: paths.length <= limits.maxPaths,
+          pathBudgetReached || paths.length > limits.maxPaths
+            ? "budget-limit"
+            : "exhausted",
+        // Completed BFS layers prove distance even when evidence enumeration is capped.
+        shortestPathCertain: true,
       };
     }
   }

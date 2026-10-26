@@ -103,6 +103,34 @@ const graphReader =
   };
 
 describe("entity graph exploration", () => {
+  it("continues to requested depth after saturating an intermediate node's path budget", async () => {
+    const root = ref("CAPROOT");
+    const hub = ref("CAPHUB");
+    const next = ref("CAPNEXT");
+    const end = ref("CAPEND");
+    const result = await exploreEntityGraph(
+      root,
+      3,
+      graphReader([
+        ...Array.from({ length: 4 }, (_, i) =>
+          edge(`parallel-${i}`, root, hub),
+        ),
+        edge("continue", hub, next),
+        edge("finish", next, end),
+      ]),
+    );
+    expect(result.nodes.map((item) => item.entityId)).toContain(end.entityId);
+    expect(
+      result.paths.filter(
+        (path) => path.nodeRefs.at(-1)?.entityId === end.entityId,
+      ),
+    ).toHaveLength(3);
+    expect(result.completion).toMatchObject({
+      status: "budget-limit",
+      reachedDepth: 3,
+    });
+  });
+
   it("explains a four-hop record without crossing into the fifth frontier", async () => {
     const chain = [
       ref("ROOT"),

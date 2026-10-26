@@ -160,6 +160,7 @@ export async function exploreEntityGraph(
   let reachedDepth = 0;
   let reads = 0;
   let budgetReached = false;
+  let pathBudgetReached = false;
   let paginationReached = false;
 
   while (frontier.length > 0 && frontierDepth < requestedDepth) {
@@ -251,7 +252,7 @@ export async function exploreEntityGraph(
                 limits.maxPathsPerNode,
               )
             )
-              budgetReached = true;
+              pathBudgetReached = true;
           }
         }
       }
@@ -304,13 +305,14 @@ export async function exploreEntityGraph(
   const retainedEdgesById = new Map(
     retainedEdges.map((edge) => [edge.id, edge]),
   );
-  const status = budgetReached
-    ? "budget-limit"
-    : paginationReached
-      ? "pagination-limit"
-      : frontier.length > 0 && frontierDepth >= requestedDepth
-        ? "depth-limit"
-        : "exhausted";
+  const status =
+    budgetReached || pathBudgetReached
+      ? "budget-limit"
+      : paginationReached
+        ? "pagination-limit"
+        : frontier.length > 0 && frontierDepth >= requestedDepth
+          ? "depth-limit"
+          : "exhausted";
 
   return {
     nodes: [...nodes.entries()]

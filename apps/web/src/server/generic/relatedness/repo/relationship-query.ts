@@ -8,7 +8,10 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { purchase as purchaseTable } from "~/server/db/retained-tables";
-import { purchaseAssociatedEmailsSql } from "~/server/domains/email/repo/email-sql";
+import {
+  purchaseAssociatedEmailsSql,
+  emailPurchaseAssociationsSql,
+} from "~/server/domains/email/repo/email-sql";
 import { purchasePurchaserSetSql } from "~/server/domains/purchase/repo/purchase-purchaser";
 
 const livePurchases = new QueryBuilder()
@@ -90,13 +93,54 @@ export function relationshipQueryCondition(
   }
 }
 
-/** Scope expensive association policies to their candidate set before joining targets. */
+/** Email-rooted acceptance reads scope the canonical policy before joining candidates. */
+const emailAssociatedPurchases = (source: string): SQL => sql`
+  SELECT association."purchaseId" FROM LATERAL (SELECT ${sql.identifier(source)}.*) "Email"
+  CROSS JOIN LATERAL (${emailPurchaseAssociationsSql()}) association`;
+
+const emailAssociatedVendors = (source: string): SQL => sql`
+  SELECT original."vendorId" AS id FROM "OrderMail" original
+    WHERE original.id = ${sql.identifier(source)}."orderMailId"
+      AND original."ledgerPartyId" = ${sql.identifier(source)}."ledgerPartyId"
+  UNION
+  SELECT purchase."vendorId" AS id FROM (${emailAssociatedPurchases(source)}) association
+    JOIN (${livePurchases}) purchase ON purchase.id = association."purchaseId"`;
+
+/** Scope expensive association policies to candidates in either traversal direction. */
 export function relationshipQueryTargets(
   key: string,
   source: string,
+  outgoing: boolean,
 ): SQL | undefined {
   const query = relationshipQueryDefinition(key);
-  if (query.kind !== "purchaseEmails") return undefined;
-  return sql`SELECT candidate.* FROM (${purchaseAssociatedEmailsSql(sql`${sql.identifier(source)}."id"`)}) associated
-    JOIN "Email" candidate ON candidate."id" = associated."id"`;
+  if (query.kind === "purchaseEmails") {
+    return outgoing
+      ? sql`SELECT candidate.* FROM (${purchaseAssociatedEmailsSql(sql`${sql.identifier(source)}."id"`)}) associated
+          JOIN "Email" candidate ON candidate."id" = associated."id"`
+      : sql`SELECT candidate.* FROM (${emailAssociatedPurchases(source)}) associated
+          JOIN "Purchase" candidate ON candidate."id" = associated."purchaseId"`;
+  }
+  if (query.kind !== "vendorEmails" && query.kind !== "vendorAccountEmails")
+    return undefined;
+  const account = query.kind === "vendorAccountEmails";
+  if (!outgoing) {
+    return account
+      ? sql`SELECT candidate.* FROM (${emailAssociatedVendors(source)}) associated
+          JOIN "VendorAccount" candidate ON candidate."vendorId" = associated.id
+            AND candidate."ledgerPartyId" = ${sql.identifier(source)}."ledgerPartyId"`
+      : sql`SELECT candidate.* FROM (${emailAssociatedVendors(source)}) associated
+          JOIN "Vendor" candidate ON candidate.id = associated.id`;
+  }
+  const vendor = sql`${sql.identifier(source)}.${sql.identifier(account ? "vendorId" : "id")}`;
+  return sql`SELECT candidate.* FROM (
+      SELECT related.id FROM (${livePurchases}) purchase
+        CROSS JOIN LATERAL (${purchaseAssociatedEmailsSql(sql`purchase.id`)}) related
+        WHERE purchase."vendorId" = ${vendor}
+      UNION
+      SELECT sender.id FROM "Email" sender
+        JOIN "OrderMail" original ON original.id = sender."orderMailId"
+          AND original."ledgerPartyId" = sender."ledgerPartyId"
+        WHERE original."vendorId" = ${vendor}
+    ) associated JOIN "Email" candidate ON candidate.id = associated.id
+    ${account ? sql`WHERE candidate."ledgerPartyId" = ${sql.identifier(source)}."ledgerPartyId"` : sql``}`;
 }

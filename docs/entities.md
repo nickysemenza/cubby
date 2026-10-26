@@ -3213,7 +3213,10 @@ depth, pagination, and budget limits; returned paths explain the explored
 records and do not claim an unsearched branch has no shorter connection.
 Distinct evidence edges between the same records retain distinct paths.
 Exploration retains at most three shortest evidence paths per record; reaching
-that ceiling reports a budget limit, never exhaustion. Connected tables retain
+that ceiling reports a budget limit, never exhaustion, while traversal continues
+under its separate record, edge, read, depth and time budgets. Completed BFS
+layers still prove that returned destination paths are shortest even when the
+number of explanatory paths is capped. Connected tables retain
 all distinct witnessed paths for each paged target. Automatic summaries remain
 explicitly curated and do not expand through member, category or location hubs.
 `entity.graphPaths` remains the destination-path search. Cycles are valid, and

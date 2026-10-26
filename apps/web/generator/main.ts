@@ -17,9 +17,11 @@ import {
 import { EntityDeclarationError } from "./entities/source.ts";
 import { renderShortcodeRegistryArtifacts } from "./entities/shortcode-registry.ts";
 
-// `relationshipProvenanceSchema`'s local-path member; the schema module itself
+// Traversable relationship provenance kinds; the schema module itself
 // imports generated files, which do not exist yet when this validation runs.
-const localPathProvenance = z.object({ kind: z.enum(["local-path", "query"]) });
+const traversableProvenance = z.object({
+  kind: z.enum(["local-path", "query"]),
+});
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -49,10 +51,10 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
             ?.relations.find((candidate) => candidate.key === key);
           if (
             !relation ||
-            (!localPathProvenance.safeParse(relation.provenance).success &&
+            (!traversableProvenance.safeParse(relation.provenance).success &&
               !(relation.sources ?? []).some(
                 (source) =>
-                  localPathProvenance.safeParse(source.provenance).success,
+                  traversableProvenance.safeParse(source.provenance).success,
               ))
           ) {
             throw new EntityDeclarationError(
