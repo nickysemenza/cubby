@@ -1,0 +1,45 @@
+apps/apple/App/LiveActivity/CaptureControl.swift
+  s_7226f12e1f3aaa::t_eb0ada286a7e47 4-8,11-12
+apps/apple/App/LiveActivity/DeviceWorkWidget.swift
+  s_7226f12e1f3aaa::t_8e02a66a4ef1d6 5,7-8,11,13-14,18,20,27-28,33,35-39,41-43,46-66,68,76-78
+apps/apple/App/LiveActivity/Shared/DeviceWorkAttributes.swift
+  s_7226f12e1f3aaa::t_2e9d27b1b93a68 12-29
+apps/apple/App/LiveActivity/Shared/DeviceWorkPresentation.swift
+  s_7226f12e1f3aaa::t_80b4d366f0507a 1-39
+apps/apple/App/LiveActivity/Shared/PhotoRunActivityAttributes.swift
+  s_7226f12e1f3aaa::t_e2bf9cc154d1b4 12-26
+apps/apple/App/Shared/Intents/ControlIntents.swift
+  s_7226f12e1f3aaa::t_f9ae787e6d5d45 1-30
+apps/apple/App/Tests/Activity/DeviceWorkLiveActivitySelectionTests.swift
+  s_7226f12e1f3aaa::t_d05911d6251c92 43,60-61,65-110
+apps/apple/App/iOS/DeviceWorkLiveActivityCoordinator.swift
+  s_7226f12e1f3aaa::t_7cbfa33fe17576 6-7,11-17,46-53,69,72-79,88-100,102-104,112-115,117,126,130,147-365
+apps/apple/App/iOS/DeviceWorkLiveActivitySelection.swift
+  s_7226f12e1f3aaa::t_9a617a31a97358 4-13,15-23,26-59,61-70,73-101,104-110
+apps/apple/App/iOS/Info.plist
+  s_7226f12e1f3aaa::t_205aef2f1a9dd9 59
+apps/apple/App/macOS/Info.plist
+  s_7226f12e1f3aaa::t_03f1f0cd7da8b5 54
+apps/apple/README.md
+  s_7226f12e1f3aaa::t_babbb8bf0dbfb6 180-196
+apps/apple/project.yml
+  s_7226f12e1f3aaa::t_a7e2f86af92e7b 90,236,250
+apps/apple/App/Tests/Intents/IntentSurfaceTests.swift
+  s_7226f12e1f3aaa::t_506e8108b0390a 2,8,10-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7489989f8ccba49695da3d0d1214aee67f466c1c",
+  "prompts": {},
+  "sessions": {
+    "s_7226f12e1f3aaa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a08-5254-70e3-b386-1907eaae102f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
