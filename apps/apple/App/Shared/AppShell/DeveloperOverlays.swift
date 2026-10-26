@@ -8,7 +8,7 @@ import SwiftUI
 #endif
 
 /// The one switch behind all seven developer-overlay layers (analysis timings, score breakdowns,
-/// route decisions, ids, and request timing). `RootView` sets this from
+/// route decisions, ids and the record detail's raw JSON, and request timing). `RootView` sets this from
 /// `@AppStorage("developerOverlays")`; every layer reads it as `@Environment(\.developerOverlays)`
 /// rather than its own `@AppStorage`, so toggling in `DevView` updates every open screen at once.
 private struct DeveloperOverlaysKey: EnvironmentKey {

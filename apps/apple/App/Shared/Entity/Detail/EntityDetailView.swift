@@ -449,6 +449,7 @@ struct EntityDetailContent: View {
     var quickActionsBusy = false
 
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
     @State private var activityEvents: [DetailActivityEvent] = []
@@ -566,10 +567,12 @@ struct EntityDetailContent: View {
                                     Text("Connected records").font(.headline)
                                 }
                             }
-                            DisclosureGroup(isExpanded: $rawExpanded) {
-                                RawRecordDisclosure(raw: row.raw)
-                            } label: {
-                                Text("Raw record").font(.headline)
+                            if developerOverlays {
+                                DisclosureGroup(isExpanded: $rawExpanded) {
+                                    RawRecordDisclosure(raw: row.raw)
+                                } label: {
+                                    Text("Raw record").font(.headline)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -601,7 +604,6 @@ struct EntityDetailContent: View {
                 await loadActivity()
             }
             .modifier(DetailContentsNavigation(entries: contentsEntries))
-            .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
             .environment(\.reportBatchStore, reportBatches)
             .task { reportBatches.onRecordStale = onChanged }
         }
@@ -742,10 +744,12 @@ struct EntityDetailContent: View {
                     .detailContentsAnchor("connected-records")
                 }
             }
-            DisclosureGroup("Raw record", isExpanded: $rawExpanded) {
-                RawRecordDisclosure(raw: row.raw)
+            if developerOverlays {
+                DisclosureGroup("Raw record", isExpanded: $rawExpanded) {
+                    RawRecordDisclosure(raw: row.raw)
+                }
+                .detailContentsAnchor("raw-record")
             }
-            .detailContentsAnchor("raw-record")
         }
         #if os(iOS)
             .listStyle(.insetGrouped)
@@ -763,7 +767,6 @@ struct EntityDetailContent: View {
             await loadActivity()
         }
         .modifier(DetailContentsNavigation(entries: contentsEntries))
-        .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
         .environment(\.reportBatchStore, reportBatches)
         .task { reportBatches.onRecordStale = onChanged }
     }
@@ -861,7 +864,8 @@ struct EntityDetailContent: View {
                         id: "connected-records", title: "Connected records", group: "Relations")
                 ]
                 : [])
-            + [DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")]
+            + (developerOverlays
+                ? [DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")] : [])
     }
 
     private func loadTimelineIfDeclared() async {
@@ -917,66 +921,6 @@ struct EntityDetailContent: View {
     }
 
 }
-
-#if os(macOS)
-    /// Uses the loaded generic row; the inspector never starts a second record query.
-    private struct FieldGuideRecordInspector: ViewModifier {
-        let descriptor: EntityDescriptor
-        let row: EntityRow
-        @State private var isPresented = false
-
-        func body(content: Content) -> some View {
-            content
-                .toolbar {
-                    Button {
-                        isPresented.toggle()
-                    } label: {
-                        Label("Inspector", systemImage: "sidebar.right")
-                    }
-                    .help(isPresented ? "Hide inspector" : "Show inspector")
-                    .accessibilityIdentifier("detail.inspectorToggle")
-                }
-                .inspector(isPresented: $isPresented) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                            Text("Record notes")
-                                .font(.fieldGuideHeadline)
-                            Divider()
-                            LabeledContent("Type", value: descriptor.singular)
-                            LabeledContent("Code", value: row.id)
-                            ForEach(descriptor.presentation.summaryFieldKeys, id: \.self) { key in
-                                if let field = descriptor.field(key),
-                                    let value = EntityFieldValue.text(
-                                        in: row.raw, field: field, surface: "detail")
-                                {
-                                    LabeledContent(field.label) {
-                                        if let date = EntityFieldValue.dateValue(
-                                            in: row.raw, field: field, surface: "detail")
-                                        {
-                                            DateDisplay(date)
-                                        } else {
-                                            Text(value)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(FieldGuideTokens.Space.lg)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    .background(FieldGuideTokens.surface)
-                    .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
-                }
-        }
-    }
-#else
-    private struct FieldGuideRecordInspector: ViewModifier {
-        let descriptor: EntityDescriptor
-        let row: EntityRow
-
-        func body(content: Content) -> some View { content }
-    }
-#endif
 
 /// Developer overlays layer 4/7: shortcode plus fetched-at/age. No `uuid` field — the generic
 /// entity API never exposes the underlying uuid, only the public shortcode (`row.id`).
