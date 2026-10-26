@@ -1,3 +1,4 @@
+import AppKit
 import CubbyKit
 import SwiftUI
 
@@ -7,6 +8,10 @@ struct RootSplitView: View {
     /// Manifest section ids; retain existing domain preferences across windows and launches.
     @AppStorage("cubby.sidebar.collapsedDomains") private var collapsedDomains = ""
     @AppStorage("cubby.sidebar.expandedSections") private var expandedSections = ""
+    @SceneStorage("cubby.navigation") private var storedNavigation: Data?
+    @SceneStorage("cubby.columnVisibility") private var storedVisibility: Data?
+    @SceneStorage("cubby.detailVisible") private var detailVisible = true
+    @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var didRestoreSection = false
     @State private var browsing: NativeBrowserSession?
 
@@ -15,24 +20,40 @@ struct RootSplitView: View {
     }
 
     var body: some View {
-        Group {
-            if isBrowser {
-                NavigationSplitView {
-                    sidebar
-                } content: {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            sidebar
+                .background {
+                    SplitColumnCollapse(
+                        contentCollapsed: !usesContentColumn,
+                        detailCollapsed: usesContentColumn && !detailVisible)
+                }
+        } content: {
+            Group {
+                if isBrowser {
                     browserList
-                        .navigationSplitViewColumnWidth(min: 260, ideal: 420, max: 760)
-                } detail: {
-                    recordDetail
+                } else if model.navigator.section == .activity {
+                    SectionView(section: .activity)
                 }
+            }
+            .navigationSplitViewColumnWidth(min: 300, ideal: 460, max: 900)
+        } detail: {
+            if usesContentColumn {
+                recordDetail
             } else {
-                NavigationSplitView {
-                    sidebar
-                } detail: {
-                    NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
-                        SectionView(section: model.navigator.section)
-                    }
+                NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
+                    SectionView(section: model.navigator.section)
                 }
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .toolbar {
+            ToolbarItem {
+                Button(detailVisible ? "Hide Detail" : "Show Detail", systemImage: "sidebar.right") {
+                    detailVisible.toggle()
+                }
+                .keyboardShortcut("d", modifiers: [.option, .command])
+                .disabled(!usesContentColumn)
+                .help("Show or hide detail (⌥⌘D)")
             }
         }
         .environment(
@@ -46,11 +67,51 @@ struct RootSplitView: View {
             if browsing == nil { browsing = NativeBrowserSession(client: model.client) }
             guard !didRestoreSection else { return }
             didRestoreSection = true
-            if !model.navigator.launchLinkApplied, let section = AppSection(rawValue: storedSection) {
-                model.navigator.section = section
+            model.navigator.restore(section: storedSection, navigation: storedNavigation)
+            if let storedVisibility,
+                let visibility = try? JSONDecoder().decode(
+                    NavigationSplitViewVisibility.self, from: storedVisibility)
+            {
+                columnVisibility = visibility
             }
+            selectFirstRecord()
         }
         .onChange(of: model.navigator.section) { _, value in storedSection = value.rawValue }
+        .onChange(of: model.navigator.restoration) { _, value in
+            guard didRestoreSection else { return }
+            storedNavigation = try? JSONEncoder().encode(value)
+        }
+        .onChange(of: columnVisibility) { _, value in
+            storedVisibility = try? JSONEncoder().encode(value)
+        }
+        .onChange(of: visibleRecords, initial: true) { _, _ in selectFirstRecord() }
+        .onChange(of: model.navigator.macDestination) { _, _ in selectFirstRecord() }
+    }
+
+    private var usesContentColumn: Bool { isBrowser || model.navigator.section == .activity }
+
+    private var visibleRecords: [RecordSelection] {
+        guard let browsing else { return [] }
+        if model.navigator.section == .search {
+            switch browsing.search.phase {
+            case .results(let groups):
+                return groups.flatMap { group in
+                    group.hits.map { RecordSelection(key: group.key, id: $0.id) }
+                }
+            case .idle:
+                return browsing.search.recents.map { RecordSelection(key: $0.key, id: $0.row.id) }
+            default: return []
+            }
+        }
+        guard model.navigator.section == .browse, let key = model.navigator.browseKey else { return [] }
+        let list = browsing.list(for: key)
+        let rows = list.isSearching ? list.searchModel?.rows ?? [] : list.rows
+        return rows.map { RecordSelection(key: key, id: $0.id) }
+    }
+
+    private func selectFirstRecord() {
+        guard didRestoreSection, isBrowser else { return }
+        model.navigator.selectFirstRecordIfNeeded(visibleRecords, in: model.navigator.section)
     }
 
     private var sidebar: some View {
@@ -209,7 +270,9 @@ struct RootSplitView: View {
     private var recordDetail: some View {
         NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
             Group {
-                if let record = model.navigator.selectedRecords[model.navigator.section] {
+                if model.navigator.section == .activity, let selection = model.navigator.selectedActivity {
+                    ActivitySelectionDetailView(selection: selection)
+                } else if let record = model.navigator.selectedRecords[model.navigator.section] {
                     RouteDestinationView(route: .entityDetail(record.key, id: record.id))
                         .id(record)
                 } else {
@@ -246,5 +309,57 @@ final class NativeBrowserSession {
             view: NativePresentationCoverage.listViews(for: descriptor).first ?? .table)
         lists[key] = model
         return model
+    }
+}
+
+/// SwiftUI visibility can hide the sidebar or content, but cannot keep sidebar + content while
+/// hiding detail. Collapse only the owned root split's items through AppKit for that layout and
+/// for sections without a content column; the NavigationSplitView and sidebar retain identity.
+private struct SplitColumnCollapse: NSViewRepresentable {
+    var contentCollapsed: Bool
+    var detailCollapsed: Bool
+
+    func makeNSView(context: Context) -> ColumnProbe { ColumnProbe() }
+
+    func updateNSView(_ view: ColumnProbe, context: Context) {
+        view.contentCollapsed = contentCollapsed
+        view.detailCollapsed = detailCollapsed
+        view.apply()
+    }
+
+    final class ColumnProbe: NSView {
+        var contentCollapsed = false
+        var detailCollapsed = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
+        }
+
+        func apply() {
+            // SwiftUI attaches/reconciles the hosting hierarchy after updateNSView.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                var ancestor = self.superview
+                while let view = ancestor {
+                    if let split = view as? NSSplitView,
+                        let controller = split.delegate as? NSSplitViewController,
+                        controller.splitViewItems.count == 3
+                    {
+                        let content = controller.splitViewItems[1]
+                        let detail = controller.splitViewItems[2]
+                        content.canCollapse = true
+                        detail.canCollapse = true
+                        // Expand the destination before collapsing the old column.
+                        if !self.contentCollapsed { content.isCollapsed = false }
+                        if !self.detailCollapsed { detail.isCollapsed = false }
+                        if self.contentCollapsed { content.isCollapsed = true }
+                        if self.detailCollapsed { detail.isCollapsed = true }
+                        return
+                    }
+                    ancestor = view.superview
+                }
+            }
+        }
     }
 }

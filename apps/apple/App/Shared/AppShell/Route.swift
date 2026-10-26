@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
-enum Route: Hashable {
+enum Route: Hashable, Codable {
     case activityList
     case auditHistory
     case photosLibrary
@@ -73,7 +73,7 @@ enum PhoneTab: String, CaseIterable, Identifiable {
 }
 
 /// Top-level sections. The Mac exposes all in its sidebar; iOS maps them into `PhoneTab`.
-enum AppSection: String, CaseIterable, Identifiable {
+enum AppSection: String, CaseIterable, Identifiable, Codable {
     case today, activity, capture, photos, browse, search, graph, dev, settings
 
     var id: String { rawValue }

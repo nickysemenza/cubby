@@ -67,6 +67,41 @@ struct NavigationTests {
         #expect(navigator.macDestination == .entity(.product))
     }
 
+    @Test func windowRestorationRetainsDestinationSelectionAndIndependentPaths() throws {
+        let original = Navigator()
+        original.macDestination = .entity(.product)
+        original.selectRecord(record(.product, "PRD-2345"), in: .browse)
+        original.paths[.browse] = [.entityDetail(.location, id: "LOC-2345")]
+        original.paths[.capture] = [.identify]
+        original.paths[.activity] = [.entityList(.run, filters: EntityFilterState(["status": ["running"]]))]
+        let data = try JSONEncoder().encode(original.restoration)
+        let restored = Navigator()
+
+        restored.restore(section: original.section.rawValue, navigation: data)
+        #expect(restored.macDestination == .entity(.product))
+        #expect(restored.restoration == original.restoration)
+        restored.macDestination = .section(.today)
+        restored.macDestination = .entity(.product)
+        #expect(restored.restoration == original.restoration)
+
+        restored.selectFirstRecordIfNeeded([record(.product, "PRD-6789")], in: .browse)
+        #expect(restored.selectedRecords[.browse] == record(.product, "PRD-2345"))
+        restored.open(.audit(location: LocationCode("LOC-6789")))
+        restored.restore(section: original.section.rawValue, navigation: data)
+        #expect(restored.section == .capture)
+        #expect(restored.paths[.capture] == [.audit(locationID: LocationCode("LOC-6789"))])
+    }
+
+    @Test func initialRecordSelectionFillsDetailWithoutDiscardingHistory() {
+        let navigator = Navigator()
+        navigator.paths[.browse] = [.entityDetail(.location, id: "LOC-2345")]
+        navigator.selectFirstRecordIfNeeded([], in: .browse)
+        #expect(navigator.selectedRecords[.browse] == nil)
+        navigator.selectFirstRecordIfNeeded([record(.product, "PRD-2345")], in: .browse)
+        #expect(navigator.selectedRecords[.browse] == record(.product, "PRD-2345"))
+        #expect(navigator.paths[.browse] == [.entityDetail(.location, id: "LOC-2345")])
+    }
+
     @Test func selectingSameSidebarEntityPreservesRecordContext() {
         let navigator = Navigator()
         let selection = record(.product, "PRD-1")

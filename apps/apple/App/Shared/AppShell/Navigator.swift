@@ -146,6 +146,36 @@ final class Navigator {
     /// that arrives either before or after the restore still wins — see that view's doc comment.
     private(set) var launchLinkApplied = false
 
+    /// Window-owned scene storage keeps this snapshot separate from other windows and sessions.
+    struct Restoration: Codable, Equatable {
+        var browseKey: EntityKey?
+        var paths: [AppSection: [Route]]
+        var selectedRecords: [AppSection: RecordSelection]
+        var selectedActivity: ActivitySelection?
+    }
+
+    var restoration: Restoration {
+        Restoration(
+            browseKey: browseKey, paths: paths, selectedRecords: selectedRecords,
+            selectedActivity: selectedActivity)
+    }
+
+    func restore(section storedSection: String, navigation data: Data?) {
+        guard !launchLinkApplied else { return }
+        if let section = AppSection(rawValue: storedSection) { self.section = section }
+        guard let data, let saved = try? JSONDecoder().decode(Restoration.self, from: data) else { return }
+        browseKey = saved.browseKey
+        paths = saved.paths
+        selectedRecords = saved.selectedRecords
+        selectedActivity = saved.selectedActivity
+    }
+
+    /// Initial selection fills the Mac detail without replacing a restored or linked record.
+    func selectFirstRecordIfNeeded(_ records: [RecordSelection], in section: AppSection) {
+        guard selectedRecords[section] == nil, let first = records.first else { return }
+        selectedRecords[section] = first
+    }
+
     func path(for section: AppSection) -> Binding<[Route]> {
         Binding(
             get: { self.paths[section] ?? [] },
@@ -297,19 +327,21 @@ final class Navigator {
     }
 }
 
-enum ActivitySelection: Hashable, Identifiable {
+enum ActivitySelection: Hashable, Identifiable, Codable {
     case serverRun(String)
     case localActivity(String)
+    case record(RecordSelection)
 
     var id: String {
         switch self {
         case .serverRun(let id): "server:\(id)"
         case .localActivity(let id): "local:\(id)"
+        case .record(let record): "record:\(record.key.rawValue):\(record.id)"
         }
     }
 }
 
-struct RecordSelection: Hashable {
+struct RecordSelection: Hashable, Codable {
     let key: EntityKey
     let id: String
 }

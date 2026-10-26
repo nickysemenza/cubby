@@ -54,7 +54,7 @@ struct ActivityView: View {
                     entityRows(
                         overview.runs, key: .run,
                         columns: ["purpose", "status", "waitingOn", "stalled", "startedAt", "chargedCost"])
-                    NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
+                    activityDestination(.entityList(.run, savedView: "attention")) {
                         Text("All \(overview.runs.meta?.totalCount ?? 0)")
                     }
                 }
@@ -90,7 +90,7 @@ struct ActivityView: View {
                             DisclosureGroup {
                                 ActivityJobExplainPanel(code: row.id, overview: overview)
                             } label: {
-                                NavigationLink(value: Route.entityDetail(.job, id: row.id)) {
+                                activityDestination(.entityDetail(.job, id: row.id)) {
                                     EntityRowView(
                                         key: .job, row: row,
                                         columns: [
@@ -102,7 +102,7 @@ struct ActivityView: View {
                         }
                     }
                     listState(overview.jobs)
-                    NavigationLink(value: Route.entityList(.job, filters: overview.jobs.filters)) {
+                    activityDestination(.entityList(.job, filters: overview.jobs.filters)) {
                         Text("All \(overview.jobs.meta?.totalCount ?? 0)")
                     }
                 }
@@ -120,18 +120,37 @@ struct ActivityView: View {
                 await load()
             }
         }
-        .inspector(
-            isPresented: Binding(
-                get: { appModel.navigator.selectedActivity != nil },
-                set: { if !$0 { appModel.navigator.selectedActivity = nil } }
-            )
-        ) {
-            if let selection = appModel.navigator.selectedActivity {
-                ActivitySelectionDetailView(selection: selection)
-                    .inspectorColumnWidth(min: 300, ideal: 380, max: 540)
+        #if os(macOS)
+            .onChange(of: initialSelections, initial: true) { _, selections in
+                if appModel.navigator.selectedActivity == nil {
+                    appModel.navigator.selectedActivity = selections.first
+                }
             }
-        }
+        #else
+            .inspector(
+                isPresented: Binding(
+                    get: { appModel.navigator.selectedActivity != nil },
+                    set: { if !$0 { appModel.navigator.selectedActivity = nil } }
+                )
+            ) {
+                if let selection = appModel.navigator.selectedActivity {
+                    ActivitySelectionDetailView(selection: selection)
+                    .inspectorColumnWidth(min: 300, ideal: 380, max: 540)
+                }
+            }
+        #endif
     }
+
+    #if os(macOS)
+        private var initialSelections: [ActivitySelection] {
+            let local = appModel.backgroundActivity.visibleActivities.map { activity in
+                if case .serverRun(let id) = activity.link { return ActivitySelection.serverRun(id) }
+                return ActivitySelection.localActivity(activity.id)
+            }
+            return local + (overview?.runs.rows ?? []).map { .serverRun($0.id) }
+                + (overview?.jobs.rows ?? []).map { .record(RecordSelection(key: .job, id: $0.id)) }
+        }
+    #endif
 
     private func load() async {
         guard appModel.phase == .signedIn else { return }
@@ -152,11 +171,33 @@ struct ActivityView: View {
         -> some View
     {
         ForEach(model.rows) { row in
-            NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+            activityDestination(.entityDetail(key, id: row.id)) {
                 EntityRowView(key: key, row: row, columns: columns)
             }
         }
         listState(model)
+    }
+
+    @ViewBuilder private func activityDestination<Label: View>(
+        _ route: Route, @ViewBuilder label: () -> Label
+    ) -> some View {
+        #if os(macOS)
+            Button {
+                if case .entityDetail(let key, let id) = route {
+                    appModel.navigator.selectedActivity =
+                        key == .run
+                        ? .serverRun(id) : .record(RecordSelection(key: key, id: id))
+                    appModel.navigator.paths[.activity] = []
+                } else {
+                    appModel.navigator.paths[.activity, default: []].append(route)
+                }
+            } label: {
+                label()
+            }
+            .buttonStyle(.plain)
+        #else
+            NavigationLink(value: route, label: label)
+        #endif
     }
 
     @ViewBuilder private func listState(_ model: GenericEntityListModel) -> some View {
@@ -194,6 +235,9 @@ struct ActivityView: View {
                     if case .serverRun(let runID) = activity.link {
                         Button {
                             appModel.navigator.selectedActivity = .serverRun(runID)
+                            #if os(macOS)
+                                appModel.navigator.paths[.activity] = []
+                            #endif
                         } label: {
                             row
                         }
@@ -227,6 +271,7 @@ struct ActivitySelectionDetailView: View {
             EntityDetailView(key: .imageJob, id: id).id("imageJob/\(id)")
         case .serverRun(let id): RunConsoleView(runID: id).id(id)
         case .localActivity(let id): LocalActivityDetailView(id: id)
+        case .record(let record): EntityDetailView(key: record.key, id: record.id).id(record)
         }
     }
 }
