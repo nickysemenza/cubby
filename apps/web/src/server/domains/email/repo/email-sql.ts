@@ -95,16 +95,17 @@ export const emailAcceptedEvidenceSql = (
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE identity."ledgerPartyId" = "Email"."ledgerPartyId"
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
-    AND (
-      (identity."kind" = ${importSourceKind.enum.mail_message}
-        AND identity."externalKey" = "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId")
-      OR (identity."kind" = ${importSourceKind.enum.mail_attachment} AND EXISTS (
-        SELECT 1 FROM "OrderMailAttachment" attachment
-        INNER JOIN "OrderMail" original ON original."id" = attachment."orderMailId"
-        WHERE original."id" = "Email"."orderMailId"
-          AND original."ledgerPartyId" = "Email"."ledgerPartyId"
-          AND identity."externalKey" = "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId" || ':attachment:' || attachment."providerAttachmentId"
-      ))
+    -- Separate source keys let the composite identity index resolve each arm.
+    AND (identity."kind", identity."externalKey") IN (
+      SELECT ${importSourceKind.enum.mail_message}::text,
+        "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId"
+      UNION ALL
+      SELECT ${importSourceKind.enum.mail_attachment}::text,
+        "Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId" || ':attachment:' || attachment."providerAttachmentId"
+      FROM "OrderMailAttachment" attachment
+      INNER JOIN "OrderMail" original ON original."id" = attachment."orderMailId"
+      WHERE original."id" = "Email"."orderMailId"
+        AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     )
 `;
 

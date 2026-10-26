@@ -620,8 +620,10 @@ proposed the link (member, agent, import or the suggestion heuristic), and the
 Emails Accuracy view counts dismissed proposals per proposer. The Email page
 holds the Gmail original, per-Purchase links with Link/Dismiss, and changed-
 since-review warnings; another member's Email reads as metadata only.
-Accepted-source association reads use the canonical root and alias indexes;
-an Email's family lookup must not scan unrelated accepted mailbox history.
+Accepted-source association reads resolve message and attachment source keys
+through the composite identity index, then use the canonical root and alias
+indexes. Attachment keys still require the original to belong to the Email
+owner. An Email's family lookup must not scan unrelated accepted mailbox history.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
