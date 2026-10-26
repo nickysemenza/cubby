@@ -17,12 +17,14 @@ import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { assessment, expense, run, image } from "~/server/db/schema";
 import * as connections from "~/server/domains/connection/repo/entity-connections";
+import { deleteExpenses } from "~/server/domains/expense/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   publishAssessment,
   publishFieldAssessment,
 } from "~/server/generic/assessment/repo/assessment";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import * as diagnostics from "~/server/generic/problems/service/problem-diagnostics.service";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -202,6 +204,33 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       );
       expect(expensive).not.toHaveBeenCalled();
       expect(page.meta.totalCount).toBe(1);
+      for (const query of [
+        "pending connection",
+        "1 pending connection",
+        "Suggestions page",
+      ])
+        expect(
+          (
+            await readWorkQueue(
+              ctx.db,
+              null,
+              workQueueHouseholdInput.parse({
+                source: "suggestion",
+                query,
+              }),
+              false,
+            )
+          ).items,
+        ).toEqual(page.items);
+      await deleteExpenses(ctx.db, [line.output.id], ctx.actor);
+      const retiredTarget = await readWorkQueue(
+        ctx.db,
+        null,
+        workQueueHouseholdInput.parse({ source: "suggestion" }),
+        false,
+      );
+      expect(retiredTarget.items).toEqual([]);
+      expect(retiredTarget.meta.totalCount).toBe(0);
     } finally {
       expensive.mockRestore();
     }
@@ -318,6 +347,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     await merchandiseOrder(prefix);
     const page = await read({ query: prefix, view: "research", pageSize: 1 });
     expect(page.items).toHaveLength(1);
+
     expect(page.meta.totalCount).toBeGreaterThan(1);
     expect(page.items[0]?.kind).toBe("research");
     expect(page.items[0]?.explanations.length).toBeGreaterThan(0);
@@ -513,6 +543,24 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     });
     expect(page.meta.totalCount).toBe(3);
     expect(page.items).toHaveLength(1);
+
+    // A mixed reason selection must prune unrelated preparation just as a
+    // gap-only read does, while counting the complete matching population.
+    const diagnosticReads = vi.spyOn(diagnostics, "runDiagnostic");
+    try {
+      const mixedPage = await read({
+        query: prefix,
+        reason: ["expense_product_resolution", "finding"],
+        pageSize: 1,
+        pageIndex: 1,
+      });
+      expect(mixedPage.meta.totalCount).toBe(3);
+      expect(mixedPage.items).toHaveLength(1);
+      expect(mixedPage.items[0]?.key).not.toBe(page.items[0]?.key);
+      expect(diagnosticReads).not.toHaveBeenCalled();
+    } finally {
+      diagnosticReads.mockRestore();
+    }
 
     const product = await read({ query: prefix, reason: ["product_category"] });
     expect(product.meta.totalCount).toBe(1);

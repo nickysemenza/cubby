@@ -384,6 +384,21 @@ view is visible manifest-backed URL state; `scopeFilters` is only a visible
 contextual scope. Missing filters never widen a query; renderer omissions are
 server-enforced and disclosed.
 
+The household and member Work queues share source admission before preparation:
+Source, Kind and Reason include/exclude filters prune impossible branches,
+including mixed gap/finding reasons. Search and Reason predicates narrow SQL
+candidates before ownership/routing is materialized. Exact totals and view/group
+counts use the complete eligible population; quality, execution explanations,
+display images and non-filtering facts load only for the selected page. Pending
+statement-reference invalidation uses one hashable source-reference set rather
+than a source-record lookup per reference per pending suggestion.
+Statement counts decode one compact page-independent eligibility projection.
+Connection publication retains its small target reference in the existing
+`AssessmentState.data` projection; the migration fills current pending rows
+from immutable evidence without changing decisions. Queue counts still check
+live endpoints, feedback and suppression. A missing projection falls back to
+immutable evidence, including writes completed by the predecessor during deployment.
+
 Infinite tables use the shared pagination default unless a measured caller
 constraint requires an override. A smaller batch can repeat full population
 reads just to fill the same prefetch runway. Measure first-data latency and

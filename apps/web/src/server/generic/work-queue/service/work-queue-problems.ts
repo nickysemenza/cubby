@@ -57,6 +57,7 @@ import {
   scopeAdmitsUnrecorded,
   workDiagnosticCandidate,
   workQueueCandidate,
+  workQueueAdmits,
   type WorkQueueScope,
 } from "~/server/generic/work-queue/repo/work-queue-projection";
 import {
@@ -258,7 +259,9 @@ const includesWorkSource = (
   kind: WorkQueueRow["kind"],
 ) =>
   (!scope.sources?.length || scope.sources.includes(source)) &&
-  (!scope.kinds?.length || scope.kinds.includes(kind));
+  !scope.sourceExclude?.includes(source) &&
+  (!scope.kinds?.length || scope.kinds.includes(kind)) &&
+  !scope.kindExclude?.includes(kind);
 const needsProjectAttention = (source: EntityProblemSource) =>
   source.entity === "project" &&
   source.filters.some((filter) => filter.id === "attention");
@@ -304,6 +307,14 @@ export async function additionalWorkProblemSelections(
     ));
   for (const definition of problemQueryDeclarations()) {
     if (!includeProblems) break;
+    if (
+      !workQueueAdmits(scope, {
+        source: "problem",
+        kinds: ["repair"],
+        reasons: [definition.key],
+      })
+    )
+      continue;
     const source = definition.source;
     const details = {
       source: "problem",
@@ -442,7 +453,14 @@ export async function additionalWorkProblemSelections(
       return rows;
     };
   }
-  if (includeAccounts)
+  if (
+    includeAccounts &&
+    workQueueAdmits(scope, {
+      source: "account",
+      kinds: ["review"],
+      reasons: ["incompleteTransactionImports"],
+    })
+  )
     diagnostics.incompleteTransactionImports = async () => {
       const rows: SQL[] = [];
       for (const incomplete of await findIncompleteTransactionImports(db)) {

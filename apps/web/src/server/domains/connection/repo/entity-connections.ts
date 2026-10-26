@@ -168,7 +168,8 @@ async function publishPreparedEntityConnection(
         producer: null,
         evidence,
       },
-      { data: { connection: true } },
+      // Queue counts need only this reference, not the full immutable basis.
+      { data: { connection: true, connectionTarget: candidate.target } },
     );
     await transitionAssessmentStates(
       db,
