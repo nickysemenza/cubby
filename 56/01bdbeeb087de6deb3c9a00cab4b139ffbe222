@@ -1,0 +1,21 @@
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_d4e0640dd7b1ac::t_fdaf233cd6a2fd 828-830
+apps/apple/DESIGN.md
+  s_d4e0640dd7b1ac::t_d583b6cb40bbc0 109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5601bdbeeb087de6deb3c9a00cab4b139ffbe222",
+  "prompts": {},
+  "sessions": {
+    "s_d4e0640dd7b1ac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "78d76256-7241-4720-a3fe-9a49b5aeb01d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
