@@ -269,31 +269,34 @@ function isNonEmptyHeaderLabel<TItem extends RowData>(
 }
 
 /**
- * A column header asks the table's filter bar to open one column's editor.
+ * A column header asks the table's filter editor to open one column's editor.
  *
- * The header and the filter bar render in different subtrees and the bar is
- * the only editor owner; filter values stay in the table's URL-backed state.
- * Keyed by the table instance so two tables on a page never cross wires.
+ * The header and the editor render in different subtrees and one editor owns
+ * each table: the toolbar's filter bar, or a header-anchored panel when the
+ * table has no toolbar. Filter values stay in the table's state. Keyed by the
+ * table instance so two tables on a page never cross wires.
  */
-type Listener = (columnId: string) => void;
+type Listener = (columnId: string, anchor?: Element | null) => void;
 
 const listeners = new WeakMap<WeakKey, Set<Listener>>();
 
 export function requestColumnFilterEdit<TData extends RowData>(
   table: CubbyTable<TData>,
   columnId: string,
+  /** The header the editor opens beside when no toolbar hosts it. */
+  anchor?: Element | null,
 ) {
-  for (const listener of listeners.get(table) ?? []) listener(columnId);
+  for (const listener of listeners.get(table) ?? []) listener(columnId, anchor);
 }
 
-/** Whether some filter bar is listening, so a header offers "Filter…" only when it can open. */
+/** Whether some filter editor is listening, so a header offers "Filter…" only when it can open. */
 export function hasColumnFilterEditor<TData extends RowData>(
   table: CubbyTable<TData>,
 ): boolean {
   return (listeners.get(table)?.size ?? 0) > 0;
 }
 
-/** The filter bar's subscription to header requests for `table`. */
+/** A filter editor's subscription to header requests for `table`. */
 export function useColumnFilterEditRequests<TData extends RowData>(
   table: CubbyTable<TData>,
   onRequest: Listener,

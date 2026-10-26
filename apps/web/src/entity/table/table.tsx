@@ -82,6 +82,7 @@ import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./desktop-data-row";
 import { TableEmptyState } from "./entity-empty-states";
+import { HeaderFilterEditor } from "./ledger-filters";
 import { MobileListScreen } from "./mobile-list-screen";
 import TableHeaderLayout from "./table-header-layout";
 
@@ -1565,6 +1566,14 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             }
           >
             <Stack>
+              {/* Without a toolbar, header Filter… opens beside the header. */}
+              {showToolbar ? null : (
+                <HeaderFilterEditor
+                  table={table}
+                  entity={entity}
+                  optionHints={filterOptionHints}
+                />
+              )}
               <DesktopTableView
                 table={table}
                 isLoading={isLoading || !hydrated}

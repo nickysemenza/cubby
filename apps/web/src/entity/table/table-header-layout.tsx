@@ -30,7 +30,7 @@ import { UserIcon } from "@phosphor-icons/react/dist/csr/User";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { Header, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
@@ -247,7 +247,8 @@ function valueKindGlyph(kind: ColumnValueKind | null) {
 /**
  * The column's own menu: sort, filter, group, pin and hide in one place. The
  * caret appears on hover or focus over the header's free edge, so it takes no
- * width at rest. Its inline editor shares the filter bar's URL-backed draft.
+ * width at rest. Its filter editor shares the table's filter draft: the
+ * toolbar's bar, or a panel beside this header on a table without one.
  */
 function HeaderMenu<TData extends RowData>({
   header,
@@ -262,6 +263,7 @@ function HeaderMenu<TData extends RowData>({
 }) {
   const column = header.column;
   const meta = table.options.meta;
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const canSort = column.getCanSort();
   const sorted = column.getIsSorted();
   const canFilter = column.columnDef.meta?.filterConfig !== undefined;
@@ -280,6 +282,7 @@ function HeaderMenu<TData extends RowData>({
       <DropdownMenuTrigger
         render={
           <Button
+            ref={triggerRef}
             variant="ghost"
             size="icon-xs"
             aria-label={`${label} column menu`}
@@ -332,7 +335,13 @@ function HeaderMenu<TData extends RowData>({
             </>
           )}
         </DropdownMenuGroup>
-        {canFilter && <ColumnFilterMenuItems table={table} column={column} />}
+        {canFilter && (
+          <ColumnFilterMenuItems
+            table={table}
+            column={column}
+            anchor={() => triggerRef.current?.closest("th") ?? null}
+          />
+        )}
         {groupChoice && <DropdownMenuSeparator />}
         {groupChoice && (
           <DropdownMenuItem
@@ -369,22 +378,44 @@ function HeaderMenu<TData extends RowData>({
 }
 
 /**
- * Rendered when the menu opens, after the filter bar has subscribed, so a
- * table without a bar never offers an editor it cannot open.
+ * Rendered when the menu opens, after the table's filter editor has
+ * subscribed, so a table without one never offers an editor it cannot open.
  */
 function ColumnFilterMenuItems<TData extends RowData>({
   table,
   column,
+  anchor,
 }: {
   table: Table<TData>;
   column: Header<typeof cubbyTableFeatures, TData, unknown>["column"];
+  /** The header cell, read at click time. */
+  anchor: () => Element | null;
 }) {
-  if (!hasColumnFilterEditor(table)) return null;
+  const filtered = column.getIsFiltered();
+  if (!hasColumnFilterEditor(table) && !filtered) return null;
   return (
-    <DropdownMenuItem onClick={() => requestColumnFilterEdit(table, column.id)}>
-      <FunnelSimpleIcon aria-hidden="true" />
-      Filter…
-    </DropdownMenuItem>
+    <>
+      {hasColumnFilterEditor(table) && (
+        <DropdownMenuItem
+          onClick={() => requestColumnFilterEdit(table, column.id, anchor())}
+        >
+          <FunnelSimpleIcon aria-hidden="true" />
+          Filter…
+        </DropdownMenuItem>
+      )}
+      {filtered && (
+        <DropdownMenuItem
+          onClick={() =>
+            table.setColumnFilters((old) =>
+              old.filter((filter) => filter.id !== column.id),
+            )
+          }
+        >
+          <XIcon aria-hidden="true" />
+          Clear filter
+        </DropdownMenuItem>
+      )}
+    </>
   );
 }
 

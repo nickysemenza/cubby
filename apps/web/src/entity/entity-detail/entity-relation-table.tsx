@@ -62,6 +62,7 @@ import {
 import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core";
 import { type BaseListRow, useEntityList } from "../hooks/use-entity-list";
 import { useEntityFieldSave } from "../hooks/use-update-mutation";
+import { ListQueryProvider } from "../table/list-query-context";
 import { ListWorkbench } from "../table/list-workbench";
 import { RelationScopeContext } from "./relation-scope";
 import {
@@ -665,12 +666,19 @@ function LiveEntityRelationTable({
   useEffect(() => {
     connectionColumn?.toggleVisibility(hasIndirectPath === true);
   }, [connectionColumn, hasIndirectPath]);
-  useSectionCount(list.totalCount);
+  // Header filters narrow this table for the visit; the section stays the
+  // record's relation, so its count, emptiness and table do not follow them.
+  const filtered = list.workbench.table.state.columnFilters.length > 0;
+  const [unfilteredCount, setUnfilteredCount] = useState(list.totalCount);
+  if (!filtered && unfilteredCount !== list.totalCount)
+    setUnfilteredCount(list.totalCount);
+  useSectionCount(unfilteredCount);
   // `list.totalCount` stays `undefined` until the first response lands (see
   // `useEntityList`), so this only fires once the read genuinely resolves
   // empty — never mid-fetch, and never on an error (which leaves it
   // `undefined` too since the query never completes with data).
-  const resolvedEmpty = !list.workbench.error && list.totalCount === 0;
+  const resolvedEmpty =
+    !list.workbench.error && !filtered && list.totalCount === 0;
   useSectionEmpty(resolvedEmpty);
   const { pluralLabel } = entities[target];
 
@@ -693,7 +701,7 @@ function LiveEntityRelationTable({
     );
   }
 
-  if (list.totalCount === 0) {
+  if (list.totalCount === 0 && !filtered) {
     return (
       <RelationEmptyState pluralLabel={pluralLabel} emptyLabel={emptyLabel} />
     );
@@ -718,25 +726,36 @@ function LiveEntityRelationTable({
           refs={connectionRefs(evidenceQuery.data?.items ?? [])}
         >
           <EvidenceContext.Provider value={evidence}>
-            <ListWorkbench
-              model={list.workbench}
-              mode="embedded"
-              toolbarMode="none"
-              ariaLabel={title}
-              renderMobileRowFooter={(row) => {
-                const item = evidence.get(row.id);
-                return item || movementSource !== null ? (
-                  <div className="border-t border-border/60 pt-2">
-                    {movementSource !== null ? (
-                      <RelationshipMovementBadges id={row.id} />
-                    ) : null}
-                    {item ? (
-                      <ConnectionPaths paths={item.paths} compact />
-                    ) : null}
-                  </div>
-                ) : null;
+            {/* Facets and the live count for header filters come from this
+                relation's own query, never an enclosing page list. */}
+            <ListQueryProvider
+              value={{
+                entity: target,
+                filters: list.currentFilters,
+                matching: list.totalCount,
+                chipsTarget: null,
               }}
-            />
+            >
+              <ListWorkbench
+                model={list.workbench}
+                mode="embedded"
+                toolbarMode="none"
+                ariaLabel={title}
+                renderMobileRowFooter={(row) => {
+                  const item = evidence.get(row.id);
+                  return item || movementSource !== null ? (
+                    <div className="border-t border-border/60 pt-2">
+                      {movementSource !== null ? (
+                        <RelationshipMovementBadges id={row.id} />
+                      ) : null}
+                      {item ? (
+                        <ConnectionPaths paths={item.paths} compact />
+                      ) : null}
+                    </div>
+                  ) : null;
+                }}
+              />
+            </ListQueryProvider>
           </EvidenceContext.Provider>
         </EntityDisplayImagesProvider>
         {evidenceQuery.isError ? (

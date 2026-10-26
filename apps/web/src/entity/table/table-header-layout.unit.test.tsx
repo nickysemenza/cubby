@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -8,6 +9,7 @@ import {
   useCubbyTable,
 } from "../../ui/data-table/table-features";
 import type { CubbyTableMeta } from "../../ui/data-table/table-meta";
+import { HeaderFilterEditor } from "./ledger-filters";
 import TableHeaderLayout from "./table-header-layout";
 
 interface TestRow {
@@ -215,4 +217,81 @@ describe("TableHeaderLayout", () => {
     // No filter bar subscribed, so the menu offers no editor it cannot open.
     expect(screen.queryByRole("menuitem", { name: /Filter/ })).toBeNull();
   });
+
+  it("filters from the header of a table without a toolbar", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ToolbarlessHarness />
+      </QueryClientProvider>,
+    );
+    const openMenu = () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: "Trade column menu" }),
+      );
+
+    openMenu();
+    expect(screen.queryByRole("menuitem", { name: "Clear filter" })).toBeNull();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Filter…" }));
+    await screen.findByRole("region", { name: "Filter Trade" });
+    fireEvent.click(await screen.findByRole("option", { name: "Workshop" }));
+    // Live apply commits to the table's own state after the draft debounce.
+    await vi.waitFor(() =>
+      expect(lastTradeTable?.state.columnFilters).toEqual([
+        { id: "trade", value: ["workshop"] },
+      ]),
+    );
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: "Escape",
+    });
+
+    openMenu();
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Clear filter" }),
+    );
+    expect(lastTradeTable?.state.columnFilters).toEqual([]);
+  });
 });
+
+interface TradeRow {
+  id: string;
+  trade: string;
+}
+const tradeHelper = createCubbyColumnHelper<TradeRow>();
+const tradeColumns = tradeHelper.columns([
+  tradeHelper.accessor("trade", {
+    header: "Trade",
+    meta: {
+      filterConfig: {
+        filterType: "multiselect",
+        options: [
+          { value: "orchard", label: "Orchard" },
+          { value: "workshop", label: "Workshop" },
+        ],
+      },
+    },
+  }),
+]);
+let lastTradeTable: ReturnType<typeof useCubbyTable<TradeRow>> | undefined;
+
+function ToolbarlessHarness() {
+  const table = useCubbyTable({
+    data: [{ id: "row-a", trade: "orchard" }],
+    columns: tradeColumns,
+    getRowId: (row) => row.id,
+  });
+  lastTradeTable = table;
+  return (
+    <>
+      <HeaderFilterEditor table={table} />
+      <table>
+        <thead>
+          <TableHeaderLayout
+            table={table}
+            styles={{ header: "", sortIcon: "" }}
+            isDebugEnabled={false}
+          />
+        </thead>
+      </table>
+    </>
+  );
+}

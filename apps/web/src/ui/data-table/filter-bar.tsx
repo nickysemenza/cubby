@@ -1053,7 +1053,7 @@ function PanelRow({
  * in place and every edit applies as it is made; the footer reports the
  * live result count.
  */
-function FiltersPanel({
+export function FiltersPanel({
   filters,
   fields,
   onChange,
