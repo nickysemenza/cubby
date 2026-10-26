@@ -1,0 +1,20 @@
+apps/apple/e2e/qa-cook-mode.ad
+  s_47fea50e8ec744::t_9b996f6995a15d 3
+  s_47fea50e8ec744::t_4054f5c9616e42 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f4acc626c292a23e21d89712b0eb3fbe4cd897e1",
+  "prompts": {},
+  "sessions": {
+    "s_47fea50e8ec744": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a179e5-43e7-7b80-94d2-c41cb34c8332",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
