@@ -284,6 +284,15 @@ pass is dated by availability; its follow-up pass is dated by the later of
 capture and completion. Retention deletes only acknowledged captures: the
 admitted Job retains recovery ownership if its worker disappears.
 
+Retained completed Jobs far outnumber live work, so reads over many Jobs stay
+index-backed. The shared due predicate (drain, positions, queue health, device
+backlog) tests pending captures as key membership in the few distinct pending
+keys; a BitmapOr then reaches woken Jobs through `Job_key_unique` and live ones
+through `Job_due_idx`. A correlated capture EXISTS under OR tested every
+retained row and took queue health 20–180 s in production. Recent-claim
+windows (throughput, health) use `Job_claimed_idx`; the drain's last service
+per kind probes `Job_kind_claimed_idx` once per backlog kind.
+
 Migration 0034 locks Job, invalidation policy and captures before conversion.
 It preserves each old capture and maps its observed state from the predecessor
 Job revision. A pending marker without retained capture history gains a

@@ -1,0 +1,1 @@
+CREATE INDEX "Job_claimed_idx" ON "Job" USING btree ("lastClaimedAt");
