@@ -3,89 +3,18 @@ import CubbyKit
 import Foundation
 import Observation
 
-/// Generic sustained device work uses the local activity register. Photo imports with their
-/// own per-run push activity are filtered out. Queue progress only reflects an active worker window.
-struct DeviceWorkLiveSelection: Equatable {
-    let id: String
-    let title: String
-    let detail: String
-    let progress: Double?
-    let additionalCount: Int
-
-    static func select(_ activities: [BackgroundActivity], at now: Date) -> Self? {
-        let eligible = activities.filter { activity in
-            switch activity.kind {
-            case .libraryScan, .hashRepair, .classificationSweep, .metadataSync:
-                now.timeIntervalSince(activity.startedAt) >= 30
-            case .upload:
-                activity.isUserInitiated || now.timeIntervalSince(activity.startedAt) >= 30
-            case .companionJob:
-                true
-            }
-        }
-        guard
-            let primary = eligible.min(by: { left, right in
-                if left.isUserInitiated != right.isUserInitiated { return left.isUserInitiated }
-                if (left.progress != nil) != (right.progress != nil) { return left.progress != nil }
-                return left.startedAt < right.startedAt
-            })
-        else { return nil }
-        return Self(
-            id: primary.id, title: primary.title,
-            detail: primary.detail ?? "Working on this device",
-            progress: primary.progress.map { min(1, max(0, $0)) },
-            additionalCount: eligible.count - 1)
-    }
-
-    func contentState(estimatedRemaining: String? = nil) -> DeviceWorkAttributes.ContentState {
-        .init(
-            title: title, detail: detail, progress: progress,
-            estimatedRemaining: estimatedRemaining,
-            additionalCount: additionalCount, localActivityID: id)
-    }
-}
-
-/// Estimate from the last minute of observed progress. A restarted or different task discards
-/// the old rate, and a short sample span cannot produce a useful estimate.
-struct DeviceWorkProgressETA {
-    private struct Sample {
-        let at: Date
-        let progress: Double
-    }
-
-    private var taskID: String?
-    private var samples: [Sample] = []
-
-    mutating func record(_ selection: DeviceWorkLiveSelection?, at now: Date) {
-        guard let selection, let progress = selection.progress, progress < 1 else {
-            taskID = nil
-            samples = []
-            return
-        }
-        if taskID != selection.id || (samples.last.map { progress < $0.progress } ?? false) {
-            taskID = selection.id
-            samples = []
-        }
-        samples.append(Sample(at: now, progress: progress))
-        if let firstInWindow = samples.firstIndex(where: { now.timeIntervalSince($0.at) <= 60 }),
-            firstInWindow > 1
-        {
-            samples.removeFirst(firstInWindow - 1)
-        }
-    }
-
-    func remaining(at now: Date) -> TimeInterval? {
-        guard let first = samples.first, let last = samples.last else { return nil }
-        let span = last.at.timeIntervalSince(first.at)
-        let advanced = last.progress - first.progress
-        guard span >= 10, advanced > 0 else { return nil }
-        return max(0, (1 - last.progress) * span / advanced - now.timeIntervalSince(last.at))
-    }
-}
-
+/// One coordinator owns device work and device-started imports. Local progress stays separate
+/// from per-batch ActivityKit pushes, which update sealed imports while the app is asleep.
 @MainActor
 final class DeviceWorkLiveActivityCoordinator {
     static let shared = DeviceWorkLiveActivityCoordinator()
+    private var tokenTasks: [String: Task<Void, Never>] = [:]
+    private var trackedActivities: [String: String] = [:]
+    private var startedBatches: Set<String> = []
+    private var activityBatches: [String: String] =
+        UserDefaults.standard.dictionary(
+            forKey: "photoRunActivityBatches") as? [String: String] ?? [:]
+    private var lastStates: [String: PhotoRunActivityAttributes.ContentState] = [:]
 
     private weak var model: AppModel?
     private var foreground = false
@@ -114,6 +43,14 @@ final class DeviceWorkLiveActivityCoordinator {
         withObservationTracking {
             _ = model?.phase
             _ = model?.backgroundActivity.visibleActivities
+            _ = model?.photoImportFlows
+            for flow in model?.latestPhotoImportFlows ?? [] {
+                _ = flow.isBusy
+                _ = flow.needsAttention
+                _ = flow.session.phase
+                _ = flow.session.progress
+                _ = flow.session.runID
+            }
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.armObservation()
@@ -129,11 +66,17 @@ final class DeviceWorkLiveActivityCoordinator {
             repeat {
                 await reconcile()
                 guard !Task.isCancelled else { break }
+                guard model?.phase == .signedIn else { break }
                 let hasWork = !(model?.backgroundActivity.visibleActivities.isEmpty ?? true)
                 let hasLiveActivity =
-                    !Activity<DeviceWorkAttributes>.activities.isEmpty
-                    || !Activity<PhotoRunActivityAttributes>.activities.isEmpty
-                if !hasWork && !hasLiveActivity { break }
+                    Activity<DeviceWorkAttributes>.activities.contains {
+                        $0.activityState == .active || $0.activityState == .stale
+                    }
+                    || Activity<PhotoRunActivityAttributes>.activities.contains {
+                        $0.activityState == .active || $0.activityState == .stale
+                    }
+                let hasImports = model?.hasPendingPhotoImports ?? false
+                if !hasWork && !hasLiveActivity && !hasImports { break }
                 try? await Task.sleep(for: .seconds(5))
             } while !Task.isCancelled
             loop = nil
@@ -142,9 +85,23 @@ final class DeviceWorkLiveActivityCoordinator {
 
     private func reconcile() async {
         guard let model, model.phase != .restoring else { return }
-        await PhotoRunLiveActivityCoordinator.shared.reconcile(model: model, foreground: foreground)
+        await reconcileImports(model: model, foreground: foreground)
+        await reconcileLocalWork(model: model)
+    }
+
+    private func reconcileLocalWork(model: AppModel) async {
+        guard model.phase == .signedIn else {
+            for activity in Activity<DeviceWorkAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            lastPublished = nil
+            progressETA.record(nil, at: .now)
+            return
+        }
         let uploadsWithRunActivity = Set(
-            Activity<PhotoRunActivityAttributes>.activities.map { $0.attributes.runId })
+            Activity<PhotoRunActivityAttributes>.activities.filter {
+                $0.activityState == .active || $0.activityState == .stale
+            }.map { $0.attributes.runId })
         let handledLocally = Set(
             model.photoImportFlows.filter {
                 $0.session.runID.map(uploadsWithRunActivity.contains) ?? false
@@ -152,10 +109,12 @@ final class DeviceWorkLiveActivityCoordinator {
         let snapshot = DeviceWorkLiveSelection.select(
             model.backgroundActivity.visibleActivities.filter { !handledLocally.contains($0.id) }, at: .now)
         progressETA.record(snapshot, at: .now)
-        let activities = Activity<DeviceWorkAttributes>.activities
-        for extra in activities.dropFirst() { await extra.end(nil, dismissalPolicy: .immediate) }
+        let activityIDs = Activity<DeviceWorkAttributes>.activities.filter {
+            $0.activityState == .active || $0.activityState == .stale
+        }.map(\.id)
+        for id in activityIDs.dropFirst() { await Self.endLocalActivity(id) }
         guard let snapshot else {
-            if let activity = activities.first { await activity.end(nil, dismissalPolicy: .immediate) }
+            if let id = activityIDs.first { await Self.endLocalActivity(id) }
             lastPublished = nil
             return
         }
@@ -164,12 +123,11 @@ final class DeviceWorkLiveActivityCoordinator {
             // a frozen waiting baseline and must not be extrapolated into a second ETA.
             estimatedRemaining: snapshot.id == "companion-image-queue"
                 ? nil : progressETA.remaining(at: .now).map(PhotoStageETA.format))
-        if let activity = activities.first {
+        if let id = activityIDs.first {
             let changedTask = lastPublished?.localActivityID != state.localActivityID
             let due = Date.now.timeIntervalSince(lastUpdate) >= 15
             guard changedTask || (due && state != lastPublished) else { return }
-            await activity.update(
-                ActivityContent(state: state, staleDate: Date.now.addingTimeInterval(90)))
+            await Self.updateLocalActivity(id, state: state)
         } else {
             guard foreground, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
             do {
@@ -186,4 +144,223 @@ final class DeviceWorkLiveActivityCoordinator {
         lastPublished = state
         lastUpdate = .now
     }
+
+    private func reconcileImports(model: AppModel, foreground: Bool) async {
+        guard model.phase == .signedIn else {
+            for task in tokenTasks.values { task.cancel() }
+            tokenTasks.removeAll()
+            trackedActivities.removeAll()
+            lastStates.removeAll()
+            startedBatches.removeAll()
+            activityBatches.removeAll()
+            UserDefaults.standard.removeObject(forKey: "photoRunActivityBatches")
+            for activity in Activity<PhotoRunActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+            return
+        }
+        let flows = model.latestPhotoImportFlows
+        defer { UserDefaults.standard.set(activityBatches, forKey: "photoRunActivityBatches") }
+        let active = Activity<PhotoRunActivityAttributes>.activities
+        for (runID, id) in trackedActivities {
+            if !active.contains(where: {
+                $0.id == id && ($0.activityState == .active || $0.activityState == .stale)
+            }) {
+                tokenTasks.removeValue(forKey: runID)?.cancel()
+                trackedActivities.removeValue(forKey: runID)
+                lastStates.removeValue(forKey: runID)
+                activityBatches.removeValue(forKey: id)
+            }
+        }
+        if foreground {
+            for activity in Activity<PhotoRunActivityAttributes>.activities
+            where activity.activityState == .active || activity.activityState == .stale {
+                let runID = activity.attributes.runId
+                if let latest = flows.first(where: { $0.session.runID == runID }),
+                    activityBatches[activity.id] != latest.liveActivityBatchID
+                {
+                    continue
+                }
+                guard
+                    !model.photoImportFlows.contains(where: {
+                        $0.session.runID == runID
+                            && ($0.isBusy || $0.needsAttention || $0.session.phase == .cancelled)
+                    })
+                else { continue }
+                do {
+                    let lifecycle = try await model.client.photoRunReview(.init(runId: runID)).lifecycle
+                    let phase = lifecycle.phase.rawValue
+                    let state = PhotoRunActivityAttributes.ContentState(
+                        phase: phase,
+                        title: phase == "completed"
+                            ? "Photo import complete"
+                            : (phase == "needs_attention"
+                                ? "Photo import needs attention"
+                                : (["ready_for_review", "ready_for_handoff"].contains(phase)
+                                    ? "Photo import ready" : "Processing photos")),
+                        detail: lifecycle.dispatchError
+                            ?? "Described \(lifecycle.describedImageCount) of \(lifecycle.finalizedImageCount)",
+                        completed: lifecycle.describedImageCount, total: lifecycle.finalizedImageCount,
+                        needsAttention: phase == "needs_attention")
+                    if state.shouldEnd {
+                        await end(activity, state: state, client: model.client)
+                    } else if lastStates[runID] != state {
+                        await Self.updateActivity(activity.id, state: state)
+                        lastStates[runID] = state
+                    }
+                } catch { Diagnostics.report(error, context: "photos.import.liveActivity.refresh") }
+            }
+        }
+        for flow in flows {
+            guard let runID = flow.session.runID else { continue }
+            let batchID = flow.liveActivityBatchID
+            let ownedActivityIDs = Set(activityBatches.filter { $0.value == batchID }.map(\.key))
+            let progress = flow.session.progress
+            let uploading = progress.uploaded < progress.total
+            if flow.needsAttention || flow.session.phase == .cancelled {
+                let state = PhotoRunActivityAttributes.ContentState(
+                    phase: flow.needsAttention ? "failed" : "cancelled",
+                    title: flow.needsAttention ? "Photo import needs attention" : "Photo import cancelled",
+                    detail: "Open Cubby for import details",
+                    completed: progress.transferred, total: progress.total,
+                    needsAttention: flow.needsAttention)
+                for activity in Activity<PhotoRunActivityAttributes>.activities
+                where activity.attributes.runId == runID && ownedActivityIDs.contains(activity.id)
+                    && (activity.activityState == .active || activity.activityState == .stale)
+                {
+                    await end(activity, state: state, client: model.client)
+                    // Only an explicit retry may create another Activity for this failed batch.
+                    startedBatches.remove(batchID)
+                }
+                continue
+            }
+            guard flow.isBusy || flow.session.phase == .complete else { continue }
+            let state = PhotoRunActivityAttributes.ContentState(
+                phase: uploading ? "uploading" : "describing",
+                title: "Importing photos",
+                detail: progress.waitingReason
+                    ?? (uploading
+                        ? "Transferred \(progress.transferred) of \(progress.total)"
+                        : "Photos imported; processing continues"),
+                completed: progress.transferred, total: progress.total, needsAttention: false)
+            // An active prior batch can still receive its late APNs end. Give this batch
+            // a distinct Activity/token and never let a retained older flow update it.
+            for previous in Activity<PhotoRunActivityAttributes>.activities
+            where
+                previous.attributes.runId == runID && activityBatches[previous.id] != flow.liveActivityBatchID
+            {
+                await previous.end(nil, dismissalPolicy: .immediate)
+                tokenTasks.removeValue(forKey: runID)?.cancel()
+                trackedActivities.removeValue(forKey: runID)
+                lastStates.removeValue(forKey: runID)
+                activityBatches.removeValue(forKey: previous.id)
+            }
+            let activityID: String
+            if let existing = Activity<PhotoRunActivityAttributes>.activities.first(where: {
+                $0.attributes.runId == runID
+                    && ownedActivityIDs.contains($0.id)
+                    && ($0.activityState == .active || $0.activityState == .stale)
+            }) {
+                activityID = existing.id
+                if uploading, lastStates[runID] != state {
+                    await Self.updateActivity(existing.id, state: state)
+                }
+            } else {
+                guard foreground, flow.isBusy, uploading, !startedBatches.contains(flow.liveActivityBatchID),
+                    ActivityAuthorizationInfo().areActivitiesEnabled
+                else { continue }
+                do {
+                    let activity = try Activity.request(
+                        attributes: PhotoRunActivityAttributes(runId: runID),
+                        content: ActivityContent(state: state, staleDate: nil), pushType: .token)
+                    activityID = activity.id
+                } catch {
+                    Diagnostics.report(error, context: "photos.import.liveActivity.start")
+                    continue
+                }
+            }
+            startedBatches.insert(flow.liveActivityBatchID)
+            trackedActivities[runID] = activityID
+            activityBatches[activityID] = flow.liveActivityBatchID
+            UserDefaults.standard.set(activityBatches, forKey: "photoRunActivityBatches")
+            lastStates[runID] = state
+            if tokenTasks[runID] == nil {
+                let client = model.client
+                tokenTasks[runID] = Task {
+                    guard
+                        let activity = Activity<PhotoRunActivityAttributes>.activities.first(where: {
+                            $0.id == activityID
+                        })
+                    else { return }
+                    for await token in activity.pushTokenUpdates {
+                        guard !Task.isCancelled else { break }
+                        do {
+                            var input = PhotoRunLiveActivityRegisterInput(
+                                runId: runID, pushToken: token.map { String(format: "%02x", $0) }.joined(),
+                                apnsEnvironment: .production,
+                                appIdentity: AppleAppIdentity.current == .development
+                                    ? .development : .production)
+                            #if DEBUG
+                                input.apnsEnvironment = .development
+                            #endif
+                            _ = try await client.registerPhotoRunLiveActivity(input)
+                        } catch {
+                            Diagnostics.report(error, context: "photos.import.liveActivity.register")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    private func end(
+        _ activity: Activity<PhotoRunActivityAttributes>,
+        state: PhotoRunActivityAttributes.ContentState, client: CubbyClient
+    ) async {
+        let runID = activity.attributes.runId
+        tokenTasks.removeValue(forKey: runID)?.cancel()
+        trackedActivities.removeValue(forKey: runID)
+        lastStates.removeValue(forKey: runID)
+        activityBatches.removeValue(forKey: activity.id)
+        await Self.endRunActivity(activity.id, state: state)
+        do { _ = try await client.endPhotoRunLiveActivity(.init(runId: runID)) } catch {
+            Diagnostics.report(error, context: "photos.import.liveActivity.end")
+        }
+    }
+
+    // ActivityKit's Activity handles are not Sendable. Resolve each handle in the
+    // nonisolated operation instead of sending an actor-owned handle across executors.
+    nonisolated private static func endLocalActivity(_ id: String) async {
+        guard let activity = Activity<DeviceWorkAttributes>.activities.first(where: { $0.id == id })
+        else { return }
+        await activity.end(
+            ActivityContent(state: activity.content.state.ending(), staleDate: nil),
+            dismissalPolicy: .immediate)
+    }
+
+    nonisolated private static func updateLocalActivity(
+        _ id: String, state: DeviceWorkAttributes.ContentState
+    ) async {
+        guard let activity = Activity<DeviceWorkAttributes>.activities.first(where: { $0.id == id })
+        else { return }
+        await activity.update(ActivityContent(state: state, staleDate: Date.now.addingTimeInterval(90)))
+    }
+
+    nonisolated private static func endRunActivity(
+        _ id: String, state: PhotoRunActivityAttributes.ContentState
+    ) async {
+        guard let activity = Activity<PhotoRunActivityAttributes>.activities.first(where: { $0.id == id })
+        else { return }
+        await activity.end(
+            ActivityContent(state: state, staleDate: nil),
+            dismissalPolicy: .after(state.dismissalDate(at: .now)))
+    }
+
+    nonisolated private static func updateActivity(
+        _ id: String, state: PhotoRunActivityAttributes.ContentState
+    ) async {
+        guard let activity = Activity<PhotoRunActivityAttributes>.activities.first(where: { $0.id == id })
+        else { return }
+        await activity.update(ActivityContent(state: state, staleDate: nil))
+    }
+
 }

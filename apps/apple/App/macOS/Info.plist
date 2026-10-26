@@ -51,7 +51,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Cubby scans barcodes to add items to a location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cubby uses selected photos for garden journals and product images.</string>
+	<string>Cubby scans your photo library to match photos with your products and garden records and import the photos you choose.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>com.nickysemenza.cubby.cook</string>
