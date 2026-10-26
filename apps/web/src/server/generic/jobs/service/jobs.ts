@@ -13,7 +13,11 @@ import {
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
-import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
+import {
+  JOB_BATCH_CLAIM_SHARE,
+  JOB_DRAIN,
+  JOB_HEARTBEAT_MS,
+} from "~/server/generic/jobs/limits";
 import {
   claimJob,
   dueJobs,
@@ -242,9 +246,14 @@ async function advanceBatch(
       pending.delete(id);
     }
   };
+  // Production regression: serial claims on a loaded database spent the whole
+  // budget, so every page released its claims unexecuted. Claiming may use at
+  // most this share of the remaining budget; execution keeps the rest.
+  const claimDeadline =
+    Date.now() + (deadline - Date.now()) * JOB_BATCH_CLAIM_SHARE;
   try {
     for (const id of ids) {
-      if (Date.now() >= deadline) break;
+      if (Date.now() >= claimDeadline) break;
       const claim = await claimJob(db, id, undefined, { pageToken });
       if (claim) pending.set(claim.id, claim);
       else {

@@ -542,6 +542,11 @@ the up-front claim attempt for exhausting kinds. The next wake reselects fairly,
 so newly arrived Run-owned work can lead instead of waiting for every long input
 in the original batch.
 
+Serial claiming stops once it has used `JOB_BATCH_CLAIM_SHARE` (40%) of the
+page's remaining drain budget; the claimed prefix executes and unclaimed members
+stay due for the next wake. On a saturated database a full-width claim loop
+otherwise spent the whole budget and released every claim unexecuted.
+
 One heartbeat renews only the batch's pending claims, serially on one database
 socket. Each renewal catches its own failure and uses `FOR UPDATE SKIP LOCKED`
 to avoid waiting on another transaction's Job-row lock. A refused or failed
