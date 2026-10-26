@@ -66,8 +66,8 @@ import {
 /**
  * Every arrival order of the four evidence sources must converge on one
  * Purchase, Product, Expense, settlement, inventory row and linked mail. The
- * browser spec keeps both statement-first and receipt-first UI paths; this file
- * drives the same server writers those UI steps dispatch.
+ * focused Gmail and photo browser journeys own acquisition, review and
+ * navigation; this file drives their server writers across arrival orders.
  *
  * Each order costs ~2s of real writers, so the file runs a Latin square (every
  * source arrives in every position once) plus two further orders drawn from
