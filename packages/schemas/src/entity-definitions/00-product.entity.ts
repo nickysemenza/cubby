@@ -839,6 +839,10 @@ export default defineEntity(
           display: {
             columnGroup: "Purchasing",
             columnLabel: "Origin",
+            // Near-constant (Unclassified or Purchased) on most rows; ordered
+            // after price so the Purchasing band does not lead the table.
+            listHidden: true,
+            listOrderOverride: 22,
             optionRole: "category",
             optionColor: "domain-pantry",
             optionGlyph: { phosphor: "Package", sfSymbol: "shippingbox" },
@@ -1065,7 +1069,7 @@ Rules:
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { columnGroup: "Catalog", width: "md", listHidden: true },
+          display: { columnGroup: "Catalog", width: "xl", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().optional(),
@@ -1644,6 +1648,8 @@ Rules:
           display: {
             columnGroup: "Food",
             detail: false,
+            // Empty for everything that is not a USDA-linked food.
+            listHidden: true,
             labelPath: "food.foodInfo.description",
             renderer: { list: "usda-food-link" },
           },
@@ -1775,6 +1781,8 @@ Rules:
           display: {
             columnGroup: "Stock",
             columnLabel: "Owner",
+            // Owner follows Where, ahead of catalog and price columns.
+            listOrderOverride: 4,
             width: "md",
             format: "resolvedList",
             emptyLabel: "Owner unknown",
@@ -1844,6 +1852,8 @@ Rules:
           display: {
             columnGroup: "Stock",
             detail: false,
+            // Zero except for kits and sets.
+            listHidden: true,
             width: "sm",
             mobile: { slot: "meta", priority: 44 },
           },
@@ -1872,6 +1882,8 @@ Rules:
             columnGroup: "Stock",
             detail: false,
             columnLabel: "As location",
+            // Zero except for products installed as a location.
+            listHidden: true,
             width: "sm",
             readPath: "quantityLedger.locationCount",
             format: "count",

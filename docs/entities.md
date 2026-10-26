@@ -372,7 +372,15 @@ names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
 as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
 data only, safe for eagerly-loaded client code), spreads it into the inspector,
-and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. The summary
+and writes `domain`/`sfSymbol`/`emptyState` onto the Swift `EntityDescriptor`:
+native list empty states print the declared title and description and offer
+`actionLabel` as a create button when the entity has a native create plan.
+`nativeBrowse` (default `true`) declares whether the root appears in native
+Browse and the native sidebar (`EntityCatalog.browsable`). Set it to `false`
+only for operator plumbing whose list serves no member task on a phone or Mac
+(Jobs, Image jobs, source transaction records, transaction imports), and say
+why beside the flag; its records still open natively from links, and web
+navigation ignores it. The summary
 also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
@@ -1479,7 +1487,15 @@ beside that disposition. `handoff` remains a disclosed native web row; compiler
 schema checks do not prove executable web or native registration. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
-field model. `display.valueOptions` is the label/tone roster for an
+field model. Default columns have no separate roster: set `listHidden` on a
+column that is near-constant in practice ("1 each", "Stock", "Needs data",
+an identifier or flag empty on most rows) so the informative ones (placement,
+owner, value, due date, status) lead after the title. Order them with
+`listOrderOverride` when model order puts them late, and keep a band's members
+together: web paints a `columnGroup` at its first member's position, hidden or
+not, while native sorts by `listOrder` alone. Web tables, Mac tables and native
+rows all start from this state. `display.width` buckets a column as `xs`,
+`sm`, `md`, `lg` or `xl`; `xl` is for long prose such as notes. `display.valueOptions` is the label/tone roster for an
 enum-like value a field renders without a select control (a derived status, or
 the `kind`/`status` member of a JSON field); read it through
 `fieldEnumOptions(entity, key)`. A range filter's presets are declared as

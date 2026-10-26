@@ -594,7 +594,12 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
-        display: { columnGroup: "Booking", columnLabel: "Fallback" },
+        // Empty on most rows; the expense categories column carries the booking.
+        display: {
+          columnGroup: "Booking",
+          columnLabel: "Fallback",
+          listHidden: true,
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -661,6 +666,9 @@ export default defineEntity({
         display: {
           columnGroup: "Evidence",
           columnLabel: "Evidence",
+          // A policy setting, Unknown on most rows; the coverage columns show
+          // the outcome.
+          listHidden: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -756,6 +764,8 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Order",
+          // Vendor, date and total lead; the coverage statuses follow.
+          listOrderOverride: 1,
           labelPath: "vendorName",
           renderer: { list: "vendor-cell" },
         },
@@ -830,6 +840,7 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Order",
+          listOrderOverride: 2,
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },
@@ -854,6 +865,7 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Booking",
+          listOrderOverride: 7,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
           width: "sm",
@@ -872,7 +884,7 @@ export default defineEntity({
           kind: "textarea",
           placeholder: "Anything worth remembering",
         },
-        display: { columnGroup: "Order" },
+        display: { columnGroup: "Order", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -1179,6 +1191,8 @@ export default defineEntity({
           columnGroup: "Evidence",
           columnBar: true,
           detail: false,
+          // Document coverage already reports whether evidence is attached.
+          listHidden: true,
           width: "xs",
           mobile: { slot: "meta", priority: 70 },
         },

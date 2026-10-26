@@ -142,7 +142,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Party" },
+        display: { columnGroup: "Party", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

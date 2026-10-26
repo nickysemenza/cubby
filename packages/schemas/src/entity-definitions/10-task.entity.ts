@@ -471,6 +471,8 @@ export default defineEntity({
         display: {
           columnGroup: "Assignment",
           columnLabel: "Product",
+          // Empty except for tasks about one product.
+          listHidden: true,
           width: "md",
           mobile: { slot: "meta", priority: 35, interactive: true },
         },
@@ -544,7 +546,8 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Dependencies" },
+        // Empty except for subtasks.
+        display: { columnGroup: "Dependencies", listHidden: true },
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),

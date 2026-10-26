@@ -938,7 +938,12 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { columnGroup: "Evidence", detail: false, listHidden: true },
+          display: {
+            columnGroup: "Evidence",
+            detail: false,
+            listHidden: true,
+            width: "xl",
+          },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().default(null),
