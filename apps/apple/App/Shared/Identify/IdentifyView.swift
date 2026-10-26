@@ -53,6 +53,7 @@ private struct IdentifyContent: View {
                 Button("Rebuild index") {
                     Task { await identify.rebuild() }
                 }
+                .disabled(identify.isIndexing)
             }
         }
     }
@@ -89,7 +90,7 @@ private struct IdentifyContent: View {
                 .font(.fieldGuideBody)
                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         case .indexing(let done, let total):
-            Text("Indexing \(done) of \(total)")
+            Text(total == 0 ? "Loading product covers…" : "Indexing \(done) of \(total)")
                 .font(.fieldGuideData)
                 .foregroundStyle(FieldGuideTokens.graphite)
         case .ready(let count):
@@ -109,6 +110,7 @@ private struct IdentifyContent: View {
             PhotoSourceButtons { image in
                 Task { await identify.identify(image) }
             }
+            .disabled(!identify.canIdentify)
         }
     }
 }

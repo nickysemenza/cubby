@@ -277,6 +277,14 @@ example, save `~/Library/LaunchAgents/com.example.cubby-companion.plist` with:
 Then run `launchctl bootstrap gui/$(id -u) <plist>`. Use `launchctl bootout` to stop it.
 launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop grace.
 
+## On-device Identify
+
+Identify indexes Product covers by record ID before ranking: repeated records
+share one feature print and one result slot, and the indexed count is the number
+of unique Products. Photo and rebuild controls wait for indexing to finish.
+Progress updates complete before the ready state; a retained photo is ranked
+again after the index finishes or is rebuilt, so partial results are not final.
+
 ## Verification
 
 - `pnpm apple check` runs native formatting, prepares FFI, then runs CubbyKit

@@ -50,6 +50,28 @@ struct FeaturePrintIndexTests {
         await reloaded.clear()
     }
 
+    @Test(.requiresVisionHardware) func duplicateRecordsCountAndRankOnce() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "fp-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let index = FeaturePrintIndex(cacheDirectory: dir)
+        let url = URL(string: "https://example.invalid/cover.png")!
+        let productID = ProductCode("PRD-2345")
+        try await index.add(productID: productID, name: "Red", imageURL: url, image: red)
+        try await index.add(productID: productID, name: "Split", imageURL: url, image: split)
+        try await index.add(productID: ProductCode("PRD-3456"), name: "Other", imageURL: url, image: red)
+        let entries = await index.all
+        let duplicate = try #require(entries.first { $0.productID == productID })
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try JSONEncoder().encode(entries + [duplicate]).write(
+            to: dir.appending(path: "featureprints-\(FeaturePrintIndex.revisionTag).json"))
+
+        let reloaded = FeaturePrintIndex(cacheDirectory: dir)
+        #expect(try await reloaded.loadCache() == 2)
+        #expect(await reloaded.count == 2)
+        let ranked = try await reloaded.rank(split, limit: 2)
+        #expect(ranked.map(\.productID) == [productID, ProductCode("PRD-3456")])
+    }
+
     @Test func decodesAndDownsamplesPNGData() throws {
         let data = try #require(pngData(red))
         let decoded = try CoverImageLoader.decode(data, maxPixelSize: 32)
