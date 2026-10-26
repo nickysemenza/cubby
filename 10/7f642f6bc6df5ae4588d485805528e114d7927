@@ -1,0 +1,339 @@
+.agents/skills/financial-evidence-import/SKILL.md
+  s_672398f43d55a3::t_278f44a9b7032b 57-63,78-79
+apps/apple/AGENTS.md
+  s_672398f43d55a3::t_9fbd37fabcb0d8 181
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_672398f43d55a3::t_6fc025985af8b7 518,520-525
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/CompanionImageProcessor.swift
+  s_672398f43d55a3::t_f72e55ace049d1 150,158-162,187-206,208-209,212-215,218-219,223-224,226-252
+apps/apple/CubbyKit/Tests/CubbyKitTests/ImageProcessing/CompanionImageProcessorTests.swift
+  s_672398f43d55a3::t_8c640f7265ce6b 187,196,213-261,365-381
+apps/web/DESIGN.md
+  s_672398f43d55a3::t_e66c6bb5671fd2 321-328,408,503-507
+apps/web/drizzle/0041_unclassified_principal_product_gaps.sql
+  s_672398f43d55a3::t_ab220d22315922 1-18
+apps/web/drizzle/meta/_journal.json
+  s_672398f43d55a3::t_8a306b5d4f313b 291-297
+apps/web/generator/entities/render/swift-shared-constants.ts
+  s_672398f43d55a3::t_e08d7a9d119a2b 158
+apps/web/src/contracts/run.contract.ts
+  s_672398f43d55a3::t_30fd9e314eb6b5 39,324,373-381
+apps/web/src/contracts/suggestions.contract.ts
+  s_672398f43d55a3::t_1a36c8b61f2485 53
+apps/web/src/contracts/work-queue.contract.ts
+  s_672398f43d55a3::t_adfd2ff3269b70 42
+apps/web/src/entity/display/detail-field-renderers/product.tsx
+  s_672398f43d55a3::t_8d94ec4bd18c2b 100-111
+apps/web/src/entity/display/entity-display.product.unit.test.tsx
+  s_672398f43d55a3::t_3c9ee9133e764a 234-251
+apps/web/src/entity/editing/definitions.ts
+  s_672398f43d55a3::t_9c2a1e130c6a51 195-196
+apps/web/src/entity/editing/editor-presentations.tsx
+  s_672398f43d55a3::t_e8d2cd178f0563 209-210,213-217,660,666
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_672398f43d55a3::t_94f2bc7cc7a749 64,658-664,669-670,695,720-727,729-749
+apps/web/src/entity/filters.unit.test.ts
+  s_672398f43d55a3::t_532074b5f4101e 2-7,42-85
+apps/web/src/entity/suggestions/queue/suggestion-views.tsx
+  s_672398f43d55a3::t_1e5c9966528585 5,74-77,80-81,97,114,133,168,197-199,201-202,247,584,739
+apps/web/src/entity/suggestions/queue/suggestion-views.unit.test.tsx
+  s_672398f43d55a3::t_9ff01cba48949f 1,4-8,10-26,28-36,38-41
+apps/web/src/entity/suggestions/queue/suggestions-page.tsx
+  s_672398f43d55a3::t_75301cdfc0becc 42-46,468-470,473-482,485-487
+apps/web/src/entity/suggestions/queue/suggestions-search.ts
+  s_672398f43d55a3::t_051c1b78e95735 45,47,49,51,53,57,59,63,65,68,70,73,75
+apps/web/src/entity/suggestions/record-suggestions.tsx
+  s_672398f43d55a3::t_406f8df3e774e0 391
+apps/web/src/entity/suggestions/record-suggestions.unit.test.tsx
+  s_672398f43d55a3::t_530f7788ec22cb 1274,1280,1310,1348
+apps/web/src/entity/table/ledger-filters.tsx
+  s_672398f43d55a3::t_20f6829dbde1d3 9,15,19,21,88-95,99,102-104,156-226,228,263,267-332
+apps/web/src/entity/table/table-header-layout.tsx
+  s_672398f43d55a3::t_9385bb9a343797 33,250-251,266,285,338-344,381-382,387,391-392,394-395,397-418
+apps/web/src/entity/table/table-header-layout.unit.test.tsx
+  s_672398f43d55a3::t_e96da7c9a12a0c 1,12,220-252,254-298
+apps/web/src/entity/table/table-row-step.unit.test.tsx
+  s_672398f43d55a3::t_2cec64dde0f3e7 10,40,45,48-52,90-119
+apps/web/src/entity/table/table.tsx
+  s_672398f43d55a3::t_01ed264a433542 85,847-885,1608-1615
+apps/web/src/features/product/product-editor-fields.tsx
+  s_672398f43d55a3::t_fda0f68c6e1499 57,75,91-92,101
+apps/web/src/features/work-queue/work-queue-page.tsx
+  s_672398f43d55a3::t_19b0524ebbdcff 3,52,130-137,183-189,252-268,270-271,361-362,374-375,418-419,432,446-447,453-465,467-485,506,518
+apps/web/src/integrations/tanstack-query/cache-tags.ts
+  s_672398f43d55a3::t_a1c33c47f9dac5 159,275
+apps/web/src/routes/_authenticated.tsx
+  s_672398f43d55a3::t_e4601136d177a5 27
+apps/web/src/routes/_authenticated/work-queue.tsx
+  s_672398f43d55a3::t_fbd134f0fc8893 17,19,21,23-25,27
+apps/web/src/server/ai/decision-request-batch.ts
+  s_672398f43d55a3::t_501c9bbd98ee0c 69-75,105,114,119,121-130
+apps/web/src/server/ai/field-suggest/registry.ts
+  s_672398f43d55a3::t_a52aabac33221f 147,337,339
+apps/web/src/server/ai/product-identity.ts
+  s_672398f43d55a3::t_a335dc0b24c2ef 8-10,13,25-36,41-44,46-50,55-56,60-63,86-98,100-101,103-104,106,108-163,165-168,173-185,188-207,209-294,296-312,314-387,389-390,394-474,476-477,479-532,539,553,557-559,675-678
+apps/web/src/server/ai/repo/ai-evaluation-requests.ts
+  s_672398f43d55a3::t_567f5a86b58a7b 9-17,30,59-63,67,70-84,87-101,103-112,125-144,146-166,168-173,175-196,198
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_672398f43d55a3::t_075c98f166a6ce 2,7-16,26-38,45-51,54-58,307-879
+apps/web/src/server/ai/repo/evaluation-page-transport.integration.test.ts
+  s_672398f43d55a3::t_1aed956534b83a 1-2,4-12,14-42,44-96,98-100,103-164,166-265,267-273,275-280,283-287,289-293,295-325,327-332,334-363,365-369,371-380,382-411,413-422,425-426,428-438
+apps/web/src/server/ai/repo/evaluation-page.integration.test.ts
+  s_672398f43d55a3::t_5f9252290dee44 2-9,11,13-16,18-26,28-37,39-51,53-57,59-113,115-124,126-130,132-134,136-220,222-224,226-236,238-254,256-313,315-323,325-360,362-374,376-396,398-485,488-489,492-515,517-550,552-576,578-580,582-600,602-616,618-629,631-632,634-637,639-661,664-690,692
+apps/web/src/server/ai/repo/evaluation-page.ts
+  s_672398f43d55a3::t_ca0d7a025eb0bf 1,4,6-7,9-13,16-24,26-30,32-36,38-62
+apps/web/src/server/db/helpers/relations.ts
+  s_672398f43d55a3::t_74a1512eb8cb52 232-233,235-239,249,251,545
+apps/web/src/server/domains/connection/service/entity-connections.ts
+  s_672398f43d55a3::t_60adc8bb3f8eb1 25-28,163-164,166-172,174-178,180
+apps/web/src/server/domains/financial-transaction/repo/financial-evidence-correction.integration.test.ts
+  s_672398f43d55a3::t_b1248ae278e294 396-470
+apps/web/src/server/domains/financial-transaction/repo/financial-evidence-correction.ts
+  s_672398f43d55a3::t_75217ed934da09 216-245,308-315
+apps/web/src/server/domains/financial-transaction/repo/financial-statement-preview.ts
+  s_672398f43d55a3::t_4592d01012fcd4 566-569,574-578
+apps/web/src/server/domains/image-processing/repo/image-processing.ts
+  s_672398f43d55a3::t_e61153e69d2707 78-82,185-188,1909-1913
+apps/web/src/server/domains/image-processing/repo/image-representations.ts
+  s_672398f43d55a3::t_e0a2edafaed9aa 1-2,5-11,13-17,20-46,48-65
+apps/web/src/server/domains/product/repo/analytics.ts
+  s_672398f43d55a3::t_a81da5d4af183b 155,215
+apps/web/src/server/domains/product/repo/detail.ts
+  s_672398f43d55a3::t_97d50b5a70ce7d 20,228
+apps/web/src/server/domains/product/repo/list-enrichment.ts
+  s_672398f43d55a3::t_2b8e247ddea94c 1-4,11-12,15-23
+apps/web/src/server/domains/product/repo/match/product-identity-fence.ts
+  s_672398f43d55a3::t_035e0d2e04c978 11-14,16-21,24-31,33-53,57-58,60-78,80-81,83-103
+apps/web/src/server/domains/product/repo/match/product-identity-snapshot.ts
+  s_672398f43d55a3::t_6db98578922541 7,35,53,124-126,128-132,137-140,181-183,185-189,192,195-196,232-257,259-294,369,381-385,387-390,394,397
+apps/web/src/server/domains/product/repo/match/product-match-candidate.ts
+  s_672398f43d55a3::t_31c0280a9e8280 32,38,41-42,45,49-51,97-123,125-149,153-155,157-227,229-243,245-263,265-270,278-283,294,308-310,312-400,402-421,423-467
+apps/web/src/server/domains/product/repo/product-identifier-source.ts
+  s_672398f43d55a3::t_e10d8b73a4f7c7 2,5-6,204-234
+apps/web/src/server/domains/product/repo/product-identity-claims.ts
+  s_672398f43d55a3::t_7ae7fc2b0547df 63,118-121,127,129-135,147
+apps/web/src/server/domains/product/repo/product-variant-evidence.integration.test.ts
+  s_672398f43d55a3::t_b889ef855316ea 18,242,246-249
+apps/web/src/server/domains/product/repo/product-variant-evidence.ts
+  s_672398f43d55a3::t_964e8f34c97946 5,92-108,111-119,123-124,132,136-158,167-189,193-194,196
+apps/web/src/server/domains/product/repo/write/product-writes.ts
+  s_672398f43d55a3::t_2e55b97620e47c 39,166
+apps/web/src/server/domains/purchase-import/operations/import-orders.ts
+  s_672398f43d55a3::t_92f0064bbe2890 38,80,941-959,1198-1200
+apps/web/src/server/domains/purchase-import/operations/mail-run-settlement.integration.test.ts
+  s_672398f43d55a3::t_148f932a489e23 14,19,23-25,28,30,33,41-220,241,270-280,338-358
+apps/web/src/server/domains/purchase-import/operations/run-review.ts
+  s_672398f43d55a3::t_e94373f0ef1b82 61-66,131-152,238-239,241-244,278-292,300,306,312-316,318,326-330,648,654-663,713-714,774
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.integration.test.ts
+  s_672398f43d55a3::t_66b8ee951b15da 27,513-656,675-685
+apps/web/src/server/domains/purchase-import/repo/mail-run-membership.ts
+  s_672398f43d55a3::t_79dfc1a3e7a730 6,8-9,11,310-314,316-320,322,334-336,344-379,381-383,410-414
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_672398f43d55a3::t_df43f0a4f09193 656-659,1147-1150
+apps/web/src/server/domains/purchase-import/repo/run-service.ts
+  s_672398f43d55a3::t_21e2a6b69a4c32 166-179,212,217-228,230-234,239
+apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.ts
+  s_672398f43d55a3::t_b0fcd379b4ea28 6-9,225-227
+apps/web/src/server/domains/run/operations/run.server.ts
+  s_672398f43d55a3::t_cb9faeeb4b8fdc 49,289-292,323-330
+apps/web/src/server/domains/run/repo/ai-refresh-state.ts
+  s_672398f43d55a3::t_93ffc7d193159c 31,50,98-115,118-123,125-171,174,179-181,184-185,188-201,204-235,237-246,249-252,258-260,263,268,270-305,335-342,408
+apps/web/src/server/domains/run/repo/ai-work-state.ts
+  s_672398f43d55a3::t_1f81240eeac149 1,279-334
+apps/web/src/server/domains/run/service/ai-refresh.ts
+  s_672398f43d55a3::t_cdc9b6db966e2b 30-31,33,50-53,58-61,63,69-75,77,81,85,87,91,109,116,375-408,416,419,422,959,961-974,1258-1903
+apps/web/src/server/domains/run/service/ai-work.ts
+  s_672398f43d55a3::t_575313b0b201bb 31,97-124
+apps/web/src/server/domains/run/service/sweep.ts
+  s_672398f43d55a3::t_a617b4e2ee65ec 466
+apps/web/src/server/domains/transaction-import/repo/source-transaction-record.integration.test.ts
+  s_672398f43d55a3::t_687ef6fd7101fd 221-245,583-625,654,718
+apps/web/src/server/domains/transaction-import/repo/source-transaction-record.ts
+  s_672398f43d55a3::t_23e7ac0d6f5400 474-507,512,581
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.integration.test.ts
+  s_672398f43d55a3::t_0e2f436ebe67d8 2377-2407,3409-3410,4965-4997
+apps/web/src/server/domains/transaction-import/service/statement-suggestion-labels.ts
+  s_672398f43d55a3::t_1f038f113c4a00 677-682,777,1236-1237
+apps/web/src/server/domains/vendor-account/repo/vendor-account-coverage.integration.test.ts
+  s_672398f43d55a3::t_293a890de7ef0e 72,118
+apps/web/src/server/entity-kernel/repo/entity-display-image.integration.test.ts
+  s_672398f43d55a3::t_4cd9718419ec27 3,11,54-57,330-388
+apps/web/src/server/entity-kernel/repo/entity-display-image.ts
+  s_672398f43d55a3::t_f1f84cbc2ca4d3 48,51-55,466,498,520,557-561,646-653,658,686-696,699-700,703-704,712-713,721,725,727-735,807,1020,1023,1028-1032,1039
+apps/web/src/server/generic/assessment/repo/assessment-state.ts
+  s_672398f43d55a3::t_1266d17d70247e 129-133,139,147,172-193,199-211,213,215,222-223,228-229,234,236,241-249
+apps/web/src/server/generic/assessment/repo/suggestion-list.integration.test.ts
+  s_672398f43d55a3::t_30898dd5311bb3 295-337,441-459
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_672398f43d55a3::t_5115283084e475 101-102
+apps/web/src/server/generic/data-quality/repo/checks/expense.ts
+  s_672398f43d55a3::t_ef894bd210a432 13
+apps/web/src/server/generic/data-quality/repo/checks/purchase.ts
+  s_672398f43d55a3::t_8356223cf69e80 29
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_672398f43d55a3::t_67b1bb756874b3 260
+apps/web/src/server/generic/data-quality/repo/expense-checks.integration.test.ts
+  s_672398f43d55a3::t_3eae040ec352fb 38-109,200-203,214,232
+apps/web/src/server/generic/derived/repo/derived-engine.integration.test.ts
+  s_672398f43d55a3::t_4edc723c3d5790 316-358,360-368,425-496
+apps/web/src/server/generic/derived/repo/drain.ts
+  s_672398f43d55a3::t_67c68e45e57a7f 166,276,284-290,293-297,299-300,303-307,309-371,516-569,583,591-595
+apps/web/src/server/generic/derived/repo/read-set.integration.test.ts
+  s_672398f43d55a3::t_9ce14fc35dc9ea 8,12,17-22,36,38,90,183-184,188-191,194-197,264-360
+apps/web/src/server/generic/entity-links/repo/entity-edge-source.integration.test.ts
+  s_672398f43d55a3::t_a0de40a5400737 136-137
+apps/web/src/server/generic/entity-report/repo/email.ts
+  s_672398f43d55a3::t_1649ecbf209402 57
+apps/web/src/server/generic/entity-report/repo/finance-report.integration.test.ts
+  s_672398f43d55a3::t_6bcb6c51eb6106 139-145
+apps/web/src/server/generic/entity-report/repo/record-items.ts
+  s_672398f43d55a3::t_5e4f72ce580bb3 14
+apps/web/src/server/generic/entity-report/repo/record-items.unit.test.ts
+  s_672398f43d55a3::t_2729804cef44e8 12
+apps/web/src/server/generic/entity-report/repo/records.ts
+  s_672398f43d55a3::t_881864db00e670 56
+apps/web/src/server/generic/entity-report/repo/run.ts
+  s_672398f43d55a3::t_3941b36b5df331 49
+apps/web/src/server/generic/field-explanation/operations/field-explanation.integration.test.ts
+  s_672398f43d55a3::t_21c2307906a29a 876-896
+apps/web/src/server/generic/jobs/kind-policy.ts
+  s_672398f43d55a3::t_15cd1632ed0983 100-102
+apps/web/src/server/generic/jobs/limits.ts
+  s_672398f43d55a3::t_c247b04f532b98 17-19
+apps/web/src/server/generic/jobs/repo/batch-claim-budget.integration.test.ts
+  s_672398f43d55a3::t_855254fbbf6795 1-3,6-7,9-11,13,15-18,20-51,53-76,78-88
+apps/web/src/server/generic/jobs/repo/fairness.integration.test.ts
+  s_672398f43d55a3::t_d37b689a594a24 9,74,336-337,347,354,356,360,380,389-400,723-783
+apps/web/src/server/generic/jobs/repo/jobs.integration.test.ts
+  s_672398f43d55a3::t_0a20858354880d 39,818-849
+apps/web/src/server/generic/jobs/repo/jobs.ts
+  s_672398f43d55a3::t_734b641782903c 10-16,20,26,35,37,55-59,173-252,260-265,284,291-295,445-466,476-511,528-532,535-536,538-571,574-585,589-591,597-603,605-607,610-638,640-660,662,670,718,721,724-725,727-734,740-810,812-814,817,821-829,838-840,856,874-882,897-898,911-916,919,922,925,973-976,1065-1318
+apps/web/src/server/generic/jobs/repo/waiting-on.ts
+  s_672398f43d55a3::t_303bb1c3d31c13 113-115
+apps/web/src/server/generic/jobs/service/jobs.ts
+  s_672398f43d55a3::t_320a48322486ab 16-20,249-253,256,308,322,341,356,391,410-415,438
+apps/web/src/server/generic/jobs/types.ts
+  s_672398f43d55a3::t_077b1ccde871eb 16-17
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_672398f43d55a3::t_f989eaed6ab6b3 13-16,33-34,111,391,442,446-450,453-461,548,550,595,718-719
+apps/web/src/server/generic/relatedness/service/relatedness.service.ts
+  s_672398f43d55a3::t_2c2b4a0e256d8b 199
+apps/web/src/server/generic/relatedness/service/relatedness.service.unit.test.ts
+  s_672398f43d55a3::t_3e00bc7d953f8c 92,107
+apps/web/src/server/generic/work-queue/repo/work-explanation.unit.test.ts
+  s_672398f43d55a3::t_4bdf9851bc3aa2 18
+apps/web/src/server/generic/work-queue/repo/work-queue-projection.ts
+  s_672398f43d55a3::t_487799503b8479 30-32,133,149,162,165,176,194
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_672398f43d55a3::t_f6f13caf6cc82e 486,499,511,517,525-565,581,606,697,820-834
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_672398f43d55a3::t_1d323cab043311 43,199,210-211,253-272,289,316,330,339,369,386,405,424,445,457,468,498,510,519,535,539,569,584,601,618,647,676,698,702,730,733,738,761,774,820,862-881,898-900,904-926,928-934,952-955,961-973,992-998,1019-1035,1040-1047,1050-1057,1136,1162
+apps/web/src/server/generic/work-queue/service/work-queue-problems.ts
+  s_672398f43d55a3::t_3bc64400de7bae 284-285
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_672398f43d55a3::t_53322ba218ef01 311-314
+apps/web/src/server/workflows/background-tasks/publish.ts
+  s_672398f43d55a3::t_7ac9884e9a72db 12,27,33-40,42-52,135
+apps/web/src/server/workflows/background-tasks/publish.unit.test.ts
+  s_672398f43d55a3::t_25f22b156d3c63 3-4,16-57
+apps/web/src/server/workflows/runs/job-execution.ts
+  s_672398f43d55a3::t_a7225be8b40364 5,9-12,18-20,185,188-191,242-324
+apps/web/src/server/workflows/runs/wake.ts
+  s_672398f43d55a3::t_e04d66c51d1e31 1,5,8-15,22-31
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_672398f43d55a3::t_38773c8766c3f8 552,557,559-561,570-572,581,819,1055
+apps/web/src/ui/data-table/filter-bar.unit.test.tsx
+  s_672398f43d55a3::t_42e1703d3e641a 86-129
+apps/web/src/ui/data-table/table-meta.ts
+  s_672398f43d55a3::t_b6228c07db1158 272,274-277,279,286-287,289,292,299
+apps/web/src/ui/derived/backlog-matrix.ts
+  s_672398f43d55a3::t_0a6743795821cc 1-60
+apps/web/src/ui/derived/backlog-matrix.unit.test.ts
+  s_672398f43d55a3::t_4e65bb5d49b3df 3,5-14,17-21,23-29,32-37
+apps/web/src/ui/derived/backlog.tsx
+  s_672398f43d55a3::t_c1a72b27d3946d 9,11-14,16,75-78,80-110,112-182,185-207
+apps/web/src/ui/primitives/popover.tsx
+  s_672398f43d55a3::t_17194168b1081e 28,33,38
+apps/web/tests/e2e/fixtures/photos.ts
+  s_672398f43d55a3::t_edd1a4e8a0c77a 608-611
+apps/web/tests/e2e/harness-services/purchase-import-test-gateway.ts
+  s_672398f43d55a3::t_7c1a1f31ae4988 88-137,280-283,290-293,296,306
+apps/web/tests/e2e/suggestions.spec.ts
+  s_672398f43d55a3::t_bf823a36254185 43,392-422,924,1010
+apps/web/tests/e2e/work-queue.spec.ts
+  s_672398f43d55a3::t_15a32939d18c0e 68-92
+apps/web/tooling/checks/ai-evaluation-throughput.integration.test.ts
+  s_672398f43d55a3::t_9fae15a6521a35 1-13,15-16,18-32,34-43,45-49,51-59,61-71,73-89,91-204,206-227,229-232,234-235,237-238,240-248,250,253-454,456-464,466-467,469-490,492-719
+apps/web/tooling/checks/batch-evaluation-profile.integration.test.ts
+  s_672398f43d55a3::t_d1b653497968eb 1-6,8-23,25-54,58-59,61-66,68-71,73-101,103-111,113-134,136-137,139-140,142-143,145-146,148-149,151-152,154-155,157-161,163-165,167-176,178-179,181-190,192-205,207,210-229,231-372,375-393,395-396,399-419,421-481,484-506,509-514,516-523,525-630,632-643,645,647,649-650,652-668,670-673,675-680,682-684,686-690,692-704,706-760,762-764,766-770,772-876
+apps/web/tooling/principal-product-gaps-migration.integration.test.ts
+  s_672398f43d55a3::t_7cdf5f8a598d2c 1-2,4-5,7-33,35-47,49-57,60-64
+apps/web/tooling/typecheck-repositories.ts
+  s_672398f43d55a3::t_70d6a023c89217 17,205
+apps/web/vite.config.ts
+  s_672398f43d55a3::t_ae9c771ad90394 342-348
+docs/adr/0022-named-groupings-are-saved-views.md
+  s_672398f43d55a3::t_aaa6aeb1cab771 1-15
+docs/adr/README.md
+  s_672398f43d55a3::t_dfd84e00ff9249 32
+docs/agents/validation-tests.md
+  s_672398f43d55a3::t_51a63fc8a4a2da 749-755
+docs/development.md
+  s_672398f43d55a3::t_81b53e5b88cf72 515-517
+docs/entities.md
+  s_672398f43d55a3::t_c202c0dfdf227c 26-33,122-127,1970-1972,2001-2008,2175-2191,2587-2590,2598-2606,2610-2612,2629-2636,3994-4001
+docs/guide/import-journey.md
+  s_672398f43d55a3::t_a07610d9012a9c 76-81,85-91,94-96
+docs/guide/product-identity-journey.md
+  s_672398f43d55a3::t_d069b3071e30c3 84-95
+docs/guide/terminology.md
+  s_672398f43d55a3::t_6dcba07bc75929 606
+docs/guide/work-queue.md
+  s_672398f43d55a3::t_4c1ab04a121da1 69-73
+docs/import-evidence-convergence.md
+  s_672398f43d55a3::t_5be54fe593eb05 322-330,463-466,563-565,571-574
+docs/infrastructure.md
+  s_672398f43d55a3::t_5603bd7a2e571c 807-809
+docs/jobs.md
+  s_672398f43d55a3::t_4f5879652711d9 85,141-156,175-176,190-198,236-238,496-503,531-533,568-572,600-679
+packages/schemas/package.json
+  s_672398f43d55a3::t_819b316250037a 179
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_672398f43d55a3::t_4a561101608767 927,956,962,1149,1154
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_672398f43d55a3::t_0d34bcdb1d8804 315,763,773
+packages/schemas/src/field-policy-fields.ts
+  s_672398f43d55a3::t_34a97d0ba62a6e 6,11-12
+packages/schemas/src/native-coverage.ts
+  s_672398f43d55a3::t_406e4bbbc8dbfb 166
+packages/schemas/src/product-read-fields.ts
+  s_672398f43d55a3::t_19f731cc9c6355 216
+packages/schemas/src/source-list.ts
+  s_672398f43d55a3::t_73621e7bb80a9d 19-21,101-124
+packages/schemas/src/suggestion-list.ts
+  s_672398f43d55a3::t_0a0f7ed90e3fc9 291-292
+packages/schemas/src/work-queue.ts
+  s_672398f43d55a3::t_9c3bded83d5481 6-11,155-191,221-222,281,286,288-290,292,315,317-322,329-338,342,351,384-385,387,426-430,437-438
+packages/shared/src/redundant-tokens.ts
+  s_672398f43d55a3::t_caf2280c5dcc06 45-49,82,96
+packages/shared/src/redundant-tokens.unit.test.ts
+  s_672398f43d55a3::t_93bcfb02288f80 20,23
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_672398f43d55a3::t_b582daaf6d4cf0 27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "107f642f6bc6df5ae4588d485805528e114d7927",
+  "prompts": {},
+  "sessions": {
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
