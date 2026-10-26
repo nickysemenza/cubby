@@ -1,0 +1,33 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_ff3e82730f47f5::t_43447f34465583 4-5,11,13,22-28,31,33,35-36,38-40,80,86,88,95-101,109-110
+apps/apple/App/Shared/AppShell/AppModel.swift
+  s_ff3e82730f47f5::t_978793c5eebc3f 641,649,651
+apps/apple/App/Shared/AppShell/SectionView.swift
+  s_ff3e82730f47f5::t_8b004d5afe4971 13,58
+apps/apple/App/Shared/Settings/SettingsView.swift
+  s_ff3e82730f47f5::t_f76ee9064c82e3 106-107,437,447,459,480
+apps/apple/App/iOS/ImageQueueBackgroundProcessing.swift
+  s_ff3e82730f47f5::t_c3e1dbe4663196 5,10,34,43
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/CompanionImageWorker.swift
+  s_ff3e82730f47f5::t_c64a4ed6fee401 428-429,433,452,1088
+apps/apple/DESIGN.md
+  s_ff3e82730f47f5::t_d86f54295e70cc 62-65
+apps/apple/README.md
+  s_ff3e82730f47f5::t_191492420fef9f 177,200,238-243,245-246,251-253
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fd7fc785933e7c3ebe07e56eda9b5c2ddd3ece2e",
+  "prompts": {},
+  "sessions": {
+    "s_ff3e82730f47f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10031cff-a3e6-4974-ad1d-15fc92417c83",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
