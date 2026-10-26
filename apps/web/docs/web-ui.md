@@ -327,3 +327,13 @@ explicit no-image result does not register another request with the shell batch.
 The same contract applies to native typed consumers: Location lists read the
 tree’s canonical media, and recount Products receive canonical media in the
 shared inventory read batch. Neither client reconstructs identity from galleries.
+
+### Activity work feed
+
+Now owns current work state, pace and watchdog explanations. Internal Job kinds
+stay out of the member-facing stream list; derived drain health attaches to
+Derived values. Raw watchdog evidence is collapsed under Watchdog details.
+The live header dot is static for reduced motion; an idle feed reads All quiet.
+Run codes are spaced, capped at three with a +N remainder, and share a command
+line below the secondary text on phone. Run evaluation bars compose ProgressLabel
+and ProgressValue; inactive Runs show paused bars without a rate or ETA.

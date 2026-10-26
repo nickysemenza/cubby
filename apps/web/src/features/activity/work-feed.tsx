@@ -6,7 +6,9 @@ import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 
+import type { QueueHealthSnapshot } from "~/contracts/job.contract";
 import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
@@ -21,6 +23,8 @@ import {
   formatMinutesLeft,
   formatPace,
   orderWorkStreams,
+  isVisibleWorkStream,
+  watchdogReason,
   type WorkStreamStatus,
   type WorkStreamView,
   workStreamView,
@@ -92,11 +96,14 @@ const duration = (seconds: number) =>
 function streamFacts(view: WorkStreamView, failedMinutes: number) {
   const { stream } = view;
   const parts: string[] = [];
+  if (view.alertReason) parts.push(view.alertReason);
   if (stream.running) parts.push(`${formatCount(stream.running)} running`);
   if (stream.due)
     parts.push(
       `${formatCount(stream.due)} waiting${
-        view.oldestWaitSeconds !== null && view.oldestWaitSeconds >= 60
+        !view.alertReason &&
+        view.oldestWaitSeconds !== null &&
+        view.oldestWaitSeconds >= 60
           ? ` (oldest ${duration(view.oldestWaitSeconds)})`
           : ""
       }`,
@@ -117,6 +124,7 @@ function streamPace(
   now: number,
 ) {
   const { stream } = view;
+  if (view.status === "paused" || view.status === "stuck") return null;
   if (stream.completedPerMinute > 0)
     return [
       formatPace(stream.completedPerMinute),
@@ -140,8 +148,10 @@ function streamPace(
  */
 export function WorkFeed({
   onShowJobs,
+  health,
 }: {
   onShowJobs: (kind: string) => void;
+  health?: QueueHealthSnapshot | null;
 }) {
   const activity = useQuery({
     ...job.activity.queryOptions({}),
@@ -154,7 +164,9 @@ export function WorkFeed({
   const now = activity.dataUpdatedAt || Date.now();
   const views = activity.data
     ? orderWorkStreams(
-        activity.data.streams.map((stream) => workStreamView(stream, now)),
+        activity.data.streams
+          .filter(isVisibleWorkStream)
+          .map((stream) => workStreamView(stream, now, health)),
       )
     : [];
   const live = views.filter((view) => view.status !== "done");
@@ -169,14 +181,48 @@ export function WorkFeed({
     (sum, view) => sum + view.stream.completed,
     0,
   );
+  const derivedAlert = watchdogReason("derived.drain", health);
+  const derivedStatus: WorkStreamStatus = derivedAlert
+    ? "stuck"
+    : derivedWaiting === 0
+      ? "done"
+      : derivedPace > 0
+        ? "working"
+        : (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
+          ? "stuck"
+          : "waiting";
+  const working =
+    views.some((view) => view.status === "working") ||
+    derivedStatus === "working";
+  const activeCount =
+    live.filter((view) => view.status !== "paused").length +
+    (derivedWaiting > 0 || derivedAlert ? 1 : 0);
   const caption = !activity.data
     ? undefined
-    : live.length
-      ? `${countLabel(live.length, "kind")} of work in progress · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`
+    : activeCount
+      ? `${countLabel(activeCount, "kind")} of work in progress · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`
       : `All quiet · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`;
 
   return (
-    <Section headingAs="h2" title="Now" caption={caption} id="now">
+    <Section
+      headingAs="h2"
+      title={
+        <span className="inline-flex items-center gap-2">
+          Now
+          {working ? (
+            <>
+              <span
+                aria-hidden
+                className="size-1.5 rounded-full bg-info motion-safe:animate-pulse"
+              />
+              <span className="sr-only">Work is moving</span>
+            </>
+          ) : null}
+        </span>
+      }
+      caption={caption}
+      id="now"
+    >
       <RecordList
         state={
           activity.isPending
@@ -190,78 +236,63 @@ export function WorkFeed({
                 }
               : { status: "success" }
         }
-        empty={<span>Nothing running or waiting.</span>}
+        empty={<span>All quiet · Nothing running or waiting.</span>}
       >
-        {backlog.data && (derivedWaiting > 0 || derivedUpdated > 0) ? (
-          <RecordRow
-            data-testid="work-stream-derived"
-            leading={
-              <StatusGlyph
-                status={
-                  derivedWaiting === 0
-                    ? "done"
-                    : derivedPace > 0
-                      ? "working"
-                      : (backlog.data.oldestWaitingSeconds ?? 0) >= 600
-                        ? "stuck"
-                        : "waiting"
-                }
-              />
-            }
-            primary={
+        {(backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
+        derivedAlert ? (
+          <FeedRow
+            testId="work-stream-derived"
+            status={derivedStatus}
+            label={
               <a href="#derived-values" className="hover:underline">
                 Derived values
               </a>
             }
-            secondary={
-              derivedWaiting
-                ? `${formatCount(derivedWaiting)} waiting${
-                    (backlog.data.oldestWaitingSeconds ?? 0) >= 60
-                      ? ` (oldest ${duration(backlog.data.oldestWaitingSeconds ?? 0)})`
-                      : ""
-                  }`
-                : "Up to date"
+            facts={
+              derivedAlert ??
+              (derivedWaiting
+                ? `${formatCount(derivedWaiting)} waiting${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
+                : "Up to date")
             }
-            trailing={`${formatCount(derivedUpdated)} updated in ${backlog.data.recent.windowMinutes} min`}
+            pace={
+              backlog.data
+                ? `${formatCount(derivedUpdated)} updated in ${backlog.data.recent.windowMinutes} min`
+                : null
+            }
           />
         ) : null}
         {[...live, ...finished].map((view) => {
           const facts = streamFacts(view, windows?.failedMinutes ?? 60);
           return (
-            <RecordRow
+            <FeedRow
               key={view.key}
-              data-testid="work-stream"
-              leading={<StatusGlyph status={view.status} />}
-              primary={
-                <span
-                  className={cn(
-                    view.status === "done" && "text-muted-foreground",
-                  )}
-                >
-                  {view.label}
-                </span>
-              }
-              secondary={facts || undefined}
-              trailing={
-                streamPace(view, windows?.completedMinutes ?? 15, now) ??
-                undefined
-              }
+              testId="work-stream"
+              status={view.status}
+              label={view.label}
+              facts={facts}
+              pace={streamPace(view, windows?.completedMinutes ?? 15, now)}
               actions={
                 <>
-                  {view.stream.runIds.map((code) => (
+                  {view.stream.runIds.slice(0, 3).map((code) => (
                     <Link
                       key={code}
                       to="/runs/$shortcode"
                       params={{ shortcode: code }}
-                      className="font-mono text-xs text-link hover:underline"
+                      className="inline-flex min-h-11 items-center font-mono text-xs text-link hover:underline sm:min-h-7"
                     >
                       {code}
                     </Link>
                   ))}
+                  {view.stream.runIds.length > 3 ? (
+                    <span className="font-mono text-xs text-muted-foreground">
+                      +{view.stream.runIds.length - 3}
+                    </span>
+                  ) : null}
                   {view.status !== "done" ? (
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="min-h-11 sm:min-h-7"
                       onClick={() => onShowJobs(view.stream.kind)}
                     >
                       Jobs
@@ -273,6 +304,80 @@ export function WorkFeed({
           );
         })}
       </RecordList>
+      {health?.alerts.length ? (
+        <details
+          className="text-xs text-muted-foreground"
+          data-testid="queue-health"
+        >
+          <summary className="min-h-11 cursor-pointer py-2 sm:min-h-7 sm:py-1">
+            Watchdog details
+          </summary>
+          <p>Measured {formatRelative(health.measuredAt)}</p>
+          <ul className="grid gap-1 py-1 font-mono break-words">
+            {health.alerts.map((alert) => (
+              <li key={`${alert.kind}:${alert.code}`}>
+                {alert.kind ?? "all kinds"} · {alert.code}: {alert.evidence}
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </Section>
+  );
+}
+
+/** Keep pace below identity on phone, and commands together below the facts. */
+function FeedRow({
+  status,
+  label,
+  facts,
+  pace,
+  actions,
+  testId,
+}: {
+  status: WorkStreamStatus;
+  label: ReactNode;
+  facts: string;
+  pace: string | null;
+  actions?: ReactNode;
+  testId: string;
+}) {
+  return (
+    <RecordRow
+      data-testid={testId}
+      leading={<StatusGlyph status={status} />}
+      primary={
+        <div className="grid w-full min-w-0 gap-x-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <span
+              className={cn(
+                "text-sm font-medium",
+                status === "done" && "text-muted-foreground",
+              )}
+            >
+              {label}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {STATUS_LABEL[status]}
+            </span>
+          </div>
+          {pace ? (
+            <span className="text-xs text-muted-foreground tabular-nums sm:text-right">
+              {pace}
+            </span>
+          ) : null}
+          {facts ? (
+            <span className="text-xs/5 text-muted-foreground sm:col-start-1">
+              {facts}
+            </span>
+          ) : null}
+          {actions ? (
+            <div className="flex flex-wrap items-center gap-x-2 sm:col-start-2 sm:row-span-2 sm:row-start-2 sm:justify-end">
+              {actions}
+            </div>
+          ) : null}
+        </div>
+      }
+    />
   );
 }

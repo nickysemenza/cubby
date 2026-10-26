@@ -23,7 +23,11 @@ import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import { Button } from "~/ui/primitives/button";
-import { Progress } from "~/ui/primitives/progress";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
 import { StaticTable } from "~/ui/primitives/static-table";
 
 const LIVE_POLL_MS = 5_000;
@@ -93,6 +97,8 @@ function OutcomeGlyph({ outcome }: { outcome: Outcome }) {
  */
 export function RunEvaluations({ record }: { record: RunOut }) {
   const [failedOnly, setFailedOnly] = useState(false);
+  // Active statuses include pauses for polling; only running work has a live pace.
+  const moving = record.status === "running";
   const polling = live(record.status) ? LIVE_POLL_MS : false;
   const result = useQuery({
     ...runDetail.evaluations.queryOptions({ runId: record.id, failedOnly }),
@@ -109,7 +115,7 @@ export function RunEvaluations({ record }: { record: RunOut }) {
   );
   useSectionCount(data ? totals.settled + totals.waiting : undefined);
   const now = result.dataUpdatedAt || Date.now();
-  const pace = data?.pace.completedPerMinute ?? 0;
+  const pace = moving ? (data?.pace.completedPerMinute ?? 0) : 0;
   const minutesLeft =
     pace > 0 && totals.waiting > 0 ? totals.waiting / pace : null;
 
@@ -130,7 +136,7 @@ export function RunEvaluations({ record }: { record: RunOut }) {
   const facts = [
     pace > 0
       ? `${formatPace(pace)} over ${data.pace.windowMinutes} min`
-      : live(record.status)
+      : moving
         ? "Not moving right now"
         : null,
     minutesLeft !== null
@@ -146,35 +152,31 @@ export function RunEvaluations({ record }: { record: RunOut }) {
     <div className="grid gap-4" data-testid="run-evaluations">
       <div className="grid gap-1.5">
         {data.roster ? (
-          <>
-            <div className="flex items-baseline justify-between gap-2 text-sm">
-              <span>Records checked</span>
-              <span className="font-mono tabular-nums">
-                {formatCount(data.roster.walked)} of{" "}
-                {formatCount(data.roster.total)}
-              </span>
-            </div>
-            <Progress
-              value={data.roster.walked}
-              max={data.roster.total}
-              paused={!live(record.status) || pace === 0}
-              aria-label="Records checked"
-            />
-          </>
+          <Progress
+            value={data.roster.walked}
+            max={data.roster.total}
+            paused={!moving || pace === 0}
+          >
+            <ProgressLabel>Records checked</ProgressLabel>
+            <ProgressValue>
+              {() =>
+                `${formatCount(data.roster?.walked ?? 0)} of ${formatCount(data.roster?.total ?? 0)}`
+              }
+            </ProgressValue>
+          </Progress>
         ) : null}
-        <div className="flex items-baseline justify-between gap-2 text-sm">
-          <span>Evaluations settled</span>
-          <span className="font-mono tabular-nums">
-            {formatCount(totals.settled)} of{" "}
-            {formatCount(totals.settled + totals.waiting)}
-          </span>
-        </div>
         <Progress
           value={totals.settled}
           max={totals.settled + totals.waiting}
-          paused={!live(record.status) || pace === 0}
-          aria-label="Evaluations settled"
-        />
+          paused={!moving || pace === 0}
+        >
+          <ProgressLabel>Evaluations settled</ProgressLabel>
+          <ProgressValue>
+            {() =>
+              `${formatCount(totals.settled)} of ${formatCount(totals.settled + totals.waiting)}`
+            }
+          </ProgressValue>
+        </Progress>
         {facts.length ? (
           <p className="text-xs text-muted-foreground">{facts.join(" · ")}</p>
         ) : null}

@@ -19,6 +19,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
 
 import { RunDecisions, RunDiagnostics, RunStepsDetail } from "./run-detail";
+import { RunEvaluations } from "./run-evaluations";
 
 const NOW = Date.now();
 const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
@@ -227,6 +228,32 @@ const logs: JobLogsOut = {
 };
 
 const answers = new Map<string, UnparsedStartOperationData>([
+  [
+    "runDetail.evaluations",
+    {
+      measuredAt: ago(0),
+      pace: {
+        windowMinutes: 5,
+        completedPerMinute: 12,
+        lastCompletedAt: ago(1),
+      },
+      roster: { walked: 80, total: 100 },
+      byKind: [
+        {
+          entity: "product",
+          feature: "entity-connections",
+          waiting: 20,
+          running: 2,
+          completed: 60,
+          failed: 2,
+          obsolete: 1,
+          cancelled: 0,
+          averageSeconds: 1.2,
+        },
+      ],
+      recent: [],
+    },
+  ],
   ["runDetail.steps", steps],
   ["runDetail.decisions", decisions],
   ["job.list", jobs],
@@ -376,3 +403,23 @@ it("keeps earlier decision families available inside the Run", async () => {
     await screen.findByRole("option", { name: /transfer candidates/i }),
   );
 });
+
+it.each(["paused", "failed"] as const)(
+  "keeps evaluation counts without a rate for a %s Run",
+  async (status) => {
+    render(<RunEvaluations record={{ ...run, status }} />, {
+      wrapper: harness.wrapper,
+    });
+    const progress = await screen.findByTestId("run-evaluations");
+    expect(
+      within(progress).getByRole("progressbar", { name: "Records checked" }),
+    ).toHaveTextContent("80 of 100");
+    expect(
+      within(progress).getByRole("progressbar", {
+        name: "Evaluations settled",
+      }),
+    ).toHaveTextContent("63 of 85");
+    expect(progress).not.toHaveTextContent("/min");
+    expect(progress).not.toHaveTextContent("left for what is queued");
+  },
+);
