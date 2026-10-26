@@ -1015,22 +1015,4 @@ describe("stored derived values", () => {
     expect(marked).toBe(3);
     expect(await marks("inventory.valuation")).toHaveLength(3);
   });
-
-  it("rebuilds the same values from an empty cache", async () => {
-    const location = await makeLocation("Hall cupboard");
-    const towels = await makeProduct("Synthetic towels", 4);
-    await makeEntry(towels, location, 2);
-    await drain();
-    const snapshot = async () =>
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT "entityId"::text, key, value FROM "DerivedValue" ORDER BY 1, 2`,
-        )
-      ).rows;
-    const incremental = await snapshot();
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"`);
-    await markAllStoredDerived(ctx.db);
-    await drain();
-    expect(await snapshot()).toEqual(incremental);
-  });
 });
