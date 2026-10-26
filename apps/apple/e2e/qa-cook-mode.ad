@@ -1,11 +1,8 @@
 context platform=ios timeout=240000
 
-open com.nickysemenza.cubby
+open com.nickysemenza.cubby "cubby://entity/${RECIPE_ID}"
 settings text-size large
-wait "role=Button label=Find" 240000
-open "cubby://entity/${RECIPE_ID}"
 wait "role=Button label=More" 90000
-wait text "Composition" 90000
 wait text "Can I make this?" 90000
 scroll down 0.3
 scroll down 0.4 --until "id=recipe.workflow.cook"
@@ -13,6 +10,7 @@ wait "id=recipe.workflow.cook" 90000
 wait "label=\"250 g Synthetic Flour\"" 90000
 click "label=2×"
 wait "label=\"500 g Synthetic Flour\"" 90000
+scroll down 0.2
 click "id=recipe.workflow.cook"
 wait text "Whisk the flour with 2 cups of water." 90000
 wait text "500 g Synthetic Flour" 90000
@@ -37,4 +35,4 @@ click "id=recipe.cook.next"
 wait text "Rest the batter for 10 minutes, then cook." 90000
 click "id=recipe.cook.finish"
 settings text-size large
-wait "id=recipe.workflow.cook" 90000
+wait "role=Button label=More" 90000
