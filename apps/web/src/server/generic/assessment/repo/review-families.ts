@@ -578,7 +578,10 @@ export function pendingRecommendationEligibility() {
   );
 }
 
-function assessmentRecordMatch(scope: AssessmentRecordScope): SQL {
+function assessmentRecordMatches(
+  scope: AssessmentRecordScope,
+  separateFamilies: boolean,
+): SQL[] {
   const requested = scope.entity
     ? [scope.entity]
     : scope.records?.map((r) => r.entity);
@@ -591,32 +594,27 @@ function assessmentRecordMatch(scope: AssessmentRecordScope): SQL {
         : [],
   );
   const primaryMatch = and(
-    inArray(reviewAssessment.family, primaryFamilies),
+    inArray(
+      separateFamilies ? reviewState.family : reviewAssessment.family,
+      primaryFamilies,
+    ),
     scope.entity ? eq(reviewState.entity, scope.entity) : undefined,
     scope.records
       ? or(
           ...scope.records.map((r) =>
             and(
               eq(reviewState.entity, r.entity),
-              inArray(sql<string>`${reviewState.recordId}::text`, [
-                r.id,
-                r.code,
-              ]),
+              separateFamilies
+                ? eq(reviewState.recordId, r.id)
+                : inArray(sql<string>`${reviewState.recordId}::text`, [
+                    r.id,
+                    r.code,
+                  ]),
             ),
           ),
         )
       : undefined,
   );
-  const refs = sql`CASE ${sql.join(
-    Object.entries(reviewFamilyDeclarations).flatMap(([family, spec]) =>
-      "primaryOnly" in spec
-        ? []
-        : [
-            sql`WHEN a.family = ${family} THEN ${requested && "recordsFor" in spec ? spec.recordsFor(requested) : spec.records}`,
-          ],
-    ),
-    sql` `,
-  )} ELSE '[]'::jsonb END`;
   const recordMatch = scope.records
     ? or(
         ...scope.records.map((r) =>
@@ -627,8 +625,44 @@ function assessmentRecordMatch(scope: AssessmentRecordScope): SQL {
         ),
       )
     : undefined;
-  // CASE guarantees the expensive secondary graph is skipped for a primary hit.
-  return sql`CASE WHEN ${primaryMatch} THEN true ELSE EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r WHERE ${and(isNotNull(sql`r->>'id'`), scope.entity ? eq(sql<string>`r->>'entity'`, scope.entity) : undefined, recordMatch)}) END`;
+  const recordExists = (refs: SQL) =>
+    sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r WHERE ${and(isNotNull(sql`r->>'id'`), scope.entity ? eq(sql<string>`r->>'entity'`, scope.entity) : undefined, recordMatch)})`;
+  const secondary = Object.entries(reviewFamilyDeclarations).flatMap(
+    ([family, spec]) => {
+      if ("primaryOnly" in spec) return [];
+      return [
+        {
+          family: assessmentFamily.parse(family),
+          refs:
+            requested && "recordsFor" in spec
+              ? spec.recordsFor(requested)
+              : spec.records,
+        },
+      ];
+    },
+  );
+  // Automatic history keeps one matched-id barrier before expensive receipts.
+  if (!separateFamilies) {
+    const refs = sql`CASE ${sql.join(
+      secondary.map(
+        ({ family, refs }) => sql`WHEN a.family = ${family} THEN ${refs}`,
+      ),
+      sql` `,
+    )} ELSE '[]'::jsonb END`;
+    return [
+      sql`CASE WHEN ${primaryMatch} THEN true ELSE ${recordExists(refs)} END`,
+    ];
+  }
+  // Separate branches let Postgres narrow state identities/families before
+  // joining immutable evidence. One CASE across families scanned every served
+  // Assessment and spilled the pending-state join during ordinary list reads.
+  return [
+    sql`${primaryMatch}`,
+    ...secondary.map(
+      ({ family, refs }) =>
+        sql`${and(eq(reviewState.family, family), recordExists(refs))}`,
+    ),
+  ];
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
@@ -636,19 +670,29 @@ function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const client = unwrapDb(db);
   const a = reviewAssessment;
   const s = reviewState;
-  const matched = client
-    .select({ id: a.id })
-    .from(a)
-    .innerJoin(s, eq(s.id, a.id))
-    .where(
-      and(
-        assessmentAdmission(db, scope.eligibility),
-        assessmentRecordMatch(scope),
-        !scope.records ? assessmentAudit(scope.eligibility) : undefined,
-      ),
-    );
+  const branches = assessmentRecordMatches(
+    scope,
+    scope.eligibility.kind === "suggestions",
+  );
+  const matched = sql.join(
+    branches.map((match) =>
+      client
+        .select({ id: a.id })
+        .from(a)
+        .innerJoin(s, eq(s.id, a.id))
+        .where(
+          and(
+            assessmentAdmission(db, scope.eligibility),
+            match,
+            !scope.records ? assessmentAudit(scope.eligibility) : undefined,
+          ),
+        )
+        .getSQL(),
+    ),
+    sql` UNION ALL `,
+  );
   if (scope.eligibility.kind === "suggestions" || !scope.records)
-    return matched.getSQL();
+    return matched;
   // Drizzle 0.45 has no MATERIALIZED CTE option; only this boundary is raw SQL.
   const ids = sql`(WITH matched AS MATERIALIZED (${matched}) SELECT id FROM matched)`;
   return client

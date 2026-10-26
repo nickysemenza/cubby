@@ -3756,6 +3756,10 @@ Every entity list batches the same queue's pending counts and opens its shared
 inline review; detail pages show a scoped Suggestions section. Family declarations
 expand every affected record: both endpoints of connections and pairs, reference
 values of fields, and a statement row's account and candidate Transactions.
+Scoped Suggestions reads match primary UUID identities and secondary family graphs in
+separate SQL branches before joining immutable Assessment evidence. This keeps
+unrelated pending families out of the evidence join; overlapping branches
+still contribute each Assessment once to the caller's identity set.
 Non-actionable Product pairs remain ordinary history. A merge still requires
 explicit survivor and impact confirmation, and identity conflicts cannot merge.
 Tag proposals retain the source and every supporting Product's revision; listing,
