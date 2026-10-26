@@ -133,6 +133,8 @@ describe("entity edge source", () => {
               statementDate: "2026-06-01",
               providerAmount: -12.5,
               rawDescription: "Synthetic connection charge",
+              // A revision changes a fact; providerData alone is an annotation.
+              providerNotes: version === 1 ? null : `Synthetic v${version}`,
               providerData: { version },
             },
           ],
