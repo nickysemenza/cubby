@@ -31,7 +31,7 @@ import {
 } from "~/server/db/schema";
 import {
   attachInventoryValuations,
-  loadInventoryValuations,
+  loadStoredInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
 import {
   loadPrimaryGtins,
@@ -346,7 +346,10 @@ export const loadProductInventoryEntries = async (
     orderBy: inventoryEntry.createdAt,
     with: { location: true },
   });
-  const valuations = await loadInventoryValuations(db, rows);
+  const valuations = await loadStoredInventoryValuations(
+    db,
+    rows.map((row) => row.id),
+  );
 
   const byProduct = new Map<ProductId, typeof rows>();
   for (const row of rows) {

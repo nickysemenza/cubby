@@ -475,7 +475,7 @@ export default defineEntity(
           explanation: {
             ruleId: "inventory.valuation",
             description:
-              "Computed on every read: the inventory amount routed to money through the product's current price and unit mappings, so a price or mapping change is reflected immediately.",
+              "Published in the background from the inventory amount and the product's price and unit mappings. Updating means a new calculation is pending; the explanation compares the published value with a live calculation.",
             resolver: "productValuation",
             readPath: "valuation",
             sourceDependencies: [
@@ -489,7 +489,7 @@ export default defineEntity(
           },
           validation: {
             read: inventoryValuation.describe(
-              "Computed on read: amount routed through the product's unit mappings to its current price",
+              "Published inventory valuation from the product's price and unit mappings; may be awaiting background recomputation",
             ),
             create: null,
             update: null,

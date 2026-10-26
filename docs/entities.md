@@ -2577,7 +2577,10 @@ Reads never compute or repair: lists compile a stored field to one primary-key
 lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
 missing value reads as unknown, never zero. List pages and record reads carry a
 `derived` sidecar per row: state (`fresh`, `stale`, `missing`, `failed`), the
-deciding level and computation time. Field explanations add the stored value
+deciding level and computation time. Detail reads attach it to the record beside
+media, using the same resolved identity and metadata reader as list pages. Native
+and web detail indicators therefore consume the record's current sidecar rather
+than the list snapshot it opened from. Field explanations add the stored value
 beside a live recompute for that one record; they never publish it. Web and
 Apple explanations distinguish the published value from the live result,
 retain Updating and calculation failures, and show the publication time when
@@ -2599,6 +2602,10 @@ reconciliation would conceal a missing declared input in a mutation test.
 Lists that need a value live instead (a one-hop lookup or an indexed rollup the
 round-trip report shows cheap) compile it inline; the Location list's direct
 value is a live sum of stored inventory valuations.
+Inventory detail reads, mutation read-backs and Product stock embeds all use the
+published inventory valuation, including unknown before its first computation.
+Only the background compute and explicit live reports/explanations price the
+inventory rows against current conversion graphs.
 
 ### Row sets and same-row matching
 

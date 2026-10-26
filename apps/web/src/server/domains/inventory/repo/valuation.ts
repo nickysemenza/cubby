@@ -1,15 +1,14 @@
 /**
- * Inventory valuation, computed on every read.
+ * Inventory valuation: live computation and the published read projection.
  *
  * An entry's valuation is its amount routed to money through the product's
  * unit-mapping graph — not `amount.value × price`. The graph is what makes
- * "4 roll" of a four-pack worth one pack rather than four. Nothing stores the
- * result: a price or mapping change is reflected on the next read, so there is
- * no recompute fan-out to forget and no stale figure to disagree with the
- * product page. {@link loadInventoryValuations} prices specific rows (the
- * stored `inventory.valuation` compute and reports); lists read the stored
- * value (ADR 0021). {@link inventoryValuationSql} hands a computed map back to
- * SQL for reports that price on read.
+ * "4 roll" of a four-pack worth one pack rather than four.
+ * {@link loadInventoryValuations} prices specific rows for background compute
+ * and explicit live reports. Ordinary reads and mutation read-backs use
+ * {@link loadStoredInventoryValuations}, retaining the published value until
+ * the background wave completes (ADR 0021). {@link inventoryValuationSql}
+ * hands a computed map back to SQL for reports that price on read.
  *
  * A repo helper rather than a service on purpose — it is data access plus a
  * call into lib compute, and a `*.service.ts` here would be the empty
@@ -146,7 +145,7 @@ export const attachInventoryValuations = <T extends { id: InventoryId }>(
   }));
 
 /**
- * Attach computed valuations to the `inventoryEntry` rows nested in loaded
+ * Attach published valuations to the `inventoryEntry` rows nested in loaded
  * product rows (the detail/list product reads embed their stock).
  */
 export const enrichProductRowsWithInventoryValuations = async <
@@ -163,9 +162,11 @@ export const enrichProductRowsWithInventoryValuations = async <
     }
   >
 > => {
-  const valuations = await loadInventoryValuations(
+  const valuations = await loadStoredInventoryValuations(
     db,
-    products.flatMap((product) => product.inventoryEntry),
+    products.flatMap((product) =>
+      product.inventoryEntry.map((entry) => entry.id),
+    ),
   );
   return products.map((product) => ({
     ...product,
@@ -200,6 +201,7 @@ export const loadStoredInventoryValuations = async (
   db: Database | DrizzleTransaction,
   ids?: readonly InventoryId[],
 ): Promise<InventoryValuations> => {
+  if (ids?.length === 0) return new Map();
   const rows = await unwrapDb(db)
     .select({ id: inventoryEntry.id, valuation: storedValuationColumn })
     .from(inventoryEntry)
