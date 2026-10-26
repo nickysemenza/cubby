@@ -1,5 +1,6 @@
 import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { createHash } from "node:crypto";
+import assert from "node:assert/strict";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySchema } from "@cubby/schemas/entity-core";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -429,13 +430,13 @@ async function seedConnectedHousehold(
     );
 
   const ingredients: CreatedEntity[] = [];
+  // Brand and seller roles share the same Vendor identity.
+  const [, seedBrand, toolBrand, clothingBrand] = vendors;
+  assert(seedBrand, "Exploration nursery fixture is missing");
+  assert(toolBrand, "Exploration tool supplier fixture is missing");
+  assert(clothingBrand, "Exploration clothing supplier fixture is missing");
   const foodBrand = await create("vendor", { name: "Cedar Example Foods" });
-  const toolBrand = await create("vendor", { name: "Bench Example Tools" });
   const deviceBrand = await create("vendor", { name: "Example Devices" });
-  const clothingBrand = await create("vendor", {
-    name: "Thread Example Outfitters",
-  });
-  const seedBrand = await create("vendor", { name: "Sprout Example Nursery" });
   const foodProducts = [];
   for (const [index, name] of [
     "Rolled oats",
