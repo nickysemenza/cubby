@@ -492,7 +492,11 @@ the chain; the Images section also renders it. Both read the record-level
 `fieldExplanation.imageChain` query and preserve its precedence order. Editing
 remains #3310.
 The sidebar shows “Updating N values · Activity” only with a nonempty backlog;
-Activity lists outstanding work once per declared derived kind.
+Activity shows outstanding work as a record type x derived value cross-tab:
+fields shared by the most types lead, `·` marks a value the type does not
+declare, idle declared cells read a muted 0, and counts take the shared heat
+scale with row and column totals. Queued work matching no declaration is
+counted below the matrix rather than dropped.
 While Activity is open, it samples the backlog every 15 seconds and shows an
 approximate remaining time after a minute of net decrease, using up to five
 minutes of observations. A gap over a minute resets the estimate. Flat or growing
