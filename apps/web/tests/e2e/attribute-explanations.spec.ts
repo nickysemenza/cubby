@@ -86,10 +86,10 @@ test("product location detail preserves its partial gap and nested ownership evi
   });
   await expect(beneficiaries).toBeVisible();
   await beneficiaries.click();
-  const sourceExplanation = beneficiaries.locator("..");
+  const sourceExplanation = await inlineExplanation(page, beneficiaries);
   await expect(
     sourceExplanation.getByRole("heading", {
-      name: "Beneficiaries",
+      name: "Why this value · Beneficiaries",
       exact: true,
     }),
   ).toBeVisible();

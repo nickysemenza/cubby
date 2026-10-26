@@ -48,6 +48,7 @@ import {
 import JsonRenderer from "~/ui/text/json-renderer";
 
 import { DecisionChain, DerivedFreshness } from "./decision-chain";
+import { DecisionLevels } from "./decision-levels";
 import { ImageChain } from "./image-chain";
 import {
   ResolutionEvidence,
@@ -528,6 +529,12 @@ export function WhyValueContents({
       <PopoverTitle className="text-sm font-semibold">
         Why this value · {label}
       </PopoverTitle>
+      {/* Suggestion readiness is independent of the explanation request. */}
+      {!result.isSuccess && pendingSuggestion ? (
+        <DecisionLevels>
+          {(level) => (level === "pending" ? pendingSuggestion : null)}
+        </DecisionLevels>
+      ) : null}
       {result.isPending ? (
         <p className="text-muted-foreground">Loading…</p>
       ) : result.isError ? (
@@ -550,9 +557,26 @@ export function WhyValueContents({
             pending={pendingSuggestion}
           />
           {result.data.interpretation ? (
-            <p className="text-xs leading-5">
-              {result.data.interpretation.summary}
-            </p>
+            <div className="grid gap-1 text-xs leading-5">
+              {!result.data.resolution && !result.data.resolutionEvidence ? (
+                <p className="font-medium">
+                  {result.data.interpretation.result}
+                </p>
+              ) : null}
+              <p>{result.data.interpretation.summary}</p>
+              {!result.data.qualityBreakdown ? (
+                <>
+                  {result.data.interpretation.caveats.map((caveat) => (
+                    <p key={caveat} className="text-muted-foreground">
+                      {caveat}
+                    </p>
+                  ))}
+                  {result.data.interpretation.nextSteps.map((step) => (
+                    <p key={step}>{step}</p>
+                  ))}
+                </>
+              ) : null}
+            </div>
           ) : null}
           <ResolutionEvidence evidence={result.data.resolutionEvidence} />
           {result.data.imageChain ? (
@@ -574,14 +598,6 @@ export function WhyValueContents({
                 />
               ))}
             </Ledger>
-          ) : null}
-          {result.data.interpretation &&
-          !explanationScalar.safeParse(result.data.value).success &&
-          result.data.value !== null &&
-          !result.data.resolution &&
-          !result.data.resolutionEvidence &&
-          !result.data.qualityBreakdown ? (
-            <ReadableExplanationValue value={result.data.value} />
           ) : null}
           {visibleSources(result.data).length > 0 ? (
             <section className="grid gap-2 border-t border-border pt-3">

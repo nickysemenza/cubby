@@ -233,10 +233,18 @@ test("draft category edits hide obsolete policy provenance while the replacement
   await page.getByRole("button", { name: /Edit Purchase/i }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  const oldSource = dialog.locator(
-    `[data-slot="field-resolution"] a[href="/spending-categories/${oldCategory}"]`,
+  await dialog
+    .getByRole("button", { name: "Why this value", exact: true })
+    .click();
+  const explanation = page.getByRole("dialog", {
+    name: "Why this value",
+    exact: true,
+  });
+  const oldSource = explanation.locator(
+    `a[href="/spending-categories/${oldCategory}"]`,
   );
   await expect(oldSource).toBeVisible();
+  await page.keyboard.press("Escape");
 
   let releaseRequest = () => {};
   const released = new Promise<void>((resolve) => {
@@ -264,7 +272,11 @@ test("draft category edits hide obsolete policy provenance while the replacement
     );
     await expect.poll(() => requestBlocked).toBe(true);
     // The pending draft has no authoritative source yet; the old query must not supply one.
+    await dialog
+      .getByRole("button", { name: "Why this value", exact: true })
+      .click();
     await expect(oldSource).toHaveCount(0);
+    await page.keyboard.press("Escape");
   } finally {
     releaseRequest();
   }

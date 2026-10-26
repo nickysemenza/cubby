@@ -47,8 +47,11 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   await gotoAuthenticatedPage(
     page,
     `/inventory/${entry.id}`,
-    page.getByRole("button", { name: "Use inherited", exact: true }),
+    page.getByRole("button", { name: "How owner is determined", exact: true }),
   );
+  await page
+    .getByRole("button", { name: "How owner is determined", exact: true })
+    .click();
   // The owner is the generic resolved field: set here, then inherited (no
   // purchase evidence names anyone, so Unknown), then Household.
   await page

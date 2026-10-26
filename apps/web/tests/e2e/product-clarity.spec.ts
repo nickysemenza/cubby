@@ -345,7 +345,9 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
   );
   await explanation.click();
   let popover = await inlineExplanation(page, explanation);
-  await expect(popover.getByText("Inherited", { exact: true })).toBeVisible();
+  await expect(
+    popover.getByText("Inherited · Decides this value", { exact: true }),
+  ).toBeVisible();
   // The chain reads nearest source first: this category unset, its parent used.
   await expect(
     popover.getByRole("heading", { name: "Resolution order", exact: true }),
@@ -355,7 +357,7 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
   ).toBeVisible();
   await expect(
     popover
-      .getByRole("listitem")
+      .locator('[data-record-list="timeline"]')
       .locator(
         `a[href="/product-categories/${taxonomyShortcode("household")}"]`,
       ),
@@ -372,8 +374,12 @@ test("feature explanation ladders ancestry and calls a root binding set here", a
   );
   await explanation.click();
   popover = await inlineExplanation(page, explanation);
-  await expect(popover.getByText("Set here", { exact: true })).toBeVisible();
-  await expect(popover.getByText(/override|inherit/i)).toHaveCount(0);
+  await expect(
+    popover.getByText("Set here · Decides this value", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    popover.getByText("Inherited · Decides this value", { exact: true }),
+  ).toHaveCount(0);
   await expect(
     popover.getByRole("button", { name: /Use inherited|Clear value/ }),
   ).toHaveCount(0);

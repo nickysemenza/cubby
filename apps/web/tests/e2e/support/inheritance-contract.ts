@@ -10,7 +10,9 @@ import { expect, test } from "./e2e-test";
 
 const assignment = z.object({
   projectId: z.string().nullable(),
-  fieldResolutions: z.object({ projectId: z.object({ mode: z.string() }) }),
+  fieldResolutions: z.object({
+    projectId: z.object({ mode: z.string(), matchesFallback: z.boolean() }),
+  }),
 });
 
 export function inheritanceContract() {
@@ -27,9 +29,17 @@ export function inheritanceContract() {
     const open = () =>
       gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
     await open();
-    await expect(
-      page.getByText("Same as inherited value", { exact: true }).first(),
-    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "How project is determined", exact: true })
+      .click();
+    await expect(useInherited).toBeVisible();
+    expect(
+      await readExpense(page, fixture.expense.id, assignment),
+    ).toMatchObject({
+      fieldResolutions: {
+        projectId: { mode: "explicit", matchesFallback: true },
+      },
+    });
     await useInherited.click();
     await expect
       .poll(() => readExpense(page, fixture.expense.id, assignment))
@@ -38,7 +48,9 @@ export function inheritanceContract() {
         fieldResolutions: { projectId: { mode: "inherit" } },
       });
     await expect(
-      page.getByText("From purchase", { exact: true }).first(),
+      page
+        .getByRole("dialog")
+        .getByText("Inherited · Decides this value", { exact: true }),
     ).toBeVisible();
     await expectViewportBounded(page);
   });

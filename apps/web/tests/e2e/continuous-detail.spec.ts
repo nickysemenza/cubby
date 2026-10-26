@@ -92,7 +92,7 @@ test("dense record header preserves identity, actions, and the editor", async ({
     });
     expect(geometry.titleWidth).toBeGreaterThan(200);
     expect(geometry.overlaps).toBe(false);
-    const cover = header.getByRole("img", { name: "example-record-cover.png" });
+    const cover = header.getByRole("img", { name: "Record cover" });
     await expect
       .poll(() =>
         cover.evaluate(

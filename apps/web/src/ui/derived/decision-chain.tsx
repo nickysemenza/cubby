@@ -37,7 +37,8 @@ export function DecisionValue({
   );
 }
 
-/** The envelope decides the winning level; clients never rerun precedence. */
+/** The envelope decides the winning level; clients never rerun precedence.
+ * Resolution evidence owns its structured value instead of duplicating wire fields. */
 export function DecisionChain({
   data,
   pending,
@@ -73,7 +74,7 @@ export function DecisionChain({
                 />
               </div>
             ) : null}
-            {level === winner ? (
+            {level === winner && !data.resolutionEvidence ? (
               <div className="text-foreground">
                 <DecisionValue
                   entity={data.subject.entityKind}
@@ -81,9 +82,6 @@ export function DecisionChain({
                   value={data.value}
                 />
               </div>
-            ) : null}
-            {level === winner && data.resolution?.mode === "allocated" ? (
-              <span>{capitalize(data.resolution.source)}</span>
             ) : null}
             {data.resolution &&
             ((level === "inherited" && data.resolution.canReset) ||
@@ -124,7 +122,13 @@ export function DecisionChain({
           </>
         )}
       </DecisionLevels>
-      {winner === "computed" || (!decided && data.value !== null) ? (
+      {data.resolution?.mode === "allocated" ? (
+        <p className="text-xs font-medium">
+          {capitalize(data.resolution.source)}
+        </p>
+      ) : null}
+      {!data.resolutionEvidence &&
+      (winner === "computed" || (!decided && data.value !== null)) ? (
         <div className="flex items-center gap-2 text-xs">
           <span
             aria-hidden="true"

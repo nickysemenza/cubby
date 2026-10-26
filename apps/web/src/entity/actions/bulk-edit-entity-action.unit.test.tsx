@@ -465,7 +465,12 @@ describe("BulkEditDialogBody", () => {
       fireEvent.click(
         within(
           screen.getByRole("group", { name: "Project assignment" }),
-        ).getByRole("button", { name: action }),
+        ).getByRole("button", { name: "Why this value" }),
+      );
+      fireEvent.click(screen.getByRole("button", { name: action }));
+      fireEvent.keyDown(
+        screen.getByRole("dialog", { name: "Why this value" }),
+        { key: "Escape" },
       );
       fireEvent.click(screen.getByRole("button", { name: "Update" }));
       await waitFor(() =>

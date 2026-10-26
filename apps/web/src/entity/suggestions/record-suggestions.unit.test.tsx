@@ -488,7 +488,11 @@ describe("record suggestions", () => {
       screen.queryByRole("button", { name: "Suggestion actions" }),
     ).toBeNull();
     fireEvent.click(review);
-    expect(screen.getByText(/Confidence:/)).toBeVisible();
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("dialog")).getByText(/Confidence:/),
+      ).toBeVisible(),
+    );
     fireEvent.click(
       await screen.findByRole("button", { name: "Accept suggestions (1)" }),
     );
@@ -1025,7 +1029,11 @@ describe("record suggestions", () => {
         }),
       );
       await waitFor(() =>
-        expect(screen.getByRole("button", { name: "Accept" })).toBeEnabled(),
+        expect(
+          within(screen.getByRole("dialog")).getByRole("button", {
+            name: "Accept",
+          }),
+        ).toBeEnabled(),
       );
     });
 

@@ -104,7 +104,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
   ).toHaveCount(0);
   const cover = page
     .getByTestId("detail-spec-plate")
-    .getByRole("img", { name: `${itemImageName}.png` });
+    .getByRole("img", { name: "Record cover" });
   await expect(cover).toBeVisible();
   await expect
     .poll(() =>

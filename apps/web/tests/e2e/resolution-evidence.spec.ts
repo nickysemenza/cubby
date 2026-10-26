@@ -136,7 +136,9 @@ test("shows owner rollup evidence once without nested wire fields", async ({
       .filter({ visible: true }),
   ).toHaveCount(1);
   await expect(panel.getByText("Entity Kind", { exact: true })).toHaveCount(0);
-  await expect(panel.getByText("Inherited", { exact: true })).toHaveCount(0);
+  await expect(
+    panel.getByText("Inherited · Decides this value", { exact: true }),
+  ).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);

@@ -476,8 +476,13 @@ the field's normal dash. Marks preserve 32px table rows.
 Why this value is one viewport-bounded popover: a vertical chain in declared
 precedence order, with a filled deciding level and muted skipped levels. Set,
 Use inherited, Accept and Reject belong to the affected level. Detail proposals
-retain inline Accept. Quality checks and their exception controls share this
-explanation. The footer compares stored and live values and shows computation
+retain inline Accept. Pending suggestion evidence and review actions remain available
+while the explanation query loads or fails; their enabled state follows the
+current suggestion. Forms place inheritance and explicit None controls inside
+Why this value. Structured resolution evidence renders the resolved rollup once,
+and allocated results retain their Mixed or Allocated label. Quality checks and their exception controls share this
+explanation. Interpretations retain their readable result, caveats and next steps.
+The footer compares stored and live values and shows computation
 age and Updating. `ui/derived` is the app-aware generic composition boundary:
 it may reuse entity links, evidence and existing mutation actions.
 

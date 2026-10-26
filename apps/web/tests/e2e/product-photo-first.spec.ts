@@ -57,7 +57,7 @@ test("a member creates a Product from own item and label photos without an impor
   await page.setViewportSize({ width: 402, height: 874 });
   const photo = page
     .getByTestId("detail-spec-plate")
-    .getByRole("img", { name: "synthetic-wardrobe-shirt.png" });
+    .getByRole("img", { name: "Record cover" });
   await expect(photo).toBeVisible();
   await expectViewportBounded(page);
 
