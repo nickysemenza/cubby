@@ -22,6 +22,7 @@ import { photoImportContract } from "~/contracts/photo-import.contract";
 import type { RunDetail } from "~/contracts/run.contract";
 import { installFeatures } from "~/features/registry";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
@@ -252,6 +253,65 @@ afterEach(() => {
 });
 
 describe("PhotoImportRunView", () => {
+  it("points a superseded Run at the successor's pending groups instead of listing ungrouped photos", async () => {
+    const successorId = shortcode("RUN-5K8N");
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: RUN_ID }),
+      {
+        ...review,
+        review: {
+          ...review.review,
+          unassignedImageIds: review.images.map((image) => image.id),
+        },
+      },
+    );
+    harness.queryClient.setQueryData(
+      runOperations.work.queryKey({ runId: successorId }),
+      {
+        ...run,
+        publicId: successorId,
+        predecessorRunPublicId: RUN_ID,
+        status: "needs_review",
+      } satisfies RunDetail,
+    );
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: successorId }),
+      {
+        ...review,
+        review: {
+          runId: successorId,
+          runStatus: "needs_review",
+          proposals: [
+            {
+              ...committedSweater,
+              state: "proposed",
+              committedProduct: null,
+              committedAt: null,
+            },
+          ],
+          unassignedImageIds: [],
+        },
+      } satisfies PhotoRunReview,
+    );
+
+    render(
+      <PhotoImportRunView
+        run={{ ...run, successorRunPublicId: successorId }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByRole("link", {
+        name: `Grouping continued in ${successorId}`,
+      }),
+    ).toHaveAttribute("href", `/runs/${successorId}`);
+    expect(screen.getByText("Needs review")).toBeInTheDocument();
+    expect(screen.getByText("1 group awaiting approval")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Not in a group")).not.toBeInTheDocument();
+    expect(screen.queryByText(/photos not in a group/)).not.toBeInTheDocument();
+  });
+
   it("keeps approval available for unresolved photos on a stopped review run", async () => {
     const stoppedReview: PhotoRunReview = {
       ...review,

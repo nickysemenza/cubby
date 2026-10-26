@@ -1,11 +1,11 @@
 import { recipeLineAsInput } from "@cubby/schemas/recipe";
 import { testUserId } from "@cubby/schemas/testing";
-import vectorFile from "@cubby/shared/golden-vectors/structured-roundtrip.json";
 import { stabilize, wireJson as json } from "tooling/stabilize-vector";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import vectorFile from "~/entity/editing/structured-value.fixtures.json";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
   entityKernelContextSchema,

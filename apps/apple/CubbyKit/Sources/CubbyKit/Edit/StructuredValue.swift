@@ -24,21 +24,12 @@ public enum StructuredValue {
             let allowed = Set(keys.map(\.value))
             return .object(
                 object.filter { allowed.contains($0.key) }.mapValues { project($0, to: item) })
-        case (.variant(let discriminator, let cases), .object(let object)):
-            guard let tag = object[discriminator]?.stringValue,
-                let match = cases.first(where: { $0.value == tag })
-            else { return value }
-            var projected = projectFields(object, match.fields)
-            projected[discriminator] = .string(tag)
-            return .object(projected)
         default:
             return value
         }
     }
 
-    /// A key the read payload does not carry at its own name is read from the field's `readPath`
-    /// (the nested record a flat input id names), and a required key the schema fixes (a union's
-    /// `null` arm) is written as that constant, so a read line is exactly the input line.
+    /// Retain only input keys and fill a required constant the read did not carry.
     private static func projectFields(
         _ object: [String: JSONValue], _ fields: [ValueSchema.Field]
     ) -> [String: JSONValue] {
@@ -46,11 +37,6 @@ public enum StructuredValue {
         for field in fields {
             if let child = object[field.key] {
                 projected[field.key] = project(child, to: field.schema)
-            } else if let path = field.readPath,
-                case let found = value(at: path.split(separator: ".").map(String.init), in: .object(object)),
-                found != .null
-            {
-                projected[field.key] = project(found, to: field.schema)
             } else if field.required, case .constant(let fixed) = field.schema.node {
                 projected[field.key] = fixed
             }
@@ -79,13 +65,6 @@ public enum StructuredValue {
         case .map: return .object([:])
         case .variant: return .null
         }
-    }
-
-    /// A variant value of `match`, carrying its tag and required keys.
-    public static func blankCase(_ discriminator: String, _ match: ValueSchema.Case) -> JSONValue {
-        var object = blankFields(match.fields)
-        object[discriminator] = .string(match.value)
-        return .object(object)
     }
 
     private static func blankFields(_ fields: [ValueSchema.Field]) -> [String: JSONValue] {
@@ -134,13 +113,6 @@ public enum StructuredValue {
             return .object(
                 object.mapValues { normalize($0, schema: item, required: true) ?? .null }
                     .filter { $0.value != .null })
-        case (.variant(let discriminator, let cases), .object(let object)):
-            guard let tag = object[discriminator]?.stringValue,
-                let match = cases.first(where: { $0.value == tag })
-            else { return value }
-            var normalized = normalizeFields(object, match.fields)
-            normalized[discriminator] = .string(tag)
-            return .object(normalized)
         default:
             return value
         }
@@ -204,18 +176,13 @@ public enum StructuredValue {
                 && (upper ? ["value", "unit", "upperValue"] : ["value", "unit"]).contains(head)
         case .object(let fields):
             return drawsField(head, rest, value, fields)
-        case .variant(let discriminator, let cases):
-            guard let tag = value?[discriminator]?.stringValue,
-                let match = cases.first(where: { $0.value == tag })
-            else { return false }
-            return drawsField(head, rest, value, match.fields)
         case .array(let item):
             guard let index = Int(head), let element = value?.arrayValue?[safe: index] else { return false }
             return rest.isEmpty || draws(path: rest, in: element, schema: item)
         case .map(_, let item):
             guard let entry = value?[head] else { return false }
             return rest.isEmpty || draws(path: rest, in: entry, schema: item)
-        case .text, .number, .boolean, .enum, .reference, .constant:
+        case .text, .number, .boolean, .enum, .reference, .variant, .constant:
             return false
         }
     }

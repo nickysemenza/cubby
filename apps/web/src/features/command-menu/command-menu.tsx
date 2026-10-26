@@ -679,7 +679,7 @@ function SearchGroupItem({
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm">{group.primary.title}</div>
             <div className="truncate text-xs text-muted-foreground">
-              {[group.primary.subtitle, productFamilySummary(group)]
+              {[group.primary.facts.join(" · "), productFamilySummary(group)]
                 .filter(Boolean)
                 .join(" · ")}
             </div>
@@ -761,9 +761,9 @@ function SearchEntityResultItem({
       <SearchResultMedia item={item} />
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm">{item.title}</div>
-        {item.subtitle && (
+        {item.facts.length > 0 && (
           <div className="truncate text-xs text-muted-foreground">
-            {item.subtitle}
+            {item.facts.join(" · ")}
           </div>
         )}
         {group.linkedProduct && (

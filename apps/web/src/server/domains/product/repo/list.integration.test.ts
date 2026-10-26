@@ -301,7 +301,7 @@ describe("product list price footer", () => {
 describe("product list staged projections", () => {
   const ctx = withTestDb();
 
-  it("keeps USDA and pricing enrichment query work constant across page sizes", async () => {
+  it("keeps USDA, pricing and placement enrichment query work constant across page sizes", async () => {
     const products = await Promise.all(
       [1, 2, 3].map((index) =>
         createProductIdentityFixture(
@@ -315,6 +315,22 @@ describe("product list staged projections", () => {
         ),
       ),
     );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic placement shelf" }),
+      ctx.actor,
+    );
+    for (const item of products) {
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
     const usda: Pick<USDAClient, "findFoodsBatch"> = {
       findFoodsBatch: async (inputs) => inputs.map(() => null),
     };
@@ -327,7 +343,11 @@ describe("product list staged projections", () => {
           { pageIndex: 0, pageSize },
           "page",
           usda,
-          selectedListProjection("product", ["food", "pricing"]),
+          selectedListProjection("product", [
+            "food",
+            "pricing",
+            "primaryPlacement",
+          ]),
         ),
       );
     const one = await read(1);
@@ -335,6 +355,9 @@ describe("product list staged projections", () => {
     expect(one.result.data).toHaveLength(1);
     expect(page.result.data).toHaveLength(3);
     expect(page.queryCount).toBe(one.queryCount);
+    expect(page.result.data.every((row) => row.primaryPlacement != null)).toBe(
+      true,
+    );
     expect(
       page.statements.filter((statement) =>
         statement.startsWith('select "id" from "Product" where'),

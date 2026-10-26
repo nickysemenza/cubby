@@ -10,6 +10,8 @@ import {
   productLocationRefOut,
 } from "./product-read-fields";
 export {
+  productPrimaryPlacement,
+  type ProductPrimaryPlacement,
   productQuantityLedgerOut,
   productCookbookRefOut,
   productQuantityFields,
@@ -664,7 +666,9 @@ export type ProductPickerOnHandOut = ProductPickerItemOut["onHand"];
  * two surfaces cannot describe the same numbers differently — the drift that
  * produced two bugs when the list owned its own copy.
  */
-export const productQuantitySummaryOut = z.object(productQuantityFields);
+export const productQuantitySummaryOut = z
+  .object(productQuantityFields)
+  .omit({ primaryPlacement: true });
 export type ProductQuantitySummaryOut = z.infer<
   typeof productQuantitySummaryOut
 >;

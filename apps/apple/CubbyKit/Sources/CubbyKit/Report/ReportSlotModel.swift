@@ -126,6 +126,9 @@ public final class ReportSlotModel {
     /// screen to reload its record.
     public var shownStatus: String?
     @ObservationIgnored public var onRecordStale: (@MainActor () -> Void)?
+    /// For a host that reads the report itself (Today's briefing): a refresh, including the one
+    /// after a command, reloads through it and the model keeps no copy.
+    @ObservationIgnored public var reload: (@MainActor () async -> Void)?
 
     @ObservationIgnored private let service: any ReportServing
     @ObservationIgnored private let batch: ReportBatchModel?
@@ -167,6 +170,7 @@ public final class ReportSlotModel {
     /// Reads the report. A refresh asked for while a read is in flight waits for it and reads
     /// again, so a change made just before (an action) is never hidden behind a stale poll.
     public func refresh() async {
+        if let reload { return await reload() }
         if let batch { return await batch.refresh() }
         await loadFinished()
         isLoading = true

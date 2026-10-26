@@ -90,7 +90,34 @@ export default defineEntity({
         },
       ],
 
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["purpose"],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: [
+            "id",
+            "name",
+            "purchaseId",
+            "vendorId",
+            "carrierId",
+            "trackingNumber",
+            "extraTrackingNumbers",
+            "notes",
+            "firstEventDate",
+            "lastEventDate",
+            "eventSpanHours",
+            "eventCount",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
         { kind: "slot", id: "tracking", title: "Tracking evidence" },
       ],
     },

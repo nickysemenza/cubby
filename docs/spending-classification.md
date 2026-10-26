@@ -89,8 +89,8 @@ merchant, or merged category, plus the other lines of their Purchases. A change
 to policy or to one of those Expenses, including one that newly comes into
 reach, requires a fresh review; an edit to any other Expense does not. Only
 those Expenses are resolved before and after; household totals come from one
-aggregated allocation pass. Web and native views use this same
-backend operation; the Swift review session supplies presentation state only.
+aggregated allocation pass. Classification review is web-only; native hands
+the vendor and category sections off to web.
 
 Merging Spending Categories is keeper-wins: every incoming reference (explicit
 Expense categories, Purchase defaults, Financial Transactions, merchant
@@ -110,5 +110,5 @@ in which case PostgreSQL aborts one and the person retries.
 
 Splitting an Expense preserves its category when a part omits the field, resets
 it when a part supplies null, and stores an explicit category when supplied.
-Web and native split editors let each part set an explicit receipt role or ask for a Decision; an abstention can be resolved by selecting a role before retrying.
+The web split editor lets each part set an explicit receipt role or ask for a Decision; an abstention can be resolved by selecting a role before retrying.
 Splits preserve allocation basis and cannot fabricate Product/receipt identity.

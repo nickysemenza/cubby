@@ -69,6 +69,12 @@ function nativeCoverageLabel(entity: Entity): string | null {
   return [actions, rpc].filter(Boolean).join(" ") || null;
 }
 
+/** The slots and fields native draws as a web handoff row; null when there are none. */
+function nativeHandoffLabel(entity: Entity): string | null {
+  const { handoffs } = ENTITY_NATIVE_COVERAGE[entity];
+  return handoffs.length ? handoffs.join(" · ") : null;
+}
+
 type KernelAction = EntityInspectorMetadata["kernelActions"][number];
 
 /** The four CRUD slots; `read` needs both `get` and `list`. Anything else a
@@ -259,6 +265,7 @@ export function schemaRow(
     overrides: overridesFor(entity).length,
     sections: metadata.detail.sections.length,
     native: nativeCoverageLabel(entity),
+    nativeHandoffs: nativeHandoffLabel(entity),
   };
 }
 

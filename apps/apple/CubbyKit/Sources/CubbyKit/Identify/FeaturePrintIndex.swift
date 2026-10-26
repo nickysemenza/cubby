@@ -77,11 +77,13 @@ public actor FeaturePrintIndex {
         from products: [ProductDetail],
         loader: CoverImageLoader = CoverImageLoader(),
         concurrency: Int = 6,
-        progress: (@Sendable (Int, Int) -> Void)? = nil
+        progress: (@Sendable (Int, Int) async -> Void)? = nil
     ) async -> Int {
-        let pending = products.filter { $0.coverImageURL != nil && entries[$0.id] == nil }
+        var seen = Set(entries.keys)
+        let pending = products.filter { $0.coverImageURL != nil && seen.insert($0.id).inserted }
         var added = 0
         var done = 0
+        await progress?(0, pending.count)
         await withTaskGroup(of: (ProductDetail, FeaturePrintObservation)?.self) { group in
             var iterator = pending.makeIterator()
             func enqueue() {
@@ -97,11 +99,11 @@ public actor FeaturePrintIndex {
             for await result in group {
                 done += 1
                 if let (product, print) = result, let url = product.coverImageURL {
+                    if entries[product.id] == nil { added += 1 }
                     entries[product.id] = FeaturePrintEntry(
                         productID: product.id, name: product.name, imageURL: url, print: print)
-                    added += 1
                 }
-                progress?(done, pending.count)
+                await progress?(done, pending.count)
                 enqueue()
             }
         }
@@ -135,7 +137,7 @@ public actor FeaturePrintIndex {
         else { return 0 }
         let cached = try JSONDecoder().decode([FeaturePrintEntry].self, from: Data(contentsOf: cacheURL))
         for entry in cached { entries[entry.productID] = entry }
-        return cached.count
+        return entries.count
     }
 
     public func saveCache() throws {

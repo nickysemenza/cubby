@@ -81,6 +81,26 @@ export default defineEntity({
         { relation: "plantings", dateField: "sowedOn" },
         { relation: "images", dateField: "capturedAt" },
       ],
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "locationId",
+            "kind",
+            "observedOn",
+            "notes",
+            "harvestAmount",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["plantings"],
+        },
+      ],
     },
     list: {
       timeline: { fields: ["observedOn"] },
@@ -176,7 +196,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Observation" },
+        display: { columnGroup: "Observation", width: "xl" },
         validation: {
           read: optionalText,
           create: optionalText.default(null),

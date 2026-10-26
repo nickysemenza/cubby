@@ -2,10 +2,8 @@ import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Pool } from "pg";
 
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { photoRunImage } from "~/server/db/schema";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
-import { proposePhotoGroups } from "~/server/domains/photo-import/repo/run/proposals";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { getDb } from "~/server/db/helpers";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
@@ -131,7 +129,6 @@ export async function seedNativeQa(
   const account = await createEntity(context, "financialAccount", {
     name: "Synthetic Checking",
   });
-  const split = await seedSplitSettlement(pool, userId);
   const pausedRun = await seedPausedRun(pool, userId);
   const researchMember = await pool.query<{
     id: string;
@@ -175,12 +172,9 @@ export async function seedNativeQa(
       diff: {},
     },
   ]);
-  const photoRun = await seedProposedPhotoRun(pool, userId);
   const garden = await seedScopedPlantingPicker(pool, context);
   return {
-    ...split,
     ...pausedRun,
-    ...photoRun,
     ...garden,
     LOCATION_ID: kitchen.id,
     SHELF_ID: shelf.id,
@@ -260,57 +254,6 @@ async function seedScopedPlantingPicker(
   };
 }
 
-/**
- * Two Purchases sharing one unallocated synthetic card charge: the financial settlement
- * slot's statement-match journey.
- */
-export async function seedSplitSettlement(
-  pool: Pool,
-  userId: string,
-): Promise<Record<string, string>> {
-  const db = buildScenarioDatabase(pool);
-  const member = await pool.query<{ id: string }>(
-    'SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = $2 AND "deletedAt" IS NULL LIMIT 1',
-    [userId, "member"],
-  );
-  const memberId = member.rows[0]?.id;
-  if (!memberId) throw new Error("Synthetic member party is missing");
-  const splitVendor = await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Split Vendor",
-  });
-  const splitFirst = await insertWithShortcode(db, "purchase", {
-    vendorId: splitVendor.id,
-    orderId: "SYN-SPLIT-1",
-    date: "2026-09-10",
-    statedTotal: 42.5,
-  });
-  const splitSecond = await insertWithShortcode(db, "purchase", {
-    vendorId: splitVendor.id,
-    orderId: "SYN-SPLIT-2",
-    date: "2026-09-10",
-    statedTotal: 48.5,
-  });
-  const card = await insertWithShortcode(db, "financialAccount", {
-    name: "Synthetic Split Card",
-    identity: { kind: "credit_card", network: "visa" },
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
-  });
-  const charge = await insertWithShortcode(db, "financialTransaction", {
-    accountId: card.id,
-    kind: "purchase",
-    status: "posted",
-    amount: 91,
-    merchant: "Synthetic Split Vendor",
-    transactionDate: "2026-09-12",
-    postedDate: "2026-09-12",
-  });
-  return {
-    SPLIT_PURCHASE_ID: splitFirst.shortcode,
-    SPLIT_PURCHASE_2_ID: splitSecond.shortcode,
-    SPLIT_CHARGE_ID: charge.shortcode,
-  };
-}
-
 /** A running Run on a fresh photo inventory (`notes` keeps seeds apart). */
 export async function startSyntheticRun(
   pool: Pool,
@@ -343,97 +286,4 @@ export async function seedPausedRun(
     "paused",
   ]);
   return { PAUSED_RUN_ID: run.publicId };
-}
-
-/**
- * A running photo-inventory Run with two ready proposed groups. The native journey selects only
- * the second group and approves the selection; the first must stay proposed.
- */
-export async function seedProposedPhotoRun(
-  pool: Pool,
-  userId: string,
-  options: { finalReview?: boolean } = {},
-): Promise<Record<string, string>> {
-  const db = buildScenarioDatabase(pool);
-  const run = await startPhotoInventoryRun(db, {
-    actorUserId: testUserId(userId),
-  });
-  const images = [];
-  for (const name of options.finalReview
-    ? ["selected-shirt", "front", "back", "label", "detail"]
-    : ["unselected-mug", "selected-shirt"])
-    images.push(
-      await insertWithShortcode(db, "image", {
-        // Unique per seed: a retried journey seeds a second photo Run.
-        key: `synthetic-qa-photo-${run.publicId}-${name}`,
-        filename: `synthetic-qa-photo-${name}.png`,
-        contentType: "image/png",
-        size: 100,
-        status: "UPLOADED",
-      }),
-    );
-  const runRow = await pool.query<{ id: string }>(
-    'SELECT id FROM "Run" WHERE shortcode = $1',
-    [run.publicId],
-  );
-  // No describe job exists for these images, so neither group waits on an AI description.
-  await getDb(db)
-    .insert(photoRunImage)
-    .values(
-      images.map((image, position) => ({
-        runId: parseEntityId("run", runRow.rows[0]?.id ?? ""),
-        imageId: parseEntityId("image", image.id),
-        workKey: image.id,
-        position,
-        state: "pending" as const,
-        targetFingerprint: `synthetic-qa-photo-${position}`,
-      })),
-    );
-  const mug = images[0];
-  const shirt = images.at(-1);
-  // Product names are unique per seed: a retried journey reseeds after the first attempt may
-  // have committed, and the photo writer refuses a name another Run's Product already uses.
-  const unselectedName = `Synthetic Unselected Mug ${run.publicId}`;
-  const selectedName = `Synthetic Selected Shirt ${run.publicId}`;
-  if (!mug || !shirt) throw new Error("Synthetic photo images are missing");
-  // Proposals list by creation time, then group key: the selected group is deliberately second.
-  await proposePhotoGroups(db, {
-    runId: parseShortcodeFor("run", run.publicId),
-    groups: [
-      {
-        groupKey: "synthetic-qa-a-unselected-mug",
-        images: [
-          {
-            id: parseShortcodeFor("image", mug.shortcode),
-            purpose: "item" as const,
-          },
-        ],
-        product: {
-          kind: "create" as const,
-          create: { name: unselectedName },
-        },
-      },
-      {
-        groupKey: "synthetic-qa-b-selected-shirt",
-        images: (options.finalReview ? images : [shirt]).map((image) => ({
-          id: parseShortcodeFor("image", image.shortcode),
-          purpose: "item" as const,
-        })),
-        product: {
-          kind: "create" as const,
-          create: { name: selectedName },
-        },
-      },
-    ].slice(options.finalReview ? -1 : 0),
-  });
-  if (options.finalReview)
-    await pool.query('UPDATE "Run" SET status = $2 WHERE shortcode = $1', [
-      run.publicId,
-      "needs_review",
-    ]);
-  return {
-    PHOTO_RUN_ID: run.publicId,
-    PHOTO_SELECTED_NAME: selectedName,
-    PHOTO_UNSELECTED_NAME: unselectedName,
-  };
 }

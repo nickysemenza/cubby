@@ -23,10 +23,53 @@ struct NativeCoverageViewPathTests {
         }
     #endif
 
-    @Test func nativeCoverageDecodesAndSurfacesUnsupportedReasons() {
+    @Test func nativeCoverageDecodesAndHandsUnknownSlotsOffToTheRecord() {
         #expect(NativePresentationCoverage.detailSlot("purchase.receiving") == .implemented)
+        let unknown = NativePresentationCoverage.detailSlot("not.a-slot").handoff
+        #expect(unknown?.section == nil && unknown?.reason == "Unknown native detail slot.")
+    }
+
+    /// Reconciliation and its verbs are web's; receiving what an expense bought stays native.
+    @Test func financeReconciliationHandsOffAndReceivingStaysNative() {
+        #expect(NativePresentationCoverage.sectionAction(.receiveExpense) == .implemented)
         #expect(
-            NativePresentationCoverage.detailSlot("not.a-slot")
-                == .unsupported("Unknown native detail slot."))
+            NativePresentationCoverage.sectionAction(.matchStatement).handoff?.section
+                == "financial-settlement")
+        let purchase = EntityRow(
+            id: "PUR-4K7M", title: "Synthetic order", subtitle: nil, imageURL: nil, raw: ["id": "PUR-4K7M"])
+        #expect(
+            NativePresentationCoverage.recordHandoffs(EntityCatalog[.purchase], row: purchase).map(\.label)
+                == ["Review reconciliation on web"])
+    }
+
+    /// A handoff slot draws its row only where web's slot predicate would draw the slot.
+    @Test func importAgentHandoffFollowsTheRunsPurposeAndLiveness() throws {
+        func run(_ purpose: String, _ status: String) -> EntityRow {
+            EntityRow(
+                id: "RUN-4K7M", title: "Import", subtitle: nil, imageURL: nil,
+                raw: ["id": "RUN-4K7M", "purpose": .string(purpose), "status": .string(status)])
+        }
+        let importPurpose = try #require(SharedConstants.importReportRunPurposes.first)
+        let live = try #require(SharedConstants.activeRunStatuses.first)
+        let liveImport = run(importPurpose, live)
+        let stoppedImport = run(importPurpose, "completed")
+
+        #expect(
+            DetailSlotRegistry.handoff(slot: "run.import-agent-live", row: liveImport)?.section
+                == "import-agent-live")
+        #expect(DetailSlotRegistry.handoff(slot: "run.import-agent-stopped", row: liveImport) == nil)
+        #expect(
+            DetailSlotRegistry.handoff(slot: "run.import-agent-stopped", row: stoppedImport)?.section
+                == "import-agent-stopped")
+        let photoRun = run("photo_inventory", live)
+        #expect(DetailSlotRegistry.handoff(slot: "run.import-agent-live", row: photoRun) == nil)
+        // Photo-group review is web's, and only a photo Run takes it.
+        #expect(
+            DetailSlotRegistry.handoff(slot: "run.photo-batch", row: photoRun)?.label
+                == "Review photo groups on web")
+        #expect(DetailSlotRegistry.handoff(slot: "run.photo-batch", row: stoppedImport) == nil)
+        #expect(
+            NativePresentationCoverage.recordHandoffs(EntityCatalog[.run], row: stoppedImport).map(\.label)
+                == ["Open agent history on web"])
     }
 }

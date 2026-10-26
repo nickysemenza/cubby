@@ -20,7 +20,7 @@ final class WorkHighlightsModel {
             entries = try await client.auditHistory(limit: 6).entries
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.userMessage
             Diagnostics.report(error, context: "work.highlights")
         }
     }
@@ -149,9 +149,17 @@ struct AuditEntryRow: View {
                     ?? entry.entityKind.rawValue)
         } rail: {
             Text(group.foldSummary ?? entry.action.rawValue.capitalized)
-            DateDisplay(date: entry.createdAt)
+            #if os(iOS)
+                DateDisplay(date: entry.createdAt)
+            #endif
         } supplement: {
-            EmptyView()
+            #if os(macOS)
+                DateDisplay(date: entry.createdAt)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            #else
+                EmptyView()
+            #endif
         }
     }
 }
@@ -192,6 +200,13 @@ struct TodayView: View {
     @State private var nutrition: MealNutritionModel?
     @State private var highlights = WorkHighlightsModel()
     @State private var householdDay = HouseholdDay.string(for: .now)
+    @State private var creation: Creation?
+
+    private enum Creation: String, Identifiable {
+        case task, meal
+        var id: String { rawValue }
+        var key: EntityKey { self == .task ? .task : .meal }
+    }
 
     var body: some View {
         Group {
@@ -199,10 +214,12 @@ struct TodayView: View {
                 let nutrition = nutrition
                 TodayContent(
                     dateText: displayDate,
-                    tasks: today.tasks, meals: today.meals, problems: today.problems,
+                    tasks: today.tasks, meals: today.meals,
+                    taskCommands: today.taskCommands,
                     nutrition: nutrition?.state ?? .loading,
                     nutritionDay: householdDay,
                     onRefresh: {
+                        async let changesRefresh: Void = highlights.refresh(client: model.client)
                         if let nutrition {
                             async let todayRefresh: Void = today.refresh()
                             async let nutritionRefresh: Void = nutrition.refresh()
@@ -210,17 +227,15 @@ struct TodayView: View {
                         } else {
                             await today.refresh()
                         }
+                        await changesRefresh
                     },
                     tasksError: today.tasksError, mealsError: today.mealsError,
-                    problemsError: today.problemsError,
                     nutritionError: nutrition?.refreshError,
                     onRetryTasks: { await today.refreshTasks() },
                     onRetryMeals: { await today.refreshMeals() },
-                    onRetryProblems: { await today.refreshProblems() },
                     onRetryNutrition: { await nutrition?.refresh() },
                     tasksIsLoading: today.tasksIsLoading,
                     mealsIsLoading: today.mealsIsLoading,
-                    problemsIsLoading: today.problemsIsLoading,
                     nutritionIsLoading: nutrition?.isLoading ?? false,
                     highlights: highlights
                 )
@@ -229,6 +244,32 @@ struct TodayView: View {
             }
         }
         .navigationTitle("Today")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button("New task", systemImage: "checklist") { creation = .task }
+                    Button("Log meal", systemImage: "fork.knife") { creation = .meal }
+                    Button("Capture", systemImage: "barcode.viewfinder") {
+                        model.navigator.section = .capture
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Add")
+                .accessibilityIdentifier("today.add")
+            }
+        }
+        .sheet(item: $creation) { creation in
+            EntityEditorSheet(
+                key: creation.key,
+                mode: .create(
+                    prefill: creation == .task
+                        ? ["due": .object(["start": .string(HouseholdDay.string(for: .now)), "end": .null])]
+                        : [:])
+            ) { _ in
+                Task { await synchronizeDay(forceRefresh: true) }
+            }
+        }
         #if os(iOS)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -296,186 +337,188 @@ struct TodayContent: View {
     let dateText: String
     let tasks: TodaySectionState<EntityReportOut>
     let meals: TodaySectionState<[EntityRow]>
-    let problems: TodaySectionState<ProblemsCount>
+    /// Runs the briefing rows' commands; nil (previews) draws them inert.
+    var taskCommands: ReportSlotModel? = nil
     var nutrition: TodaySectionState<MealNutritionOut> = .loading
     var nutritionDay = HouseholdDay.string(for: .now)
     let onRefresh: @Sendable () async -> Void
     var tasksError: String?
     var mealsError: String?
-    var problemsError: String?
     var nutritionError: String?
     var onRetryTasks: (@Sendable () async -> Void)?
     var onRetryMeals: (@Sendable () async -> Void)?
-    var onRetryProblems: (@Sendable () async -> Void)?
     var onRetryNutrition: (@Sendable () async -> Void)?
     var tasksIsLoading = false
     var mealsIsLoading = false
-    var problemsIsLoading = false
     var nutritionIsLoading = false
     var highlights: WorkHighlightsModel?
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
     @State private var macDashboardWidth: CGFloat = 0
 
     var body: some View {
-        #if os(macOS)
-            macDashboard
-        #else
-            iOSList
-        #endif
+        Group {
+            if let message = TodayModel.failureMessage(
+                tasks: tasks, meals: meals, nutrition: nutrition,
+                changesError: highlights?.entries.isEmpty == true ? highlights?.error : nil)
+            {
+                LoadFailureView(title: "Couldn’t load Today", message: message, retry: onRefresh)
+            } else {
+                #if os(macOS)
+                    macDashboard
+                #else
+                    iOSList
+                #endif
+            }
+        }
+        .navigationSubtitle(dateText)
     }
 
     #if os(iOS)
         private var iOSList: some View {
             List {
-                Section("Activity inbox") {
-                    NavigationLink(value: Route.activityList) {
-                        Label("All activity", systemImage: "clock.arrow.circlepath")
-                    }
-                    NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
-                        Label("Runs needing attention", systemImage: "exclamationmark.circle")
-                    }
-                    NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
-                        Label("Image jobs needing attention", systemImage: "photo.badge.checkmark")
-                    }
-                }
-                .accessibilityIdentifier("work.activityInbox")
-                Section("Recent changes") {
-                    ForEach(AuditEntryFolding.fold(highlights?.entries ?? [])) { group in
-                        AuditEntryRow(group: group)
-                    }
-                    NavigationLink(value: Route.auditHistory) {
-                        Label("All changes", systemImage: "clock")
-                    }
-                    if let error = highlights?.error {
-                        Text(error).font(.caption).foregroundStyle(FieldGuideTokens.warning)
-                    }
-                }
-                .accessibilityIdentifier("work.auditFeed")
-                Section("Next up") {
-                    switch tasks {
-                    case .loading: loadingRow("Loading tasks")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                    case .loaded(let briefing):
-                        ReportBlocksView(report: ReportPresentation(briefing))
-                    }
-                    if let tasksError {
-                        InlineLoadFailure(
-                            message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                    }
-                }
-                Section("Meals today") {
-                    switch meals {
-                    case .loading: loadingRow("Loading meals")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
-                    case .loaded(let rows):
-                        if rows.isEmpty { emptyStateText("No meals planned") }
-                        ForEach(rows) { meal in
-                            NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
-                                mealRow(meal)
-                            }
+                ForEach(TodaySection.allCases) { section in
+                    Section(section.rawValue) {
+                        switch section {
+                        case .tasks: taskContent
+                        case .meals: mealContent
+                        case .nutrition: nutritionContent
+                        case .views: PinnedViewLinks()
                         }
                     }
-                    if let mealsError {
-                        InlineLoadFailure(
-                            message: mealsError, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
-                    }
                 }
-                Section("Nutrition today") {
-                    switch nutrition {
-                    case .loading: loadingRow("Loading nutrition")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: nutritionIsLoading,
-                            retry: onRetryNutrition ?? onRefresh)
-                    case .loaded(let summary):
-                        MealNutritionCompactView(summary: summary)
-                        NavigationLink(value: Route.nutrition(day: nutritionDay)) {
-                            Label("View food breakdown", systemImage: "chart.bar.doc.horizontal")
-                        }
-                    }
-                    if let nutritionError {
-                        InlineLoadFailure(
-                            message: nutritionError, isRetrying: nutritionIsLoading,
-                            retry: onRetryNutrition ?? onRefresh)
-                    }
-                }
-                Section("Status") {
-                    switch problems {
-                    case .loading: loadingRow("Loading problems")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: problemsIsLoading,
-                            retry: onRetryProblems ?? onRefresh)
-                    case .loaded(let counts):
-                        Text(
-                            "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
-                        )
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(.secondary)
-                    }
-                    if let problemsError {
-                        InlineLoadFailure(
-                            message: problemsError, isRetrying: problemsIsLoading,
-                            retry: onRetryProblems ?? onRefresh)
-                    }
-                }
-                Section("Your views") { PinnedViewLinks() }
-                Section("Quick actions") {
-                    Button {
-                        model.navigator.section = .capture
-                        model.navigator.paths[.capture] = [.audit(locationID: nil)]
-                    } label: {
-                        Label("Walk the shelf", systemImage: "checklist")
-                    }
-                    NavigationLink(value: Route.needsPhoto(locationID: nil)) {
-                        Label("Needs a photo", systemImage: "camera.badge.ellipsis")
-                    }
-                    Button {
-                        model.navigator.openIdentify()
-                    } label: {
-                        Label("Identify a photo", systemImage: "camera.metering.center.weighted")
-                    }
-                }
+                Section { problemsLink }
             }
-            .listRowInsets(
-                EdgeInsets(
-                    top: 0, leading: FieldGuideTokens.Space.md,
-                    bottom: 0, trailing: FieldGuideTokens.Space.md)
-            )
+            .fieldGuideSectionStyle()
             .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
             .refreshControl(onRefresh)
             .accessibilityIdentifier("today.sections")
-            .navigationSubtitle(dateText)
+            .frame(maxWidth: horizontalSizeClass == .regular ? 760 : .infinity)
+            .frame(maxWidth: .infinity)
+            .background(FieldGuideTokens.canvas)
         }
     #endif
+
+    @ViewBuilder private var taskContent: some View {
+        switch tasks {
+        case .loading: loadingRow("Loading tasks")
+        case .failed(let message):
+            InlineLoadFailure(
+                message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+        case .loaded(let briefing):
+            let presentation = TodayBriefingPresentation(briefing)
+            ReportBlocksView(report: ReportPresentation(presentation.tasks), model: taskCommands)
+            ForEach(presentation.moreReady, id: \.self) { footer in
+                NavigationLink(value: Route.entityList(.task)) {
+                    Text(footer)
+                }
+            }
+            #if os(macOS)
+                if !presentation.stats.blocks.isEmpty {
+                    Divider()
+                    ReportBlocksView(report: ReportPresentation(presentation.stats))
+                }
+            #endif
+        }
+        if let tasksError {
+            InlineLoadFailure(
+                message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+        }
+        if let failure = taskCommands?.actionError {
+            Text(failure).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
+        }
+    }
+
+    @ViewBuilder private var activityLinks: some View {
+        #if os(macOS)
+            Button("All activity", systemImage: "clock.arrow.circlepath") {
+                model.navigator.section = .activity
+            }
+        #else
+            NavigationLink(value: Route.activityList) {
+                Label("All activity", systemImage: "clock.arrow.circlepath")
+            }
+        #endif
+        NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
+            Label("Runs needing attention", systemImage: "exclamationmark.circle")
+        }
+        NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
+            Label("Image jobs needing attention", systemImage: "photo.badge.checkmark")
+        }
+    }
+
+    @ViewBuilder private var mealContent: some View {
+        switch meals {
+        case .loading: loadingRow("Loading meals")
+        case .failed(let message):
+            InlineLoadFailure(
+                message: message, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+        case .loaded(let rows):
+            if rows.isEmpty { emptyStateText("No meals planned") }
+            ForEach(rows) { meal in
+                NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) { mealRow(meal) }
+            }
+        }
+        if let mealsError {
+            InlineLoadFailure(
+                message: mealsError, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+        }
+    }
+
+    @ViewBuilder private var nutritionContent: some View {
+        switch nutrition {
+        case .loading: loadingRow("Loading nutrition")
+        case .failed(let message):
+            InlineLoadFailure(
+                message: message, isRetrying: nutritionIsLoading, retry: onRetryNutrition ?? onRefresh)
+        case .loaded(let summary):
+            MealNutritionCompactView(summary: summary)
+            NavigationLink(value: Route.nutrition(day: nutritionDay)) {
+                Label("View food breakdown", systemImage: "chart.bar.doc.horizontal")
+            }
+        }
+        if let nutritionError {
+            InlineLoadFailure(
+                message: nutritionError, isRetrying: nutritionIsLoading, retry: onRetryNutrition ?? onRefresh)
+        }
+    }
+
+    @ViewBuilder private var recentChanges: some View {
+        ForEach(AuditEntryFolding.fold(highlights?.entries ?? [])) { group in
+            AuditEntryRow(group: group)
+        }
+        NavigationLink(value: Route.auditHistory) { Label("All changes", systemImage: "clock") }
+        if let error = highlights?.error {
+            InlineLoadFailure(message: error, retry: onRefresh)
+        }
+    }
+
+    private var problemsLink: some View {
+        OpenOnWebButton(target: .route(path: "/problems")) {
+            HStack {
+                Label("Problems on web", systemImage: "safari")
+                Spacer()
+                Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
+            }
+        }
+    }
 
     #if os(macOS)
         private var macDashboard: some View {
             ScrollView {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
-                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                        Text("Today").font(.fieldGuideDisplay)
-                        HStack(spacing: FieldGuideTokens.Space.sm) {
-                            Circle().fill(FieldGuideTokens.signal).frame(width: 9, height: 9)
-                            Text(dateText).font(.fieldGuideLabel).foregroundStyle(.secondary)
-                        }
-                    }
-
+                Group {
                     if dynamicTypeSize.isAccessibilitySize || macDashboardWidth < 760 {
-                        macDashboardStack
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                            macLeftColumn
+                            macRightColumn
+                        }
                     } else {
                         HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
-                            macWorkAndActivity
-                                .frame(width: macWorkWidth, alignment: .topLeading)
-                            macMealsAndChanges
-                                .frame(
-                                    width: macDashboardWidth - macWorkWidth - FieldGuideTokens.Space.lg,
-                                    alignment: .topLeading)
+                            macLeftColumn.frame(maxWidth: .infinity, alignment: .topLeading)
+                            macRightColumn.frame(maxWidth: .infinity, alignment: .topLeading)
                         }
                     }
                 }
@@ -494,156 +537,22 @@ struct TodayContent: View {
             .accessibilityIdentifier("today.sections")
         }
 
-        private var macWorkWidth: CGFloat {
-            max(400, (macDashboardWidth - FieldGuideTokens.Space.lg) * 0.55)
-        }
-
-        private var macWorkAndActivity: some View {
+        private var macLeftColumn: some View {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                macWorkColumn
-                if let highlights { workActivityPanel(highlights) }
-            }
-        }
-
-        private var macMealsAndChanges: some View {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                macMealsColumn
-                if let highlights { workAuditPanel(highlights) }
-            }
-        }
-
-        private var macDashboardStack: some View {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                macWorkAndActivity
-                macMealsAndChanges
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-
-        private func workActivityPanel(_ highlights: WorkHighlightsModel) -> some View {
-            dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") {
-                Button("All activity") { model.navigator.section = .activity }
-                NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
-                    Label("Runs needing attention", systemImage: "exclamationmark.circle")
-                }
-                NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
-                    Label("Image jobs needing attention", systemImage: "photo.badge.checkmark")
-                }
-            }
-        }
-
-        private func workAuditPanel(_ highlights: WorkHighlightsModel) -> some View {
-            dashboardPanel("Recent changes", systemImage: "clock") {
-                ForEach(AuditEntryFolding.fold(highlights.entries)) { AuditEntryRow(group: $0) }
-                NavigationLink(value: Route.auditHistory) { Text("All changes") }
-                if let error = highlights.error { Text(error).foregroundStyle(FieldGuideTokens.warning) }
-            }
-        }
-
-        private var macMealsColumn: some View {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                dashboardPanel("Meals today", systemImage: "fork.knife") {
-                    switch meals {
-                    case .loading: LoadingIndicator(label: "Loading meals")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
-                    case .loaded(let rows):
-                        if rows.isEmpty { emptyStateText("No meals planned") }
-                        ForEach(rows) { meal in
-                            NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
-                                mealRow(meal)
-                            }
-                        }
-                    }
-                    if let mealsError {
-                        InlineLoadFailure(
-                            message: mealsError, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
-                    }
-                }
-
-                dashboardPanel("Nutrition today", systemImage: "chart.bar.doc.horizontal") {
-                    switch nutrition {
-                    case .loading: LoadingIndicator(label: "Loading nutrition")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: nutritionIsLoading,
-                            retry: onRetryNutrition ?? onRefresh)
-                    case .loaded(let summary):
-                        MealNutritionCompactView(summary: summary)
-                        NavigationLink(value: Route.nutrition(day: nutritionDay)) {
-                            Label("View food breakdown", systemImage: "arrow.right")
-                        }
-                    }
-                    if let nutritionError {
-                        InlineLoadFailure(
-                            message: nutritionError, isRetrying: nutritionIsLoading,
-                            retry: onRetryNutrition ?? onRefresh)
-                    }
-                }
-            }
-        }
-
-        private var macWorkColumn: some View {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                dashboardPanel("Next up", systemImage: "checklist") {
-                    switch tasks {
-                    case .loading: LoadingIndicator(label: "Loading tasks")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                    case .loaded(let briefing):
-                        ReportBlocksView(report: ReportPresentation(briefing))
-                    }
-                    if let tasksError {
-                        InlineLoadFailure(
-                            message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                    }
-                }
-
-                dashboardPanel("Status", systemImage: "exclamationmark.triangle") {
-                    switch problems {
-                    case .loading: LoadingIndicator(label: "Loading problems")
-                    case .failed(let message):
-                        InlineLoadFailure(
-                            message: message, isRetrying: problemsIsLoading,
-                            retry: onRetryProblems ?? onRefresh)
-                    case .loaded(let counts):
-                        Text(
-                            "\(counts.total.formatted()) problems · \(counts.coverageTotal.formatted()) coverage gaps"
-                        )
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(.secondary)
-                    }
-                    if let problemsError {
-                        InlineLoadFailure(
-                            message: problemsError, isRetrying: problemsIsLoading,
-                            retry: onRetryProblems ?? onRefresh)
-                    }
-                }
-
+                dashboardPanel("Next up", systemImage: "checklist") { taskContent }
+                dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") { activityLinks }
                 dashboardPanel("Your views", systemImage: "pin") { PinnedViewLinks() }
-
-                dashboardPanel("Quick actions", systemImage: "arrow.up.right.square") {
-                    macShortcuts
-                }
+                problemsLink
             }
         }
 
-        @ViewBuilder private var macShortcuts: some View {
-            Button {
-                model.navigator.section = .capture
-                model.navigator.paths[.capture] = [.audit(locationID: nil)]
-            } label: {
-                Label("Walk the shelf", systemImage: "checklist")
-            }
-            NavigationLink(value: Route.needsPhoto(locationID: nil)) {
-                Label("Needs a photo", systemImage: "camera.badge.ellipsis")
-            }
-            Button {
-                model.navigator.openIdentify()
-            } label: {
-                Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+        private var macRightColumn: some View {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                dashboardPanel("Meals today", systemImage: "fork.knife") { mealContent }
+                dashboardPanel("Nutrition today", systemImage: "chart.bar.doc.horizontal") {
+                    nutritionContent
+                }
+                dashboardPanel("Recent changes", systemImage: "clock") { recentChanges }
             }
         }
 
@@ -702,7 +611,6 @@ struct TodayContent: View {
             dateText: "Friday, September 11",
             tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
             meals: .loaded(PreviewFixtures.sampleTodayMeals),
-            problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
             nutritionDay: "2026-09-14",
             onRefresh: {},
@@ -727,7 +635,6 @@ struct TodayContent: View {
             tasks: .loaded(
                 EntityReportOut(blocks: [])),
             meals: .loaded([]),
-            problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(MealNutritionOut(meals: [], people: [])),
             onRefresh: {}
         )
@@ -741,9 +648,20 @@ struct TodayContent: View {
             dateText: "Friday, September 11",
             tasks: .loading,
             meals: .failed("The server returned an error."),
-            problems: .loading,
             nutrition: .failed("Nutrition is temporarily unavailable."),
             onRefresh: {}
+        )
+        .navigationTitle("Today")
+    }
+}
+
+#Preview("Today — all failed", traits: .modifier(SignedInPreview())) {
+    NavigationStack {
+        TodayContent(
+            dateText: "Friday, September 11",
+            tasks: .failed("TEST: Still offline"), meals: .failed("TEST: Still offline"),
+            nutrition: .failed("TEST: Still offline"), onRefresh: {},
+            highlights: WorkHighlightsModel(error: "TEST: Still offline")
         )
         .navigationTitle("Today")
     }
@@ -755,7 +673,6 @@ struct TodayContent: View {
             dateText: "Friday, September 11",
             tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
             meals: .loaded(PreviewFixtures.sampleTodayMeals),
-            problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
             onRefresh: {}
         )
@@ -769,7 +686,6 @@ struct TodayContent: View {
             dateText: "Friday, September 11",
             tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
             meals: .loaded(PreviewFixtures.sampleTodayMeals),
-            problems: .loaded(PreviewFixtures.sampleTodayProblems),
             nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
             onRefresh: {}
         )
@@ -784,7 +700,6 @@ struct TodayContent: View {
                 dateText: "Friday, September 11",
                 tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
                 meals: .loaded(PreviewFixtures.sampleTodayMeals),
-                problems: .loaded(PreviewFixtures.sampleTodayProblems),
                 nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
                 nutritionDay: "2026-09-14",
                 onRefresh: {}
@@ -801,7 +716,6 @@ struct TodayContent: View {
                 dateText: "Friday, September 11",
                 tasks: .loaded(PreviewFixtures.sampleTodayBriefing),
                 meals: .loaded(PreviewFixtures.sampleTodayMeals),
-                problems: .loaded(PreviewFixtures.sampleTodayProblems),
                 nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
                 onRefresh: {},
                 highlights: WorkHighlightsModel())

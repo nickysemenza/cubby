@@ -292,6 +292,7 @@ export const manifestWire = {
     heroWhen: "HeroWhen~",
     heroImages: "boolean",
     heroActions: "[EntityHeroActionID]",
+    detailQuickActions: "[EntityHeroActionID]?",
     activityRelations: "[ActivityRelation]",
     detailSections: "[DetailSection]",
     connectedViews: "[ConnectedViewSpec]",
@@ -300,6 +301,7 @@ export const manifestWire = {
     shelfSubtitle: "[string]",
     titleSubtitle: "boolean",
     listActions: "[string]",
+    listQuickActions: "[string]?",
     timelineFields: "[string]",
     lifecycle: "TimelineLifecycle~",
     editSections: "[EditSection]",
@@ -373,6 +375,11 @@ export const manifestWire = {
   }),
   EntityTimelineMode: raw({ default: "default", custom: "custom" }),
   PrimarySearchDescriptor: record({ key: "string", placeholder: "string" }),
+  EntityEmptyState: record({
+    title: "string",
+    description: "string",
+    actionLabel: "string?",
+  }),
   EntityDescriptor: record(
     {
       key: "EntityKey",
@@ -389,6 +396,8 @@ export const manifestWire = {
       recordEmojiField: "string~",
       recordIconEntityField: "string~",
       searchable: "boolean",
+      nativeBrowse: "boolean",
+      emptyState: "EntityEmptyState",
       primarySearch: "PrimarySearchDescriptor~",
       timeline: "EntityTimelineMode~",
       fields: "[FieldDescriptor]",

@@ -70,7 +70,24 @@ export default defineEntity(
           },
         ],
 
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: ["name", "author", "subjects"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: [
+              "recipeCount",
+              "coverUrl",
+              "sourceRecipeCount",
+              "needsReextract",
+            ],
+          },
           {
             kind: "fields",
             id: "physical-copy",

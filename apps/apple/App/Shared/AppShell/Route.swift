@@ -2,11 +2,10 @@ import CubbyKit
 import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
-enum Route: Hashable {
+enum Route: Hashable, Codable {
     case activityList
     case auditHistory
     case photosLibrary
-    case browseCatalog
     case graph(EntityRef?)
     case nutrition(day: String)
     /// A device-local `BackgroundActivity`'s own detail, resolved by id against whatever is
@@ -72,8 +71,9 @@ enum PhoneTab: String, CaseIterable, Identifiable {
     }
 }
 
-/// Top-level sections. The Mac exposes all in its sidebar; iOS maps them into `PhoneTab`.
-enum AppSection: String, CaseIterable, Identifiable {
+/// Top-level sections. iOS maps them into `PhoneTab`. On Mac, `browse` has no sidebar row of its
+/// own: it holds the entity lists that the sidebar's manifest rows open.
+enum AppSection: String, CaseIterable, Identifiable, Codable {
     case today, activity, capture, photos, browse, search, graph, dev, settings
 
     var id: String { rawValue }
@@ -106,12 +106,13 @@ enum AppSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Mac sidebar destinations, retained independently of the phone tabs.
+    /// Numbered top-level destinations: the phone tabs, or the Mac Go menu in sidebar order. Dev
+    /// (⌘0) and Settings (⌘,) have their own commands, so neither takes a number.
     static var tabs: [AppSection] {
         #if os(iOS)
             [.today, .capture, .browse, .search]
         #else
-            allCases
+            [.today, .activity, .capture, .photos, .search, .graph]
         #endif
     }
 }

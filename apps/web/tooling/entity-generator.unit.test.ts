@@ -23,7 +23,7 @@ import { typeChecker } from "cubby/tooling/type-checker";
 import { generatedHeader, removeExtraArtifacts } from "../generator/artifacts";
 import {
   collectEntityOverrides,
-  compileEntityDeclarations,
+  compileEntityDeclarations as compileDeclarations,
   validatePhotoCategoryLabels,
 } from "../generator/entities/compile";
 import {
@@ -57,15 +57,15 @@ it("catalogs every named declaration override with keyed paths and preserves opt
         ],
       },
       route: { createOverride: null },
-      presentation: { detail: { sectionOverrides: [{ id: "facts" }] } },
+      presentation: { detail: { variantOverride: "journal" } },
     }),
   ).toEqual([
     { path: "model.fields[name].labelOverride", value: '"Display name"' },
     { path: "model.fields[image].display.listOrderOverride", value: "0" },
     { path: "route.createOverride", value: "null" },
     {
-      path: "presentation.detail.sectionOverrides",
-      value: '[{"id":"facts"}]',
+      path: "presentation.detail.variantOverride",
+      value: '"journal"',
     },
   ]);
 });
@@ -78,13 +78,76 @@ afterEach(async () => {
   );
 });
 
+// Fixtures that do not exercise detail presentation keep this empty roster;
+// the compile helper below authors one section for the fields they display.
+const unauthoredSections: never[] = [];
+
 const presentation = {
   titleField: "name",
   domain: null,
   description: "Alpha records.",
   emptyState: { title: "No alphas", description: "Add one." },
   icons: { phosphor: "Cube", sfSymbol: "cube", emoji: "🧊" },
+  detail: { sections: unauthoredSections },
 } as const;
+
+/**
+ * Compiles fixtures, giving each one still on `unauthoredSections` a Record
+ * section for the detail fields the compiler reports unplaced. Fixtures that
+ * author sections keep the strict placement check.
+ */
+const compileEntityDeclarations = (
+  declarations: Parameters<typeof compileDeclarations>[0],
+  ...rest: Parameters<typeof compileDeclarations> extends [unknown, ...infer R]
+    ? R
+    : never
+): ReturnType<typeof compileDeclarations> => {
+  let current = declarations;
+  for (;;) {
+    try {
+      return compileDeclarations(current, ...rest);
+    } catch (error) {
+      const unplaced =
+        /ENTITY_DECLARATIONS\[(\d+)\]\.presentation\.detail\.sections leave display\.detail fields unplaced: (.+)\.$/u.exec(
+          error instanceof Error ? error.message : "",
+        );
+      const index = Number(unplaced?.[1]);
+      // SAFETY: fixtures are plain declaration objects.
+      const declaration = current[index] as DeclarationObject | undefined;
+      // SAFETY: as above; `presentation` is an object on every fixture.
+      const declared = declaration?.presentation as
+        | { detail?: { sections?: unknown } }
+        | undefined;
+      if (
+        unplaced === null ||
+        declaration === undefined ||
+        declared?.detail?.sections !== unauthoredSections
+      )
+        throw error;
+      current = current.map((entry, at) =>
+        at === index
+          ? {
+              ...declaration,
+              presentation: {
+                ...declared,
+                detail: {
+                  ...declared.detail,
+                  sections: [
+                    {
+                      kind: "fields",
+                      id: "overview",
+                      title: "Record",
+                      fields: unplaced[2]!.split(", "),
+                    },
+                  ],
+                },
+              },
+            }
+          : entry,
+      );
+    }
+  }
+};
 
 const base = {
   key: "alpha",
@@ -1304,35 +1367,60 @@ describe("typed entity compiler", () => {
     expect(entity.fieldModel.sort).toBeNull();
   });
 
-  it("derives a detail overview from readable fields unless sections are opted out", () => {
+  it("requires authored detail sections; a summary slot or listHidden field needs no section", () => {
+    const fields = [
+      { ...model.fields[0]!, display: {} },
+      {
+        key: "notes",
+        kind: "text" as const,
+        display: { listHidden: true },
+        provenance: { kind: "derived", sources: [{ label: "Synthetic" }] },
+        validation: { read: z.string(), create: null, update: null },
+      },
+    ];
     const displayed = {
       ...base,
-      model: {
-        ...model,
-        fields: [{ ...model.fields[0]!, display: {} }],
-      },
+      model: { ...model, fields, output: ["name", "notes"] },
     };
+    const detail = (
+      declared: Partial<EntityDeclaration["presentation"]["detail"]>,
+    ) =>
+      compileDeclarations([
+        { ...displayed, presentation: { ...presentation, detail: declared } },
+      ])[0]?.inspector.detail;
+    expect(() => detail({})).toThrow("detail.sections is required");
+    expect(() => detail({ sections: [] })).toThrow("unplaced: name.");
     expect(
-      compileEntityDeclarations([displayed])[0]?.inspector.detail.sections,
+      detail({
+        summary: [
+          { kind: "fields", id: "named", title: "Name", fields: ["name"] },
+        ],
+        sections: [],
+      })?.sections,
+    ).toEqual([]);
+    expect(
+      detail({
+        sections: [
+          {
+            kind: "fields",
+            id: "facts",
+            title: "Facts",
+            fields: ["name"],
+            surfaces: ["web"],
+          },
+        ],
+      })?.sections,
     ).toEqual([
       {
         kind: "fields",
-        id: "overview",
-        title: "Record",
+        id: "facts",
+        title: "Facts",
         placement: "primary",
-        workspace: "overview",
         overview: true,
         fields: ["name"],
+        surfaces: ["web"],
       },
     ]);
-    expect(
-      compileEntityDeclarations([
-        {
-          ...displayed,
-          presentation: { ...presentation, detail: { sectionOverrides: [] } },
-        },
-      ])[0]?.inspector.detail.sections,
-    ).toEqual([]);
   });
 
   it.each([
@@ -1876,22 +1964,39 @@ describe("typed entity compiler", () => {
         },
       ],
     };
+    // A case's `detail` keeps the authored Overview unless it declares sections.
+    type PresentationCase = Omit<
+      Partial<EntityDeclaration["presentation"]>,
+      "detail"
+    > & { detail?: Partial<EntityDeclaration["presentation"]["detail"]> };
     const compile = (
-      presentation: Partial<EntityDeclaration["presentation"]>,
+      presentation: PresentationCase,
       capabilities: Partial<EntityDeclaration["capabilities"]> = {},
     ) =>
       compileEntityDeclarations([
         {
           ...presented,
-          presentation: { ...base.presentation, ...presentation },
+          presentation: {
+            ...base.presentation,
+            ...presentation,
+            detail: {
+              sections: [
+                {
+                  kind: "fields",
+                  id: "overview",
+                  title: "Overview",
+                  fields: ["status", "dueOn"],
+                },
+              ],
+              ...presentation.detail,
+            },
+          },
           capabilities: { ...base.capabilities, ...capabilities },
         },
       ]);
-    const fields = (
-      keys: string[],
-    ): Partial<EntityDeclaration["presentation"]> => ({
+    const fields = (keys: string[]): PresentationCase => ({
       detail: {
-        sectionOverrides: [
+        sections: [
           { kind: "fields", id: "overview", title: "Overview", fields: keys },
         ],
       },
@@ -1905,11 +2010,7 @@ describe("typed entity compiler", () => {
       images: false,
       actions: [],
     });
-    const rejected: [
-      string,
-      Partial<EntityDeclaration["presentation"]>,
-      string,
-    ][] = [
+    const rejected: [string, PresentationCase, string][] = [
       [
         "a non-detail field in a fields section",
         fields(["name"]),
@@ -1920,7 +2021,7 @@ describe("typed entity compiler", () => {
         "a field placed twice",
         {
           detail: {
-            sectionOverrides: [
+            sections: [
               {
                 kind: "fields",
                 id: "a",
@@ -1935,14 +2036,14 @@ describe("typed entity compiler", () => {
       ],
       [
         "a reserved section id",
-        { detail: { sectionOverrides: [{ kind: "slot", id: "history" }] } },
+        { detail: { sections: [{ kind: "slot", id: "history" }] } },
         "reserved id",
       ],
       [
         "a relation section over a to-one relation",
         {
           detail: {
-            sectionOverrides: [
+            sections: [
               {
                 kind: "relation",
                 id: "parent",

@@ -13,9 +13,9 @@ const ingredientProvenance = {
  * The key of a section line's read payload that nests the record its input id names:
  * `ingredient: {id, name…}` for `ingredientId`, `recipe: {id…}` for `recipeId` (the id is that
  * record's `id`). Declared once as `readFrom` metadata on the input fields, which `pnpm generate`
- * carries into the manifest as `readPath` for native's generic read-to-input projection, and
- * applied here for web (`recipeLineAsInput`); `golden-vectors/structured-roundtrip.json` pins
- * both against a real server read.
+ * carries into web's structured schema as `readPath` for the generic read-to-input projection,
+ * and applied here by `recipeLineAsInput`. The recipe sections integration test pins both
+ * against the web-only vector in `structured-value.fixtures.json`.
  */
 const LINE_TARGET = { ingredientId: "ingredient", recipeId: "recipe" } as const;
 const readFrom = (input: keyof typeof LINE_TARGET) =>

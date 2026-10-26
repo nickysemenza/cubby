@@ -2,17 +2,19 @@ import CubbyKit
 import SwiftUI
 
 /// The declaration owns order and meaning; native supplies one renderer for each summary kind.
+/// The first four cells are the record's glance, laid out two across under the hero.
 struct DetailSummaryGrid: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var slots: [DetailSummarySlot] {
-        Array(descriptor.presentation.summarySlots.prefix(8)).filter { slot in
+        descriptor.presentation.summarySlots.filter { slot in
             guard case .fields(let keys) = slot.kind else { return true }
             // Invalid keys must stay visible as diagnostics rather than looking inapplicable.
             if keys.contains(where: { descriptor.field($0) == nil }) { return true }
             if keys.contains(where: { key in
-                descriptor.field(key).flatMap { NativePresentationCoverage.unsupportedDetail($0) } != nil
+                descriptor.field(key).flatMap { NativePresentationCoverage.detailHandoff($0) } != nil
             }) {
                 return true
             }
@@ -28,15 +30,35 @@ struct DetailSummaryGrid: View {
     }
 
     var body: some View {
+        let visible = slots
+        let glance = Array(visible.prefix(4))
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(slots) { slot in
-                SummaryCellContainer(title: slot.title) { cell(slot) }
-                    .id(slot)
-                    .id("\(descriptor.key.rawValue)|\(row.id)|\(slot.id)")
-                    .accessibilityIdentifier("detail.summary.\(slot.id)")
+            if dynamicTypeSize.isAccessibilitySize {
+                ForEach(glance) { container($0) }
+            } else {
+                Grid(alignment: .topLeading, horizontalSpacing: FieldGuideTokens.Space.md, verticalSpacing: 0)
+                {
+                    ForEach(Array(stride(from: 0, to: glance.count, by: 2)), id: \.self) { index in
+                        GridRow {
+                            container(glance[index])
+                            if index + 1 < glance.count {
+                                container(glance[index + 1])
+                            } else {
+                                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                            }
+                        }
+                    }
+                }
             }
+            ForEach(visible.dropFirst(4)) { container($0) }
         }
         .buttonStyle(.borderless)
+    }
+
+    private func container(_ slot: DetailSummarySlot) -> some View {
+        SummaryCellContainer(title: slot.title) { cell(slot) }
+            .id("\(descriptor.key.rawValue)|\(row.id)|\(slot.id)")
+            .accessibilityIdentifier("detail.summary.\(slot.id)")
     }
 
     @ViewBuilder private func cell(_ slot: DetailSummarySlot) -> some View {
@@ -44,10 +66,11 @@ struct DetailSummaryGrid: View {
         case .fields(let keys):
             if let missing = keys.first(where: { descriptor.field($0) == nil }) {
                 Text("Unsupported summary field: \(missing)").font(.caption).textSelection(.enabled)
-            } else if let reason = keys.compactMap({ key in
-                descriptor.field(key).flatMap { NativePresentationCoverage.unsupportedDetail($0) }
+            } else if let handoff = keys.compactMap({ key in
+                descriptor.field(key).flatMap { NativePresentationCoverage.detailHandoff($0) }
             }).first {
-                Text(reason).font(.caption).textSelection(.enabled)
+                OpenOnWebButton(target: handoff.target(key: descriptor.key, id: row.id), label: handoff.label)
+                    .font(.caption)
             } else if descriptor.key == .usdaFood {
                 USDASummaryFields(descriptor: descriptor, row: row, keys: keys)
             } else {
@@ -106,8 +129,9 @@ private struct SummaryRecordsCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             if let page, page.totalCount > 0 {
-                Text("\(page.totalCount) total").font(.caption).foregroundStyle(.secondary)
-                ForEach(page.items, id: \.target.entityId) { ConnectedRecordRow(item: $0) }
+                // The record itself is never one of its own connections; the remainder
+                // link carries the count, so a short list shows no "N total" caption.
+                ForEach(others(page), id: \.target.entityId) { ConnectedRecordRow(item: $0) }
                 if page.totalCount > page.items.count {
                     NavigationLink(value: Route.connectedRecords(source, viewKey: viewKey)) {
                         Text("\(page.totalCount - page.items.count) more")
@@ -123,6 +147,10 @@ private struct SummaryRecordsCell: View {
         }
         .preference(key: SummaryCellEmpty.self, value: page?.totalCount == 0 && failure == nil)
         .task(id: "\(source.stableKey)|\(viewKey)|\(appModel.entityMutationRevision)") { await load() }
+    }
+
+    private func others(_ page: ConnectedRecordsOutput) -> [ConnectedRecord] {
+        page.items.filter { $0.target.entityKind != source.entity || $0.target.entityId != source.id }
     }
 
     private func load() async {

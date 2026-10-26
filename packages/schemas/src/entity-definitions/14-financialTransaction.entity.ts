@@ -131,17 +131,14 @@ export default defineEntity(
             title: "Purchase",
             viewKey: "relation:purchase",
           },
+          // Web renders unallocated lines with the booking review form, which
+          // belongs in the Record section rather than a glance cell.
           {
             kind: "fields",
             id: "reconciliation",
             title: "Reconciliation",
             fields: ["allocations"],
-          },
-          {
-            kind: "chart",
-            id: "monthly-spend",
-            title: "Spend over 12 months",
-            viewKey: "relation:expenses",
+            surfaces: ["native"],
           },
           {
             kind: "records",
@@ -166,6 +163,12 @@ export default defineEntity(
               "productsCoverage",
             ],
           },
+          {
+            kind: "chart",
+            id: "monthly-spend",
+            title: "Spend over 12 months",
+            viewKey: "relation:expenses",
+          },
         ],
 
         activityRelations: [
@@ -176,6 +179,47 @@ export default defineEntity(
           products:
             "Reached through the Purchases table on this page; the product path is three joins deep.",
         },
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "amount",
+              "accountId",
+              "kind",
+              "status",
+              "allocations",
+              "itemizationExpectation",
+              "sourceRefs",
+            ],
+          },
+          {
+            kind: "fields",
+            id: "schedule",
+            title: "Schedule",
+            fields: ["postedDate"],
+          },
+          {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["merchant"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: [
+              "bookingCoverage",
+              "documentCoverage",
+              "itemizationCoverage",
+              "productsCoverage",
+              "spendingCategorySummary",
+              "vendorInference",
+            ],
+          },
+        ],
       },
     },
     model: {
@@ -897,7 +941,12 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { columnGroup: "Evidence", detail: false, listHidden: true },
+          display: {
+            columnGroup: "Evidence",
+            detail: false,
+            listHidden: true,
+            width: "xl",
+          },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().default(null),

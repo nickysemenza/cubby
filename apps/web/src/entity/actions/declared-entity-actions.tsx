@@ -6,8 +6,14 @@ import {
 import { Suspense, useState } from "react";
 import { z } from "zod";
 
-import { expenseCaptureRequest } from "~/entity/editing/editor-requests";
-import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
+import {
+  detailEditRequest,
+  expenseCaptureRequest,
+} from "~/entity/editing/editor-requests";
+import {
+  EntityEditDialog,
+  type EntityEditDialogRequest,
+} from "~/entity/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { featureRegistry } from "~/entity/feature-registry";
 
@@ -182,6 +188,108 @@ function useMarkWishPurchasedAction(): EntityActionHandles {
   };
 }
 
+const openTaskRow = z.object({
+  id: z.string(),
+  status: z.string().nullish(),
+});
+
+/** A task's "Complete" sets status to done; a done task offers nothing. */
+function useCompleteTaskAction(): EntityActionHandles {
+  const update = useUpdateMutation({
+    mutationFn: entityMutationOptionsFactory("task", "update"),
+    entity: "task",
+  });
+  const open = (row: EntityActionRow) => {
+    const parsed = openTaskRow.safeParse(row);
+    return parsed.success && parsed.data.status !== "done";
+  };
+  const complete = async (row: EntityActionRow) => {
+    if (!open(row)) return false;
+    await update.mutateAsync({ id: row.id, data: { status: "done" } });
+    return true;
+  };
+  return {
+    run: async (rows) => {
+      const results = await Promise.all(rows.map(complete));
+      return { success: results.every(Boolean) };
+    },
+    availability: ({ rows }: EntityActionResolutionContext) =>
+      rows.length > 0 && rows.every(open)
+        ? { status: "available" }
+        : { status: "hidden" },
+    rowMenuItem: (row) =>
+      open(row) ? (
+        <VerbMenuItem
+          verb="complete"
+          onSelect={(event) => {
+            event.stopPropagation();
+            void complete(row);
+          }}
+        />
+      ) : null,
+    dialog: null,
+  };
+}
+
+/** The inventory editor's seed reads the nested product and location. */
+const adjustableInventory = z.object({
+  id: inventoryShortcode,
+  product: z.object({ id: productShortcode }),
+  location: z.object({ id: locationShortcode }),
+});
+
+/**
+ * "Adjust amount" is the entry editor scoped to its amount: a deliberate
+ * correction, not a recount, so it never stamps `verifiedAt`.
+ */
+function useAdjustInventoryAmountAction(): EntityActionHandles {
+  const [entry, setEntry] = useState<EntityActionRow | null>(null);
+  const stage = (row: EntityActionRow) => {
+    const adjustable = adjustableInventory.safeParse(row).success;
+    if (adjustable) setEntry(row);
+    return adjustable;
+  };
+  return {
+    run: async (rows) => {
+      const row = singleRow(rows);
+      return { success: row !== undefined && stage(row) };
+    },
+    availability: ({ rows }: EntityActionResolutionContext) => {
+      const row = singleRow(rows);
+      return row && adjustableInventory.safeParse(row).success
+        ? { status: "available" }
+        : { status: "hidden" };
+    },
+    rowMenuItem: (row) =>
+      adjustableInventory.safeParse(row).success ? (
+        <VerbMenuItem
+          verb="adjustAmount"
+          onSelect={(event) => {
+            event.stopPropagation();
+            stage(row);
+          }}
+        />
+      ) : null,
+    dialog: entry !== null && (
+      <EntityEditDialog
+        open
+        onOpenChange={(open) => {
+          if (!open) setEntry(null);
+        }}
+        // SAFETY: `adjustableInventory` proved the nested product and location
+        // the inventory request seeds from; the registry validates the rest.
+        request={
+          detailEditRequest(
+            "inventory",
+            entry as never,
+            "amount",
+          ) as EntityEditDialogRequest<"inventory">
+        }
+      />
+    ),
+  };
+}
+
 export const declaredEntityActionDefinitions = [
   defineEntityAction({
     verb: "recordSale",
@@ -219,5 +327,25 @@ export const declaredEntityActionDefinitions = [
     group: "primary",
     priority: 50,
     use: useMarkWishPurchasedAction,
+  }),
+  defineEntityAction({
+    id: "complete-task",
+    verb: "complete",
+    entities: ["task"],
+    arity: "both",
+    surfaces: ["row", "selection", "inspector", "detail"],
+    group: "primary",
+    priority: 40,
+    use: useCompleteTaskAction,
+  }),
+  defineEntityAction({
+    id: "adjust-inventory-amount",
+    verb: "adjustAmount",
+    entities: ["inventory"],
+    arity: "single",
+    surfaces: ["row", "inspector", "detail"],
+    group: "organize",
+    priority: 90,
+    use: useAdjustInventoryAmountAction,
   }),
 ] as const;

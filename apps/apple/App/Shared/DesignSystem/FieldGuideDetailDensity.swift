@@ -1,12 +1,9 @@
 import SwiftUI
 
 extension View {
-    /// Shared detail chrome: a compact canvas around native rows, with system text scaling.
-    func fieldGuideDetailDensity() -> some View {
+    /// Shared row inset and section spacing for native List and Form content.
+    func fieldGuideSectionStyle() -> some View {
         self
-            #if os(iOS)
-                .environment(\.defaultMinListRowHeight, 30)
-            #endif
             .listRowInsets(
                 EdgeInsets(
                     top: 2, leading: FieldGuideTokens.Space.md,
@@ -16,6 +13,15 @@ extension View {
             #if os(iOS)
                 .listSectionSpacing(.compact)
             #endif
+    }
+
+    /// Shared detail chrome: a compact canvas around native rows, with system text scaling.
+    func fieldGuideDetailDensity() -> some View {
+        self
+            #if os(iOS)
+                .environment(\.defaultMinListRowHeight, 30)
+            #endif
+            .fieldGuideSectionStyle()
     }
 }
 

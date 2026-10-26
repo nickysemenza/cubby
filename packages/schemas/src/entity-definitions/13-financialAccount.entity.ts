@@ -109,6 +109,38 @@ export default defineEntity({
         purchases:
           "Two joins through transactions; the Transactions table links each transaction's purchase.",
       },
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "name",
+            "identity",
+            "network",
+            "sourceAliases",
+            "cardNumbers",
+            "providerVendorId",
+            "primaryCardholderId",
+            "authorizedUsers",
+            "fundingPeriods",
+            "ledgerPartyId",
+            "notes",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "details",
+          title: "Details",
+          fields: ["inventoryOwnerDefaultEnabled"],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["transactionCount", "createdAt", "updatedAt"],
+        },
+      ],
     },
   },
   model: {
@@ -422,7 +454,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Evidence" },
+        display: { columnGroup: "Evidence", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

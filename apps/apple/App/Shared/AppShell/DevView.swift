@@ -112,9 +112,7 @@ struct DevView: View {
                     Eyebrow("App")
                     Panel(padding: 0, spacing: 0) {
                         #if os(macOS)
-                            Button {
-                                model.navigator.openSettings()
-                            } label: {
+                            SettingsLink {
                                 settingsLabel
                             }
                             .buttonStyle(.plain)

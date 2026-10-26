@@ -108,6 +108,26 @@ struct SearchModelTests {
     }
 
     @Test
+    func editingTheQueryClearsPublishedResultsBeforeTheNextRequest() async throws {
+        defer { SearchModelStub.handler.withLock { $0 = nil } }
+        SearchModelStub.handler.withLock { handler in
+            handler = { _ in (200, Self.searchPayload(title: "hammer")) }
+        }
+        let model = SearchModel(client: try makeClient())
+        model.query = "hammer"
+        model.retry()
+        await model.searchTask?.waitUnlessCancelled()
+        #expect(Self.resultTitle(in: model.phase) == "hammer")
+
+        model.query = "drill"
+        #expect(model.phase == .searching)
+        #expect(model.searchTask == nil)
+
+        model.query = " "
+        #expect(model.phase == .idle)
+    }
+
+    @Test
     func queryChangeCancelsAStaleSubmittedCodeLookup() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let lookup = Gate()
@@ -128,7 +148,25 @@ struct SearchModelTests {
 
         #expect(outcome == .text("new words"))
         #expect(model.lookupOutcome == nil)
+        #expect(model.lookupError == nil)
         #expect(model.phase == .searching)
+    }
+
+    @Test
+    func submittedLookupFailureIsVisibleUntilTheQueryChanges() async throws {
+        defer { SearchModelStub.handler.withLock { $0 = nil } }
+        SearchModelStub.handler.withLock { handler in
+            handler = { _ in
+                (503, Data(#"{"code":"UPSTREAM","message":"Synthetic lookup unavailable"}"#.utf8))
+            }
+        }
+        let model = SearchModel(client: try makeClient())
+        model.query = "012345678905"
+        _ = await model.submit()
+        #expect(model.lookupError == "UPSTREAM: Synthetic lookup unavailable")
+
+        model.query = "new query"
+        #expect(model.lookupError == nil)
     }
 
     @Test
@@ -169,8 +207,20 @@ struct SearchModelTests {
     }
 
     nonisolated private static func operationInput(_ request: URLRequest) -> JSONValue {
-        guard let data = request.httpBody,
-            let envelope = try? JSONDecoder().decode(JSONValue.self, from: data)
+        // URLSession supplies a body stream on the simulator as well as inline bodies on host tests.
+        var data = request.httpBody ?? Data()
+        if request.httpBody == nil, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while true {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                guard count >= 0 else { return .null }
+                if count == 0 { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+        }
+        guard let envelope = try? JSONDecoder().decode(JSONValue.self, from: data)
         else { return .null }
         return envelope["input"] ?? .null
     }
@@ -180,7 +230,7 @@ struct SearchModelTests {
             [
                 "id": "PRD-2345", "entityKind": "product", "title": title,
                 "subtitle": NSNull(), "typeHint": NSNull(), "imageUrl": NSNull(), "matchKind": "prefix",
-                "matchField": "title", "matchReason": "", "matchTerms": [title],
+                "matchField": "title", "matchReason": "", "matchTerms": [title], "facts": [],
             ]
         ]
         return try! JSONSerialization.data(withJSONObject: object)

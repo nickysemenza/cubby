@@ -27,12 +27,14 @@ final class CaptureModel {
 
     init(client: CubbyClient) {
         self.client = client
-        self.session = ScanSession(service: client)
+        self.session = ScanSession(service: client, locationDefaults: .standard)
     }
 
     var location: LocationOption? {
         guard let code = session.location else { return nil }
-        return locations.first { $0.id == code } ?? LocationOption(id: code, name: code.rawValue, path: nil)
+        if let option = locations.first(where: { $0.id == code }) { return option }
+        return LocationOption(
+            id: code, name: tree?[code]?.name ?? code.rawValue, path: tree?.parent(of: code)?.name)
     }
 
     func select(_ location: LocationOption?) {
@@ -53,7 +55,9 @@ final class CaptureModel {
         do {
             let page = try await client.locationOptions(page: 1, pageSize: 200)
             locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.parentName) }
-            tree = try await client.locationTree()
+            let loadedTree = try await client.locationTree()
+            tree = loadedTree
+            session.restoreLocation { loadedTree[$0] != nil }
             locationError = nil
         } catch {
             locationError = error.userMessage
@@ -98,6 +102,7 @@ final class CaptureModel {
             }
             missingError = nil
         } catch {
+            Diagnostics.report(error, context: "capture.checkMissing")
             missingError = error.userMessage
         }
     }
@@ -112,6 +117,7 @@ final class CaptureModel {
             tree = try await client.locationTree()
             missingError = nil
         } catch {
+            Diagnostics.report(error, context: "capture.moveMissing")
             missingError = error.userMessage
         }
     }
@@ -121,6 +127,7 @@ final class CaptureModel {
             let unknown = try await client.ensureGlobalUnknownLocation()
             await moveMissing(id, to: unknown)
         } catch {
+            Diagnostics.report(error, context: "capture.sendMissingToUnknown")
             missingError = error.userMessage
         }
     }

@@ -546,7 +546,15 @@ nonisolated private final class PhotoMatchTestProtocol: URLProtocol, @unchecked 
             url: request.url!, statusCode: 200, httpVersion: nil,
             headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Self.response.withLock { $0 })
+        // Wrap only valid JSON: malformed-response fixtures must still reach the transport unchanged.
+        let payload = Self.response.withLock { $0 }
+        let data: Data
+        if (try? JSONSerialization.jsonObject(with: payload)) != nil {
+            data = Data(#"{"ok":true,"data":\#(String(decoding: payload, as: UTF8.self))}"#.utf8)
+        } else {
+            data = payload
+        }
+        client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}

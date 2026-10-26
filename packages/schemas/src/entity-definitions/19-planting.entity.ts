@@ -88,7 +88,7 @@ export default defineEntity({
       activityRelations: [{ relation: "entries", dateField: "observedOn" }],
       variantOverride: "journal",
       hero: { chip: "status" },
-      sectionOverrides: [
+      sections: [
         {
           kind: "relation",
           id: "garden-history",

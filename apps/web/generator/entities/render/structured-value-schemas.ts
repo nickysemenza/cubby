@@ -51,7 +51,7 @@ export const valueSchemaForField = (
 };
 
 /**
- * Web's copy of the schemas native draws: one record keyed `entity.field`, imported only by the
+ * Input schemas for web's structured editors: one record keyed `entity.field`, imported only by the
  * generic structured-value editor so no other bundle pays for it.
  */
 export const renderStructuredValueSchemas = (

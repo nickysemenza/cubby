@@ -77,6 +77,28 @@ export default defineEntity({
         { relation: "purchases", dateField: "date" },
         { relation: "expenses", dateField: "date" },
       ],
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "emoji",
+            "name",
+            "aliases",
+            "parentId",
+            "itemizationExpectation",
+            "productExpectation",
+            "stockTracked",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["productCategories"],
+        },
+      ],
     },
     list: {
       tree: {},

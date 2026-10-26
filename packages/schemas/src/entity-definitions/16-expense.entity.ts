@@ -126,7 +126,38 @@ export default defineEntity({
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "spendingCategoryId",
+            "economicRole",
+            "name",
+            "projectId",
+            "productId",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "details",
+          title: "Details",
+          fields: [
+            "cost",
+            "lineKind",
+            "lineBasis",
+            "costType",
+            "trade",
+            "url",
+            "notes",
+            "future",
+            "productQuantity",
+            "vendor",
+            "orderId",
+          ],
+        },
+        { kind: "fields", id: "schedule", title: "Schedule", fields: ["date"] },
         {
           kind: "fields",
           id: "purchase",
@@ -439,6 +470,8 @@ export default defineEntity({
         display: {
           columnGroup: "Booking",
           columnLabel: "Role",
+          // Vendor on most rows.
+          listHidden: true,
           optionRole: "category",
           optionColor: "domain-finance",
         },
@@ -547,6 +580,8 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Booking",
+          // Principal or Unclassified on most rows.
+          listHidden: true,
           width: "md",
           mobile: { slot: "meta", priority: 18 },
         },
@@ -683,7 +718,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Evidence" },
+        display: { columnGroup: "Evidence", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -696,6 +731,8 @@ Rules:
         control: { kind: "checkbox" },
         display: {
           columnGroup: "Booking",
+          // False on most rows; the Future filter finds planned spend.
+          listHidden: true,
           mobile: { slot: "meta", priority: 50 },
         },
         validation: {
@@ -787,6 +824,8 @@ Rules:
         display: {
           columnGroup: "Links",
           columnLabel: "Quantity",
+          // One on most product-linked rows.
+          listHidden: true,
           width: "sm",
           mobile: { slot: "meta", priority: 47, interactive: true },
         },

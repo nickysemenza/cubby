@@ -17,6 +17,38 @@ struct DiagnosticsTests {
         #expect(!SentrySDK.isEnabled)
     }
 
+    @MainActor
+    @Test func signedInFailureRetainsRawDiagnosticsAndRetriesTheAction() async throws {
+        let model = AppModel.preview(signedIn: true, baseURL: URL(string: "https://example.invalid")!)
+        let raw =
+            #"{"code":"INTERNAL_SERVER_ERROR","message":"Query failed","diagnostics":{"origin":"server","operation":"entity.mutate","stage":"write","causes":[{"name":"PostgresError","message":"SQLSTATE 23505: synthetic duplicate"}]}}"#
+        let error = CubbyAPIError.decode(status: 500, operationID: "entity.mutate", body: Data(raw.utf8))
+        var attempts = 0
+        model.handle(error) { attempts += 1 }
+
+        #expect(model.phase == .signedIn)
+        #expect(model.lastError == raw)
+        #expect(model.canRetryLastError)
+        await model.retryLastError()?.value
+        #expect(attempts == 1)
+        #expect(model.lastError == nil)
+        #expect(!model.canRetryLastError)
+        await model.retryLastError()?.value
+        #expect(attempts == 1)
+    }
+
+    @MainActor
+    @Test func signInFailurePreservesTheConfiguredServer() async throws {
+        let server = URL(string: "https://cubby.example.invalid:8443")!
+        let model = AppModel.preview(signedIn: false, baseURL: server)
+        await model.signInWithGoogle { _ in
+            throw AuthError.http(status: 503, body: "Synthetic sign-in upstream failure")
+        }
+        #expect(model.phase == .signedOut)
+        #expect(model.baseURL == server)
+        #expect(model.lastError == "HTTP 503: Synthetic sign-in upstream failure")
+    }
+
     @Test func recognizesTestLaunchMarkers() {
         for key in ["XCTestConfigurationFilePath", "XCTestBundlePath", "XCTestSessionIdentifier"] {
             #expect(Diagnostics.isTestHost([key: "test"]))

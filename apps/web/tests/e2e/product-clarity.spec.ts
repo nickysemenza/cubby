@@ -83,7 +83,7 @@ test("phone relationship rows keep planned and explicit link evidence separate",
         orderId: `${name} order`,
         date: "2026-01-05",
       });
-      const brand = await create("vendor", { name: "E2E fixture" });
+      const brand = await create("vendor", { name: `${name} brand` });
       const product = await create("product", {
         name: `${name} item`,
         brandId: brand.id,
@@ -144,7 +144,7 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
           sortOrder: 0,
           feature: null,
         });
-        const brand = await create("vendor", { name: "E2E fixture" });
+        const brand = await create("vendor", { name: `${name} brand` });
         const product = await create("product", {
           name,
           categoryId: category.id,

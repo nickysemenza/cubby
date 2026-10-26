@@ -45,6 +45,7 @@ final class PhotoImportManifest {
     private var duplicateDecisions: [String: PhotoDuplicateDecision] = [:]
     private var analysisGeneration = UUID()
     private var undoSnapshot: [PhotoUndoAssignment] = []
+    weak var undoManager: UndoManager?
     private var prepared: [String: (PhotoFile, PhotoLocalAnalysis)] = [:]
     private var transaction: PhotoImportTransaction?
     private var analysisTask: Task<Void, Never>?
@@ -859,6 +860,7 @@ final class PhotoImportManifest {
         for item in snapshot { assignments[item.photoID] = item.assignment }
         selectedIDs = Set(snapshot.map(\.photoID))
         undoSnapshot = []
+        undoManager?.removeAllActions(withTarget: self)
     }
 
     /// The wire batch for every selected item, from its resolved assignment and prepared
@@ -1162,6 +1164,13 @@ final class PhotoImportManifest {
     private func rememberMove() {
         undoSnapshot = selectedIDs.sorted().map {
             PhotoUndoAssignment(photoID: $0, assignment: assignments[$0])
+        }
+        undoManager?.removeAllActions(withTarget: self)
+        if !undoSnapshot.isEmpty {
+            undoManager?.registerUndo(withTarget: self) { manifest in
+                manifest.undoLastMove()
+            }
+            undoManager?.setActionName("Photo destination")
         }
     }
 

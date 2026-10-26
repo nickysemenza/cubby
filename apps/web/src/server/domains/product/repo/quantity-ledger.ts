@@ -1,11 +1,17 @@
-import { type ProductId, productId } from "@cubby/schemas/identifiers";
+import {
+  type ProductId,
+  productId,
+  locationId,
+} from "@cubby/schemas/identifiers";
 import type {
   ProductPickerOnHandOut,
   ProductQuantityLedgerOut,
   ProductQuantitySummaryOut,
 } from "@cubby/schemas/product";
+import { productPrimaryPlacement } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
 import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -14,6 +20,7 @@ import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
+import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import {
   kitAncestorCteSql,
   kitAncestorCteText,
@@ -402,6 +409,87 @@ export const loadProductDetailQuantityLedgers = async (
   return quantityLedgersFromAggregateRows(rows);
 };
 
+const placementRowSchema = z.object({
+  productId,
+  locationId,
+  shortcode: z.string(),
+  name: z.string(),
+  onHand: z.number(),
+  onHandUnits: z.number().nullable(),
+});
+
+/** One bounded stock aggregate and one ancestor batch for the whole page.
+ * Identity Locations count as one owned unit, as in onHandUnitsReadSql.
+ * Activity breaks quantity ties; the public code makes exact ties stable. */
+export const loadProductPlacementFacts = async (
+  db: Database,
+  ids: readonly ProductId[],
+): Promise<
+  Map<
+    ProductId,
+    {
+      primaryPlacement: z.infer<typeof productPrimaryPlacement>;
+      onHandUnits: number | null;
+    }
+  >
+> => {
+  if (ids.length === 0) return new Map();
+  const stockInventory = alias(inventoryEntry, "i");
+  const stockLocation = alias(location, "l");
+  const stockProduct = alias(product, "p");
+  const rows = projectionRows(
+    await unwrapDb(db).execute(sql`
+    WITH stock AS (
+      SELECT i."productId", i."locationId", i."amountValue"::double precision AS quantity,
+        i."amountUnit" <> 'each' AS noncount, i."updatedAt" AS activity
+      FROM "InventoryEntry" i
+      JOIN "Location" l ON l.id = i."locationId" AND ${notDeleted(stockLocation)}
+      WHERE ${notDeleted(stockInventory)} AND i."productId" = ANY(${uuidArrayParam(ids)})
+      UNION ALL
+      SELECT l."productId", l.id, 1::double precision, false, l."updatedAt"
+      FROM "Location" l
+      WHERE ${notDeleted(stockLocation)} AND l."productId" = ANY(${uuidArrayParam(ids)})
+    ), places AS (
+      SELECT "productId", "locationId", sum(quantity) AS "onHand",
+        bool_or(noncount) AS noncount, max(activity) AS activity
+      FROM stock GROUP BY "productId", "locationId"
+    ), ranked AS (
+      SELECT places.*, l.shortcode, l.name,
+        CASE WHEN bool_or(noncount) OVER (PARTITION BY places."productId") THEN NULL
+          ELSE sum("onHand") OVER (PARTITION BY places."productId") END AS "onHandUnits",
+        row_number() OVER (PARTITION BY places."productId"
+          ORDER BY "onHand" DESC, activity DESC, l.shortcode) AS rank
+      FROM places JOIN "Location" l ON l.id = places."locationId"
+      JOIN "Product" p ON p.id = places."productId" AND ${notDeleted(stockProduct)}
+      WHERE NOT ${serviceProductIdSql(sql`p.id`)}
+    )
+    SELECT "productId", "locationId", shortcode, name, "onHand", "onHandUnits"
+    FROM ranked WHERE rank = 1
+  `),
+    placementRowSchema,
+  );
+  const ancestors = await loadLocationAncestors(
+    db,
+    rows.map((row) => row.locationId),
+  );
+  return new Map(
+    rows.map((row) => [
+      row.productId,
+      {
+        primaryPlacement: {
+          locationId: row.shortcode,
+          path: [
+            ...(ancestors.get(row.locationId) ?? []).map((rung) => rung.name),
+            row.name,
+          ].join(" › "),
+          onHand: row.onHand,
+        },
+        onHandUnits: row.onHandUnits,
+      },
+    ]),
+  );
+};
+
 /**
  * Attach the ledger to loaded rows. A product with no product-linked Expense
  * gets the empty ledger rather than null. Its zero is a numeric identity,
@@ -410,9 +498,20 @@ export const loadProductDetailQuantityLedgers = async (
 export const enrichProductRowsWithQuantityLedger = async <
   T extends { id: ProductId },
 >(
-  db: Database | DrizzleTransaction,
+  db: Database,
   products: readonly T[],
-): Promise<Array<T & { quantityLedger: QuantityLedger }>> => {
+): Promise<
+  Array<
+    T & {
+      quantityLedger: QuantityLedger;
+      primaryPlacement: z.infer<typeof productPrimaryPlacement> | null;
+    }
+  >
+> => {
+  const placements = await loadProductPlacementFacts(
+    db,
+    products.map((product) => product.id),
+  );
   const ledgers = await loadProductQuantityLedgers(
     db,
     products.map((product) => product.id),
@@ -420,6 +519,7 @@ export const enrichProductRowsWithQuantityLedger = async <
   return products.map((product) => ({
     ...product,
     quantityLedger: ledgers.get(product.id) ?? EMPTY_QUANTITY_LEDGER,
+    primaryPlacement: placements.get(product.id)?.primaryPlacement ?? null,
   }));
 };
 

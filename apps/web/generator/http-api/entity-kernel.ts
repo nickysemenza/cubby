@@ -2,6 +2,10 @@ import { z } from "zod";
 import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
 import { entityInspectorMetadata } from "@cubby/schemas/compiler/generated/entity-inspector.gen";
 import { entityKeys } from "@cubby/schemas/entity-summary";
+import {
+  nativeCoverage,
+  type NativeCoverageEntry,
+} from "@cubby/schemas/compiler/native-coverage";
 import { ENTITY_SCHEMA_BINDINGS } from "../../src/server/generated/entity-bindings.gen.ts";
 import { toWire } from "../../src/lib/operation-wire.ts";
 import { generatedHeader } from "../artifacts.ts";
@@ -249,6 +253,19 @@ const checkFilterWires = (
     );
 };
 
+/** The entity-qualified coverage ids (`run.import-agent-live`) native hands off to web, unqualified. */
+const entityHandoffs = (entity: string): string[] =>
+  (["detailSlot", "listSlot", "structuredField"] as const).flatMap((kind) =>
+    Object.entries<NativeCoverageEntry>(nativeCoverage[kind]).flatMap(
+      ([id, entry]) => {
+        const [owner, local] = id.split(".");
+        return entry.status === "handoff" && owner === entity && local
+          ? [local]
+          : [];
+      },
+    ),
+  );
+
 /**
  * `entity-kernel.json` (read by CubbyKit's `EntityKernel.swift`) and the web
  * inspector's native coverage table, from one capability table.
@@ -265,6 +282,7 @@ export const renderEntityKernelArtifacts = (
       {
         httpActions: capabilities[entity]?.actions ?? [],
         rpcIds: nativeOperations.filter((id) => id.split(".")[0] === entity),
+        handoffs: entityHandoffs(entity),
       },
     ]),
   );
@@ -280,12 +298,13 @@ export const renderEntityKernelArtifacts = (
 
 /**
  * What the native app can do with an entity: the entity kernel actions its
- * generic client sends, and the RPC operation ids it calls whose domain is
- * this entity.
+ * generic client sends, the RPC operation ids it calls whose domain is
+ * this entity, and the slots and fields it hands off to web.
  */
 export interface NativeCoverage {
   httpActions: readonly ("list" | "timeline" | "get" | "create" | "update" | "bulkUpdate" | "delete")[];
   rpcIds: readonly string[];
+  handoffs: readonly string[];
 }
 
 // Generated coverage stays one entity per line.

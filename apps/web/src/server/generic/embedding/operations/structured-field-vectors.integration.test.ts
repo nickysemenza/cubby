@@ -1,6 +1,5 @@
 import { structuredValueSchemas } from "@cubby/schemas/structured-value-schemas";
 import { testUserId } from "@cubby/schemas/testing";
-import vectorFile from "@cubby/shared/golden-vectors/structured-roundtrip.json";
 import { buildEntity } from "tooling/factories/build";
 import { stabilize, wireJson } from "tooling/stabilize-vector";
 import { withTestDb } from "tooling/test-setup";
@@ -8,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { project, wireValue } from "~/entity/editing/structured-value";
+import vectorFile from "~/entity/editing/structured-value.fixtures.json";
 import {
   entityKernelContextSchema,
   executeEntity,

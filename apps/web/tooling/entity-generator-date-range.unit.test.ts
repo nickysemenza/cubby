@@ -10,6 +10,7 @@ const presentation = {
   description: "Widgets.",
   emptyState: { title: "No widgets", description: "Add one." },
   icons: { phosphor: "Cube", sfSymbol: "cube", emoji: "🧊" },
+  detail: { sections: [] },
 } as const;
 
 const text = (key: string) =>

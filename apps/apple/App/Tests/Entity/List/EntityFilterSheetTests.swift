@@ -109,6 +109,43 @@ struct EntityFilterSheetTests {
         #expect(draft.state.isEmpty)
     }
 
+    /// The sheet lists active filters as chips, one per side. Removing the "is" chip keeps the
+    /// exclusions, and removing the "is not" chip keeps the picks.
+    @Test func activeFiltersReadAsRemovableChips() throws {
+        let text = try #require(inventory.filter("product"))
+        let category = try #require(inventory.filter("category"))
+        let placement = try #require(inventory.filter("placement"))
+        let verified = try #require(inventory.filter("verifiedAt"))
+        let exclude = try #require(category.excludeParam)
+        var draft = EntityFilterDraft()
+        draft.setValue("skillet", for: text)
+        draft.setValues(["CAT-2345"], for: category)
+        draft.setNoValue(true, for: category)
+        draft.set("CAT-6789", true, for: category, side: .exclude)
+        draft.set("installed", true, for: placement)
+        draft.setRange(.init(from: "@today-30d"), for: verified)
+
+        let chips = EntityFilterDraft.chips(in: inventory, state: draft.state)
+        let labels = Dictionary(uniqueKeysWithValues: chips.map { ($0.id, $0.label) })
+        #expect(chips.count == 5)
+        #expect(labels["product.include"] == "Product: skillet")
+        #expect(labels["category.include"] == "Category is CAT-2345 or No value")
+        #expect(labels["category.exclude"] == "Category is not CAT-6789")
+        #expect(labels["placement.include"] == "Placement is Installed")
+        #expect(labels["verifiedAt.include"] == "Verified at from today − 30 days")
+
+        let categoryChip = try #require(chips.first { $0.id == "category.include" })
+        draft.remove(categoryChip, in: inventory)
+        #expect(draft.values(category).isEmpty)
+        #expect(draft.presence(category) == nil)
+        #expect(draft.state[exclude] == ["CAT-6789"])
+
+        let excludedChip = try #require(chips.first { $0.id == "category.exclude" })
+        draft.remove(excludedChip, in: inventory)
+        #expect(!draft.isActive(category))
+        #expect(EntityFilterDraft.chips(in: inventory, state: draft.state).count == 3)
+    }
+
     /// Match all is offered only where declared and writes `all`; Match any removes it.
     @Test func matchAllWritesTheMatchParameter() throws {
         let tags = try #require(EntityCatalog[.product].filter("tags"))

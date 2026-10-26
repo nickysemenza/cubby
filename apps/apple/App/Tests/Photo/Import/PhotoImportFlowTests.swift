@@ -9,35 +9,48 @@ import Testing
 @MainActor
 @Suite("Photo import flow", .serialized)
 struct PhotoImportFlowTests {
-    @Test func selectedApprovalExcludesSettledOrBlockedGroups() {
-        let readyImage = PhotoRunImage(
-            id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
-            targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
-            cutoutUrl: nil, cutout: nil, describe: .ready, cloudDescriptionMissing: false,
-            describeStartedAt: nil, describeCompletedAt: nil,
-            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
-            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
-            deviceWorkError: nil, deviceWorkAttempts: 0)
-        let ready = PhotoGroupProposal(
-            groupKey: "shirt", steps: [], blockedReason: nil,
-            review: .init(observedName: "Canvas shirt", unresolvedReason: nil, stockIntent: .evidence),
-            state: .proposed,
-            images: [.init(id: readyImage.id, purpose: .item)], skip: [],
-            product: .create(
-                .init(kind: .create, create: .init(name: "Canvas shirt", brandId: .value("VEN-2345")))),
-            committedProduct: nil, inventory: nil, evidence: nil, origin: nil, conflict: nil, lastError: nil,
-            missingImageCount: 0, committedAt: nil, updatedAt: "2026-09-25T12:00:00Z")
-        var blocked = ready
-        blocked.groupKey = "blocked"
-        blocked.blockedReason = "Some photos are missing"
-        var settled = ready
-        settled.groupKey = "settled"
-        settled.state = .committed
-        #expect(
-            PhotoReviewPolicy.approvableSelection(
-                selected: ["shirt", "blocked", "settled"],
-                groups: [ready, blocked, settled]
-            ) == ["shirt"])
+    @Test func cameraPreparationRetainsFailedBytesForRetry() async throws {
+        let preparation = CameraPhotoPreparation()
+        let bytes = Data("synthetic camera source".utf8)
+        do {
+            _ = try await preparation.prepare(bytes) { _ in throw CocoaError(.fileReadCorruptFile) }
+            Issue.record("Preparation should fail")
+        } catch {
+            #expect(preparation.pendingData == bytes)
+        }
+        let retryData = try #require(preparation.pendingData)
+        let expected = try selection(filename: "camera-retry.jpg")
+        let result = try await preparation.prepare(retryData) { received in
+            #expect(received == bytes)
+            return expected
+        }
+        #expect(result.id == expected.id)
+        #expect(preparation.pendingData == nil)
+    }
+
+    @Test func destinationUndoUsesTheSystemManagerWithoutRemovingOtherActions() throws {
+        let photo = try selection(filename: "undo-destination.jpg")
+        let manifest = makeManifest(items: [photo])
+        let manager = UndoManager()
+        manager.groupsByEvent = false
+        manifest.undoManager = manager
+        let otherTarget = NSObject()
+        manager.beginUndoGrouping()
+        manager.registerUndo(withTarget: otherTarget) { _ in }
+        manager.endUndoGrouping()
+        manager.beginUndoGrouping()
+        manifest.moveSelected(
+            to: try #require(manifest.destinationOptions.first),
+            row: EntityRow(
+                id: "PRD-2345", title: "Example", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-2345", "name": "Example"]))
+        manager.endUndoGrouping()
+        #expect(manifest.needsDestination.isEmpty)
+        #expect(manager.undoActionName == "Photo destination")
+        manager.undo()
+        #expect(manifest.needsDestination == [photo.id])
+        #expect(!manifest.canUndo)
+        #expect(manager.canUndo)
     }
 
     // Regression for issue #9 (import run detail screen): the "ready to group" copy and the
@@ -45,7 +58,7 @@ struct PhotoImportFlowTests {
     // description. Both must wait for at least one settled (ready/skipped/failed) description.
     @Test func groupingReadinessWaitsForPhotosBeforeOfferingToStart() {
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .running)
+            PhotoGroupingReadiness(images: [], runStatus: .running)
                 == .waitingForPhotos)
     }
 
@@ -68,10 +81,10 @@ struct PhotoImportFlowTests {
             deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(
+            PhotoGroupingReadiness(
                 images: [pending], runStatus: .running) == .processing)
         #expect(
-            PhotoReviewPolicy.groupingReadiness(
+            PhotoGroupingReadiness(
                 images: [working], runStatus: .running) == .processing)
     }
 
@@ -86,7 +99,7 @@ struct PhotoImportFlowTests {
             deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(
+            PhotoGroupingReadiness(
                 images: [queued], runStatus: .running) == .processing)
     }
 
@@ -112,11 +125,11 @@ struct PhotoImportFlowTests {
         excluded.targetState = .skipped
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(
+            PhotoGroupingReadiness(
                 images: [ready, excluded], runStatus: .running)
                 == .readyToStart)
         #expect(
-            PhotoReviewPolicy.groupingReadiness(
+            PhotoGroupingReadiness(
                 images: [ready], runStatus: .completed) == .working)
     }
 
@@ -131,7 +144,7 @@ struct PhotoImportFlowTests {
             deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
-            PhotoReviewPolicy.groupingReadiness(
+            PhotoGroupingReadiness(
                 images: [ready], runStatus: .needsReview)
                 == .needsReviewOnWeb)
     }
@@ -140,7 +153,7 @@ struct PhotoImportFlowTests {
     // waiting message (not a dead-end web link) is what belongs on screen.
     @Test func groupingReadinessStaysWaitingForPhotosEvenWhenRunNeedsReview() {
         #expect(
-            PhotoReviewPolicy.groupingReadiness(images: [], runStatus: .needsReview)
+            PhotoGroupingReadiness(images: [], runStatus: .needsReview)
                 == .waitingForPhotos)
     }
 
@@ -662,7 +675,8 @@ struct PhotoImportFlowTests {
         PhotoRouteTestProtocol.response.withLock {
             $0 = Data(
                 (statusCode == 200
-                    ? json : "{\"code\":\"UPSTREAM_ERROR\",\"message\":\"Synthetic lookup refusal\"}").utf8)
+                    ? "{\"ok\":true,\"data\":\(json)}"
+                    : "{\"code\":\"UPSTREAM_ERROR\",\"message\":\"Synthetic lookup refusal\"}").utf8)
         }
         PhotoRouteTestProtocol.statusCode.withLock { $0 = statusCode }
         let configuration = URLSessionConfiguration.ephemeral

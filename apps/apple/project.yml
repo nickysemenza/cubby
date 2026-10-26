@@ -87,7 +87,7 @@ targetTemplates:
           - CFBundleURLName: "$(PRODUCT_BUNDLE_IDENTIFIER)"
             CFBundleURLSchemes: ["$(CUBBY_CALLBACK_SCHEME)"]
         NSCameraUsageDescription: Cubby scans barcodes to add items to a location.
-        NSPhotoLibraryUsageDescription: Cubby uses selected photos for garden journals and product images.
+        NSPhotoLibraryUsageDescription: Cubby scans your photo library to match photos with your products and garden records and import the photos you choose.
         NSAppTransportSecurity:
           NSExceptionDomains:
             localhost:
@@ -107,6 +107,7 @@ targetTemplates:
         # CURRENT_PROJECT_VERSION. ClientIdentity sends this marketing version to the server.
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSUserActivityTypes: [com.nickysemenza.cubby.cook]
         # Only HTTPS via URLSession (exempt); answers App Store Connect's export-compliance
         # question at upload so every TestFlight build skips the prompt.
         ITSAppUsesNonExemptEncryption: false
@@ -201,7 +202,6 @@ targets:
           - com.nickysemenza.cubby.photo-matching
           - com.nickysemenza.cubby.library-sync
           - com.nickysemenza.cubby.image-queue
-          - com.nickysemenza.cubby.image-queue.continued.*
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - processing
@@ -232,6 +232,7 @@ targets:
     platform: iOS
     sources:
       - path: App/LiveActivity
+      - path: App/Shared/Intents/ControlIntents.swift
     info:
       path: App/LiveActivity/Info.plist
       properties:
@@ -245,6 +246,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.LiveActivity
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) CUBBY_CONTROL_EXTENSION"
       configs:
         Release:
           # The embedded extension needs its own App Store profile; testflight.sh
@@ -307,7 +309,8 @@ targets:
       - path: App/Tests/AppShell/NavigationTests.swift
       - path: App/Tests/Auth
       - path: App/Tests/Entity
-      - path: App/Tests/DesignSystem/EntityWebURLTests.swift
+      - path: App/Tests/DesignSystem/WebHandoffTests.swift
+      - path: App/Tests/DesignSystem/SceneRefreshTests.swift
       - path: App/Tests/DesignSystem/RecordListRowRenderingTests.swift
       - path: App/Tests/Photo/Import/PhotoImportRunPreparationTests.swift
       - path: App/Tests/Photo/Review/PhotoDestinationOptionTests.swift

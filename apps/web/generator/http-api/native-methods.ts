@@ -5,50 +5,6 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     doc: null,
   },
   "chatgpt.connect": { method: "connectChatGpt", doc: null },
-  "purchase.settlementCandidates": {
-    method: "purchaseSettlementCandidates",
-    doc: "Unallocated statement entries near an order, already ranked and worded. Advisory: reading allocates nothing.",
-  },
-  "purchase.suggestSettlementMatch": {
-    method: "suggestPurchaseSettlementMatch",
-    doc: "An advisory ordering of equally ranked candidates. It never selects or allocates; the person still chooses and saves.",
-  },
-  "purchase.checkSettlementAllocation": {
-    method: "checkPurchaseSettlementAllocation",
-    doc: "Whether typed allocation rows can be saved against a statement entry, and why not. The only allocation rule clients consult.",
-  },
-  "purchase.splitStart": {
-    method: "startExpenseSplit",
-    doc: "The starting parts of a split, its wording and the sentence to confirm before it replaces the expense.",
-  },
-  "purchase.checkSplit": {
-    method: "checkExpenseSplit",
-    doc: "Whether typed split parts can be saved, and the exact body to send when they can. The only split rule clients consult.",
-  },
-  "purchase.split": {
-    method: "splitExpense",
-    doc: "Replaces one expense with its parts. Send the body `checkExpenseSplit` returned, after the person confirmed.",
-  },
-  "purchase.link": {
-    method: "attachExpensesToPurchase",
-    doc: "Moves the selected expenses onto a Purchase. Send the ids `checkPurchaseExpenseLink` returned.",
-  },
-  "purchase.linkExpenseCandidates": {
-    method: "purchaseLinkExpenseCandidates",
-    doc: "Expenses that can be attached to a Purchase for a scope and search, already worded.",
-  },
-  "purchase.checkLinkExpenses": {
-    method: "checkPurchaseExpenseLink",
-    doc: "Whether an expense selection can be attached to a Purchase, what it does to the expense total, and what to confirm.",
-  },
-  "purchase.linkProductCandidates": {
-    method: "purchaseLinkProductCandidates",
-    doc: "Products that can be attached to a Purchase: a search minus what is already attached.",
-  },
-  "purchase.attachProducts": {
-    method: "attachProductsToPurchase",
-    doc: "Records which products a Purchase bought. The link carries no money or quantity.",
-  },
   "recipe.getIngredientUsage": { method: "ingredientUsage", doc: null },
   "meal.addRecipe": {
     method: "addRecipeToMeal",
@@ -90,14 +46,6 @@ export const CLIENT_PASSTHROUGH_METHODS = {
   "connection.read": { method: "readConnections", doc: null },
   "connection.discover": { method: "discoverConnections", doc: null },
   "image.attachExisting": { method: "attachExistingImage", doc: null },
-  "spendingClassification.preview": {
-    method: "previewSpendingClassification",
-    doc: null,
-  },
-  "spendingClassification.apply": {
-    method: "applySpendingClassification",
-    doc: null,
-  },
   "ai.detectInventoryItems": { method: "detectInventoryItems", doc: null },
   "ai.approveDetectedInventoryItem": {
     method: "approveDetectedInventoryItem",
@@ -108,23 +56,7 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     method: "applyFinanceCategorySuggestion",
     doc: null,
   },
-  "financialTransaction.previewBookingCorrection": {
-    method: "previewFinancialBookingCorrection",
-    doc: null,
-  },
-  "financialTransaction.commitBookingCorrection": {
-    method: "commitFinancialBookingCorrection",
-    doc: null,
-  },
   "problems.resolveRunFinding": { method: "resolveRunFinding", doc: null },
-  "financialTransaction.previewBooking": {
-    method: "previewFinancialBooking",
-    doc: null,
-  },
-  "financialTransaction.commitBooking": {
-    method: "commitFinancialBooking",
-    doc: null,
-  },
   "entity.detailActivity": { method: "detailActivity", doc: null },
   "entity.monthlyExpenseSpend": { method: "monthlyExpenseSpend", doc: null },
   "dashboard.counts": { method: "dashboardCounts", doc: null },
@@ -167,13 +99,7 @@ export const CLIENT_PASSTHROUGH_METHODS = {
     method: "renewCompanionImageProcessing",
     doc: null,
   },
-  "photoImport.candidates": { method: "photoProductCandidates", doc: null },
-  "photoImport.chooseExisting": {
-    method: "choosePhotoGroupProduct",
-    doc: null,
-  },
   "photoImport.commit": { method: "commitPhotoImport", doc: null },
-  "photoImport.discardGroup": { method: "discardPhotoGroup", doc: null },
   "photoImport.admitBatch": { method: "admitPhotoImportBatch", doc: null },
   "photoImport.sealBatch": { method: "sealPhotoImportBatch", doc: null },
   "photoImport.registerLiveActivity": {

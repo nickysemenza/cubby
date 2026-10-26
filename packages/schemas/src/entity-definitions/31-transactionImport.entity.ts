@@ -13,6 +13,8 @@ export default defineEntity({
     titleField: "label",
     domain: "finance",
     description: "One resumable transaction import and its received records.",
+    // Import batches run through the web and MCP intake workflow.
+    nativeBrowse: false,
     emptyState: {
       title: "No transaction imports yet",
       description: "Record financial evidence through the intake workflow.",
@@ -66,6 +68,27 @@ export default defineEntity({
         firstRecords: { descriptor: "batchId" },
         withdrawnRecords: { descriptor: "withdrawalImportId" },
       },
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "id",
+            "source",
+            "label",
+            "fingerprint",
+            "dateKind",
+            "rowCountDeclared",
+            "observedAt",
+            "completedAt",
+            "notes",
+            "createdAt",
+            "updatedAt",
+            "rowCountStored",
+          ],
+        },
+      ],
     },
   },
   model: {

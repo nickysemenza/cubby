@@ -183,6 +183,7 @@ export const repositoryOwners = [
   "src/server/domains/transaction-import/repo/transaction-import-membership.ts",
   "src/server/domains/transaction-import/repo/source-transaction-record-identity.ts",
   "src/server/domains/task/repo/blocking-sql.ts",
+  "src/server/domains/task/repo/briefing-commands.ts",
   "src/server/domains/task/repo/helpers.ts",
   "src/server/domains/task/repo/summary.ts",
   "src/server/domains/task/repo/today-briefing.ts",

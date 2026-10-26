@@ -176,8 +176,13 @@ cancellation, stops unfinished device transfers, finalizes already transferred
 photos, and seals that upload batch; imported Images remain. Preparation and
 upload failures retain the selection, offer individual Retry controls, and require
 an explicit Continue without failed photos before omitting them. Done clears only
-confirmed imported photos from selection. View import reopens local progress;
-Review item groups is shown only after proposals actually exist.
+confirmed imported photos from selection. View import opens the Run console.
+
+The Run console keeps upload and description progress, per-photo recovery,
+Start grouping and attention. Reviewing proposed groups (candidates, Product
+edits, ownership, approve and discard) is web's: the console's `photo-batch`
+slot is one row, Review photo groups on web, that opens `run/<id>#photo-batch`.
+Send to computer shares the same anchor.
 
 The native app owns a journal in Application Support, excluded from backup, and
 copies selected files before starting uploads. A selection journal records Photos
@@ -232,18 +237,8 @@ An admission attempt is persisted before `createRun` or `admitBatch` HTTP. Cance
 The synthetic native input journey selects the newest 25 distinct pixel fixtures
 from the authorized Library grid using fresh accessibility refs, then verifies
 original digests, capture dates, import Sightings, sheet-close continuation, and
-explicit group approval without automatic financial or inventory writes. The
-Review item groups action targets the proposed-items section directly through
-the Run's shared contents navigation, ahead of the per-photo processing rows. The
-initial target is a short approval-controls body row, separate from the tall
-evidence workspace and noninteractive count header. Centering that bounded row
-keeps its buttons clear of the navigation bar in a medium-height sheet. The
-primary approval labels fill their allocated row width with a 44-point minimum
-hit height and rectangular hit region, so accessibility row-center taps activate
-the same action as tapping its visible text. The
-review uses one confirmation presenter for individual, selected, all, and discard
-actions; approval keeps the reviewed document and group keys frozen until confirmation.
-The separate system-picker scripts retain the denied-library entry path. Fixture
+no automatic Product, financial or inventory writes. Group approval, including a
+selected subset, is covered on web by `photo-group-review.spec.ts`. The separate system-picker scripts retain the denied-library entry path. Fixture
 setup grants library access to the simulator app without resetting its library;
 each fixture batch has distinct original bytes so older batches cannot satisfy
 the digest readback.

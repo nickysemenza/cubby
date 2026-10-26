@@ -80,16 +80,22 @@ export default defineEntity(
             slot: "recipe.availability",
           },
           {
-            kind: "report",
-            id: "estimated-cost-coverage",
-            title: "Estimated cost & coverage",
-            slot: "recipe.costing-coverage",
-          },
-          {
             kind: "fields",
             id: "nutrition",
             title: "Nutrition",
             fields: ["calories", "protein", "carbs", "fat"],
+          },
+          {
+            kind: "fields",
+            id: "source",
+            title: "Source",
+            fields: ["source"],
+          },
+          {
+            kind: "report",
+            id: "estimated-cost-coverage",
+            title: "Estimated cost & coverage",
+            slot: "recipe.costing-coverage",
           },
           {
             kind: "records",
@@ -103,12 +109,6 @@ export default defineEntity(
             title: "Meals",
             viewKey: "relation:meals",
           },
-          {
-            kind: "fields",
-            id: "source",
-            title: "Source",
-            fields: ["source"],
-          },
         ],
 
         activityRelations: [
@@ -116,7 +116,31 @@ export default defineEntity(
           { relation: "meals", dateField: "date" },
         ],
 
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["name"],
+          },
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: ["meta", "yield", "tags", "notes", "forkedFromRecipeId"],
+          },
+          {
+            kind: "fields",
+            id: "servings",
+            title: "Servings",
+            fields: ["servings"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["createdAt", "updatedAt", "source", "activeMinutes"],
+          },
           {
             kind: "fields",
             id: "contents",
@@ -275,7 +299,7 @@ export default defineEntity(
           // Hidden by default (`listHidden`) but toggleable via the View menu —
           // never actually shown by default before this field went through
           // `createEntityDisplayColumns`.
-          display: { columnGroup: "Recipe", listHidden: true },
+          display: { columnGroup: "Recipe", listHidden: true, width: "xl" },
           validation: {
             read: recipeTopLevelFields.notes,
             create: recipeNotes.nullable().optional(),

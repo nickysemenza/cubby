@@ -18,6 +18,7 @@ function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
     entityKind: "location",
     title: "Workshop drawer",
     subtitle: "Garage › Main area",
+    facts: [],
     typeHint: "drawer",
     imageUrl: "https://example.com/workshop-drawer.jpg",
     matchKind: "text",
@@ -121,24 +122,13 @@ describe("generic record picture", () => {
 });
 
 describe("buildLocationComboboxItem tree presentation", () => {
-  it("keeps the structured ancestry of a typed location search hit", () => {
+  it("shows the server path for a typed location search hit", () => {
     const item = buildSearchHitComboboxItem(
-      locationSearchHit({
-        locationPath: [
-          { id: "LOC-1ABC", name: "Garage" },
-          { id: "LOC-2ABC", name: "Workbench" },
-        ],
-      }),
+      locationSearchHit({ facts: ["Garage › Workbench › Workshop drawer"] }),
       "location",
     );
     expect(item.name).toBe("Workshop drawer");
-    // The tree header and indent show the path; it stays searchable.
-    expect(item.detail).toBeUndefined();
-    expect(item.aliases).toContain("Garage › Workbench");
-    expect(item.presentation).toMatchObject({
-      group: { id: "LOC-1ABC", label: "Garage" },
-      depth: 2,
-    });
+    expect(item.secondary).toBe("Garage › Workbench › Workshop drawer");
   });
   it("groups under the root ancestor and sets depth to the path length", () => {
     const locationId = testShortcode("location", "LOC-9ABC");

@@ -32,7 +32,9 @@ export async function plantTaskConnection(page: Page) {
         orderUrlTemplate: "https://example.com/orders/{orderId}",
         notes: `${vendorName} notes`,
       });
-      const brand = await create("vendor", { name: "E2E fixture" });
+      const brand = await create("vendor", {
+        name: `Connection brand ${suffix}`,
+      });
       const purchaseFor = async (name: string) => {
         const product = await create("product", {
           brandId: brand.id,

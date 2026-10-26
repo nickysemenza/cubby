@@ -54,6 +54,7 @@ const destinationFromHit = (hit: SearchHit): SearchDestination => ({
   emoji: hit.emoji,
   typeHint: hit.typeHint,
   imageUrl: hit.imageUrl,
+  facts: hit.facts,
 });
 
 const destinationFromInternalHit = (

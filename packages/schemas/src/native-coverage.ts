@@ -48,12 +48,27 @@ import type {
  *
  * Every record is keyed by the generated id union, so adding a renderer, slot,
  * or hero action to a declaration is a type error here until it is classified.
- * `unsupported` is a deliberate, disclosed gap (the native screen shows the
- * reason); `NATIVE_UNSUPPORTED_CEILING` only shrinks.
+ * `handoff` is a reviewed web-only surface: native draws one row (and a record
+ * More item) that opens `web` — a declared detail `section` of the record, or a
+ * list route `query` — named by `label`; `reason` says why it stays on web. The
+ * unit test pins the roster, so adding a handoff is a deliberate declaration change.
  */
+export type NativeWebHandoff = {
+  /** A detail section id the entity declares; the web hash. */
+  readonly section?: string;
+  /** List-route query parameters, for a list-level handoff. */
+  readonly query?: Readonly<Record<string, string>>;
+  /** The row and menu text, named after the web surface. */
+  readonly label: string;
+};
+
 export type NativeCoverageEntry = (
   | { readonly status: "implemented" | "generic" | "ownedElsewhere" }
-  | { readonly status: "unsupported"; readonly reason: string }
+  | {
+      readonly status: "handoff";
+      readonly web: NativeWebHandoff;
+      readonly reason: string;
+    }
 ) & {
   readonly inputs?: readonly {
     readonly path: string;
@@ -90,10 +105,10 @@ const classify =
 const implemented = classify("implemented");
 const generic = classify("generic");
 const ownedElsewhere = classify("ownedElsewhere");
-const unsupported = <const Id extends string>(
-  ids: readonly Id[],
+const handoff = <const Web extends NativeWebHandoff>(
+  web: Web,
   reason: string,
-) => mapRecord(ids, () => ({ status: "unsupported", reason }) as const);
+) => ({ status: "handoff", web, reason }) as const;
 
 /**
  * Control renderers whose value is an object or array the generic structured-value editor draws
@@ -109,7 +124,7 @@ const STRUCTURED_VALUE_RENDERERS = [
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
 
-/** Whether the generator derives a `valueSchema` (and native draws the structured editor) for a field. */
+/** Whether a structured editor needs an input schema, including fields native hands off to web. */
 export const drawsFromValueSchema = (
   entity: string,
   field: {
@@ -123,7 +138,8 @@ export const drawsFromValueSchema = (
     (renderer === "structured-field" &&
       Object.entries<NativeCoverageEntry>(nativeCoverage.structuredField).some(
         ([id, entry]) =>
-          id === `${entity}.${field.key}` && entry.status === "implemented",
+          id === `${entity}.${field.key}` &&
+          (entry.status === "implemented" || entry.status === "handoff"),
       ))
   );
 };
@@ -144,9 +160,7 @@ export const nativeCoverage = {
     // `upc-lookup`/`usda-food` are plain text/number fields once their AI action strips away.
     ...generic(["entity-select", "money", "url", "upc-lookup", "usda-food"]),
     ...generic(STRUCTURED_VALUE_RENDERERS),
-    // Drawn from the field's `valueSchema` only where `structuredField` marks it implemented
-    // (a golden read-to-input vector proves the round trip); the other fields of this renderer
-    // are read-only, as on web.
+    // Field-level coverage owns the named web handoffs for this shared renderer.
     ...generic(["structured-field"]),
     // Product tags use the ordinary token editor.
     ...implemented(["product-tags"]),
@@ -310,10 +324,13 @@ export const nativeCoverage = {
   heroAction: {
     ...implemented([
       "addToInventory",
+      "adjustAmount",
+      "complete",
       "delete",
       "discard",
       "markPurchased",
       "fetchLogo",
+      "moveTo",
       "recordSale",
       "setStatus",
     ]),
@@ -331,10 +348,7 @@ export const nativeCoverage = {
     ...implemented([
       "meal.nutrition",
       "run.import-controls",
-      "run.photo-batch",
       "purchase.receiving",
-      "vendor.spending-classification",
-      "productCategory.spending-classification",
       "product.ownership",
       "product.nutrition",
       "product.unit-mappings",
@@ -353,11 +367,9 @@ export const nativeCoverage = {
       "cookbook.toc",
       "cookbook.import-progress",
       // One generic report view draws these from the server-composed
-      // `entityReport.get` blocks (stats, chart, table, schedule, note).
+      // `entityReport.get` blocks (stats, chart, table, note).
       "project.budget",
       "project.contribution",
-      "project.analytics",
-      "project.schedule",
       "location.contents-valuation",
       "vendor.mail-search",
       // The server's recipes (scale, cost) and portions, edited with report commands that carry
@@ -377,12 +389,10 @@ export const nativeCoverage = {
       "shipment.tracking",
       "purchase.runs",
       "location.ai-description",
-      // Finance slots: the same report view draws their `records` rows (checked rows, footer and
-      // verbs included); the verbs are classified under `sectionAction`.
-      "purchase.reconciliation",
+      // Read-only finance status: the same report view draws their `records` rows; a verb the
+      // server offers there is classified under `sectionAction`.
       "purchase.project-allocation",
       "purchase.financial-settlement",
-      "expense.settlement",
       // A run's progress, findings, transcript, log, usage and changes: the same report
       // view draws the server's `records` rows, polls (one batched read) while the run is live,
       // and runs the commands the server offers (apply, dismiss, retry) only
@@ -411,11 +421,46 @@ export const nativeCoverage = {
     ]),
     // The agent conversation is web-only on purpose: it streams from the import-run agent route (SSE
     // plus prompt and abort over its own protocol), not a Cubby operation, and CubbyKit has no
-    // client, reconnect or transcript model for it. Native promotion:
-    // https://github.com/nickysemenza/cubby/issues/2210
-    ...unsupported(
-      ["run.import-agent-live", "run.import-agent-stopped"],
-      "The live agent conversation is web-only: it streams from the import-run agent route, which native has no client for. Prompt, stop and review the agent on web.",
+    // client, reconnect or transcript model for it.
+    "project.schedule": handoff(
+      { section: "schedule", label: "Open schedule on web" },
+      "Project schedules are reviewed on web.",
+    ),
+    "project.analytics": handoff(
+      { section: "analytics", label: "Open analytics on web" },
+      "Project analytics are explored on web; budget summaries stay native.",
+    ),
+    "run.import-agent-live": handoff(
+      { section: "import-agent-live", label: "Open live agent on web" },
+      "The live agent conversation streams from the import-run agent route, which native has no client for. Prompt and stop the agent on web.",
+    ),
+    "run.import-agent-stopped": handoff(
+      { section: "import-agent-stopped", label: "Open agent history on web" },
+      "The agent conversation streams from the import-run agent route, which native has no client for. Review the agent's history on web.",
+    ),
+    // The Run console keeps a photo Run's upload, processing, recovery and attention; deciding
+    // its proposed groups (candidates, Product edits, ownership, approve and discard) is web's.
+    "run.photo-batch": handoff(
+      { section: "photo-batch", label: "Review photo groups on web" },
+      "Comparing candidates, editing proposed Products and ownership, and approving or discarding photo groups are reviewed on web.",
+    ),
+    // Reconciliation is web's: attaching expenses and products, splitting, and the totals they
+    // change are reviewed beside the line evidence web draws.
+    "purchase.reconciliation": handoff(
+      { section: "reconciliation", label: "Review reconciliation on web" },
+      "Attaching expenses and products to an order, and the totals that change with them, are reviewed on web.",
+    ),
+    "expense.settlement": handoff(
+      { section: "settlement", label: "Review settlement on web" },
+      "Splitting an expense and reviewing its settlement are web's. Receive into Inventory stays on the expense.",
+    ),
+    "vendor.spending-classification": handoff(
+      { section: "spending-classification", label: "Classify spending on web" },
+      "A vendor's spending defaults change only after a historical-impact review, which web draws.",
+    ),
+    "productCategory.spending-classification": handoff(
+      { section: "spending-classification", label: "Classify spending on web" },
+      "A category's spending mapping changes only after a historical-impact review, which web draws.",
     ),
     ...unsupported(
       ["run.evaluations"],
@@ -423,59 +468,99 @@ export const nativeCoverage = {
     ),
   },
   /**
-   * Finance verbs a report's `records` block offers. Native offers the `implemented` ones;
-   * `RecordsBlockView.verbButton` switches over every verb, each through the same operation
-   * web's handler calls; the report says per record whether the verb is available, so
-   * native never offers one the server would refuse.
+   * Finance verbs a report's `records` block offers. `RecordsBlockView.verbButton` switches over
+   * every verb: an `implemented` one runs the same operation web's handler calls, only when the
+   * report says it is available; a `handoff` one draws its web row in the block. `section` is
+   * the detail section web offers the verb in.
    */
   sectionAction: {
-    ...implemented([
-      "matchStatement",
-      "receiveExpense",
-      "splitExpense",
-      "linkExpenses",
-      "linkProducts",
-    ]),
+    ...implemented(["receiveExpense"]),
+    matchStatement: handoff(
+      {
+        section: "financial-settlement",
+        label: "Match statement activity on web",
+      },
+      "Allocating a statement charge across orders is reviewed on web.",
+    ),
+    splitExpense: handoff(
+      { section: "settlement", label: "Split expense on web" },
+      "Splitting an expense replaces it with its parts; web reviews the split.",
+    ),
+    linkExpenses: handoff(
+      { section: "reconciliation", label: "Attach expenses on web" },
+      "Attaching expenses moves them onto the order; web reviews the change to its total.",
+    ),
+    linkProducts: handoff(
+      { section: "reconciliation", label: "Attach products on web" },
+      "Attaching products to an order is reviewed on web.",
+    ),
   },
   /**
    * `implemented` slots are the generated `ImplementedListSlotID`, which `ListSlotRegistry`
    * (`apps/apple/App/Shared/Entity/List/SpecialistListViews.swift`) switches over; `ownedElsewhere` ones are
    * covered by the generic list's own affordances and never selectable as a slot.
    */
-  /**
-   * `structured-field` is a shared renderer id, so each field is classified here as
-   * `<entity>.<field>`: `implemented` ones are drawn from a `valueSchema` by the generic
-   * structured-value editor on both clients (each needs a read-to-input vector in
-   * `structured-roundtrip.json`); an `unsupported` one stays read-only on both, with its reason.
-   * Every field with that renderer must appear (asserted by the unit test), and
-   * `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
-   */
+  /** Structured-field editors stay on web; native retains their read-only summaries. */
   structuredField: {
-    // Every field is drawn by the one generic editor on both clients, each with a read-to-input
-    // vector from a real server read. `meal.recipes` has only a create input (an existing meal's
-    // recipes change through the meal composition workflow), so it draws on create alone.
-    ...implemented([
-      "expense.sourceClaims",
-      "financialAccount.cardNumbers",
-      "financialAccount.authorizedUsers",
-      "financialAccount.fundingPeriods",
-      "financialAccount.identity",
-      "financialTransaction.allocations",
-      "ledgerTransfer.sourceClaims",
-      "meal.recipes",
-      "recipe.meta",
-      "recipe.sections",
-      "recipe.yield",
-      "vendor.agentHints",
-    ]),
+    "expense.sourceClaims": handoff(
+      { section: "settlement", label: "Review source claims on web" },
+      "Source evidence and reconciliation are reviewed on web.",
+    ),
+    "financialAccount.cardNumbers": handoff(
+      { section: "overview", label: "Edit card numbers on web" },
+      "Card history affects transaction matching and is edited on web.",
+    ),
+    "financialAccount.authorizedUsers": handoff(
+      { section: "overview", label: "Edit authorized users on web" },
+      "Account authorization periods are edited on web.",
+    ),
+    "financialAccount.fundingPeriods": handoff(
+      { section: "overview", label: "Edit funding periods on web" },
+      "Account funding periods are edited on web.",
+    ),
+    "financialAccount.identity": handoff(
+      { section: "overview", label: "Edit account identity on web" },
+      "Account identity is chosen and reviewed on web.",
+    ),
+    "financialTransaction.allocations": handoff(
+      { section: "overview", label: "Edit allocations on web" },
+      "Transaction allocations are reviewed beside their evidence on web.",
+    ),
+    "ledgerTransfer.sourceClaims": handoff(
+      { section: "evidence", label: "Review transfer source claims on web" },
+      "Transfer source evidence and reconciliation are reviewed on web.",
+    ),
+    "meal.recipes": handoff(
+      { section: "composition", label: "Edit meal recipes on web" },
+      "Meal recipe composition is edited on web.",
+    ),
+    "recipe.meta": handoff(
+      { section: "overview", label: "Edit recipe metadata on web" },
+      "Recipe source metadata and timing are edited on web.",
+    ),
+    "recipe.sections": handoff(
+      { section: "contents", label: "Edit recipe sections on web" },
+      "Recipe ingredients and instructions are edited on web.",
+    ),
+    "recipe.yield": handoff(
+      { section: "overview", label: "Edit recipe yield on web" },
+      "Recipe yield is edited on web.",
+    ),
+    "vendor.agentHints": handoff(
+      { section: "details", label: "Edit agent hints on web" },
+      "Import agent instructions are edited on web.",
+    ),
   },
   listSlot: {
-    ...implemented([
-      "location.gallery",
-      "meal.calendar",
-      "project.analytics",
-      "expense.analytics",
-    ]),
+    "project.analytics": handoff(
+      { query: { view: "analytics" }, label: "Open project analytics on web" },
+      "Portfolio analytics are explored on web.",
+    ),
+    "expense.analytics": handoff(
+      { query: { view: "analytics" }, label: "Open expense analytics on web" },
+      "Expense analytics are explored on web.",
+    ),
+    ...implemented(["location.gallery", "meal.calendar"]),
     ...ownedElsewhere([
       "location.visualizations",
       "meal.nutrition",
@@ -598,6 +683,14 @@ export type NativeHeroActionPlan = {
   | {
       /** Picks a value for one declared enum field, then updates the row. */
       readonly kind: "setField";
+      readonly entities: readonly Entity[];
+      readonly field: string;
+      /** Writes this option on one tap instead of asking (a task's Done). */
+      readonly value?: string;
+    }
+  | {
+      /** Edits one update field's current value in the single-field form, then updates the row. */
+      readonly kind: "editField";
       readonly entities: readonly Entity[];
       readonly field: string;
     }
@@ -731,6 +824,36 @@ export const nativeHeroActionPlans = {
     },
     editor: EXPENSE_DISPOSITION_EDITOR,
   },
+  complete: {
+    label: "Done",
+    symbol: "checkmark.circle",
+    kind: "setField",
+    entities: ["task"],
+    field: "status",
+    value: "done",
+  },
+  moveTo: {
+    label: "Move to",
+    symbol: "arrow.left.arrow.right",
+    kind: "operation",
+    operation: "inventory.moveEntries",
+    entities: ["inventory"],
+    // The whole entry moves and can move back; a partial move stays on web's Move dialog.
+    confirmation: "none",
+    fields: [{ key: "location", label: "Location", kind: "location" }],
+    body: {
+      items: [
+        { inventoryEntryId: "$row.id", targetLocationId: "$field.location" },
+      ],
+    },
+  },
+  adjustAmount: {
+    label: "Adjust amount",
+    symbol: "plusminus",
+    kind: "editField",
+    entities: ["inventory"],
+    field: "amount",
+  },
   setStatus: {
     label: "Set status",
     symbol: "checklist",
@@ -825,23 +948,6 @@ export const nativeCollectionActionPlans = {
   CollectionActionId,
   Extract<NativeHeroActionPlan, { kind: "operation" }>
 >;
-
-/**
- * Reviewed count of `unsupported` ids per kind. It only shrinks: implement an
- * id natively, flip its status above, and lower the number. Raising it means a
- * new web-only declaration shipped without a native path and needs a
- * justification in review.
- */
-export const NATIVE_UNSUPPORTED_CEILING = {
-  control: 0,
-  list: 0,
-  detail: 0,
-  heroAction: 0,
-  detailSlot: 2,
-  listSlot: 0,
-  sectionAction: 0,
-  structuredField: 0,
-} as const satisfies Record<NativeCoverageKind, number>;
 
 /** Named whole-row renderers declare the projection they consume beside their platform disposition. */
 export function rendererReadInputs(surface: "list" | "detail", id: string) {

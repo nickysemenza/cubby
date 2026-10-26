@@ -49,21 +49,15 @@ export default defineEntity(
         summary: [
           {
             kind: "records",
-            id: "parent-location",
-            title: "Parent location",
-            viewKey: "relation:parent",
-          },
-          {
-            kind: "records",
             id: "direct-holdings",
             title: "Direct holdings",
             viewKey: "relation:inventory",
           },
           {
-            kind: "fields",
-            id: "stock-check",
-            title: "Stock check",
-            fields: ["lastBulkInventory"],
+            kind: "records",
+            id: "child-locations",
+            title: "Child locations",
+            viewKey: "relation:children",
           },
           {
             kind: "report",
@@ -72,10 +66,10 @@ export default defineEntity(
             slot: "location.contents-valuation",
           },
           {
-            kind: "records",
-            id: "child-locations",
-            title: "Child locations",
-            viewKey: "relation:children",
+            kind: "fields",
+            id: "stock-check",
+            title: "Stock check",
+            fields: ["lastBulkInventory"],
           },
           {
             kind: "records",
@@ -95,6 +89,12 @@ export default defineEntity(
             title: "Space reference",
             viewKey: "relation:images",
           },
+          {
+            kind: "records",
+            id: "parent-location",
+            title: "Parent location",
+            viewKey: "relation:parent",
+          },
         ],
 
         activityRelations: [
@@ -111,7 +111,26 @@ export default defineEntity(
         hero: {
           breadcrumb: "parentId",
         },
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "aliases",
+              "tags",
+              "type",
+              "notes",
+              "productId",
+              "parentId",
+            ],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["id", "lastBulkInventory", "createdAt", "updatedAt"],
+          },
           {
             kind: "slot",
             id: "contents-valuation",
@@ -444,6 +463,8 @@ Rules:
           display: {
             columnGroup: "Place",
             detail: false,
+            // Empty except for furniture recorded as a product.
+            listHidden: true,
             labelPath: "product.name",
             renderer: { list: "product-link" },
           },
@@ -497,7 +518,7 @@ Rules:
             columnGroup: "Place",
             detail: false,
             listHidden: true,
-            width: "lg",
+            width: "xl",
             mobile: { slot: "meta", priority: 70 },
           },
           validation: {

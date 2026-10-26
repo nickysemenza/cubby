@@ -70,6 +70,7 @@ describe("image dialog pickers", () => {
             matchKind: "text",
             matchField: "title",
             matchReason: "Name",
+            facts: [],
             matchTerms: ["oats"],
           },
         ])}

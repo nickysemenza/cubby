@@ -353,7 +353,7 @@ option. Required desktop regression shards exclude this project and retain
 small fixtures. `household-exploration.spec.ts` exercises the graph through the
 browser and saves a synthetic wardrobe screenshot.
 `pnpm test:e2e:sim -- --qa` loads this same household before its journey-specific
-fixtures. The focused `--qa-photo-completion` guard keeps its small fixture.
+fixtures.
 
 ## Profiles and inspection
 

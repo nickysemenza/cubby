@@ -63,6 +63,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     componentCount,
     expenseTotal: 0,
     purchaseDate: null,
+    primaryPlacement: null,
     quantityLedger: {
       acquiredUnits: 0,
       exitedUnits: 0,

@@ -62,22 +62,7 @@ struct RootView: View {
         case .restoring:
             StartupView()
         case .signedOut:
-            #if os(macOS)
-                if model.navigator.section == .settings {
-                    NavigationStack {
-                        SettingsView(isSidebarRoot: true)
-                            .toolbar {
-                                ToolbarItem(placement: .navigation) {
-                                    Button("Sign in") { model.navigator.section = .today }
-                                }
-                            }
-                    }
-                } else {
-                    LoginView()
-                }
-            #else
-                LoginView()
-            #endif
+            LoginView()
         case .signedIn:
             Group {
                 #if os(iOS)
@@ -85,6 +70,14 @@ struct RootView: View {
                 #else
                     RootSplitView()
                 #endif
+            }
+            .alert("Request failed", isPresented: signedInFailure) {
+                if model.canRetryLastError {
+                    Button("Retry") { model.retryLastError() }
+                }
+                Button("Dismiss", role: .cancel) { model.dismissLastError() }
+            } message: {
+                Text(model.lastError ?? "")
             }
             .id(ObjectIdentifier(model.client))
             .task(id: model.host) {
@@ -105,23 +98,13 @@ struct RootView: View {
                     }
                 }
             #endif
-            // Asked once per install, right after sign-in: until it is answered the participation
-            // master switch stays off (`DeviceParticipation`'s default).
-            .sheet(isPresented: showsParticipationOnboarding) {
-                DeviceParticipationOnboardingSheet()
-            }
         }
     }
 
-    private var showsParticipationOnboarding: Binding<Bool> {
+    private var signedInFailure: Binding<Bool> {
         Binding(
-            get: { model.participation.answeredAt == nil },
-            set: { presented in
-                // Any dismissal path (including the sheet's own buttons, which already call
-                // `setParticipation`) must leave `answeredAt` set so this never reappears.
-                guard !presented, model.participation.answeredAt == nil else { return }
-                model.setParticipation(automaticWork: model.participation.automaticWork)
-            })
+            get: { model.phase == .signedIn && model.lastError != nil },
+            set: { presented in if !presented { model.dismissLastError() } })
     }
 
     #if os(iOS)

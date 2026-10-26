@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 
 /// Which declared detail slots native fills, and which entity-specific supplements appear.
-/// Unsupported declaration features are surfaced by the detail screen. The slot ids are
+/// A `handoff` slot draws its `OpenOnWebButton` row in the section. The slot ids are
 /// entity-qualified, so no `(entity, slot)` pairing is needed.
 enum DetailSlotRegistry {
     /// One case per slot `packages/schemas/src/native-coverage.ts` marks `implemented`, so a
@@ -43,10 +43,6 @@ enum DetailSlotRegistry {
             return reportSlot(.projectBudget, row)
         case .projectContribution:
             return reportSlot(.projectContribution, row)
-        case .projectAnalytics:
-            return reportSlot(.projectAnalytics, row)
-        case .projectSchedule:
-            return reportSlot(.projectSchedule, row)
         case .locationContentsValuation:
             return reportSlot(.locationContentsValuation, row)
         case .vendorMailSearch:
@@ -69,18 +65,10 @@ enum DetailSlotRegistry {
             return reportSlot(.purchaseRuns, row)
         case .locationAiDescription:
             return reportSlot(.locationAiDescription, row)
-        case .purchaseReconciliation:
-            return reportSlot(.purchaseReconciliation, row)
         case .purchaseProjectAllocation:
             return reportSlot(.purchaseProjectAllocation, row)
         case .purchaseFinancialSettlement:
             return reportSlot(.purchaseFinancialSettlement, row)
-        case .expenseSettlement:
-            return reportSlot(.expenseSettlement, row)
-        case .vendorSpendingClassification:
-            return AnyView(SpendingClassificationView(key: .vendor, row: row))
-        case .productCategorySpendingClassification:
-            return AnyView(SpendingClassificationView(key: .productCategory, row: row))
         case .purchaseReceiving:
             return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
         case .runSteps:
@@ -124,9 +112,6 @@ enum DetailSlotRegistry {
                 RunPausedHandoff.pausedStatuses.contains(row.raw["status"]?.stringValue ?? "")
             else { return nil }
             return AnyView(RunPausedHandoff(runID: row.id))
-        case .runPhotoBatch:
-            guard row.raw["purpose"]?.stringValue == "photo_inventory" else { return nil }
-            return AnyView(RunPhotoBatchSlot(runID: row.id))
         }
     }
 
@@ -161,19 +146,70 @@ enum DetailSlotRegistry {
     /// Section content for `slot` on a detail screen; nil renders nothing (the section is skipped).
     @MainActor
     static func view(slot: String, row: EntityRow) -> AnyView? {
-        guard let slot = ImplementedDetailSlotID(rawValue: slot) else { return nil }
-        return build(slot, row)
+        if let implemented = ImplementedDetailSlotID(rawValue: slot) { return build(implemented, row) }
+        guard let handoff = handoff(slot: slot, row: row),
+            let key = slot.split(separator: ".").first.flatMap({ EntityKey(rawValue: String($0)) })
+        else { return nil }
+        return handoffRow(handoff.label, target: handoff.target(key: key, id: row.id), id: slot)
+    }
+
+    /// The one row a web handoff draws where the native surface would have stood.
+    @MainActor
+    private static func handoffRow(_ label: String, target: WebHandoff.Target, id: String) -> AnyView {
+        AnyView(
+            OpenOnWebButton(target: target) {
+                HStack {
+                    Label(label, systemImage: "safari")
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
+                    Image(systemName: "arrow.up.right").foregroundStyle(.secondary).accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+            }
+            .accessibilityIdentifier("detail.handoff.\(id)"))
+    }
+
+    /// Transaction kinds web can book into the Expense ledger (`financialTransaction.previewBooking`).
+    private static let bookableKinds: Set<String> = [
+        "purchase", "refund", "adjustment", "fee", "interest", "income",
+    ]
+
+    /// The web handoff a `handoff` slot draws for `row`; nil when the slot is native or, like web's
+    /// slot predicate, does not apply to the row.
+    static func handoff(slot: String, row: EntityRow) -> NativeWebHandoff? {
+        guard let handoff = NativePresentationCoverage.detailSlot(slot).handoff else { return nil }
+        switch slot {
+        // Import runs only; live and stopped split on whether the run is still moving, as the
+        // import progress slots do.
+        case "run.import-agent-live", "run.import-agent-stopped":
+            guard SharedConstants.importReportRunPurposes.contains(row.raw["purpose"]?.stringValue ?? "")
+            else { return nil }
+            let live = SharedConstants.activeRunStatuses.contains(row.raw["status"]?.stringValue ?? "")
+            return live == (slot == "run.import-agent-live") ? handoff : nil
+        // Photo Runs only; the Run console keeps their processing and recovery native.
+        case "run.photo-batch":
+            return row.raw["purpose"]?.stringValue == "photo_inventory" ? handoff : nil
+        default:
+            return handoff
+        }
     }
 
     /// Record-specific affordances beside the generic sections; none is a manifest hero action.
     @MainActor
-    static func supplement(for key: EntityKey, row: EntityRow, onChanged: @escaping () -> Void) -> AnyView? {
+    static func supplement(for key: EntityKey, row: EntityRow) -> AnyView? {
         switch key {
         case .expense:
             guard let productID = row.raw["productId"]?.stringValue else { return nil }
             return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))
+        // Booking a charge into the Expense ledger, and correcting a recorded booking, are web's:
+        // both sit with the allocations in the transaction's Record section.
         case .financialTransaction:
-            return AnyView(FinancialTransactionEvidenceView(row: row, onChanged: onChanged))
+            guard row.raw["status"]?.stringValue != "void",
+                bookableKinds.contains(row.raw["kind"]?.stringValue ?? "")
+            else { return nil }
+            return handoffRow(
+                "Review booking on web",
+                target: .record(key: .financialTransaction, id: row.id, section: "overview"),
+                id: "financialTransaction.booking")
         default:
             return nil
         }
@@ -182,7 +218,6 @@ enum DetailSlotRegistry {
 
 private struct ProductJourneySummaryView: View {
     let product: ProductDetail
-    @Environment(AppModel.self) private var appModel
 
     private var ownPhotos: Int { product.attachments.filter { $0.source == .own }.count }
     private var isService: Bool {
@@ -216,9 +251,9 @@ private struct ProductJourneySummaryView: View {
                 )
             }
             if isService || product.ownershipEvidence.state != .exited {
-                Link(
-                    "Review purchase and statement",
-                    destination: appModel.webURL(for: .product, id: product.id.rawValue))
+                OpenOnWebButton(
+                    target: .record(key: .product, id: product.id.rawValue),
+                    label: "Review purchase and statement on web")
             }
         }
         .font(.caption)
@@ -233,13 +268,14 @@ private struct RunPausedHandoff: View {
     static let pausedStatuses: Set<String> = ["paused", "paused_auth", "paused_offline"]
 
     let runID: String
-    @Environment(AppModel.self) private var appModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Label("Run paused", systemImage: "pause.circle")
                 .font(.subheadline.weight(.medium))
-            Link("Open run controls", destination: appModel.webURL(for: .run, id: runID))
+            OpenOnWebButton(
+                target: .record(key: .run, id: runID, section: "import-controls"),
+                label: "Open run controls on web")
         }
     }
 }

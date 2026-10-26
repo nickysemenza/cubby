@@ -9,7 +9,11 @@ import {
   valueSchemaOf,
   type ValueSchemaJSON,
 } from "../generator/entities/render/value-schema";
-import { drawsFromValueSchema } from "@cubby/schemas/compiler/native-coverage";
+import {
+  drawsFromValueSchema,
+  nativeCoverage,
+  type NativeCoverageEntry,
+} from "@cubby/schemas/compiler/native-coverage";
 
 const noEntity: EntityForPrefix = () => null;
 const schemaOf = (
@@ -234,28 +238,34 @@ describe("declared structured editors", () => {
     }
   });
 
-  it("every native-edited field has a read-to-input vector the update schema accepts", async () => {
-    const vectors = z
-      .object({
-        vectors: z.array(
-          z.object({
-            entity: z.string(),
-            field: z.string(),
-            read: z.json(),
-            input: z.json(),
-          }),
-        ),
-      })
-      .parse(
-        JSON.parse(
-          readFileSync(
-            "../../packages/shared/golden-vectors/structured-roundtrip.json",
-            "utf8",
+  it("every structured editor has a read-to-input vector its input schema accepts", async () => {
+    const readVectors = (path: string) =>
+      z
+        .object({
+          vectors: z.array(
+            z.object({
+              entity: z.string(),
+              field: z.string(),
+              read: z.json(),
+              input: z.json(),
+            }),
           ),
-        ),
-      ).vectors;
+        })
+        .parse(JSON.parse(readFileSync(path, "utf8"))).vectors;
+    const nativeVectors = readVectors(
+      "../../packages/shared/golden-vectors/structured-roundtrip.json",
+    );
+    const webVectors = readVectors(
+      "src/entity/editing/structured-value.fixtures.json",
+    );
+    const vectors = [...nativeVectors, ...webVectors];
+    const nativeCoverageEntries: Record<string, NativeCoverageEntry> =
+      nativeCoverage.structuredField;
     const covered = new Set(
       vectors.map((vector) => `${vector.entity}.${vector.field}`),
+    );
+    const nativeCovered = new Set(
+      nativeVectors.map((vector) => `${vector.entity}.${vector.field}`),
     );
     for (const entity of await loadEntityDeclarations()) {
       for (const field of entity.fieldModel.fields) {
@@ -267,6 +277,11 @@ describe("declared structured editors", () => {
           (candidate) =>
             candidate.entity === entity.key && candidate.field === field.key,
         );
+        const id = `${entity.key}.${field.key}`;
+        expect(
+          nativeCovered.has(id),
+          `${id} shares a vector only when native edits it`,
+        ).toBe(nativeCoverageEntries[id]?.status !== "handoff");
         // A create-only field (a meal's `recipes`) is edited on create alone.
         const input = field.validation.update ?? field.validation.create;
         expect(input?.safeParse(vector?.input).success).toBe(true);

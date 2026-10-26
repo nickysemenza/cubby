@@ -1,3 +1,4 @@
+import { searchHitSchema } from "@cubby/schemas/search";
 import { describe, expect, it } from "vitest";
 
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -37,6 +38,13 @@ const unavailableRelatedSearch: RelatedSearchPort = {
 };
 
 describe("search query preparation", () => {
+  it("defaults omitted facts to an empty list and rejects more than three", () => {
+    expect(searchHitSchema.shape.facts.parse(undefined)).toEqual([]);
+    expect(
+      searchHitSchema.shape.facts.safeParse(["a", "b", "c", "d"]).success,
+    ).toBe(false);
+  });
+
   it("normalizes terms and creates an ANDed prefix tsquery", () => {
     expect(searchTerms("  Blue   TARP! ")).toEqual(["blue", "tarp"]);
     expect(buildPrefixTsQuery("Blue TARP")).toBe("blue:* & tarp:*");

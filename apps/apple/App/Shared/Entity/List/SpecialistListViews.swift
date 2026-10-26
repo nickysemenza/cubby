@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// The load/phase seam every specialist layout (calendar, board, gallery, analytics) shares:
+/// The load/phase seam every specialist layout (calendar, board, gallery) shares:
 /// the manifest names the layout id, the layout supplies only its fetch and its rows.
 @MainActor @Observable
 private final class SpecialistLoader<Value> {
@@ -58,8 +58,6 @@ enum ListSlotRegistry {
         switch slot {
         case .mealCalendar: AnyView(MealCalendarListView(client: client, filters: filters))
         case .locationGallery: AnyView(LocationGalleryListView(client: client, filters: filters))
-        case .projectAnalytics: AnyView(ProjectAnalyticsListView(client: client, filters: filters))
-        case .expenseAnalytics: AnyView(ExpenseAnalyticsListView(client: client, filters: filters))
         }
     }
 }
@@ -97,10 +95,6 @@ private struct SpecialistLoadView<Value, Content: View>: View {
 
 private func wire(_ value: some Encodable) -> JSONValue {
     (try? JSONValue(encoding: value)) ?? .null
-}
-
-private func dollars(_ value: JSONValue?) -> String {
-    (value?.doubleValue ?? 0).usd
 }
 
 private func isoDay(_ date: Date) -> String {
@@ -292,66 +286,6 @@ struct LocationGalleryListView: View {
                                     raw: .object(["dataQuality": wire(node.dataQuality)]))
                                 Text("\(node.totalItems) items · \(node.childNodes.count) sublocations")
                                     .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - project.analytics
-
-struct ProjectAnalyticsListView: View {
-    let client: CubbyClient
-    let filters: EntityFilterState
-
-    var body: some View {
-        SpecialistLoadView(
-            loadingLabel: "Loading analytics", filters: filters,
-            fetch: { filters in
-                ReportPresentation(try await client.projectAnalytics(filters: filters))
-            }
-        ) { report, _ in
-            List {
-                ReportBlocksView(report: report)
-            }
-            .fieldGuideDetailDensity()
-        }
-    }
-}
-
-// MARK: - expense.analytics
-
-struct ExpenseAnalyticsListView: View {
-    let client: CubbyClient
-    let filters: EntityFilterState
-
-    var body: some View {
-        SpecialistLoadView(
-            loadingLabel: "Loading analytics", filters: filters,
-            fetch: { filters in wire(try await client.expenseAnalytics(filters: filters)) }
-        ) { analytics, _ in
-            List {
-                Section("Spend") {
-                    LabeledContent("Net", value: dollars(analytics["summary"]?["net"]))
-                    LabeledContent(
-                        "Expenses", value: "\(Int(analytics["summary"]?["count"]?.doubleValue ?? 0))")
-                }
-                Section("By month") {
-                    ForEach(Array((analytics["monthly"]?.arrayValue ?? []).enumerated()), id: \.offset) {
-                        _, row in
-                        LabeledContent(row["month"]?.stringValue ?? "Month", value: dollars(row["net"]))
-                    }
-                }
-                Section("By project") {
-                    ForEach(Array((analytics["byProject"]?.arrayValue ?? []).enumerated()), id: \.offset) {
-                        _, row in
-                        if let id = row["projectId"]?.stringValue {
-                            NavigationLink(value: Route.entityDetail(.project, id: id)) {
-                                LabeledContent(
-                                    row["projectName"]?.stringValue ?? id, value: dollars(row["net"]))
                             }
                         }
                     }

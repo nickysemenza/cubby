@@ -17,6 +17,7 @@ import {
 } from "./expense-fields";
 import { inventoryPlacementValues, locationTypeValues } from "@cubby/shared";
 import { amount } from "./codec";
+import { reportCommand } from "./entity-report";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import {
   money,
@@ -341,6 +342,8 @@ export const taskTodayBriefingItemOut = z.object({
   projectId: projectShortcode.nullable(),
   projectName: z.string().nullable(),
   projectEmoji: z.string().nullable(),
+  /** The row's one-tap commands (Done), carried onto the briefing report's row. */
+  commands: z.array(reportCommand),
 });
 export type TaskTodayBriefingItemOut = z.infer<typeof taskTodayBriefingItemOut>;
 

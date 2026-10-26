@@ -9,7 +9,6 @@ import {
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { locationType } from "@cubby/schemas/location";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import {
@@ -156,30 +155,12 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   };
 }
 
-const buildSearchLocationHitComboboxItem = <E extends SearchableEntity>(
-  hit: SearchHit,
-  shortcode: ShortcodeFor<E>,
-  path: NonNullable<SearchHit["locationPath"]>,
-): ComboboxItem<ShortcodeFor<E>> => {
-  const item = buildLocationComboboxItem({
-    id: parseShortcodeFor("location", hit.id),
-    name: hit.title,
-    type: locationType.safeParse(hit.typeHint).data ?? null,
-    ancestors: path,
-    coverImage: hit.imageUrl ? { url: hit.imageUrl } : null,
-  });
-  return { ...item, id: shortcode, shortcode };
-};
-
 /** Maps compact indexed-search hits into the picker contract. */
 export function buildSearchHitComboboxItem<E extends SearchableEntity>(
   hit: SearchHit,
   entity: E,
 ): ComboboxItem<ShortcodeFor<E>> {
   const shortcode = parseShortcodeFor(entity, hit.id);
-  if (entity === "location" && hit.locationPath) {
-    return buildSearchLocationHitComboboxItem(hit, shortcode, hit.locationPath);
-  }
   // A non-title match says why the row is here; a title match is self-evident.
   const matchReason =
     hit.matchField === "title" || hit.matchField === "shortcode"
@@ -202,7 +183,8 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
     shortcode,
     name: hit.title,
     thumb: searchHitThumb(hit, entity),
-    secondary: hit.subtitle ?? hit.typeHint ?? undefined,
+    secondary:
+      hit.facts.join(" · ") || hit.subtitle || hit.typeHint || undefined,
     ...(matchReason && { detail: matchReason }),
     ...(group && { presentation: { group } }),
   };

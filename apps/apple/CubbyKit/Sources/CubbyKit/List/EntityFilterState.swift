@@ -5,7 +5,7 @@ import Foundation
 /// Every value is a list: a scalar parameter holds one element, and an array parameter repeats
 /// its key once per element (`tagFilters=a&tagFilters=b`). `EntityKernel.swift` types each list
 /// from the kernel parameter, so a scalar route still receives a JSON scalar.
-public struct EntityFilterState: Sendable, Hashable {
+public struct EntityFilterState: Sendable, Hashable, Codable {
     public private(set) var values: [String: [String]]
 
     /// An empty string is never a value, so a parameter left with none is dropped.

@@ -16,6 +16,8 @@ export function identityWidthClassName(
       return "w-40";
     case "lg":
       return "w-56";
+    case "xl":
+      return "w-80";
     case null:
       return DEFAULT_IDENTITY_WIDTH;
   }

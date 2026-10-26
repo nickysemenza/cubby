@@ -143,9 +143,7 @@ export const searchHitSchema = z.object({
   emoji: z.string().nullable().optional(),
   typeHint: z.string().nullable(),
   imageUrl: z.string().nullable(),
-  locationPath: z
-    .array(z.object({ id: z.string(), name: z.string() }))
-    .optional(),
+  facts: z.array(z.string()).max(3).default([]),
   matchKind: searchMatchKindSchema,
   matchField: searchMatchFieldSchema,
   matchReason: z.string(),
@@ -164,6 +162,7 @@ export const searchDestinationSchema = searchHitSchema.pick({
   emoji: true,
   typeHint: true,
   imageUrl: true,
+  facts: true,
 });
 export type SearchDestination = z.infer<typeof searchDestinationSchema>;
 
