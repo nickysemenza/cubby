@@ -1,0 +1,49 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_931718bbf1e269::t_50ff2cbd54a032 29,288
+apps/apple/App/Shared/Audit/AdjustCountSheet.swift
+  s_672398f43d55a3::t_53a249f23066b5 47
+apps/apple/App/Shared/DesignSystem/FieldGuideDetailDensity.swift
+  s_931718bbf1e269::t_509219c214d660 4-5,17-25
+apps/apple/App/Shared/DesignSystem/RecordListRow.swift
+  s_931718bbf1e269::t_a5802c03c1cb5b 51
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_672398f43d55a3::t_d8392125d55ead 945,1297,1485,1574
+apps/apple/App/Shared/Finance/ReceiveExpenseSheet.swift
+  s_672398f43d55a3::t_584690990af1fd 136,154-156
+apps/apple/App/Shared/Photo/Import/PhotoImportHero.swift
+  s_931718bbf1e269::t_3877debda221b8 198,291
+apps/apple/App/Shared/Photo/Library/PhotosRootView.swift
+  s_931718bbf1e269::t_09956eb70cfbc5 151,293-295
+apps/apple/App/Shared/Today/TodayView.swift
+  s_931718bbf1e269::t_8be8e4213e43c4 395
+apps/apple/App/Tests/DesignSystem/RecordListRowRenderingTests.swift
+  s_931718bbf1e269::t_987c68ebcaf066 29-46
+apps/apple/DESIGN.md
+  s_931718bbf1e269::t_2b8e3580883c6b 97,105
+packages/schemas/src/entity-definitions/32-job.entity.ts
+  s_931718bbf1e269::t_8797f3b4164ca0 1,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "642d7c5fd840e8751d2982b7a80f81eda19bf5ef",
+  "prompts": {},
+  "sessions": {
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_931718bbf1e269": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a41-9a7e-73f3-b697-e6c6f52e51f3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
