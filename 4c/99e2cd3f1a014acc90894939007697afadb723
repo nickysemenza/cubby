@@ -1,0 +1,25 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_8058afbf13b87f::t_7e9edb6b7abeab 71-74,100-104,109-115,383-387,389-390,920-928,937,939-941,945-946,960-963,971,973,979,981,991,993,1000,1002,1018-1026,1029,1081-1087,1175,1177,1189-1190,1201-1227,1229-1230,1232-1233,1235-1247,1249-1263
+apps/apple/App/Tests/Entity/List/EntityCardRenderingTests.swift
+  s_8058afbf13b87f::t_c1586400ff4777 42-79
+apps/apple/DESIGN.md
+  s_8058afbf13b87f::t_b007dbf85f3302 31,99-100
+apps/apple/App/Shared/Entity/List/EntityTableLayout.swift
+  s_8058afbf13b87f::t_eb457312e032a2 1-76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4c99e2cd3f1a014acc90894939007697afadb723",
+  "prompts": {},
+  "sessions": {
+    "s_8058afbf13b87f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "731af77f-00db-42c5-b853-48611bea27c6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
