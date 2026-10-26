@@ -191,7 +191,7 @@ interface StoredDescriptorView {
     | null;
   readonly nullable: Readonly<{ field: string }> | null;
   readonly match: Readonly<{ field: string }> | null;
-  readonly exclude: Readonly<{ field: string; reason: string | null }> | null;
+  readonly exclude: Readonly<{ field: string }> | null;
   readonly range: Readonly<{ kind: "number" | "date" }> | null;
   readonly derived: string | null;
   readonly wire:
@@ -398,9 +398,7 @@ const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] => [
  * One filter request per excluded value list: the descriptor's value key set
  * to the excluded values, beside its "Include sub-…" toggle, so the include
  * predicate it builds is the one to negate. Excluding a hierarchy node
- * therefore excludes its descendants unless the toggle is off. A filter
- * whose declaration cannot exclude fails with the reason it derives, the
- * same text every client shows on its disabled "is not".
+ * therefore excludes its descendants unless the toggle is off.
  */
 const excludedFilterRequests = (
   entity: Entity,
@@ -412,11 +410,6 @@ const excludedFilterRequests = (
       optionalTextList.parse(values[descriptor.exclude.field]),
     );
     if (excluded === undefined) return [];
-    if (descriptor.exclude.reason !== null)
-      throw createAppError(
-        "LIST_FILTER_EXCLUDE_UNSUPPORTED",
-        `Cannot exclude ${entity} by "${descriptor.columnId}": ${descriptor.exclude.reason}`,
-      );
     const key = descriptor.field ?? descriptor.columnId;
     const toggle = Object.entries(
       generatedEntityListFields[entity].subtree,
@@ -1193,7 +1186,10 @@ export function declaredFilterPredicates<Filters extends object>(
     const field = derivedFieldsOf(entity)[derived];
     return field?.shape === "rows" ? field.rows : null;
   };
-  const include = (values: ListFilterValues): Array<SQL | undefined> => [
+  const include = (
+    values: ListFilterValues,
+    input = derivedInput,
+  ): Array<SQL | undefined> => [
     hasSuggestTargets
       ? suggestionPredicate(
           entity,
@@ -1205,13 +1201,7 @@ export function declaredFilterPredicates<Filters extends object>(
     ...derivedDescriptors
       .filter((descriptor) => rowSetOf(descriptor) === null)
       .flatMap((descriptor) =>
-        derivedFilterPredicates(
-          entity,
-          table,
-          descriptor,
-          values,
-          derivedInput,
-        ),
+        derivedFilterPredicates(entity, table, descriptor, values, input),
       ),
     ...descriptorsFor(entity).map((descriptor) =>
       descriptor.anyOf === null
@@ -1222,7 +1212,7 @@ export function declaredFilterPredicates<Filters extends object>(
             descriptor,
             descriptor.anyOf,
             values,
-            derivedInput,
+            input,
           ),
     ),
     ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
@@ -1237,7 +1227,7 @@ export function declaredFilterPredicates<Filters extends object>(
                 (descriptor) => rowSetOf(descriptor) === rows,
               ),
               values,
-              derivedInput,
+              input,
             ),
           ],
     ),
@@ -1338,7 +1328,15 @@ export function declaredFilterPredicates<Filters extends object>(
   return [
     ...include(values),
     ...excludedFilterRequests(entity, values).map((excluded) =>
-      excludedPredicate(include(excluded)),
+      excludedPredicate(
+        include(
+          excluded,
+          derivedInput && {
+            ...derivedInput,
+            context: derivedInput.context.excluding(),
+          },
+        ),
+      ),
     ),
   ];
 }

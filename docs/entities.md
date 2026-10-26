@@ -2191,19 +2191,18 @@ the include predicate built for the excluded values, negated as
 empty rows), a to-many path matches when no related row has an excluded
 value, and excluding a hierarchy node excludes its descendants through the
 filter's own "Include sub-…" toggle. Include and exclude combine ("Clothing
-except Outerwear"). A declared `predicate` offers Exclude only with
-`negatable: true`, which asserts its SQL reads only the values it receives.
-One that reads request data prepared from the include values (an effective
-owner) would ignore excluded values, so it keeps
-the key with the reason `Include only: <its reason>.`;
-clients disable "is not" with that line and the list rejects the key as
-`LIST_FILTER_EXCLUDE_UNSUPPORTED` with the same text. Web column state carries
-excluded values with `FILTER_NOT_PREFIX` (`__not__:`) beside the included
+except Outerwear"). A declared `predicate` is negated the same way, so its
+SQL reads only the values it receives, and request data it reads comes from
+a filter-independent `sharedListPrepare` (an effective owner loads every live
+entry's owner state and selects ids for the given values). A `listPrepare`
+load reads the request filters, so a predicate over it throws when an Exclude
+key renders it instead of negating data built from the include values. Web
+column state carries excluded values with `FILTER_NOT_PREFIX` (`__not__:`) beside the included
 ones, and each side shows its own chip ("Category is not Outerwear"); Any
 value, No value, and Match all belong to the include side, the subtree toggle
 to both.
 
-A field, path, layout, or filter side the compiler cannot support stays in
+A field, path, or layout the compiler cannot support stays in
 its menu, disabled, with a one-line reason derived from the declaration, never
 hand-written per entity: web shows it as a secondary line and Apple as a menu
 subtitle, since a hover tooltip does not work on touch. HTTP and MCP reject the
@@ -2333,7 +2332,7 @@ one shape:
   only shrink: each is listed in
   `apps/web/generator/entities/predicate-baseline.json`, and the generator
   rejects an unlisted predicate and an entry whose predicate is gone.
-  `negatable: true` offers Exclude (above). `predicate` names the descriptor kind
+  A value-filter predicate offers Exclude (above). `predicate` names the descriptor kind
   it serves, and the SQL receives that kind's parsed value: a trimmed string
   (`text`), `{ values, presence }` (`multiselect`/`idMulti`, with the
   descriptor's declared `nullable`; `idMulti` adds `includeDescendants`), a

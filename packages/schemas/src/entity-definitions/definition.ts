@@ -990,8 +990,8 @@ const buildMetadataSchemas = () => {
    * that range filters test for overlap and a one-date filter for
    * containment.
    * `predicate` is a filter-only declared exception and carries its reason;
-   * `negatable` declares that its SQL reads only the values it receives, so
-   * a value filter's generated Exclude key is its negation.
+   * it reads only the values it receives, so a value filter's generated
+   * Exclude key is its negation.
    */
   /**
    * A stored derived value (ADR 0021): the drain recomputes it through the
@@ -1151,7 +1151,6 @@ const buildMetadataSchemas = () => {
         ]),
         options: z.array(nonEmptyString()).min(1).optional(),
         reason: nonEmptyString(),
-        negatable: z.literal(true).optional(),
       })
       .strict(),
   ]);

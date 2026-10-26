@@ -36,8 +36,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * that way — the list showed the filter chip and returned every row.
  * For each seeded entity, every id-shaped filter is re-run with a
  * well-formed shortcode that names no row, and must return nothing; its
- * generated Exclude key must instead keep every row. An Exclude key whose
- * declaration cannot exclude must be rejected with its declared reason.
+ * generated Exclude key must instead keep every row.
  */
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
@@ -127,17 +126,13 @@ function unmatchedIdSample(
 }
 /* oxlint-enable anti-slop/no-unknown-returns */
 
-/** The entity's generated Exclude keys, with the reason when it cannot exclude. */
-function excludeKeysOf(entity: EntityKernelEntity): Map<string, string | null> {
-  const descriptors: ReadonlyArray<{
-    exclude: { field: string; reason: string | null } | null;
-  }> =
+/** The entity's generated Exclude keys. */
+function excludeKeysOf(entity: EntityKernelEntity): Set<string> {
+  const descriptors: ReadonlyArray<{ exclude: { field: string } | null }> =
     Object.entries(entityInspectorMetadata).find(([key]) => key === entity)?.[1]
       .filterDescriptors ?? [];
-  return new Map(
-    descriptors.flatMap(({ exclude }) =>
-      exclude ? [[exclude.field, exclude.reason] as const] : [],
-    ),
+  return new Set(
+    descriptors.flatMap(({ exclude }) => (exclude ? [exclude.field] : [])),
   );
 }
 
@@ -280,7 +275,6 @@ describe("entity list smoke — shared selection/count FROM context", () => {
 
       for (const [key, fieldSchema] of Object.entries(filterFields)) {
         seed += 1;
-        const excludeReason = excludeKeys.get(key);
         const sample =
           key === "runStepInput"
             ? {
@@ -292,26 +286,6 @@ describe("entity list smoke — shared selection/count FROM context", () => {
             : buildFilterSample(fieldSchema, seed, universe.shortcodeByPrefix);
         if (!sample.ok) {
           skipped.push(`${entity} filter ${key}: ${sample.reason}`);
-          continue;
-        }
-        if (typeof excludeReason === "string") {
-          listCases.push(async () => {
-            caseCount += 1;
-            const outcome = await executeEntity(kernelCtx, {
-              action: "list",
-              entity,
-              filters: { [key]: sample.value },
-              pagination: { pageIndex: 0, pageSize: 1 },
-            }).then(
-              () => "accepted",
-              (err: unknown) => describeError(err),
-            );
-            // `describeError` truncates; the reason follows this prefix.
-            if (!outcome.startsWith(`Cannot exclude ${entity} by`))
-              failures.push(
-                `${entity} filter ${key}: expected rejection "${excludeReason}", got ${outcome}`,
-              );
-          });
           continue;
         }
         listCases.push(() =>
@@ -335,8 +309,9 @@ describe("entity list smoke — shared selection/count FROM context", () => {
               pagination: { pageIndex: 0, pageSize: 1 },
             });
             // Excluding a code that names no row excludes nothing.
-            const expected =
-              excludeReason === null ? (unfiltered?.meta.totalCount ?? 0) : 0;
+            const expected = excludeKeys.has(key)
+              ? (unfiltered?.meta.totalCount ?? 0)
+              : 0;
             if (result.meta.totalCount !== expected)
               failures.push(
                 `${entity} filter ${key}=${String(unmatched)}: matched ${result.meta.totalCount} row(s), expected ${expected}${expected === 0 ? " — the filter is accepted but not applied" : ""}`,

@@ -104,7 +104,6 @@ export const AppErrors = {
   // specific to say rather than the field being silently ignored.
   RELATION_QUANTITY_UNSUPPORTED: "BAD_REQUEST",
   LIST_SORT_FIELD_UNSUPPORTED: "BAD_REQUEST",
-  LIST_FILTER_EXCLUDE_UNSUPPORTED: "BAD_REQUEST",
   LIST_GROUP_BY_FIELD_UNSUPPORTED: "BAD_REQUEST",
   LIST_NESTING_UNSUPPORTED: "BAD_REQUEST",
   // `entity_read` `fields` named a key the entity's projection does not publish.

@@ -84,8 +84,9 @@ import {
   storedDerivedSql,
 } from "~/server/generic/derived/repo/read";
 import {
+  type AnyOfValue,
   ListContext,
-  listPrepare,
+  sharedListPrepare,
 } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -122,8 +123,9 @@ import { assertLiveTargets, inventoryAuditRow } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
-  inventoryIdsByEffectiveOwner,
+  loadInventoryOwnerStates,
   loadInventoryOwnershipTraces,
+  selectInventoryIdsByOwner,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
 import { loadInventoryValuations } from "./valuation";
@@ -232,25 +234,16 @@ const storedValuation = storedDerivedSql(
   inventoryEntry.id,
 );
 
-const ownerFilterCodes = z
-  .union([z.string(), z.array(z.string())])
-  .optional()
-  .transform((value) => (value === undefined ? [] : [value].flat()));
-
 // The ownership resolver runs once per request, only when it filters by owner.
-const effectiveOwners = listPrepare((db, filters) =>
-  inventoryIdsByEffectiveOwner(
-    db,
-    ownerFilterCodes.parse(filters.ownerLedgerPartyId),
-  ),
-);
+const effectiveOwners = sharedListPrepare(loadInventoryOwnerStates);
 
 const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
   population: liveProductAndLocation,
   derived: {
-    effectiveOwner: effectiveOwners.predicate((ids) =>
-      ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids),
-    ),
+    effectiveOwner: effectiveOwners.predicate<AnyOfValue>((states, value) => {
+      const ids = selectInventoryIdsByOwner(states, value.values);
+      return ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids);
+    }),
     locationRole: gapCondition("inventory", "inventory_unknown_location"),
     valuation: storedValuation,
     // Amount is stored as a unit + value pair: group by unit, then by size.

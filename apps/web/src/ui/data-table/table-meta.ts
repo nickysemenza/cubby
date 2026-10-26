@@ -40,7 +40,7 @@ export interface FilterConfig {
   /** A hierarchical reference: the editor shows its "Include sub-…" toggle. */
   subtree?: { label: string };
   /** A value filter with an Exclude key: the editor offers is | is not. */
-  exclude?: { reason: string | null };
+  exclude?: boolean;
   /** A date range: beside its presets the editor sets `from..to` bounds. */
   dateRange?: boolean;
   /** A number range: beside its presets the editor sets `min..max` bounds. */

@@ -250,17 +250,14 @@ const renderDerivedFilterFields = (
           : [
               `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe(${JSON.stringify(`all: every picked ${label}`)})`,
             ]),
-        // The Exclude key takes the value key's schema; a filter that cannot
-        // exclude keeps it so the list rejects it with the reason.
+        // The Exclude key takes the value key's schema.
         ...(descriptor.exclude === null
           ? []
           : [
               valueEntry(descriptor, {
                 name: descriptor.exclude.field,
                 description:
-                  descriptor.exclude.reason === null
-                    ? "Exclude any listed value; keep rows with no value"
-                    : `Unsupported: ${descriptor.exclude.reason}`,
+                  "Exclude any listed value; keep rows with no value",
               }),
             ]),
       ];

@@ -904,9 +904,8 @@ const assertRowSetRange = (
 
 /**
  * Every compiled value filter gets a generated Exclude key: the negation of
- * the predicate its include builds, so rows with no value stay. A declared
- * predicate that is not `negatable` keeps the key with the reason it cannot
- * exclude. A single-value scope has none.
+ * the predicate its include builds, so rows with no value stay. A
+ * single-value scope has none.
  */
 const withExcludeKey = (
   descriptor: FilterDescriptor,
@@ -920,10 +919,7 @@ const withExcludeKey = (
     return descriptor;
   return {
     ...descriptor,
-    exclude: {
-      field: `${descriptor.columnId}Exclude`,
-      reason: bound?.shape === "predicate" ? bound.exclude : null,
-    },
+    exclude: { field: `${descriptor.columnId}Exclude` },
   };
 };
 
@@ -1454,10 +1450,6 @@ export const compileListFields = (
                   reason: entry.reason,
                   sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
                   group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
-                  exclude:
-                    entry.negatable === true
-                      ? null
-                      : `Include only: ${entry.reason.replace(/\.$/, "")}.`,
                 };
       validateDerivedReference(entity, key, derived[key], derivedContext);
     }

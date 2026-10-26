@@ -13,6 +13,7 @@ import {
   inventoryentryList,
   inventoryentryListRead,
 } from "~/server/domains/inventory/repo/crud";
+import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
 import { locationList } from "~/server/domains/location/repo/crud";
 import { productList } from "~/server/domains/product/repo/crud";
 import { projectList } from "~/server/domains/project/repo/lookup";
@@ -47,7 +48,8 @@ const page = { pageIndex: 0, pageSize: 50 };
  * generated Any value / No value narrows instead of ORing beside picked
  * values; Match all matches any; Exclude drops rows with no value (a plain
  * `NOT IN`), keeps a hierarchy node's descendants, cannot combine with an
- * include, or silently ignores a predicate that cannot negate; an id filter
+ * include, or negates an effective owner over data loaded from the include
+ * values; an id filter
  * matches a soft-deleted or unknown record's code.
  */
 describe("compiled list fields", () => {
@@ -369,7 +371,7 @@ describe("compiled list fields", () => {
     ).toEqual(["Exclude baking only", "Exclude no subjects"]);
   });
 
-  it("negates a negatable predicate and rejects one that is not", async () => {
+  it("negates declared predicates and keeps rows with no value", async () => {
     const renovation = (
       await createRepoEntity(ctx, "project", { name: "Exclude renovation" })
     ).output;
@@ -390,8 +392,8 @@ describe("compiled list fields", () => {
     const inKitchen = await task("Exclude kitchen task", kitchen.id);
     const loose = await task("Exclude loose task");
     const ours = new Set([inKitchen, loose]);
-    // The inherited-project predicate is negatable: a sub-project's task is
-    // excluded with its parent, a task with no project stays.
+    // A sub-project's task is excluded with its parent, a task with no
+    // project stays.
     expect(
       (
         await taskList(ctx.db, { projectIdExclude: [renovation.id] }, [], page)
@@ -400,17 +402,92 @@ describe("compiled list fields", () => {
         .filter((id) => ours.has(id)),
     ).toEqual([loose]);
 
-    // A product's effective owner is resolved from the include values in app
-    // code, so negating it would silently ignore the excluded ones.
-    await expect(
-      productList(
+    // Effective owner: the predicate selects ids for the excluded values, so
+    // "is not" drops only that owner's rows. Household and Unknown stock stays,
+    // and so does an unstocked Product with no owner.
+    const party = async (name: string) =>
+      (await createRepoEntity(ctx, "ledgerParty", { name, kind: "member" }))
+        .output.id;
+    const first = await party("Exclude first owner");
+    const second = await party("Exclude second owner");
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Exclude owner shelf",
+        type: "shelf",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    const owned = async (name: string, ownerId?: typeof first | null) => {
+      const item = await createProductIdentityFixture(
         ctx.db,
-        { ownerLedgerPartyIdExclude: ["@household"] },
-        [],
-        page,
-      ),
-    ).rejects.toThrow(
-      /Cannot exclude product by "ownerLedgerPartyId": Include only: The effective owner/,
+        makeProductInput({ name }),
+        ctx.actor,
+      );
+      const entry = await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: shelf.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      if (ownerId !== undefined)
+        await setInventoryOwnership(
+          ctx.db,
+          entry.entityId,
+          { mode: "explicit", ownerId },
+          undefined,
+          ctx.actor,
+        );
+      return { product: item.id, entry: entry.id };
+    };
+    const firsts = await owned("Exclude first's", first);
+    const seconds = await owned("Exclude second's", second);
+    const household = await owned("Exclude household", null);
+    const unknown = await owned("Exclude unknown");
+    const unstocked = (
+      await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Exclude unstocked" }),
+        ctx.actor,
+      )
+    ).id;
+    const stock = [firsts, seconds, household, unknown];
+    const entries = new Set(stock.map(({ entry }) => entry));
+    expect(
+      (
+        await inventoryentryList(
+          ctx.db,
+          { ownerLedgerPartyIdExclude: [first] },
+          [],
+          page,
+        )
+      ).data
+        .map((row) => row.id)
+        .filter((id) => entries.has(id))
+        .sort(),
+    ).toEqual([seconds.entry, household.entry, unknown.entry].sort());
+    const products = new Set([
+      ...stock.map(({ product }) => product),
+      unstocked,
+    ]);
+    expect(
+      (
+        await productList(
+          ctx.db,
+          { ownerLedgerPartyIdExclude: [first] },
+          [],
+          page,
+        )
+      ).data
+        .map((row) => row.id)
+        .filter((id) => products.has(id))
+        .sort(),
+    ).toEqual(
+      [seconds.product, household.product, unknown.product, unstocked].sort(),
     );
   });
 

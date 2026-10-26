@@ -393,42 +393,29 @@ struct EntityFilterSheet: View {
         }
     }
 
-    /// is | is not above a filter that declares an exclude key. A filter that cannot exclude keeps
-    /// the control visible but disabled on "is", with the server's reason as a subtitle (touch has
-    /// no tooltip). Any value, No value, and Match all belong to "is"; Include sub-… is shared.
+    /// is | is not above a filter that declares an exclude key. Any value, No value, and Match all
+    /// belong to "is"; Include sub-… is shared.
     @ViewBuilder
     private func sideToggle(_ filter: FilterDescriptor) -> some View {
         if filter.excludeParam != nil {
-            let reason = filter.excludeReason
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                Picker(
-                    "Condition",
-                    selection: Binding(
-                        get: { side(filter) },
-                        set: { side in
-                            if side == .exclude, reason == nil {
-                                excluding.insert(filter.columnId)
-                            } else {
-                                excluding.remove(filter.columnId)
-                            }
-                        })
-                ) {
-                    Text("is").tag(EntityFilterDraft.Side.include)
-                    Text("is not").tag(EntityFilterDraft.Side.exclude)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                // A segmented control cannot disable one segment, so the whole control is
-                // disabled on "is" and the reason below says why "is not" is unavailable.
-                .disabled(reason != nil)
-                .accessibilityIdentifier("filter.\(filter.columnId).side")
-                if let reason {
-                    Text(reason)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("filter.\(filter.columnId).excludeReason")
-                }
+            Picker(
+                "Condition",
+                selection: Binding(
+                    get: { side(filter) },
+                    set: { side in
+                        if side == .exclude {
+                            excluding.insert(filter.columnId)
+                        } else {
+                            excluding.remove(filter.columnId)
+                        }
+                    })
+            ) {
+                Text("is").tag(EntityFilterDraft.Side.include)
+                Text("is not").tag(EntityFilterDraft.Side.exclude)
             }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityIdentifier("filter.\(filter.columnId).side")
         }
     }
 

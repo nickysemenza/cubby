@@ -2133,7 +2133,7 @@ const suggestionFilterDescriptors = (
       nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
       sentinels: null,
       match: null,
-      exclude: { field: "suggestionExclude", reason: null },
+      exclude: { field: "suggestionExclude" },
       subtree: null,
       currentMember: false,
       singleValue: null,
