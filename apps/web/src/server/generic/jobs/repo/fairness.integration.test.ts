@@ -710,6 +710,67 @@ describe("fair drain under a flood", () => {
       expect(predicted.get(id)).toBeGreaterThanOrEqual(JOB_DRAIN.batch);
   });
 
+  // Widening needs its own prefix in each exemption class. A top-N over the
+  // merged backfill would hide low-priority ordinary siblings behind routine
+  // Run work after both classes already won seeds.
+  it(
+    "fills both exemption classes from one selection without losing lower-priority siblings",
+    { timeout: 30_000 },
+    async () => {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "connection_discovery",
+        trigger: "scheduled",
+        execution: false,
+      });
+      const ordinary: string[] = [];
+      const routine: string[] = [];
+      for (let index = 0; index < 150; index++) {
+        ordinary.push(
+          (
+            await enqueueJob(ctx.db, {
+              key: `synthetic.pool-ordinary.${index}`,
+              kind: "embedding.refresh",
+              input: {},
+              priority: index < 2 ? 100 : 0,
+            })
+          ).id,
+        );
+        routine.push(
+          (
+            await enqueueJob(ctx.db, {
+              key: `synthetic.pool-routine.${index}`,
+              kind: "embedding.refresh",
+              input: {},
+              priority: 50,
+              runId,
+            })
+          ).id,
+        );
+      }
+      const selection = { batchSizes: new Map([["embedding.refresh", 100]]) };
+      const excluded = ordinary[0]!;
+      const selected = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, {
+        ...selection,
+        excludeIds: [excluded],
+      });
+      const embeddings = selected.filter(
+        (row) => row.kind === "embedding.refresh",
+      );
+      expect(embeddings.filter((row) => row.capExempt)).toHaveLength(100);
+      expect(embeddings.filter((row) => !row.capExempt)).toHaveLength(100);
+      expect(new Set(embeddings.map((row) => row.id)).size).toBe(200);
+      expect(embeddings.map((row) => row.id)).not.toContain(excluded);
+      expect(embeddings.every((row) => !row.runOwned)).toBe(true);
+      const predicted = await dueJobPositions(ctx.db, [
+        ...ordinary,
+        ...routine,
+      ]);
+      const admitted = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, selection);
+      for (const [index, row] of admitted.entries())
+        expect(predicted.get(row.id)).toBe(index);
+    },
+  );
+
   // Review finding: beyond the first batch the drain re-ranks kinds by their
   // last service, so a position there is a projection, not a promise.
   it("flags queue positions beyond the first batch as estimates", async () => {
