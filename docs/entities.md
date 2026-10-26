@@ -1150,6 +1150,9 @@ Assessment review identity and Feedback admission reads select only their
 required identity or served-status fields; immutable evidence is loaded only
 by the family action that consumes it. Large retained snapshots must not be
 transferred by generic history or review plumbing.
+Correction-history receipt joins validate canonical Feedback handles on the
+metadata side and keep UUID keys indexed; malformed retained handles do not
+match or fail the entire history read.
 Canonical fingerprint serialization traverses validated JSON directly, sorting
 object keys while preserving array order and JSON scalar encoding; it must not
 revalidate or clone each nested subtree. Normalize dates and optional values at
