@@ -547,10 +547,10 @@ New work still uses canonical Job admission; a completed upload no longer select
 physical identity when its text returns.
 
 `embedding.refresh` uses the shared drain's kind-level batch handler. When a
-normal fair selection includes embedding work, the drain reselects up to 64
+normal fair selection includes embedding work, the drain reselects up to 100
 Jobs with the same run-first, backfill-reserve and weighted kind ordering.
 Run-owned and backfill embedding Jobs form separate batches. Each batch occupies
-one of the existing three execution lanes; claims, lease renewals and publication stay serial within that lane;
+one of the existing three execution lanes; claims and lease renewals stay serial within that lane;
 freshness and visibility use bounded shared lookups, so widening embeddings
 does not multiply database sockets or change other kinds' concurrency.
 
@@ -575,7 +575,7 @@ An expired claim cannot renew or publish after reclamation, and completed
 checkpoints leave the heartbeat set immediately.
 
 Fresh submissions with the same stored provider/model/dimensions share one
-embedding call and Vectorize upload. Requests contain at most 64 texts, below
+embedding call and Vectorize upload. Requests contain at most 100 texts, below
 OpenAI's 2,048-input limit, and at most 300,000 UTF-8 bytes, a conservative bound
 on its 300,000-token request limit. Inputs over 8,192 bytes run alone, preserving
 provider validation of the 8,192-token input limit without failing neighbors.
@@ -586,9 +586,23 @@ keeping content addressing and selected-vector provenance consistent across chan
 
 Every Job retains its own claim, generation, retry budget, physical vector ID,
 upload hash and visibility receipt. Stale sources settle alone; a failed provider
-or upload chunk retries only its member Jobs under the existing policy. Visibility
-checks and final source/input checks still run per Job, and publication rejects
-revoked claims. A shared call has no single Job publication owner; cache contention
+or upload chunk retries only its member Jobs under the existing policy. Visibility checks share bounded Vectorize lookups. Completed selections publish
+as a page: sorted source locks followed by identity locks, one current search
+preparation, one retirement update, one multi-row selection insert and one
+reader notification. Job locks, invalidation checks and completion updates are
+also set-based, with the same lease and generation fences checked again before
+commit. The healthy path's statement count is independent of page size for a
+fixed set of source kinds. Source removal, changed inputs or a database data
+exception (SQLSTATE classes 22, 23, 54) rolls back the shared transaction and
+retries publication individually; only the rejected targets fail or back off.
+Transaction-level failures retry the page. Retired selections and terminal
+unselected uploads remain eligible for the existing artifact cleanup.
+Vectorize rate limits (including `VECTOR_DELETE_ERROR` 40041 with `Too Many
+Requests`) and upload visibility deadlines use the existing Job exponential
+backoff. These transient errors reserve another attempt even at the normal
+attempt limit; other failures retain their attempt budget. Visibility retries
+retain the physical ID and upload receipt so late visibility can finish without
+another upload. Publication rejects revoked claims. A shared call has no single Job publication owner; cache contention
 defers it as background work instead of polling. `AiUsage` keeps one row per
 provider call (plus existing application-cache-hit rows), attributes a shared
 call to the daily background Run without choosing an arbitrary entity, and records

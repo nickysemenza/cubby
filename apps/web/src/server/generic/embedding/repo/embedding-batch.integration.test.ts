@@ -2,7 +2,7 @@ import type { JobId } from "@cubby/schemas/identifiers";
 import { pollUntil } from "@cubby/shared/retry";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, ne, sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -12,6 +12,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { entityEmbedding, job, aiUsage } from "~/server/db/retained-tables";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
+import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { embedTexts } from "~/server/generic/embedding/service/semantic/embeddings";
 import {
@@ -24,6 +25,7 @@ import {
   claimJob,
   renewJob,
   publishJobPage,
+  publishCompletedJobPages,
 } from "~/server/generic/jobs/repo/jobs";
 import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
@@ -103,6 +105,272 @@ describe("embedding batches in the shared drain", () => {
   async function read(ids: readonly JobId[]) {
     return getDb(ctx.db).select().from(job).where(inArray(job.id, ids));
   }
+
+  it(
+    "publishes 1 and 100 completed selections with the same statement count",
+    { timeout: 120_000 },
+    async () => {
+      const counts: number[] = [];
+      for (const count of [1, 100]) {
+        const { jobs } = await seed(count);
+        const handler = embeddingJobHandler(port());
+        const claimAll = async () => {
+          const claims = [];
+          for (const row of jobs) {
+            const claim = await claimJob(ctx.db, row.id);
+            if (!claim) throw new Error("Missing synthetic embedding claim");
+            claims.push(claim);
+          }
+          return claims;
+        };
+        const uploads = await claimAll();
+        await handler.batch!.execute(ctx.db, uploads, {
+          deadline: Infinity,
+          checkpoint: async (results) => {
+            for (const claim of uploads) {
+              const result = results.get(claim.id);
+              if (!result || result.status !== "fulfilled")
+                throw new Error("Missing upload receipt");
+              await publishJobPage(
+                ctx.db,
+                claim,
+                result.value.page,
+                result.value.publish,
+              );
+            }
+          },
+        });
+        await getDb(ctx.db)
+          .update(job)
+          .set({ availableAt: new Date(0) })
+          .where(
+            inArray(
+              job.id,
+              jobs.map(({ id }) => id),
+            ),
+          );
+        const claims = await claimAll();
+        await handler.batch!.execute(ctx.db, claims, {
+          deadline: Infinity,
+          checkpoint: async (results) => {
+            const entries = claims.map((claim) => {
+              const result = results.get(claim.id);
+              if (!result || result.status !== "fulfilled")
+                throw new Error("Missing visible selection");
+              return { claim, prepared: result.value };
+            });
+            const measured = await countTestDbQueries(async () => {
+              const group = entries[0]?.prepared.publicationGroup;
+              if (group) {
+                return publishCompletedJobPages(
+                  ctx.db,
+                  entries.map(({ claim, prepared }) => ({
+                    claim,
+                    page: prepared.page,
+                  })),
+                  group.publish,
+                );
+              }
+              for (const { claim, prepared } of entries)
+                await publishJobPage(
+                  ctx.db,
+                  claim,
+                  prepared.page,
+                  prepared.publish,
+                );
+            });
+            counts.push(measured.queryCount);
+          },
+        });
+        expect(
+          (await read(jobs.map(({ id }) => id))).every(
+            ({ state }) => state === "completed",
+          ),
+        ).toBe(true);
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(entityEmbedding)
+            .where(
+              inArray(
+                entityEmbedding.id,
+                jobs.map(({ id }) => id),
+              ),
+            ),
+        ).toHaveLength(count);
+      }
+      expect(counts[1]).toBe(counts[0]);
+      expect(counts).toEqual([12, 12]);
+    },
+  );
+
+  it.each(["changed", "removed", "data", "revoked"])(
+    "isolates a %s target during page publication",
+    async (failure) => {
+      const { jobs, products } = await seed(3);
+      const embeddingPort = port();
+      await drain(embeddingPort);
+      const bad = products[0]!;
+      await getDb(ctx.db)
+        .update(job)
+        .set({ availableAt: new Date(0) })
+        .where(
+          inArray(
+            job.id,
+            jobs.map(({ id }) => id),
+          ),
+        );
+      try {
+        if (failure === "data") {
+          await getDb(ctx.db)
+            .execute(sql`CREATE FUNCTION synthetic_selection_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+          IF NEW."embeddingText" LIKE '%synthetic batch kettle 0%' THEN
+            RAISE EXCEPTION 'Synthetic rejected selection' USING ERRCODE='23514';
+          END IF; RETURN NEW; END $$`);
+          await getDb(ctx.db).execute(
+            sql`CREATE TRIGGER synthetic_selection_failure BEFORE INSERT ON "EntityEmbedding" FOR EACH ROW EXECUTE FUNCTION synthetic_selection_failure()`,
+          );
+        }
+        await drain({
+          ...embeddingPort,
+          vectorStore: {
+            ...embeddingPort.vectorStore,
+            getByIds: async (ids) => {
+              const vectors = await embeddingPort.vectorStore.getByIds(ids);
+              if (failure === "changed")
+                await renameFixtureRaw(
+                  ctx.db,
+                  "product",
+                  bad.entityId,
+                  "Synthetic changed source",
+                );
+              if (failure === "revoked")
+                await getDb(ctx.db)
+                  .update(job)
+                  .set({
+                    state: "cancelled",
+                    leaseToken: null,
+                    leaseExpiresAt: null,
+                  })
+                  .where(eq(job.subjectId, bad.entityId));
+              if (failure === "removed")
+                await getDb(ctx.db).execute(
+                  sql`UPDATE "Product" SET "deletedAt"=now() WHERE id=${bad.entityId}`,
+                );
+              return vectors;
+            },
+          },
+        });
+        const rows = await read(jobs.map(({ id }) => id));
+        expect(rows.filter(({ state }) => state === "completed")).toHaveLength(
+          2,
+        );
+        expect(
+          rows.find(({ subjectId }) => subjectId === bad.entityId),
+        ).toMatchObject({
+          state: failure === "revoked" ? "cancelled" : "retry_wait",
+          attempts: 1,
+        });
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(entityEmbedding)
+            .where(eq(entityEmbedding.artifactState, "selected")),
+        ).toHaveLength(2);
+      } finally {
+        if (failure === "data") {
+          await getDb(ctx.db).execute(
+            sql`DROP TRIGGER IF EXISTS synthetic_selection_failure ON "EntityEmbedding"`,
+          );
+          await getDb(ctx.db).execute(
+            sql`DROP FUNCTION IF EXISTS synthetic_selection_failure()`,
+          );
+        }
+      }
+    },
+  );
+
+  it("backs off visibility deadlines beyond the attempt limit and selects the late upload", async () => {
+    const { jobs } = await seed(1);
+    const embeddingPort = port();
+    await drain(embeddingPort);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        availableAt: new Date(0),
+        attempts: 2,
+        cursor: sql`jsonb_set(cursor, '{submittedAt}', '"2000-01-01T00:00:00.000Z"'::jsonb)`,
+      })
+      .where(eq(job.id, jobs[0]!.id));
+    await drain({
+      ...embeddingPort,
+      vectorStore: { ...embeddingPort.vectorStore, getByIds: async () => [] },
+    });
+    const [waiting] = await read([jobs[0]!.id]);
+    expect(waiting).toMatchObject({
+      state: "retry_wait",
+      attempts: 3,
+      maxAttempts: 4,
+    });
+    expect(waiting!.availableAt.getTime()).toBeGreaterThan(Date.now());
+    expect(waiting!.error).toContain("visibility deadline");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, jobs[0]!.id));
+    await drain(embeddingPort);
+    expect((await read([jobs[0]!.id]))[0]).toMatchObject({
+      state: "completed",
+      attempts: 0,
+    });
+    expect(embeddingPort.embed).toHaveBeenCalledTimes(1);
+  });
+
+  it("backs off Vectorize cleanup rate limits beyond the attempt limit", async () => {
+    const artifactId = crypto.randomUUID();
+    const index = createInMemoryVectorizeIndex();
+    let limited = true;
+    setCfEnv(
+      fromPartial<Env>({
+        VECTORIZE: {
+          ...index,
+          deleteByIds: async (ids: string[]) => {
+            if (limited)
+              throw new Error(
+                "VECTOR_DELETE_ERROR (code = 40041): Too Many Requests",
+              );
+            return index.deleteByIds(ids);
+          },
+        },
+      }),
+    );
+    const cleanup = await enqueueJob(ctx.db, {
+      key: `embedding-cleanup:${artifactId}`,
+      kind: "embedding.cleanup",
+      input: { artifactId },
+    });
+    await getDb(ctx.db)
+      .update(job)
+      .set({ attempts: 2 })
+      .where(eq(job.id, cleanup.id));
+    const handlers = { "embedding.cleanup": embeddingCleanupHandler() };
+    await drainDueJobs(ctx.db, handlers);
+    const [waiting] = await read([cleanup.id]);
+    expect(waiting).toMatchObject({
+      state: "retry_wait",
+      attempts: 3,
+      maxAttempts: 4,
+    });
+    expect(waiting!.availableAt.getTime()).toBeGreaterThan(Date.now());
+    expect(waiting!.error).toContain("Too Many Requests");
+    limited = false;
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, cleanup.id));
+    await drainDueJobs(ctx.db, handlers);
+    expect((await read([cleanup.id]))[0]?.state).toBe("completed");
+  });
 
   it(
     "embeds 101 Jobs in full pages and selects each vector under its own claim",

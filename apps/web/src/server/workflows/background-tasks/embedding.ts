@@ -29,6 +29,10 @@ import {
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  JobRetryableError,
+  JobTargetError,
+} from "~/server/generic/jobs/errors";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import type { JobClaim } from "~/server/generic/jobs/repo/jobs";
@@ -243,7 +247,7 @@ export function embeddingJobHandler(
       (await vectorPayloadHash(observed.values)) !== cursor.hash
     ) {
       if (Date.now() - Date.parse(cursor.submittedAt) > 2 * 60_000)
-        throw new Error(
+        throw new JobRetryableError(
           "Vectorize did not expose the uploaded artifact before its visibility deadline",
         );
       return {
@@ -263,81 +267,135 @@ export function embeddingJobHandler(
           vectorHash: cursor.hash,
         },
       },
-      publish: async (tx) => {
-        // Writers and removals lock the source before its durable identity.
-        // Hold the same rows until commit so deletion cannot pass this check
-        // and leave a newly selected vector behind.
-        const source = SHORTCODE_TABLE[input.entityKind];
-        const [liveSource] = await getDb(tx)
-          .select({ id: source.id })
-          .from(source)
-          .where(and(eq(source.id, input.entityId), isNull(source.deletedAt)))
-          .for("share");
-        const [liveIdentity] = await getDb(tx)
-          .select({ id: entityIdentity.id })
-          .from(entityIdentity)
-          .where(
-            and(
-              eq(entityIdentity.id, input.entityId),
-              isNull(entityIdentity.deletedAt),
+      publish: (tx) => publishSelections(tx, [{ claim, input }]),
+    };
+  }
+
+  async function publishSelections(
+    db: Database,
+    selections: readonly EmbeddingSubmission[],
+  ) {
+    if (!selections.length) return;
+    // Writers lock sources before identities. Materialized CTE dependencies
+    // preserve that order across mixed-kind pages, with sorted locks per table.
+    const kinds = [
+      ...new Set(selections.map(({ input }) => input.entityKind)),
+    ].sort();
+    const locks = kinds.map((kind, index) => {
+      const source = SHORTCODE_TABLE[kind];
+      const previous = index
+        ? sql`AND (SELECT count(*) FROM ${sql.identifier(`sources_${index - 1}`)}) >= 0`
+        : sql``;
+      return sql`${sql.identifier(`sources_${index}`)} AS MATERIALIZED (
+        SELECT ${source.id} AS id, ${kind}::text AS kind FROM ${source}
+        WHERE ${inArray(
+          source.id,
+          selections
+            .filter(({ input }) => input.entityKind === kind)
+            .map(({ input }) => input.entityId),
+        )}
+          AND ${isNull(source.deletedAt)} ${previous} ORDER BY ${source.id} FOR SHARE)`;
+    });
+    const live = await getDb(db).execute<{
+      id: string;
+      kind: SearchableEntityRef["entityKind"];
+    }>(sql`
+      WITH ${sql.join(locks, sql`, `)}, sources AS MATERIALIZED (
+        ${sql.join(
+          kinds.map(
+            (_, index) =>
+              sql`SELECT * FROM ${sql.identifier(`sources_${index}`)}`,
+          ),
+          sql` UNION ALL `,
+        )}
+      ), identities AS MATERIALIZED (
+        SELECT ${entityIdentity.id} AS id FROM ${entityIdentity}
+        WHERE ${entityIdentity.id} IN (SELECT id FROM sources) AND ${isNull(entityIdentity.deletedAt)}
+        ORDER BY ${entityIdentity.id} FOR SHARE
+      ) SELECT sources.* FROM sources JOIN identities USING (id)`);
+    const liveKeys = new Set(
+      live.rows.map(({ id, kind }) => entityRefKey(kind, id)),
+    );
+    for (const { input } of selections)
+      if (!liveKeys.has(entityRefKey(input.entityKind, input.entityId)))
+        throw new JobTargetError(
+          "Embedding source was removed before selection",
+        );
+    const latest = await prepareSearchDocuments(
+      db,
+      selections.map(({ input }) => input),
+    );
+    const bodies = new Map(
+      latest.entries.map(({ source, body }) => [
+        entityRefKey(source.entityKind, source.entityId),
+        body,
+      ]),
+    );
+    for (const { input } of selections) {
+      const body = bodies.get(entityRefKey(input.entityKind, input.entityId));
+      if (
+        body === undefined ||
+        (await embeddingTextHash({
+          entityKind: input.entityKind,
+          ...input.config,
+          text: normalizeSearchText(body),
+        })) !== input.hash
+      )
+        throw new JobTargetError("Embedding inputs changed before selection");
+    }
+    await getDb(db)
+      .update(entityEmbedding)
+      .set({ deletedAt: new Date(), artifactState: "retired" })
+      .where(
+        and(
+          isNull(entityEmbedding.deletedAt),
+          or(
+            ...selections.map(({ input }) =>
+              and(
+                eq(entityEmbedding.entityKind, input.entityKind),
+                eq(entityEmbedding.entityId, input.entityId),
+              ),
             ),
-          )
-          .for("share");
-        if (!liveSource || !liveIdentity)
-          throw new Error("Embedding source was removed before selection");
-        const latest = await prepareSearchDocuments(tx, [input]);
-        const body = latest.entries[0]?.body;
-        if (
-          body === undefined ||
-          (await embeddingTextHash({
-            entityKind: input.entityKind,
-            ...input.config,
-            text: normalizeSearchText(body),
-          })) !== input.hash
-        )
-          throw new Error("Embedding inputs changed before selection");
-        await getDb(tx)
-          .update(entityEmbedding)
-          .set({ deletedAt: new Date(), artifactState: "retired" })
-          .where(
-            and(
-              eq(entityEmbedding.entityKind, input.entityKind),
-              eq(entityEmbedding.entityId, input.entityId),
-              isNull(entityEmbedding.deletedAt),
-            ),
-          );
-        await getDb(tx)
-          .insert(entityEmbedding)
-          .values({
-            id: claim.id,
-            entityKind: input.entityKind,
-            entityId: input.entityId,
-            embeddingText: input.text,
-            embeddingHash: input.hash,
-            artifactHash: input.hash,
-            ...input.config,
-            artifactState: "selected",
-            vectorHash: cursor.hash,
-            submissionId: cursor.mutationId,
-            observedAt: new Date(),
-            indexedAt: new Date(),
-            deletedAt: null,
-          })
-          .onConflictDoUpdate({
-            target: entityEmbedding.id,
-            set: {
-              deletedAt: null,
-              artifactState: "selected",
+          ),
+        ),
+      );
+    await getDb(db)
+      .insert(entityEmbedding)
+      .values(
+        selections
+          .map(({ claim, input }) => {
+            const cursor = submittedCursor.parse(claim.cursor);
+            return {
+              id: claim.id,
+              entityKind: input.entityKind,
+              entityId: input.entityId,
+              embeddingText: input.text,
+              embeddingHash: input.hash,
+              artifactHash: input.hash,
+              ...input.config,
+              artifactState: "selected" as const,
+              vectorHash: cursor.hash,
+              submissionId: cursor.mutationId,
               observedAt: new Date(),
               indexedAt: new Date(),
-            },
-          });
-        await recordChange(tx, {
-          kind: "projection",
-          categories: [input.entityKind, "search", "relatedData", "problems"],
-        });
-      },
-    };
+              deletedAt: null,
+            };
+          })
+          .sort((a, b) => a.id.localeCompare(b.id)),
+      )
+      .onConflictDoUpdate({
+        target: entityEmbedding.id,
+        set: {
+          deletedAt: null,
+          artifactState: "selected",
+          observedAt: new Date(),
+          indexedAt: new Date(),
+        },
+      });
+    await recordChange(db, {
+      kind: "projection",
+      categories: [...kinds, "search", "relatedData", "problems"],
+    });
   }
 
   async function executeBatch(
@@ -442,6 +500,23 @@ export function embeddingJobHandler(
         results.set(claim.id, { status: "rejected", reason });
       }
     }
+    const publicationGroup = {
+      publish: (tx: Database, ids: ReadonlySet<string>) =>
+        publishSelections(
+          tx,
+          parsed.filter(({ claim }) => ids.has(claim.id)),
+        ),
+    };
+    for (const result of results.values())
+      if (
+        result.status === "fulfilled" &&
+        result.value.page.done &&
+        result.value.page.result &&
+        typeof result.value.page.result === "object" &&
+        "outcome" in result.value.page.result &&
+        result.value.page.result.outcome === "written"
+      )
+        result.value.publicationGroup = publicationGroup;
     if (results.size) {
       await context.checkpoint(results);
       results.clear();
