@@ -14,7 +14,7 @@
   "apps/web/src/server/domains/expense/repo/expense-inheritance.ts": 9,
   "apps/web/src/server/domains/expense/repo/expense-project-allocation.ts": 10,
   "apps/web/src/server/domains/financial-transaction/repo/financial-booking.ts": 2,
-  "apps/web/src/server/domains/household-contribution/repo/allocation.ts": 11,
+  "apps/web/src/server/domains/household-contribution/repo/allocation.ts": 3,
   "apps/web/src/server/domains/image/repo/image-displayability.ts": 1,
   "apps/web/src/server/generic/inheritance/repo/inheritance-validation.ts": 4,
   "apps/web/src/server/mcp/mcp-usage.ts": 7,

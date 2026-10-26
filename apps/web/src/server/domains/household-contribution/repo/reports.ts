@@ -150,8 +150,8 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
       });
     }
 
-    // Arm C only fires when no explicit beneficiary row exists, so an assumed
-    // row is always the whole beneficiary allocation for that expense.
+    // Household is the final beneficiary fallback, so an assumed row is always
+    // the whole beneficiary allocation for that expense.
     const assumed = bucket.filter((row) => row.basis === "assumed_household");
     if (assumed.length > 0) {
       assumedCount += 1;

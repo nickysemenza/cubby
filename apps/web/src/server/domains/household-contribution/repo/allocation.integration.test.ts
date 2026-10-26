@@ -5,6 +5,8 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
+import { createRepoEntity } from "tooling/factories/repo";
+import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -15,6 +17,8 @@ import {
   financialTransactionAllocation,
   ledgerParty,
 } from "~/server/db/schema";
+import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
@@ -236,6 +240,167 @@ describe("loadExpenseAllocations derived funders", () => {
       (row) => row.expenseId === expenseId && row.role === "funder",
     );
 
+  it("keeps household card benefits separate from purchaser and funding overrides", async () => {
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
+    });
+    const shopper = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic shopper",
+      kind: "member",
+    });
+    const funder = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic funder",
+      kind: "member",
+    });
+    const seller = await createRepoEntity(ctx, "vendor");
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "credit_card", network: "visa" },
+      ledgerPartyId: household.output.id,
+      primaryCardholderId: shopper.output.id,
+      fundingPeriods: [
+        { ledgerPartyId: funder.output.id, validFrom: null, validTo: null },
+      ],
+    });
+    const order = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      purchaserOverrideId: shopper.output.id,
+      date: "2026-08-10",
+    });
+    const line = await createRepoEntity(ctx, "expense", {
+      purchaseId: order.output.id,
+      cost: 100,
+      date: "2026-08-10",
+      trade: "other",
+    });
+    await insertSettlementTransaction(ctx.db, {
+      accountId: account.entityId,
+      purchaseId: order.entityId,
+      kind: "purchase",
+      status: "posted",
+      amount: 100,
+      transactionDate: "2026-08-10",
+      postedDate: "2026-08-10",
+    });
+    const rows = await loadExpenseAllocations(ctx.db, {
+      expenseIds: [line.entityId],
+    });
+    expect(rows.find((row) => row.role === "beneficiary")).toMatchObject({
+      allocationKey: household.output.id,
+      basis: "derived_from_payment",
+      cents: 10_000n,
+    });
+    expect(rows.find((row) => row.role === "funder")).toMatchObject({
+      allocationKey: funder.output.id,
+      cents: 10_000n,
+    });
+    await updateExpense(
+      ctx.db,
+      line.output.id,
+      { beneficiaries: [{ partyId: shopper.output.id, weight: 1 }] },
+      ctx.actor,
+    );
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [line.entityId] })
+      ).filter((row) => row.role === "beneficiary"),
+    ).toEqual([
+      expect.objectContaining({
+        allocationKey: shopper.output.id,
+        basis: "recorded",
+        cents: 10_000n,
+      }),
+    ]);
+    await updateExpense(
+      ctx.db,
+      line.output.id,
+      { beneficiaries: [{ partyId: null, weight: 1 }] },
+      ctx.actor,
+    );
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [line.entityId] })
+      ).filter((row) => row.role === "beneficiary"),
+    ).toEqual([
+      expect.objectContaining({
+        ledgerPartyId: null,
+        basis: "recorded",
+        cents: 10_000n,
+      }),
+    ]);
+    await updateExpense(
+      ctx.db,
+      line.output.id,
+      { beneficiaries: [] },
+      ctx.actor,
+    );
+    await updateFinancialAccount(
+      ctx.db,
+      account.output.id,
+      { ledgerPartyId: shopper.output.id },
+      ctx.actor,
+    );
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [line.entityId] })
+      ).find((row) => row.role === "beneficiary"),
+    ).toMatchObject({
+      allocationKey: shopper.output.id,
+      basis: "derived_from_payment",
+    });
+  });
+
+  it("uses the effective purchaser when payment ownership is unresolved", async () => {
+    await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic household fallback",
+      kind: "household",
+    });
+    const shopper = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic vendor member",
+      kind: "member",
+    });
+    const seller = await createRepoEntity(ctx, "vendor");
+    const vendorAccount = await createRepoEntity(ctx, "vendorAccount", {
+      vendorId: seller.output.id,
+      ledgerPartyId: shopper.output.id,
+    });
+    const order = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      vendorAccountId: vendorAccount.output.id,
+      date: "2026-08-10",
+    });
+    const line = await createRepoEntity(ctx, "expense", {
+      purchaseId: order.output.id,
+      cost: 11,
+      date: "2026-08-10",
+      trade: "other",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "cash" },
+      ledgerPartyId: null,
+    });
+    await insertSettlementTransaction(ctx.db, {
+      accountId: account.entityId,
+      purchaseId: order.entityId,
+      kind: "purchase",
+      status: "posted",
+      amount: 11,
+      transactionDate: "2026-08-10",
+      postedDate: "2026-08-10",
+    });
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [line.entityId] })
+      ).filter((row) => row.role === "beneficiary"),
+    ).toEqual([
+      expect.objectContaining({
+        allocationKey: shopper.output.id,
+        basis: "derived_from_purchaser",
+        cents: 1_100n,
+      }),
+    ]);
+  });
+
   it("derives the funder from the paying account's owner", async () => {
     const party = await mkParty("Payer", "LPY-PAY1", "member");
     const account = await mkAccount("FAC-CRDA", "Card A", party.id);
@@ -248,12 +413,23 @@ describe("loadExpenseAllocations derived funders", () => {
         cents: 10_000n,
       }),
     ]);
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [expense.id] })
+      ).filter((row) => row.role === "beneficiary"),
+    ).toEqual([
+      expect.objectContaining({
+        allocationKey: "LPY-PAY1",
+        basis: "derived_from_payment",
+        cents: 10_000n,
+      }),
+    ]);
   });
 
   it("splits proportionally between two owning parties", async () => {
     const [one, two] = await Promise.all([
       mkParty("Split one", "LPY-SPA1", "member"),
-      mkParty("Split two", "LPY-SPB2", "member"),
+      mkParty("Split two", "LPY-SPB2", "household"),
     ]);
     const [a, b] = await Promise.all([
       mkAccount("FAC-SPLA", "Split A", one.id),
@@ -265,6 +441,14 @@ describe("loadExpenseAllocations derived funders", () => {
     ]);
 
     const funders = await fundersOf(expense.id);
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [expense.id] })
+      ).filter((row) => row.role === "beneficiary"),
+    ).toEqual([
+      expect.objectContaining({ allocationKey: "LPY-SPA1", cents: 7_500n }),
+      expect.objectContaining({ allocationKey: "LPY-SPB2", cents: 2_500n }),
+    ]);
     expect(funders).toEqual([
       expect.objectContaining({ allocationKey: "LPY-SPA1", cents: 7_500n }),
       expect.objectContaining({ allocationKey: "LPY-SPB2", cents: 2_500n }),
@@ -391,6 +575,17 @@ describe("loadExpenseAllocations derived funders", () => {
       expect.objectContaining({
         allocationKey: "LPY-EXPL",
         basis: "recorded",
+        cents: 4_000n,
+      }),
+    ]);
+    expect(
+      (
+        await loadExpenseAllocations(ctx.db, { expenseIds: [expense.id] })
+      ).filter((row) => row.role === "beneficiary"),
+    ).toEqual([
+      expect.objectContaining({
+        allocationKey: "LPY-CHN1",
+        basis: "derived_from_payment",
         cents: 4_000n,
       }),
     ]);

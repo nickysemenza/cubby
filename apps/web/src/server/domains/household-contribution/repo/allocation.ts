@@ -1,10 +1,13 @@
 import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
+import { financialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import type {
   ExpenseId,
   LedgerPartyId,
   ProjectId,
 } from "@cubby/schemas/identifiers";
+import { contributionRole, ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { and, lte, type SQL, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
@@ -16,10 +19,12 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   ledgerParty,
+  purchase,
 } from "~/server/db/schema";
 import { expenseDerivedCostsSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { paymentFundingPartySql } from "~/server/domains/financial-account/repo/funding-sql";
+import { purchasePurchaserSql } from "~/server/domains/purchase/repo/purchase-purchaser";
 
 /**
  * Where a row's party came from. One boolean could not carry this once funder
@@ -28,8 +33,10 @@ import { paymentFundingPartySql } from "~/server/domains/financial-account/repo/
 type AllocationBasis =
   /** An explicit `ExpenseAttribution` row. Always wins for its role. */
   | "recorded"
-  /** Funder resolved through the paying account's owner. */
+  /** Funder from dated funding evidence, or beneficiary from account ownership. */
   | "derived_from_payment"
+  /** Beneficiary inherited from the Purchase's effective purchaser. */
+  | "derived_from_purchaser"
   /** Beneficiary defaulted to the singleton household party. */
   | "assumed_household"
   /** Paid from an account with no funding party known for that payment. */
@@ -78,13 +85,14 @@ const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
  * Currency is converted to bigint cents before multiplication; no floating
  * arithmetic participates in splitting.
  *
- * Four mutually exclusive arms feed `seeded`, and every partition
+ * Mutually exclusive sources feed `seeded`, and every partition
  * (`expenseId`, `role`) ends up with at least one row so the largest-remainder
  * pass below always reconciles to exactly `abs(cost_cents)`:
  *
  *  A `explicit_attr`      — explicit `ExpenseAttribution` rows. The override.
  *  B `funder_derived`     — funder inferred from the account that paid.
- *  C `beneficiary_assumed`— beneficiary defaulted to the household party.
+ *  C beneficiary defaults — paying account ownership, then the effective
+ *    purchaser, then the household party. Explicit funders do not decide these.
  *  D `residual_unattributed` — nothing known; the legacy implicit seed.
  *
  * Arms B/C are each guarded by "no explicit row for this role", and arm D is
@@ -100,6 +108,9 @@ export async function loadExpenseAllocations(
 ): Promise<ExpenseAllocationRow[]> {
   if (scope.projectIds?.length === 0) return [];
   if (scope.expenseIds?.length === 0) return [];
+  const accountOwner = alias(ledgerParty, "account_owner");
+  const nullableParty = alias(ledgerParty, "p");
+  const purchaserParty = alias(ledgerParty, "purchaser_party");
   const settlementKinds = sql.raw(
     purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "),
   );
@@ -116,7 +127,7 @@ export async function loadExpenseAllocations(
       ${scope.projectIds ? sql`JOIN (${expenseDerivedCostsSql({ projectIds: scope.projectIds }, scope.expenseIds)}) derived_cost ON derived_cost."expenseId" = ${expense.id}` : sql``}
       WHERE ${scopeCondition(scope)}
     ), roles(role) AS (
-      VALUES ('beneficiary'::text), ('funder'::text)
+      VALUES (${contributionRole.enum.beneficiary}::text), (${contributionRole.enum.funder}::text)
     ), explicit_attr AS (
       SELECT
         e."expenseId",
@@ -135,7 +146,7 @@ export async function loadExpenseAllocations(
        AND a.role = r.role
        AND a."deletedAt" IS NULL
       LEFT JOIN ${ledgerParty} p
-        ON p.id = a."ledgerPartyId" AND p."deletedAt" IS NULL
+        ON p.id = a."ledgerPartyId" AND ${notDeleted(nullableParty)}
 
     /* Outgoing and incoming cents per PAYING PARTY for each expense's linked
        Purchase. Grouping by the owning party rather than the account is what
@@ -143,10 +154,11 @@ export async function loadExpenseAllocations(
        duplicate keys would make the remainder tie-break non-deterministic.
        Every unowned account collapses into the one NULL group for the same
        reason. */
-    ), funder_party_flow AS (
+    ), payment_party_flow AS (
       SELECT
         e."expenseId",
-        ${paymentFundingPartySql(sql`fa`, sql`ft`)} AS owner_party_id,
+        party_source.role,
+        party_source.owner_party_id,
         coalesce(sum(round(fta.amount::numeric * 100))
           FILTER (WHERE fta.amount > 0), 0)::bigint AS gross_cents,
         coalesce(sum(round(-fta.amount::numeric * 100))
@@ -158,10 +170,16 @@ export async function loadExpenseAllocations(
         ON ft.id = fta."transactionId"
        AND ft."deletedAt" IS NULL
        AND ft.kind IN (${settlementKinds})
-       AND ft.status <> 'void'
+       AND ft.status <> ${financialTransactionStatus.enum.void}
       JOIN ${financialAccount} fa
         ON fa.id = ft."accountId" AND fa."deletedAt" IS NULL
-      GROUP BY e."expenseId", ${paymentFundingPartySql(sql`fa`, sql`ft`)}
+      LEFT JOIN ${ledgerParty} account_owner
+        ON account_owner.id = fa."ledgerPartyId" AND ${notDeleted(accountOwner)}
+      CROSS JOIN LATERAL (VALUES
+        (${contributionRole.enum.funder}::text, ${paymentFundingPartySql(sql`fa`, sql`ft`)}),
+        (${contributionRole.enum.beneficiary}::text, account_owner.id)
+      ) party_source(role, owner_party_id)
+      GROUP BY e."expenseId", party_source.role, party_source.owner_party_id
 
     /* Weight by GROSS outlay — the sum of positive allocations — not by the net.
        Allocation amounts are signed (purchase +, refund/income -, adjustment
@@ -182,20 +200,23 @@ export async function loadExpenseAllocations(
        out this arm is empty and arm D fires. That is also why
        weight / total_weight can never divide by zero: a zero-weight partition
        has no row to aggregate over. */
-    ), funder_weight AS (
+    ), payment_weight AS (
       SELECT
         f."expenseId",
+        f.role,
         f.owner_party_id,
-        CASE WHEN bool_or(f.gross_cents > 0) OVER (PARTITION BY f."expenseId")
+        CASE WHEN bool_or(f.gross_cents > 0) OVER (PARTITION BY f."expenseId", f.role)
           THEN f.gross_cents ELSE f.inflow_cents END AS weight_cents
-      FROM funder_party_flow f
+      FROM payment_party_flow f
+    ), funder_weight AS (
+      SELECT "expenseId", owner_party_id, weight_cents FROM payment_weight WHERE role = ${contributionRole.enum.funder}
     ), funder_derived AS (
       SELECT
         e."expenseId",
         e."expenseShortcode",
         e."projectId",
         e.cost_cents,
-        'funder'::text AS role,
+        ${contributionRole.enum.funder}::text AS role,
         n.owner_party_id AS "ledgerPartyId",
         coalesce(p.shortcode, '~unowned-account') AS "allocationKey",
         n.weight_cents AS weight,
@@ -204,14 +225,42 @@ export async function loadExpenseAllocations(
       FROM scoped_expense e
       JOIN funder_weight n ON n."expenseId" = e."expenseId"
       LEFT JOIN ${ledgerParty} p
-        ON p.id = n.owner_party_id AND p."deletedAt" IS NULL
+        ON p.id = n.owner_party_id AND ${notDeleted(nullableParty)}
       WHERE n.weight_cents > 0
         AND NOT EXISTS (
           SELECT 1 FROM ${expenseAttribution} a
           WHERE a."expenseId" = e."expenseId"
-            AND a.role = 'funder'
+            AND a.role = ${contributionRole.enum.funder}
             AND a."deletedAt" IS NULL
         )
+
+    ), beneficiary_payment AS (
+      SELECT e."expenseId", e."expenseShortcode", e."projectId", e.cost_cents,
+        ${contributionRole.enum.beneficiary}::text AS role, n.owner_party_id AS "ledgerPartyId",
+        coalesce(p.shortcode, '~unattributed') AS "allocationKey",
+        n.weight_cents AS weight,
+        CASE WHEN p.id IS NOT NULL THEN 'derived_from_payment' ELSE 'unknown' END AS basis
+      FROM scoped_expense e
+      JOIN payment_weight n ON n."expenseId" = e."expenseId" AND n.role = ${contributionRole.enum.beneficiary}
+      LEFT JOIN ${ledgerParty} p ON p.id = n.owner_party_id AND ${notDeleted(nullableParty)}
+      WHERE n.weight_cents > 0
+        AND NOT EXISTS (SELECT 1 FROM explicit_attr a WHERE a."expenseId" = e."expenseId" AND a.role = ${contributionRole.enum.beneficiary})
+        -- Partial payment ownership retains its unknown share. Entirely
+        -- unknown payment ownership can use the purchaser/household fallback.
+        AND EXISTS (SELECT 1 FROM payment_weight known
+          JOIN ${ledgerParty} owner ON owner.id = known.owner_party_id AND owner."deletedAt" IS NULL
+          WHERE known."expenseId" = e."expenseId" AND known.role = ${contributionRole.enum.beneficiary} AND known.weight_cents > 0)
+    ), beneficiary_purchaser AS (
+      SELECT e."expenseId", e."expenseShortcode", e."projectId", e.cost_cents,
+        ${contributionRole.enum.beneficiary}::text AS role, purchaser_party.id AS "ledgerPartyId",
+        purchaser_party.shortcode AS "allocationKey", 1::bigint AS weight,
+        'derived_from_purchaser'::text AS basis
+      FROM scoped_expense e
+      JOIN ${purchase} ON ${purchase.id} = e."purchaseId" AND ${notDeleted(purchase)}
+      JOIN ${ledgerParty} purchaser_party
+        ON purchaser_party.shortcode = ${purchasePurchaserSql} AND ${notDeleted(purchaserParty)}
+      WHERE NOT EXISTS (SELECT 1 FROM explicit_attr a WHERE a."expenseId" = e."expenseId" AND a.role = ${contributionRole.enum.beneficiary})
+        AND NOT EXISTS (SELECT 1 FROM beneficiary_payment b WHERE b."expenseId" = e."expenseId")
 
     /* At most one row by LedgerParty_household_singleton_key. The ORDER BY /
        LIMIT is defence against that invariant being violated, not behaviour
@@ -220,7 +269,7 @@ export async function loadExpenseAllocations(
     ), household_party AS (
       SELECT id, shortcode
       FROM ${ledgerParty}
-      WHERE kind = 'household' AND "deletedAt" IS NULL
+      WHERE kind = ${ledgerPartyKind.enum.household} AND "deletedAt" IS NULL
       ORDER BY shortcode
       LIMIT 1
 
@@ -232,7 +281,7 @@ export async function loadExpenseAllocations(
         e."expenseShortcode",
         e."projectId",
         e.cost_cents,
-        'beneficiary'::text AS role,
+        ${contributionRole.enum.beneficiary}::text AS role,
         h.id AS "ledgerPartyId",
         h.shortcode AS "allocationKey",
         1::bigint AS weight,
@@ -242,9 +291,11 @@ export async function loadExpenseAllocations(
       WHERE NOT EXISTS (
         SELECT 1 FROM ${expenseAttribution} a
         WHERE a."expenseId" = e."expenseId"
-          AND a.role = 'beneficiary'
+          AND a.role = ${contributionRole.enum.beneficiary}
           AND a."deletedAt" IS NULL
       )
+        AND NOT EXISTS (SELECT 1 FROM beneficiary_payment b WHERE b."expenseId" = e."expenseId")
+        AND NOT EXISTS (SELECT 1 FROM beneficiary_purchaser b WHERE b."expenseId" = e."expenseId")
 
     /* The outer parentheses around the OR are load-bearing. Without them
        AND-before-OR precedence reparses this as
@@ -268,7 +319,7 @@ export async function loadExpenseAllocations(
            would strip their real funders. The row is still emitted so the
            partition stays non-empty and
            fundedTotal + unattributedFunding = expenseTotal keeps holding. */
-        CASE WHEN r.role = 'funder' AND e.future
+        CASE WHEN r.role = ${contributionRole.enum.funder} AND e.future
           THEN 'not_yet_paid' ELSE 'unknown' END AS basis
       FROM scoped_expense e
       CROSS JOIN roles r
@@ -279,18 +330,21 @@ export async function loadExpenseAllocations(
             AND a."deletedAt" IS NULL
         )
         AND (
-          (r.role = 'funder' AND NOT EXISTS (
+          (r.role = ${contributionRole.enum.funder} AND NOT EXISTS (
             SELECT 1 FROM funder_weight n
             WHERE n."expenseId" = e."expenseId" AND n.weight_cents > 0
           ))
           OR
-          (r.role = 'beneficiary' AND NOT EXISTS (
+          (r.role = ${contributionRole.enum.beneficiary} AND NOT EXISTS (
             SELECT 1 FROM household_party
-          ))
+          ) AND NOT EXISTS (SELECT 1 FROM beneficiary_payment b WHERE b."expenseId" = e."expenseId")
+            AND NOT EXISTS (SELECT 1 FROM beneficiary_purchaser b WHERE b."expenseId" = e."expenseId"))
         )
     ), seeded AS (
       SELECT * FROM explicit_attr
       UNION ALL SELECT * FROM funder_derived
+      UNION ALL SELECT * FROM beneficiary_payment
+      UNION ALL SELECT * FROM beneficiary_purchaser
       UNION ALL SELECT * FROM beneficiary_assumed
       UNION ALL SELECT * FROM residual_unattributed
     ), weighted AS (

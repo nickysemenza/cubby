@@ -2052,8 +2052,9 @@ membership. Garden feed UIDs are unchanged.
 Calendar pills show explicitly assigned Projects (excluding inherited defaults)
 and spending beneficiary LedgerParty names, including the contributing lines
 of Purchase occurrences.
-Beneficiaries use the effective spending allocation resolver, including its
-Household default and recorded overrides. They carry LedgerParty identities
+Beneficiaries use the effective spending allocation resolver and its
+[default and override policy](household-contribution-ledger.md#presentation-and-unknowns).
+They carry LedgerParty identities
 and inheritance state in the range batch; every calendar density renders their
 shared initials avatars and inherited markers without per-row lookups. Explicit
 unknown attribution stays blank; unpriced lines retain any recorded beneficiary

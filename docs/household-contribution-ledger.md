@@ -67,7 +67,16 @@ not apply later transfers: transfers are household-global.
 Client labels are derived from party kind. Route-capable entity references elsewhere in the app are links; on this ledger page, Ledger Parties and Ledger Transfers still render as plain text — that is a presentation choice for this module now, not a routing limitation, since both gained their own browser list and detail pages (`/ledger-parties`, `/ledger-transfers`). Recorded Expense attributions win for their role. Without recorded funders,
 reports derive funding from positive payment allocations, or from incoming
 allocations when a Purchase has no outgoing payment (a guest's repayment credits
-the receiving account's owner); without recorded beneficiaries, they use the singleton Household party. Missing, partial,
+the receiving account's owner). Unset beneficiaries inherit the paying accounts'
+owning Ledger Parties, weighted by the existing gross-payment allocation rule.
+A personal account defaults to its member; a Household account defaults to
+Household even when an individual is the purchaser or supplies the funds.
+Separate funding overrides and dated funding periods do not redefine who
+benefits. If no usable paying-account owner is known, use the Purchase's
+effective purchaser, then the singleton Household party. Explicit beneficiary
+rows, including an explicitly unknown party, always win. Partially known
+payment ownership keeps its unknown share instead of silently reallocating it.
+Missing, partial,
 unavailable, and null-attributed evidence remains an explicit gap.
 
 ## Import boundary
