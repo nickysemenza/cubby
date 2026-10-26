@@ -183,7 +183,9 @@ private struct ServerSettingsSection: View {
         } header: {
             Text("Server")
         } footer: {
-            Text("Each host keeps its own credential, so switching never sends one server's token to another.")
+            Text(
+                "Each host keeps its own credential, so switching never sends one server's token to another."
+            )
         }
     }
 

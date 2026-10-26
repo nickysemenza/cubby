@@ -63,6 +63,12 @@ cover paging and pending-search response fencing; the simulator journey covers
 the compact presentation controls and navigation boundary. Its evidence uses the usual checksummed
 QA artifact bundle.
 
+`pnpm test:e2e:sim -- --qa --journey qa-settings` pushes Settings from the Today
+toolbar and checks the Server, Notifications, Advanced and About sections,
+including the version row and Open Cubby on the web. The fixture install has
+already answered the participation question, so Photos' inline prompt is
+covered by `#Preview` only.
+
 Reach catalog targets with `scroll down 0.5 --until "id=…"` using the current
 shared driver, whose scroll command repeats passes until the target is visible.
 Avoid fixed swipe counts: compact row changes can overshoot the intended entity.
