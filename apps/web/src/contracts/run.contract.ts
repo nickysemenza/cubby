@@ -36,6 +36,7 @@ import {
   runRetirementReason,
   runStatus,
 } from "@cubby/schemas/run-fields";
+import { runStepErrors } from "@cubby/schemas/run-step";
 import { runWorkProgress } from "@cubby/schemas/run-work-progress";
 import { sweepEstimateOut, sweepStartInput } from "@cubby/schemas/sweep";
 import { z } from "zod";
@@ -320,7 +321,7 @@ export const runContract = defineContract(
     }),
     workSnapshot: query({
       description:
-        "One Run's live state: status, counts, findings (each `id` is what activity.resolve_run_finding takes; activity_read.report shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope and current mailbox coverage summarized as query counts with the next pending queries, persisted Workflow checkpoint with its in-flight page as counts, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
+        "One Run's live state: status, counts, findings (each `id` is what activity.resolve_run_finding takes; activity_read.report shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, write operations, and stepFailures (each failed step's scrubbed error sample). An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope and current mailbox coverage summarized as query counts with the next pending queries, persisted Workflow checkpoint with its in-flight page as counts, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
       nativeModels: { output: "json" },
       input: z.object({
         runId: runShortcode,
@@ -368,6 +369,15 @@ export const runContract = defineContract(
         ),
         operations: z.array(
           runDetail.shape.operations.element.omit({ operationId: true }),
+        ),
+        /** Steps with failures and their newest scrubbed error sample. */
+        stepFailures: z.array(
+          z.object({
+            key: z.string(),
+            label: z.string(),
+            failed: z.number().int().nonnegative(),
+            errors: runStepErrors,
+          }),
         ),
         /** Durable publication receipts; absent on legacy Runs. */
         mailReclassification: mailReclassificationRead.nullable(),

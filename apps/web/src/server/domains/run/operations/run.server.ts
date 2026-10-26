@@ -46,6 +46,7 @@ import {
   loadMailDiscoveryRead,
 } from "~/server/domains/run/repo/run-discovery-read";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
+import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { assertPaidOverride } from "~/server/domains/run/service/paid-override";
 import { createAppError } from "~/server/errors/app-error";
@@ -285,6 +286,10 @@ export const runHandlers = implementOperationDomain(runContract, {
     const run = await loadRunDetail(context.db, input.runId);
     const workProgress = await getRunWorkProgress(context.db, input.runId);
     if (!workProgress) throw new Error("Run progress was not found");
+    const steps = await readRunSteps(
+      context.db,
+      await resolveOrThrow(context.db, "run", input.runId),
+    );
     return {
       runId: input.runId,
       purpose: runPurpose.parse(run.purpose),
@@ -315,6 +320,14 @@ export const runHandlers = implementOperationDomain(runContract, {
       })),
       progress: run.progress,
       operations: run.operations,
+      stepFailures: steps
+        .filter((step) => step.failed > 0)
+        .map((step) => ({
+          key: step.key,
+          label: step.label,
+          failed: step.failed,
+          errors: step.errors ?? [],
+        })),
       mailDiscovery,
       mailReclassification,
     };

@@ -563,18 +563,19 @@ export async function previewFinancialTransactionImport(
           );
           if (!nearbyDate) return false;
           if (suggestionPolicy && transaction.status === "void") return false;
+          // Providers such as Monarch MCP supply no statement text or merchant;
+          // two empty values are absent evidence, not a match (#3396).
+          const description = canonical(row.originalStatement);
+          const merchant = row.merchant ? normalizeMerchant(row.merchant) : "";
           return (
             // A settled tip or other amount correction without a provider ID
             // is a review candidate only with matching source description.
             ((!row.importFingerprint || suggestionPolicy) && sameAmount) ||
-            canonical(transaction.rawDescription ?? "") ===
-              canonical(row.originalStatement) ||
-            Boolean(
-              row.merchant &&
-              transaction.merchant &&
-              normalizeMerchant(row.merchant) ===
-                normalizeMerchant(transaction.merchant),
-            )
+            (description !== "" &&
+              canonical(transaction.rawDescription ?? "") === description) ||
+            (merchant !== "" &&
+              transaction.merchant !== null &&
+              normalizeMerchant(transaction.merchant) === merchant)
           );
         })
       : [];
