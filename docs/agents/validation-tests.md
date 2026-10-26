@@ -341,8 +341,11 @@ offline search pump can otherwise update the shared refresh Job under the
 import's snapshot and fail it intermittently.
 For a mixed-entity prerequisite graph, use `createFixtureGraph` with its supplied
 kernel writer. It commits the graph and settles projections once; keep fixtures
-with intermediate browser reads outside that transaction. Recipe costing,
-meal-food writes and review-proposal publication that consume the committed
+with intermediate browser reads outside that transaction.
+The callback also receives the transaction database for canonical name
+resolution. Shared fixture brands use `resolveProductBrandName` there instead
+of repeatedly creating a Vendor with the same name.
+Recipe costing, meal-food writes and review-proposal publication that consume the committed
 graph run after the transaction, rather than settling each prerequisite.
 Setup that consumes only identities uses `createRepoIdentity` or
 `createProductIdentityFixture`; retain the full-response fixture when its

@@ -1,3 +1,4 @@
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { Page } from "@playwright/test";
 import { count, eq } from "drizzle-orm";
@@ -54,16 +55,16 @@ export async function seedRecordListDisplayPrerequisite(
   page: Page,
   name: string,
 ) {
-  return createFixtureGraph(page, async (create) => {
+  return createFixtureGraph(page, async (create, db) => {
     const vendor = await create("vendor", {
       name: `${name} vendor`,
       website: "https://example.com",
       orderUrlTemplate: "https://example.com/orders/{orderId}",
       notes: `${name} vendor notes`,
     });
-    const brand = await create("vendor", { name: "E2E fixture" });
+    const brandId = await resolveProductBrandName(db, "E2E fixture");
     const product = await create("product", {
-      brandId: brand.id,
+      brandId,
       tags: [],
       name: `${name} product`,
     });
@@ -116,7 +117,7 @@ export async function seedRelationshipReviewPrerequisite(
   const year = 2100 + (projectCount?.value ?? 0);
   const { current, target, product, expense } = await createFixtureGraph(
     page,
-    async (create) => {
+    async (create, db) => {
       const current = await create("project", {
         name: `${name} current`,
         dates: { start: `${year}-05-01`, end: `${year}-05-31` },
@@ -125,9 +126,9 @@ export async function seedRelationshipReviewPrerequisite(
         name: `${name} suggested`,
         dates: { start: `${year}-05-01`, end: `${year}-05-31` },
       });
-      const brand = await create("vendor", { name: "E2E fixture" });
+      const brandId = await resolveProductBrandName(db, "E2E fixture");
       const product = await create("product", {
-        brandId: brand.id,
+        brandId,
         name: `${name} switch`,
       });
       await create("expense", {

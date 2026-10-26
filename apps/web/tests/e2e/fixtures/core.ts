@@ -182,17 +182,20 @@ export async function createFixtureGraph<Result>(
       entity: E,
       overrides: EntityOverrides<E>,
     ) => Promise<CreatedEntity>,
+    db: Database,
   ) => Promise<Result>,
 ): Promise<Result> {
   const userId = await fixtureUserId(page);
   const created = await withTransactionDatabase(getFixtureDb(), async (db) => {
     const context = buildKernelContext(db, userId);
-    return build((entity, input) =>
-      createIdentityFixture(
-        context,
-        entity,
-        buildEntity(entity, input, { faker: e2eFaker() }),
-      ),
+    return build(
+      (entity, input) =>
+        createIdentityFixture(
+          context,
+          entity,
+          buildEntity(entity, input, { faker: e2eFaker() }),
+        ),
+      db,
     );
   });
   await drainDerivedRefreshFrontier(getFixtureDb());
