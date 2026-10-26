@@ -1,0 +1,31 @@
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_9d2102a8478360::t_3ba3625a756072 65,669-675,680-681,704,729-736,738-758
+apps/web/src/entity/table/ledger-filters.tsx
+  s_9d2102a8478360::t_465497e779c793 9,15,19,21,88-95,99,102-104,156-226,228,263,267-332
+apps/web/src/entity/table/table-header-layout.tsx
+  s_9d2102a8478360::t_5179cf8cfb8d4f 33,250-251,266,285,338-344,381-382,387,391-392,394-395,397-418
+apps/web/src/entity/table/table.tsx
+  s_9d2102a8478360::t_4bbac89ebaf1a6 85,1569-1576
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_9d2102a8478360::t_05d6fc8db27cc3 1071
+apps/web/src/ui/data-table/table-meta.ts
+  s_9d2102a8478360::t_b47a1e2bd9c51e 272,274-277,279,286-287,289,292,299
+apps/web/src/ui/primitives/popover.tsx
+  s_9d2102a8478360::t_d187b5d722511a 28,33,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "90fe286d22ef50dfda2830e8bddf93d076d806c5",
+  "prompts": {},
+  "sessions": {
+    "s_9d2102a8478360": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5c3d2341-5556-4d9a-b46b-3a91a9e72a62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
