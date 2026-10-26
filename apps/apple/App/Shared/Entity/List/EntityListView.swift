@@ -60,10 +60,13 @@ struct EntityListView: View {
     let key: EntityKey
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Phone table column widths grow with Dynamic Type so cells wrap less as text scales; the
-    /// header and every row read the same metrics, keeping columns aligned.
+    /// Regular-width iPad table columns grow with Dynamic Type; compact width uses List or Cards.
+    /// The header and every row read the same metrics, keeping columns aligned.
     @ScaledMetric(relativeTo: .body) private var titleColumnWidth: CGFloat = 240
     @ScaledMetric(relativeTo: .body) private var fieldColumnWidth: CGFloat = 180
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
     @State private var model: GenericEntityListModel?
     @State private var showingFilters = false
     @State private var creating = false
@@ -126,7 +129,26 @@ struct EntityListView: View {
         NativePresentationCoverage.listViews(for: descriptor)
     }
 
+    private var offersNativeTable: Bool {
+        #if os(iOS)
+            horizontalSizeClass == .regular
+        #else
+            true
+        #endif
+    }
+
     private var presentationChoices: [PresentationChoice] {
+        if !offersNativeTable {
+            return [
+                PresentationChoice(
+                    id: "list", label: "List", symbol: "list.bullet",
+                    view: .table, density: nil, browsePresentation: .list),
+                PresentationChoice(
+                    id: ListPresentationChoice.cards.rawValue, label: "Cards", symbol: "rectangle.grid.2x2",
+                    view: .shelf, density: .cards, browsePresentation: nil),
+            ]
+        }
+
         let shared = renderableViews.filter { $0 == .shelf }
         let specialist = renderableViews.filter { $0 != .table && $0 != .shelf }
         let browse = [BrowsePresentation.list, .table].map { presentation in
@@ -313,6 +335,12 @@ struct EntityListView: View {
                         Label(choice.label, systemImage: choice.symbol)
                     }
                     .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
+                }
+                if !offersNativeTable {
+                    OpenOnWebButton(
+                        target: .route(path: "/\(descriptor.basePath)"), label: "Open table on web"
+                    )
+                    .accessibilityIdentifier("browse.\(key.rawValue).open-table-web")
                 }
             }
         }
@@ -681,7 +709,7 @@ struct EntityListView: View {
             }
         } else if model.view == .shelf {
             cardGrid(model, rows: model.rows, meta: model.summaryMeta)
-        } else if model.view == .table && browsePresentation == .table {
+        } else if model.view == .table && browsePresentation == .table && offersNativeTable {
             tableView(model)
         } else {
             rowList(model)
@@ -713,7 +741,7 @@ struct EntityListView: View {
                 }
             } else if model.view == .shelf {
                 cardGrid(model, rows: search.rows, meta: search.summaryMeta)
-            } else if model.view == .table && browsePresentation == .table {
+            } else if model.view == .table && browsePresentation == .table && offersNativeTable {
                 tableView(model)
             } else {
                 rowList(model)
@@ -1087,14 +1115,14 @@ struct EntityListView: View {
                         if let sections {
                             ForEach(sections) { section in
                                 Section {
-                                    ForEach(section.rows) { row in compactTableRow(row, fields: fields) }
+                                    ForEach(section.rows) { row in regularTableRow(row, fields: fields) }
                                 } header: {
                                     EntityListSectionHeader(
                                         section: section, entity: key, actions: actions(section))
                                 }
                             }
                         } else {
-                            ForEach(visibleRows) { row in compactTableRow(row, fields: fields) }
+                            ForEach(visibleRows) { row in regularTableRow(row, fields: fields) }
                         }
                     }
                 }
@@ -1114,7 +1142,7 @@ struct EntityListView: View {
     }
 
     #if !os(macOS)
-        private func compactTableRow(_ row: EntityRow, fields: [FieldDescriptor]) -> some View {
+        private func regularTableRow(_ row: EntityRow, fields: [FieldDescriptor]) -> some View {
             // A fact depends only on its own field, so one resolve serves every cell in the row.
             let facts = EntityRowPresentation.resolve(
                 descriptor: descriptor, row: row, columns: fields.map(\.key)

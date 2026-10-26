@@ -57,10 +57,10 @@ This journey does not establish Retry, logout, host switching, auth/update gates
 or record handoff and refresh acceptance.
 
 `pnpm test:e2e:sim -- --qa --journey qa-entity-table --video` checks the generic
-Product List/Table switch, sortable headers, column visibility, and record
+Product List ↔ Cards switch, the “Open table on web” menu item, and record
 navigation against the same synthetic QA world. The focused sort-model tests
 cover paging and pending-search response fencing; the simulator journey covers
-the controls and navigation boundary. Its evidence uses the usual checksummed
+the compact presentation controls and navigation boundary. Its evidence uses the usual checksummed
 QA artifact bundle.
 
 Reach catalog targets with `scroll down 0.5 --until "id=…"` using the current
@@ -70,7 +70,7 @@ If the driver reports no progress, inspect the current tree and scroll surface
 before adding another swipe. An identifier may be
 shared by its row and child nodes, so narrow catalog clicks with the entity
 label. Inspect the current accessibility tree before adding role constraints:
-iOS View choices are cells, column toggles and table headers are buttons, and
+iOS View choices are cells, regular-width column toggles and table headers are buttons, and
 the Columns control is a popup button. Use visible labels for menu choices.
 Assert table rows, headers, and
 visible totals rather than an unexposed layout container; the Columns popup
