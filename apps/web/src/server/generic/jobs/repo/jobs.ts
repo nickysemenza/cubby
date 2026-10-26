@@ -59,7 +59,7 @@ import {
 import { findPgError } from "~/server/errors/db-errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { JobSupersededError } from "../errors";
+import { JobRetryableError, JobSupersededError } from "../errors";
 import {
   jobKindPolicy,
   neverExhaustedRetryDelayMs,
@@ -1525,6 +1525,94 @@ export async function publishJobPage(
   });
 }
 
+/** Completed batch pages share source publication and retain every individual lease fence. */
+export async function publishCompletedJobPages(
+  db: Database,
+  entries: readonly { claim: JobClaim; page: JobPage }[],
+  publish: (tx: Database, ids: ReadonlySet<string>) => Promise<void>,
+): Promise<ReadonlySet<string>> {
+  for (const { page } of entries)
+    if (!jobPage.parse(page).done)
+      throw new Error("Batch publication requires completed pages");
+  return withTransactionDatabase(db, async (tx) => {
+    const read = () =>
+      getDb(tx)
+        .select({
+          row: job,
+          invalidated: sql<boolean>`EXISTS (SELECT 1 FROM ${jobInvalidationCapture} c
+        JOIN ${jobInvalidation} i ON i.key=c.key
+        WHERE c.key=${outer(job.key)} AND NOT c.observed AND i."restartsPass")`,
+        })
+        .from(job)
+        .where(
+          inArray(
+            job.id,
+            entries.map(({ claim }) => claim.id),
+          ),
+        )
+        .orderBy(job.id)
+        .for("update");
+    const current = new Map(
+      (await read()).map(({ row, invalidated }) => [
+        row.id,
+        { row, invalidated },
+      ]),
+    );
+    const active = entries.filter(({ claim }) => {
+      const found = current.get(claim.id);
+      if (!found || !ownsLease(found.row, claim)) return false;
+      if (found.row.generation !== claim.generation || found.invalidated)
+        throw new JobSupersededError();
+      return true;
+    });
+    const ids = new Set(active.map(({ claim }) => claim.id));
+    if (!ids.size) return ids;
+    await publish(tx, ids);
+    await repositoryBeforeCommit(
+      tx,
+      async (commit) => {
+        const latest = new Map(
+          (await read()).map(({ row, invalidated }) => [
+            row.id,
+            { row, invalidated },
+          ]),
+        );
+        for (const { claim } of active) {
+          const found = latest.get(claim.id);
+          if (
+            !found ||
+            !ownsLease(found.row, claim) ||
+            found.row.generation !== claim.generation ||
+            found.invalidated
+          )
+            throw new JobSupersededError();
+        }
+        const records = JSON.stringify(
+          active.map(({ claim, page }) => ({
+            id: claim.id,
+            cursor: page.cursor ?? null,
+            result: page.result ?? null,
+            availableAt: (
+              page.waitUntil ??
+              page.availableAt ??
+              new Date()
+            ).toISOString(),
+          })),
+        );
+        await commit.execute(sql`UPDATE "Job" j SET state=${jobState.enum.completed}, cursor=p.cursor,
+        result=CASE WHEN jsonb_typeof(j.result)='object' AND jsonb_typeof(p.result)='object'
+          THEN j.result || p.result ELSE coalesce(p.result,j.result) END,
+        "availableAt"=p."availableAt", "waitReason"=NULL, "waitUntil"=NULL,
+        "leaseToken"=NULL, "leaseExpiresAt"=NULL, attempts=0, error=NULL, "updatedAt"=now()
+        FROM jsonb_to_recordset(${records}::jsonb) p(id uuid,cursor jsonb,result jsonb,"availableAt" timestamp)
+        WHERE j.id=p.id`);
+      },
+      { phase: "publication" },
+    );
+    return ids;
+  });
+}
+
 export async function failJob(
   db: Database,
   claim: JobClaim,
@@ -1560,18 +1648,24 @@ export async function failJob(
     return;
   }
   const { retry } = jobKindPolicy(claim.kind);
+  const transient = error instanceof JobRetryableError;
   // A never-exhausted kind counts this reported failure here, not at claim.
   const failures = retry.exhaust ? claim.attempts : claim.attempts + 1;
   await getDb(db)
     .update(job)
     .set({
       state:
+        !transient &&
         retry.exhaust &&
         claim.recoveryTimeoutMs === null &&
         claim.attempts >= claim.maxAttempts
           ? "failed"
           : "retry_wait",
       attempts: failures,
+      // Claims enforce the budget too; a transient failure reserves its next attempt.
+      ...(transient
+        ? { maxAttempts: Math.max(claim.maxAttempts, failures + 1) }
+        : {}),
       availableAt: new Date(
         Date.now() +
           (retry.exhaust
