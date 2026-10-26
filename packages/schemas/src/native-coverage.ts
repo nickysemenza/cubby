@@ -48,12 +48,27 @@ import type {
  *
  * Every record is keyed by the generated id union, so adding a renderer, slot,
  * or hero action to a declaration is a type error here until it is classified.
- * `unsupported` is a deliberate, disclosed gap (the native screen shows the
- * reason); `NATIVE_UNSUPPORTED_CEILING` only shrinks.
+ * `handoff` is a reviewed web-only surface: native draws one row (and a record
+ * More item) that opens `web` — a declared detail `section` of the record, or a
+ * list route `query` — named by `label`; `reason` says why it stays on web. The
+ * unit test pins the roster, so adding a handoff is a deliberate declaration change.
  */
+export type NativeWebHandoff = {
+  /** A detail section id the entity declares; the web hash. */
+  readonly section?: string;
+  /** List-route query parameters, for a list-level handoff. */
+  readonly query?: Readonly<Record<string, string>>;
+  /** The row and menu text, named after the web surface. */
+  readonly label: string;
+};
+
 export type NativeCoverageEntry = (
   | { readonly status: "implemented" | "generic" | "ownedElsewhere" }
-  | { readonly status: "unsupported"; readonly reason: string }
+  | {
+      readonly status: "handoff";
+      readonly web: NativeWebHandoff;
+      readonly reason: string;
+    }
 ) & {
   readonly inputs?: readonly {
     readonly path: string;
@@ -90,10 +105,10 @@ const classify =
 const implemented = classify("implemented");
 const generic = classify("generic");
 const ownedElsewhere = classify("ownedElsewhere");
-const unsupported = <const Id extends string>(
-  ids: readonly Id[],
+const handoff = <const Web extends NativeWebHandoff>(
+  web: Web,
   reason: string,
-) => mapRecord(ids, () => ({ status: "unsupported", reason }) as const);
+) => ({ status: "handoff", web, reason }) as const;
 
 /**
  * Control renderers whose value is an object or array the generic structured-value editor draws
@@ -413,11 +428,14 @@ export const nativeCoverage = {
     ]),
     // The agent conversation is web-only on purpose: it streams from the import-run agent route (SSE
     // plus prompt and abort over its own protocol), not a Cubby operation, and CubbyKit has no
-    // client, reconnect or transcript model for it. Native promotion:
-    // https://github.com/nickysemenza/cubby/issues/2210
-    ...unsupported(
-      ["run.import-agent-live", "run.import-agent-stopped"],
-      "The live agent conversation is web-only: it streams from the import-run agent route, which native has no client for. Prompt, stop and review the agent on web.",
+    // client, reconnect or transcript model for it.
+    "run.import-agent-live": handoff(
+      { section: "import-agent-live", label: "Open live agent on web" },
+      "The live agent conversation streams from the import-run agent route, which native has no client for. Prompt and stop the agent on web.",
+    ),
+    "run.import-agent-stopped": handoff(
+      { section: "import-agent-stopped", label: "Open agent history on web" },
+      "The agent conversation streams from the import-run agent route, which native has no client for. Review the agent's history on web.",
     ),
   },
   /**
@@ -444,9 +462,8 @@ export const nativeCoverage = {
    * `structured-field` is a shared renderer id, so each field is classified here as
    * `<entity>.<field>`: `implemented` ones are drawn from a `valueSchema` by the generic
    * structured-value editor on both clients (each needs a read-to-input vector in
-   * `structured-roundtrip.json`); an `unsupported` one stays read-only on both, with its reason.
-   * Every field with that renderer must appear (asserted by the unit test), and
-   * `NATIVE_UNSUPPORTED_CEILING.structuredField` only shrinks.
+   * `structured-roundtrip.json`); a `handoff` one is edited on web.
+   * Every field with that renderer must appear (asserted by the unit test).
    */
   structuredField: {
     // Every field is drawn by the one generic editor on both clients, each with a read-to-input
@@ -823,23 +840,6 @@ export const nativeCollectionActionPlans = {
   CollectionActionId,
   Extract<NativeHeroActionPlan, { kind: "operation" }>
 >;
-
-/**
- * Reviewed count of `unsupported` ids per kind. It only shrinks: implement an
- * id natively, flip its status above, and lower the number. Raising it means a
- * new web-only declaration shipped without a native path and needs a
- * justification in review.
- */
-export const NATIVE_UNSUPPORTED_CEILING = {
-  control: 0,
-  list: 0,
-  detail: 0,
-  heroAction: 0,
-  detailSlot: 2,
-  listSlot: 0,
-  sectionAction: 0,
-  structuredField: 0,
-} as const satisfies Record<NativeCoverageKind, number>;
 
 /** Named whole-row renderers declare the projection they consume beside their platform disposition. */
 export function rendererReadInputs(surface: "list" | "detail", id: string) {

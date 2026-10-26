@@ -16,7 +16,6 @@ import {
 import { SECTION_ACTION_IDS } from "./entity-section-actions";
 import {
   NATIVE_COVERAGE_KINDS,
-  NATIVE_UNSUPPORTED_CEILING,
   nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
@@ -83,35 +82,49 @@ describe("native presentation coverage", () => {
     },
   );
 
-  it("explains every unsupported id", () => {
-    const unexplained = NATIVE_COVERAGE_KINDS.flatMap((kind) =>
+  it("hands off exactly the reviewed ids", () => {
+    // Adding a handoff moves a surface to web for native members: review it here.
+    const handoffs = NATIVE_COVERAGE_KINDS.flatMap((kind) =>
       entries(kind).flatMap(([id, entry]) =>
-        entry.status === "unsupported" && entry.reason.trim() === ""
-          ? [`${kind} ${id}`]
-          : [],
+        entry.status === "handoff" ? [`${kind} ${id}`] : [],
       ),
     );
-    expect(unexplained).toEqual([]);
+    expect(handoffs.sort()).toEqual([
+      "detailSlot run.import-agent-live",
+      "detailSlot run.import-agent-stopped",
+    ]);
   });
 
-  it.each(NATIVE_COVERAGE_KINDS)(
-    "keeps the %s unsupported set at its reviewed ceiling",
-    (kind) => {
-      const actual = entries(kind).filter(
-        ([, entry]) => entry.status === "unsupported",
-      ).length;
-      const ceiling = NATIVE_UNSUPPORTED_CEILING[kind];
-      const verdict =
-        actual === ceiling
-          ? "within ceiling"
-          : `${actual} native-unsupported ${kind} ids, ceiling ${ceiling}. The unsupported ` +
-            `set only shrinks: implement the id natively in apps/apple, flip its status in ` +
-            `packages/schemas/src/native-coverage.ts, and lower ` +
-            `NATIVE_UNSUPPORTED_CEILING.${kind}. Raising the ceiling needs a reviewed ` +
-            `justification.`;
-      expect(verdict).toBe("within ceiling");
-    },
-  );
+  it("names a declared web section or a route query for every handoff", () => {
+    const sectionIds = new Map<string, readonly string[]>(
+      entityKeys.map((key) => [
+        key,
+        entitySummary[key].detail.sections.map((section) => section.id),
+      ]),
+    );
+    const anySection = new Set([...sectionIds.values()].flat());
+    const problems = NATIVE_COVERAGE_KINDS.flatMap((kind) =>
+      entries(kind).flatMap(([id, entry]) => {
+        if (entry.status !== "handoff") return [];
+        const { section, query, label } = entry.web;
+        const qualified =
+          kind === "detailSlot" ||
+          kind === "listSlot" ||
+          kind === "structuredField";
+        const sections = qualified
+          ? new Set(sectionIds.get(id.split(".")[0] ?? "") ?? [])
+          : anySection;
+        const target =
+          section === undefined
+            ? Object.keys(query ?? {}).length > 0
+            : sections.has(section);
+        return target && label.trim() !== "" && entry.reason.trim() !== ""
+          ? []
+          : [`${kind} ${id}`];
+      }),
+    );
+    expect(problems).toEqual([]);
+  });
 
   it("gives exactly the implemented hero actions a runner plan", () => {
     const implemented = entries("heroAction")

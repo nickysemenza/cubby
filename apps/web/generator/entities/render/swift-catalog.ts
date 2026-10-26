@@ -889,11 +889,27 @@ export const renderSwiftEntityCatalog = (
     return Object.fromEntries(
       ids.map((id) => {
         const entry = requireNativeCoverage(kind, id);
+        if (entry.status !== "handoff") return [id, { status: entry.status }];
+        // A detail slot hands off to a section its own record declares (the web hash).
+        const [owner] = id.split(".");
+        const section = entry.web.section;
+        if (
+          kind === "detailSlot" &&
+          section !== undefined &&
+          !entities.some(
+            (entity) =>
+              entity.key === owner &&
+              entity.inspector.detail.sections.some(
+                (declared) => declared.id === section,
+              ),
+          )
+        )
+          throw new Error(
+            `native-coverage.ts: detailSlot ${JSON.stringify(id)} hands off to section ${JSON.stringify(section)}, which ${owner} does not declare`,
+          );
         return [
           id,
-          entry.status === "unsupported"
-            ? { status: entry.status, reason: entry.reason }
-            : { status: entry.status },
+          { status: entry.status, web: entry.web, reason: entry.reason },
         ];
       }),
     );

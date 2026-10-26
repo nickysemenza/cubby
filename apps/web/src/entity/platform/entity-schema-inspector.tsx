@@ -126,6 +126,7 @@ function SchemaFacts({ entity, wide }: { entity: Entity; wide?: boolean }) {
       `${row.mcpOwner ?? "none"} · ${row.mcpOperations.join(", ") || "no operations"}`,
     ],
     ["Native calls", row.native ?? dash],
+    ["Web only (native hands off)", row.nativeHandoffs ?? dash],
     [
       "Repository port",
       repository
