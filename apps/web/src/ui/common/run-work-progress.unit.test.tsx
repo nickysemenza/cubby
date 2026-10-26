@@ -33,14 +33,15 @@ const sample = runWorkSample.parse({
 
 describe("work progress", () => {
   it.each(["paused", "needs_review", "failed"])(
-    "withholds historical rate and ETA for a %s Run",
+    "withholds a live rate and ETA for a %s Run",
     (status) => {
       const work = readRunWorkPhase(sample, status, now);
       render(<RunWorkProgress sample={work} status={status} />);
       expect(
         screen.getByRole("progressbar", { name: "Discovering connections" }),
       ).toHaveTextContent("12,400 / 55,000");
-      expect(runProgressValue(work)).not.toContain("/min");
+      // Only a finished Run's recorded rate may appear; never a live one.
+      expect(runProgressValue(work)).not.toMatch(/\/min(?! recorded)/);
       expect(runProgressValue(work)).not.toContain("left");
     },
   );
