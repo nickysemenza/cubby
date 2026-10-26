@@ -115,6 +115,10 @@ Declared entity fields carry the same facts to web, Apple and MCP:
   `failed` Run with a successor reads `retried` (its open work moved; its own
   findings stay on its sections), and an `execution_limit` stop reads
   `waiting_for_funding`. The stored `status` stays the filter.
+  Web photo Run details replace a predecessor's photo review with a link to its
+  successor, its current status and the number of groups awaiting approval.
+  Retained predecessor photos are not shown as ungrouped once work continues in
+  a successor. The pointer reuses the Run controls' lineage links and live read.
 - Image job: `waitingOn` for open rows.
 - Device: `updateRequired`, `inactive` (not seen for 7 days or never) and
   `appleIntelligenceAvailable` (the hello's actual-image description

@@ -11,7 +11,6 @@ import type { RunOut } from "@cubby/schemas/run";
 import { runInputsErased } from "@cubby/schemas/run-fields";
 import { humanize } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
@@ -28,7 +27,6 @@ import {
   agentUrl,
   runHasAgent,
   useAgentObservation,
-  useAgentReviewSync,
   type AgentConversationObservationSnapshot,
 } from "~/features/run/agent-observation";
 import { AgentTranscript } from "~/features/run/agent-transcript";
@@ -37,6 +35,7 @@ import {
   PhotoImportRunView,
   PhotoRunGroupingAction,
 } from "~/features/run/photo-run-detail";
+import { RunLink, useRun } from "~/features/run/run-lineage";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { aiFunding } from "~/integrations/tanstack-query/generated/catalog/aiFunding.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
@@ -787,31 +786,6 @@ function ActiveAgentSurface({ run }: { run: RunDetail }) {
 }
 
 /**
- * The run's live read (agent transcript, operations, evidence), polled while
- * the run is active. Every run slot shares it through this one query key.
- * A live agent stream invalidates it on each agent change, so the poll
- * relaxes to a safety net for writes the agent does not make.
- */
-function useRun(runId: RunOut["id"]) {
-  const [agentLive, setAgentLive] = useState(false);
-  const query = useQuery({
-    ...runOperations.work.queryOptions({ runId }),
-    refetchInterval: (current) =>
-      current.state.data && ACTIVE_STATUSES.has(current.state.data.status)
-        ? agentLive
-          ? 30_000
-          : 3_000
-        : false,
-  });
-  const live = useAgentReviewSync(
-    query.data?.publicId ?? "",
-    Boolean(query.data && isActiveRun(query.data) && runHasAgent(query.data)),
-  );
-  useEffect(() => setAgentLive(live), [live]);
-  return query;
-}
-
-/**
  * `useRun`, plus — for the one slot that owns it — a refresh of the Run
  * record once the run moves on (a control action, or the agent finishing):
  * the hero and fields read the record, not this poll.
@@ -958,22 +932,6 @@ export function RunPhotoBatch({ record }: { record: RunOut }) {
         </>
       )}
     </RunGate>
-  );
-}
-
-function RunLink({ label, publicId }: { label: string; publicId: string }) {
-  return (
-    <Row wrap gap="sm" align="center" justify="between" className="text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <a
-        className="inline-flex items-center gap-1 font-mono text-xs text-primary hover:underline"
-        href={runHref(publicId)}
-        aria-label={`${label} ${publicId}`}
-      >
-        {publicId}
-        <ArrowSquareOutIcon className="size-3" />
-      </a>
-    </Row>
   );
 }
 
