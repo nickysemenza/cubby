@@ -660,7 +660,10 @@ writes. The Product adapter uses `prepareProductIdentityPage` and
 `publishProductIdentityChunk` for shared preparation and publication. Source
 edges enroll in guarded chunks of at most 25 sources, 25 business
 publications and 100 enrollment edges before enumeration receipts, and
-canonical pairs share decision waves. [#3320](https://github.com/nickysemenza/cubby/issues/3320)
+canonical pairs share decision waves. Standalone catalog evaluation reuses the
+candidate read's source eligibility instead of repeating its snapshot; pair
+evaluation and publication retain their current-input fences. Semantic coverage
+uses the shared direct/fanout dirty-mark probe once per page. [#3320](https://github.com/nickysemenza/cubby/issues/3320)
 owns full synthetic throughput acceptance.
 Full re-check scheduling remains gated on that acceptance; no production
 throughput improvement is established by the page lifecycle alone.

@@ -366,7 +366,7 @@ export async function prepareProductIdentityPairRequests(
 }
 
 /** Batch unlocked evidence preparation; each publication still checks its own fence. */
-export async function prepareFencedProductIdentityPairs(
+async function prepareFencedProductIdentityPairs(
   db: Database,
   expected: readonly {
     productIds: readonly [ProductId, ProductId];

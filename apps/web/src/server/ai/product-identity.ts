@@ -5,16 +5,7 @@ import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { getErrorMessage } from "@cubby/shared";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
-import {
-  and,
-  eq,
-  inArray,
-  isNull,
-  isNotNull,
-  like,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { chunk } from "es-toolkit";
 import { z } from "zod";
@@ -32,7 +23,6 @@ import {
 } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, isTransaction } from "~/server/db/helpers";
-import { derivedDirty } from "~/server/db/retained-tables";
 import {
   product,
   entityExternalId,
@@ -117,7 +107,11 @@ export async function retrieveProductIdentityCandidatePage(
   });
   const results = new Map<
     ProductId,
-    { candidates: ProductId[]; coverage: ProductIdentityRetrievalCoverage }
+    {
+      eligible: boolean;
+      candidates: ProductId[];
+      coverage: ProductIdentityRetrievalCoverage;
+    }
   >();
   const idsBySource = new Map<ProductId, Set<ProductId>>();
   if (sourceIds.length) {
@@ -219,6 +213,7 @@ export async function retrieveProductIdentityCandidatePage(
       semanticNeighbours: { status: "unconfigured" },
     };
     results.set(seed.id, {
+      eligible: !isMiscProduct(seed.name),
       candidates: [...ids].filter((other) => other !== seed.id).sort(),
       coverage,
     });
@@ -325,16 +320,7 @@ async function retrieveProductIdentitySemanticPage(
       }),
     );
     const observed = new Map(observations.map((row) => [row.id, row]));
-    const [pending] = await client
-      .select({ ref: derivedDirty.ref })
-      .from(derivedDirty)
-      .where(
-        or(
-          eq(derivedDirty.target, "product.searchDocument"),
-          like(derivedDirty.target, "product.searchDocument@%"),
-        ),
-      )
-      .limit(1);
+    // The shared coverage probe includes direct and fanout dirty marks.
     const missing = await searchCoverageIncomplete(db, config, ["product"]);
     for (const wave of chunk(ids, 4))
       await Promise.all(
@@ -372,9 +358,7 @@ async function retrieveProductIdentitySemanticPage(
               ),
             ];
             const complete =
-              !pending &&
-              !missing &&
-              !(raw.length === 100 && candidates.length < 20);
+              !missing && !(raw.length === 100 && candidates.length < 20);
             result.set(id, {
               candidates: candidates.slice(0, 20),
               coverage: complete
@@ -409,6 +393,7 @@ export async function retrieveProductIdentityCandidates(
 ) {
   return (
     (await retrieveProductIdentityCandidatePage(db, [id])).sources.get(id) ?? {
+      eligible: false,
       candidates: [],
       coverage: {
         droppedClaims: [],
@@ -541,15 +526,18 @@ export async function prepareProductIdentityCatalog(
   db: Database,
   id: ProductId,
 ) {
-  const [outcome] = await prepareProductIdentityPage(db, [
-    { key: id, kind: "product", recordId: id },
-  ]);
-  if (!outcome?.valid)
-    throw new Error("Product identity evidence changed during preparation");
+  const { eligible, candidates, coverage } =
+    await retrieveProductIdentityCandidates(db, id);
+  // Candidate retrieval already read the source name and deletion state.
+  if (!eligible) return { eligible: false, pairs: [], coverage: null };
+  const pairs = await prepareProductIdentityPairs(
+    db,
+    candidates.map((other) => [id, other]),
+  );
   return {
-    eligible: outcome.eligible,
-    pairs: outcome.pairs,
-    coverage: outcome.coverage,
+    eligible: true,
+    pairs: [...pairs.values()],
+    coverage,
   };
 }
 export async function evaluatePreparedProductIdentityPair(
