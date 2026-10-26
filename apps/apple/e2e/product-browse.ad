@@ -1,8 +1,8 @@
 context platform=ios timeout=60000
 
 open com.nickysemenza.cubby
-wait "role=Button label=Find" 30000
-click "role=Button label=Find"
+wait "role=Button label=Search" 30000
+click "role=Button label=Search"
 wait "role=SearchField label=\"Search Cubby\" editable=true" 30000
 fill "role=SearchField label=\"Search Cubby\" editable=true" "${PRODUCT_ID}"
 wait "id=search.result.${PRODUCT_ID}" 30000

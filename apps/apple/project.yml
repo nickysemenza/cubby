@@ -210,7 +210,7 @@ targets:
             UIApplicationShortcutItemTitle: Scan
             UIApplicationShortcutItemIconSymbolName: barcode.viewfinder
           - UIApplicationShortcutItemType: cubby://audit
-            UIApplicationShortcutItemTitle: Start audit
+            UIApplicationShortcutItemTitle: Audit a shelf
             UIApplicationShortcutItemIconSymbolName: checklist
           - UIApplicationShortcutItemType: cubby://search
             UIApplicationShortcutItemTitle: Search
