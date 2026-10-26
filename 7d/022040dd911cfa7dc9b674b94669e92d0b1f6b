@@ -1,0 +1,27 @@
+apps/apple/App/Shared/AppShell/Navigator.swift
+  s_d1942d66b01930::t_bfbff46110e9e7 376-378
+apps/apple/App/Shared/Entity/List/BrowseRootView.swift
+  s_d1942d66b01930::t_673c4d2807ad55 4-5,7-8,14-56,59-64,80,83-87,132,140-143,146-148
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_d1942d66b01930::t_93c1b4f480b30b 36-38,42,59-67
+apps/apple/App/iOS/RootTabsView.swift
+  s_d1942d66b01930::t_cfa50a91766ed4 6,69
+apps/apple/DESIGN.md
+  s_d1942d66b01930::t_67da72fc3aeeda 129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7d022040dd911cfa7dc9b674b94669e92d0b1f6b",
+  "prompts": {},
+  "sessions": {
+    "s_d1942d66b01930": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a18-bc3d-75d0-b561-557917c51865",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
