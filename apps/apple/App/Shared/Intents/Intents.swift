@@ -105,13 +105,34 @@ struct OpenEntityIntent: AppIntent {
     }
 }
 
+/// Resolves any Location, including ones without stock, while preserving ambiguous matches
+/// for Shortcuts to disambiguate. Saved parameters are constrained by kind too.
+nonisolated struct AuditLocationIntentQuery: EntityStringQuery {
+    func entities(for identifiers: [String]) async throws -> [CubbyEntity] {
+        let locations = identifiers.filter { EntityCatalog.descriptor(forShortcode: $0)?.key == .location }
+        return try await CubbyEntityQuery().entities(for: locations)
+    }
+
+    func entities(matching string: String) async throws -> [CubbyEntity] {
+        let client = try await IntentContext.client()
+        return try await client.search(string, kinds: [.location], limit: 10).compactMap(
+            CubbyEntity.init(hit:))
+    }
+
+    func suggestedEntities() async throws -> [CubbyEntity] {
+        try await entities(for: RecentEntities.ids())
+    }
+}
+
 /// Starts a walk-the-shelf recount, optionally scoped to a location.
 struct StartAuditIntent: AppIntent {
     static let title: LocalizedStringResource = "Walk the Shelf"
     static let description = IntentDescription("Starts a recount of every stocked bin under a location.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
-    @Parameter(title: "Location")
+    @Parameter(
+        title: "Location", requestDisambiguationDialog: "Which location would you like to recount?",
+        query: AuditLocationIntentQuery())
     var location: CubbyEntity?
 
     nonisolated static var parameterSummary: some ParameterSummary {
@@ -119,7 +140,12 @@ struct StartAuditIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        let scope = location.flatMap { $0.kind == .location ? LocationCode($0.id) : nil }
+        // A connected Shortcut can still supply another kind despite the location-only query.
+        // Only an omitted value may select the household-wide scope.
+        if let location, location.kind != .location {
+            throw $location.needsValueError("Choose a location to recount instead of \(location.title).")
+        }
+        let scope = location.map { LocationCode($0.id) }
         await IntentContext.open(.audit(location: scope))
         return .result()
     }
