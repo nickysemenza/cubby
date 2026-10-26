@@ -6,7 +6,15 @@ import {
 import type { RunId } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
@@ -19,7 +27,7 @@ import {
   aiEvaluationRequest,
   run,
 } from "~/server/db/retained-tables";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJobs } from "~/server/generic/jobs/repo/jobs";
 
 /** Matches AiEvaluation's generated SQL key, including UTF-8 length prefixes. */
 export const evaluationSlotKey = ({
@@ -36,36 +44,6 @@ export const evaluationSlotKey = ({
     .map((value) => `${new TextEncoder().encode(value).length}:${value}`)
     .join("");
 
-/** Deterministic attempt suffixes keep historical work keys unique without chains. */
-export async function availableEvaluationWorkKey(
-  db: Database,
-  {
-    baseKey,
-    slotKey,
-    updatingId,
-  }: { baseKey: string; slotKey: string; updatingId?: string },
-): Promise<string> {
-  const rows = await getDb(db)
-    .select({ id: aiEvaluation.id, workKey: aiEvaluation.workKey })
-    .from(aiEvaluation)
-    .where(
-      and(
-        eq(aiEvaluation.slotKey, slotKey),
-        or(
-          eq(aiEvaluation.workKey, baseKey),
-          sql`starts_with(${aiEvaluation.workKey}, ${`${baseKey}:attempt:`})`,
-        ),
-      ),
-    );
-  const held = new Set(
-    rows.filter((row) => row.id !== updatingId).map((row) => row.workKey),
-  );
-  let key = baseKey;
-  for (let attempt = 1; held.has(key); attempt++)
-    key = `${baseKey}:attempt:${attempt}`;
-  return key;
-}
-
 export const PENDING_AI_STATES: readonly (typeof aiEvaluation.$inferSelect)["state"][] =
   [
     aiEvaluationState.enum.queued,
@@ -78,29 +56,60 @@ const inputIdentity = (
   provenance: (typeof aiEvaluation.$inferSelect)["provenance"],
 ) => JSON.stringify(aiProvenance.omit({ model: true }).parse(provenance));
 
+type EvaluationEnrollment = Omit<
+  typeof aiEvaluation.$inferInsert,
+  "id" | "workKey"
+> & { workKey?: string; shareKey: string | null };
+
 /** A request retains its own demand and receipt; only pending execution is shared. */
 export async function enqueueAiEvaluation(
   db: Database,
-  input: Omit<typeof aiEvaluation.$inferInsert, "id" | "workKey"> & {
-    workKey?: string;
-    shareKey: string | null;
-  },
+  input: EvaluationEnrollment,
   sequence = 0,
 ) {
+  const [row] = await enqueueAiEvaluations(db, [{ input, sequence }]);
+  if (!row) throw new Error("AI evaluation enrollment returned no slot");
+  return row;
+}
+
+/** Stable slot locks, one history read, and set enrollment for a finite producer page. */
+export async function enqueueAiEvaluations(
+  db: Database,
+  inputs: readonly { input: EvaluationEnrollment; sequence?: number }[],
+) {
+  if (!inputs.length) return [];
+  const unique = new Map(
+    inputs.map(({ input }) => [evaluationSlotKey(input), input]),
+  );
+  const keys = [...unique.keys()].sort();
   return withTransactionDatabase(db, async (tx) => {
-    const slotKey = evaluationSlotKey(input);
     await getDb(tx).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${slotKey}, 0))`,
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(key, 0)) FROM unnest(ARRAY[${sql.join(
+        keys.map((key) => sql`${key}`),
+        sql`, `,
+      )}]::text[]) key ORDER BY key`,
     );
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const id = crypto.randomUUID();
-      const [latest] = await getDb(tx)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.slotKey, slotKey))
-        .orderBy(desc(aiEvaluation.createdAt), desc(aiEvaluation.id))
-        .limit(1);
-      const baseKey = input.workKey ?? `${input.executionKind}:${id}`;
+    const history = await getDb(tx)
+      .select()
+      .from(aiEvaluation)
+      .where(inArray(aiEvaluation.slotKey, keys))
+      .orderBy(aiEvaluation.id)
+      .for("update");
+    history.sort(
+      (a, b) =>
+        b.createdAt.getTime() - a.createdAt.getTime() ||
+        b.id.localeCompare(a.id),
+    );
+    const result = new Map<string, typeof aiEvaluation.$inferSelect>();
+    const updates: {
+      row: typeof aiEvaluation.$inferSelect;
+      input: EvaluationEnrollment;
+      workKey: string;
+    }[] = [];
+    const fresh: (typeof aiEvaluation.$inferInsert)[] = [];
+    for (const [key, input] of unique) {
+      const rows = history.filter((row) => row.slotKey === key);
+      const latest = rows[0];
       // Unchanged input joins in-flight work. Automatic refresh also reuses
       // a completed result, so unchanged targets are never re-checked; a
       // member's request owns a fresh evaluation, which the response cache
@@ -113,97 +122,80 @@ export async function enqueueAiEvaluation(
             input.executionKind === aiExecutionKind.enum.ai_refresh))
           ? latest
           : undefined;
-      const workKey = await availableEvaluationWorkKey(tx, {
-        baseKey,
-        slotKey,
-      });
-      const [inserted] = reusable
-        ? []
-        : await getDb(tx)
-            .insert(aiEvaluation)
-            .values({ ...input, id, workKey })
-            .onConflictDoNothing()
-            .returning();
-      const existing =
-        inserted ??
-        reusable ??
-        (
-          await getDb(tx)
-            .select()
-            .from(aiEvaluation)
-            .where(
-              or(
-                and(
-                  eq(aiEvaluation.slotKey, slotKey),
-                  inArray(aiEvaluation.state, ["queued", "retry_wait"]),
-                ),
-                input.workKey ? eq(aiEvaluation.workKey, workKey) : undefined,
-                input.shareKey
-                  ? and(
-                      eq(aiEvaluation.shareKey, input.shareKey),
-                      inArray(aiEvaluation.state, PENDING_AI_STATES),
-                    )
-                  : undefined,
-              ),
-            )
-            .orderBy(
-              sql`CASE WHEN ${aiEvaluation.state} IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.retry_wait}) THEN 0 ELSE 1 END`,
-            )
-            .limit(1)
-        )[0];
-      // A completion can release the pending key between the insert and read.
-      if (!existing) continue;
-      if (
-        !inserted &&
-        (existing.state === "queued" || existing.state === "retry_wait") &&
-        inputIdentity(existing.provenance) !== inputIdentity(input.provenance)
-      ) {
-        const updated = await getDb(tx)
-          .update(aiEvaluation)
-          .set({
-            target: input.target,
-            provenance: input.provenance,
-            snapshot: input.snapshot,
-            result: null,
-            receipt: null,
-            error: null,
-            shareKey: input.shareKey,
-            workKey: await availableEvaluationWorkKey(tx, {
-              baseKey,
-              slotKey,
-              updatingId: existing.id,
-            }),
-          })
-          .where(
-            and(
-              eq(aiEvaluation.id, existing.id),
-              inArray(aiEvaluation.state, ["queued", "retry_wait"]),
-            ),
-          )
-          .returning();
-        if (!updated[0]) continue;
-        Object.assign(existing, updated[0]);
+      const open = rows.find(
+        (row) => row.state === "queued" || row.state === "retry_wait",
+      );
+      const existing = reusable ?? open;
+      const id = existing?.id ?? crypto.randomUUID();
+      const base = input.workKey ?? `${input.executionKind}:${id}`;
+      const held = new Set(
+        rows.filter((row) => row.id !== existing?.id).map((row) => row.workKey),
+      );
+      let workKey = base;
+      for (let attempt = 1; held.has(workKey); attempt++)
+        workKey = `${base}:attempt:${attempt}`;
+      if (!existing) fresh.push({ ...input, id, workKey });
+      else {
+        result.set(key, existing);
+        if (
+          (existing.state === "queued" || existing.state === "retry_wait") &&
+          inputIdentity(existing.provenance) !== inputIdentity(input.provenance)
+        )
+          updates.push({ row: existing, input, workKey });
       }
-      await getDb(tx)
-        .insert(aiEvaluationRequest)
-        .values({
-          runId: input.runId,
-          evaluationId: existing.id,
-          sequence,
-        })
-        .onConflictDoNothing();
-      if (inserted)
-        await enqueueJob(tx, {
-          key: `ai-evaluation:${existing.id}`,
-          kind: "ai.evaluation",
-          input: { evaluationId: existing.id },
-          priority: existing.executionKind === "ai_refresh" ? 0 : 10,
-        });
-      return existing;
     }
-    throw new Error(
-      "AI execution changed repeatedly while registering its request",
+    if (updates.length) {
+      const values = sql.join(
+        updates.map(
+          ({ row, input, workKey }) =>
+            sql`(${row.id}::uuid, ${JSON.stringify(input.target)}::jsonb, ${JSON.stringify(input.provenance)}::jsonb, ${JSON.stringify(input.snapshot)}::jsonb, ${input.shareKey}::text, ${workKey}::text)`,
+        ),
+        sql`, `,
+      );
+      const changed = await getDb(tx)
+        .update(aiEvaluation)
+        .set({
+          target: sql`page.target`,
+          provenance: sql`page.provenance`,
+          snapshot: sql`page.snapshot`,
+          shareKey: sql`page.share_key`,
+          workKey: sql`page.work_key`,
+          result: null,
+          receipt: null,
+          error: null,
+          updatedAt: new Date(),
+        })
+        .from(
+          sql`(VALUES ${values}) page(id, target, provenance, snapshot, share_key, work_key)`,
+        )
+        .where(sql`${aiEvaluation.id}=page.id`)
+        .returning(getTableColumns(aiEvaluation));
+      for (const row of changed) result.set(row.slotKey, row);
+    }
+    const created = fresh.length
+      ? await getDb(tx).insert(aiEvaluation).values(fresh).returning()
+      : [];
+    for (const row of created) result.set(row.slotKey, row);
+    await getDb(tx)
+      .insert(aiEvaluationRequest)
+      .values(
+        inputs.map(({ input, sequence }, index) => ({
+          runId: input.runId,
+          evaluationId: result.get(evaluationSlotKey(input))!.id,
+          sequence: sequence ?? index,
+        })),
+      )
+      .onConflictDoNothing();
+    await enqueueJobs(
+      tx,
+      created.map((row) => ({
+        key: `ai-evaluation:${row.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: row.id },
+        priority: row.executionKind === "ai_refresh" ? 0 : 10,
+      })),
     );
+    return inputs.map(({ input }) => result.get(evaluationSlotKey(input))!);
   });
 }
 

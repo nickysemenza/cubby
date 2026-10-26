@@ -81,6 +81,18 @@ flowchart LR
 A registered identifier has one Product owner. Accepted order lines retain
 their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs can support exact identity. A raw SKU stays a ranking clue even when current Sources corroborate matching size, color and pack: other relevant dimensions can differ. A shared model/style identifier stays a ranking clue. The existing durable Product identity Decision selects literal color, size and pack spans from retained Sources, then judges each relation as same, different or unknown. Each side carries its actual Source and Product IDs, current field fingerprint, exact quote and UTF-16 span offsets. Stored receipts retain the exact Decision requests and outcomes, actual model and policy dependencies. Validation checks those bindings and currentness; the semantic relation remains a source-grounded model judgment. A quote containing several possible variants stays unknown unless selected-variant evidence explicitly binds the chosen literal. There is no title keyword classifier or inferred pack default.
 
+Product evaluation pages load candidate edges, accepted identifier claims,
+photos and canonical pair history in sets. Each source and pair retains its own
+evidence digest; issuer and activation changes invalidate every affected digest.
+Preparation holds no transaction across inference. Publication chunks contain at
+most 25 outcomes, take pair locks in stable order and publish immutable evidence
+in sets. Repeated requests for a pair share one publication while retaining their
+own execution receipts. Supersession and activation write replayable projection
+Feedback, carrying member suppression forward and leaving historical conflicts
+as verification guards. Publication preserves the caller's explicit actionability
+judgment; ordinary detector evaluation makes only exact identity actionable.
+Similarity alone never makes a pair actionable.
+
 Preparation, review reads, Problems, proposals and merges consume stored evidence without model calls. Every Product merge entry point checks all pairs among the combined Products, including loser-to-loser pairs, after acquiring Product and identifier parent locks and before mutation. Inference exclusions never bypass merge safety. Source or Product edits retire current pair actions. A historical grounded contradiction remains a verification guard after its support changes or disappears: a new agent proposal or exact-identifier outage fallback cannot clear it. Fresh current grounded evidence must address the conflicting dimensions and acknowledge the prior conflict lineage before merging can proceed. Partial or uncertain grounding leaves that guard pending. A recorded contradiction between structured model values also stays pending when a supporting Source disappears; current Source-bound agreeing model values clear only that model-specific reason. Exact identifier admission remains separate from semantic variant evidence. A confirmed variant contradiction under an exact claim exposes a conflict
 without assigning the identifier twice. Shared URLs and partial variant words
 remain clues for review.

@@ -22,7 +22,10 @@ import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
 } from "~/server/domains/connection/repo/field-connections";
-import { prepareProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
+import {
+  prepareProductPairPublications,
+  publishProductPairPublications,
+} from "~/server/domains/product/repo/match/product-match-candidate";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
@@ -157,14 +160,24 @@ export async function prepareEntityConnections(
       evaluateProductIdentity(db, recordId, runId, ports.productIdentityPorts),
     );
     if (identity.failure) throw new Error(identity.failure);
-    for (let offset = 0; offset < identity.pairs.length; offset += 16)
-      for (const publish of await prepareProductPairPublications(
+    for (let offset = 0; offset < identity.pairs.length; offset += 16) {
+      const prepared = await prepareProductPairPublications(
         db,
-        identity.pairs.slice(offset, offset + 16),
-      ))
+        identity.pairs
+          .slice(offset, offset + 16)
+          .map((input, index) => ({ key: String(index), input })),
+      );
+      if (prepared.length !== identity.pairs.slice(offset, offset + 16).length)
+        throw new Error("Product pair evidence changed during inference");
+      for (const publication of prepared)
         publishers.push(async (transactionDb) => {
-          await publish(transactionDb);
+          const [result] = await publishProductPairPublications(transactionDb, [
+            publication,
+          ]);
+          if (!result?.valid)
+            throw new Error("Product pair evidence changed during inference");
         });
+    }
   }
   publishers.push(
     ...(await stage("fieldConnections", () =>

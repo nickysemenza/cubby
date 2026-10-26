@@ -15,6 +15,7 @@ import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
   prepareProductIdentityPair,
   prepareProductIdentityPairs,
+  productIdentityPairKey,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
@@ -238,12 +239,14 @@ describe("retained Product identity conflict guards", () => {
       model: "SYNTH-SAME",
     });
     const thirdId = await recordId(ctx.db, third.id, "product");
-    const [samePair, unrelated] = await prepareProductIdentityPairs(ctx.db, [
+    const pairs = await prepareProductIdentityPairs(ctx.db, [
       [ids[1], ids[0]],
       [ids[0], thirdId],
     ]);
-    expect(samePair).toEqual(await prepareProductIdentityPair(ctx.db, ids));
-    expect(unrelated).toMatchObject({
+    expect(pairs.get(productIdentityPairKey(ids))).toEqual(
+      await prepareProductIdentityPair(ctx.db, ids),
+    );
+    expect(pairs.get(productIdentityPairKey([ids[0], thirdId]))).toMatchObject({
       verification: "unknown",
       priorConflictIds: [],
     });

@@ -7,15 +7,23 @@ import {
   type JobPage,
   type JobWaitReason,
 } from "@cubby/schemas/job";
-import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
+import {
+  runStatus,
+  runPurpose,
+  runTrigger,
+  VISIBLE_RUN_PURPOSES,
+} from "@cubby/schemas/run-fields";
+import { generateShortcode } from "@cubby/shared";
 import {
   and,
   eq,
+  getTableColumns,
   gt,
   inArray,
   lte,
   not,
   notInArray,
+  ne,
   or,
   type SQL,
   sql,
@@ -26,6 +34,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, related } from "~/server/db/helpers/related";
+import { repositorySavepoint } from "~/server/db/repository-access.boundary";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase as withTransactionDatabase,
@@ -43,6 +52,11 @@ import {
   jobInvalidationCapture,
   run,
 } from "~/server/db/retained-tables";
+import {
+  insertPayloadsWithIdentities,
+  isEntityShortcodeCollision,
+} from "~/server/entity-kernel/repo/entity-identity-writer";
+import { findPgError } from "~/server/errors/db-errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { JobSupersededError } from "../errors";
@@ -156,6 +170,86 @@ export async function enqueueJob(
   });
 }
 
+/** Insert fresh keyed Jobs and identities in sets. Invalidation stays with enqueueJob. */
+export async function enqueueJobs(
+  db: Database,
+  submitted: readonly EnqueueJobInput[],
+): Promise<JobRow[]> {
+  const inputs = [
+    ...new Map(
+      submitted.map((value) => {
+        const input = enqueueJobInput.parse(value);
+        return [input.key, input] as const;
+      }),
+    ).values(),
+  ];
+  if (!inputs.length) return [];
+  if (inputs.some((input) => input.invalidate))
+    throw new Error("Batch Job enrollment does not invalidate existing Jobs");
+  return withTransactionDatabase(db, async (tx) => {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const existing = await getDb(tx)
+        .select()
+        .from(job)
+        .where(
+          inArray(
+            job.key,
+            inputs.map((input) => input.key),
+          ),
+        )
+        .orderBy(job.id)
+        .for("update");
+      if (
+        existing.some((row) =>
+          inputs.some(
+            (input) => input.key === row.key && input.kind !== row.kind,
+          ),
+        )
+      )
+        throw new Error("Job key belongs to a different kind");
+      const held = new Set(existing.map((row) => row.key));
+      const fresh = inputs.filter((input) => !held.has(input.key));
+      if (!fresh.length) return existing;
+      try {
+        const created = await repositorySavepoint(tx, (client) =>
+          insertPayloadsWithIdentities(
+            client,
+            job,
+            "job",
+            fresh.map((input) => ({
+              key: input.key,
+              kind: input.kind,
+              input: input.input,
+              shortcode: generateShortcode("job"),
+              subjectKind: input.subjectKind ?? null,
+              subjectId: input.subjectId ?? null,
+              runId: input.runId ? parseEntityId("run", input.runId) : null,
+              priority: input.priority ?? 0,
+              maxAttempts: input.maxAttempts ?? DEFAULT_JOB_MAX_ATTEMPTS,
+              recoveryTimeoutMs: input.recoveryTimeoutMs ?? null,
+              lastUsefulProgressAt: input.recoveryTimeoutMs ? new Date() : null,
+              availableAt: input.availableAt ?? new Date(),
+            })),
+          ),
+        );
+        return [...existing, ...created];
+      } catch (error) {
+        if (
+          !isEntityShortcodeCollision(error, "Job") &&
+          !(
+            findPgError(error)?.code === "23505" &&
+            findPgError(error)?.constraint === "Job_key_unique"
+          )
+        )
+          throw error;
+      }
+    }
+    throw new Error(
+      "Could not enroll Job page after repeated key/code collisions",
+    );
+  });
+}
+
 /**
  * A durable invalidation this Job has not observed yet (`JobInvalidation`):
  * outstanding work even while the Job row itself reads `completed`.
@@ -163,21 +257,12 @@ export async function enqueueJob(
  */
 export const unobservedJobInvalidation = (
   options: { restartsPass?: true } = {},
-) => {
-  const pending = related(
-    jobInvalidationCapture,
-    (c) => sql`${c.key} = ${outer(job.key)} AND NOT ${c.observed}`,
-  );
-  return options.restartsPass
-    ? pending
-        .join(
-          jobInvalidation,
-          (policy, c) =>
-            sql`${policy.key} = ${c.key} AND ${policy.restartsPass}`,
-        )
-        .exists()
-    : pending.exists();
-};
+) =>
+  // OFFSET keeps this finite key set out of a correlated nested-loop plan.
+  // Bulk claims must not rescan every capture for every unrelated Job.
+  sql<boolean>`${job.key} IN (SELECT DISTINCT capture.key FROM "JobInvalidationCapture" capture
+    ${options.restartsPass ? sql`JOIN "JobInvalidation" policy ON policy.key=capture.key AND policy."restartsPass"` : sql``}
+    WHERE NOT capture.observed OFFSET 0)`;
 
 /**
  * `unobservedJobInvalidation` as key membership, for predicates that scan
@@ -357,8 +442,28 @@ const runOwningJob = () =>
     .exists();
 
 /** Whether the outer `"Job"` row belongs to a running, member-visible Run. */
-export const jobRunOwned = () =>
-  sql<boolean>`("Job"."runId" IS NOT NULL AND ${runOwningJob()})`;
+export const jobRunOwned = () => {
+  const demand = related(
+    run,
+    (requester) => sql`(
+      (${requester.id}=e."runId" AND NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" withdrawn WHERE withdrawn."evaluationId"=e.id AND withdrawn."runId"=${requester.id} AND withdrawn."cancelledAt" IS NOT NULL))
+      OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" demand WHERE demand."evaluationId"=e.id AND demand."runId"=${requester.id} AND demand."cancelledAt" IS NULL)
+    )`,
+  )
+    .where((requester) =>
+      and(
+        eq(requester.status, runStatus.enum.running),
+        inArray(requester.purpose, VISIBLE_RUN_PURPOSES),
+        or(
+          ne(requester.purpose, "ai_refresh"),
+          ne(requester.trigger, "scheduled"),
+        ),
+        sql`${requester.retiredAt} IS NULL`,
+      )!,
+    )
+    .exists();
+  return sql<boolean>`(("Job"."runId" IS NOT NULL AND ${runOwningJob()}) OR ("Job".kind='ai.evaluation' AND "Job".key IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e WHERE ${demand})))`;
+};
 
 /** Run execution and work of any active Run bypass background admission. */
 const jobCapExempt = () =>
@@ -367,6 +472,42 @@ const jobCapExempt = () =>
     (r) =>
       sql`${r.id} = ${outer(job.runId)} AND ${r.status} = ${runStatus.enum.running}`,
   ).exists()})`;
+
+/** Shared with single claims: a page reserves capacity through its live per-target leases. */
+async function admitJobKind(
+  tx: Database,
+  kind: string,
+  now: Date,
+  pageToken?: string,
+) {
+  const policy = jobKindPolicy(kind);
+  const cap = policy.maxInFlight;
+  const maxPages =
+    pageToken === undefined ? undefined : policy.maxInFlightPages;
+  if (cap === undefined && maxPages === undefined) return true;
+  // Match #3322's cross-Worker fence. Never wait while holding candidate Jobs.
+  const admission = await getDb(tx).execute<{ locked: boolean }>(sql`
+    SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${kind}`}, 0)) AS locked`);
+  if (!admission.rows[0]?.locked) return false;
+  const [live] = await getDb(tx)
+    .select({
+      count: sql<number>`count(*)::int`,
+      otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${pageToken ?? null}::uuid))::int`,
+    })
+    .from(job)
+    .where(
+      and(
+        eq(job.kind, kind),
+        eq(job.state, "running"),
+        gt(job.leaseExpiresAt, now),
+        not(jobCapExempt()),
+      ),
+    );
+  return (
+    (cap === undefined || (live?.count ?? 0) < cap) &&
+    (maxPages === undefined || (live?.otherPages ?? 0) < maxPages)
+  );
+}
 
 const kindLimits = Object.keys(JOB_KIND_POLICY).map((kind) => {
   const policy = jobKindPolicy(kind);
@@ -390,7 +531,7 @@ const fairlyOrderedDueJobs = (
   { excludeIds = [], excludeKinds = [] }: DueJobSelection = {},
 ) => sql`
   WITH active_runs AS MATERIALIZED (
-    SELECT id, purpose IN (${sql.join(
+    SELECT id, "retiredAt" IS NULL AND NOT (purpose = ${runPurpose.enum.ai_refresh} AND trigger = ${runTrigger.enum.scheduled}) AS member_demand, purpose IN (${sql.join(
       VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
       sql`, `,
     )}) AS visible
@@ -402,18 +543,26 @@ const fairlyOrderedDueJobs = (
     -- enter the timed scan just to test a correlated invalidation EXISTS.
     -- Pending keys are distinct and the wake branch excludes timed Jobs, so
     -- UNION ALL preserves one candidate per Job without hashing the backlog.
-    SELECT id, kind, priority, "updatedAt", "availableAt", "runId" FROM "Job"
+    SELECT id, key, kind, priority, "updatedAt", "availableAt", "runId" FROM "Job"
     WHERE ${scheduledDue(now)}
       AND ${notInArray(job.kind, [...UNDRAINED_JOB_KINDS])}
     UNION ALL
-    SELECT "Job".id, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."availableAt", "Job"."runId"
+    SELECT "Job".id, "Job".key, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."availableAt", "Job"."runId"
     FROM pending JOIN "Job" USING (key) WHERE ${drainedDue(now)}
       AND (${scheduledDue(now)}) IS NOT TRUE
   ), due AS MATERIALIZED (
     SELECT source.id, source.kind, source.priority, source."updatedAt", source."availableAt",
-      coalesce(active_runs.visible, false) AS run_owned,
+      (coalesce(active_runs.visible, false) OR coalesce(demand.visible, false)) AS run_owned,
+      coalesce(page_e.feature, source.kind) AS service_key,
       (source.kind = 'run.execute' OR active_runs.id IS NOT NULL) AS cap_exempt
     FROM due_source source LEFT JOIN active_runs ON active_runs.id = source."runId"
+    LEFT JOIN "AiEvaluation" page_e ON source.kind='ai.evaluation' AND source.key='ai-evaluation:' || page_e.id::text
+    LEFT JOIN LATERAL (
+      SELECT true AS visible FROM active_runs requester WHERE requester.visible AND requester.member_demand AND (
+        (requester.id=page_e."runId" AND NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" withdrawn WHERE withdrawn."evaluationId"=page_e.id AND withdrawn."runId"=requester.id AND withdrawn."cancelledAt" IS NOT NULL))
+        OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" request WHERE request."evaluationId"=page_e.id AND request."runId"=requester.id AND request."cancelledAt" IS NULL)
+      ) LIMIT 1
+    ) demand ON page_e.id IS NOT NULL
     WHERE true
       ${
         excludeIds.length
@@ -460,25 +609,52 @@ const fairlyOrderedDueJobs = (
       SELECT "lastClaimedAt" FROM "Job" WHERE kind = backlog.kind AND "lastClaimedAt" IS NOT NULL
       ORDER BY "lastClaimedAt" DESC LIMIT 1
     ) latest ON true
-  ), eligible AS (
-    SELECT candidate.*, served.last_served, backlog.weight
+  ), services AS MATERIALIZED (
+    SELECT DISTINCT kind, service_key FROM due
+  ), feature_served AS (
+    SELECT services.*, latest."lastClaimedAt" AS feature_last_served
+    FROM services LEFT JOIN LATERAL (
+      SELECT claimed."lastClaimedAt" FROM "Job" claimed
+      JOIN "AiEvaluation" evaluation ON claimed.key='ai-evaluation:' || evaluation.id::text
+      WHERE services.kind='ai.evaluation' AND claimed.kind=services.kind
+        AND evaluation.feature=services.service_key AND claimed."lastClaimedAt" IS NOT NULL
+      ORDER BY claimed."lastClaimedAt" DESC LIMIT 1
+    ) latest ON true
+  ), feature_candidates AS (
+    SELECT candidate.*, served.last_served, backlog.weight, feature_served.feature_last_served
     FROM backlog JOIN capacity USING (kind) JOIN served USING (kind)
-    CROSS JOIN (VALUES (true, true), (false, true), (false, false)) lane(run_owned, cap_exempt)
+    JOIN feature_served USING (kind)
+    CROSS JOIN (VALUES (true, true), (true, false), (false, true), (false, false)) lane(run_owned, cap_exempt)
     CROSS JOIN LATERAL (
-      -- Nonexempt work is always backfill. Bound each exemption class before
-      -- merging by priority so a capped prefix cannot hide active-Run work.
+      -- Bound each feature/exemption class before ranking: a feature flood
+      -- cannot hide another feature or expand the window over the due set.
       SELECT due.* FROM due WHERE due.kind = backlog.kind
+        AND due.service_key = feature_served.service_key
         AND due.run_owned = lane.run_owned AND due.cap_exempt = lane.cap_exempt
       ORDER BY priority DESC, "updatedAt", "availableAt", id
       LIMIT CASE WHEN lane.cap_exempt THEN ${perKind}
         WHEN NOT capacity.page_available THEN 0 ELSE least(${perKind}, capacity.remaining) END
     ) candidate
+  ), feature_ranked AS (
+    SELECT *, row_number() OVER (
+      PARTITION BY run_owned, cap_exempt, kind, service_key ORDER BY priority DESC, "updatedAt", "availableAt", id
+    ) AS feature_position FROM feature_candidates
+  ), eligible AS (
+    SELECT candidate.* FROM backlog JOIN capacity USING (kind)
+    CROSS JOIN (VALUES (true, true), (true, false), (false, true), (false, false)) lane(run_owned, cap_exempt)
+    CROSS JOIN LATERAL (
+      SELECT feature_ranked.* FROM feature_ranked WHERE feature_ranked.kind=backlog.kind
+        AND feature_ranked.run_owned=lane.run_owned AND feature_ranked.cap_exempt=lane.cap_exempt
+      ORDER BY feature_position, feature_last_served NULLS FIRST, priority DESC, "updatedAt", "availableAt", id
+      LIMIT CASE WHEN lane.cap_exempt THEN ${perKind}
+        WHEN NOT capacity.page_available THEN 0 ELSE least(${perKind}, capacity.remaining) END
+    ) candidate
   ), ranked AS (
     SELECT *, row_number() OVER (
-      PARTITION BY run_owned, kind ORDER BY priority DESC, "updatedAt", "availableAt", id
+      PARTITION BY run_owned, kind ORDER BY feature_position, feature_last_served NULLS FIRST, priority DESC, "updatedAt", "availableAt", id
     ) AS position FROM eligible
   ), ordered AS (
-    SELECT id, kind, run_owned, cap_exempt,
+    SELECT id, kind, run_owned, cap_exempt, service_key,
       row_number() OVER (
         PARTITION BY run_owned
         ORDER BY ceil(position / weight), last_served NULLS FIRST, kind, position
@@ -556,6 +732,7 @@ async function readDrainDueJobs(
     kind: string;
     run_owned: boolean;
     cap_exempt: boolean;
+    service_key: string;
     class_position: number;
     owned_total: number;
     backfill_total: number;
@@ -579,13 +756,13 @@ async function readDrainDueJobs(
     )`
         : sql``
     }
-    SELECT id, kind, run_owned, cap_exempt, class_position::int,
+    SELECT id, kind, run_owned, cap_exempt, service_key, class_position::int,
       0 AS owned_total, 0 AS backfill_total, false AS projected, overall
     FROM ordered
     ${
       positionIds.length
         ? sql`UNION ALL
-      SELECT id, kind, run_owned, cap_exempt, class_position::int,
+      SELECT id, kind, run_owned, cap_exempt, service_key, class_position::int,
         owned_total::int, backfill_total::int, true AS projected, 0 AS overall
       FROM projection_ordered WHERE id IN (${sql.join(
         positionIds.map((id) => sql`${parseEntityId("job", id)}::uuid`),
@@ -601,19 +778,36 @@ async function readDrainDueJobs(
       kind: row.kind,
       runOwned: row.run_owned,
       capExempt: row.cap_exempt,
+      pageKey:
+        row.kind === "ai.evaluation"
+          ? JSON.stringify([row.service_key, row.run_owned, row.cap_exempt])
+          : null,
       classPosition: row.class_position,
     }));
-  const owned = pool.filter(
+  const anchors = new Set<string>();
+  const services = pool.filter((row) => {
+    if (!row.pageKey) return true;
+    if (anchors.has(row.pageKey)) return false;
+    anchors.add(row.pageKey);
+    return true;
+  });
+  const owned = services.filter(
     (row) => row.runOwned && row.classPosition <= seedLimit,
   );
-  const backfill = pool.filter(
+  const backfill = services.filter(
     (row) => !row.runOwned && row.classPosition <= seedLimit,
   );
   const reserved = backfillReserve(seedLimit, backfill.length);
   const leading = owned.slice(0, Math.max(0, seedLimit - reserved));
   const seeds = [...leading, ...backfill.slice(0, seedLimit - leading.length)];
   const selected = widenDrainSeeds(seeds, pool, limit, selection).map(
-    ({ id, kind, runOwned, capExempt }) => ({ id, kind, runOwned, capExempt }),
+    ({ id, kind, runOwned, capExempt, pageKey }) => ({
+      id,
+      kind,
+      runOwned,
+      capExempt,
+      pageKey,
+    }),
   );
   return { selected, projected: result.rows.filter((row) => row.projected) };
 }
@@ -625,6 +819,7 @@ function widenDrainSeeds(
     kind: string;
     runOwned: boolean;
     capExempt: boolean;
+    pageKey: string | null;
   }[],
   pool: typeof seeds,
   limit: number,
@@ -769,39 +964,11 @@ export async function claimJob(
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
-    const policy = jobKindPolicy(available.kind);
-    const maxInFlight = policy.maxInFlight;
-    const maxPages =
-      pageToken === undefined ? undefined : policy.maxInFlightPages;
     if (
-      (maxInFlight !== undefined || maxPages !== undefined) &&
-      !candidate.capExempt
-    ) {
-      // Selection is advisory. Serialize admission across Worker invocations,
-      // then count in a fresh READ COMMITTED statement before issuing a lease.
-      // Never wait here while holding a Job row another executor may need.
-      const admission = await getDb(tx).execute<{ locked: boolean }>(sql`
-        SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${available.kind}`}, 0)) AS locked`);
-      if (!admission.rows[0]?.locked) return null;
-      const live = await getDb(tx)
-        .select({
-          count: sql<number>`count(*)::int`,
-          otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${token}::uuid))::int`,
-        })
-        .from(job)
-        .where(
-          and(
-            eq(job.kind, available.kind),
-            eq(job.state, "running"),
-            gt(job.leaseExpiresAt, now),
-            not(jobCapExempt()),
-          ),
-        );
-      if (maxInFlight !== undefined && (live[0]?.count ?? 0) >= maxInFlight)
-        return null;
-      if (maxPages !== undefined && (live[0]?.otherPages ?? 0) >= maxPages)
-        return null;
-    }
+      !candidate.capExempt &&
+      !(await admitJobKind(tx, available.kind, now, pageToken))
+    )
+      return null;
     const moved = candidate.pendingCapture;
     const restart =
       moved &&
@@ -888,6 +1055,260 @@ export async function claimJob(
       ? { ...claimed, leaseToken: token, leaseExpiresAt: expires }
       : null;
   });
+}
+
+/** Claim a finite set in one transaction; each row retains independent ownership. */
+export async function claimJobPage(
+  db: Database,
+  options: { where: SQL; limit: number; leaseMs?: number },
+): Promise<JobClaim[]> {
+  const leaseMs = options.leaseMs ?? JOB_LEASE_MS;
+  if (
+    !Number.isInteger(options.limit) ||
+    options.limit < 1 ||
+    options.limit > 100
+  )
+    throw new Error("Job page size must be between 1 and 100");
+  if (!Number.isFinite(leaseMs) || leaseMs <= 0)
+    throw new Error("Job lease must be a positive finite duration");
+  const now = new Date();
+  return withTransactionDatabase(db, async (tx) => {
+    const selected = await getDb(tx)
+      .select({
+        row: job,
+        pendingCapture: unobservedJobInvalidation(),
+        markerRestartsPass: jobInvalidation.restartsPass,
+        capExempt: jobCapExempt(),
+      })
+      .from(job)
+      .leftJoin(jobInvalidation, eq(jobInvalidation.key, job.key))
+      .where(and(options.where, due(now)))
+      .orderBy(sql`${job.priority} DESC`, job.updatedAt, job.id)
+      .limit(options.limit)
+      .for("update", { of: job, skipLocked: true });
+    const denied = new Set<string>();
+    for (const kind of [
+      ...new Set(
+        selected
+          .filter((entry) => !entry.capExempt)
+          .map((entry) => entry.row.kind),
+      ),
+    ].sort())
+      if (!(await admitJobKind(tx, kind, now))) denied.add(kind);
+    // At cap=1 the entire page enters once; any surviving target lease keeps
+    // the kind occupied until the page finishes, including across Workers.
+    const candidates = selected.filter(
+      (entry) => entry.capExempt || !denied.has(entry.row.kind),
+    );
+    const exhausted: JobRow["id"][] = [];
+    const admitted = candidates.flatMap(
+      ({ row, pendingCapture, markerRestartsPass }) => {
+        const restart =
+          pendingCapture &&
+          (row.state === "completed" ||
+            row.cursor === null ||
+            markerRestartsPass === true);
+        const attempts = restart ? 0 : row.attempts;
+        const progress = restart
+          ? now
+          : (row.lastUsefulProgressAt ?? row.createdAt);
+        const { retry } = jobKindPolicy(row.kind);
+        if (
+          retry.exhaust &&
+          (row.recoveryTimeoutMs === null
+            ? attempts >= row.maxAttempts
+            : now.getTime() - progress.getTime() >= row.recoveryTimeoutMs)
+        ) {
+          exhausted.push(row.id);
+          return [];
+        }
+        return [
+          {
+            row,
+            restart,
+            attempts: retry.exhaust ? attempts + 1 : attempts,
+            token: crypto.randomUUID(),
+          },
+        ];
+      },
+    );
+    if (exhausted.length)
+      await getDb(tx)
+        .update(job)
+        .set({
+          state: "failed",
+          waitReason: null,
+          waitUntil: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          error: "Job exhausted its interrupted-execution recovery budget",
+          updatedAt: now,
+        })
+        .where(inArray(job.id, exhausted));
+    if (!admitted.length) return [];
+    const values = sql.join(
+      admitted.map(
+        ({ row, restart, attempts, token }) =>
+          sql`(${row.id}::uuid, ${token}::uuid, ${attempts}::int, ${restart}::boolean)`,
+      ),
+      sql`, `,
+    );
+    const rows = await getDb(tx)
+      .update(job)
+      .set({
+        state: "running",
+        waitReason: null,
+        waitUntil: null,
+        leaseToken: sql`page.token`,
+        leaseExpiresAt: new Date(now.getTime() + leaseMs),
+        attempts: sql`page.attempts`,
+        generation: sql`${job.generation} + CASE WHEN page.restart THEN 1 ELSE 0 END`,
+        cursor: sql`CASE WHEN page.restart THEN NULL ELSE ${job.cursor} END`,
+        result: sql`CASE WHEN page.restart THEN NULL ELSE ${job.result} END`,
+        error: sql`CASE WHEN page.restart THEN NULL ELSE ${job.error} END`,
+        lastUsefulProgressAt: sql`CASE WHEN page.restart AND ${job.recoveryTimeoutMs} IS NOT NULL THEN ${now.toISOString()}::timestamp ELSE ${job.lastUsefulProgressAt} END`,
+        lastClaimedAt: now,
+        updatedAt: now,
+      })
+      .from(sql`(VALUES ${values}) AS page(id, token, attempts, restart)`)
+      .where(sql`${job.id} = page.id`)
+      .returning(getTableColumns(job));
+    const restarted = admitted
+      .filter((entry) => entry.restart)
+      .map((entry) => entry.row.key);
+    if (restarted.length)
+      await getDb(tx)
+        .update(jobInvalidationCapture)
+        .set({ observed: true })
+        .where(
+          and(
+            inArray(jobInvalidationCapture.key, restarted),
+            eq(jobInvalidationCapture.observed, false),
+          ),
+        );
+    return rows.flatMap((row) =>
+      row.leaseToken && row.leaseExpiresAt
+        ? [
+            {
+              ...row,
+              leaseToken: row.leaseToken,
+              leaseExpiresAt: row.leaseExpiresAt,
+            },
+          ]
+        : [],
+    );
+  });
+}
+
+/** Exact claim relation used by page renewal, guards and settlement. */
+function jobClaimSet(
+  claims: readonly Pick<JobClaim, "id" | "leaseToken" | "generation">[],
+): SQL {
+  if (!claims.length) return sql`false`;
+  return sql`(${job.id}, ${job.leaseToken}, ${job.generation}) IN (VALUES ${sql.join(
+    claims.map(
+      (claim) =>
+        sql`(${claim.id}::uuid, ${claim.leaseToken}::uuid, ${claim.generation}::int)`,
+    ),
+    sql`, `,
+  )})`;
+}
+
+/** A lost token is returned separately by omission, never renewed with its siblings. */
+export async function renewJobPage(
+  db: Database,
+  claims: readonly JobClaim[],
+): Promise<string[]> {
+  if (!claims.length) return [];
+  const rows = await getDb(db)
+    .update(job)
+    .set({
+      leaseExpiresAt: new Date(Date.now() + JOB_LEASE_MS),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        jobClaimSet(claims),
+        eq(job.state, "running"),
+        sql`${job.leaseExpiresAt} > now()`,
+      ),
+    )
+    .returning({ id: job.id });
+  return rows.map((row) => row.id);
+}
+
+/** Return unadmitted claims without spending attempts; paused authority stays stopped. */
+export async function releaseJobPage(
+  db: Database,
+  claims: readonly JobClaim[],
+  state: "queued" | "paused" = "queued",
+) {
+  if (!claims.length) return;
+  await getDb(db)
+    .update(job)
+    .set({
+      state,
+      attempts: sql`greatest(0, ${job.attempts}-1)`,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      availableAt: new Date(Date.now() + 1000),
+      waitReason: null,
+      waitUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(and(jobClaimSet(claims), eq(job.state, "running")));
+}
+
+/** Lock and validate a set explicitly, independent of AsyncLocal target context. */
+export async function guardJobPage(
+  db: RepositoryQueryInput,
+  claims: readonly JobClaim[],
+): Promise<JobClaim[]> {
+  if (!claims.length) return [];
+  const rows = await getDb(db)
+    .select({ id: job.id })
+    .from(job)
+    .where(
+      and(
+        jobClaimSet(claims),
+        eq(job.state, "running"),
+        sql`${job.leaseExpiresAt} > now()`,
+        not(unobservedJobInvalidation({ restartsPass: true })),
+      ),
+    )
+    .orderBy(job.id)
+    .for("update");
+  const valid = new Set(rows.map((row) => row.id));
+  return claims.filter((claim) => valid.has(claim.id));
+}
+
+/** One final check/hook for an already guarded page; evidence and Jobs commit together. */
+export async function completeJobPage(
+  db: Database,
+  claims: readonly JobClaim[],
+) {
+  if (!claims.length) return;
+  await repositoryBeforeCommit(
+    db,
+    async (tx) => {
+      const valid = await guardJobPage(tx, claims);
+      if (valid.length !== claims.length) throw new JobSupersededError();
+      await getDb(tx)
+        .update(job)
+        .set({
+          state: "completed",
+          attempts: 0,
+          error: null,
+          waitReason: null,
+          waitUntil: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(jobClaimSet(claims));
+    },
+    { phase: "publication" },
+  );
 }
 
 /** The token, not the elapsed wall clock alone, owns publication. */

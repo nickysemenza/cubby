@@ -1,3 +1,4 @@
+import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
@@ -274,4 +275,60 @@ export async function storeAiEvaluationResult(
       .returning({ id: aiEvaluation.id });
     return Boolean(stored);
   });
+}
+
+/** Refresh coordinators need counts and pending identities, never inference snapshots. */
+export async function readAiRefreshWorkSummary(
+  db: Database,
+  runId: RunRow["id"],
+  attempt: number,
+) {
+  const where = and(
+    eq(aiEvaluation.runId, runId),
+    sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
+  );
+  const counts = await getDb(db)
+    .select({ state: aiEvaluation.state, count: sql<number>`count(*)::int` })
+    .from(aiEvaluation)
+    .where(where)
+    .groupBy(aiEvaluation.state);
+  const errors = await getDb(db)
+    .select({ error: aiEvaluation.error })
+    .from(aiEvaluation)
+    .where(and(where, sql`${aiEvaluation.error} IS NOT NULL`))
+    .orderBy(aiEvaluation.createdAt, aiEvaluation.id)
+    .limit(10);
+  const [diagnostic] = await getDb(db)
+    .select({
+      text: sql<
+        string | null
+      >`string_agg(${aiEvaluation.error}, ${"\n"} ORDER BY ${aiEvaluation.createdAt}, ${aiEvaluation.id})`,
+    })
+    .from(aiEvaluation)
+    .where(where);
+  const pending = await getDb(db)
+    .select({ id: aiEvaluation.id })
+    .from(aiEvaluation)
+    .where(and(where, inArray(aiEvaluation.state, PENDING_AI_STATES)))
+    .orderBy(aiEvaluation.createdAt, aiEvaluation.id)
+    .limit(2);
+  const tally = new Map(counts.map((row) => [row.state, row.count]));
+  return {
+    pending,
+    failureText: diagnostic?.text ?? null,
+    progress: aiRefreshProgress.parse({
+      attempt,
+      selected: counts.reduce((total, row) => total + row.count, 0),
+      queued: tally.get("queued") ?? 0,
+      running: tally.get("running") ?? 0,
+      retryWait: tally.get("retry_wait") ?? 0,
+      resultReady: tally.get("result_ready") ?? 0,
+      completed: tally.get("completed") ?? 0,
+      blocked: tally.get("blocked") ?? 0,
+      failed: tally.get("failed") ?? 0,
+      obsolete: tally.get("obsolete") ?? 0,
+      cancelled: tally.get("cancelled") ?? 0,
+      errors: errors.flatMap((row) => (row.error ? [row.error] : [])),
+    }),
+  };
 }

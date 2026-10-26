@@ -2,14 +2,22 @@ import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { jobWaitReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
+import { createLogger } from "@cubby/worker-tracing";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  claimAiEvaluationPage,
+  failAiEvaluationPage,
+} from "~/server/ai/repo/ai-evaluation";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/retained-tables";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
+import { JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
+import { renewJobPage } from "~/server/generic/jobs/repo/jobs";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
@@ -174,9 +182,13 @@ export const runJobHandler = defineJobHandler(
     ),
 );
 
-export const aiEvaluationJobHandler = defineJobHandler(
+const singleAiEvaluationJobHandler = defineJobHandler(
   aiEvaluationJobInput,
   async (db, claim, { evaluationId }) => {
+    if (claim.key !== `ai-evaluation:${evaluationId}`)
+      throw new Error(
+        "AI evaluation Job input does not match its execution key",
+      );
     const item = await (
       await import("~/server/domains/run/repo/ai-work-state")
     ).readAiEvaluation(db, evaluationId);
@@ -227,3 +239,86 @@ async function assertNotPaused(
       owner.dispatchError ?? "Mailbox requires authorization",
     );
 }
+
+/** Other features retain their existing handler until they provide a page adapter. */
+export const aiEvaluationJobHandler = {
+  ...singleAiEvaluationJobHandler,
+  async advancePage(
+    db: import("~/server/db").Database,
+    anchorId: string,
+  ): Promise<string> {
+    const { job, aiEvaluation } = await import("~/server/db/retained-tables");
+    const { parseEntityId } = await import("@cubby/schemas/identifiers");
+    const { sql } = await import("drizzle-orm");
+    const [anchor] = await getDb(db)
+      .select({ item: aiEvaluation, input: job.input })
+      .from(job)
+      .innerJoin(
+        aiEvaluation,
+        sql`${job.key}='ai-evaluation:' || ${aiEvaluation.id}::text`,
+      )
+      .where(eq(job.id, parseEntityId("job", anchorId)));
+    if (!anchor)
+      return advanceJob(db, anchorId, {
+        "ai.evaluation": singleAiEvaluationJobHandler,
+      });
+    const input = aiEvaluationJobInput.safeParse(anchor.input);
+    if (!input.success || input.data.evaluationId !== anchor.item.id)
+      return advanceJob(db, anchorId, {
+        "ai.evaluation": singleAiEvaluationJobHandler,
+      });
+    if (
+      anchor.item.executionKind !== "ai_refresh" ||
+      !["product", "product_pair"].includes(anchor.item.target.kind) ||
+      !(await readAiRefreshActivation(db))?.enabled
+    )
+      return advanceJob(db, anchorId, {
+        "ai.evaluation": singleAiEvaluationJobHandler,
+      });
+    const targets = await claimAiEvaluationPage(db, anchorId);
+    if (!targets.length) return "skipped";
+    const log = createLogger("ai-evaluation-page");
+    let renewing: Promise<void> | undefined;
+    const heartbeat = setInterval(() => {
+      if (!renewing)
+        renewing = renewJobPage(
+          db,
+          targets.map((entry) => entry.claim),
+        )
+          .then((renewed) => {
+            log.info("page leases renewed", {
+              renewed: renewed.length,
+              lost: targets.length - renewed.length,
+            });
+          })
+          .catch((error: unknown) => {
+            log.error("page lease renewal failed", { error });
+          })
+          .finally(() => {
+            renewing = undefined;
+          });
+    }, JOB_HEARTBEAT_MS);
+    try {
+      const { executeProductAiRefreshPage } =
+        await import("~/server/domains/run/service/ai-refresh");
+      await executeProductAiRefreshPage(db, targets);
+      return "succeeded";
+    } catch (error) {
+      await failAiEvaluationPage(
+        db,
+        targets.map((target) => ({
+          target,
+          state:
+            target.claim.attempts >= target.claim.maxAttempts
+              ? "failed"
+              : "retry_wait",
+          error: error instanceof Error ? error.message : String(error),
+        })),
+      );
+      return "failed";
+    } finally {
+      clearInterval(heartbeat);
+      await renewing;
+    }
+  },
+};
