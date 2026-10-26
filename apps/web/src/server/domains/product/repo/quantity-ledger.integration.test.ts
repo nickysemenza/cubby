@@ -1,13 +1,13 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { inventoryEntry, product } from "~/server/db/schema";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -25,6 +25,8 @@ import {
   hasUnknownAcquisitionLinesSql,
   unknownQuantityLinesReadSql,
   loadProductDetailQuantityLedgers,
+  loadProductPlacementFacts,
+  enrichProductRowsWithQuantityLedger,
   loadProductPickerQuantities,
   loadProductQuantityLedgers,
   loadProductQuantitySummaries,
@@ -592,5 +594,84 @@ describe("loadProductPickerQuantities", () => {
     expect(
       (await compare()).find((row) => row.id === mixed.entityId)?.batch,
     ).toBeNull();
+  });
+});
+
+describe("primary placement", () => {
+  const ctx = withTestDb();
+
+  it("chooses greatest stock, then recent activity, with a full path and null for absent stock", async () => {
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic placement tool" }),
+      ctx.actor,
+    );
+    const absent = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic unplaced tool" }),
+      ctx.actor,
+    );
+    const shelves = await Promise.all(
+      ["Synthetic older shelf", "Synthetic newer shelf"].map((name) =>
+        createLocationFixture(ctx.db, makeLocationInput({ name }), ctx.actor),
+      ),
+    );
+    const older = await createInventoryFixture(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        locationId: shelves[0]!.entityId,
+        amount: { value: 3, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const newer = await createInventoryFixture(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        locationId: shelves[1]!.entityId,
+        amount: { value: 2, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ updatedAt: new Date("2026-01-01") })
+      .where(eq(inventoryEntry.id, older.entityId));
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ updatedAt: new Date("2026-02-01") })
+      .where(eq(inventoryEntry.id, newer.entityId));
+    const load = () =>
+      loadProductPlacementFacts(ctx.db, [prod.entityId, absent.entityId]);
+    let facts = await load();
+    expect(facts.get(prod.entityId)).toEqual({
+      primaryPlacement: {
+        locationId: shelves[0]!.id,
+        path: "Home › Synthetic older shelf",
+        onHand: 3,
+      },
+      onHandUnits: 5,
+    });
+    expect(facts.get(absent.entityId)).toBeUndefined();
+    const [empty] = await enrichProductRowsWithQuantityLedger(ctx.db, [
+      { id: absent.entityId },
+    ]);
+    expect(empty?.primaryPlacement).toBeNull();
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ amountValue: 3 })
+      .where(eq(inventoryEntry.id, newer.entityId));
+    facts = await load();
+    expect(facts.get(prod.entityId)?.primaryPlacement.locationId).toBe(
+      shelves[1]!.id,
+    );
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ deletedAt: new Date() })
+      .where(eq(inventoryEntry.id, newer.entityId));
+    expect((await load()).get(prod.entityId)?.primaryPlacement.locationId).toBe(
+      shelves[0]!.id,
+    );
   });
 });

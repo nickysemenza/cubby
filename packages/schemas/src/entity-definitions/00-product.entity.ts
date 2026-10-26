@@ -2,7 +2,10 @@ import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
-import { productReadSchemas } from "../product-read-fields";
+import {
+  productPrimaryPlacement,
+  productReadSchemas,
+} from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
 import { type DerivedStoredInput, defineEntity } from "./definition.js";
 import {
@@ -833,6 +836,26 @@ export default defineEntity(
               .describe("Product name")
               .meta({ mock: "commerce.productName" })
               .optional(),
+          },
+        },
+        {
+          key: "primaryPlacement",
+          kind: "json",
+          nullable: true,
+          labelOverride: "Where",
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "inventory" }, { entity: "location" }],
+          },
+          display: {
+            width: "md",
+            readPath: "primaryPlacement.path",
+            mobile: { slot: "trailing", priority: 6 },
+          },
+          validation: {
+            read: productPrimaryPlacement.nullable(),
+            create: null,
+            update: null,
           },
         },
         {

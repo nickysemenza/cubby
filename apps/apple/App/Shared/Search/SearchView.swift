@@ -338,10 +338,7 @@ private struct SearchHitRow: View {
     let hit: SearchHit
 
     private var context: String? {
-        let parts = [hit.subtitle, hit.key.map { EntityCatalog[$0].singular }]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        hit.facts.isEmpty ? nil : hit.facts.joined(separator: " · ")
     }
 
     var body: some View {
@@ -373,7 +370,8 @@ private struct SearchHitRow: View {
                     SearchHitRow(
                         hit: SearchHit(
                             id: row.id, entityKind: "product", title: row.title, subtitle: row.subtitle,
-                            typeHint: nil, imageUrl: row.imageURL?.absoluteString, matchKind: .prefix,
+                            typeHint: nil, imageUrl: row.imageURL?.absoluteString, facts: [],
+                            matchKind: .prefix,
                             matchField: .title, matchReason: "name", matchTerms: []))
                 }
             }

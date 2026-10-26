@@ -3,6 +3,7 @@ import { emailOut } from "@cubby/schemas/email";
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { productPrimaryPlacement } from "@cubby/schemas/product";
 import {
   isServiceProductCategory,
   productCategorySummary,
@@ -114,11 +115,17 @@ export async function productStockSummary(
     { pageIndex: 0, pageSize: 1 },
     "page",
     undefined,
-    selectedListProjection("product", ["id", "onHandUnits", "category"]),
+    selectedListProjection("product", [
+      "id",
+      "onHandUnits",
+      "category",
+      "primaryPlacement",
+    ]),
   );
   const product = z
     .object({
       onHandUnits: z.number().nullable(),
+      primaryPlacement: productPrimaryPlacement.nullable(),
       category: productCategorySummary.nullable(),
     })
     .parse(products.data[0]);
@@ -135,6 +142,9 @@ export async function productStockSummary(
     limit: 3,
   });
   return [
+    ...(product.primaryPlacement
+      ? [{ kind: "note" as const, text: product.primaryPlacement.path }]
+      : []),
     {
       kind: "stats",
       figures: [

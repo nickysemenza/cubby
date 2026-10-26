@@ -101,7 +101,16 @@ export const productInventoryWithLocationOut = z.object({
   }),
 });
 
+export const productPrimaryPlacement = z.object({
+  locationId: z.string(),
+  path: z.string(),
+  onHand: z.number(),
+});
+
+export type ProductPrimaryPlacement = z.infer<typeof productPrimaryPlacement>;
+
 export const productQuantityFields = {
+  primaryPlacement: productPrimaryPlacement.nullable(),
   stockStatus: z.string().nullish(),
   stockStatusItems: displayItems,
   quantityLedger: productQuantityLedgerOut,

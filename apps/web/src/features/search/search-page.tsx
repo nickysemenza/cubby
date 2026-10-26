@@ -377,9 +377,9 @@ function SearchRow({
         >
           {item.title}
         </Link>
-        {item.subtitle && (
+        {item.facts.length > 0 && (
           <span className="block truncate text-xs text-muted-foreground">
-            {item.subtitle}
+            {item.facts.join(" · ")}
           </span>
         )}
         {group.linkedProduct && (
@@ -495,7 +495,7 @@ function ProductSearchRow({
             {group.primary.title}
           </Link>
           <span className="block truncate text-xs text-muted-foreground">
-            {[group.primary.subtitle, productFamilySummary(group)]
+            {[group.primary.facts.join(" · "), productFamilySummary(group)]
               .filter(Boolean)
               .join(" · ")}
           </span>
@@ -568,7 +568,7 @@ function MobileSearchResults({
                   <MobileCard
                     variant="row"
                     title={group.primary.title}
-                    subtitle={productFamilySummary(group)}
+                    subtitle={group.primary.facts.join(" · ")}
                     imageSlot={
                       <SearchResultMedia
                         item={group.primary}
@@ -613,10 +613,13 @@ function MobileSearchResults({
             title={item.title}
             subtitle={
               group.linkedProduct
-                ? [item.subtitle, `Linked to ${group.linkedProduct.title}`]
+                ? [
+                    item.facts.join(" · "),
+                    `Linked to ${group.linkedProduct.title}`,
+                  ]
                     .filter(Boolean)
                     .join(" · ")
-                : item.subtitle
+                : item.facts.join(" · ")
             }
             imageSlot={<SearchResultMedia item={item} variant="mobile" />}
             rightValues={[

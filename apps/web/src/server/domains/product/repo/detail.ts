@@ -27,6 +27,7 @@ import { enrichProductRowsWithPricing } from "~/server/domains/product/repo/pric
 import {
   EMPTY_QUANTITY_LEDGER,
   loadProductDetailQuantityLedgers,
+  loadProductPlacementFacts,
 } from "~/server/domains/product/repo/quantity-ledger";
 import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -93,6 +94,7 @@ export async function readProductDetail(
     row.id,
     row.category,
   );
+  const placementsPromise = loadProductPlacementFacts(context.db, [row.id]);
   const ownersPromise = loadProductOwners(context.db, [row.id]);
   const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
@@ -173,6 +175,7 @@ export async function readProductDetail(
     food,
     ownership,
     owners,
+    placements,
   ] = await Promise.all([
     pricingPromise,
     quantityPromise,
@@ -184,6 +187,7 @@ export async function readProductDetail(
     foodPromise,
     ownershipPromise,
     ownersPromise,
+    placementsPromise,
   ]);
   const coverImageUrl = covers.get(row.id) ?? null;
 
@@ -199,6 +203,7 @@ export async function readProductDetail(
   );
   return {
     ...mapped,
+    primaryPlacement: placements.get(row.id)?.primaryPlacement ?? null,
     unitPriceDetailLabel: productUnitPriceDetailLabel({ ...mapped, food }),
     ownershipEvidence: ownership,
     owners: owners.get(row.id) ?? [],

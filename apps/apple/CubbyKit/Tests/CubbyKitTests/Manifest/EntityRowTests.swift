@@ -202,6 +202,7 @@ struct EntityRowTests {
         let detail = try row.decode(ProductDetail.self)
         #expect(detail.id == ProductCode("PRD-2345"))
         #expect(detail.name == row.title)
+        #expect(detail.primaryPlacement?.path == "Home › Garage › Shelf A")
         #expect(detail.brandName == "Sample Manufacturer")
         #expect(detail.createdAt.timeIntervalSince1970 > 0)
         // The nutrition slot renders the server's display verbatim, so it must survive the typed decode.

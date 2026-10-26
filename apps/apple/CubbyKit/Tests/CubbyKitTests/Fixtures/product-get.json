@@ -76,6 +76,7 @@
   "commodity": false,
   "recipeUsages": [],
   "cookbooks": [],
+  "primaryPlacement": {"locationId": "LOC-5678", "path": "Home › Garage › Shelf A", "onHand": 2},
   "quantityLedger": {
     "acquiredUnits": 0,
     "exitedUnits": 0,

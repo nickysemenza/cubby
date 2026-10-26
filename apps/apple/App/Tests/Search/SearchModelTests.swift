@@ -169,8 +169,20 @@ struct SearchModelTests {
     }
 
     nonisolated private static func operationInput(_ request: URLRequest) -> JSONValue {
-        guard let data = request.httpBody,
-            let envelope = try? JSONDecoder().decode(JSONValue.self, from: data)
+        // URLSession supplies a body stream on the simulator as well as inline bodies on host tests.
+        var data = request.httpBody ?? Data()
+        if request.httpBody == nil, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            while true {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                guard count >= 0 else { return .null }
+                if count == 0 { break }
+                data.append(contentsOf: buffer.prefix(count))
+            }
+        }
+        guard let envelope = try? JSONDecoder().decode(JSONValue.self, from: data)
         else { return .null }
         return envelope["input"] ?? .null
     }
@@ -180,7 +192,7 @@ struct SearchModelTests {
             [
                 "id": "PRD-2345", "entityKind": "product", "title": title,
                 "subtitle": NSNull(), "typeHint": NSNull(), "imageUrl": NSNull(), "matchKind": "prefix",
-                "matchField": "title", "matchReason": "", "matchTerms": [title],
+                "matchField": "title", "matchReason": "", "matchTerms": [title], "facts": [],
             ]
         ]
         return try! JSONSerialization.data(withJSONObject: object)

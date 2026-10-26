@@ -1,14 +1,13 @@
-import {
-  TEST_HOME_ID,
-  TEST_HOME_SHORTCODE,
-  withTestDb,
-} from "tooling/test-setup";
+import { TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createLocationFixture,
+  createInventoryFixture,
+  createProductFixture,
+  makeProductInput,
   makeLocationInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -36,7 +35,7 @@ describe("search labels and location paths", () => {
     );
   });
 
-  it("returns root-first structured ancestors for a typed location hit", async () => {
+  it("returns a preformatted root-first path for a typed location hit", async () => {
     const parent = await createLocationFixture(
       ctx.db,
       makeLocationInput({ name: "Synthetic instrument room" }),
@@ -58,9 +57,43 @@ describe("search labels and location paths", () => {
       limit: 10,
     });
     const hit = hits.find((item) => item.id === child.id);
-    expect(hit?.locationPath).toEqual([
-      { id: TEST_HOME_SHORTCODE, name: "Home" },
-      { id: parent.id, name: "Synthetic instrument room" },
+    expect(hit?.facts).toEqual([
+      "Home › Synthetic instrument room › Synthetic brass shelf",
+    ]);
+  });
+  it("hydrates Product and inventory facts from current stock rather than indexed subtitles", async () => {
+    const prod = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic facts wrench" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic facts drawer" }),
+      ctx.actor,
+    );
+    const inventory = await createInventoryFixture(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 2.5, unit: "each" },
+      },
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", prod.entityId);
+    await refreshSearchDocument(ctx.db, "inventory", inventory.entityId);
+    const hits = await findSearchHits(ctx.db, {
+      query: "Synthetic facts wrench",
+      entityKinds: ["product", "inventory"],
+      limit: 10,
+    });
+    expect(hits.find((hit) => hit.id === prod.id)?.facts).toEqual([
+      "Home › Synthetic facts drawer",
+      "2.5 on hand",
+    ]);
+    expect(hits.find((hit) => hit.id === inventory.id)?.facts).toEqual([
+      "Home › Synthetic facts drawer",
     ]);
   });
 });

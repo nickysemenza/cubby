@@ -2030,6 +2030,19 @@ These assertions do not prove scale, cache warmth or deployment provenance;
 response versions remain independently observed. Invocation/warmup, concurrency,
 pagination and input equality fingerprints retain their existing meanings.
 
+Product complete list and detail reads carry `primaryPlacement` (nullable), computed
+in the quantity batch: the live location with the greatest on-hand amount, then
+most recent stock activity, then public location code. Its path includes ancestors
+and the location joined with `›`; identity Locations count as one owned unit.
+Service Products have no placement. The field is read-only and is the default
+column after Name, with a mobile trailing projection of its path.
+Search hits carry at most three ordered, preformatted `facts`: Products show their
+primary path and a known total on-hand label, Locations and Inventory show their
+full location path, and other kinds have none. Search destinations preserve these
+facts. Search rows and typed search pickers consume them directly; no structured
+`locationPath` field remains on a hit. Grouped inventory placement payloads retain
+their own `locationPath` string.
+
 ## Filters and search
 
 Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.

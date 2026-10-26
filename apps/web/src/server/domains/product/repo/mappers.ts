@@ -453,6 +453,7 @@ export const dbProductToListAPI = (
     expenseTotal: Number(productData.expenseTotal),
     purchaseDate: productData.purchaseDate,
     owners: productData.owners ?? [],
+    primaryPlacement: productData.primaryPlacement ?? null,
     ...deriveProductQuantitySummary(
       inventoryEntry,
       productData.quantityLedger,
@@ -614,6 +615,7 @@ export const dbProductToAPI = (
       recipeCount:
         cb.recipes?.filter((recipe) => isNotDeleted(recipe)).length ?? 0,
     })),
+    primaryPlacement: productData.primaryPlacement ?? null,
     ...deriveProductQuantitySummary(
       mappedInventoryEntry,
       productData.quantityLedger,
