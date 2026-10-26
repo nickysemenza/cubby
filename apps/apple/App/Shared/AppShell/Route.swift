@@ -106,12 +106,13 @@ enum AppSection: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// Mac sidebar destinations, retained independently of the phone tabs.
+    /// Numbered top-level destinations: the phone tabs, or the Mac Go menu in sidebar order. Dev
+    /// (⌘0) and Settings (⌘,) have their own commands, so neither takes a number.
     static var tabs: [AppSection] {
         #if os(iOS)
             [.today, .capture, .browse, .search]
         #else
-            allCases
+            [.today, .activity, .capture, .photos, .browse, .search, .graph]
         #endif
     }
 }

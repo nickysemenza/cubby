@@ -280,8 +280,32 @@ struct NavigationTests {
         #else
             #expect(navigator.section == .dev)
             #expect(navigator.paths[.dev] == [])
-            #expect(AppSection.tabs.contains(.dev))
+            // ⌘0 is Dev's own command; it is not numbered beside the sidebar's sections.
+            #expect(!AppSection.tabs.contains(.dev))
         #endif
+    }
+
+    @Test func menuCommandsTargetTheRecordInFrontThenTheList() {
+        let navigator = Navigator()
+        let handoff = WebHandoff(baseURL: URL(string: "https://cubby.example.invalid")!)
+        func url() -> String? { navigator.commandTarget.map { handoff.url($0.webTarget).absoluteString } }
+
+        navigator.section = .browse
+        navigator.browseKey = .expense
+        #expect(url() == "https://cubby.example.invalid/expenses")
+
+        navigator.selectedRecords[.browse] = record(.expense, "EXP-4K7M")
+        #expect(url() == "https://cubby.example.invalid/EXP-4K7M")
+
+        navigator.paths[.browse] = [.entityDetail(.product, id: "PRD-4K7M")]
+        #expect(url() == "https://cubby.example.invalid/PRD-4K7M")
+
+        navigator.section = .activity
+        navigator.selectedActivity = .serverRun("RUN-4K7M")
+        #expect(url() == "https://cubby.example.invalid/RUN-4K7M")
+
+        navigator.section = .today
+        #expect(navigator.commandTarget == nil)
     }
 
     #if os(iOS)

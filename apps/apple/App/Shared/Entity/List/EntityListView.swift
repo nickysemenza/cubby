@@ -22,6 +22,8 @@ private struct EntityListSearchModifier: ViewModifier {
     @Binding var text: String
     @Binding var isPresented: Bool
     let prompt: String
+    let plural: String
+    var focused: FocusState<Bool>.Binding
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -30,7 +32,11 @@ private struct EntityListSearchModifier: ViewModifier {
                 content.searchable(
                     text: $text, isPresented: $isPresented, placement: .navigationBarDrawer, prompt: prompt)
             #else
+                // Edit › Find (⌘F) filters this list instead of leaving it for global Search.
                 content.searchable(text: $text, isPresented: $isPresented, prompt: prompt)
+                    .searchFocused(focused)
+                    .focusedSceneValue(
+                        \.listSearch, ListSearchAction(plural: plural) { focused.wrappedValue = true })
             #endif
         } else {
             content
@@ -63,6 +69,7 @@ struct EntityListView: View {
     @State private var creating = false
     @State private var searchText = ""
     @State private var searchPresented = false
+    @FocusState private var searchFieldFocused: Bool
     @State private var retainedSearchText = ""
     @State private var clearingSearchExplicitly = false
     @State private var cardDensity = ListPresentationChoice.cards
@@ -179,7 +186,9 @@ struct EntityListView: View {
                 text: $searchText,
                 isPresented: $searchPresented,
                 prompt: descriptor.primarySearch?.placeholder
-                    ?? "Search \(descriptor.plural.lowercased()) or shortcode"
+                    ?? "Search \(descriptor.plural.lowercased()) or shortcode",
+                plural: descriptor.plural,
+                focused: $searchFieldFocused
             )
         )
         .onChange(of: searchText) { _, value in applySearchText(value) }
@@ -793,6 +802,12 @@ struct EntityListView: View {
     }
 
     #if os(macOS)
+        /// Edit › Copy (⌘C) on the selected row puts its `RecordCopyText` on the pasteboard.
+        private func copyItems(_ id: String?, in rows: [EntityRow]) -> [String] {
+            guard let id, let row = rows.first(where: { $0.id == id }) else { return [] }
+            return [RecordCopyText.text(key: key, id: id, title: row.title)]
+        }
+
         private var tableSelection: Binding<String?> {
             Binding(
                 get: {
@@ -833,6 +848,12 @@ struct EntityListView: View {
     private func rowList(_ model: GenericEntityListModel) -> some View {
         List(selection: selection) { rows(model) }
             .listStyle(.plain)
+            #if os(macOS)
+                .copyable(
+                    copyItems(
+                        selection?.wrappedValue.flatMap { $0.key == key ? $0.id : nil },
+                        in: model.isSearching ? (model.searchModel?.rows ?? []) : model.rows))
+            #endif
             .navigationDestination(item: $openedRecord) { record in
                 RouteDestinationView(route: .entityDetail(record.key, id: record.id))
             }
@@ -1027,6 +1048,7 @@ struct EntityListView: View {
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: true))
                 .environment(\.defaultMinListRowHeight, EntityTableLayout.rowHeight)
+                .copyable(copyItems(tableSelection.wrappedValue, in: visibleRows))
                 .contextMenu(forSelectionType: String.self) { records in
                     if let id = records.first {
                         Button("Copy link", systemImage: "link") {
