@@ -581,23 +581,19 @@ struct GenericEntityEditModelTests {
         #expect(model.isDirty)
     }
 
-    @Test func validationForUnavailableFieldsRemainsVisibleAsASaveFailure() async throws {
+    @Test func validationForUnavailableFieldsPreservesRawServerDiagnostics() async throws {
         defer { EditStub.handler.withLock { $0 = nil } }
-        _ = capture { _ in
-            (
-                400,
-                Data(
-                    #"{"code":"VALIDATION","message":"Invalid input","validationIssues":[{"code":"custom","path":["data","id"],"message":"Record no longer exists"}]}"#
-                        .utf8)
-            )
-        }
+        let rejection = Data(
+            #"{"code":"VALIDATION","message":"Invalid input","validationIssues":[{"code":"custom","path":["data","id"],"message":"Record no longer exists"}],"diagnostics":{"origin":"server","operation":"entity.mutate","stage":"input","causes":[{"name":"ConstraintError","message":"underlying check failed","code":"23514"}]}}"#
+                .utf8)
+        _ = capture { _ in (400, rejection) }
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"),
             client: try makeClient(), original: Self.productOriginal)
         model.draft["name"] = "New name"
         #expect(!(await model.save()))
         #expect(model.fieldErrors.isEmpty)
-        #expect(model.bannerError == "data.id: Record no longer exists")
+        #expect(model.bannerError == String(decoding: rejection, as: UTF8.self))
         #expect(model.draft["name"] == "New name")
     }
 

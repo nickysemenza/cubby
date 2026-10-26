@@ -461,7 +461,11 @@ public final class GenericEntityEditModel {
             }
             fieldErrors = named
             nestedErrors = nested
-            if !unplaced.isEmpty { bannerError = unplaced.joined(separator: "\n") }
+            if apiError.detail?.diagnostics != nil {
+                bannerError = error.userMessage
+            } else if !unplaced.isEmpty {
+                bannerError = unplaced.joined(separator: "\n")
+            }
             return
         }
         bannerError = error.userMessage
