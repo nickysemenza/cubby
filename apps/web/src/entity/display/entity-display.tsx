@@ -197,10 +197,11 @@ const orderedListFields = (entity: Entity): DisplayField[] =>
 
 /**
  * Buckets a declared `display.width` into the shared table's fixed-layout
- * class. Four buckets can't reproduce every hand-tuned pixel width in the app
+ * class. Five buckets can't reproduce every hand-tuned pixel width in the app
  * (observed widths run from `w-20` to `w-64`); each bucket picks the class
  * closest to its cluster's center rather than the extremes, so this is a
  * deliberate approximation, not a literal replay of any one column's class.
+ * `xl` holds long prose (notes) wide enough to read a clause before it clips.
  */
 function widthClassName(
   width: DisplayField["display"]["width"],
@@ -218,6 +219,8 @@ function widthClassName(
       return "w-40";
     case "lg":
       return "w-56";
+    case "xl":
+      return "w-80";
     case null:
       return undefined;
   }

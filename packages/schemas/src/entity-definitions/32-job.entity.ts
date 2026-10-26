@@ -49,6 +49,8 @@ export default defineEntity({
     domain: null,
     description:
       "Durable background work, its executor, waits and diagnostics.",
+    // Executor diagnostics for operators; the work's own records open natively.
+    nativeBrowse: false,
     emptyState: {
       title: "No matching Jobs",
       description: "Background work appears here when it is scheduled.",

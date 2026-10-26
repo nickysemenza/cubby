@@ -455,9 +455,12 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
-      /** List column width bucket; the shared table maps it to a class. */
+      /**
+       * List column width bucket; the shared table maps it to a class and the
+       * Mac table to a width range. `xl` is for long prose such as notes.
+       */
       width: z
-        .enum(["xs", "sm", "md", "lg"])
+        .enum(["xs", "sm", "md", "lg", "xl"])
         .nullable()
         .optional()
         .default(null),
@@ -1508,6 +1511,15 @@ const buildMetadataSchemas = () => {
       domain: z.enum(WAYFINDING_DOMAINS).nullable(),
       /** One sentence for the records catalog and nav. */
       description: nonEmptyString(),
+      /**
+       * `false` keeps a web-only root (operator plumbing) out of native
+       * Browse and the native sidebar; its records still open natively from
+       * links. Web navigation ignores it.
+       */
+      nativeBrowse: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(true),
       emptyState: z
         .object({
           title: nonEmptyString(),

@@ -375,6 +375,11 @@ export const manifestWire = {
   }),
   EntityTimelineMode: raw({ default: "default", custom: "custom" }),
   PrimarySearchDescriptor: record({ key: "string", placeholder: "string" }),
+  EntityEmptyState: record({
+    title: "string",
+    description: "string",
+    actionLabel: "string?",
+  }),
   EntityDescriptor: record(
     {
       key: "EntityKey",
@@ -391,6 +396,8 @@ export const manifestWire = {
       recordEmojiField: "string~",
       recordIconEntityField: "string~",
       searchable: "boolean",
+      nativeBrowse: "boolean",
+      emptyState: "EntityEmptyState",
       primarySearch: "PrimarySearchDescriptor~",
       timeline: "EntityTimelineMode~",
       fields: "[FieldDescriptor]",
