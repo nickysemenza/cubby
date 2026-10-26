@@ -1,0 +1,23 @@
+apps/web/src/server/domains/vendor-account/repo/vendor-account-coverage.integration.test.ts
+  s_4f032629b22ae8::t_ac38e5cc935e14 72,118
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_4f032629b22ae8::t_124cab029b3ce6 260
+apps/web/src/server/generic/data-quality/repo/expense-checks.integration.test.ts
+  s_4f032629b22ae8::t_cbf4e12a11cb70 155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "50e7ab94e8125e31c7a2e9ee21f7720ffe895acc",
+  "prompts": {},
+  "sessions": {
+    "s_4f032629b22ae8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "45e3573a-1f3e-4def-b556-d6f649cef913",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
