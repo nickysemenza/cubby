@@ -1,0 +1,31 @@
+apps/apple/DESIGN.md
+  s_3d5778384758c7::t_6fd51e39aaa995 111-112
+apps/apple/App/Shared/DesignSystem/DraftDismissal.swift
+  s_3d5778384758c7::t_eb84f9ef687eb1 35-36,39,42-49,51
+apps/apple/App/Shared/Editors/EntityEditorSheet.swift
+  s_3d5778384758c7::t_d0b922fb896c6a 46,105,119-121,123-125,153,163,167-185,187-188,217,235,241,248,311,399
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_3d5778384758c7::t_1f3c61caf5596c 61,63
+apps/apple/App/Tests/Editors/EntityEditorDraftTests.swift
+  s_3d5778384758c7::t_2fb6a3b0a2e95e 40-41,46,51,55-93
+apps/apple/CubbyKit/Sources/CubbyKit/Edit/GenericEntityEditModel.swift
+  s_3d5778384758c7::t_b9df275462e812 21,46,68,81-86,181,439-440,442-449,452,464,515
+apps/apple/CubbyKit/Tests/CubbyKitTests/Edit/GenericEntityEditModelTests.swift
+  s_3d5778384758c7::t_2f34312dd44279 25-59,282-284,519,560-601
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3a5ccf8a97b703e5443d7068453299cd5c890bb4",
+  "prompts": {},
+  "sessions": {
+    "s_3d5778384758c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a2f-ac7e-72a3-9bd0-f7a7b2303131",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
