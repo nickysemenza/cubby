@@ -1,0 +1,19 @@
+packages/schemas/src/native-coverage.unit.test.ts
+  s_931718bbf1e269::t_6aa273f4c4649d 110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "de8833f13837dfc03f37ab6af587bc2485ba6d94",
+  "prompts": {},
+  "sessions": {
+    "s_931718bbf1e269": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a41-9a7e-73f3-b697-e6c6f52e51f3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
