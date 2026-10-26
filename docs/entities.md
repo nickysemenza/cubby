@@ -120,6 +120,11 @@ Domain rules supply the fallback; the generic framework
 owns its presentation and assignment intent. Generic form controls alone do not
 establish reuse of the resolution framework.
 
+Principal Expense project reads preserve live explicit Project → live Purchase
+default → household food fallback. The canonical scalar SQL checks uncorrelated
+live-Project id sets, avoiding a Project scan per Expense while retaining null
+short-circuiting and soft-delete behavior.
+
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
 generator, `server/db/computed/effective-field.ts`. `mode` says when the
