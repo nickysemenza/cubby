@@ -34,9 +34,16 @@ struct EntityDetailView: View {
         let titled =
             content
             .fieldGuideScreen()
-            .navigationTitle(descriptor.singular)
             #if os(iOS)
+                .navigationTitle(descriptor.singular)
                 .navigationBarTitleDisplayMode(.inline)
+            #else
+                // The window title, Window menu and Back history name the record; the kind is the
+                // subtitle. The cramped iPhone bar keeps the kind alone.
+                .navigationTitle(model?.row?.title ?? descriptor.singular)
+                .navigationSubtitle(model?.row == nil ? "" : descriptor.singular)
+                .copyable(
+                    model?.row.map { [RecordCopyText.text(key: key, id: $0.id, title: $0.title)] } ?? [])
             #endif
             .toolbar { detailToolbar }
         sheets(on: lifecycle(on: titled, model: model))
@@ -131,14 +138,22 @@ struct EntityDetailView: View {
                         .accessibilityIdentifier("detail.\(key.rawValue).edit")
                 }
             }
-            ToolbarItem {
-                ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+            #if os(iOS)
+                ToolbarItem {
+                    ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
                 }
-            }
+            #endif
             ToolbarItem {
                 Menu {
                     webMenuItems(row: row)
+                    #if os(macOS)
+                        // The Mac toolbar keeps Edit and More; Share joins Copy link here.
+                        ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    #endif
                     Button {
                         Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     } label: {

@@ -27,4 +27,9 @@ struct WebHandoffTests {
             url(.route(path: "/expenses", query: ["view": "analytics", "group": "month"]))
                 == "https://cubby.example.invalid/expenses?group=month&view=analytics")
     }
+
+    @Test func copyPutsTheShortcodeOrTheTitleForExternalIDs() {
+        #expect(RecordCopyText.text(key: .product, id: "PRD-4K7M", title: "Cedar shelf") == "PRD-4K7M")
+        #expect(RecordCopyText.text(key: .usdaFood, id: "12345", title: "Oats, rolled") == "Oats, rolled")
+    }
 }

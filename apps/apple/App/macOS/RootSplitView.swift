@@ -14,6 +14,8 @@ struct RootSplitView: View {
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var didRestoreSection = false
     @State private var browsing: NativeBrowserSession?
+    @State private var refresh = SceneRefresh()
+    @State private var creating: NewRecordRequest?
 
     private var isBrowser: Bool {
         model.navigator.section == .search || model.navigator.section == .browse
@@ -55,6 +57,25 @@ struct RootSplitView: View {
                 .disabled(!usesContentColumn)
                 .help("Show or hide detail (⌥⌘D)")
             }
+            ToolbarItem {
+                Button("Refresh", systemImage: "arrow.clockwise") { refresh.refresh() }
+                    .disabled(!refresh.isEnabled)
+                    .help("Refresh (⌘R)")
+            }
+        }
+        .environment(\.sceneRefresh, refresh)
+        .focusedSceneValue(\.nativeRefresh, refresh.action)
+        .focusedSceneValue(
+            \.sceneCommands,
+            SceneCommandActions(
+                target: model.navigator.commandTarget,
+                create: { creating = NewRecordRequest(key: $0) })
+        )
+        .sheet(item: $creating) { request in
+            EntityEditorSheet(key: request.key, mode: .create(prefill: [:])) { id in
+                model.navigator.open(.entity(request.key, id: id))
+            }
+            .environment(model)
         }
         .environment(
             \.sectionSelection,

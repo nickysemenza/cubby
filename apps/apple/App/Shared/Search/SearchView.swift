@@ -249,7 +249,22 @@ struct SearchContent: View {
             }
         }
         .listStyle(.plain)
+        #if os(macOS)
+            .copyable(copyItems(groups))
+        #endif
     }
+
+    #if os(macOS)
+        /// Edit › Copy (⌘C) on the selected hit puts its `RecordCopyText` on the pasteboard.
+        private func copyItems(_ groups: [SearchModel.ResultGroup]) -> [String] {
+            guard let selected = model.navigator.selectedRecords[.search],
+                let hit = groups.first(where: { $0.key == selected.key })?.hits.first(where: {
+                    $0.id == selected.id
+                })
+            else { return [] }
+            return [RecordCopyText.text(key: selected.key, id: hit.id, title: hit.title)]
+        }
+    #endif
 
     private func resultsGrid(
         _ groups: [SearchModel.ResultGroup], density: ListPresentationChoice
