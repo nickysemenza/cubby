@@ -138,9 +138,18 @@ Job budget bounds the expanded selection:
    the least recently claimed kind goes first; within a kind, priority, then
    age.
 
-The selector materializes the backlog weight once per kind. Numeric logarithms
-must not be evaluated for every candidate Job in a large backfill; the weight
-and all admission and ordering rules remain shared by selection and queue positions.
+Selection reads one database snapshot for fair seeds, reserved pages and batch
+widening. Timed Jobs and pending-capture wakes use separate scans, so terminal
+history is not searched to find pending captures. Run classification joins the
+active Runs once. Backlog counts still include all due Jobs after exclusions and
+compute the logarithmic weight once per kind. Each kind and ownership/exemption
+class contributes a bounded priority prefix before window ranking; an exempt routine Run cannot hide
+ordinary siblings needed to widen another selected page. The latest claim comes
+from the existing `(kind, lastClaimedAt)` index, including completed Jobs so that
+finishing a page never erases its service history. Queue positions reuse the same
+due snapshot and admitted selection; only their later-round projection ranks the
+full due backlog. Claim-time admission remains authoritative across concurrent
+drains.
 
 Job source writes also respect the derived drain's member-first ordering:
 root transactions in Job execution (including shared evaluation batches) mark
