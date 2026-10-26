@@ -1,0 +1,37 @@
+apps/web/src/entity/page/entity-page-header.tsx
+  s_34f0947f9f6a59::t_7700db84a29d77 1-5,13-17,56-59,67-70,76,81,111-129,224-226
+apps/web/src/entity/page/page.unit.test.tsx
+  s_34f0947f9f6a59::t_db8f78ec205811 136-161
+apps/web/src/server/domains/product/repo/detail.ts
+  s_34f0947f9f6a59::t_e24669dc90b155 1,59,194-202,216-227
+apps/web/src/server/domains/product/repo/quantity-ledger.integration.test.ts
+  s_34f0947f9f6a59::t_b419fc4712304c 3,12-13,23,661-708
+apps/web/src/server/entity-kernel/entity-operations.ts
+  s_34f0947f9f6a59::t_2add4406555b48 50,368-385
+apps/web/src/server/generic/entity-detail/repo/detail-breadcrumb.ts
+  s_34f0947f9f6a59::t_d62cd8427ada0e 1-89
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_34f0947f9f6a59::t_bd2873f32417c8 228
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_34f0947f9f6a59::t_0ec019bf20ac43 105-108
+packages/schemas/src/entity-detail-summary.ts
+  s_34f0947f9f6a59::t_e988854873d8a8 54-62
+packages/schemas/src/entity-read-media.ts
+  s_34f0947f9f6a59::t_82cdb0ab0ccd9b 5,25-26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7c73c0f9edc0552f9516dd96b7398bc57213496d",
+  "prompts": {},
+  "sessions": {
+    "s_34f0947f9f6a59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "121d83ba-ae8e-437b-8994-c2d0064b0126",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
