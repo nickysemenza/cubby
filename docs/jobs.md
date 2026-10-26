@@ -71,6 +71,8 @@ failure. A release with no delay also rings at once (best effort).
 
 `generic/jobs/repo/waiting-on.ts` is the single derivation of what a live Job
 waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
+Reads rank only the queues needed by the displayed statuses: device work does
+not rank the server drain, and leased or backing-off work needs no queue rank.
 `jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
 
 - `due`: claimable now; `aheadCount` in the drain's own selection order (the
