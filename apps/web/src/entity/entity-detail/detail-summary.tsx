@@ -1,6 +1,9 @@
 import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
-import type { DetailSummarySlot } from "@cubby/schemas/entity-detail-summary";
+import {
+  onDetailSurface,
+  type DetailSummarySlot,
+} from "@cubby/schemas/entity-detail-summary";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -269,8 +272,9 @@ export function DetailSummary<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   compact?: boolean;
 }) {
-  const slots: readonly DetailSummarySlot[] =
+  const declared: readonly DetailSummarySlot[] =
     entitySummary[entity].detail.summary;
+  const slots = declared.filter((slot) => onDetailSurface(slot, "web"));
   const id = record.id;
   const [showContext, setShowContext] = useState(false);
   const records = slots.filter((slot) => slot.kind === "records");
@@ -316,6 +320,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
         ]) ?? [],
     ),
   ];
+  // The first four slots are the glance; later context folds behind a toggle.
   const secondary = new Set(
     slots
       .slice(4)
@@ -356,7 +361,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
         className={cn(
           "grid grid-cols-1 border-y border-border sm:grid-cols-2 sm:[&>section:nth-child(odd)]:border-r",
           !compact &&
-            "xl:grid-cols-3 xl:[&>section]:border-r xl:[&>section:nth-child(3n)]:border-r-0",
+            "xl:grid-cols-4 xl:[&>section]:border-r xl:[&>section:nth-child(4n)]:border-r-0",
         )}
       >
         {slots.map((slot) => {
