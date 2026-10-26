@@ -1,3 +1,4 @@
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   emailFilters,
@@ -24,6 +25,7 @@ import {
   expense,
   product,
   feedback,
+  assessment,
   emailClassificationObservation,
   ledgerParty,
   email as emailTable,
@@ -43,7 +45,7 @@ import {
 } from "~/server/domains/email/repo/email-purchase-links";
 import {
   emailAcceptedEvidenceSql,
-  emailFeedbackObservationIdSql,
+  EMAIL_OBSERVATION_PUBLICATION_PREFIX,
   emailFeedbackClassificationSql,
   emailFeedbackHasClassificationSql,
   emailLinkedSql,
@@ -219,29 +221,35 @@ export async function hasAcceptedEmailAssociation(
 
 // Link order is relative to the list's scope filter, so it reads the scope
 // the request resolves.
-const emailScope = listPrepare((db, filters) =>
-  resolveEmailScope(db, emailScopeFilters.parse(filters)),
-);
+const emailScope = listPrepare(async (db, filters) => {
+  const parsed = emailScopeFilters.parse(filters);
+  return {
+    scope: await resolveEmailScope(db, parsed),
+    fixedLinkState: oneOrManyValues(parsed.linkState)?.length === 1,
+  };
+});
 const emailScopeFilters = emailFilters.pick({
   purchaseId: true,
   vendorId: true,
   vendorAccountId: true,
+  linkState: true,
 });
 
 // One scope record across the three filters (`resolveEmailScope`), so each
 // filter that names it applies the same condition.
-const inScope = emailScope.predicate((scope) =>
+const inScope = emailScope.predicate(({ scope }) =>
   scope ? emailInScopeSql(scope) : undefined,
 );
 
 const scaffold = listScaffold("email", emailTable, {
   derived: {
     // Ties read newest first in either direction.
-    linkState: emailScope.value((scope) => [
-      emailLinkRankSql(scope),
+    linkState: emailScope.value(({ scope, fixedLinkState }) => [
+      // A single included state fixes the rank; retain date and stable ties.
+      fixedLinkState ? sql`0::integer` : emailLinkRankSql(scope),
       { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
     ]),
-    scopeLinkState: emailScope.value((scope) => emailLinkStateSql(scope)),
+    scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
     linked: emailLinkedSql(),
     reviewConflict: emailReviewConflictSql(),
     purchaseId: inScope,
@@ -331,7 +339,7 @@ const emailRead = (
       const [associations, reviews, purchaseLinks, owners] = await Promise.all([
         rows.length === 0
           ? []
-          : await unwrapDb(db)
+          : unwrapDb(db)
               .select({
                 id: emailTable.id,
                 linked: emailLinkedSql(),
@@ -350,11 +358,12 @@ const emailRead = (
               ),
         rows.length === 0
           ? []
-          : await unwrapDb(db)
+          : unwrapDb(db)
               .select({
                 emailId: emailTable.id,
                 classification: emailFeedbackClassificationSql(
                   sql`${feedback}`,
+                  sql`${assessment}`,
                 ),
                 reason: feedback.reason,
               })
@@ -374,15 +383,30 @@ const emailRead = (
                 ),
               )
               .innerJoin(
-                feedback,
+                assessment,
                 and(
+                  eq(assessment.family, assessmentFamily.enum.email_relevance),
                   eq(
-                    emailFeedbackObservationIdSql(sql`${feedback}`),
+                    assessment.publicationKey,
+                    sql`${EMAIL_OBSERVATION_PUBLICATION_PREFIX} || ${emailClassificationObservation.id}::text`,
+                  ),
+                  // The key finds the row; its subject remains the lineage authority.
+                  eq(
+                    sql`${assessment.subject}->>'observationId'`,
                     sql`${emailClassificationObservation.id}::text`,
                   ),
+                ),
+              )
+              .innerJoin(
+                feedback,
+                and(
+                  eq(feedback.assessmentId, assessment.id),
                   eq(feedback.authority, "member"),
                   eq(feedback.actorUserId, ledgerParty.userId),
-                  emailFeedbackHasClassificationSql(sql`${feedback}`),
+                  emailFeedbackHasClassificationSql(
+                    sql`${feedback}`,
+                    sql`${assessment}`,
+                  ),
                 ),
               )
               .where(
@@ -509,7 +533,7 @@ const emailListRead =
     const request = { filters, sorts, pagination, projection, readIntent };
     const context = await scaffold.context(db, request);
     const scope = context.has(emailScope)
-      ? context.get(emailScope)
+      ? context.get(emailScope).scope
       : await resolveEmailScope(db, filters);
     return scaffold.read(db, request, {
       context,

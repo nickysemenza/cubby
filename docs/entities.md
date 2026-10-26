@@ -625,8 +625,24 @@ proposed the link (member, agent, import or the suggestion heuristic), and the
 Emails Accuracy view counts dismissed proposals per proposer. The Email page
 holds the Gmail original, per-Purchase links with Link/Dismiss, and changed-
 since-review warnings; another member's Email reads as metadata only.
-Accepted-source association reads use the canonical root and alias indexes;
-an Email's family lookup must not scan unrelated accepted mailbox history.
+Accepted-source association reads resolve message and attachment source keys
+through the composite identity index, then use the canonical root and alias
+indexes. Attachment keys still require the original to belong to the Email
+owner. An Email's family lookup must not scan unrelated accepted mailbox history.
+Link-state lists evaluate exact source-identity candidates and order-event
+presence once per statement before applying the full evidence policy. Emails
+with neither have state `none`; candidates still pass all owner, lifecycle and
+scope checks. Suggestion reads split disjoint exact-order and amount/date
+Purchase candidates so order matches do not scan the Vendor's entire history;
+the fallback date range allows the existing date index and keeps the inclusive
+45-day window.
+A single included link-state filter fixes the sort rank, so ordering reuses that
+constant and retains date and stable ties without computing the state again.
+After page selection, independent association, review, Purchase-link and owner
+facts start together; awaiting an array element before `Promise.all` adds a
+serial database stage. Review facts join each observation's canonical
+`email-observation:` Assessment publication key and check its subject lineage
+before reading member Feedback, reusing the Assessment judgment in that join.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers
