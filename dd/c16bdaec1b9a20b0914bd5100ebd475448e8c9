@@ -1,0 +1,39 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_5179a923bdfd2e::t_06ac8bb6020968 63-64,67-69,132-139,141-151,340-345,730,762,1136,1143,1163
+  s_5179a923bdfd2e::t_6c627547db4ef8 339,384,439-451,617-619
+apps/apple/DESIGN.md
+  s_5179a923bdfd2e::t_8d5c5b1dfaa10f 31,35
+  s_5179a923bdfd2e::t_b918f3af7f891a 113
+apps/apple/ITERATION.md
+  s_5179a923bdfd2e::t_124cb0a8027391 60,63,73
+apps/apple/e2e/qa-entity-table.ad
+  s_5179a923bdfd2e::t_7436fe0dc084b1 3-4,22-24,31-34
+  s_5179a923bdfd2e::t_402322033e51c5 8
+  s_5179a923bdfd2e::t_f7667d26b12fe6 16
+apps/apple/App/Shared/Entity/List/SpecialistListViews.swift
+  s_5179a923bdfd2e::t_e4acfb74b0493b 6
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_5179a923bdfd2e::t_d12b5bcecc0003 9-10,394-396
+apps/apple/CubbyKit/Tests/CubbyKitTests/Report/ReportPresentationTests.swift
+  s_5179a923bdfd2e::t_527bba0c05283c 8,127
+packages/schemas/src/native-coverage.ts
+  s_5179a923bdfd2e::t_38545918f970ba 373,428-435,529-537
+packages/schemas/src/native-coverage.unit.test.ts
+  s_5179a923bdfd2e::t_fdedb56fd5a5fc 95-96,102-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ddc16bdaec1b9a20b0914bd5100ebd475448e8c9",
+  "prompts": {},
+  "sessions": {
+    "s_5179a923bdfd2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a24-b465-7303-96da-d76d9c4ec5dd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
