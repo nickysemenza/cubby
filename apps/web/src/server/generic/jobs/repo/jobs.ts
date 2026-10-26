@@ -51,6 +51,7 @@ import {
   NEVER_EXHAUSTED_JOB_KINDS,
   UNDRAINED_JOB_KINDS,
   JOB_KIND_POLICY,
+  JOB_BACKGROUND_SHARE,
 } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 
@@ -62,6 +63,7 @@ export const DEFAULT_JOB_MAX_ATTEMPTS = 3;
 export const JOB_RETRY_BACKOFF = { baseMs: 1_000, maxMs: 60_000 } as const;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
+  /** One drain page token can own several Jobs; fencing always includes Job ID and generation. */
   leaseToken: string;
   leaseExpiresAt: Date;
   /**
@@ -346,9 +348,14 @@ const jobCapExempt = () =>
       sql`${r.id} = ${outer(job.runId)} AND ${r.status} = ${runStatus.enum.running}`,
   ).exists()})`;
 
-const cappedKinds = Object.keys(JOB_KIND_POLICY).flatMap((kind) => {
-  const cap = jobKindPolicy(kind).maxInFlight;
-  return cap === undefined ? [] : [{ kind, cap }];
+const kindLimits = Object.keys(JOB_KIND_POLICY).map((kind) => {
+  const policy = jobKindPolicy(kind);
+  return {
+    kind,
+    cap: policy.maxInFlight ?? null,
+    pages: policy.maxInFlightPages ?? JOB_BACKGROUND_SHARE.maxInFlightPages,
+    reserved: policy.reservedConcurrentPages ?? 0,
+  };
 });
 
 type DueJobSelection = {
@@ -377,24 +384,27 @@ const fairlyOrderedDueJobs = (
       }
       ${excludeKinds.length ? sql`AND (${jobCapExempt()} OR ${notInArray(job.kind, [...excludeKinds])})` : sql``}
       ${batch ? sql`AND ${job.kind} = ${batch.kind} AND ${jobRunOwned()} = ${batch.runOwned} AND ${jobCapExempt()} = ${batch.capExempt}` : sql``}
+  ), backlog AS (
+    SELECT kind, count(*) AS size FROM due GROUP BY kind
   ), capacity AS MATERIALIZED (
     -- Count live leases once, before joining capacity to a potentially large backlog.
-    SELECT policy.kind, greatest(0, policy.cap - count("Job".id)) AS remaining
-    FROM (${
-      cappedKinds.length
+    SELECT backlog.kind,
+      CASE WHEN policy.cap IS NULL THEN NULL ELSE greatest(0, policy.cap - count("Job".id)) END AS remaining,
+      count(DISTINCT "Job"."leaseToken") < coalesce(policy.pages, ${JOB_BACKGROUND_SHARE.maxInFlightPages}) AS page_available
+    FROM backlog LEFT JOIN (${
+      kindLimits.length
         ? sql`VALUES ${sql.join(
-            cappedKinds.map(
-              ({ kind, cap }) => sql`(${kind}::text, ${cap}::int)`,
+            kindLimits.map(
+              ({ kind, cap, pages }) =>
+                sql`(${kind}::text, ${cap}::int, ${pages}::int)`,
             ),
             sql`, `,
           )}`
-        : sql`SELECT NULL::text, 0::int WHERE false`
-    }) policy(kind, cap)
-    LEFT JOIN "Job" ON "Job".kind = policy.kind AND "Job".state = ${jobState.enum.running}
+        : sql`SELECT NULL::text, NULL::int, NULL::int WHERE false`
+    }) policy(kind, cap, pages) USING (kind)
+    LEFT JOIN "Job" ON "Job".kind = backlog.kind AND "Job".state = ${jobState.enum.running}
       AND "Job"."leaseExpiresAt" > ${now.toISOString()}::timestamp AND NOT ${jobCapExempt()}
-    GROUP BY policy.kind, policy.cap
-  ), backlog AS (
-    SELECT kind, count(*) AS size FROM due GROUP BY kind
+    GROUP BY backlog.kind, policy.cap, policy.pages
   ), served AS (
     SELECT kind, max("lastClaimedAt") AS last_served FROM "Job"
     WHERE kind IN (SELECT kind FROM backlog) GROUP BY kind
@@ -412,7 +422,7 @@ const fairlyOrderedDueJobs = (
       ORDER BY priority DESC, "updatedAt", "availableAt", id
     ) AS position
     FROM ranked LEFT JOIN capacity USING (kind)
-    ${perKind === undefined ? sql`` : sql`WHERE cap_exempt OR remaining IS NULL OR kind_position <= remaining`}
+    ${perKind === undefined ? sql`` : sql`WHERE cap_exempt OR (page_available AND (remaining IS NULL OR kind_position <= remaining))`}
   ), candidates AS (
     -- Apply admission before the per-kind window so capped backfill cannot
     -- hide an exempt routine Run's work behind the candidate cutoff.
@@ -516,6 +526,27 @@ async function selectDrainDueJobs(
     selection,
   );
   if (!selection.batchSizes) return seeds;
+  // A reservation must enter the selection even when the fair seed window
+  // filled with Run work and many other background kinds.
+  for (const { kind } of kindLimits.filter((policy) => policy.reserved > 0)) {
+    if (seeds.some((seed) => seed.kind === kind)) continue;
+    const [reserved] = await selectFairDueJobs(db, 1, {
+      ...selection,
+      batch: { kind, runOwned: false, capExempt: false },
+    });
+    if (!reserved) continue;
+    if (seeds.length >= Math.min(JOB_DRAIN.batch, limit)) {
+      let replace = seeds.length - 1;
+      while (
+        replace >= 0 &&
+        (jobKindPolicy(seeds[replace]!.kind).reservedConcurrentPages ?? 0) > 0
+      )
+        replace--;
+      if (replace < 0) continue;
+      seeds.splice(replace, 1);
+    }
+    seeds.push(reserved);
+  }
   const groups: (typeof seeds)[] = [];
   const batches = new Map<string, typeof seeds>();
   const excluded = new Set([
@@ -553,9 +584,9 @@ async function selectDrainDueJobs(
     allocated += extra.length;
   }
   const serviceClass = (group: typeof seeds) =>
-    group[0]!.runOwned
+    (jobKindPolicy(group[0]!.kind).reservedConcurrentPages ?? 0) > 0
       ? 0
-      : (jobKindPolicy(group[0]!.kind).reservedConcurrentPages ?? 0) > 0
+      : group[0]!.runOwned
         ? 1
         : 2;
   return groups.sort((a, b) => serviceClass(a) - serviceClass(b)).flat();
@@ -632,11 +663,13 @@ export async function claimJob(
   db: Database,
   id: string,
   leaseMs = JOB_LEASE_MS,
+  { pageToken }: { pageToken?: string } = {},
 ): Promise<JobClaim | null> {
   const recordId = parseEntityId("job", id);
   if (!Number.isFinite(leaseMs) || leaseMs <= 0)
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();
+  const token = pageToken ?? crypto.randomUUID();
   return withTransactionDatabase(db, async (tx) => {
     // A fresh claim observes pending input in its own transaction. Only the
     // execution row is locked; source writers append independent captures.
@@ -653,8 +686,14 @@ export async function claimJob(
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
-    const maxInFlight = jobKindPolicy(available.kind).maxInFlight;
-    if (maxInFlight !== undefined && !candidate.capExempt) {
+    const policy = jobKindPolicy(available.kind);
+    const maxInFlight = policy.maxInFlight;
+    const maxPages =
+      pageToken === undefined ? undefined : policy.maxInFlightPages;
+    if (
+      (maxInFlight !== undefined || maxPages !== undefined) &&
+      !candidate.capExempt
+    ) {
       // Selection is advisory. Serialize admission across Worker invocations,
       // then count in a fresh READ COMMITTED statement before issuing a lease.
       // Never wait here while holding a Job row another executor may need.
@@ -662,7 +701,10 @@ export async function claimJob(
         SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${available.kind}`}, 0)) AS locked`);
       if (!admission.rows[0]?.locked) return null;
       const live = await getDb(tx)
-        .select({ count: sql<number>`count(*)::int` })
+        .select({
+          count: sql<number>`count(*)::int`,
+          otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${token}::uuid))::int`,
+        })
         .from(job)
         .where(
           and(
@@ -672,7 +714,10 @@ export async function claimJob(
             not(jobCapExempt()),
           ),
         );
-      if ((live[0]?.count ?? 0) >= maxInFlight) return null;
+      if (maxInFlight !== undefined && (live[0]?.count ?? 0) >= maxInFlight)
+        return null;
+      if (maxPages !== undefined && (live[0]?.otherPages ?? 0) >= maxPages)
+        return null;
     }
     const moved = candidate.pendingCapture;
     const restart =
@@ -719,7 +764,6 @@ export async function claimJob(
         .where(eq(job.id, recordId));
       return null;
     }
-    const token = crypto.randomUUID();
     const expires = new Date(now.getTime() + leaseMs);
     const [claimed] = await getDb(tx)
       .update(job)

@@ -140,6 +140,18 @@ whose `runId` names any active Run bypass the cap and its accounting, including
 routine Runs that do not receive member-visible priority. Shared evaluations
 with no `runId` remain backfill.
 
+Every drained kind, including unregistered kinds, inherits strict background
+shares: `maxConcurrentPages: 1` per drain and `maxInFlightPages: 2` across the
+four queue consumers (half the configured consumer count). A kind never
+borrows the spare capacity. A blocked image or maintenance page therefore
+cannot occupy every lane or every consumer. Claim-time page admission uses
+the same per-kind advisory lock and live-lease check as record admission.
+A batch shares one page lease token, counted once while any member has a live
+lease; each Job retains its own expiry, generation, cursor, and publication
+fence against its Job ID. Completion/release of the final live member frees
+the page. Expired tokens count nothing. Older individually tokened claims
+count conservatively as separate pages until they settle or expire.
+
 `ai.evaluation` defaults to **one live background claim globally**. This is
 deliberately stricter than one page per Worker: a blocked evaluation must not
 multiply across queue consumers. It leaves two of a Worker's three lanes for
@@ -151,7 +163,12 @@ estimate.
 `embedding.refresh` fills **100 Jobs per page**, even with other kinds due.
 Its policy reserves one background page slot and caps it at one page per
 drain (`reservedConcurrentPages` / `maxConcurrentPages`); Run-owned work keeps
-priority and bypasses page caps. The fair seed selection still gives other
+priority within the remaining lanes and bypasses per-kind page caps. A due
+embedding page enters even a crowded seed selection and takes its reserved
+execution lane before Run pages start; the other lanes remain Run-first.
+An active Run-owned embedding page already occupies that reservation; it does
+not grant another background page priority over the remaining Run work.
+The fair seed selection still gives other
 kinds their turns. Batch width counts records, not sockets: claims and
 publications remain serial inside that one lane, keeping the three-page,
 five-socket Worker budget. Small remaining backlogs, the wake's remaining Job
@@ -171,7 +188,11 @@ several drains. Free lanes refill fair selections while sibling pages are
 still running, so a blocked page cannot hold the next selection behind a
 batch-wide wait. Selected groups are reserved within the invocation until
 execution finishes, including the unclaimed members of a batch. Page and time
-budgets still bound new starts. Every Job holds its own row lock and lease. AI evaluation Jobs
+budgets still bound new starts. A skipped claim stays excluded for the entire
+invocation, so locked expired rows cannot repeatedly consume its budget ahead
+of unlocked work; the next invocation may retry them. Completed Jobs are not
+excluded, so immediately runnable successive pages still progress. Every Job
+holds its own row lock and lease. AI evaluation Jobs
 carry no `runId` because shared evaluations serve several Runs; they compete
 as backfill. Run views still attribute them: a Run's demand (`runDemandPairs`)
 is its own Jobs plus the evaluation Jobs it owns or still requests (an

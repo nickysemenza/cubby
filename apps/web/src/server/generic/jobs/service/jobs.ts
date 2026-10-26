@@ -54,7 +54,9 @@ export async function advanceJob(
   id: string,
   handlers: JobHandlers,
 ) {
-  const claimed = await claimJob(db, id);
+  const claimed = await claimJob(db, id, undefined, {
+    pageToken: crypto.randomUUID(),
+  });
   if (!claimed) return "skipped";
   return executeClaim(db, claimed, () => {
     const handler = handlers[claimed.kind];
@@ -198,7 +200,9 @@ async function advanceBatch(
   ids: readonly string[],
   batch: NonNullable<JobHandler["batch"]>,
   deadline: number,
+  onSkipped: (id: string) => void,
 ) {
+  const pageToken = crypto.randomUUID();
   const pending = new Map<string, JobClaim>();
   const outcomes: string[] = [];
   let renewing: Promise<void> | undefined;
@@ -241,9 +245,12 @@ async function advanceBatch(
   try {
     for (const id of ids) {
       if (Date.now() >= deadline) break;
-      const claim = await claimJob(db, id);
+      const claim = await claimJob(db, id, undefined, { pageToken });
       if (claim) pending.set(claim.id, claim);
-      else outcomes.push("skipped");
+      else {
+        outcomes.push("skipped");
+        onSkipped(id);
+      }
     }
     if (!pending.size || Date.now() >= deadline) return outcomes;
     try {
@@ -288,6 +295,7 @@ export async function drainDueJobs(
   const deadline = Date.now() + timeBudgetMs;
   let scheduled = 0;
   const reserved = new Set<string>();
+  const skipped = new Set<string>();
   const activePages = new Map<string, number>();
   const batchSizes = new Map(
     Object.entries(handlers).flatMap(([kind, handler]) =>
@@ -296,20 +304,23 @@ export async function drainDueJobs(
   );
   type Candidates = Awaited<ReturnType<typeof dueJobs>>;
   const groups: Candidates[] = [];
+  let settledPages = 0;
   let selecting: Promise<boolean> | undefined;
   const spent = () => scheduled >= limit || Date.now() >= deadline;
   const refill = async () => {
+    const settledBefore = settledPages;
     const remaining =
       limit -
       scheduled -
       groups.reduce((total, group) => total + group.length, 0);
     if (remaining <= 0) return false;
+    const excludeKinds = [...activePages].flatMap(([kind, active]) => {
+      const cap = jobKindPolicy(kind).maxConcurrentPages;
+      return cap !== undefined && active >= cap ? [kind] : [];
+    });
     const candidates = await dueJobs(db, remaining, {
-      excludeIds: [...reserved],
-      excludeKinds: [...activePages].flatMap(([kind, active]) => {
-        const cap = jobKindPolicy(kind).maxConcurrentPages;
-        return cap !== undefined && active >= cap ? [kind] : [];
-      }),
+      excludeIds: [...reserved, ...skipped],
+      excludeKinds,
       batchSizes,
     });
     // Keep the fair selector's first service for each kind. A kind batch owns
@@ -328,7 +339,9 @@ export async function drainDueJobs(
         if (batch) batches.set(key, group);
       }
     }
-    return candidates.length > 0;
+    // A page may finish or skip while selection is in flight. Reselect before
+    // every idle lane exits on an empty result from that older snapshot.
+    return candidates.length > 0 || settledBefore !== settledPages;
   };
   const nextGroup = async () => {
     while (!spent()) {
@@ -353,17 +366,16 @@ export async function drainDueJobs(
         );
       });
       const index =
-        leading >= 0
-          ? leading
-          : reservedPage >= 0
-            ? reservedPage
+        reservedPage >= 0
+          ? reservedPage
+          : leading >= 0
+            ? leading
             : groups.findIndex(available);
       const group = index >= 0 ? groups.splice(index, 1)[0] : undefined;
       if (group) {
         scheduled += group.length;
         const first = group[0]!;
-        if (!first.capExempt)
-          activePages.set(first.kind, (activePages.get(first.kind) ?? 0) + 1);
+        activePages.set(first.kind, (activePages.get(first.kind) ?? 0) + 1);
         return group;
       }
       // Share selection, not execution: an idle lane can refill while another
@@ -389,16 +401,23 @@ export async function drainDueJobs(
               group.map((entry) => entry.id),
               batch,
               deadline,
+              (id) => skipped.add(id),
             )),
           );
-        else outcomes.push(await advanceJob(db, candidate.id, handlers));
+        else {
+          const outcome = await advanceJob(db, candidate.id, handlers);
+          outcomes.push(outcome);
+          // A lock can outlast this invocation. Do not spend every remaining
+          // attempt selecting the same expired lease instead of healthy work.
+          if (outcome === "skipped") skipped.add(candidate.id);
+        }
       } finally {
         for (const entry of group) reserved.delete(entry.id);
-        if (!candidate.capExempt)
-          activePages.set(
-            candidate.kind,
-            (activePages.get(candidate.kind) ?? 1) - 1,
-          );
+        activePages.set(
+          candidate.kind,
+          (activePages.get(candidate.kind) ?? 1) - 1,
+        );
+        settledPages++;
       }
     }
   };
