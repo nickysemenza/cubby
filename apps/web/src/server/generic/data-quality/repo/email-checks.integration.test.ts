@@ -257,7 +257,7 @@ describe("Email data quality", () => {
         ctx.db,
         null,
         workQueueHouseholdInput.parse({
-          check: ["email_not_imported"],
+          reason: ["email_not_imported"],
           pageSize: 100,
         }),
         false,
