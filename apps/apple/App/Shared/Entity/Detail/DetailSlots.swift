@@ -69,18 +69,10 @@ enum DetailSlotRegistry {
             return reportSlot(.purchaseRuns, row)
         case .locationAiDescription:
             return reportSlot(.locationAiDescription, row)
-        case .purchaseReconciliation:
-            return reportSlot(.purchaseReconciliation, row)
         case .purchaseProjectAllocation:
             return reportSlot(.purchaseProjectAllocation, row)
         case .purchaseFinancialSettlement:
             return reportSlot(.purchaseFinancialSettlement, row)
-        case .expenseSettlement:
-            return reportSlot(.expenseSettlement, row)
-        case .vendorSpendingClassification:
-            return AnyView(SpendingClassificationView(key: .vendor, row: row))
-        case .productCategorySpendingClassification:
-            return AnyView(SpendingClassificationView(key: .productCategory, row: row))
         case .purchaseReceiving:
             return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
         case .runSteps:
@@ -165,17 +157,28 @@ enum DetailSlotRegistry {
         guard let handoff = handoff(slot: slot, row: row),
             let key = slot.split(separator: ".").first.flatMap({ EntityKey(rawValue: String($0)) })
         else { return nil }
-        return AnyView(
-            OpenOnWebButton(target: handoff.target(key: key, id: row.id)) {
+        return handoffRow(handoff.label, target: handoff.target(key: key, id: row.id), id: slot)
+    }
+
+    /// The one row a web handoff draws where the native surface would have stood.
+    @MainActor
+    private static func handoffRow(_ label: String, target: WebHandoff.Target, id: String) -> AnyView {
+        AnyView(
+            OpenOnWebButton(target: target) {
                 HStack {
-                    Label(handoff.label, systemImage: "safari")
+                    Label(label, systemImage: "safari")
                     Spacer(minLength: FieldGuideTokens.Space.sm)
                     Image(systemName: "arrow.up.right").foregroundStyle(.secondary).accessibilityHidden(true)
                 }
                 .contentShape(Rectangle())
             }
-            .accessibilityIdentifier("detail.handoff.\(slot)"))
+            .accessibilityIdentifier("detail.handoff.\(id)"))
     }
+
+    /// Transaction kinds web can book into the Expense ledger (`financialTransaction.previewBooking`).
+    private static let bookableKinds: Set<String> = [
+        "purchase", "refund", "adjustment", "fee", "interest", "income",
+    ]
 
     /// The web handoff a `handoff` slot draws for `row`; nil when the slot is native or, like web's
     /// slot predicate, does not apply to the row.
@@ -196,13 +199,21 @@ enum DetailSlotRegistry {
 
     /// Record-specific affordances beside the generic sections; none is a manifest hero action.
     @MainActor
-    static func supplement(for key: EntityKey, row: EntityRow, onChanged: @escaping () -> Void) -> AnyView? {
+    static func supplement(for key: EntityKey, row: EntityRow) -> AnyView? {
         switch key {
         case .expense:
             guard let productID = row.raw["productId"]?.stringValue else { return nil }
             return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))
+        // Booking a charge into the Expense ledger, and correcting a recorded booking, are web's:
+        // both sit with the allocations in the transaction's Record section.
         case .financialTransaction:
-            return AnyView(FinancialTransactionEvidenceView(row: row, onChanged: onChanged))
+            guard row.raw["status"]?.stringValue != "void",
+                bookableKinds.contains(row.raw["kind"]?.stringValue ?? "")
+            else { return nil }
+            return handoffRow(
+                "Review booking on web",
+                target: .record(key: .financialTransaction, id: row.id, section: "overview"),
+                id: "financialTransaction.booking")
         default:
             return nil
         }

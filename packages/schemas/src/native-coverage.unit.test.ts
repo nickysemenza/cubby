@@ -90,8 +90,16 @@ describe("native presentation coverage", () => {
       ),
     );
     expect(handoffs.sort()).toEqual([
+      "detailSlot expense.settlement",
+      "detailSlot productCategory.spending-classification",
+      "detailSlot purchase.reconciliation",
       "detailSlot run.import-agent-live",
       "detailSlot run.import-agent-stopped",
+      "detailSlot vendor.spending-classification",
+      "sectionAction linkExpenses",
+      "sectionAction linkProducts",
+      "sectionAction matchStatement",
+      "sectionAction splitExpense",
     ]);
   });
 

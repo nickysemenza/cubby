@@ -395,15 +395,10 @@ struct RecordsBlockView: View {
     @State private var reviewing: AIReviewRequest?
     @State private var notice: String?
     @State private var busy = false
-    // Finance verbs (`records.verbs`): the flows they open.
     @State private var selectedCapture: String?
     @State private var captureOffset = 0
-    @State private var statementMatch: StatementMatchSession?
+    // The one finance verb (`records.verbs`) native runs; the rest hand off to web.
     @State private var receiving: ReceivingModel?
-    @State private var splitting: ExpenseSplitSession?
-    @State private var linkingExpenses: PurchaseExpenseLinkSession?
-    @State private var linkingProducts: PurchaseProductLinkSession?
-    @State private var verbError: String?
     // The answers to the block's choices (a prepared import's per-line decisions).
     @State private var answers = ReportChoiceAnswers()
 
@@ -518,29 +513,8 @@ struct RecordsBlockView: View {
             }
             verbs
         }
-        .sheet(item: $statementMatch) { session in
-            StatementMatchSheet(session: session) {
-                appModel.recordEntityMutation(keys: [.financialTransaction, .purchase])
-            }
-            .nativeSheet(.editor)
-        }
         .sheet(item: $receiving) { model in
             ReceiveExpenseSheet(model: model)
-        }
-        .sheet(item: $splitting) { session in
-            SplitExpenseSheet(session: session) { splitSaved() }
-                .environment(appModel)
-                .nativeSheet(.editor)
-        }
-        .sheet(item: $linkingExpenses) { session in
-            LinkExpensesSheet(session: session) { attachSaved() }
-                .environment(appModel)
-                .nativeSheet(.editor)
-        }
-        .sheet(item: $linkingProducts) { session in
-            LinkProductsSheet(session: session) { attachSaved() }
-                .environment(appModel)
-                .nativeSheet(.editor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $action) { model in
@@ -589,7 +563,8 @@ struct RecordsBlockView: View {
     }
 
     @ViewBuilder private var verbs: some View {
-        ForEach(records.verbs.filter { SectionActionRunner.coverage(of: $0.verb) == .implemented }) { verb in
+        ForEach(records.verbs.filter { NativePresentationCoverage.sectionAction($0.verb) == .implemented }) {
+            verb in
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 verbButton(verb)
                     .buttonStyle(.borderless)
@@ -598,11 +573,10 @@ struct RecordsBlockView: View {
                 }
             }
         }
-        if let verbError {
-            Text(verbError).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
-        }
         if let host {
-            let handoffs = records.verbs.compactMap { SectionActionRunner.coverage(of: $0.verb).handoff }
+            let handoffs = records.verbs.compactMap {
+                NativePresentationCoverage.sectionAction($0.verb).handoff
+            }
             ForEach(handoffs, id: \.label) { handoff in
                 OpenOnWebButton(
                     target: handoff.target(key: host.entity, id: host.row.id), label: handoff.label
@@ -615,15 +589,6 @@ struct RecordsBlockView: View {
     @ViewBuilder
     private func verbButton(_ verb: ReportPresentation.Records.Verb) -> some View {
         switch verb.verb {
-        case .matchStatement:
-            Button(verb.label) {
-                verbError = nil
-                if let host {
-                    statementMatch = StatementMatchSession(purchaseID: host.row.id, client: appModel.client)
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.matchStatement")
         case .receiveExpense:
             let productID = host?.row.raw["productId"]?.stringValue
             Button {
@@ -635,72 +600,10 @@ struct RecordsBlockView: View {
             }
             .disabled(verb.disabledReason != nil || productID == nil)
             .accessibilityIdentifier("receive.open.\(host?.row.id ?? "")")
-        case .splitExpense:
-            Button(verb.label) {
-                open {
-                    try $0.splitSession(expenseID: $1, records: records)
-                } assign: {
-                    splitting = $0
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.splitExpense")
-        case .linkExpenses:
-            Button(verb.label) {
-                open {
-                    try $0.expenseLinkSession(purchaseID: $1, records: records)
-                } assign: {
-                    linkingExpenses = $0
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.linkExpenses")
-        case .linkProducts:
-            Button(verb.label) {
-                open {
-                    try $0.productLinkSession(purchaseID: $1, records: records)
-                } assign: {
-                    linkingProducts = $0
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.linkProducts")
+        // Handed off to web (`native-coverage.ts`): `verbs` draws their web rows instead.
+        case .matchStatement, .splitExpense, .linkExpenses, .linkProducts:
+            EmptyView()
         }
-    }
-
-    /// Opens a verb's session on the record this report belongs to. The runner throws, sending
-    /// nothing, unless the server offers the verb available.
-    private func open<Session>(
-        _ make: (SectionActionRunner, String) throws -> Session, assign: (Session) -> Void
-    ) {
-        guard let host else { return }
-        verbError = nil
-        do {
-            assign(try make(SectionActionRunner(client: appModel.client), host.row.id))
-        } catch let error as SectionActionError {
-            verbError =
-                switch error {
-                case .unavailable(let reason), .handoff(let reason): reason
-                }
-        } catch {
-            verbError = error.userMessage
-        }
-    }
-
-    /// The parts replaced the expense, so leave its screen for the purchase they were filed under.
-    private func splitSaved() {
-        appModel.recordEntityMutation(keys: [.expense, .purchase, .product])
-        if let purchaseID = host?.row.raw["purchaseId"]?.stringValue {
-            appModel.navigator.replaceCurrentRecord(
-                with: RecordSelection(key: .purchase, id: purchaseID))
-        } else {
-            host?.onChanged()
-        }
-    }
-
-    private func attachSaved() {
-        appModel.recordEntityMutation(keys: [.purchase, .expense, .product])
-        host?.onChanged()
     }
 
     private var noticeBinding: Binding<Bool> {
