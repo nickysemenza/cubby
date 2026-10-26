@@ -3,6 +3,8 @@ import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { manufacturerSource } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { Database } from "~/server/db";
@@ -22,7 +24,7 @@ import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/re
 import { suggestFinancialTransferPairs } from "~/server/domains/financial-transaction/repo/financial-transfer-pairing";
 import { suggestProjectTools } from "~/server/domains/project/repo/tools";
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
-import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
+import { listPurchasesSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { classificationPolicySql } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import {
@@ -145,72 +147,12 @@ export async function retrieveConnectionCandidates(
       });
     result.push(...(await settlementCandidates(db, source)));
   }
-  if (source.entityKind === "financialTransaction") {
-    const id = await resolveOrThrow(
-      db,
-      "financialTransaction",
-      source.entityId,
+  if (source.entityKind === "financialTransaction")
+    result.push(
+      ...((await retrieveFinancialConnectionCandidatePage(db, [source])).get(
+        source.entityId,
+      ) ?? []),
     );
-    const [transaction] = await getDb(db)
-      .select({
-        date: sql<
-          string | null
-        >`coalesce(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,
-      })
-      .from(financialTransaction)
-      .where(
-        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-      );
-    if (transaction?.date) {
-      const orders = await getDb(db)
-        .select({ code: purchase.shortcode })
-        .from(purchase)
-        .where(
-          and(
-            notDeleted(purchase),
-            sql`abs(${purchase.date}::date-${transaction.date}::date)<=45`,
-          ),
-        )
-        .orderBy(
-          sql`abs(${purchase.date}::date-${transaction.date}::date)`,
-          purchase.id,
-        )
-        .limit(10);
-      for (const row of orders)
-        result.push(
-          ...(
-            await settlementCandidates(db, {
-              entityKind: "purchase",
-              entityId: row.code,
-            })
-          ).filter((p) => p.source.entityId === source.entityId),
-        );
-    }
-    const transfers = await suggestFinancialTransferPairs(db, {
-      transactionIds: [
-        parseShortcodeFor("financialTransaction", source.entityId),
-      ],
-      maxDateDistanceDays: 5,
-      maxCandidatesPerTransaction: 3,
-    });
-    for (const group of transfers.suggestions)
-      for (const candidate of group.candidates)
-        result.push({
-          relation: "transaction-transfer",
-          source: {
-            entityKind: "financialTransaction",
-            entityId: candidate.outflowTransactionId,
-          },
-          target: {
-            entityKind: "financialTransaction",
-            entityId: candidate.inflowTransactionId,
-          },
-          label: "Review transfer pair",
-          evidence: evidence(candidate.reasons, [
-            "Equal and opposite values do not prove a transfer; existing domain ownership and evidence checks decide acceptance",
-          ]),
-        });
-  }
   if (source.entityKind === "project") {
     const tools = await suggestProjectTools(
       db,
@@ -234,56 +176,146 @@ async function settlementCandidates(
   db: Database,
   target: EntityRef,
 ): Promise<ConnectionCandidate[]> {
-  const rows = await listPurchaseSettlementCandidates(
-    db,
-    parseShortcodeFor("purchase", target.entityId),
+  return (
+    (await settlementCandidatePage(db, [target])).get(target.entityId) ?? []
   );
-  const result: ConnectionCandidate[] = [];
-  for (const row of rows.slice(0, 10)) {
-    const id = await resolveOrThrow(
-      db,
-      "financialTransaction",
-      row.transactionId,
-    );
-    const [transaction] = await getDb(db)
-      .select({
-        kind: financialTransaction.kind,
-        allocated: related(
-          financialTransactionAllocation,
-          (a) => sql`${a.transactionId} = ${outer(financialTransaction.id)}`,
-        ).exists(),
-      })
-      .from(financialTransaction)
-      .where(
-        and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
-      );
-    if (!transaction || transaction.allocated || row.conflicts.length) continue;
-    result.push({
-      relation:
-        transaction.kind === "refund"
-          ? "transaction-refund"
-          : "transaction-purchase",
-      source: {
-        entityKind: "financialTransaction",
-        entityId: row.transactionId,
-      },
-      target,
-      label: "Review settlement connection",
-      evidence: evidence(
-        [
-          ...(row.exactAmount ? ["Exact stated amount"] : []),
-          ...(row.nearAmount ? ["Amount within one cent"] : []),
-          ...(row.merchantMatches ? ["Merchant text overlaps Vendor"] : []),
-          `Dates differ by ${row.days} days`,
-        ],
-        [
-          "Amount, date and merchant similarity do not prove settlement identity",
-          "Only unallocated transactions are offered; partial allocation requires the existing allocation editor",
-        ],
+}
+
+/** Preserve each Purchase's ranked top ten before eligibility filtering. */
+async function settlementCandidatePage(
+  db: Database,
+  targets: readonly EntityRef[],
+) {
+  const rows = await listPurchasesSettlementCandidates(
+    db,
+    targets.map((target) => parseShortcodeFor("purchase", target.entityId)),
+  );
+  const codes = [
+    ...new Set(
+      [...rows.values()].flatMap((values) =>
+        values.slice(0, 10).map((row) => row.transactionId),
       ),
-    });
-  }
-  return result;
+    ),
+  ];
+  const transactions = codes.length
+    ? await getDb(db)
+        .select({
+          code: financialTransaction.shortcode,
+          kind: financialTransaction.kind,
+          allocated: related(
+            financialTransactionAllocation,
+            (a) => sql`${a.transactionId} = ${outer(financialTransaction.id)}`,
+          ).exists(),
+        })
+        .from(financialTransaction)
+        .where(
+          and(
+            inArray(financialTransaction.shortcode, codes),
+            notDeleted(financialTransaction),
+          ),
+        )
+    : [];
+  const byCode = new Map(transactions.map((row) => [row.code, row]));
+  return new Map(
+    targets.map((target) => {
+      const candidates: ConnectionCandidate[] = [];
+      for (const row of (rows.get(target.entityId) ?? []).slice(0, 10)) {
+        const transaction = byCode.get(row.transactionId);
+        if (!transaction || transaction.allocated || row.conflicts.length)
+          continue;
+        candidates.push({
+          relation:
+            transaction.kind === "refund"
+              ? "transaction-refund"
+              : "transaction-purchase",
+          source: {
+            entityKind: "financialTransaction",
+            entityId: row.transactionId,
+          },
+          target,
+          label: "Review settlement connection",
+          evidence: evidence(
+            [
+              ...(row.exactAmount ? ["Exact stated amount"] : []),
+              ...(row.nearAmount ? ["Amount within one cent"] : []),
+              ...(row.merchantMatches ? ["Merchant text overlaps Vendor"] : []),
+              `Dates differ by ${row.days} days`,
+            ],
+            [
+              "Amount, date and merchant similarity do not prove settlement identity",
+              "Only unallocated transactions are offered; partial allocation requires the existing allocation editor",
+            ],
+          ),
+        });
+      }
+      return [target.entityId, candidates];
+    }),
+  );
+}
+
+/** Nearby purchases, settlement ranks and transfer policy are shared by the page. */
+export async function retrieveFinancialConnectionCandidatePage(
+  db: Database,
+  sources: readonly EntityRef[],
+) {
+  const out = new Map<string, ConnectionCandidate[]>(
+    sources.map((source) => [source.entityId, []]),
+  );
+  if (!sources.length) return out;
+  const codes = sources.map((source) =>
+    parseShortcodeFor("financialTransaction", source.entityId),
+  );
+  const requested = alias(financialTransaction, "t");
+  const nearbyPurchase = alias(purchase, "p");
+  const result = await getDb(db).execute(sql`
+    SELECT t.shortcode AS source, nearby.shortcode AS target
+    FROM "FinancialTransaction" t
+    CROSS JOIN LATERAL (
+      SELECT p.shortcode FROM "Purchase" p
+      WHERE ${notDeleted(nearbyPurchase)}
+        AND abs(p.date::date-coalesce(t."postedDate", t."transactionDate")::date)<=45
+      ORDER BY abs(p.date::date-coalesce(t."postedDate", t."transactionDate")::date), p.id LIMIT 10
+    ) nearby
+    WHERE ${inArray(sql`t.shortcode`, codes)} AND ${notDeleted(requested)}
+    ORDER BY t.id`);
+  const edges = z
+    .array(z.object({ source: z.string(), target: z.string() }))
+    .parse(result.rows);
+  const targets: EntityRef[] = [
+    ...new Set(edges.map((edge) => edge.target)),
+  ].map((entityId) => ({ entityKind: "purchase", entityId }));
+  const settlements = await settlementCandidatePage(db, targets);
+  for (const edge of edges)
+    out
+      .get(edge.source)
+      ?.push(
+        ...(settlements.get(edge.target) ?? []).filter(
+          (candidate) => candidate.source.entityId === edge.source,
+        ),
+      );
+  const transfers = await suggestFinancialTransferPairs(db, {
+    transactionIds: codes,
+    maxDateDistanceDays: 5,
+    maxCandidatesPerTransaction: 3,
+  });
+  for (const group of transfers.suggestions)
+    for (const candidate of group.candidates)
+      out.get(group.transactionId)?.push({
+        relation: "transaction-transfer",
+        source: {
+          entityKind: "financialTransaction",
+          entityId: candidate.outflowTransactionId,
+        },
+        target: {
+          entityKind: "financialTransaction",
+          entityId: candidate.inflowTransactionId,
+        },
+        label: "Review transfer pair",
+        evidence: evidence(candidate.reasons, [
+          "Equal and opposite values do not prove a transfer; existing domain ownership and evidence checks decide acceptance",
+        ]),
+      });
+  return out;
 }
 
 /** The Expense codes still eligible for an acquisition connection, in one statement. */

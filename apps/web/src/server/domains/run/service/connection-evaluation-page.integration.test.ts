@@ -1,8 +1,15 @@
+import { appendFileSync } from "node:fs";
+
+import type { EntityRef } from "@cubby/schemas/entity";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -14,9 +21,24 @@ import {
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
 import { readRunEvaluationsByCode } from "~/server/generic/run-detail/repo/run-evaluations";
+import {
+  refreshSearchDocument,
+  getSearchDocumentEmbeddingText,
+} from "~/server/generic/search/repo/search-document";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
+import {
+  createIngredientFixture,
+  createPlantFixture,
+  createProductIdentityFixture,
+  createProductFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
 
 // Failure modes: each connection evaluation pays its own claim, guard and
@@ -25,6 +47,10 @@ import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
 // page path.
 describe("connection evaluation pages", () => {
   const ctx = withTestDb();
+  afterEach(() => {
+    setCfEnv(undefined);
+    vi.unstubAllEnvs();
+  });
 
   async function setup() {
     await activateAiRefresh(ctx.db, "synthetic-connection-page", {
@@ -74,13 +100,19 @@ describe("connection evaluation pages", () => {
   }
 
   async function schedule(messages: readonly { shortcode: string }[]) {
-    await reconcileDerivedRefreshInputs(ctx.db);
-    const ids: string[] = [];
-    for (const message of messages) {
-      const { runId } = await scheduleConnectionRefresh(ctx.db, {
+    return scheduleSources(
+      messages.map((message) => ({
         entityKind: "email",
         entityId: message.shortcode,
-      });
+      })),
+    );
+  }
+
+  async function scheduleSources(sources: readonly EntityRef[]) {
+    await reconcileDerivedRefreshInputs(ctx.db);
+    const ids: string[] = [];
+    for (const source of sources) {
+      const { runId } = await scheduleConnectionRefresh(ctx.db, source);
       if (!runId) throw new Error("Synthetic connection was not scheduled");
     }
     const rows = await getDb(ctx.db)
@@ -137,6 +169,276 @@ describe("connection evaluation pages", () => {
     // (2 statements for an Email when measured).
     const perSource = (twenty.queryCount - one.queryCount) / 19;
     expect(perSource).toBeLessThanOrEqual(3);
+  });
+
+  // Ordinary sweeps must not regain per-candidate locked reads/savepoints.
+  // Existing Email coverage has no candidates and cannot catch that growth.
+  it("bounds Expense page statements while publishing acquisition candidates for every source", async () => {
+    await setup();
+    const index = createInMemoryVectorizeIndex();
+    const config = getSemanticEmbeddingConfig();
+    const values = Array.from({ length: config.dimensions }, (_, axis) =>
+      axis === 0 ? 1 : 0,
+    );
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        VECTORIZE: index,
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+        CUBBY_TEST_AI_GATEWAY: {
+          fetch: async () =>
+            Response.json({ data: [{ index: 0, embedding: values }] }),
+        },
+      }),
+    );
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic page anvil" }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", item.entityId);
+    await reconcileDerivedRefreshInputs(ctx.db);
+    const text = await getSearchDocumentEmbeddingText(
+      ctx.db,
+      "product",
+      item.entityId,
+    );
+    if (!text) throw new Error("Synthetic Product search document missing");
+    const embeddingId = await seedEntityEmbedding(ctx.db, {
+      ...text,
+      config,
+      values,
+    });
+    await index.upsert([
+      { id: embeddingId, values, metadata: { entityType: "product" } },
+    ]);
+    const createExpenses = async (count: number, prefix: string) => {
+      const sources: EntityRef[] = [];
+      for (let i = 0; i < count; i++) {
+        const payment = await createRepoEntity(ctx, "expense", {
+          name: `Synthetic page anvil ${prefix} ${i}`,
+          cost: 24,
+          date: "2026-10-01",
+          trade: "other",
+          costType: "materials",
+        });
+        sources.push({ entityKind: "expense", entityId: payment.output.id });
+      }
+      return sources;
+    };
+    const singleSources = await createExpenses(1, "single");
+    const single = await scheduleSources(singleSources);
+    const one = await runPage(single);
+    expect(one.result).toBe("succeeded");
+    expect(await states(single)).toEqual(["completed"]);
+    const sources = await createExpenses(8, "batch");
+    const ids = (await scheduleSources(sources)).filter(
+      (id) => !single.includes(id),
+    );
+    const many = await runPage(ids);
+    expect(many.result).toBe("succeeded");
+    expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
+    for (const source of [...singleSources, ...sources]) {
+      const proposals = await readEntityConnections(ctx.db, source);
+      expect(proposals).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            relation: "product-expense",
+            source: { entityKind: "product", entityId: item.id },
+            target: source,
+          }),
+        ]),
+      );
+    }
+    const incremental = (many.queryCount - one.queryCount) / 7;
+    if (process.env.CUBBY_QUERY_BUDGET_REPORT)
+      appendFileSync(
+        process.env.CUBBY_QUERY_BUDGET_REPORT,
+        `\nExpense page: single=${one.queryCount} eight=${many.queryCount} incremental=${incremental}\n`,
+      );
+    expect(incremental).toBeLessThanOrEqual(40);
+    expect(many.queryCount / sources.length).toBeLessThanOrEqual(40);
+  });
+
+  it("bounds FinancialTransaction page statements with settlement candidates", async () => {
+    await setup();
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic page card",
+      identity: { kind: "credit_card", network: "visa" },
+    });
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic page settlement vendor",
+    });
+    await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-10-01",
+      statedTotal: 24,
+    });
+    const sources: EntityRef[] = [];
+    for (let i = 0; i < 8; i++) {
+      const payment = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 24,
+        transactionDate: "2026-10-01",
+        postedDate: "2026-10-01",
+        sourceRefs: [{ source: "synthetic-page", externalId: `payment-${i}` }],
+      });
+      sources.push({
+        entityKind: "financialTransaction",
+        entityId: payment.output.id,
+      });
+    }
+    const ids = await scheduleSources(sources);
+    const page = await runPage(ids);
+    expect(page.result).toBe("succeeded");
+    expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
+    for (const source of sources)
+      expect(await readEntityConnections(ctx.db, source)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ relation: "transaction-purchase", source }),
+        ]),
+      );
+    if (process.env.CUBBY_QUERY_BUDGET_REPORT)
+      appendFileSync(
+        process.env.CUBBY_QUERY_BUDGET_REPORT,
+        `\nFinancialTransaction page: eight=${page.queryCount} perSource=${page.queryCount / sources.length}\n`,
+      );
+    expect(page.queryCount / sources.length).toBeLessThanOrEqual(40);
+  });
+
+  it("packs Product identity and field questions across the page at the gateway", async () => {
+    await setup();
+    const index = createInMemoryVectorizeIndex();
+    const config = getSemanticEmbeddingConfig();
+    const values = Array.from({ length: config.dimensions }, (_, axis) =>
+      axis === 0 ? 1 : 0,
+    );
+    const requests: { operation: string; questions: number }[] = [];
+    setCfEnv(
+      fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
+        VECTORIZE: index,
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+        CUBBY_TEST_AI_GATEWAY: {
+          fetch: async (
+            _url: Parameters<typeof fetch>[0],
+            init?: RequestInit,
+          ) => {
+            if (!init?.body) return Response.json({});
+            const body = JSON.parse(String(init.body));
+            if (!body.questions)
+              return Response.json({ data: [{ index: 0, embedding: values }] });
+            const questions = z
+              .record(
+                z.string(),
+                z.object({ criteria: z.record(z.string(), z.string()) }),
+              )
+              .parse(body.questions);
+            const metadata = z
+              .object({ operation: z.string() })
+              .parse(
+                JSON.parse(
+                  new Headers(init?.headers).get("cf-aig-metadata") ?? "{}",
+                ),
+              );
+            requests.push({
+              operation: metadata.operation,
+              questions: Object.keys(questions).length,
+            });
+            return Response.json({
+              result: {
+                answers: Object.fromEntries(
+                  Object.entries(questions).map(([key, question]) => {
+                    const choices = Object.keys(question.criteria);
+                    const selected = choices.includes("none")
+                      ? "none"
+                      : choices.at(-1);
+                    return [
+                      key,
+                      {
+                        type: "choice",
+                        choice: selected,
+                        confidence: 0.9,
+                        probabilities: Object.fromEntries(
+                          choices.map((choice) => [
+                            choice,
+                            choice === selected
+                              ? 0.9
+                              : 0.1 / Math.max(1, choices.length - 1),
+                          ]),
+                        ),
+                      },
+                    ];
+                  }),
+                ),
+              },
+            });
+          },
+        },
+      }),
+    );
+    const products = [];
+    for (const suffix of ["alpha", "beta", "gamma", "delta"])
+      products.push(
+        await createProductIdentityFixture(
+          ctx.db,
+          makeProductInput({ name: `Synthetic basil ${suffix}` }),
+          ctx.actor,
+        ),
+      );
+    const ingredient = await createIngredientFixture(
+      ctx.db,
+      { name: "Synthetic basil", aliases: [] },
+      ctx.actor,
+    );
+    const plant = await createPlantFixture(
+      ctx.db,
+      { name: "Synthetic basil" },
+      ctx.actor,
+    );
+    const refs = [
+      ...products.map((item) => ({
+        entityKind: "product" as const,
+        entityId: item.entityId,
+      })),
+      { entityKind: "ingredient" as const, entityId: ingredient.entityId },
+      {
+        entityKind: "plant" as const,
+        entityId: await resolveOrThrow(ctx.db, "plant", plant.id),
+      },
+    ];
+    for (const ref of refs)
+      await refreshSearchDocument(ctx.db, ref.entityKind, ref.entityId);
+    await reconcileDerivedRefreshInputs(ctx.db);
+    for (const ref of refs) {
+      const text = await getSearchDocumentEmbeddingText(
+        ctx.db,
+        ref.entityKind,
+        ref.entityId,
+      );
+      if (!text) throw new Error("Synthetic search document missing");
+      const id = await seedEntityEmbedding(ctx.db, { ...text, config, values });
+      await index.upsert([
+        { id, values, metadata: { entityType: ref.entityKind } },
+      ]);
+    }
+    const ids = await scheduleSources(
+      products.map((item) => ({ entityKind: "product", entityId: item.id })),
+    );
+    expect((await runPage(ids)).result).toBe("succeeded");
+    expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
+    // A port bypasses DecisionRequestBatch. Inspect actual gateway requests
+    // instead, so separate per-source usage objects cannot silently regress it.
+    for (const operation of [
+      "product-identity",
+      "suggestFields.product.ingredientId",
+      "suggestFields.product.growsPlantId",
+    ])
+      expect(
+        requests
+          .filter((request) => request.operation === operation)
+          .some((request) => request.questions >= 2),
+      ).toBe(true);
   });
 
   it("publishes a source's candidates and retires a deleted source without writes", async () => {

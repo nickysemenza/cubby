@@ -3427,6 +3427,17 @@ once for the invocation's roster; only the current batch's expanded contexts
 are retained. These read projections preserve immutable
 evidence and the family's transaction-time acceptance checks.
 
+Connection sweeps share Expense recommendation inputs and FinancialTransaction
+candidate lookups across their evaluation page. Prepared candidate evidence is
+immutable across provider waits. Publication reads live endpoint rows again
+under locks, in domain parent order, then loads dependency contexts and checks
+eligibility for the chunk. An unlocked preparation cannot satisfy this fence.
+Only equal original/current bases publish, through the existing immutable
+Assessment writer and supersession event mechanism in sets. No batching turns
+retrieval, proximity or a stale member decision into permission to apply a
+connection. Product identity and field model questions join the page's shared
+decision waves with separate usage groups for each Run and operation.
+
 ### Product relationship route
 
 `product.relationshipRoute`, keyed by the Product's public shortcode, owns

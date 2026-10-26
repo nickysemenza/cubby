@@ -835,7 +835,31 @@ export async function executeAiRefreshTarget(
       // Units publish a few per transaction: each transaction's guard and
       // fences cost about ten statements, while one transaction over every
       // unit held activation and a pooled connection for 100+ statements (#2819).
-      const units = preparation.publications;
+      const { publishPreparedEntityConnections } =
+        await import("~/server/domains/connection/repo/entity-connections");
+      const units = [
+        ...Array.from(
+          { length: Math.ceil(preparation.connections.length / 16) },
+          (_, index) => async (tx: Database) => {
+            await publishPreparedEntityConnections(
+              tx,
+              preparation.connections.slice(index * 16, index * 16 + 16),
+            );
+          },
+        ),
+        ...Array.from(
+          { length: Math.ceil(preparation.productPairs.length / 16) },
+          (_, index) => async (tx: Database) => {
+            const results = await publishProductPairPublications(
+              tx,
+              preparation.productPairs.slice(index * 16, index * 16 + 16),
+            );
+            if (results.some((result) => !result.valid))
+              throw new Error("Product pair evidence changed during inference");
+          },
+        ),
+        ...preparation.publications,
+      ];
       for (
         let offset = 0;
         offset < units.length;
@@ -1920,9 +1944,22 @@ export async function executeProductAiRefreshPage(
   });
 }
 
-type ConnectionPagePreparation = { source: EntityRef };
+type ConnectionPagePreparation = {
+  source: EntityRef;
+  initialConnections?: Awaited<
+    ReturnType<
+      typeof import("~/server/domains/connection/service/entity-connections").prepareEntityConnections
+    >
+  >["connections"];
+};
 type ConnectionPageOutcome = {
   source: EntityRef;
+  productPairs: readonly PreparedProductPairPublication[];
+  connections: Awaited<
+    ReturnType<
+      typeof import("~/server/domains/connection/service/entity-connections").prepareEntityConnections
+    >
+  >["connections"];
   publications: readonly ((transactionDb: Database) => Promise<void>)[];
 };
 
@@ -1936,14 +1973,37 @@ const CONNECTION_PAGE_CONCURRENCY = 8;
 /**
  * A connection evaluation's cost was its own claim, guard and settlement
  * (about 30 round trips for a source with no candidates); a page shares them.
- * Each source still prepares through the single-source path, so candidate
- * retrieval, model calls and evidence capture are unchanged.
+ * Heavy deterministic retrieval shares page inputs; source-local provider
+ * continuations join decision waves and publication shares locked evidence.
  */
 function connectionEvaluationPageAdapter(
   ports: AiRefreshPorts = {},
 ): EvaluationPageAdapter<ConnectionPagePreparation, ConnectionPageOutcome> {
   const changed = () =>
     new Error("Connection discovery source changed during evaluation");
+  const usageGroups = new Map<AiRunContext, Map<string, AiRunContext>>();
+  const operationUsage = (
+    page: AiRunContext,
+    operation: string,
+    recordUsage = true,
+  ) => {
+    let operations = usageGroups.get(page);
+    if (!operations) {
+      operations = new Map();
+      usageGroups.set(page, operations);
+    }
+    let usage = operations.get(operation);
+    if (!usage) {
+      usage = {
+        ...page,
+        operation,
+        force: ports.suggestPorts?.force ?? page.force,
+        ...(recordUsage ? {} : { db: undefined }),
+      };
+      operations.set(operation, usage);
+    }
+    return usage;
+  };
   return {
     operation: "entity-connections",
     concurrency: CONNECTION_PAGE_CONCURRENCY,
@@ -1971,6 +2031,16 @@ function connectionEvaluationPageAdapter(
           fingerprints[index],
         ]),
       );
+      const { prepareEntityConnectionSources } =
+        await import("~/server/domains/connection/service/entity-connections");
+      const eligible = present.filter((source) => {
+        const index = sources.indexOf(source);
+        return (
+          current.get(entityRefKey(source.entityKind, source.entityId)) ===
+          targets[index]?.evaluation.provenance.inputFingerprint
+        );
+      });
+      const initial = await prepareEntityConnectionSources(db, eligible);
       return targets.map((entry, index) => {
         const source = sources[index];
         const fingerprint = source
@@ -1982,12 +2052,15 @@ function connectionEvaluationPageAdapter(
               kind: "ready" as const,
               target: entry,
               evidenceDigest: fingerprint,
-              prepared: { source },
+              prepared: {
+                source,
+                initialConnections: initial.get(source.entityId),
+              },
             }
           : { kind: "failed" as const, target: entry, error: changed() };
       });
     },
-    async evaluate(db, ready) {
+    async evaluate(db, ready, usage) {
       const { prepareEntityConnections } =
         await import("~/server/domains/connection/service/entity-connections");
       const { source } = ready.prepared;
@@ -1996,8 +2069,24 @@ function connectionEvaluationPageAdapter(
         kernel(db, ports, ready.target.evaluation.runId),
         source,
         {
-          suggestPorts: ports.suggestPorts,
-          productIdentityPorts: ports.productIdentityPorts,
+          initialConnections: ready.prepared.initialConnections,
+          suggestPorts: {
+            ...ports.suggestPorts,
+            usageFor:
+              ports.suggestPorts?.usageFor ??
+              ((operation) =>
+                operationUsage(
+                  usage,
+                  operation,
+                  ports.suggestPorts?.recordUsage !== false,
+                )),
+          },
+          productIdentityPorts: {
+            ...ports.productIdentityPorts,
+            usage:
+              ports.productIdentityPorts?.usage ??
+              operationUsage(usage, "product-identity"),
+          },
         },
       );
       // Incomplete coverage retries the whole source rather than publishing
@@ -2006,14 +2095,48 @@ function connectionEvaluationPageAdapter(
         throw new Error(
           `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
         );
-      return { source, publications: preparation.publications };
+      return {
+        source,
+        connections: preparation.connections,
+        productPairs: preparation.productPairs,
+        publications: preparation.publications,
+      };
     },
-    weight: (entry) => 1 + entry.outcome.publications.length,
+    weight: (entry) =>
+      1 +
+      entry.outcome.publications.length +
+      entry.outcome.connections.length +
+      entry.outcome.productPairs.length,
     async publish(tx, outcomes) {
       const fingerprints = await connectionSourceFingerprintsOrMissing(
         tx,
         outcomes.map((entry) => entry.outcome.source),
       );
+      const { publishPreparedEntityConnections } =
+        await import("~/server/domains/connection/repo/entity-connections");
+      const valid = outcomes.filter(
+        (entry, index) => fingerprints[index] === entry.evidenceDigest,
+      );
+      await publishPreparedEntityConnections(
+        tx,
+        valid.flatMap((entry) => entry.outcome.connections),
+      );
+      const pairs = [
+        ...new Map(
+          valid
+            .flatMap((entry) => entry.outcome.productPairs)
+            .map((pair) => [pair.key, pair]),
+        ).values(),
+      ];
+      for (let offset = 0; offset < pairs.length; offset += 25) {
+        const results = await publishProductPairPublications(
+          tx,
+          pairs.slice(offset, offset + 25),
+        );
+        if (results.some((result) => !result.valid))
+          throw new Error("Product pair evidence changed during inference");
+      }
+
       const published: EvaluationPagePublication[] = [];
       for (const [index, entry] of outcomes.entries()) {
         if (fingerprints[index] !== entry.evidenceDigest) {
@@ -2031,7 +2154,10 @@ function connectionEvaluationPageAdapter(
           receipt: jsonSnapshot({
             source: entry.outcome.source,
             discovered: true,
-            candidates: entry.outcome.publications.length,
+            candidates:
+              entry.outcome.publications.length +
+              entry.outcome.connections.length +
+              entry.outcome.productPairs.length,
           }),
         });
       }

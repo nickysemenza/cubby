@@ -20,6 +20,8 @@ import {
   searchDocument,
   product,
 } from "~/server/db/schema";
+import { publishPreparedEntityConnections } from "~/server/domains/connection/repo/entity-connections";
+import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import { executeAiRefreshTarget as executeAiRefreshTargetImplementation } from "~/server/domains/run/service/ai-refresh";
@@ -71,8 +73,14 @@ const executeAiRefreshTarget = async (
 async function prepareCombinedConnections(
   ...args: Parameters<typeof prepareEntityConnections>
 ) {
-  const { publications } = await prepareEntityConnections(...args);
+  const { connections, productPairs, publications } =
+    await prepareEntityConnections(...args);
   return async (db: Parameters<(typeof publications)[number]>[0]) => {
+    await publishPreparedEntityConnections(db, connections);
+    if (productPairs.length)
+      await withTransactionDatabase(db, (tx) =>
+        publishProductPairPublications(tx, productPairs),
+      );
     for (const publish of publications) await publish(db);
   };
 }

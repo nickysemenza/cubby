@@ -7,7 +7,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   entityLink,
   financialTransactionAllocation,
@@ -175,6 +175,18 @@ describe("prepared connection bases", () => {
       expect(
         canonicalJson(await captureConnectionBasis(ctx.db, raw, false, ready)),
       ).toBe(canonicalJson(await captureConnectionBasis(ctx.db, raw)));
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      const locked = await prepareConnectionBases(
+        tx,
+        candidates,
+        undefined,
+        true,
+      );
+      for (const raw of candidates)
+        expect(
+          canonicalJson(await captureConnectionBasis(tx, raw, true, locked)),
+        ).toBe(canonicalJson(await captureConnectionBasis(tx, raw, true)));
+    });
     // Tags are not connection evidence; a large unrelated value must never
     // cross the wire in either the single-record or prepared-batch path.
     await getDb(ctx.db)

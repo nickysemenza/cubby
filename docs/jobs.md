@@ -656,13 +656,32 @@ Routing, response-cache keys and per-question avoided usage stay unchanged.
 An oversized question fails visibly. Page evidence is limited to 4 MiB; an
 unadmitted suffix stays due rather than completing its enumeration receipt.
 
-Connection pages keep each source's single-source preparation (candidate
-retrieval, model calls, evidence capture) and evaluate 8 sources at once (a Worker invocation holds five strong connections); the
-page shares what made a source slow: its claim, guard and settlement, about 30
-round trips for a source without candidates. One batched fingerprint read
-fences the page before evaluation and each chunk before writes; a changed or
-deleted source is obsolete without writes. Incomplete candidate coverage
-retries the source before any of its candidates publish.
+Connection pages evaluate 8 sources at once (a Worker invocation holds five
+strong connections). Expense Project recommendation inputs and
+FinancialTransaction settlement/transfer retrieval load for the page before
+provider work. Nearby purchases retain their per-transaction top ten and each
+Purchase retains its original ranked settlement limit before allocation and
+conflict filtering. Acquisition search still captures each newly retrieved
+candidate before subsequent provider waits. Compatible Product identity and
+field questions share operation-specific usage objects and the page's decision
+wave; nested pair evaluation joins that wave instead of dispatching per source.
+Distinct Runs, features, models and operations remain separate accounting groups.
+Duplicate questions inside one wave await its own cache claim's completion;
+Jobs still defer when another invocation owns the claim.
+
+One batched fingerprint read fences the page before evaluation and each chunk
+before writes; a changed or deleted source is obsolete without writes.
+Incomplete candidate coverage retries the source before any of its candidates
+publish. Candidate publication locks live endpoints in domain parent order,
+recomputes dependency bases and acquisition eligibility in sets, and compares
+each locked basis against its original retrieval evidence. It then uses one
+immutable Assessment batch and one supersession transition for the chunk.
+Repeated edges retain the last publication's active fingerprint, preserving
+sequential publication semantics; member suppression and review are unchanged.
+Canonical Product pairs retrieved by multiple source owners publish once per
+chunk through the existing pair batch writer, before those owners settle.
+The single-target path shares the candidate publisher in batches of 16 while
+retaining its existing publication authority and incomplete-coverage behavior.
 
 Publication commits at most 25 outcomes per SERIALIZABLE transaction (an
 adapter may weight outcomes, so a connection with many candidates fills its

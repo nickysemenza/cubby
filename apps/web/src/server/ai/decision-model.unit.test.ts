@@ -956,6 +956,51 @@ describe("runDecisionChoices", () => {
     expect(requests).toEqual([1, 2]);
   });
 
+  it("keeps nested pair work in its owning page's request batch", async () => {
+    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+    await resetDecisionTransport();
+    const { runDecisionChoice, settleDecisionWorkItems } =
+      await import("./decision-model");
+    const sizes: number[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      const input = JSON.parse(String(init?.body)).input;
+      const ids = Object.keys(input.questions);
+      sizes.push(ids.length);
+      return Response.json({
+        result: {
+          answers: Object.fromEntries(
+            ids.map((id) => [
+              id,
+              {
+                type: "choice",
+                choice: "c0",
+                confidence: 0.9,
+                probabilities: { c0: 0.9, c1: 0.1 },
+              },
+            ]),
+          ),
+        },
+      });
+    });
+    const results = await settleDecisionWorkItems(
+      ["first", "second"],
+      (source) =>
+        settleDecisionWorkItems(["pair"], (pair) =>
+          runDecisionChoice({
+            ...base,
+            subject: `Synthetic ${source} ${pair}`,
+            choices: ["same", "different"],
+            allowNone: false,
+          }),
+        ),
+    );
+    expect(results.map((result) => result.status)).toEqual([
+      "fulfilled",
+      "fulfilled",
+    ]);
+    expect(sizes).toEqual([2]);
+  });
+
   it("splits at the context bound without dropping questions", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     await resetDecisionTransport();

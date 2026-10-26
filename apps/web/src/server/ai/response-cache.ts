@@ -201,6 +201,23 @@ function cacheStore(key: string): CacheStore {
 
 /** Collect the first lookup of each independent decision before reading bounded shard chunks. */
 export class AiResponseCacheBatch {
+  private owned = new Map<string, { token: string; done: Promise<void> }>();
+
+  /** Only duplicates owned by this finite wave may wait inside a Job. */
+  waitForOwned(key: string) {
+    return this.owned.get(key)?.done;
+  }
+
+  own(key: string, token: string) {
+    const completion = Promise.withResolvers<void>();
+    this.owned.set(key, { token, done: completion.promise });
+    return () => {
+      if (this.owned.get(key)?.token !== token) return;
+      this.owned.delete(key);
+      completion.resolve();
+    };
+  }
+
   private pending: Set<number>;
   private requests: {
     key: string;
@@ -334,7 +351,15 @@ export async function withAiResponseCache<T>(args: {
     }
     if (claim.kind === "busy") {
       args.onWait?.();
-      // A job page republishes its cursor instead of polling inside its page.
+      // Let the owning question dispatch before awaiting a duplicate in this
+      // wave. A sibling's completion is finite and needs no lease polling.
+      const owned = args.batch?.batch.waitForOwned(key);
+      if (owned) {
+        await owned;
+        force = false;
+        continue;
+      }
+      // A job page republishes its cursor instead of polling another invocation.
       if (inJobExecution())
         throw deferred(
           "Another request is computing this AI answer; no duplicate model call was placed.",
@@ -344,60 +369,65 @@ export async function withAiResponseCache<T>(args: {
       continue;
     }
     const token = claim.token;
-    const heartbeat = setInterval(() => {
-      void Promise.resolve(store.renew(key, token)).catch((error) => {
-        // SILENT: A failed renewal leaves the lease reclaimable after expiry.
-        log.error("lease renewal failed", { error });
-      });
-    }, 15_000);
-    let result: T;
-    let value: string;
+    const finish = args.batch?.batch.own(key, token);
     try {
-      const kept = keptAnswer(key, args.validate);
-      if (kept) {
-        ({ result, value } = kept);
-      } else {
-        const usage: AiAvoidedUsage[] = [];
-        result = args.validate(
-          jsonSchema.parse(
-            await args.compute("miss", (recorded) => usage.push(recorded)),
-          ),
-        );
-        value = JSON.stringify({
-          [ENTRY_MARKER]: ENTRY_VERSION,
-          value: result,
-          usage: usage.length ? sumUsage(usage) : null,
+      const heartbeat = setInterval(() => {
+        void Promise.resolve(store.renew(key, token)).catch((error) => {
+          // SILENT: A failed renewal leaves the lease reclaimable after expiry.
+          log.error("lease renewal failed", { error });
         });
+      }, 15_000);
+      let result: T;
+      let value: string;
+      try {
+        const kept = keptAnswer(key, args.validate);
+        if (kept) {
+          ({ result, value } = kept);
+        } else {
+          const usage: AiAvoidedUsage[] = [];
+          result = args.validate(
+            jsonSchema.parse(
+              await args.compute("miss", (recorded) => usage.push(recorded)),
+            ),
+          );
+          value = JSON.stringify({
+            [ENTRY_MARKER]: ENTRY_VERSION,
+            value: result,
+            usage: usage.length ? sumUsage(usage) : null,
+          });
+        }
+        const bytes = new TextEncoder().encode(value).byteLength;
+        if (bytes > MAX_VALUE_BYTES)
+          throw new Error(
+            `AI answer ${key} is ${bytes} bytes, above the ${MAX_VALUE_BYTES}-byte response cache bound; it was not stored.`,
+          );
+      } catch (error) {
+        clearInterval(heartbeat);
+        await releaseClaim(store, key, token);
+        throw error;
       }
-      const bytes = new TextEncoder().encode(value).byteLength;
-      if (bytes > MAX_VALUE_BYTES)
-        throw new Error(
-          `AI answer ${key} is ${bytes} bytes, above the ${MAX_VALUE_BYTES}-byte response cache bound; it was not stored.`,
+      try {
+        if (!(await publish(store, key, token, value)))
+          throw new Error(
+            "The cache claim expired before the answer was written.",
+          );
+      } catch (error) {
+        // The claim is left to expire so another isolate cannot pay for the
+        // same answer while this one can still write it.
+        log.error("publish failed", { error });
+        keepUnwritten(key, token, value);
+        throw deferred(
+          "The AI answer was not written to the response cache; a retry in this Worker writes it without another model call.",
+          error,
         );
-    } catch (error) {
-      clearInterval(heartbeat);
-      await releaseClaim(store, key, token);
-      throw error;
-    }
-    try {
-      if (!(await publish(store, key, token, value)))
-        throw new Error(
-          "The cache claim expired before the answer was written.",
-        );
-    } catch (error) {
-      // The claim is left to expire so another isolate cannot pay for the
-      // same answer while this one can still write it.
-      log.error("publish failed", { error });
-      keepUnwritten(key, token, value);
-      throw deferred(
-        "The AI answer was not written to the response cache; a retry in this Worker writes it without another model call.",
-        error,
-      );
+      } finally {
+        clearInterval(heartbeat);
+      }
+      dropUnwritten(key);
+      return result;
     } finally {
-      clearInterval(heartbeat);
+      finish?.();
     }
-    dropUnwritten(key);
-    return result;
   }
   throw deferred(
     "Another request was still computing this AI answer after 5 minutes; no duplicate model call was placed.",

@@ -8,7 +8,10 @@ import { HOUSEHOLD_PROJECT_SHORTCODE } from "@cubby/schemas/project";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { expenseProjectRecommendationContext } from "~/server/domains/expense/repo/project-recommendations";
+import {
+  expenseProjectRecommendationContext,
+  expenseProjectRecommendationContexts,
+} from "~/server/domains/expense/repo/project-recommendations";
 import { getInventoryEntryByShortcode } from "~/server/domains/inventory/repo/crud";
 import { getPlacementRecommendation } from "~/server/domains/inventory/service/placement-recommendation.service";
 import {
@@ -25,6 +28,29 @@ async function expenseRecommendations(
     db,
     parseShortcodeFor("expense", source.entityId),
   );
+  return expenseRecommendationsFromContext(source, context);
+}
+
+export async function getExpenseRecommendationPage(
+  db: Database,
+  sources: readonly EntityRef[],
+) {
+  const contexts = await expenseProjectRecommendationContexts(
+    db,
+    sources.map((source) => parseShortcodeFor("expense", source.entityId)),
+  );
+  return sources.map((source) =>
+    expenseRecommendationsFromContext(
+      source,
+      contexts.get(parseShortcodeFor("expense", source.entityId)) ?? null,
+    ),
+  );
+}
+
+function expenseRecommendationsFromContext(
+  source: EntityRef,
+  context: Awaited<ReturnType<typeof expenseProjectRecommendationContext>>,
+): EntityRecommendationsOut {
   if (!context) return { source, basisKey: source.entityId, groups: [] };
   const { source: row, projects, history, currentTarget } = context;
   const counts = new Map<string, TradeAffinityCell>();

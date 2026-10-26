@@ -3,6 +3,7 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
+import type { EntityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
@@ -16,17 +17,27 @@ import {
 import { evaluateProductIdentity } from "~/server/ai/product-identity";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { retrieveConnectionCandidates } from "~/server/domains/connection/repo/connection-candidates";
-import { prepareEntityConnections as prepareConnectionCandidates } from "~/server/domains/connection/repo/entity-connections";
+import {
+  retrieveConnectionCandidates,
+  retrieveFinancialConnectionCandidatePage,
+} from "~/server/domains/connection/repo/connection-candidates";
+import {
+  prepareEntityConnectionEvidence,
+  type PreparedEntityConnection,
+} from "~/server/domains/connection/repo/entity-connections";
 import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
 } from "~/server/domains/connection/repo/field-connections";
 import {
   prepareProductPairPublications,
-  publishProductPairPublications,
+  productPairKey,
+  type PreparedProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
-import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
+import {
+  getEntityRecommendations,
+  getExpenseRecommendationPage,
+} from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";
@@ -53,9 +64,10 @@ const connectionFields = new Map<string, readonly string[]>(
 export type ConnectionPreparationPorts = {
   suggestPorts?: Parameters<typeof suggestFields>[3];
   productIdentityPorts?: Parameters<typeof evaluateProductIdentity>[3];
+  initialConnections?: readonly PreparedEntityConnection[];
 };
 
-/** Model work precedes the authority fence; each returned unit publishes in a separate fenced transaction. */
+/** Model work precedes the authority fence; candidate evidence publishes in bounded chunks. */
 export async function prepareEntityConnections(
   db: Database,
   context: EntityKernelContext,
@@ -64,6 +76,7 @@ export async function prepareEntityConnections(
 ) {
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
+  const productPairs: PreparedProductPairPublication[] = [];
   let productRecordId: ProductId | undefined;
   const stage = <T>(name: string, fn: () => Promise<T>) =>
     withTrace(TraceNames.service("connections", name), fn, {
@@ -73,26 +86,33 @@ export async function prepareEntityConnections(
   // await a provider: evidence is captured as retrieved, so a change made
   // while an embedding waits fails the locked basis comparison at publish
   // instead of being captured as if it had been retrieved.
-  const captured = new Set<string>();
+  const connections: PreparedEntityConnection[] = [
+    ...(ports.initialConnections ?? []),
+  ];
+  const candidateKey = (candidate: ConnectionCandidate) =>
+    `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
+  const captured = new Set(
+    connections.map((entry) => candidateKey(entry.candidate)),
+  );
   const captureCandidates = async (
     candidates: readonly ConnectionCandidate[],
   ) => {
     const fresh = candidates.filter((candidate) => {
-      const key = `${candidate.relation}:${candidate.source.entityId}:${candidate.target.entityId}`;
+      const key = candidateKey(candidate);
       if (captured.has(key)) return false;
       captured.add(key);
       return true;
     });
-    for (const publish of await stage("prepare", () =>
-      prepareConnectionCandidates(db, fresh),
-    ))
-      publishers.push(async (transactionDb) => {
-        await publish(transactionDb);
-      });
+    connections.push(
+      ...(await stage("prepare", () =>
+        prepareEntityConnectionEvidence(db, fresh),
+      )),
+    );
   };
-  await stage("retrieve", async () =>
-    captureCandidates(await retrieveConnectionCandidates(db, source)),
-  );
+  if (!ports.initialConnections)
+    await stage("retrieve", async () =>
+      captureCandidates(await retrieveConnectionCandidates(db, source)),
+    );
   // Indexed/semantic retrieval may call a model; preserve earlier candidates first.
   const acquisition = await stage("acquisitionScan", async () => {
     // Query embeddings bill to the evaluation's Run rather than opening one.
@@ -103,42 +123,14 @@ export async function prepareEntityConnections(
     return scan;
   });
   const candidates: ConnectionCandidate[] = [];
-  if (source.entityKind === "expense" || source.entityKind === "inventory") {
+  if (
+    (!ports.initialConnections && source.entityKind === "expense") ||
+    source.entityKind === "inventory"
+  ) {
     const recommendations = await stage("recommendations", () =>
       getEntityRecommendations(db, source),
     );
-    for (const group of recommendations.groups) {
-      if (group.kind === "expense-project")
-        for (const proposal of group.proposals)
-          candidates.push({
-            relation: "expense-project",
-            source,
-            target: { entityKind: "project", entityId: proposal.target.id },
-            label: "Review Project assignment",
-            evidence: {
-              reasons: proposal.reasons,
-              contradictions: [],
-              unknowns: [
-                "Trade and date overlap are advisory; confirm the expense belongs to this Project",
-              ],
-            },
-          });
-      if (group.kind === "inventory-placement")
-        for (const proposal of group.proposals)
-          candidates.push({
-            relation: "inventory-location",
-            source,
-            target: { entityKind: "location", entityId: proposal.target.id },
-            label: "Review inventory placement",
-            evidence: {
-              reasons: proposal.reasons,
-              contradictions: [],
-              unknowns: [
-                "Another stock destination does not prove this row is physically there",
-              ],
-            },
-          });
-    }
+    candidates.push(...recommendationCandidates(source, recommendations));
   }
   await captureCandidates(candidates);
   if (source.entityKind === "product") {
@@ -165,18 +157,14 @@ export async function prepareEntityConnections(
         db,
         identity.pairs
           .slice(offset, offset + 16)
-          .map((input, index) => ({ key: String(index), input })),
+          .map((input) => ({
+            key: productPairKey(...input.productIds),
+            input,
+          })),
       );
       if (prepared.length !== identity.pairs.slice(offset, offset + 16).length)
         throw new Error("Product pair evidence changed during inference");
-      for (const publication of prepared)
-        publishers.push(async (transactionDb) => {
-          const [result] = await publishProductPairPublications(transactionDb, [
-            publication,
-          ]);
-          if (!result?.valid)
-            throw new Error("Product pair evidence changed during inference");
-        });
+      productPairs.push(...prepared);
     }
   }
   publishers.push(
@@ -185,6 +173,8 @@ export async function prepareEntityConnections(
     )),
   );
   return {
+    connections,
+    productPairs,
     publications: publishers,
     complete: acquisition.complete,
     coverageErrors: acquisition.coverageErrors,
@@ -330,4 +320,79 @@ async function prepareFieldConnections(
     );
   }
   return publishers;
+}
+
+function recommendationCandidates(
+  source: EntityRef,
+  recommendations: EntityRecommendationsOut,
+) {
+  const candidates: ConnectionCandidate[] = [];
+  for (const group of recommendations.groups) {
+    if (group.kind === "expense-project")
+      for (const proposal of group.proposals)
+        candidates.push({
+          relation: "expense-project",
+          source,
+          target: { entityKind: "project", entityId: proposal.target.id },
+          label: "Review Project assignment",
+          evidence: {
+            reasons: proposal.reasons,
+            contradictions: [],
+            unknowns: [
+              "Trade and date overlap are advisory; confirm the expense belongs to this Project",
+            ],
+          },
+        });
+    if (group.kind === "inventory-placement")
+      for (const proposal of group.proposals)
+        candidates.push({
+          relation: "inventory-location",
+          source,
+          target: { entityKind: "location", entityId: proposal.target.id },
+          label: "Review inventory placement",
+          evidence: {
+            reasons: proposal.reasons,
+            contradictions: [],
+            unknowns: [
+              "Another stock destination does not prove this row is physically there",
+            ],
+          },
+        });
+  }
+  return candidates;
+}
+
+/** Provider-free heavy-source retrieval and evidence capture for the whole page. */
+export async function prepareEntityConnectionSources(
+  db: Database,
+  sources: readonly EntityRef[],
+) {
+  const expenses = sources.filter((source) => source.entityKind === "expense");
+  const financial = sources.filter(
+    (source) => source.entityKind === "financialTransaction",
+  );
+  const retrieved = await retrieveFinancialConnectionCandidatePage(
+    db,
+    financial,
+  );
+  for (const recommendations of await getExpenseRecommendationPage(
+    db,
+    expenses,
+  ))
+    retrieved.set(
+      recommendations.source.entityId,
+      recommendationCandidates(recommendations.source, recommendations),
+    );
+  const owners: string[] = [];
+  const candidates = [...retrieved].flatMap(([owner, values]) => {
+    owners.push(...values.map(() => owner));
+    return values;
+  });
+  const evidence = await prepareEntityConnectionEvidence(db, candidates);
+  const out = new Map<string, PreparedEntityConnection[]>(
+    [...retrieved.keys()].map((key) => [key, []]),
+  );
+  for (const [index, entry] of evidence.entries())
+    out.get(owners[index]!)!.push(entry);
+  return out;
 }
