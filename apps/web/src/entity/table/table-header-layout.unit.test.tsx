@@ -262,6 +262,7 @@ const tradeColumns = tradeHelper.columns([
     header: "Trade",
     meta: {
       filterConfig: {
+        placeholder: "Filter trade",
         filterType: "multiselect",
         options: [
           { value: "orchard", label: "Orchard" },
