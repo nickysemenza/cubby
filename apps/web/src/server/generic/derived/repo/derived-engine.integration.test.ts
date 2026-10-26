@@ -50,6 +50,11 @@ import {
 } from "~/server/generic/derived/repo/drain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
+import {
+  withJobBatchExecution,
+  withJobExecution,
+} from "~/server/generic/jobs/context";
+import { claimJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   makeLocationInput,
@@ -147,6 +152,105 @@ describe("stored derived values", () => {
     expect(stored?.value).toBe(10);
     expect(stored?.meta.state).toBe("fresh");
     expect(await marks("inventory.valuation")).toEqual([]);
+  });
+
+  it("claims newer member edits before older background source writes without demoting member work", async () => {
+    const background = await makeProduct("Synthetic background source", 2);
+    const member = await makeProduct("Synthetic member source", 3);
+    // Isolate source capture from fixture creation, without invoking compute adapters.
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    const saved = await enqueueJob(ctx.db, {
+      key: "synthetic:derived-source-priority",
+      kind: "image.cloud",
+      input: {},
+    });
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Expected synthetic Job claim");
+    const rename = (id: ProductId, name: string) =>
+      withTransaction(ctx.db, (tx) =>
+        tx.update(product).set({ name }).where(eq(product.id, id)),
+      );
+    await withJobExecution(ctx.db, claim, () =>
+      rename(background, "Synthetic background source changed"),
+    );
+    const backgroundMarks = await claimDerivedMarks(ctx.db);
+    expect(backgroundMarks.length).toBeGreaterThan(0);
+    expect(
+      backgroundMarks.map(({ target, priority }) => ({ target, priority })),
+    ).toEqual(backgroundMarks.map(({ target }) => ({ target, priority: 1 })));
+
+    await rename(member, "Synthetic member source changed");
+    expect((await claimDerivedMarks(ctx.db, 1))[0]?.ref).toBe(member);
+    await withJobExecution(ctx.db, claim, () =>
+      rename(member, "Synthetic background follow-up"),
+    );
+    expect(
+      (await claimDerivedMarks(ctx.db))
+        .filter((mark) => mark.ref === member)
+        .every((mark) => mark.priority === 0),
+    ).toBe(true);
+    await rename(background, "Synthetic member promotion");
+    expect(
+      (await claimDerivedMarks(ctx.db)).every((mark) => mark.priority === 0),
+    ).toBe(true);
+  });
+
+  it("keeps caller-owned member transactions at member priority inside a Job scope", async () => {
+    const item = await makeProduct("Synthetic nested priority", 2);
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    const saved = await enqueueJob(ctx.db, {
+      key: "synthetic:derived-nested-priority",
+      kind: "image.cloud",
+      input: {},
+    });
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Expected synthetic Job claim");
+    await withTransaction(ctx.db, (outer) => {
+      const db = databaseForTransaction(outer);
+      return withJobExecution(db, claim, () =>
+        withTransaction(db, (inner) =>
+          inner
+            .update(product)
+            .set({ name: "Synthetic nested member change" })
+            .where(eq(product.id, item)),
+        ),
+      );
+    });
+    const pending = await claimDerivedMarks(ctx.db);
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending.every((mark) => mark.priority === 0)).toBe(true);
+  });
+
+  it("inherits background priority through savepoints and clears it after rollback", async () => {
+    const item = await makeProduct("Synthetic batch priority", 2);
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await expect(
+      withJobBatchExecution(() =>
+        withTransaction(ctx.db, async (outer) => {
+          const db = databaseForTransaction(outer);
+          await withTransaction(db, (inner) =>
+            inner
+              .update(product)
+              .set({ name: "Synthetic batch change" })
+              .where(eq(product.id, item)),
+          );
+          const pending = await claimDerivedMarks(db);
+          expect(pending.length).toBeGreaterThan(0);
+          expect(pending.every((mark) => mark.priority === 1)).toBe(true);
+          throw new Error("Synthetic batch rollback");
+        }),
+      ),
+    ).rejects.toThrow("Synthetic batch rollback");
+    expect(await claimDerivedMarks(ctx.db)).toEqual([]);
+    await withTransaction(ctx.db, (tx) =>
+      tx
+        .update(product)
+        .set({ name: "Synthetic member after rollback" })
+        .where(eq(product.id, item)),
+    );
+    const pending = await claimDerivedMarks(ctx.db);
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending.every((mark) => mark.priority === 0)).toBe(true);
   });
 
   it("backs off a long-failing target without overflowing the delay", async () => {
@@ -474,18 +578,21 @@ describe("stored derived values", () => {
           parseEntityId("product", await resolved(kettle.id, "product")),
         ),
       );
-    // Expand fanout marks only; the direct marks they create stay pending.
-    while ((await fanoutMarks("task.searchDocument")).length > 0)
-      await publishDerivedPage(
+    // Expand in a background transaction; member priority must survive the Job.
+    while ((await fanoutMarks("task.searchDocument")).length > 0) {
+      const plan = await prepareDerivedPage(
         ctx.db,
-        await prepareDerivedPage(
-          ctx.db,
-          derivedComputes,
-          (await claimDerivedMarks(ctx.db, 10_000)).filter((mark) =>
-            mark.target.startsWith("task.searchDocument@"),
-          ),
+        derivedComputes,
+        (await claimDerivedMarks(ctx.db, 10_000)).filter((mark) =>
+          mark.target.startsWith("task.searchDocument@"),
         ),
       );
+      await withJobBatchExecution(() =>
+        withTransaction(ctx.db, (tx) =>
+          publishDerivedPage(databaseForTransaction(tx), plan),
+        ),
+      );
+    }
     expect(await marks("task.searchDocument")).toEqual(
       [parent, child].map((task) => task.entityId).sort(),
     );

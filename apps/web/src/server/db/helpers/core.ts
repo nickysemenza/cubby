@@ -1,5 +1,6 @@
 import { sleep } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
+import { sql } from "drizzle-orm";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
 
 import { mergeDatabaseChanges, type DatabaseChanges } from "~/lib/doorbell";
@@ -13,6 +14,7 @@ import { databaseRequestId } from "~/server/db/db-observability";
 import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import { isSerializationFailure } from "~/server/errors/db-errors";
+import { inJobExecution } from "~/server/generic/jobs/context";
 import {
   databaseTraceCaller,
   TraceNames,
@@ -274,6 +276,12 @@ const withTransactionAttempts = async <T>(
           beforeCommitQueues.set(tx, before);
           transactionParents.set(tx, db);
           try {
+            // A savepoint inherits its caller's priority. SET LOCAL also keeps
+            // pooled connections from carrying Job priority into member saves.
+            if (!callerOwned && inJobExecution())
+              await tx.execute(
+                sql`SELECT set_config('cubby.derived_priority', '1', true)`,
+              );
             const value = await fn(tx);
             if (!parentBefore) {
               // Capture may wait for another writer. Recheck live ownership

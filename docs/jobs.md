@@ -142,6 +142,12 @@ The selector materializes the backlog weight once per kind. Numeric logarithms
 must not be evaluated for every candidate Job in a large backfill; the weight
 and all admission and ordering rules remain shared by selection and queue positions.
 
+Job source writes also respect the derived drain's member-first ordering:
+root transactions in Job execution (including shared evaluation batches) mark
+derived inputs at priority 1, while member transactions use 0. Savepoints
+inherit the outer transaction's priority. This uses the existing dirty-mark
+priority and does not add another queue or change Job selection weights.
+
 `JOB_KIND_POLICY.maxInFlight` optionally caps background claims across all
 drains. Selection admits only the remaining capacity; claim-time admission
 uses a nonblocking transaction advisory lock per kind and rechecks live leases

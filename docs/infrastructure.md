@@ -326,7 +326,7 @@ Neon owns the PostgreSQL database. Production compute is autoscaling
 an idle gap waits for compute start (about 0.5 s median, 0.9 s p90), visible
 as a long `db.connect.phase.startup` on `db.client.connect`. This range belongs to the production endpoint: changing the project's
 default compute range does not resize an existing endpoint. The Hyperdrive
-origin connection caps below are 12 + 12. Both configurations share origin
+origin connection caps below are 30 uncached + 12 cached. Both configurations share origin
 compute; the cached pool needs headroom for short reads while expensive reads
 are running. Pool caps are soft limits, not interactive connection reservations.
 Keep them below database capacity and measure origin waits and query execution
@@ -334,13 +334,25 @@ together before raising them. More connections cannot remove expensive query
 work. The background
 queue consumer settings (`packages/shared/src/background-queue-consumer.json`)
 and each drain's page concurrency (`JOB_DRAIN.concurrency`) bound concurrent
-Job pages; four drains of three pages stay within the 12-connection origin
-caps while pages wait on providers. It is not a measured optimum or an
+Job pages; four drains of three pages bound delivery concurrency while pages
+wait on providers. It is not a measured optimum or an
 interactive connection reservation. Tune it against queue backlog and oldest
 due age (`job.health`), origin pool waits, and interactive latency together. Telemetry
 concurrency remains 1. Purchase dispatch starts coordinator work outside Job delivery; the background
 queue cap does not bound active coordinator database work. That workload policy
 remains separate.
+
+The uncached cap was raised from 12 to 30 on 2026-10-26 after a synthetic
+production save spent 4.0 seconds waiting at `BEGIN`, followed by 9–17 ms
+statements. Observational Hyperdrive windows showed average uncached
+connection latency falling from 286 to 22 ms and query latency from 366 to
+157 ms. Origin-read latency rose from 80 to 135 ms; traffic and query mix
+differ, so these are not isolated benchmarks. Synthetic create timings improved
+from 2.07–4.54 seconds to 0.73–1.27 seconds, but dependent freshness still
+exceeded 30 seconds. The cached cap, origin and caching settings were unchanged.
+Revert the uncached `origin_connection_limit` to 12 if additional origin
+pressure outweighs the admission benefit; verify both configurations afterward.
+The cap is provider-side state, not an optimum or a freshness guarantee.
 
 Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
 sessions; automatic resizing within those bounds does not. Apply a range change
@@ -354,7 +366,7 @@ connection string:
 
 | Binding             | Hyperdrive ID                      | Contract                                                                                              |
 | ------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 12                          |
+| `HYPERDRIVE`        | `adc9757dfffd45bc94d5c2a66b2ad410` | Authoritative reads and writes; caching disabled; origin connection limit 30                          |
 | `HYPERDRIVE_CACHED` | `427dd7a2876c4dccbe056d37fa7374ff` | Cache-eligible reads; 60-second max age, 15-second stale-while-revalidate; origin connection limit 12 |
 
 The IDs are checked into `apps/web/cloudflare.config.ts`; the origin connection

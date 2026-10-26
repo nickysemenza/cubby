@@ -281,6 +281,13 @@
       "when": 1793028396414,
       "tag": "0039_job_claimed_index",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793030091167,
+      "tag": "0040_background_derived_priority",
+      "breakpoints": true
     }
   ]
 }
