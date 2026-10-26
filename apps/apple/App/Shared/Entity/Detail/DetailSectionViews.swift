@@ -673,6 +673,10 @@ struct FieldExplanationLabel: View {
                     )
                     .font(.callout)
                 } else if let resolved {
+                    if let derived = resolved.derived {
+                        DerivedExplanationSummary(explanation: derived, field: field)
+                        Divider()
+                    }
                     explanationSectionLabel("What this means")
                     if let interpretation = resolved.interpretation {
                         if resolved.resolution == nil {
@@ -1055,7 +1059,7 @@ struct FieldExplanationLabel: View {
 }
 
 /// Structured evidence remains readable at accessibility text sizes.
-private struct ExplanationEvidenceValue: View {
+struct ExplanationEvidenceValue: View {
     let value: JSONValue
     var property: String? = nil
     var hidesByteIdentity = false

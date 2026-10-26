@@ -2464,7 +2464,11 @@ lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
 missing value reads as unknown, never zero. List pages and record reads carry a
 `derived` sidecar per row: state (`fresh`, `stale`, `missing`, `failed`), the
 deciding level and computation time. Field explanations add the stored value
-beside a live recompute for that one record; they never publish it.
+beside a live recompute for that one record; they never publish it. Web and
+Apple explanations distinguish the published value from the live result,
+retain Updating and calculation failures, and show the publication time when
+known. Values use the field's formatter, with structured evidence retained for
+non-scalar results; an unavailable live computation stays explicit.
 
 The derived cache is disposable: truncating `DerivedValue` and marking every
 declaration rebuilds the same values. Overrides, explicit None, waivers and
