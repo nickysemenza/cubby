@@ -1,6 +1,6 @@
 {
-  "id": "8b51ac55-0978-4b15-b3de-81dfdba75ab5",
-  "prevId": "28484217-0d3c-4af4-9c93-bd1a33846d9f",
+  "id": "59a6b901-bb4d-4a70-a444-4d2836f20722",
+  "prevId": "5b208d40-8dd0-44ec-a838-8582e0d430e5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1431,6 +1431,21 @@
             },
             {
               "expression": "sortText",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "DerivedValue_computed_idx": {
+          "name": "DerivedValue_computed_idx",
+          "columns": [
+            {
+              "expression": "computedAt",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

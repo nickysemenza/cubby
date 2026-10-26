@@ -91,6 +91,7 @@ import {
 } from "~/server/domains/purchase/repo/settlement-grace";
 import {
   pendingSuggestion,
+  pendingStatementStateSql,
   suggestionField,
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
@@ -109,6 +110,7 @@ import {
   NO_FACT_COLUMNS,
   scopeAdmitsUnrecorded,
   workQueueCandidate,
+  workQueueAdmits,
   workRecordFactColumns,
   type WorkQueueScope,
 } from "~/server/generic/work-queue/repo/work-queue-projection";
@@ -207,8 +209,8 @@ const gapViewFilters = (
     // queues retain indexed published predicates; this read publishes nothing.
     return missing ? { ...filters, dataGap: undefined } : null;
   }
-  if (!scope.gapChecks) return filters;
-  const requested = new Set(scope.gapChecks);
+  if (!scope.reasons?.length && !scope.gapChecks) return filters;
+  const requested = new Set(scope.reasons ?? scope.gapChecks);
   const checks = workQueueGapChecks(gapView).filter((check) =>
     requested.has(check),
   );
@@ -278,6 +280,7 @@ export type WorkProblemSelections = (
   readContexts?: Partial<Record<Entity, QualityReadContext>>,
 ) => Promise<SQL[]>;
 
+// oxlint-disable-next-line complexity -- Source branches share one exact-count population and must reject excluded work before preparing it.
 async function workQueueProjection(
   db: Database,
   scope: WorkQueueScope,
@@ -286,7 +289,34 @@ async function workQueueProjection(
   searched: boolean,
 ): Promise<SQL> {
   const selections: SQL[] = [];
-  if (!scope.gapChecks) {
+  const branch = (
+    source: WorkQueueRow["source"],
+    kinds: readonly WorkQueueRow["kind"][],
+    ...reasons: string[]
+  ) => workQueueAdmits(scope, { source, kinds, reasons });
+  // A grouped suggestion has only counts in its dynamic text. For a search
+  // without digits, representative singular/plural counts preserve every
+  // possible match and can reject the branch before reading its evidence.
+  // Record groups have dynamic titles; the final predicate handles those.
+  const aggregateSearch = (
+    name: string,
+    reasons: readonly string[],
+    nextAction: string,
+  ): SQL => {
+    const query = scope.query;
+    if (!query || scope.record || /[0-9]/.test(query)) return sql`true`;
+    return sql`(${sql.join(
+      reasons.map(
+        (reason) =>
+          sql`concat_ws(' ', ${name}::text, ${reason}::text, ${nextAction}::text) ILIKE ${ilikeContains(query)}`,
+      ),
+      sql` OR `,
+    )})`;
+  };
+  if (
+    !scope.gapChecks &&
+    branch("suggestion", ["review"], "suggestions:recommendation")
+  ) {
     // Background retirement maintains pending state. Reads never rebuild the
     // population's evidence; application still revalidates inside its transaction.
     const target = (field: "entityId" | "entityKind") =>
@@ -331,7 +361,7 @@ async function workQueueProjection(
       FROM "AssessmentState" current
       JOIN work_connection_prediction prediction ON prediction.id = current.id
       JOIN "Entity" root ON root.id = current."recordId" AND root.kind = current.entity
-      WHERE ${reviewable}
+      WHERE ${reviewable} AND ${aggregateSearch("Connection suggestions", ["1 pending connection suggestion", "0 pending connection suggestions"], "Review them on the Suggestions page.")}
       HAVING count(*) > 0`);
   }
   // Skips building a branch the scope would drop anyway.
@@ -351,7 +381,16 @@ async function workQueueProjection(
       reason: gapReason(entity, "Research queue"),
       nextAction: "Review missing facts and add verified evidence.",
     }) satisfies Candidate;
-  const productGaps = gapViewFilters(scope, "product");
+  const researchAdmitted = branch(
+    "research",
+    ["research"],
+    ...workQueueGapViews
+      .filter((view) => view.source === "research")
+      .flatMap(workQueueGapChecks),
+  );
+  const productGaps = researchAdmitted
+    ? gapViewFilters(scope, "product")
+    : null;
   if (productGaps && admits("product", true))
     selections.push(
       ...workQueueCandidate(scope, {
@@ -371,7 +410,7 @@ async function workQueueProjection(
         carriesGaps: true,
       }),
     );
-  const vendorGaps = gapViewFilters(scope, "vendor");
+  const vendorGaps = researchAdmitted ? gapViewFilters(scope, "vendor") : null;
   if (vendorGaps && admits("vendor", true))
     selections.push(
       ...workQueueCandidate(scope, {
@@ -388,7 +427,9 @@ async function workQueueProjection(
         carriesGaps: true,
       }),
     );
-  const purchaseGaps = gapViewFilters(scope, "purchase");
+  const purchaseGaps = researchAdmitted
+    ? gapViewFilters(scope, "purchase")
+    : null;
   if (purchaseGaps && admits("purchase", true))
     selections.push(
       ...workQueueCandidate(scope, {
@@ -406,7 +447,9 @@ async function workQueueProjection(
         carriesGaps: true,
       }),
     );
-  const expenseGaps = gapViewFilters(scope, "expense");
+  const expenseGaps = researchAdmitted
+    ? gapViewFilters(scope, "expense")
+    : null;
   if (expenseGaps && admits("expense", true))
     selections.push(
       ...workQueueCandidate(scope, {
@@ -425,7 +468,15 @@ async function workQueueProjection(
         carriesGaps: true,
       }),
     );
-  const emailGaps = gapViewFilters(scope, "email");
+  const emailGaps = branch(
+    "email",
+    ["review"],
+    ...workQueueGapViews
+      .filter((view) => view.entity === "email")
+      .flatMap(workQueueGapChecks),
+  )
+    ? gapViewFilters(scope, "email")
+    : null;
   if (emailGaps && admits("email", true))
     selections.push(
       ...workQueueCandidate(scope, {
@@ -446,7 +497,10 @@ async function workQueueProjection(
         carriesGaps: true,
       }),
     );
-  if (scopeAdmitsUnrecorded(scope))
+  if (
+    scopeAdmitsUnrecorded(scope) &&
+    branch("suggestion", ["review"], "suggestions:statement_transaction")
+  )
     selections.push(sql`SELECT NULL::text AS entity, NULL::text AS id,
     'Transaction suggestions'::text AS name,
     'suggestions:' || ${assessmentFamily.enum.statement_transaction}::text AS key,
@@ -455,9 +509,13 @@ async function workQueueProjection(
       || ' (' || count(*) FILTER (WHERE (${suggestionField("clean")})::boolean) || ' ready to accept)' AS reason,
     'Review them on the Suggestions page; accept the clean ones as a group.'::text AS "nextAction",
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ARRAY[${"suggestions:statement_transaction"}::text] AS reason_keys, ${NO_FACT_COLUMNS}
-    FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+    FROM work_statement_state s WHERE ${pendingSuggestion("s", { populationRead: true })}
+      AND ${aggregateSearch("Transaction suggestions", ["1 transaction suggestion (0 ready to accept)", "0 transaction suggestions (0 ready to accept)"], "Review them on the Suggestions page; accept the clean ones as a group.")}
     HAVING count(*) > 0`);
-  if (scopeAdmitsUnrecorded(scope))
+  if (
+    scopeAdmitsUnrecorded(scope) &&
+    branch("suggestion", ["review"], "suggestions:transfer_pair")
+  )
     selections.push(sql`SELECT NULL::text AS entity, NULL::text AS id,
     'Transfer-pair suggestions'::text AS name,
     'suggestions:' || ${assessmentFamily.enum.transfer_pair}::text AS key,
@@ -468,8 +526,9 @@ async function workQueueProjection(
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ARRAY[${"suggestions:transfer_pair"}::text] AS reason_keys, ${NO_FACT_COLUMNS}
     FROM "AssessmentState" s WHERE s.family = ${assessmentFamily.enum.transfer_pair}
       AND s.active AND s.status = ${suggestionStatus.enum.pending}
+      AND ${aggregateSearch("Transfer-pair suggestions", ["1 transfer pair (0 ready to accept)", "0 transfer pairs (0 ready to accept)"], "Review both legs and owners on the Suggestions page.")}
     HAVING count(*) > 0`);
-  if (admits("image"))
+  if (admits("image") && branch("suggestion", ["review"], "image-suggestions"))
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "image",
@@ -495,7 +554,10 @@ async function workQueueProjection(
     );
   // One row for the whole family, never one per Suggestion: the Suggestions
   // page is where each is reviewed. A record's own Work counts its own.
-  if (scopeAdmitsUnrecorded(scope) || (scope.record && !scope.gapChecks)) {
+  if (
+    (scopeAdmitsUnrecorded(scope) || (scope.record && !scope.gapChecks)) &&
+    branch("suggestion", ["review"], "suggestions:field")
+  ) {
     const own = scope.record
       ? sql`AND ${suggestionTable.entity} = ${scope.record.entity} AND ${suggestionTable.recordId} = (
           SELECT self.id FROM "Entity" self WHERE self.kind = ${scope.record.entity} AND self.shortcode = ${scope.record.id})`
@@ -510,13 +572,21 @@ async function workQueueProjection(
     ARRAY[]::uuid[] AS owners, true AS shared, NULL::text AS "problemKey", ARRAY[${"suggestions:field"}::text] AS reason_keys, ${NO_FACT_COLUMNS}
     FROM ${suggestionTable} LEFT JOIN ${runTable} ON ${runTable.id} = ${suggestionTable.runId}
     WHERE ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending} AND ${suggestionTable.family} = ${assessmentFamily.enum.field} AND ${reviewableSuggestionSql}
-      ${own}
+      ${own} AND ${aggregateSearch("Field suggestions", ["1 pending field suggestion", "0 pending field suggestions"], "Review them on the Suggestions page.")}
     HAVING count(*) > 0`);
   }
 
   // The declared unsettled view owns missing payment evidence. Receipt
   // research remains independent; settlement authority includes every tender.
-  if (admits("purchase")) {
+  if (
+    admits("purchase") &&
+    branch(
+      "reconciliation",
+      ["repair", "awaiting_posting"],
+      "reconciliation:purchase-unsettled",
+      "awaiting_posting:reconciliation:purchase-unsettled",
+    )
+  ) {
     const deferred = awaitingPostingSql(
       purchasePostingStartSql(quotedTable(purchase)),
     );
@@ -548,7 +618,13 @@ async function workQueueProjection(
       !["purchase", "expense", "financialTransaction"].includes(
         source.entity,
       ) ||
-      !admits(source.entity)
+      !admits(source.entity) ||
+      !branch(
+        "reconciliation",
+        ["repair", "awaiting_posting"],
+        definition.key,
+        "awaiting_posting:" + definition.key,
+      )
     )
       continue;
     const details = {
@@ -619,66 +695,80 @@ async function workQueueProjection(
         }),
       );
   }
-  selections.push(
-    ...workQueueCandidate(scope, {
-      entity: "run",
-      ...workRunReviewRead(),
-      id: sql`"Run".shortcode`,
-      name: sql`"Run".purpose || ' · ' || "Run".status`,
-      // A funding-stopped predecessor whose work moved to a retry successor
-      // is no longer waiting; the successor carries the execution.
-      where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
-        // A running maintenance pass or Sweep is not member work; its failed
-        // or stalled outcomes still surface through the failure paths.
-        EXECUTED_RUN_PURPOSES.filter(
-          (purpose) => !isStepRunPurpose(purpose),
-        ).map((purpose) => sql`${purpose}`),
-        sql`, `,
-      )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
-        runTable,
-        (successor) =>
-          sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
-        // The work moved even to a deleted successor.
-        { includeDeleted: true },
-      ).exists()}))`,
-      details: {
-        source: "execution",
-        kind: "repair",
-        reason: workQueueReasonLabels["execution:run"],
-        nextAction: "Inspect current progress and retained execution evidence.",
-      },
-      key: "execution:run",
-    }),
-    // An account's own Work counts its Transaction suggestions; the global
-    // view has one row for the family, below.
-    ...(scope.record
-      ? workQueueCandidate(scope, {
-          entity: "financialAccount",
-          table: sql`"FinancialAccount" JOIN (
+  if (branch("execution", ["repair"], "execution:run"))
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "run",
+        ...workRunReviewRead(),
+        id: sql`"Run".shortcode`,
+        name: sql`"Run".purpose || ' · ' || "Run".status`,
+        // A funding-stopped predecessor whose work moved to a retry successor
+        // is no longer waiting; the successor carries the execution.
+        where: sql`"Run"."deletedAt" IS NULL AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
+          // A running maintenance pass or Sweep is not member work; its failed
+          // or stalled outcomes still surface through the failure paths.
+          EXECUTED_RUN_PURPOSES.filter(
+            (purpose) => !isStepRunPurpose(purpose),
+          ).map((purpose) => sql`${purpose}`),
+          sql`, `,
+        )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
+          runTable,
+          (successor) =>
+            sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+          // The work moved even to a deleted successor.
+          { includeDeleted: true },
+        ).exists()}))`,
+        details: {
+          source: "execution",
+          kind: "repair",
+          reason: workQueueReasonLabels["execution:run"],
+          nextAction:
+            "Inspect current progress and retained execution evidence.",
+        },
+        key: "execution:run",
+      }),
+    );
+  // An account's own Work counts its Transaction suggestions; the global
+  // view has one row for the family, below.
+  if (
+    scope.record &&
+    branch("suggestion", ["review"], "suggestions:statement_transaction")
+  )
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "financialAccount",
+        table: sql`"FinancialAccount" JOIN (
         SELECT (${suggestionField("accountId")})::uuid AS account,
           count(*)::int AS total,
           count(*) FILTER (WHERE (${suggestionField("clean")})::boolean)::int AS clean
-        FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+        FROM work_statement_state s WHERE ${pendingSuggestion("s", { populationRead: true })}
         GROUP BY 1
       ) statement_suggestions ON statement_suggestions.account = "FinancialAccount".id`,
-          id: sql`"FinancialAccount".shortcode`,
-          name: sql`"FinancialAccount".name`,
-          owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
-          where: sql`"FinancialAccount"."deletedAt" IS NULL`,
-          details: {
-            source: "suggestion",
-            kind: "review",
-            reason: sql`statement_suggestions.total || CASE WHEN statement_suggestions.total = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END || ' (' || statement_suggestions.clean || ' ready to accept)'`,
-            nextAction:
-              "Review this account's Transaction suggestions on the Suggestions page; accept the clean ones as a group.",
-          },
-          key: "statement_suggestion",
-          reasonKeys: sql`ARRAY[${"suggestions:statement_transaction"}::text]`,
-        })
-      : []),
-  );
+        id: sql`"FinancialAccount".shortcode`,
+        name: sql`"FinancialAccount".name`,
+        owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
+        where: sql`"FinancialAccount"."deletedAt" IS NULL`,
+        details: {
+          source: "suggestion",
+          kind: "review",
+          reason: sql`statement_suggestions.total || CASE WHEN statement_suggestions.total = 1 THEN ' transaction suggestion' ELSE ' transaction suggestions' END || ' (' || statement_suggestions.clean || ' ready to accept)'`,
+          nextAction:
+            "Review this account's Transaction suggestions on the Suggestions page; accept the clean ones as a group.",
+        },
+        key: "statement_suggestion",
+        reasonKeys: sql`ARRAY[${"suggestions:statement_transaction"}::text]`,
+      }),
+    );
 
-  if (admits("financialTransaction")) {
+  if (
+    admits("financialTransaction") &&
+    branch(
+      "reconciliation",
+      ["repair", "awaiting_posting"],
+      "reconciliation:transfer",
+      "awaiting_posting:reconciliation:transfer",
+    )
+  ) {
     const deferred = awaitingPostingSql(
       transactionPostingStartSql(quotedTable(financialTransaction)),
     );
@@ -727,7 +817,7 @@ async function workQueueProjection(
   const findingRecord = scope.record
     ? sql` AND identity.kind = ${scope.record.entity} AND identity.shortcode = ${scope.record.id}`
     : sql``;
-  if (!scope.gapChecks)
+  if (!scope.gapChecks && branch("finding", ["review"], "finding"))
     selections.push(sql`SELECT identity.kind AS entity, identity.shortcode AS id,
     finding.data->>${"summary"} AS name, 'finding:' || finding.id::text AS key,
     ${workQueueSourceSchema.enum.finding}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind, ${workQueueReasonLabels.finding}::text AS reason,
@@ -742,29 +832,30 @@ async function workQueueProjection(
     CROSS JOIN LATERAL (SELECT ${findingSources} AS owners) authority
     WHERE ${activeFindingSql("finding")} AND NOT ${obsoleteExecutionFindingSql("finding")}${findingRecord}
   `);
-  selections.push(
-    ...workQueueCandidate(scope, {
-      entity: "run",
-      ...workRunReviewRead(),
-      id: sql`"Run".shortcode`,
-      name: sql`"Run".purpose || ' · ' || "Run".status`,
-      where: sql`"Run"."deletedAt" IS NULL AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
+  if (branch("account", ["review"], "account:run"))
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "run",
+        ...workRunReviewRead(),
+        id: sql`"Run".shortcode`,
+        name: sql`"Run".purpose || ' · ' || "Run".status`,
+        where: sql`"Run"."deletedAt" IS NULL AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
           AND NOT EXISTS (SELECT 1 FROM "AssessmentState" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
         ))
       )`,
-      details: {
-        source: "account",
-        kind: "review",
-        reason: workQueueReasonLabels["account:run"],
-        nextAction:
-          "Inspect retained Run status and transcript. Choose any retry or continuation explicitly.",
-      },
-      key: "account:run",
-    }),
-  );
+        details: {
+          source: "account",
+          kind: "review",
+          reason: workQueueReasonLabels["account:run"],
+          nextAction:
+            "Inspect retained Run status and transcript. Choose any retry or continuation explicitly.",
+        },
+        key: "account:run",
+      }),
+    );
   selections.push(...(await problemSelections(db, scope, readContexts)));
   // A scope that admits no branch still yields a typed, empty relation.
   if (selections.length === 0)
@@ -958,6 +1049,11 @@ async function queryWorkQueue(
     {
       sources,
       kinds,
+      sourceExclude: oneOrManyValues(input.sourceExclude),
+      kindExclude: oneOrManyValues(input.kindExclude),
+      reasons: reasonIncludes,
+      reasonExclude: oneOrManyValues(input.reasonExclude),
+      query: input.query,
       gapChecks:
         reasonIncludes?.length &&
         reasonIncludes.every((key) => gapChecks.has(key))
@@ -989,7 +1085,7 @@ async function queryWorkQueue(
       ))
   ))`,
   ];
-  conditions.push(
+  candidateConditions.push(
     ...valueFilterConditions(
       input.reason,
       input.reasonExclude,
@@ -1056,7 +1152,7 @@ async function queryWorkQueue(
     ),
   );
   if (input.query)
-    conditions.push(
+    candidateConditions.push(
       sql`concat_ws(' ', name, reason, id, "nextAction") ILIKE ${ilikeContains(input.query)}`,
     );
   const sortExpressions = {
@@ -1103,9 +1199,9 @@ async function queryWorkQueue(
     ],
     sql`, `,
   );
-  // Keep routed candidates behind a statement-local boundary before eligibility:
-  // search pushdown can turn bulk evidence joins into repeated nested-loop work.
-  // Only sort/filter facts enter that population; page facts share their declaration.
+  // Narrow candidate membership before materializing ownership and routing.
+  // Shared evidence retains its own bulk boundary; facts and enrichment that
+  // cannot affect membership load only after the exact-count page is selected.
   // Limit the correctly filtered/sorted population before assigning JSON order,
   // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
@@ -1113,8 +1209,10 @@ async function queryWorkQueue(
     WITH
     ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
     ${needsExpectedEvidence ? sql`work_product_expected AS MATERIALIZED (${expectedQuantityReadSql()}),` : sql``}
+    work_statement_state AS MATERIALIZED (${pendingStatementStateSql()}),
     work_connection_prediction AS MATERIALIZED (
-      SELECT a.id, a.subject, a.fingerprint, a.evidence->'candidate'->'target' AS target
+      SELECT a.id, a.subject, a.fingerprint,
+        coalesce(s.data->'connectionTarget', a.evidence->'candidate'->'target') AS target
       FROM "Assessment" a JOIN "AssessmentState" s ON s.id=a.id
       WHERE a.served AND s.family=${assessmentFamily.enum.recommendation} AND s.active AND s.status=${suggestionStatus.enum.pending}
         AND a.subject->>'scope' LIKE 'connection.%'

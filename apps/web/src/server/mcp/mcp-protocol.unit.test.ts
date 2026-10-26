@@ -414,6 +414,7 @@ describe("MCP protocol smoke", () => {
       item: {
         ...product,
         displayImages: [],
+        derived: {},
         attachments: [],
         redirectedFrom: null,
         previousShortcodes: [],
@@ -458,6 +459,7 @@ describe("MCP protocol smoke", () => {
       item: {
         ...product,
         displayImages: [],
+        derived: {},
         attachments: [],
         redirectedFrom: null,
         previousShortcodes: [],
@@ -582,6 +584,7 @@ describe("MCP protocol smoke", () => {
             item: {
               ...product,
               displayImages: [],
+              derived: {},
               attachments: [],
               redirectedFrom: null,
               previousShortcodes: [],
@@ -594,6 +597,7 @@ describe("MCP protocol smoke", () => {
             item: {
               ...ingredient,
               displayImages: [],
+              derived: {},
               attachments: [],
               redirectedFrom: null,
               previousShortcodes: [],

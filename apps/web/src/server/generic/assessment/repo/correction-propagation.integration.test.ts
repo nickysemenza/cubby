@@ -1406,6 +1406,20 @@ describe("confirmed correction propagation", () => {
       const attempt = automatic.items[0]?.correctionAttempt;
       if (!attempt)
         throw new Error("Synthetic correction attempt was not returned");
+      const outcome = outcomes[0];
+      if (!outcome) throw new Error("Missing synthetic correction outcome");
+      const metadata = z.record(z.string(), z.json()).parse(outcome.metadata);
+      for (const key of ["sourceFeedbackId", "sourceApplicationFeedbackId"]) {
+        await getDb(ctx.db)
+          .update(feedback)
+          .set({ metadata: { ...metadata, [key]: "invalid-handle" } })
+          .where(eq(feedback.id, outcome.id));
+        expect((await listAutomaticDecisions(ctx.db, {})).totalCount).toBe(0);
+      }
+      await getDb(ctx.db)
+        .update(feedback)
+        .set({ metadata: outcome.metadata })
+        .where(eq(feedback.id, outcome.id));
       await getDb(ctx.db)
         .update(feedback)
         .set({ actorUserId: systemActor().userId })

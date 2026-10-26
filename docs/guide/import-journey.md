@@ -73,14 +73,27 @@ does not stop other sources or new-mail discovery, and retains its diagnostics.
 Manual Run pauses remain active ownership: they can be resumed or cancelled,
 and retain the vendor account's active-Run exclusion; catch-up never resumes
 them.
+A Mail import commit files supported Purchases and Product findings while
+keeping the batch running; an unresolved principal line does not prevent the
+next Email from being claimed. A member's own `file_import` still ends with
+its commit. At Mail batch settlement, every import batch is audited, and open
+commit or audit findings require review alongside any unresolved Emails.
+
 A Mail import Run that fails on its own (its coordinator fails or aborts), or
 whose coordinator stops for review before claiming every Email, returns its
 still-researching Emails to catch-up once; `blocked` Emails, the review's
-subject, stay. An Email an earlier Run already left unsettled stays with the
-new Run, so a message that keeps ending unsettled does not spend a coordinator
-every pass. A member's cancel keeps its Emails
+subject, stay. This release also applies when settlement revisits a Run already
+stopped for review. An Email an earlier review or self-failed Run actually
+attempted stays with the new Run: its `target_outcome` or Email claim in the
+RunOperation ledger proves the attempt; roster admission alone does not.
+A later completed outcome in that Run clears its earlier unsettled attempt.
+This keeps repeatedly attempted, unsettled messages from spending a coordinator
+every pass without pinning untouched batch members. A member's cancel keeps its Emails
 with the cancelled Run. Retrying a failed Run transfers only the Emails it
 still holds.
+Run targets retain that Run's recorded Email outcomes. An unsettled target
+now held elsewhere names the owning Run; it never inherits that Run's live
+Email state or completion time.
 
 The household AI budget is a stopgap safety net on frontier chat-model spend:
 $1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from

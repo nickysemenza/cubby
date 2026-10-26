@@ -24,7 +24,7 @@
   "apps/web/src/server/domains/product/repo/conversion-coverage.ts": 4,
   "apps/web/src/server/domains/project/repo/tools.ts": 3,
   "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.integration.test.ts": 12,
-  "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.ts": 87,
+  "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.ts": 86,
   "apps/web/src/server/domains/purchase/repo/purchase-financial-aggregates.ts": 3,
   "apps/web/src/server/domains/purchase/repo/purchase-settlement-candidates.ts": 3,
   "apps/web/src/server/domains/purchase/repo/purchase.ts": 1,

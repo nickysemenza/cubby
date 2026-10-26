@@ -6,6 +6,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
+import { jobKindPolicy } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
@@ -45,6 +46,94 @@ async function drainRounds(
 // and every other kind waited behind the per-kind round-robin.
 describe("fair drain under a flood", () => {
   const ctx = withTestDb();
+
+  it("settles an already claimed lane before returning another lane's failure", async () => {
+    const active = await enqueueJob(ctx.db, {
+      key: "synthetic.lane-lifetime.active",
+      kind: "synthetic.active",
+      input: {},
+      priority: 10,
+    });
+    const unstarted = await enqueueJob(ctx.db, {
+      key: "synthetic.lane-lifetime.unstarted",
+      kind: "synthetic.active",
+      input: {},
+      priority: 0,
+    });
+    const state = async (id: typeof active.id) => {
+      const [row] = await getDb(ctx.db)
+        .select({ state: job.state })
+        .from(job)
+        .where(eq(job.id, id));
+      return row?.state;
+    };
+    await enqueueJob(ctx.db, {
+      key: "synthetic.lane-lifetime.failure",
+      kind: "ai.evaluation",
+      input: {},
+    });
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    let failed = false;
+    const failure = new Error("Synthetic page executor failure");
+    let settled = false;
+    let returnedEarly = false;
+    const draining = drainDueJobs(
+      ctx.db,
+      {
+        "synthetic.active": {
+          prepare: async () => {
+            started.resolve();
+            await release.promise;
+            return { page: { done: true } };
+          },
+        },
+        "ai.evaluation": {
+          prepare: async () => {
+            throw new Error("Expected the page executor");
+          },
+          advancePage: async () => {
+            await started.promise;
+            failed = true;
+            throw failure;
+          },
+        },
+      },
+      3,
+      10_000,
+      2,
+    ).then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      },
+    );
+    try {
+      await expect.poll(() => failed, { timeout: 10_000 }).toBe(true);
+      // Let rejection microtasks run while the other real claim stays held.
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      returnedEarly = settled;
+      expect(returnedEarly).toBe(false);
+      expect(await state(active.id)).toBe("running");
+      release.resolve();
+      expect(await draining).toBe(failure);
+      expect(await state(active.id)).toBe("completed");
+      expect(await state(unstarted.id)).toBe("queued");
+    } finally {
+      started.resolve();
+      release.resolve();
+      await draining;
+      await expect.poll(() => state(active.id)).toBe("completed");
+      // Clean up work started by the old fail-fast implementation on red runs.
+      await expect
+        .poll(() => state(unstarted.id))
+        .toBe(returnedEarly ? "completed" : "queued");
+    }
+  });
 
   it(
     "scans past locked expired evaluations for the rest of the invocation",
@@ -331,7 +420,8 @@ describe("fair drain under a flood", () => {
     },
   );
 
-  it("admits only one background evaluation across concurrent claims and reclaims expired capacity", async () => {
+  it("admits background evaluations only up to the kind cap across concurrent claims and reclaims expired capacity", async () => {
+    const cap = jobKindPolicy("ai.evaluation").maxInFlight!;
     const flood = [];
     for (let index = 0; index < 12; index++)
       flood.push(
@@ -341,18 +431,20 @@ describe("fair drain under a flood", () => {
           input: {},
         }),
       );
+    // One drain runs one page of a kind; the global cap spans concurrent drains.
     expect(
       (await dueJobs(ctx.db)).filter((row) => row.kind === "ai.evaluation"),
     ).toHaveLength(1);
     const claims = (
       await Promise.all(flood.map((row) => claimJob(ctx.db, row.id)))
     ).filter((claim) => claim !== null);
-    expect(claims).toHaveLength(1);
+    expect(claims).toHaveLength(cap);
     const first = claims[0]!;
+    const claimedIds = new Set(claims.map((claim) => claim.id));
     expect(await dueJobs(ctx.db)).toHaveLength(0);
     const waiting = await loadJobWaitingOn(
       ctx.db,
-      flood.filter((row) => row.id !== first.id),
+      flood.filter((row) => !claimedIds.has(row.id)),
     );
     expect([...waiting.values()]).toEqual(
       expect.arrayContaining([
@@ -372,7 +464,7 @@ describe("fair drain under a flood", () => {
     expect(reclaimed?.leaseToken).not.toBe(first.leaseToken);
     expect(reclaimed).not.toBeNull();
     if (!reclaimed) return;
-    const other = flood.find((row) => row.id !== first.id)!;
+    const other = flood.find((row) => !claimedIds.has(row.id))!;
     expect(await claimJob(ctx.db, other.id)).toBeNull();
     expect(await releaseJobClaim(ctx.db, reclaimed)).toBe(true);
     expect(await claimJob(ctx.db, other.id)).not.toBeNull();
@@ -381,12 +473,18 @@ describe("fair drain under a flood", () => {
   it.each(["maintenance", "connection_discovery"] as const)(
     "lets active Run work bypass a saturated kind cap (%s)",
     async (purpose) => {
-      const background = await enqueueJob(ctx.db, {
-        key: "synthetic.busy",
-        kind: "ai.evaluation",
-        input: {},
-      });
-      expect(await claimJob(ctx.db, background.id)).not.toBeNull();
+      for (
+        let index = 0;
+        index < jobKindPolicy("ai.evaluation").maxInFlight!;
+        index++
+      ) {
+        const background = await enqueueJob(ctx.db, {
+          key: `synthetic.busy.${index}`,
+          kind: "ai.evaluation",
+          input: {},
+        });
+        expect(await claimJob(ctx.db, background.id)).not.toBeNull();
+      }
       await enqueueJob(ctx.db, {
         key: "synthetic.cap-waiting",
         kind: "ai.evaluation",

@@ -182,7 +182,10 @@ export async function publishPreparedEntityConnections(
           producer: null,
           evidence: entry.evidence,
         },
-        projection: { data: { connection: true } },
+        // Queue counts need only this reference, not the full immutable basis.
+        projection: {
+          data: { connection: true, connectionTarget: entry.candidate.target },
+        },
       })),
     );
     // Several page owners may retrieve the same edge. Sequential publication

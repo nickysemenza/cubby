@@ -373,7 +373,9 @@ export async function drainDueJobs(
   const groups: Candidates[] = [];
   let settledPages = 0;
   let selecting: Promise<boolean> | undefined;
-  const spent = () => scheduled >= limit || Date.now() >= deadline;
+  let failure: { reason: unknown } | undefined;
+  const spent = () =>
+    failure !== undefined || scheduled >= limit || Date.now() >= deadline;
   const refill = async () => {
     const settledBefore = settledPages;
     const groupsBefore = groups.length;
@@ -497,9 +499,16 @@ export async function drainDueJobs(
       }
     }
   };
+  // Invocation cleanup must not close clients while a sibling still owns work.
+  // Stop new selection on an escaped error, join active lanes, then rethrow it.
   await Promise.all(
-    Array.from({ length: Math.max(1, Math.min(concurrency, limit)) }, lane),
+    Array.from({ length: Math.max(1, Math.min(concurrency, limit)) }, () =>
+      lane().catch((reason: unknown) => {
+        failure ??= { reason };
+      }),
+    ),
   );
+  if (failure) throw failure.reason;
   if ((await dueJobs(db, 1)).length) {
     await (
       await import("~/server/workflows/background-tasks/publish")

@@ -1,1 +1,2 @@
+CREATE INDEX "DerivedValue_computed_idx" ON "DerivedValue" USING btree ("computedAt");--> statement-breakpoint
 CREATE INDEX "Job_kind_position_idx" ON "Job" USING btree ("kind",(-"priority"),"updatedAt","availableAt","id");

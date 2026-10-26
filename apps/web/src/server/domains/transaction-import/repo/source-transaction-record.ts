@@ -471,10 +471,45 @@ async function prepareStatementObservations(
           "A retained provider identity must identify one live observation in its original charge scope.",
         );
     }
+    // providerData is an annotation, not evidence: agent sessions wrap the same
+    // provider response differently. A re-observation whose facts equal the
+    // current head reuses that head and its first annotation, so it is
+    // unchanged rather than a revision that reopens booked charges (#3395).
+    const sameFacts = (prior: (typeof previousProviderRows)[number]) =>
+      prior.providerAccountId === providerAccountId &&
+      prior.accountDescriptor === row.accountDescriptor &&
+      prior.statementDate === row.statementDate &&
+      prior.providerAmount === row.providerAmount &&
+      prior.merchant === row.merchant &&
+      prior.rawDescription === row.rawDescription &&
+      prior.sourceCategory === row.sourceCategory &&
+      prior.providerStatus === row.providerStatus &&
+      prior.providerNotes === row.providerNotes;
+    const sameFactsHead = row.providerTransactionId
+      ? previousProviderRows.find(
+          (prior) =>
+            prior.chargeKey === chargeKey &&
+            prior.current &&
+            prior.withdrawnAt === null &&
+            sameFacts(prior),
+        )
+      : undefined;
+    // The chosen identity keeps its own stored annotation; a fact change keeps
+    // the incoming annotation so the immutable-evidence check still refuses it.
+    const identity = retainedProvider
+      ? previousProviderRows.find(
+          (prior) => prior.externalId === retainedProvider?.externalId,
+        )
+      : sameFactsHead;
+    const providerData =
+      identity && sameFacts(identity)
+        ? identity.providerData
+        : (row.providerData ?? null);
     // Historical provider members can have frozen v2 identities. Reuse their
     // membership; the full immutable-evidence comparison below still applies.
     let externalId =
       retainedProvider?.externalId ??
+      sameFactsHead?.externalId ??
       (row.providerTransactionId && chargeKey !== undefined
         ? `v3:${await sha256Hex(
             canonicalJson({
@@ -543,7 +578,7 @@ async function prepareStatementObservations(
       legacyExternalId,
       providerAccountId,
       providerTransactionId: row.providerTransactionId ?? null,
-      providerData: row.providerData ?? null,
+      providerData,
       amount: -row.providerAmount,
       current: true,
       lastObservedAt: observedAt,

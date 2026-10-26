@@ -24,6 +24,7 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -509,6 +510,150 @@ describe("mail research admission", () => {
       },
     ]);
   });
+
+  it("shows a moved unattempted target without inheriting its successor's live outcome", async () => {
+    const { party, mail } = await source();
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
+    if (!admitted) throw new Error("Synthetic parent missing");
+    const parentId = parseEntityId("run", admitted.runId);
+    await markRunFailed(ctx.db, {
+      runId: parentId,
+      failureCode: "agent_failed",
+    });
+    const [child] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      messageIds: [mail.id],
+    });
+    if (!child) throw new Error("Synthetic successor missing");
+    const childId = parseEntityId("run", child.runId);
+    const [childRow] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, childId));
+    const [parentRow] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.id, parentId));
+    if (!childRow || !parentRow) throw new Error("Synthetic Run missing");
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: childId,
+      status: "completed",
+      detail: "Synthetic successor import",
+    });
+    const parent = await loadRunDetail(ctx.db, parentRow.shortcode);
+    expect(parent.targets).toMatchObject([
+      {
+        state: "unresolved",
+        outcome: null,
+        completedAt: null,
+        warning: `Moved to ${childRow.shortcode}.`,
+      },
+    ]);
+  });
+
+  it.each(["claim", "outcome"] as const)(
+    "retains only Emails an earlier review Run attempted through a %s",
+    async (attempt) => {
+      const { party, mail } = await source();
+      const untouched = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: "synthetic-unattempted",
+        checksum: "f".repeat(64),
+      });
+      const completed = await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: "synthetic-already-settled",
+        checksum: "e".repeat(64),
+      });
+      const admission = {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        messageIds: [mail.id, untouched.id, completed.id],
+      };
+      const [first] = await startMailImport(ctx.db, admission);
+      if (!first) throw new Error("Synthetic first Run missing");
+      const firstId = parseEntityId("run", first.runId);
+      await insertOperation(getDb(ctx.db), {
+        runId: firstId,
+        operationId: "claim:already-settled",
+        kind: "claim_next_work",
+        inputFingerprint: "synthetic-settled-claim",
+        state: "completed",
+        result: {
+          kind: "email",
+          email: {
+            mailboxId: completed.mailboxId,
+            messageId: completed.messageId,
+          },
+        },
+      });
+      await settleMail(ctx.db, {
+        mail: completed,
+        importRunId: firstId,
+        status: "completed",
+        detail: "Synthetic settled original",
+      });
+      if (attempt === "claim")
+        await insertOperation(getDb(ctx.db), {
+          runId: firstId,
+          operationId: "claim:attempted",
+          kind: "claim_next_work",
+          inputFingerprint: "synthetic-claim",
+          state: "completed",
+          result: {
+            kind: "email",
+            email: { mailboxId: mail.mailboxId, messageId: mail.messageId },
+          },
+        });
+      else {
+        await settleMail(ctx.db, {
+          mail,
+          importRunId: firstId,
+          status: "blocked",
+          detail: "Synthetic unresolved identity",
+        });
+      }
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "needs_review", endedAt: new Date() })
+        .where(eq(run.id, firstId));
+      const [firstRow] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, firstId));
+      if (!firstRow) throw new Error("Synthetic first Run missing");
+      const successor = await controlRun(ctx.db, ctx.actor, {
+        runPublicId: firstRow.shortcode,
+        action: "restart",
+      });
+      if (!("successorRunId" in successor) || !successor.successorRunId)
+        throw new Error("Synthetic retry missing");
+      const successorId = parseEntityId("run", successor.successorRunId);
+      await markRunFailed(ctx.db, {
+        runId: successorId,
+        failureCode: "agent_failed",
+      });
+      const emails = await getDb(ctx.db).select().from(emailTable);
+      expect(emails.find((row) => row.orderMailId === mail.id)).toMatchObject({
+        runId: successorId,
+        status: "researching",
+      });
+      expect(
+        emails.find((row) => row.orderMailId === untouched.id),
+      ).toMatchObject({ runId: null, status: "pending" });
+      expect(
+        emails.find((row) => row.orderMailId === completed.id),
+      ).toMatchObject({ runId: null, status: "pending" });
+    },
+  );
   // A failed Run must not strand its unsettled Emails (discovery admits only
   // unowned ones), a message that fails twice must not spend a coordinator on
   // every discovery pass, and a retry must not refuse because one source left.
@@ -527,6 +672,17 @@ describe("mail research admission", () => {
     });
     if (!admitted) throw new Error("Synthetic Run missing");
     const runId = parseEntityId("run", admitted.runId);
+    await insertOperation(getDb(ctx.db), {
+      runId,
+      operationId: "claim:synthetic-failure",
+      kind: "claim_next_work",
+      inputFingerprint: "synthetic-failure",
+      state: "completed",
+      result: {
+        kind: "email",
+        email: { mailboxId: mail.mailboxId, messageId: mail.messageId },
+      },
+    });
     await settleMail(ctx.db, {
       mail: settled,
       importRunId: runId,

@@ -71,6 +71,11 @@ Problem keys and branch keys such as `reconciliation:purchase-unsettled`.
 `reasonExclude` keeps rows with none of the selected reasons; other failed
 checks remain visible in each retained row's explanation. Kind, Source and
 Vendor also accept their corresponding `Exclude` inputs on the member queue.
+The web queue and member MCP read share this filtered server path. Filters
+exclude unrelated source preparation before paging, while totals, view counts
+and group counts still describe all matching work. Only selected rows receive
+quality and execution explanations; listing does not reconstruct every source's
+review evidence.
 The current queue's work kind describes its category, not its execution state;
 keep those meanings separate when adding automatic and waiting views.
 
