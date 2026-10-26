@@ -1,0 +1,59 @@
+apps/apple/App/Shared/DesignSystem/NativePresentationCoverage.swift
+  s_931718bbf1e269::t_2a46eaa3f41290 65-69,88,91
+apps/apple/App/Shared/Editors/EntityEditorSheet.swift
+  s_931718bbf1e269::t_9e9b1b6be914aa 4-7,63,200,202-203,218-220,225,231,265-289,291-295,388
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_931718bbf1e269::t_757a493be3d782 300
+apps/apple/App/Shared/Editors/StructuredValueEditor.swift
+  s_931718bbf1e269::t_24ae609a334868 5,19,22,37,226,479
+apps/apple/CubbyKit/Sources/CubbyKit/Edit/StructuredValue.swift
+  s_931718bbf1e269::t_136675b4228eb8 32,185
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/NativeCoverage.swift
+  s_931718bbf1e269::t_b5ec64ef43aaa7 70-71
+apps/apple/CubbyKit/Tests/CubbyKitTests/Edit/StructuredValueTests.swift
+  s_931718bbf1e269::t_a009ce7c74295e 20,63-68,160-164,235,240,243
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/NativeCoverageTests.swift
+  s_931718bbf1e269::t_87e7a20cf9431c 31
+apps/apple/DESIGN.md
+  s_931718bbf1e269::t_6518dfa9d8c0b9 115-116
+apps/web/generator/entities/render/structured-value-schemas.ts
+  s_931718bbf1e269::t_6269f4060978e4 54
+apps/web/generator/entities/render/swift-catalog.ts
+  s_931718bbf1e269::t_0c825a6e83d6a0 409-414,906-914,929,940,984-987
+apps/web/src/entity/editing/structured-value-field.unit.test.tsx
+  s_931718bbf1e269::t_19aceccb96762d 1,10,15
+apps/web/src/entity/editing/structured-value.fixtures.json
+  s_931718bbf1e269::t_1a8287f24c8645 1-492
+apps/web/src/entity/editing/structured-value.unit.test.ts
+  s_931718bbf1e269::t_85985c271af537 2,13,24
+apps/web/src/server/domains/recipe/operations/recipe-sections-vector.integration.test.ts
+  s_931718bbf1e269::t_380ba0ade1f4a6 8
+apps/web/src/server/generic/embedding/operations/structured-field-vectors.integration.test.ts
+  s_931718bbf1e269::t_e2405daec8ef9e 10
+apps/web/tooling/entity-generator-value-schema.unit.test.ts
+  s_931718bbf1e269::t_c261a0c0b63987 12-16,241-251,253-263,267-269,280-284
+packages/schemas/src/native-coverage.ts
+  s_931718bbf1e269::t_8de693b497075b 127,141-142,163,501,503-550
+packages/schemas/src/native-coverage.unit.test.ts
+  s_931718bbf1e269::t_cbb998a094e03c 108-119
+packages/schemas/src/recipe-fields.ts
+  s_931718bbf1e269::t_82c7e4f5596a0f 16-18
+packages/shared/golden-vectors/structured-roundtrip.json
+  s_931718bbf1e269::t_58bed6f979f9b0 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "75482e5dd4daca09033b8b503014a8f77bde76c1",
+  "prompts": {},
+  "sessions": {
+    "s_931718bbf1e269": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a41-9a7e-73f3-b697-e6c6f52e51f3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
