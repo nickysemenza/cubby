@@ -44,6 +44,7 @@ import {
   evaluateProductIdentity,
   prepareProductIdentityCatalog,
   evaluatePreparedProductIdentityPair,
+  evaluatePreparedProductIdentityPairs,
 } from "~/server/ai/product-identity";
 import {
   claimAiEvaluation,
@@ -59,10 +60,13 @@ import { productIdentityEvidenceFence } from "~/server/domains/product/repo/matc
 import {
   productIdentitySnapshot,
   prepareProductIdentityPair,
-  prepareProductIdentityPairRequest,
+  prepareProductIdentityPairRequests,
   preparedProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
-import { prepareProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
+import {
+  prepareProductPairPublication,
+  prepareProductPairPublications,
+} from "~/server/domains/product/repo/match/product-match-candidate";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -239,6 +243,7 @@ async function prepareField(
       },
       {
         ...ports.suggestPorts,
+        recordId: target.recordId,
         decisionModel: snapshot.decisionModelOverride,
         recordUsage: false,
       },
@@ -879,46 +884,68 @@ export async function executeAiRefreshTarget(
         string,
         Awaited<ReturnType<typeof evaluatePreparedProductIdentityPair>>
       >();
-      for (const pair of prepared.pairs)
-        if (pair.exact) {
-          exactResults.set(
-            pair.fingerprint,
-            await evaluatePreparedProductIdentityPair(db, pair, claimed.runId, {
-              ...ports.productIdentityPorts,
-              evaluationId: id,
-              provenance: claimed.provenance,
-            }),
-          );
-        }
+      const exactPairs = prepared.pairs.filter((pair) => pair.exact);
+      const settled = await evaluatePreparedProductIdentityPairs(
+        db,
+        exactPairs,
+        claimed.runId,
+        {
+          ...ports.productIdentityPorts,
+          evaluationId: id,
+          provenance: claimed.provenance,
+        },
+      );
+      for (const [index, result] of settled.entries()) {
+        if (result.status === "rejected") throw result.reason;
+        exactResults.set(exactPairs[index]!.fingerprint, result.value);
+      }
       let rulePairs = 0,
         requestedPairs = 0;
-      for (const pair of prepared.pairs) {
-        // Preparation never inherits a transaction or activation/Run/item locks.
-        // Every pair commits under its own attempt/Run/activation fence. Retrying
-        // a partial catalog uses the existing idempotent publication/work keys.
-        const result = exactResults.get(pair.fingerprint);
-        if (pair.exact && !result)
-          throw new Error("Prepared exact Product identity result is missing");
-        const publish = result
-          ? await prepareProductPairPublication(db, result)
-          : await prepareProductIdentityPairRequest(
-              db,
-              pair,
-              claimed.runId,
-              claimed.provenance,
+      // Bound evidence preparation while retaining each pair's short, fenced commit.
+      const batchSize = 16;
+      for (
+        let offset = 0;
+        offset < prepared.pairs.length;
+        offset += batchSize
+      ) {
+        const batch = prepared.pairs.slice(offset, offset + batchSize);
+        const rules = batch.flatMap((pair) => {
+          const result = exactResults.get(pair.fingerprint);
+          if (pair.exact && !result)
+            throw new Error(
+              "Prepared exact Product identity result is missing",
             );
-        await publishAiEvaluation(
+          return result ? [result] : [];
+        });
+        const rulePublications = await prepareProductPairPublications(
           db,
-          id,
-          token,
-          async (transactionDb) => {
-            await publish(transactionDb);
-            return null;
-          },
-          "continue",
+          rules,
         );
-        if (result) rulePairs++;
-        else requestedPairs++;
+        const requests = await prepareProductIdentityPairRequests(
+          db,
+          batch.filter((pair) => !pair.exact),
+          claimed.runId,
+          claimed.provenance,
+        );
+        let ruleIndex = 0,
+          requestIndex = 0;
+        for (const pair of batch) {
+          const publish = pair.exact
+            ? rulePublications[ruleIndex++]!
+            : requests[requestIndex++]!;
+          await publishAiEvaluation(
+            db,
+            id,
+            token,
+            async (transactionDb) => {
+              await publish(transactionDb);
+              return null;
+            },
+            "continue",
+          );
+          if (pair.exact) rulePairs++;
+          else requestedPairs++;
+        }
       }
       const sourceFence = await productIdentityEvidenceFence(db, [productId]);
       const latest = await productIdentitySnapshot(db, productId);
@@ -983,7 +1010,7 @@ export async function executeAiRefreshTarget(
             basisMode: "provided",
             basis: snapshot.basis,
           },
-          fieldPorts.suggestPorts,
+          { ...fieldPorts.suggestPorts, recordId: target.recordId },
         ),
       );
       const provenance = {

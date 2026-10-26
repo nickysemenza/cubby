@@ -153,16 +153,36 @@ const REPORTS = {
       execution.request.id,
     ),
   })),
-  "product.pricing-summary": reportBuilder(productPricingSummary),
-  "product.stock-summary": reportBuilder((db, code) =>
-    productStockSummary(db, code),
-  ),
-  "product.use-summary": reportBuilder((db, code) =>
-    productContextSummary(db, code, "uses"),
-  ),
-  "product.evidence-summary": reportBuilder((db, code) =>
-    productContextSummary(db, code, "evidence"),
-  ),
+  "product.pricing-summary": reportDependency(async (execution) => ({
+    blocks: await productPricingSummary(
+      execution.request.db,
+      execution.request.id,
+      await execution.read(productId),
+    ),
+  })),
+  "product.stock-summary": reportDependency(async (execution) => ({
+    blocks: await productStockSummary(
+      execution.request.db,
+      execution.request.id,
+      await execution.read(productId),
+    ),
+  })),
+  "product.use-summary": reportDependency(async (execution) => ({
+    blocks: await productContextSummary(
+      execution.request.db,
+      execution.request.id,
+      "uses",
+      await execution.read(productId),
+    ),
+  })),
+  "product.evidence-summary": reportDependency(async (execution) => ({
+    blocks: await productContextSummary(
+      execution.request.db,
+      execution.request.id,
+      "evidence",
+      await execution.read(productId),
+    ),
+  })),
   "vendor.email-summary": reportBuilder((db, code) =>
     emailSummary(db, code, "vendor"),
   ),

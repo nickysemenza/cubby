@@ -4,6 +4,7 @@ import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
@@ -21,7 +22,7 @@ import {
   prepareConnectionFieldGuard,
   saveConnectionFieldGuard,
 } from "~/server/domains/connection/repo/field-connections";
-import { prepareProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
+import { prepareProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
@@ -60,6 +61,7 @@ export async function prepareEntityConnections(
 ) {
   const source = entityGraphRootSchema.parse(raw);
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
+  let productRecordId: ProductId | undefined;
   const stage = <T>(name: string, fn: () => Promise<T>) =>
     withTrace(TraceNames.service("connections", name), fn, {
       "connection.source": source.entityKind,
@@ -149,25 +151,24 @@ export async function prepareEntityConnections(
     const runId = await ensureRun(db, context.actorContext, {
       purpose: "ai_suggest",
     });
+    const recordId = await resolveOrThrow(db, "product", source.entityId);
+    productRecordId = recordId;
     const identity = await stage("productIdentity", async () =>
-      evaluateProductIdentity(
-        db,
-        await resolveOrThrow(db, "product", source.entityId),
-        runId,
-        ports.productIdentityPorts,
-      ),
+      evaluateProductIdentity(db, recordId, runId, ports.productIdentityPorts),
     );
     if (identity.failure) throw new Error(identity.failure);
-    for (const pair of identity.pairs) {
-      const publish = await prepareProductPairPublication(db, pair);
-      publishers.push(async (transactionDb) => {
-        await publish(transactionDb);
-      });
-    }
+    for (let offset = 0; offset < identity.pairs.length; offset += 16)
+      for (const publish of await prepareProductPairPublications(
+        db,
+        identity.pairs.slice(offset, offset + 16),
+      ))
+        publishers.push(async (transactionDb) => {
+          await publish(transactionDb);
+        });
   }
   publishers.push(
     ...(await stage("fieldConnections", () =>
-      prepareFieldConnections(db, context, source, ports),
+      prepareFieldConnections(db, context, source, ports, productRecordId),
     )),
   );
   return {
@@ -182,6 +183,7 @@ async function prepareFieldConnections(
   context: EntityKernelContext,
   source: EntityRef,
   ports: ConnectionPreparationPorts,
+  resolvedRecordId?: string,
 ) {
   const publishers: ((transactionDb: Database) => Promise<void>)[] = [];
   const fields = connectionFields.get(source.entityKind);
@@ -194,7 +196,8 @@ async function prepareFieldConnections(
       `Connection inference is not generated for ${source.entityKind}`,
     );
   const entity = entityResult.data;
-  const recordId = await resolveOrThrow(db, entity, source.entityId);
+  const recordId =
+    resolvedRecordId ?? (await resolveOrThrow(db, entity, source.entityId));
   const guards = new Map<
     string,
     Awaited<ReturnType<typeof prepareConnectionFieldGuard>>
@@ -243,7 +246,7 @@ async function prepareFieldConnections(
           basisMode: "provided",
           basis,
         },
-        ports.suggestPorts,
+        { ...ports.suggestPorts, recordId },
       ),
     );
     const decision = captured.result.suggestions[field];

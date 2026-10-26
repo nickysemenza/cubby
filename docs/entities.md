@@ -1226,7 +1226,12 @@ share lock only at its final commit fence, after business work and requester
 wakeups. A deactivation or generation change during publication refuses or
 rolls back the write. Product catalog preparation holds no transaction: each
 pair publishes or registers demand in its own guarded transaction, and the
-catalog completes afterward. Connection refresh commits at most two prepared
+catalog completes afterward. Catalog and connection evaluation share Product
+snapshots, retained identifier claims and variant history within each preparation
+batch. Publication preparation loads dependency row versions for the whole batch
+and retains a separate hash for each pair; each write transaction checks that
+pair's current hash. Prepared evidence never replaces the transaction's current
+Run authorization or activation checks. Connection refresh commits at most two prepared
 units (connections, identity pairs or field proposals) per guarded transaction:
 each transaction's guards and fences cost about ten statements, and the pair
 stays within the publication statement bound. A refusal in either unit rolls

@@ -1405,6 +1405,8 @@ describe("targeted prompt refresh", () => {
       }),
     );
     expect(measured.result).toBe(true);
+    // Four pairs must share evidence reads; per-pair preparation needed 230 statements.
+    expect(measured.queryCount).toBeLessThanOrEqual(190);
     let open = false,
       statements = 0,
       largest = 0;
@@ -1488,6 +1490,8 @@ describe("targeted prompt refresh", () => {
       }),
     );
     expect(measured.result).toBe(true);
+    // Includes real publication and incomplete-coverage settlement for four pairs.
+    expect(measured.queryCount).toBeLessThanOrEqual(200);
     let open = false,
       statements = 0,
       largest = 0;

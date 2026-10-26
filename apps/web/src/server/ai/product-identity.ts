@@ -23,6 +23,7 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import { product, entityExternalId } from "~/server/db/schema";
 import {
   prepareProductIdentityPair,
+  prepareProductIdentityPairs,
   preparedProductIdentityPair,
   productIdentitySnapshot,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
@@ -175,16 +176,19 @@ export async function prepareProductIdentityCatalog(
 ) {
   const source = await productIdentitySnapshot(db, id);
   if (!source?.eligible) return { eligible: false, pairs: [], coverage: null };
-  const pairs = [];
   const { candidates, coverage } = await retrieveProductIdentityCandidates(
     db,
     id,
   );
-  for (const other of candidates) {
-    const pair = await prepareProductIdentityPair(db, [id, other]);
-    if (pair) pairs.push(pair);
-  }
-  return { eligible: true, pairs, coverage };
+  const pairs = await prepareProductIdentityPairs(
+    db,
+    candidates.map((other) => [id, other]),
+  );
+  return {
+    eligible: true,
+    pairs: pairs.filter((pair) => pair !== null),
+    coverage,
+  };
 }
 export async function evaluatePreparedProductIdentityPair(
   db: Database,
@@ -199,6 +203,19 @@ export async function evaluatePreparedProductIdentityPair(
   } = {},
 ) {
   const pair = preparedProductIdentityPair.parse(raw);
+  const current = await prepareProductIdentityPair(db, pair.productIds);
+  return evaluateCurrentProductIdentityPair(db, pair, current, runId, options);
+}
+
+async function evaluateCurrentProductIdentityPair(
+  db: Database,
+  pair: z.infer<typeof preparedProductIdentityPair>,
+  current: z.infer<typeof preparedProductIdentityPair> | null,
+  runId: RunId,
+  options: NonNullable<
+    Parameters<typeof evaluatePreparedProductIdentityPair>[3]
+  >,
+) {
   const question = {
     ...productIdentityPrompt(JSON.stringify([pair.first, pair.second])),
     feature: PRODUCT_IDENTITY_FEATURE,
@@ -210,7 +227,6 @@ export async function evaluatePreparedProductIdentityPair(
     usage: options.usage ?? { db, runId, operation: "product-identity" },
   };
   const model = decisionModelFor(question);
-  const current = await prepareProductIdentityPair(db, pair.productIds);
   if (!current || current.fingerprint !== pair.fingerprint)
     throw new Error("Product identity evidence changed during evaluation");
   const decision = pair.exact
@@ -276,12 +292,35 @@ export async function evaluateProductIdentity(
   const pairs = [];
   let failure: string | null = null;
   const usage = ports.usage ?? { db, runId, operation: "product-identity" };
-  const settled = await settleDecisionWorkItems(prepared.pairs, (pair) =>
-    evaluatePreparedProductIdentityPair(db, pair, runId, { ...ports, usage }),
+  const settled = await evaluatePreparedProductIdentityPairs(
+    db,
+    prepared.pairs,
+    runId,
+    { ...ports, usage },
   );
   for (const result of settled) {
     if (result.status === "fulfilled") pairs.push(result.value);
     else failure = getErrorMessage(result.reason);
   }
   return { eligible: prepared.eligible, pairs, failure };
+}
+
+/** Recheck all pair inputs once immediately before the decision wave. */
+export async function evaluatePreparedProductIdentityPairs(
+  db: Database,
+  pairs: readonly z.infer<typeof preparedProductIdentityPair>[],
+  runId: RunId,
+  options: NonNullable<
+    Parameters<typeof evaluatePreparedProductIdentityPair>[3]
+  > = {},
+) {
+  const current = await prepareProductIdentityPairs(
+    db,
+    pairs.map((pair) => pair.productIds),
+  );
+  return settleDecisionWorkItems(
+    pairs.map((pair, index) => ({ pair, current: current[index] ?? null })),
+    ({ pair, current }) =>
+      evaluateCurrentProductIdentityPair(db, pair, current, runId, options),
+  );
 }

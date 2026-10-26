@@ -12,7 +12,10 @@ import {
   product,
 } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
-import { prepareProductIdentityPair } from "~/server/domains/product/repo/match/product-identity-snapshot";
+import {
+  prepareProductIdentityPair,
+  prepareProductIdentityPairs,
+} from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { groundedVariantEvidence } from "~/server/domains/product/repo/product-variant-evidence";
@@ -230,6 +233,19 @@ describe("retained Product identity conflict guards", () => {
       conflict: false,
       verification: "pending_verification",
       priorConflictIds: [prior.id],
+    });
+    const third = await productFixture(ctx, "Synthetic unrelated variant", {
+      model: "SYNTH-SAME",
+    });
+    const thirdId = await recordId(ctx.db, third.id, "product");
+    const [samePair, unrelated] = await prepareProductIdentityPairs(ctx.db, [
+      [ids[1], ids[0]],
+      [ids[0], thirdId],
+    ]);
+    expect(samePair).toEqual(await prepareProductIdentityPair(ctx.db, ids));
+    expect(unrelated).toMatchObject({
+      verification: "unknown",
+      priorConflictIds: [],
     });
   });
 

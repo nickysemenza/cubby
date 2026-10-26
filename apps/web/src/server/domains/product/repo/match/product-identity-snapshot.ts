@@ -28,13 +28,16 @@ import {
   retainedProductIdentifierClaim,
 } from "~/server/domains/product/repo/product-identity-claims";
 import {
-  readVariantVerification,
+  readVariantVerifications,
   variantVerification,
   productIdentitySide,
 } from "~/server/domains/product/repo/product-variant-evidence";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
-import { productIdentityEvidenceFence } from "./product-identity-fence";
+import {
+  productIdentityEvidenceFence,
+  productIdentityEvidenceFences,
+} from "./product-identity-fence";
 
 /**
  * Product identity evidence: the frozen per-Product snapshot, the prepared
@@ -115,6 +118,7 @@ export async function productIdentitySnapshots(
   const descriptions = await loadSelectedDescriptions(db, [
     ...new Set(photoRows.map((row) => row.shortcode)),
   ]);
+  const claims = await loadProductIdentifierClaims(db, live);
   for (const row of rows) {
     const identifiers = identifierRows
       .filter((identifier) => identifier.entityId === row.id)
@@ -127,9 +131,12 @@ export async function productIdentitySnapshots(
         purpose,
         description: descriptions.get(shortcode) ?? null,
       }));
-    // TODO: one claim read per Product until the claim loader accepts a set.
-    const claims = await loadProductIdentifierClaims(db, row.id);
-    const snapshot = z.json().parse({ ...row, identifiers, claims, photos });
+    const snapshot = z.json().parse({
+      ...row,
+      identifiers,
+      claims: claims.filter((claim) => claim.productId === row.id),
+      photos,
+    });
     result.set(row.id, {
       snapshot,
       fingerprint: await sha256Hex(canonicalJson(snapshot)),
@@ -177,10 +184,49 @@ export async function prepareProductIdentityPair(
     includeExcluded?: boolean;
   } = {},
 ) {
+  return (await prepareProductIdentityPairs(db, [ids], options))[0] ?? null;
+}
+
+/** One snapshot and history load for a finite catalog/decision batch. */
+export async function prepareProductIdentityPairs(
+  db: Database,
+  pairs: readonly (readonly [ProductId, ProductId])[],
+  options: { includeExcluded?: boolean } = {},
+) {
+  const snapshots = await productIdentitySnapshots(
+    db,
+    pairs.flatMap((ids) => [...ids]),
+  );
+  const sides = pairs.flatMap((ids) => {
+    const [a, b] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
+    const first = snapshots.get(a!),
+      second = snapshots.get(b!);
+    return first && second
+      ? [
+          [
+            productIdentitySide.parse(first.snapshot),
+            productIdentitySide.parse(second.snapshot),
+          ] as const,
+        ]
+      : [];
+  });
+  const guards = await readVariantVerifications(db, sides);
+  return Promise.all(
+    pairs.map((ids) =>
+      prepareProductIdentityPairFromSnapshots(ids, snapshots, guards, options),
+    ),
+  );
+}
+
+async function prepareProductIdentityPairFromSnapshots(
+  ids: readonly [ProductId, ProductId],
+  snapshots: Map<ProductId, ProductIdentitySnapshot>,
+  guards: Awaited<ReturnType<typeof readVariantVerifications>>,
+  options: { includeExcluded?: boolean },
+) {
   const [aId, bId] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
   if (aId === bId)
     throw new Error("A Product cannot be assessed against itself");
-  const snapshots = await productIdentitySnapshots(db, [aId!, bId!]);
   const first = snapshots.get(aId!),
     second = snapshots.get(bId!);
   if (
@@ -212,10 +258,8 @@ export async function prepareProductIdentityPair(
         other.exactVariant,
     ),
   );
-  const guard = await readVariantVerification(db, [
-    productIdentitySide.parse(first.snapshot),
-    productIdentitySide.parse(second.snapshot),
-  ]);
+  const guard = guards.get(`${aId}|${bId}`);
+  if (!guard) throw new Error("Missing prepared Product variant history");
   return preparedProductIdentityPair.parse({
     productIds: [aId, bId],
     first: first.snapshot,
@@ -261,32 +305,66 @@ async function enqueuePreparedProductIdentityPair(
  * Publication accepts a root handle or a caller-owned SERIALIZABLE transaction;
  * savepoints inherit outer isolation and cannot upgrade it.
  */
-export async function prepareProductIdentityPairRequest(
+export async function prepareProductIdentityPairRequests(
   db: Database,
-  expected: z.infer<typeof preparedProductIdentityPair>,
+  expected: readonly z.infer<typeof preparedProductIdentityPair>[],
   runId: RunId,
   provenance: AiProvenance,
+) {
+  const prepared = await prepareFencedProductIdentityPairs(db, expected);
+  if (
+    prepared.some(
+      ({ pair }, index) => pair.fingerprint !== expected[index]!.fingerprint,
+    )
+  )
+    throw new Error("Product pair evidence changed during inference");
+  return prepared.map(
+    ({ pair, fence }) =>
+      (db: Database) =>
+        withTransactionDatabase(
+          db,
+          async (tx) => {
+            if (
+              (await productIdentityEvidenceFence(tx, pair.productIds)) !==
+              fence
+            )
+              throw new Error("Product pair evidence changed during inference");
+            return enqueuePreparedProductIdentityPair(
+              tx,
+              pair,
+              runId,
+              provenance,
+            );
+          },
+          { isolationLevel: "serializable" },
+        ),
+  );
+}
+
+/** Batch unlocked evidence preparation; each publication still checks its own fence. */
+export async function prepareFencedProductIdentityPairs(
+  db: Database,
+  expected: readonly {
+    productIds: readonly [ProductId, ProductId];
+    fingerprint?: string | null;
+  }[],
 ) {
   if (isTransaction(getDb(db)))
     throw new Error(
       "Product pair preparation requires a database outside a transaction",
     );
-  const fence = await productIdentityEvidenceFence(db, expected.productIds);
-  const pair = await prepareProductIdentityPair(db, expected.productIds);
-  if (
-    !pair ||
-    pair.fingerprint !== expected.fingerprint ||
-    (await productIdentityEvidenceFence(db, expected.productIds)) !== fence
-  )
-    throw new Error("Product pair evidence changed during inference");
-  return (db: Database) =>
-    withTransactionDatabase(
-      db,
-      async (tx) => {
-        if ((await productIdentityEvidenceFence(tx, pair.productIds)) !== fence)
-          throw new Error("Product pair evidence changed during inference");
-        return enqueuePreparedProductIdentityPair(tx, pair, runId, provenance);
-      },
-      { isolationLevel: "serializable" },
-    );
+  const ids = expected.map((pair) => pair.productIds);
+  const before = await productIdentityEvidenceFences(db, ids);
+  const pairs = await prepareProductIdentityPairs(db, ids);
+  const after = await productIdentityEvidenceFences(db, ids);
+  return pairs.map((pair, index) => {
+    const input = expected[index]!;
+    if (
+      !pair ||
+      (input.fingerprint && pair.fingerprint !== input.fingerprint) ||
+      before[index] !== after[index]
+    )
+      throw new Error("Product pair evidence changed during inference");
+    return { pair, fence: before[index]! };
+  });
 }
