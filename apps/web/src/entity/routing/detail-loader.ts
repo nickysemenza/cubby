@@ -4,6 +4,7 @@ import type {
   QueryClient,
   QueryKey,
 } from "@tanstack/react-query";
+import { QueryObserver } from "@tanstack/react-query";
 import { notFound, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -37,9 +38,23 @@ export async function ensureDetailRecord<
   const invalidated = queryClient.getQueryState(
     options.queryKey,
   )?.isInvalidated;
-  const record = invalidated
-    ? await queryClient.fetchQuery({ ...options, staleTime: 0 })
-    : await queryClient.ensureQueryData(options);
+  // An inspector can release the last mounted observer while this loader
+  // awaits the same request. Keep the route's consumer subscribed so that
+  // unmount cannot cancel its read. The loader owns when to fetch.
+  const observer = new QueryObserver(queryClient, {
+    ...options,
+    enabled: false,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  const record = await (async () => {
+    try {
+      return invalidated
+        ? await queryClient.fetchQuery({ ...options, staleTime: 0 })
+        : await queryClient.ensureQueryData(options);
+    } finally {
+      unsubscribe();
+    }
+  })();
   if (!record) throw notFound();
   if (!requested) return;
   const identified = identifiedRecord.safeParse(record);

@@ -211,11 +211,21 @@ export async function loadJobWaitingOn(
       row.state === jobState.enum.retry_wait ||
       row.state === jobState.enum.running,
   );
-  const ids = live.map((row) => row.id);
+  // Only queue-position statuses consume ranking and throughput. In particular,
+  // a device-only page must not scan and rank the server drain's backlog.
+  const drainIds: string[] = [];
+  const deviceIds: string[] = [];
+  for (const row of live) {
+    const reason = deriveJobWaitingOn(row, { now })?.reason;
+    if (reason === "due") drainIds.push(row.id);
+    else if (reason === "waiting_device") deviceIds.push(row.id);
+  }
   const [throughput, drainAhead, deviceAhead, executors] = await Promise.all([
-    live.length ? queueThroughput(db, now) : { drained: 0, device: 0 },
-    positions(db, ids, "drain"),
-    positions(db, ids, "device"),
+    drainIds.length || deviceIds.length
+      ? queueThroughput(db, now)
+      : { drained: 0, device: 0 },
+    positions(db, drainIds, "drain"),
+    positions(db, deviceIds, "device"),
     leasedExecutors(
       db,
       live.filter((row) => row.state === jobState.enum.running),

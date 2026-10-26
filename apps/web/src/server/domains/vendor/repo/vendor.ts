@@ -966,7 +966,7 @@ export const findOrCreateVendor = async (
   });
   if (resolved?.row) {
     const matches = [resolved.row, ...resolved.candidates];
-    // A legacy pair differing only in case keeps resolving the exact spelling.
+    // Prefer a canonical spelling over candidates reached through aliases.
     const exactCase = matches.filter((match) => match.name === trimmed);
     if (exactCase.length === 1) return exactCase[0]!.id;
     if (resolved.candidates.length > 0)
@@ -979,7 +979,10 @@ export const findOrCreateVendor = async (
     return resolved.row.id;
   }
   const { row } = await findOrCreateWithShortcode(db, "vendor", {
-    where: and(eq(vendor.name, trimmed), notDeleted(vendor)),
+    where: and(
+      sql`lower(btrim(${vendor.name})) = lower(${trimmed})`,
+      notDeleted(vendor),
+    ),
     values: () => ({
       name: trimmed,
     }),

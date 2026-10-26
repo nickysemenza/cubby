@@ -427,8 +427,8 @@ export default defineEntity({
         display: { standard: "name" },
         validation: {
           read: z.string().min(1),
-          create: z.string().min(1),
-          update: z.string().min(1).optional(),
+          create: z.string().trim().min(1),
+          update: z.string().trim().min(1).optional(),
         },
       },
       {
@@ -1223,6 +1223,12 @@ export default defineEntity({
   storage: {
     indexes: [
       { on: ["name"], where: "{deletedAt} IS NULL" },
+      {
+        name: "Vendor_name_live_key",
+        on: [{ sql: "lower(btrim({name}))" }],
+        unique: true,
+        where: "{deletedAt} IS NULL",
+      },
       { on: ["systemKey"], unique: true },
     ],
     checks: [

@@ -1,6 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -86,9 +86,15 @@ describe("device work waits parked and records no attempt", () => {
       );
     expect(await attemptsOf(jobId)).toHaveLength(0);
     expect((await jobOf(jobId)).attempts).toBe(0);
-    expect(
-      (await loadJobWaitingOn(ctx.db, [execution])).get(execution.id),
-    ).toMatchObject({ reason: "waiting_device", lane: "apple_device" });
+    const waiting = await countTestDbQueries(() =>
+      loadJobWaitingOn(ctx.db, [execution]),
+    );
+    expect(waiting.result.get(execution.id)).toMatchObject({
+      reason: "waiting_device",
+      lane: "apple_device",
+    });
+    // Device-only pages must not rank the unrelated server drain backlog.
+    expect(waiting.statements.length).toBeLessThanOrEqual(3);
     const [displayed] = await getDb(ctx.db)
       .select({ state: imageJobDisplayStateSql() })
       .from(imageProcessingJob)

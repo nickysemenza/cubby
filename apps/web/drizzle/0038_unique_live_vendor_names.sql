@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "Vendor_name_live_key" ON "Vendor" USING btree (lower(btrim("name"))) WHERE "Vendor"."deletedAt" IS NULL;

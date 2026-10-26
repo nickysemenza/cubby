@@ -162,9 +162,9 @@ describe("vendor repository — findOrCreateVendor", () => {
     // The reason `findOrCreateVendor` goes through `findOrCreate`
     // (`ON CONFLICT DO NOTHING` + re-select) rather than findFirst + insert:
     // two concurrent imports naming the same new vendor must yield one row, not
-    // a 500 on `Vendor_name_key`.
+    // a 500 on the normalized live-name unique index.
     const [a, b] = await Promise.all([
-      findOrCreateVendor(ctx.db, "Flow Form Plumbing"),
+      findOrCreateVendor(ctx.db, " FLOW FORM PLUMBING "),
       findOrCreateVendor(ctx.db, "Flow Form Plumbing"),
     ]);
 
@@ -172,15 +172,23 @@ describe("vendor repository — findOrCreateVendor", () => {
     const rows = await getDb(ctx.db)
       .select({ id: vendor.id })
       .from(vendor)
-      .where(eq(vendor.name, "Flow Form Plumbing"));
+      .where(sql`lower(btrim(${vendor.name})) = 'flow form plumbing'`);
     expect(rows).toHaveLength(1);
   });
 
-  it("keeps resolving the exact spelling of a legacy case-variant pair", async () => {
-    const upper = await insertWithShortcode(ctx.db, "vendor", { name: "3M" });
-    const lower = await insertWithShortcode(ctx.db, "vendor", { name: "3m" });
-    expect(await findOrCreateVendor(ctx.db, "3M")).toBe(upper.id);
-    expect(await findOrCreateVendor(ctx.db, "3m")).toBe(lower.id);
+  it("rejects duplicate live names and permits reuse after deletion", async () => {
+    const original = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic maker",
+    });
+    await expect(
+      insertWithShortcode(ctx.db, "vendor", { name: " SYNTHETIC MAKER " }),
+    ).rejects.toMatchObject({ cause: { constraint: "Vendor_name_live_key" } });
+    await getDb(ctx.db)
+      .update(vendor)
+      .set({ deletedAt: new Date() })
+      .where(eq(vendor.id, original.id));
+    const replacement = await findOrCreateVendor(ctx.db, "Synthetic maker");
+    expect(replacement).not.toBe(original.id);
   });
 });
 
@@ -947,9 +955,8 @@ describe("vendor repository — mergeVendors", () => {
 
   it("writes the full audit trail for a merge that folds a charge", async () => {
     const keeper = await findOrCreateVendor(ctx.db, "Audited Keeper");
-    // A legacy case-variant Vendor: import now resolves names case-insensitively.
     const { id: loser } = await insertWithShortcode(ctx.db, "vendor", {
-      name: "audited keeper",
+      name: "Synthetic audited donor",
     });
 
     const survivor = await charge(keeper, "AUD-1");
