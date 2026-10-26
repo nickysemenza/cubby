@@ -2473,6 +2473,14 @@ whose input no column path reaches (a member's Email review, a selected image
 description, explicit recipe staleness) calls the same `derived_mark` SQL
 function in its transaction.
 
+Source writes in root Job transactions, including shared evaluation batches,
+use propagation priority (1); ordinary member transactions default to priority 0. The transaction helper sets this with transaction-local
+`cubby.derived_priority`, so savepoints inherit their caller's priority and
+pooled connections cannot carry it into later member saves. A member edit
+promotes existing background marks, and later background writes cannot demote
+them. Existing marks retain their priority through deployment; no queued work
+is discarded or guessed to be background work.
+
 The `derived.drain` Job claims ready marks, member edits first, then
 propagation, then reconciliation. It expands fanout marks, computes each
 target's batch outside the publication transaction through its adapter

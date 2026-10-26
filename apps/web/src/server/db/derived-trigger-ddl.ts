@@ -124,7 +124,9 @@ const derivedMarkFunctionSql =
 LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO "DerivedDirty" (target, ref, priority)
-    SELECT DISTINCT p_target, r, 0 FROM unnest(p_refs) AS r WHERE r IS NOT NULL
+    SELECT DISTINCT p_target, r,
+      CASE current_setting('cubby.derived_priority', true) WHEN '1' THEN 1 ELSE 0 END
+    FROM unnest(p_refs) AS r WHERE r IS NOT NULL
   ON CONFLICT (target, ref) DO UPDATE SET
     ticket = nextval('"DerivedTicket"'),
     priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),

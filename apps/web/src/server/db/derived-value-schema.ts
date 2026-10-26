@@ -71,7 +71,7 @@ export const derivedDirty = pgTable(
     ticket: bigint("ticket", { mode: "number" })
       .notNull()
       .default(sql`nextval('"DerivedTicket"')`),
-    /** 0 = a member edit, 1 = propagation, 2 = reconcile or backfill. */
+    /** 0 = a member edit, 1 = background source or propagation, 2 = reconcile or backfill. */
     priority: integer("priority").notNull().default(0),
     dirtiedAt: timestamp("dirtiedAt", { mode: "date" }).notNull().defaultNow(),
     readyAt: timestamp("readyAt", { mode: "date" }).notNull().defaultNow(),

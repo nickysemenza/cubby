@@ -1405,8 +1405,15 @@ describe("targeted prompt refresh", () => {
       }),
     );
     expect(measured.result).toBe(true);
+
     // Four pairs must share evidence reads; per-pair preparation needed 230 statements.
-    expect(measured.queryCount).toBeLessThanOrEqual(190);
+    // Include the fixed setup statement in each of at most 8 root Job transactions.
+    expect(
+      measured.statements.filter((statement) =>
+        statement.includes("cubby.derived_priority"),
+      ).length,
+    ).toBeLessThanOrEqual(8);
+    expect(measured.queryCount).toBeLessThanOrEqual(198);
     let open = false,
       statements = 0,
       largest = 0;
@@ -1490,8 +1497,15 @@ describe("targeted prompt refresh", () => {
       }),
     );
     expect(measured.result).toBe(true);
+
     // Includes real publication and incomplete-coverage settlement for four pairs.
-    expect(measured.queryCount).toBeLessThanOrEqual(200);
+    // Include the fixed setup statement in each of at most 6 root Job transactions.
+    expect(
+      measured.statements.filter((statement) =>
+        statement.includes("cubby.derived_priority"),
+      ).length,
+    ).toBeLessThanOrEqual(6);
+    expect(measured.queryCount).toBeLessThanOrEqual(206);
     let open = false,
       statements = 0,
       largest = 0;
