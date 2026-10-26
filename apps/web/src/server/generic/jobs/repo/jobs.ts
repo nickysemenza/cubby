@@ -178,6 +178,20 @@ export const unobservedJobInvalidation = (
     : pending.exists();
 };
 
+/**
+ * `unobservedJobInvalidation` as key membership, for predicates that scan
+ * many Jobs. A correlated EXISTS under OR forces a test of every retained
+ * completed row; an array lets the planner reach woken rows through
+ * `Job_key_unique` in a BitmapOr. Captures name few distinct keys (a derived
+ * drain or ring key each), so the array stays short.
+ */
+const unobservedJobInvalidationKey = (options: { restartsPass?: true } = {}) =>
+  sql<boolean>`${job.key} = ANY (ARRAY(SELECT DISTINCT c.key FROM ${jobInvalidationCapture} c${
+    options.restartsPass
+      ? sql` JOIN ${jobInvalidation} p ON p.key = c.key AND p."restartsPass"`
+      : sql``
+  } WHERE NOT c.observed))`;
+
 /** Whether a Job is claimable now: the one predicate the drain, claims and health share. */
 export const jobDue = (now: Date) => due(now);
 
@@ -192,10 +206,10 @@ const due = (now: Date) =>
     // whose capture restarts its pass. A pass that keeps its cursor across
     // captures waits out its availability: its claim does not observe the
     // capture, so the same capture would otherwise bypass every backoff.
-    and(eq(job.state, "completed"), unobservedJobInvalidation()),
+    and(eq(job.state, "completed"), unobservedJobInvalidationKey()),
     and(
       inArray(job.state, ["queued", "retry_wait"]),
-      unobservedJobInvalidation({ restartsPass: true }),
+      unobservedJobInvalidationKey({ restartsPass: true }),
     ),
     // Failure is no stop for new input: execution checks pending captures before a
     // terminal write, so a capture can commit in between, and no transaction
@@ -205,7 +219,7 @@ const due = (now: Date) =>
     // member stops and never wake.
     and(
       eq(job.state, "failed"),
-      unobservedJobInvalidation({ restartsPass: true }),
+      unobservedJobInvalidationKey({ restartsPass: true }),
     ),
   );
 
@@ -409,8 +423,9 @@ const fairlyOrderedDueJobs = (
       AND "Job"."leaseExpiresAt" > ${now.toISOString()}::timestamp AND NOT ${jobCapExempt()}
     GROUP BY backlog.kind, policy.cap, policy.pages
   ), served AS (
-    SELECT kind, max("lastClaimedAt") AS last_served FROM "Job"
-    WHERE kind IN (SELECT kind FROM backlog) GROUP BY kind
+    -- One Job_kind_claimed_idx probe per kind, not a scan of retained Jobs.
+    SELECT kind, (SELECT max(j."lastClaimedAt") FROM "Job" j WHERE j.kind = backlog.kind) AS last_served
+    FROM backlog
   ), ranked AS (
     SELECT due.*, served.last_served,
       row_number() OVER (

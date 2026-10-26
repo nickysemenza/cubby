@@ -274,6 +274,13 @@
       "when": 1792986503532,
       "tag": "0038_unique_live_vendor_names",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793028396414,
+      "tag": "0039_job_claimed_index",
+      "breakpoints": true
     }
   ]
 }

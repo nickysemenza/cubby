@@ -2,9 +2,10 @@ import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   aiEvaluationRequest,
   image,
@@ -35,6 +36,7 @@ import {
 import {
   claimJob,
   enqueueJob,
+  jobDue,
   repeatJob,
   recordJobInvalidation,
 } from "~/server/generic/jobs/repo/jobs";
@@ -558,6 +560,54 @@ describe("queue watchdog, explain and retention", () => {
     expect(health.alerts).toContainEqual(
       expect.objectContaining({ kind: "derived.drain", code: "oldest_due" }),
     );
+    // Retained completed Jobs outnumber live work: a correlated capture test
+    // under OR read every one, and production health reads took 20-180 s.
+    // The woken Job must be reached by key, not by testing each retained row.
+    const retained = await Promise.all(
+      Array.from({ length: 40 }, (_, index) =>
+        enqueueJob(ctx.db, {
+          key: `synthetic:retained:${index}`,
+          kind: "embedding.refresh",
+          input: {},
+        }),
+      ),
+    );
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "completed", updatedAt: longAgo })
+      .where(
+        inArray(
+          job.id,
+          retained.map((row) => row.id),
+        ),
+      );
+    const plan = await withTransaction(ctx.db, async (tx) => {
+      await tx.execute(sql`ANALYZE "Job"`);
+      // A table this small is cheaper to scan whole; production's is not.
+      await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+      return tx.execute(
+        sql`EXPLAIN (ANALYZE, FORMAT JSON) SELECT count(*) FROM "Job" WHERE ${jobDue(new Date())}`,
+      );
+    });
+    const node = z.object({
+      "Relation Name": z.string().optional(),
+      "Actual Rows": z.number(),
+      "Rows Removed by Filter": z.number().default(0),
+      Plans: z.array(z.unknown()).optional(),
+    });
+    let jobRowsRead = 0;
+    const visit = (value: unknown) => {
+      const parsed = node.parse(value);
+      if (parsed["Relation Name"] === "Job")
+        jobRowsRead += parsed["Actual Rows"] + parsed["Rows Removed by Filter"];
+      parsed.Plans?.forEach(visit);
+    };
+    z.array(
+      z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
+    )
+      .parse(plan.rows)
+      .forEach((row) => row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan)));
+    expect(jobRowsRead).toBe(1);
   });
 
   // Review finding: every capture moved the marker's updatedAt, so a family

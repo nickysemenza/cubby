@@ -1,6 +1,6 @@
 {
-  "id": "d4dca184-6e02-4829-980a-036309d366c0",
-  "prevId": "e6009169-e75a-4c63-8f85-389a1833fa43",
+  "id": "5980a926-4c0d-40ba-9d6f-4f868fbe4148",
+  "prevId": "d4dca184-6e02-4829-980a-036309d366c0",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2847,6 +2847,21 @@
               "asc": true,
               "nulls": "last"
             },
+            {
+              "expression": "lastClaimedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Job_claimed_idx": {
+          "name": "Job_claimed_idx",
+          "columns": [
             {
               "expression": "lastClaimedAt",
               "isExpression": false,
