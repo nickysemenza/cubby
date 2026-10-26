@@ -128,7 +128,7 @@ import {
   selectInventoryIdsByOwner,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
-import { loadInventoryValuations } from "./valuation";
+import { loadStoredInventoryValuations } from "./valuation";
 
 export const checkUniqueProductDuplicate = async (
   db: Database,
@@ -198,7 +198,7 @@ const inventoryReader = createEntityReader({
       loadInventoryOwnershipTraces(db, [row]),
       loadDataQualities(db, "inventory", [row.id]),
       loadDataQualities(db, "location", [row.location.id]),
-      loadInventoryValuations(db, [row]),
+      loadStoredInventoryValuations(db, [row.id]),
       resolveEntityDisplayImageLists(
         db,
         [row].map((entry) => ({
@@ -619,7 +619,7 @@ const hydrateInventoryEntry = async (
     loadInventoryOwnershipTraces(db, [result]),
     loadDataQualities(db, "inventory", [result.id]),
     loadDataQualities(db, "location", [result.location.id]),
-    loadInventoryValuations(db, [result]),
+    loadStoredInventoryValuations(db, [result.id]),
     resolveEntityDisplayImageLists(
       db,
       [result].map((entry) => ({
@@ -904,7 +904,10 @@ export const getInventoryByLocationIds = async (
       "location",
       results.map((entry) => entry.location.id),
     ),
-    loadInventoryValuations(db, results),
+    loadStoredInventoryValuations(
+      db,
+      results.map((row) => row.id),
+    ),
     resolveEntityDisplayImageLists(
       db,
       results.map((entry) => ({

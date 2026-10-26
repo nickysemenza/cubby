@@ -3,7 +3,7 @@ import type {
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -14,6 +14,7 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import {
   getDb,
   databaseForTransaction,
@@ -37,6 +38,8 @@ import { createLocation } from "~/server/domains/location/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
+import { executeEntity } from "~/server/entity-kernel";
+import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import {
   publishAssessment,
   recordFeedback,
@@ -48,6 +51,7 @@ import {
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
+import { explainStoredDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import {
@@ -152,6 +156,62 @@ describe("stored derived values", () => {
     expect(stored?.value).toBe(10);
     expect(stored?.meta.state).toBe("fresh");
     expect(await marks("inventory.valuation")).toEqual([]);
+
+    const [identity] = await getDb(ctx.db)
+      .select({ code: inventoryEntry.shortcode })
+      .from(inventoryEntry)
+      .where(eq(inventoryEntry.id, entry));
+    if (!identity) throw new Error("Synthetic inventory identity is missing");
+    const code = parseShortcodeFor("inventory", identity.code);
+    const context = buildKernelContext(ctx.db);
+    const detail = async () => {
+      const result = await executeEntity(context, {
+        action: "get",
+        entity: "inventory",
+        id: code,
+        missing: "error",
+      });
+      if (result.action !== "get") throw new Error("Expected a record read");
+      return getEntityDetailOutputSchema("inventory").parse(result.item);
+    };
+    const published = await detail();
+    expect(published).toMatchObject({
+      valuation: 10,
+      derived: { valuation: { state: "fresh" } },
+    });
+    await executeEntity(context, {
+      action: "update",
+      entity: "inventory",
+      id: code,
+      data: { amount: { value: 5, unit: "each" } },
+    });
+    expect(await detail()).toMatchObject({
+      valuation: 10,
+      derived: { valuation: { state: "stale" } },
+    });
+    const productDetail = await executeEntity(context, {
+      action: "get",
+      entity: "product",
+      id: published.product.id,
+      missing: "error",
+    });
+    if (productDetail.action !== "get")
+      throw new Error("Expected a Product read");
+    expect(
+      getEntityDetailOutputSchema("product").parse(productDetail.item),
+    ).toMatchObject({
+      inventoryEntry: [{ id: identity.code, valuation: 10 }],
+    });
+    expect(
+      await explainStoredDerived(
+        ctx.db,
+        derivedComputes,
+        "inventory",
+        "valuation",
+        entry,
+      ),
+    ).toMatchObject({ stored: 10, live: 12.5, meta: { state: "stale" } });
+    expect((await valuation(entry))?.value).toBe(10);
   });
 
   it("claims newer member edits before older background source writes without demoting member work", async () => {
