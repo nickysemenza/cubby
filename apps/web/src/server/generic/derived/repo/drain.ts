@@ -132,7 +132,7 @@ export async function prepareDerivedPage(
     } catch (error) {
       failed.set(
         target,
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error ? errorChainMessage(error) : String(error),
       );
     }
   }

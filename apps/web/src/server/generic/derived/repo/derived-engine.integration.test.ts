@@ -159,7 +159,9 @@ describe("stored derived values", () => {
     const failing = {
       ...derivedComputes,
       "product.price": async () => {
-        throw new Error("Synthetic compute failure");
+        throw new Error(`Synthetic query wrapper ${"x".repeat(2200)}`, {
+          cause: new Error("Synthetic compute failure"),
+        });
       },
     };
     await publishDerivedPage(
@@ -179,6 +181,9 @@ describe("stored derived values", () => {
       attempts: 61,
       lastError: expect.stringContaining("Synthetic compute failure"),
       bounded: true,
+    });
+    expect(row).toMatchObject({
+      lastError: expect.stringContaining("Synthetic query wrapper"),
     });
   });
 

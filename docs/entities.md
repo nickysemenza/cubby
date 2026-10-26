@@ -2440,6 +2440,9 @@ target backs off (30 seconds doubling to 15 minutes) and other targets publish.
 Each target publishes in its own savepoint: a write the database rejects for
 that target's data (SQLSTATE classes 22, 23, 54) backs off the same way with
 the database's message, while transaction-level failures retry the page.
+Preparation and publication failures retain the same bounded cause chain,
+innermost message first, so a long query wrapper cannot hide the underlying
+database or adapter error in the stored retry diagnostic.
 Value adapters write `DerivedValue`; sink adapters write their own tables
 (search documents with embedding admission, recipe totals, conversion
 coverage). Search publication uses one sorted upsert across live documents and
