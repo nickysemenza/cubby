@@ -96,8 +96,8 @@ extension EntityDescriptor {
     /// joins the filter's excluded values (`excludeParam`), leaving its include values alone; a
     /// level section also turns "Include sub-…" on so its key's descendants go with it. The
     /// no-value section narrows presence instead: picked values alone drop their "or no value",
-    /// otherwise the list keeps only rows with a value. Nil when the filter cannot exclude
-    /// (`excludeReason`) or, for the no-value section, declares no No value.
+    /// otherwise the list keeps only rows with a value. Nil when the filter declares no
+    /// `excludeParam` or, for the no-value section, no No value.
     public func hiding(
         _ state: EntityFilterState, section: EntityListSection, of choice: GroupChoice
     ) -> EntityFilterState? {
@@ -115,7 +115,7 @@ extension EntityDescriptor {
             }
             return next
         }
-        guard let exclude = filter.excludeParam, filter.excludeReason == nil else { return nil }
+        guard let exclude = filter.excludeParam else { return nil }
         let excluded = state[exclude] ?? []
         if !excluded.contains(section.path.last ?? section.id) {
             next.set(excluded + [section.path.last ?? section.id], for: exclude)

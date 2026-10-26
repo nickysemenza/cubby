@@ -215,7 +215,6 @@ export type GeneratedListField<E extends string = Entity> =
       readonly reason: string;
       readonly sort: string;
       readonly group: string;
-      readonly exclude: string | null;
     };
 
 export type GeneratedRowSet<E extends string = Entity> = {
@@ -454,7 +453,7 @@ type EntityFilterDescriptorMetadata = {
 
   nullable: { field: string; label: string } | null;
   match: { field: string } | null;
-  exclude: { field: string; reason: string | null } | null;
+  exclude: { field: string } | null;
   subtree: string | null;
   currentMember: boolean;
   singleValue: string | null;

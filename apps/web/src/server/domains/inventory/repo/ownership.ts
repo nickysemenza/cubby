@@ -1110,20 +1110,32 @@ async function liveEntryOwnerStates(
 }
 
 /**
- * Live entries whose effective Owner matches any filter value: a Ledger Party
- * shortcode, `@household` or `@unknown`. Runs the same resolver as hydration
- * over every live entry, so inherited stock matches; callers narrow SQL by
- * these ids before paging, counts, and totals.
+ * Filter-independent owner states of every live entry for one bounded read
+ * operation: the same resolver as hydration, so inherited stock matches.
  */
-export const inventoryIdsByEffectiveOwner = async (
+export async function loadInventoryOwnerStates(
   db: Database | DrizzleTransaction,
+) {
+  return (await liveEntryOwnerStates(db)).map(({ id, state }) => ({
+    id,
+    state,
+  }));
+}
+
+/**
+ * Live entries whose effective Owner matches any filter value: a Ledger Party
+ * shortcode, `@household` or `@unknown`; callers narrow SQL by these ids
+ * before paging, counts, and totals.
+ */
+export function selectInventoryIdsByOwner(
+  states: Awaited<ReturnType<typeof loadInventoryOwnerStates>>,
   values: readonly string[],
-): Promise<InventoryId[]> => {
+): InventoryId[] {
   const wanted = new Set(values);
-  return (await liveEntryOwnerStates(db))
+  return states
     .filter(({ state }) => wanted.has(ownerFilterValue(state)))
     .map(({ id }) => id);
-};
+}
 
 /**
  * Each Product's Owner rollup: the distinct effective owners of its live

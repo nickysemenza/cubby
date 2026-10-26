@@ -105,10 +105,9 @@ export interface FilterSpecCore {
   match?: { field: string };
   /**
    * The generated Exclude key: the control offers is | is not, and the column
-   * state carries excluded values with {@link FILTER_NOT_PREFIX}. A `reason`
-   * means the filter cannot exclude; "is not" is disabled with it.
+   * state carries excluded values with {@link FILTER_NOT_PREFIX}.
    */
-  exclude?: { field: string; reason: string | null };
+  exclude?: { field: string };
   /**
    * The key of the reference's generated "Include sub-…" toggle (on unless
    * `false`). Its control sits in this filter's editor, and the column state
@@ -137,7 +136,7 @@ export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE };
 
 /** The Exclude key a spec can write, or undefined when it cannot exclude. */
 const excludeKey = (spec: FilterSpecCore): string | undefined =>
-  spec.exclude && spec.exclude.reason === null ? spec.exclude.field : undefined;
+  spec.exclude?.field;
 
 const isSentinel = (value: string): boolean =>
   value === FILTER_ANY ||

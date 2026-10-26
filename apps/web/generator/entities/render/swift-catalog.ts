@@ -243,7 +243,6 @@ const filterJSON = (
   presenceParam: filter.nullable?.field ?? null,
   matchParam: filter.match?.field ?? null,
   excludeParam: filter.exclude?.field ?? null,
-  excludeReason: filter.exclude?.reason ?? null,
   subtreeParam: filter.subtree,
   currentMember: filter.currentMember,
   singleValue: filter.singleValue !== null,
@@ -581,9 +580,9 @@ const savedViewFilters = (
         value !== FILTER_ALL &&
         excludedFilterValue(value) === undefined,
     );
-    if (excluded.length && descriptor.exclude?.reason !== null)
+    if (excluded.length && descriptor.exclude === null)
       throw new Error(
-        `Saved view ${view.id} excludes ${filter.id}, which cannot exclude${descriptor.exclude ? `: ${descriptor.exclude.reason}` : "."}`,
+        `Saved view ${view.id} excludes ${filter.id}, which cannot exclude.`,
       );
     // Any value already includes every picked value.
     if (none && any) return [];

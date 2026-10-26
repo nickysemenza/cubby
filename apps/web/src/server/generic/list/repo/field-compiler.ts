@@ -194,7 +194,15 @@ const createListPrepare = <P>(
     }),
     predicate: (render) => ({
       prepare: handle,
-      render: (context, value) => render(context.get(handle), value),
+      render: (context, value) => {
+        // A filter-dependent load ran over the include values, so its data
+        // cannot answer the excluded values a negated predicate is given.
+        if (context.excluded && loadShared === undefined)
+          throw new Error(
+            "An Exclude filter rendered a predicate over listPrepare data loaded from the request filters; load it with sharedListPrepare and select by the values the predicate receives.",
+          );
+        return render(context.get(handle), value);
+      },
     }),
     rows: (render) => ({
       prepare: handle,
@@ -239,18 +247,22 @@ export class ListPreparationScope {
 
 /**
  * The prepared data of one list request, loaded by `scaffold.context`, and
- * the quality read context its caller passed to `where`.
+ * the quality read context its caller passed to `where`. `excluded` marks the
+ * include predicates an Exclude key negates.
  */
 export class ListContext {
   constructor(
     private readonly prepared: ReadonlyMap<ListPrepare<unknown>, unknown>,
     readonly read?: QualityReadContext,
+    readonly excluded = false,
   ) {}
 
   static readonly empty = new ListContext(new Map());
 
   withRead(read: QualityReadContext | undefined): ListContext {
-    return read === this.read ? this : new ListContext(this.prepared, read);
+    return read === this.read
+      ? this
+      : new ListContext(this.prepared, read, this.excluded);
   }
 
   /** This context plus a related scope's nested one (distinct handles). */
@@ -260,7 +272,12 @@ export class ListContext {
       : new ListContext(
           new Map([...this.prepared, ...nested.prepared]),
           this.read,
+          this.excluded,
         );
+  }
+
+  excluding(): ListContext {
+    return new ListContext(this.prepared, this.read, true);
   }
 
   /** The loaded prepares, to seed a fuller context without reloading them. */

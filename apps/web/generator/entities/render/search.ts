@@ -97,7 +97,7 @@ export const renderSearchArtifacts = (
         ),
         // An Exclude key lists values only: no Any / No value or Match all.
         ...filterDescriptors.flatMap(({ exclude, ...descriptor }) =>
-          exclude === null || exclude.reason !== null
+          exclude === null
             ? []
             : [
                 `${JSON.stringify(exclude.field)}:${searchCodec({ ...descriptor, exclude: null, nullable: null, match: null }, alias)},`,
@@ -158,7 +158,7 @@ export const renderSearchArtifacts = (
         ...(primarySearch ? [primarySearch.key] : []),
         ...filterDescriptors.map(({ urlKey }) => urlKey),
         ...filterDescriptors.flatMap(({ exclude }) =>
-          exclude === null || exclude.reason !== null ? [] : [exclude.field],
+          exclude === null ? [] : [exclude.field],
         ),
         ...tableKeys,
         ...(dialog ? ["create"] : []),

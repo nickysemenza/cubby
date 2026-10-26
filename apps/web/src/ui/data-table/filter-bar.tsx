@@ -195,44 +195,34 @@ const MATCH_OPTIONS = [
   { value: "all", label: "Match all" },
 ];
 
+const SIDE_OPTIONS = [
+  { value: "is", label: "is" },
+  { value: "isNot", label: "is not" },
+];
+
 /**
  * The is | is not control: which side of the filter the picker edits. Both
- * sides keep their values, so "Clothing" and "not Outerwear" combine. A
- * filter that cannot exclude shows "is not" disabled with its reason.
+ * sides keep their values, so "Clothing" and "not Outerwear" combine.
  */
 function SideControl({
   label,
   side,
-  reason,
   onSideChange,
 }: {
   label: string;
   side: FilterSide;
-  reason: string | null;
   onSideChange: (side: FilterSide) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1">
-      <Picker
-        mode="segmented"
-        label={`${label} is or is not`}
-        options={[
-          { value: "is", label: "is" },
-          {
-            value: "isNot",
-            label: "is not",
-            ...(reason === null ? {} : { disabledReason: reason }),
-          },
-        ]}
-        value={side}
-        onValueChange={(value) => {
-          if (value === "is" || value === "isNot") onSideChange(value);
-        }}
-      />
-      {reason !== null && (
-        <p className="px-1 text-xs text-muted-foreground">{reason}</p>
-      )}
-    </div>
+    <Picker
+      mode="segmented"
+      label={`${label} is or is not`}
+      options={SIDE_OPTIONS}
+      value={side}
+      onValueChange={(value) => {
+        if (value === "is" || value === "isNot") onSideChange(value);
+      }}
+    />
   );
 }
 
@@ -664,12 +654,7 @@ function ChecklistEditor({
     field.matchAll || field.subtree || field.exclude ? (
       <>
         {field.exclude && (
-          <SideControl
-            label={label}
-            side={side}
-            reason={field.exclude.reason}
-            onSideChange={setSide}
-          />
+          <SideControl label={label} side={side} onSideChange={setSide} />
         )}
         {field.matchAll && side === "is" && (
           <Picker

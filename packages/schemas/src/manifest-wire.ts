@@ -173,7 +173,6 @@ export const manifestWire = {
       presenceParam: "string~",
       matchParam: "string~",
       excludeParam: "string~",
-      excludeReason: "string~",
       subtreeParam: "string~",
       currentMember: "boolean",
       singleValue: "boolean~",

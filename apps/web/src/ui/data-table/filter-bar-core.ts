@@ -60,8 +60,8 @@ export type FilterFieldConfig = {
   exclusiveGroup?: string;
   /** The "Include sub-…" toggle inside a hierarchical reference's editor. */
   subtree?: { label: string };
-  /** Offers is | is not; a `reason` disables "is not" with that line. */
-  exclude?: { reason: string | null };
+  /** Offers is | is not. */
+  exclude?: boolean;
   /** A date range: beside its presets the editor sets `from..to` bounds. */
   dateRange?: boolean;
   /** A number range: beside its presets the editor sets `min..max` bounds. */

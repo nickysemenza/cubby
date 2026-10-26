@@ -252,7 +252,7 @@ export const compileDataQuality = (
     kind: "multiselect",
     placeholder: "Filter data quality...",
     options: [...STATUS_OPTIONS],
-    exclude: { field: `${DATA_QUALITY_FIELD}Exclude`, reason: null },
+    exclude: { field: `${DATA_QUALITY_FIELD}Exclude` },
     wire: { kind: "param", name: "dataStatus" },
   };
   const gapDescriptor: FilterDescriptor = {
@@ -269,7 +269,7 @@ export const compileDataQuality = (
       value: check.id,
       label: check.label,
     })),
-    exclude: { field: `${DATA_GAPS_FIELD}Exclude`, reason: null },
+    exclude: { field: `${DATA_GAPS_FIELD}Exclude` },
     wire: { kind: "param", name: "dataGap" },
   };
   const sort = fieldModel.sort;

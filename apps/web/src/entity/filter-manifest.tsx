@@ -250,7 +250,7 @@ const specFilterConfig = (
     ...(spec.exclusiveGroup ? { exclusiveGroup: spec.exclusiveGroup } : {}),
     options: resolveSpecOptions(spec, runtimeOptions),
     matchAll: spec.match === undefined ? undefined : true,
-    exclude: spec.exclude && { reason: spec.exclude.reason },
+    exclude: spec.exclude === undefined ? undefined : true,
     subtree: subtreeControl(spec, specs),
     dateRange: spec.range && !spec.range.number ? true : undefined,
     numberRange: spec.range?.number,

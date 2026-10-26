@@ -452,8 +452,7 @@ describe("state predicates re-declared as values", () => {
     expect(await listed({ reconciliation: ["refund_adjusted"] })).toEqual([
       rows.refunded.shortcode,
     ]);
-    // The excepted mismatch has no verdict; Exclude keeps it, as the
-    // negatable predicate did.
+    // The excepted mismatch has no verdict; Exclude keeps it.
     expect(assigned).not.toContain(rows.excepted.shortcode);
     expect(await listed({ reconciliationExclude: ["mismatch"] })).toEqual(
       await retired(sql`NOT COALESCE(${verdicts.mismatch}, false)`),

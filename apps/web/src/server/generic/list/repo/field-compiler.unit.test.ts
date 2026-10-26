@@ -8,6 +8,8 @@ import { inventoryEntry, location, purchase, run } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
 
 import {
+  type AnyOfValue,
+  type ListPrepare,
   listPrepare,
   sharedListPrepare,
   ListPreparationScope,
@@ -21,8 +23,9 @@ import { listScaffold } from "./list";
  * One compiled expression per declared list field. Failure modes: a related
  * path joins the outer row instead of correlating, a hierarchy filter stops
  * at direct children or ignores its toggle, a repository value is not the
- * expression its sort orders by, and a request-scoped `prepare` runs when no
- * requested field reads it or runs once per consumer.
+ * expression its sort orders by, a request-scoped `prepare` runs when no
+ * requested field reads it or runs once per consumer, and an Exclude key
+ * negates a predicate over data loaded from the include values.
  */
 describe("list field compiler", () => {
   const db = {} as Database;
@@ -302,6 +305,33 @@ describe("list field compiler", () => {
       "rejected",
       "rejected",
     ]);
+  });
+
+  it("negates a predicate only over filter-independent prepared data", async () => {
+    const read = async (owners: ListPrepare<readonly string[]>) => {
+      const scaffold = listScaffold("inventory", inventoryEntry, {
+        derived: {
+          valuation: sql`0`,
+          valuationStatus: sql`0`,
+          amount: [sql`unit`, sql`size`],
+          ...filterOnly,
+          effectiveOwner: owners.predicate<AnyOfValue>(
+            (_owners, value) => sql`owner_code IN ${value.values}`,
+          ),
+        },
+      });
+      const filters = { ownerLedgerPartyIdExclude: ["LP-2345"] };
+      const context = await scaffold.context(db, { filters });
+      return whereSql(and(...scaffold.filterPredicates(filters, context)));
+    };
+    expect(await read(sharedListPrepare(async () => []))).toMatch(
+      /NOT COALESCE\(\(owner_code IN/,
+    );
+    // A listPrepare load reads the request filters, so its data answers only
+    // the include values.
+    await expect(read(listPrepare(async () => []))).rejects.toThrow(
+      /load it with sharedListPrepare/,
+    );
   });
 
   // A row set's table, `where` columns and terminals are checked when its
