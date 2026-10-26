@@ -5,7 +5,13 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { normalizeSearchText } from "~/lib/search-normalization";
 import { TEXT_WHITESPACE } from "~/lib/text-whitespace";
 import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
+import {
+  fanoutTarget,
+  isFanoutInput,
+  storedDerived,
+} from "~/server/db/derived-declarations";
 import { unwrapDb } from "~/server/db/helpers";
+import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -17,12 +23,40 @@ import {
 import {
   prepareSearchDocuments,
   refreshSearchDocument,
+  searchCoverageIncomplete,
 } from "./search-document";
 
 // A requested source must not compile unrelated entity branches into its SQL.
 // Stable source columns and recursive location paths must survive narrowing.
 describe("search source selection", () => {
   const ctx = withTestDb();
+
+  // #3327: coverage is unconfirmed per candidate kind, not while any search
+  // work anywhere is pending.
+  it("confirms coverage for a kind unless that kind's search documents are pending", async () => {
+    const config = getSemanticEmbeddingConfig();
+    const mark = (target: string) =>
+      unwrapDb(ctx.db).execute(sql`
+        INSERT INTO "DerivedDirty" (target, ref) VALUES (${target}, ${crypto.randomUUID()}::uuid)`);
+    await unwrapDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await mark("expense.searchDocument");
+    expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
+      false,
+    );
+    const product = storedDerived("product", "searchDocument")!;
+    const fanout = product.inputs.findIndex(isFanoutInput);
+    await mark(fanoutTarget(product.target, fanout));
+    expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
+      true,
+    );
+    await unwrapDb(ctx.db).execute(
+      sql`DELETE FROM "DerivedDirty" WHERE target <> 'expense.searchDocument'`,
+    );
+    await mark(product.target);
+    expect(await searchCoverageIncomplete(ctx.db, config, ["product"])).toBe(
+      true,
+    );
+  });
 
   it("indexes a document whose body exceeds the full-text size limit", async () => {
     // Distinct synthetic tokens: a tsvector over this whole body is ~2 MB.
