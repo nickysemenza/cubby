@@ -1,0 +1,41 @@
+apps/apple/App/Shared/AppShell/AppModel.swift
+  s_d4e0640dd7b1ac::t_6c69dafd6ad1c7 534
+apps/apple/App/Shared/AppShell/CubbyApp.swift
+  s_d4e0640dd7b1ac::t_3c519d2380d440 31-32,88-93
+apps/apple/App/Shared/AppShell/DevView.swift
+  s_d4e0640dd7b1ac::t_0a0d61bcd9ce4c 115
+apps/apple/App/Shared/AppShell/Navigator.swift
+  s_d4e0640dd7b1ac::t_3250c8e72177a7 184-191
+apps/apple/App/Shared/AppShell/RootView.swift
+  s_d4e0640dd7b1ac::t_a52f7e8dd05a5f 65
+apps/apple/App/Shared/AppShell/UpdateAvailableBanner.swift
+  s_d4e0640dd7b1ac::t_a97c6247b7cd26 17,29-43
+apps/apple/App/Shared/DesignSystem/CubbyCommands.swift
+  s_d4e0640dd7b1ac::t_2d023a569e4a96 11-12
+apps/apple/App/Shared/Photo/Library/PhotosRootView.swift
+  s_d4e0640dd7b1ac::t_cfb4b6c57474dd 236-238,592-625
+apps/apple/App/Shared/Settings/SettingsView.swift
+  s_d4e0640dd7b1ac::t_7672705f8a1318 10-12,25-46,48-50,52-58,60-64,66-77,79-80,83-89,93-95,97-98,100-106,108-117,119-124,126-171,173-175,177,181,183-186,188-240,242-258,260-292,294-296,299-319,327-328,331,334,367,369-372,374-391,394-399,403,422,426,432,444,535,539,542,547-549,552-556
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_d4e0640dd7b1ac::t_017586480ffcae 11-13,19,21-26
+apps/apple/CubbyKit/Sources/CubbyKit/Participation/DeviceParticipation.swift
+  s_d4e0640dd7b1ac::t_731098d58a3cc3 6-7
+apps/apple/DESIGN.md
+  s_d4e0640dd7b1ac::t_75500b0caf1f4d 17,19
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b140925c8f333a5e3c2dbdd1bcbacc1e942fef29",
+  "prompts": {},
+  "sessions": {
+    "s_d4e0640dd7b1ac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "78d76256-7241-4720-a3fe-9a49b5aeb01d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
