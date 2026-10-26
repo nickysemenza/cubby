@@ -408,9 +408,11 @@ export async function drainDueJobs(
       const batch = handlers[candidate.kind]?.batch;
       try {
         const page = handlers[candidate.kind]?.advancePage;
-        if (page && candidate.pageKey)
-          outcomes.push(await page(db, candidate.id));
-        else if (batch)
+        if (page && candidate.pageKey) {
+          const outcome = await page(db, candidate.id);
+          outcomes.push(outcome);
+          if (outcome === "skipped") skipped.add(candidate.id);
+        } else if (batch)
           outcomes.push(
             ...(await advanceBatch(
               db,
