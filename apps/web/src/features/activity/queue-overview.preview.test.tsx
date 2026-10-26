@@ -48,9 +48,11 @@ const reads: unknown[] = [];
 const retried: unknown[] = [];
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let restore: (() => void) | undefined;
+let quiet = false;
 
 beforeEach(async () => {
   await page.viewport(1440, 1200);
+  quiet = false;
   reads.length = 0;
   retried.length = 0;
   // Foreign page filters/sort must never leak into either embedded list.
@@ -78,7 +80,15 @@ beforeEach(async () => {
       };
     }
     if (operation === "derived.backlog")
-      return { ok: true, data: { total: 0, kinds: [] } };
+      return {
+        ok: true,
+        data: {
+          total: 0,
+          kinds: [],
+          oldestWaitingSeconds: null,
+          recent: { windowMinutes: 15, perMinute: [] },
+        },
+      };
     if (operation === "entity.detail")
       return {
         ok: true,
@@ -115,6 +125,37 @@ beforeEach(async () => {
         },
       };
     }
+    if (operation === "job.activity")
+      return {
+        ok: true,
+        data: {
+          measuredAt: new Date().toISOString(),
+          windows: { paceMinutes: 5, completedMinutes: 15, failedMinutes: 60 },
+          streams: quiet
+            ? []
+            : [
+                "image.device",
+                "embedding.refresh",
+                "derived.drain",
+                "jobs.retention",
+                "image.device.wake",
+              ].map((kind) => ({
+                kind,
+                feature: null,
+                running: 1,
+                due: 3,
+                backingOff: 0,
+                scheduled: 0,
+                paused: 0,
+                completedPerMinute: 2,
+                completed: 4,
+                failed: 0,
+                lastCompletedAt: null,
+                oldestDueAt: null,
+                runIds: ["RUN-4K7MN", "RUN-5K7MN", "RUN-6K7MN", "RUN-7K7MN"],
+              })),
+        },
+      };
     if (operation === "job.health")
       return {
         ok: true,
@@ -123,13 +164,20 @@ beforeEach(async () => {
             measuredAt: new Date().toISOString(),
             kinds: [],
             imageDisagreement: 0,
-            alerts: [
-              {
-                kind: "image.device",
-                code: "expired_leases",
-                evidence: "Synthetic expired leases",
-              },
-            ],
+            alerts: quiet
+              ? []
+              : [
+                  {
+                    kind: "image.device",
+                    code: "expired_leases",
+                    evidence: "Synthetic expired leases",
+                  },
+                  {
+                    kind: "derived.drain",
+                    code: "no_claims",
+                    evidence: "Synthetic derived watchdog",
+                  },
+                ],
           },
         },
       };
@@ -195,9 +243,27 @@ function Overview() {
 
 it("embeds bounded attention and Job tables, scopes chips, and expands the selected Job's diagnostics", async () => {
   render(<Overview />, { wrapper: harness.wrapper });
-  expect(await screen.findByTestId("queue-health")).toHaveTextContent(
-    "Synthetic expired leases",
+  const watchdog = await screen.findByTestId("queue-health");
+  expect(
+    within(watchdog).getByText(/Synthetic expired leases/),
+  ).not.toBeVisible();
+  const stream = (await screen.findAllByTestId("work-stream"))[0];
+  if (!stream) throw new Error("Missing synthetic work stream");
+  expect(stream).toHaveTextContent("Not moving");
+  expect(stream).toHaveTextContent(
+    "Work was not finished before its claim expired",
   );
+  expect(within(stream).getAllByRole("link")).toHaveLength(3);
+  expect(stream).toHaveTextContent("+1");
+  expect(await screen.findByTestId("work-stream-derived")).toHaveTextContent(
+    "Not moving",
+  );
+  expect(screen.queryByText("Net backlog since opened")).toBeNull();
+  expect(screen.queryByText("Jobs retention")).toBeNull();
+  expect(screen.queryByText("Image device wake")).toBeNull();
+  expect(screen.getByText("Work is moving")).toBeInTheDocument();
+  await userEvent.click(within(watchdog).getByText("Watchdog details"));
+  expect(within(watchdog).getByText(/Synthetic expired leases/)).toBeVisible();
   expect(await screen.findByTestId("device-backlog")).toBeVisible();
   const jobs = await screen.findByRole("table", { name: "Jobs table" });
   expect(await within(jobs).findByText("image.device")).toBeVisible();
@@ -337,4 +403,26 @@ it("requests navigable chip counts from the Job table population", async () => {
       }),
     ),
   );
+});
+
+it("keeps phone commands below readable stream identity and facts", async () => {
+  await page.viewport(390, 1100);
+  render(<Overview />, { wrapper: harness.wrapper });
+  const row = (await screen.findAllByTestId("work-stream"))[0];
+  if (!row) throw new Error("Missing synthetic work stream");
+  const label = within(row).getByText("Photo processing on Apple devices");
+  const jobs = within(row).getByRole("button", { name: "Jobs" });
+  expect(label.getBoundingClientRect().width).toBeGreaterThan(150);
+  expect(jobs.getBoundingClientRect().top).toBeGreaterThan(
+    label.getBoundingClientRect().bottom,
+  );
+  expect(row.getBoundingClientRect().right).toBeLessThanOrEqual(390);
+});
+
+it("reads All quiet without a live indicator when no work is outstanding", async () => {
+  quiet = true;
+  render(<Overview />, { wrapper: harness.wrapper });
+  expect(await screen.findByText(/All quiet · 0 finished/)).toBeVisible();
+  expect(screen.queryByText("Work is moving")).toBeNull();
+  expect(screen.queryByTestId("work-stream")).toBeNull();
 });

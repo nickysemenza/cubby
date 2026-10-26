@@ -513,11 +513,27 @@ Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern wit
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and
 Activity Work cells show the current phase's known processed/total counts;
-unknown totals remain text. Activity queue-kind bars and the expanded sidebar's
-large derived backlog (100 or more observed values) show net depletion from the
+unknown totals remain text. The expanded sidebar's large derived backlog (100 or more observed values)
+shows net depletion from the
 view's high-water mark, never lifetime completion. Incoming work can reduce the
 fill. Idle work or an observation gap over a minute resets the baseline; the
 sidebar samples every 15 seconds and its collapsed rail retains the status dot.
-Queue-kind observations use the watchdog snapshots and their existing measured
-at label; bars do not imply a new live measurement. These observation windows
-are local to the mounted view and are not durable workload totals.
+The observation window is local to the mounted view, not a durable workload total.
+
+### Activity and evaluation progress
+
+Activity leads with one flat Now feed: plain work names, explicit states,
+measured pace and waiting context. Working streams light a small info dot beside
+Now; reduced motion keeps it still. With no outstanding work the caption reads
+All quiet. Internal drain, retention and device-wake Jobs never become separate
+feed rows. Derived drain alerts belong to Derived values. Watchdog conditions
+make the affected stream Not moving and explain why below its name; raw codes
+and evidence stay in the quiet Watchdog details disclosure. Queue snapshots do
+not establish finite totals, so Activity has no separate per-kind depletion bars.
+Run links have visible gaps, show at most three codes and a +N remainder.
+Phone rows put pace below identity and keep commands together below the facts;
+pace never reserves the label's width.
+
+Run Evaluation progress uses shared Progress labels and values for Records
+checked and Evaluations settled. Paused and stopped Runs retain their counts
+with a paused bar and suppress historical rates and remaining-time estimates.

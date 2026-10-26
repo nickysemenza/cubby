@@ -1,4 +1,4 @@
-import type { WorkStream } from "~/contracts/job.contract";
+import type { QueueHealthSnapshot, WorkStream } from "~/contracts/job.contract";
 
 /** Plain names for the work a Job kind (or AI feature) does. */
 const KIND_LABEL = new Map<string, string>(
@@ -61,19 +61,23 @@ export type WorkStreamView = {
   /** Seconds the oldest due item has waited; null when nothing is due. */
   oldestWaitSeconds: number | null;
   stream: WorkStream;
+  alertReason: string | null;
 };
 
 export function workStreamView(
   stream: WorkStream,
   now: number,
+  health?: QueueHealthSnapshot | null,
 ): WorkStreamView {
   const remaining =
     stream.running + stream.due + stream.backingOff + stream.scheduled;
   const oldestWaitSeconds = stream.oldestDueAt
     ? Math.max(0, Math.round((now - Date.parse(stream.oldestDueAt)) / 1000))
     : null;
-  const status: WorkStreamStatus =
-    stream.running > 0
+  const alertReason = watchdogReason(stream.kind, health);
+  const status: WorkStreamStatus = alertReason
+    ? "stuck"
+    : stream.running > 0
       ? "working"
       : stream.due > 0
         ? (oldestWaitSeconds ?? 0) >= STUCK_AFTER_SECONDS &&
@@ -98,6 +102,7 @@ export function workStreamView(
         : null,
     oldestWaitSeconds,
     stream,
+    alertReason,
   };
 }
 
@@ -135,4 +140,41 @@ export function formatPace(perMinute: number) {
   return perMinute >= 10
     ? `${Math.round(perMinute).toLocaleString()}/min`
     : `${Math.round(perMinute * 10) / 10}/min`;
+}
+
+/** Infrastructure Jobs never become member-facing streams. */
+export function isVisibleWorkStream(stream: Pick<WorkStream, "kind">) {
+  return !["derived.drain", "jobs.retention", "image.device.wake"].includes(
+    stream.kind,
+  );
+}
+
+/** Translate conditions, never parse the watchdog's diagnostic prose. */
+export function watchdogReason(
+  kind: string,
+  health?: QueueHealthSnapshot | null,
+) {
+  const alerts = health?.alerts.filter((alert) => alert.kind === kind) ?? [];
+  if (!alerts.length) return null;
+  const conditions = health?.kinds.find((entry) => entry.kind === kind);
+  const reasons: string[] = alerts.map((alert) => {
+    switch (alert.code) {
+      case "no_claims":
+        return "Waiting work is not being picked up";
+      case "oldest_due":
+        return "Waiting work is overdue";
+      case "due_growth":
+        return "Waiting work is growing";
+      case "expired_leases":
+        return "Work was not finished before its claim expired";
+      case "image_disagreement":
+        return "Photo work needs reconciliation";
+      case "over_capacity":
+        return "More work queued than the processing limit";
+    }
+  });
+  const oldest = conditions?.oldestDueSeconds;
+  if (oldest !== null && oldest !== undefined)
+    reasons.push(`oldest waiting ${Math.round(oldest / 60)} min`);
+  return reasons.join(" · ");
 }

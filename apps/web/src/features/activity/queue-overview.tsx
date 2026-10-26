@@ -10,16 +10,12 @@ import {
 } from "@cubby/schemas/job";
 import { jobFilters, jobOut } from "@cubby/schemas/job-entity";
 import { countLabel } from "@cubby/shared/pluralize";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import type {
-  JobSetFilter,
-  QueueHealthSnapshot,
-} from "~/contracts/job.contract";
+import type { JobSetFilter } from "~/contracts/job.contract";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import type {
   BaseListRow,
@@ -29,20 +25,12 @@ import { WorkFeed } from "~/features/activity/work-feed";
 import { JobLogPanel } from "~/features/job/job-diagnostics";
 import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
-import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { roundTo } from "~/lib/round-to";
 import { DerivedBacklogOverview } from "~/ui/derived/backlog";
-import { useBacklogProgress } from "~/ui/derived/use-backlog-progress";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/ui/primitives/progress";
 import { StatusText } from "~/ui/primitives/status-text";
 
 export type QueueSearch = {
@@ -54,61 +42,6 @@ export type QueueSearch = {
   attention?: boolean | undefined;
   page?: number | undefined;
 };
-function QueueHealthNotice({
-  health,
-}: {
-  health: QueueHealthSnapshot | null | undefined;
-}) {
-  if (!health?.alerts.length) return null;
-  return (
-    <div className="grid gap-1.5" data-testid="queue-health">
-      <Row gap="sm" align="center" wrap>
-        <Badge variant="destructive">
-          <WarningIcon aria-hidden className="size-3" />
-          Queue unhealthy · {countLabel(health.alerts.length, "alert")}
-        </Badge>
-        <span className="text-xs text-muted-foreground">
-          Measured {formatRelative(health.measuredAt)}
-          {health.imageDisagreement
-            ? ` · ${formatCount(health.imageDisagreement)} image rows disagree with their Job`
-            : ""}
-        </span>
-      </Row>
-      <ul className="grid gap-0.5 font-mono text-xs/4.5 text-destructive">
-        {health.alerts.map((alert) => (
-          <li key={`${alert.kind ?? "all"}:${alert.code}`}>
-            {alert.kind ?? "all kinds"} · {alert.code}: {alert.evidence}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function KindBacklogProgress({
-  kind,
-  remaining,
-  at,
-}: {
-  kind: string;
-  remaining: number;
-  at: number;
-}) {
-  const progress = useBacklogProgress(remaining, at);
-  if (!remaining) return null;
-  const text = `${formatCount(remaining)} remaining · ${formatCount(progress.drained)} fewer since opened`;
-  return (
-    <Progress
-      value={progress.drained}
-      max={progress.peak || remaining}
-      aria-valuetext={text}
-    >
-      <ProgressLabel>{kind}</ProgressLabel>
-      <ProgressValue>{() => text}</ProgressValue>
-    </Progress>
-  );
-}
-
 const formatEta = (seconds: number) => {
   const minutes = Math.max(1, Math.round(seconds / 60));
   if (minutes < 60) return `${minutes} min`;
@@ -398,30 +331,9 @@ export function QueueOverview({
   );
   return (
     <Stack gap="lg">
-      <QueueHealthNotice health={health.data?.snapshot} />
-      {health.data?.snapshot?.kinds.some(
-        (kind) => kind.queued > 0 || kind.due > 0,
-      ) && (
-        <div
-          className="grid max-w-2xl gap-2"
-          aria-label="Queue backlog progress"
-        >
-          <p className="text-xs text-muted-foreground">
-            Net backlog since opened · measured{" "}
-            {formatRelative(health.data.snapshot.measuredAt)}
-          </p>
-          {health.data.snapshot.kinds.map((kind) => (
-            <KindBacklogProgress
-              key={kind.kind}
-              kind={kind.kind}
-              remaining={Math.max(kind.queued, kind.due)}
-              at={health.dataUpdatedAt}
-            />
-          ))}
-        </div>
-      )}
       <DeviceBacklogNotice />
       <WorkFeed
+        health={health.data?.snapshot}
         onShowJobs={(kind) =>
           onSearchChange({
             kind,
