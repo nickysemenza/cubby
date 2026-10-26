@@ -65,6 +65,9 @@ struct DerivedExplanationSummary: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            if case .unrecognized(let state) = explanation.meta.state {
+                Text("Unsupported calculation state: \(state)").foregroundStyle(.secondary)
+            }
             if ["stale", "waiting"].contains(explanation.meta.state.rawValue) {
                 Text("Updating").foregroundStyle(FieldGuideTokens.info)
             }
@@ -149,6 +152,10 @@ struct DerivedExplanationSummary: View {
                     "state": "failed", "asOf": .null, "decidedBy": .null,
                     "error": "Synthetic calculation failure",
                 ],
+                "stored": 12, "live": .null,
+            ],
+            [
+                "meta": ["state": "future-state", "asOf": .null, "decidedBy": .null],
                 "stored": 12, "live": .null,
             ],
         ]
