@@ -156,30 +156,41 @@ struct NavigationTests {
 
     @Test func openingRecordUsesPlatformNavigationContract() {
         let navigator = Navigator()
-        navigator.section = .search
+        navigator.section = .today
         let base = record(.product, "PRD-1")
         let related = record(.location, "LOC-2")
+        var destination: RecordSelection?
+        let binding = Binding(get: { destination }, set: { destination = $0 })
+        navigator.selectedRecords[.search] = related
+        navigator.paths[.search] = [.entityDetail(.location, id: related.id)]
 
-        navigator.openRecord(base)
+        navigator.open(base, from: .column(.search, compactDestination: binding))
         #if os(macOS)
             #expect(navigator.selectedRecords[.search] == base)
             #expect(navigator.paths[.search] == [])
+            #expect(destination == nil)
         #else
-            #expect(navigator.selectedRecords[.search] == nil)
-            #expect(navigator.paths[.search] == [.entityDetail(.product, id: "PRD-1")])
+            #expect(destination == base)
+            #expect(navigator.selectedRecords[.search] == related)
+            #expect(navigator.paths[.search] == [.entityDetail(.location, id: related.id)])
         #endif
+        #expect(navigator.section == .today)
 
-        navigator.openRecord(related)
-        #if os(macOS)
-            #expect(navigator.selectedRecords[.search] == base)
-            #expect(navigator.paths[.search] == [.entityDetail(.location, id: "LOC-2")])
-        #else
-            #expect(
-                navigator.paths[.search] == [
-                    .entityDetail(.product, id: "PRD-1"),
-                    .entityDetail(.location, id: "LOC-2"),
-                ])
-        #endif
+        // A nested list, including one in a sheet, owns its destination. Opening a row must
+        // neither pop Browse's root list nor navigate behind the sheet in Today or Activity.
+        for section in [AppSection.today, .activity, .browse] {
+            navigator.section = section
+            navigator.paths[section] = [.entityList(.product)]
+            navigator.selectedRecords[section] = base
+            let before = navigator.restoration
+            destination = nil
+
+            navigator.open(related, from: .stack(binding))
+
+            #expect(destination == related)
+            #expect(navigator.restoration == before)
+            #expect(navigator.section == section)
+        }
     }
 
     @Test func entityDeepLinkReplacesWarmBrowseDetail() {

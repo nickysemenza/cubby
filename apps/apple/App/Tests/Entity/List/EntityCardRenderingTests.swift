@@ -24,6 +24,21 @@ struct EntityCardRenderingTests {
         let minimumTwoRowHeight: CGFloat
     }
 
+    @Test func shelfSubtitleUsesDeclaredFieldsInsteadOfTheRowCaption() throws {
+        let descriptor = EntityCatalog[.purchase]
+        let row = try #require(
+            descriptor.row(from: [
+                "id": "PUR-2345", "displayName": "Synthetic purchase",
+                "vendorId": "VEN-2345", "vendorName": "Synthetic supplier",
+                "displayLabel": "Replacement parts",
+            ]))
+        let shelf = EntityShelfView(descriptor: descriptor, rows: [row])
+        let facts = shelf.subtitleFacts(for: row)
+
+        #expect(facts.map(\.id) == descriptor.presentation.shelfSubtitle)
+        #expect(facts.map(\.value) == ["Synthetic supplier", "Replacement parts"])
+    }
+
     @Test func rendersDensityAppearanceAndAccessibilityEvidence() throws {
         let specs = [
             Spec(

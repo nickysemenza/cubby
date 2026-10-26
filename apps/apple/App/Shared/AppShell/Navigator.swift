@@ -79,10 +79,29 @@ final class Navigator {
         paths[section] = []
     }
 
+    enum RecordOrigin {
+        case column(AppSection, compactDestination: Binding<RecordSelection?>)
+        case stack(Binding<RecordSelection?>)
+    }
+
+    func open(_ record: RecordSelection, from origin: RecordOrigin) {
+        switch origin {
+        case .column(let section, let destination):
+            #if os(macOS)
+                selectRecord(record, in: section)
+            #else
+                destination.wrappedValue = record
+            #endif
+        case .stack(let destination):
+            // SwiftUI owns this destination, including when its stack is inside a sheet.
+            destination.wrappedValue = record
+        }
+    }
+
     func openRecord(_ record: RecordSelection) {
         #if os(macOS)
             if section == .browse || section == .search {
-                if selectedRecords[section] == nil {
+                if selectedRecords[section] == nil && paths[section, default: []].isEmpty {
                     selectRecord(record, in: section)
                 } else {
                     paths[section, default: []].append(.entityDetail(record.key, id: record.id))

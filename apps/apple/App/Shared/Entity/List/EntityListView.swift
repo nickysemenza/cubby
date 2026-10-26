@@ -69,6 +69,8 @@ struct EntityListView: View {
     @State private var browsePresentation = BrowsePresentation.list
     @State private var hiddenTableColumns = Set<String>()
     @State private var quickActions = RowQuickActionRunner()
+    @State private var selectedTableRecordID: String?
+    @State private var openedRecord: RecordSelection?
     private let initialFilters: EntityFilterState
     private let initialSavedView: SavedView?
     private let usesBrowseSelection: Bool
@@ -707,7 +709,8 @@ struct EntityListView: View {
                 #endif
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
-                    section: .browse,
+                    section: appModel.navigator.section,
+                    usesColumn: usesBrowseSelection,
                     sections: model.sections,
                     sectionActions: sectionActions(model))
                 loadMore(model).padding(FieldGuideTokens.Space.md)
@@ -750,23 +753,37 @@ struct EntityListView: View {
             usesBrowseSelection
                 ? Binding(
                     get: { appModel.navigator.selectedRecords[.browse] },
-                    set: { appModel.navigator.selectRecord($0, in: .browse) }) : nil
+                    set: { record in
+                        if let record {
+                            open(record)
+                        } else {
+                            appModel.navigator.selectRecord(nil, in: .browse)
+                        }
+                    }) : nil
         #else
             nil
         #endif
     }
 
+    private func open(_ record: RecordSelection) {
+        appModel.navigator.open(
+            record,
+            from: usesBrowseSelection
+                ? .column(.browse, compactDestination: $openedRecord) : .stack($openedRecord))
+    }
+
     #if os(macOS)
         private var tableSelection: Binding<String?> {
             Binding(
-                get: { usesBrowseSelection ? appModel.navigator.selectedRecords[.browse]?.id : nil },
+                get: {
+                    usesBrowseSelection
+                        ? appModel.navigator.selectedRecords[.browse]?.id : selectedTableRecordID
+                },
                 set: { id in
                     if usesBrowseSelection {
-                        appModel.navigator.selectRecord(
-                            id.map { RecordSelection(key: key, id: $0) }, in: .browse)
-                    } else if let id {
-                        appModel.navigator.paths[appModel.navigator.section, default: []]
-                            .append(.entityDetail(key, id: id))
+                        selection?.wrappedValue = id.map { RecordSelection(key: key, id: $0) }
+                    } else {
+                        selectedTableRecordID = id
                     }
                 })
         }
@@ -794,7 +811,11 @@ struct EntityListView: View {
 
     @ViewBuilder
     private func rowList(_ model: GenericEntityListModel) -> some View {
-        List(selection: selection) { rows(model) }.listStyle(.plain)
+        List(selection: selection) { rows(model) }
+            .listStyle(.plain)
+            .navigationDestination(item: $openedRecord) { record in
+                RouteDestinationView(route: .entityDetail(record.key, id: record.id))
+            }
     }
 
     private var tableFields: [FieldDescriptor] {
@@ -983,6 +1004,10 @@ struct EntityListView: View {
                         Button("Copy shortcode", systemImage: "number") { Clipboard.copy(id) }
                         ShareLink(item: appModel.webHandoff.url(.record(key: key, id: id)))
                     }
+                } primaryAction: { records in
+                    if !usesBrowseSelection, let id = records.first {
+                        open(RecordSelection(key: key, id: id))
+                    }
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #else
@@ -1028,6 +1053,9 @@ struct EntityListView: View {
                     .padding(.vertical, FieldGuideTokens.Space.sm)
             }
         }
+        .navigationDestination(item: $openedRecord) { record in
+            RouteDestinationView(route: .entityDetail(record.key, id: record.id))
+        }
     }
 
     #if !os(macOS)
@@ -1045,7 +1073,9 @@ struct EntityListView: View {
                 .first(where: EntityRowPresentation.isVisibleListFactValue)
             return VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                    Button {
+                        open(RecordSelection(key: key, id: row.id))
+                    } label: {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(titleParts.title)
                                 .font(.body.weight(.medium))
@@ -1298,14 +1328,20 @@ struct EntityListView: View {
                     EntityRowView(key: key, row: row, columns: columns)
                         .tag(RecordSelection(key: key, id: row.id))
                 } else {
-                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                    Button {
+                        open(RecordSelection(key: key, id: row.id))
+                    } label: {
                         EntityRowView(key: key, row: row, columns: columns)
                     }
+                    .buttonStyle(.plain)
                 }
             #else
-                NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                Button {
+                    open(RecordSelection(key: key, id: row.id))
+                } label: {
                     EntityRowView(key: key, row: row, columns: columns)
                 }
+                .buttonStyle(.plain)
             #endif
         }
         .listRowInsets(

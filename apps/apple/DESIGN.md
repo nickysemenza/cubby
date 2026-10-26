@@ -34,6 +34,8 @@ The Mac keeps one three-column split across sidebar destinations. Browse, Search
 
 Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. Reference cells in the root split browser open through its detail navigator; nested tables use their enclosing navigation stack. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
 
+Shelf cards and list rows open records through `Navigator.open(_:from:)`. A root Mac browser replaces its owning section's detail selection; nested lists and shelves open through their enclosing SwiftUI stack, including stacks in sheets. On iPhone this pushes a record; iPad retains the enclosing navigation's detail presentation. Nested Mac table selection stays local for arrow-key browsing; its primary action opens the selected record. Shelf cards read their subtitle fields from the declared `shelfSubtitle` in both densities.
+
 ## Photo capture and handoff
 
 New belongings imports default to owned items and the signed-in member. A storage
