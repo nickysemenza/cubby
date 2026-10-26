@@ -838,6 +838,7 @@ describe("stored Product identity pairs", () => {
             input: { evaluationId: target.id },
           },
           () => executeAiRefreshTarget(ctx.db, target.id, ports),
+          { releaseClaim: true },
         ),
       ).toBe(true);
     const pairs = await listProductMatchRows(ctx.db);

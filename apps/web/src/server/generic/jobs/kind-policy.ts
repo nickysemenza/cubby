@@ -26,6 +26,10 @@ export type JobKindPolicy = {
   readonly batchSize?: number;
   /** Background claims across all drains, counted only while their leases are live. */
   readonly maxInFlight?: number;
+  /** Background pages in one drain; active Run work bypasses this limit. */
+  readonly maxConcurrentPages?: number;
+  /** Start these background page slots before other backfill when due. */
+  readonly reservedConcurrentPages?: number;
 };
 
 const IMAGE_RETRY = {
@@ -86,7 +90,12 @@ export const JOB_KIND_POLICY = {
     maxInFlight: 1,
   },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
-  "embedding.refresh": { ...SERVER, batchSize: 64 },
+  "embedding.refresh": {
+    ...SERVER,
+    batchSize: 100,
+    maxConcurrentPages: 1,
+    reservedConcurrentPages: 1,
+  },
   "purchase.dispatch": { ...SERVER, lane: "external" },
 } as const satisfies Record<string, JobKindPolicy>;
 

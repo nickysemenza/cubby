@@ -46,6 +46,83 @@ async function drainRounds(
 describe("fair drain under a flood", () => {
   const ctx = withTestDb();
 
+  it(
+    "fills embedding pages to 100 Jobs while other kinds are due",
+    { timeout: 30_000 },
+    async () => {
+      for (const [kind, count] of [
+        ["embedding.refresh", 200],
+        ["image.cloud", 20],
+      ] as const)
+        for (let index = 0; index < count; index++)
+          await enqueueJob(ctx.db, {
+            key: `synthetic.full-page.${kind}.${index}`,
+            kind,
+            input: {},
+          });
+      const pages: number[] = [];
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let active = 0;
+      let peak = 0;
+      let images = 0;
+      const handlers: JobHandlers = {
+        "embedding.refresh": {
+          prepare: async () => {
+            throw new Error("Expected batch execution");
+          },
+          batch: {
+            size: 100,
+            execute: async (_db, claims, { checkpoint }) => {
+              pages.push(claims.length);
+              active++;
+              peak = Math.max(peak, active);
+              if (pages.length === 1) {
+                started.resolve();
+                await release.promise;
+              }
+              try {
+                await checkpoint(
+                  new Map(
+                    claims.map((claim) => [
+                      claim.id,
+                      { status: "fulfilled", value: { page: { done: true } } },
+                    ]),
+                  ),
+                );
+              } finally {
+                active--;
+              }
+            },
+          },
+        },
+        "image.cloud": {
+          prepare: async () => {
+            images++;
+            return { page: { done: true } };
+          },
+        },
+      };
+      const draining = drainDueJobs(ctx.db, handlers, 256);
+      try {
+        await Promise.race([
+          started.promise,
+          draining.then(() => {
+            throw new Error("Drain finished before the first embedding page");
+          }),
+        ]);
+        await expect.poll(() => images).toBe(20);
+        expect(pages).toEqual([100]);
+      } finally {
+        release.resolve();
+        await draining;
+      }
+      expect(pages).toEqual([100, 100]);
+      expect(peak).toBe(1);
+      expect(images).toBe(20);
+    },
+  );
+
   it("admits only one background evaluation across concurrent claims and reclaims expired capacity", async () => {
     const flood = [];
     for (let index = 0; index < 12; index++)
@@ -123,7 +200,9 @@ describe("fair drain under a flood", () => {
         .filter((row) => row.kind !== "ai.evaluation")
         .map((row) => row.id);
       expect(
-        (await dueJobs(ctx.db, 1, otherKinds)).map((row) => row.id),
+        (await dueJobs(ctx.db, 1, { excludeIds: otherKinds })).map(
+          (row) => row.id,
+        ),
       ).toEqual([owned.id]);
       const execution = await enqueueJob(ctx.db, {
         key: "synthetic.cap-execute",
@@ -396,14 +475,27 @@ describe("fair drain under a flood", () => {
         ).id,
       );
     const predicted = await dueJobPositions(ctx.db, ids);
-    const selected = await dueJobs(ctx.db, 64);
-    expect(Object.fromEntries(predicted)).toEqual(
+    const selected = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, {
+      batchSizes: new Map([["embedding.refresh", 100]]),
+    });
+    const selectedIds = new Set<string>(selected.map((row) => row.id));
+    expect(
+      selected.filter((row) => row.kind === "synthetic.member"),
+    ).toHaveLength(20);
+    expect(
+      selected.filter((row) => row.kind === "embedding.refresh"),
+    ).toHaveLength(6);
+    expect(
+      Object.fromEntries([...predicted].filter(([id]) => selectedIds.has(id))),
+    ).toEqual(
       Object.fromEntries(
         selected.flatMap((row, index) =>
           ids.includes(row.id) ? [[row.id, index]] : [],
         ),
       ),
     );
+    for (const id of ids.filter((id) => !selectedIds.has(id)))
+      expect(predicted.get(id)).toBeGreaterThanOrEqual(JOB_DRAIN.batch);
   });
 
   // Review finding: beyond the first batch the drain re-ranks kinds by their

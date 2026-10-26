@@ -105,16 +105,18 @@ describe("embedding batches in the shared drain", () => {
   }
 
   it(
-    "embeds 65 Jobs in two calls and selects each vector under its own claim",
+    "embeds 101 Jobs in full pages and selects each vector under its own claim",
     { timeout: 60_000 },
     async () => {
-      const { jobs } = await seed(65);
+      const { jobs } = await seed(101);
       const embeddingPort = port();
       await drain(embeddingPort);
-      expect(calls.map((texts) => texts.length)).toEqual([64, 1]);
+      expect(calls.map((texts) => texts.length)).toEqual([100, 1]);
       expect(
         (await read(jobs.map((row) => row.id))).every(
-          (row) => row.state === "queued" && row.cursor !== null,
+          (row) =>
+            row.state === "completed" ||
+            (row.state === "queued" && row.cursor !== null),
         ),
       ).toBe(true);
       await getDb(ctx.db)
@@ -137,7 +139,7 @@ describe("embedding batches in the shared drain", () => {
             jobs.map((row) => row.id),
           ),
         );
-      expect(selected).toHaveLength(65);
+      expect(selected).toHaveLength(101);
       expect(selected.every((row) => row.artifactState === "selected")).toBe(
         true,
       );
