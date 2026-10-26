@@ -1,0 +1,27 @@
+apps/apple/App/Shared/Today/TodayModel.swift
+  s_3cc0060ca95746::t_eff24c8096fa04 11-22,56,139-190
+apps/apple/App/Shared/Today/TodayView.swift
+  s_3cc0060ca95746::t_306d4510ee5371 23,152-154,156-162,203-209,217,222,230,247-272,357-359,363-377,383-391,395,405-407,411-422,425-430,432-437,439,441-448,450-452,454-457,459-468,471-475,477-486,489-493,495-501,503,505-510,513,515-522,524-527,531-538,540-543,546,548-549,551,555-561,664-675
+apps/apple/App/Tests/Today/TodayModelTests.swift
+  s_3cc0060ca95746::t_18977200e20a5a 101,145-200,212
+apps/apple/App/iOS/RootTabsView.swift
+  s_3cc0060ca95746::t_ab50674693b623 103-108
+apps/apple/DESIGN.md
+  s_3cc0060ca95746::t_72cb009281c6bc 93-96,123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1f7568172ddee94a04a828fcbd664dea8e9c981b",
+  "prompts": {},
+  "sessions": {
+    "s_3cc0060ca95746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a179cf-97ad-7123-af32-b60b60e65f0e",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
