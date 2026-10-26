@@ -1,0 +1,31 @@
+apps/apple/App/Shared/Intents/Intents.swift
+  s_9ac7e5f472a0df::t_0b2d2948658a32 108-126,133-135,143-148
+apps/apple/App/Tests/Intents/IntentSurfaceTests.swift
+  s_371a4fad79235c::t_c1898957b36faa 1-19
+docs/inventory-audit.md
+  s_9ac7e5f472a0df::t_e1283a353ece62 14-17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e213cc4c39db5c9c51fcb775472add3d36004e66",
+  "prompts": {},
+  "sessions": {
+    "s_371a4fad79235c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69eca073-0f3a-47f2-a1c8-010847d4baef",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9ac7e5f472a0df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1795a-1422-7cc1-8a64-98051c1483bd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
