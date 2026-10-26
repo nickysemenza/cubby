@@ -64,6 +64,7 @@ test("explains allocated trades with expandable contributor precedence", async (
   await trigger.click();
   const panel = await inlineExplanation(page, trigger);
   await expect(panel.getByText("Mixed", { exact: true })).toBeVisible();
+  await expect(panel.getByText(/No value was determined/)).toHaveCount(0);
   await expect(
     panel.getByRole("heading", { name: "Resolution order", exact: true }),
   ).toBeVisible();

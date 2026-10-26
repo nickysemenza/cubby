@@ -123,9 +123,19 @@ export function DecisionChain({
         )}
       </DecisionLevels>
       {data.resolution?.mode === "allocated" ? (
-        <p className="text-xs font-medium">
-          {capitalize(data.resolution.source)}
-        </p>
+        <div className="grid gap-1 text-xs">
+          <p className="font-medium">
+            {data.resolutionEvidence?.outcome &&
+            data.resolutionEvidence.outcome !== "resolved"
+              ? { mixed: "Mixed", unset: "Not set", blocked: "Blocked" }[
+                  data.resolutionEvidence.outcome
+                ]
+              : "Allocated"}
+          </p>
+          <p className="text-muted-foreground">
+            {capitalize(data.resolution.source)}
+          </p>
+        </div>
       ) : null}
       {!data.resolutionEvidence &&
       (winner === "computed" || (!decided && data.value !== null)) ? (

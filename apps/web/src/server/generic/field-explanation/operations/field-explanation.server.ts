@@ -675,7 +675,7 @@ export function explainInterpretation(
     field.key === "dataQuality"
       ? dataQuality.safeParse(projection.dataQuality)
       : null;
-  const interpretation = interpretFieldValue(field, value);
+  const interpretation = interpretFieldValue(field, value, resolution);
   const resultLabel = interpretation.result;
   const caveats = interpretation.caveats;
   const nextSteps = interpretation.nextSteps;

@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
+import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import {
   spendingCategorySummaryLabels,
   spendingCategorySummarySchema,
@@ -105,10 +106,12 @@ function declaredInterpretation(
   return state.success ? itemizationInterpretations[state.data] : null;
 }
 
-/** Use declared display semantics; never infer currency or a score from a number. */
+/** Use declared display semantics; never infer currency or a score from a number.
+ * An allocated null can represent mixed contributor values, not a missing input. */
 export function interpretFieldValue(
   field: ExplainedField,
   value: z.infer<ReturnType<typeof z.json>>,
+  resolution?: FieldResolution | null,
 ): NonNullable<FieldExplanationOutput["interpretation"]> {
   const result = resultLabel(field, value);
   const emptyLabel =
@@ -153,7 +156,7 @@ export function interpretFieldValue(
       value.length === 0 && emptyLabel
         ? emptyLabel
         : `${value.length} ${value.length === 1 ? "entry" : "entries"}`;
-  } else if (value === null) {
+  } else if (value === null && resolution?.mode !== "allocated") {
     interpretation.caveats.push(
       "No value was determined from the current inputs; this is not a numeric zero.",
     );
