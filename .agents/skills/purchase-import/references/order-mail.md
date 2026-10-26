@@ -13,6 +13,12 @@ Relevance, within the connected member's authorized mailbox. A known message
 handle alone cannot read mail Cubby has never recorded. Respect explicitly
 selected source tools rather than silently switching connectors.
 
+For interactive account research, check Chrome's current session, then try the
+vendor's saved sign-in through 1Password when needed, before alternate order
+recovery. Keep credentials in the sign-in flow; ask the member to unlock or
+complete an interactive challenge when required. Continue with authenticated
+order history after sign-in.
+
 If no usable handle remains, search owned mail by the exact order reference
 before generic product searches. `purchase_import.mail_search` retains new matches and atomically queues normal
 classification in resumable Runs; pending results are uncertain. It is a mutation. Read-only research workers hand the query

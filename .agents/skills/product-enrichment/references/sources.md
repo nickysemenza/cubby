@@ -183,6 +183,52 @@ server-fetchable `og:image` (450×450). `fetch()` in-page follows the redirect, 
 several SKUs resolve in one call. Mfr # → Zoro # is ambiguous (several live
 listings per model); only Zoro # → Mfr # is safe.
 
+## DanceSafe
+
+An old Email print-order link can return "Invalid order" while the order remains
+available in Chrome. In My Account, check **Archived Orders** as well as Orders;
+open the matching order and follow its purchased-item links. The empty current
+Orders table does not establish missing history. Keep reagent-set contents in
+the evidence; an internal order or page id is not a Product SKU.
+When the visible page omits a SKU, inspect the published WooCommerce Store API
+in Chrome at `/wp-json/wc/store/v1/products?slug=<product-slug>`. Match the
+returned name, permalink and kit contents to the purchased item, then use its
+`sku`; the numeric `id` remains an internal handle.
+
+## Frontgate
+
+Order Emails retain the color-qualified **Item No / Item SKU** as well as towel
+dimensions and quantities. Keep the color suffix with the item number; the
+family/style number alone spans variants. If account history omits an older
+order, read **Order Status** for its current history cutoff and follow the
+linked legacy **order lookup tool**. Email tracking redirects can expire.
+Size-selected Scene7 assets can still show several towel sizes together; inspect
+the pixels before treating a size-specific filename as a singleton image.
+
+## WebstaurantStore
+
+Order-confirmation Email lines carry exact item numbers and quantities. Recover
+those before catalog search, then follow **Track Order** in Chrome: the original
+order page can still expose each item number, quantity and product link when the
+header offers Sign In. Product pages distinguish **Item number** from **MFR
+number**; keep their identifier kinds separate. A listed barcode may name a case,
+so establish the package unit before assigning it to a singleton.
+
+Email image URLs can be thumbnails. Prefer the exact product page's `og:image`;
+the same asset may exist under `/images/products/extra_large/`. Treat a size-path
+replacement as a candidate: verify the response and pixels against the ordered
+item before attaching it.
+
+## Target
+
+Expired Email tracking redirects can end at **Redirect Error**. Check Chrome's
+signed-in **Purchase history** and open the original order. Its **item details**
+panel exposes the purchased variant's **TCIN** and **View full details** link;
+use that link instead of a catalog family's default size. If order-number search
+is empty, try item text or open the order from history before declaring it
+missing. The original Email's item image can also retain a readable size
+label when its tracking links have expired.
+
 ## Shopify stores and their emails
 
 Order-confirmation emails embed `_compact_cropped` thumbnails (~3 KB); strip
