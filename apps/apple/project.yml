@@ -308,6 +308,7 @@ targets:
       - path: App/Tests/Auth
       - path: App/Tests/Entity
       - path: App/Tests/DesignSystem/WebHandoffTests.swift
+      - path: App/Tests/DesignSystem/SceneRefreshTests.swift
       - path: App/Tests/DesignSystem/RecordListRowRenderingTests.swift
       - path: App/Tests/Photo/Import/PhotoImportRunPreparationTests.swift
       - path: App/Tests/Photo/Review/PhotoDestinationOptionTests.swift
