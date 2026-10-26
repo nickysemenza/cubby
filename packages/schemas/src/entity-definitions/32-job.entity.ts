@@ -94,6 +94,29 @@ export default defineEntity({
         },
       ],
     },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "kind",
+            "lane",
+            "state",
+            "waitingOn",
+            "runId",
+            "imageId",
+            "locationId",
+            "attempts",
+            "error",
+            "leaseExpiresAt",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+      ],
+    },
   },
   model: {
     fields: [

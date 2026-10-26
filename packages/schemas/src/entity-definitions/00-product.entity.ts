@@ -193,7 +193,12 @@ export default defineEntity(
           { relation: "images", dateField: "capturedAt" },
         ],
         overviewSections: [
-          "overview",
+          "identity",
+          "names-and-tags",
+          "stock-and-price",
+          "identifiers",
+          "garden-source",
+          "coverage",
           "ownership",
           "notes",
           "labels",
@@ -222,7 +227,43 @@ export default defineEntity(
         hero: {
           extraActions: ["addToInventory", "recordSale", "discard"],
         },
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["name", "model", "brandId", "commodity", "categoryId"],
+          },
+          {
+            kind: "fields",
+            id: "names-and-tags",
+            title: "Names & tags",
+            fields: ["tags"],
+          },
+          {
+            kind: "fields",
+            id: "stock-and-price",
+            title: "Stock & price",
+            fields: ["price", "stockTracked", "kind", "acquisitionOrigin"],
+          },
+          {
+            kind: "fields",
+            id: "identifiers",
+            title: "Identifiers",
+            fields: ["externalIds"],
+          },
+          {
+            kind: "fields",
+            id: "garden-source",
+            title: "Nutrition",
+            fields: ["growsPlantId"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["primaryPlacement", "id", "primaryGtin", "unitPrice"],
+          },
           { kind: "slot", id: "ownership", title: "Ownership & evidence" },
           { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
           { kind: "slot", id: "runs", title: "Enrichment history" },

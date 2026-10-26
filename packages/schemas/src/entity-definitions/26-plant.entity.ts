@@ -115,6 +115,32 @@ export default defineEntity({
       ],
 
       activityRelations: [{ relation: "plantings", dateField: "sowedOn" }],
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "name",
+            "gardenGuideKey",
+            "verdict",
+            "ingredientId",
+            "latinName",
+            "breeding",
+            "daysFromSowMin",
+            "daysFromSowMax",
+            "daysFromTransplantMin",
+            "daysFromTransplantMax",
+            "notes",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["guideSowWindow", "guideTransplantWindow", "routes"],
+        },
+      ],
     },
     list: {
       links: [{ label: "Garden workbench", path: "/garden-workbench" }],

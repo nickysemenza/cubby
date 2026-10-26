@@ -83,7 +83,19 @@ export default defineEntity({
       hero: {
         when: { field: "date", label: "Transferred" },
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["fromPartyId", "toPartyId", "amount", "date", "notes"],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["classification", "createdAt", "updatedAt"],
+        },
         {
           kind: "fields",
           id: "evidence",

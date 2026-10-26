@@ -142,7 +142,49 @@ export default defineEntity({
       hero: {
         when: { field: "date", label: "Ordered" },
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["vendorId", "date", "statedTotal", "notes"],
+        },
+        {
+          kind: "fields",
+          id: "order",
+          title: "Order",
+          fields: [
+            "orderId",
+            "vendorAccountId",
+            "displayLabel",
+            "purchaserOverrideId",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "classification",
+          title: "Classification",
+          fields: [
+            "defaultProjectId",
+            "defaultTrade",
+            "spendingCategoryId",
+            "itemizationExpectation",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: [
+            "purchaserId",
+            "bookingCoverage",
+            "documentCoverage",
+            "itemizationCoverage",
+            "productsCoverage",
+            "spendingCategorySummary",
+            "spendingCategoryOrigin",
+          ],
+        },
         {
           kind: "relation",
           id: "expenses",

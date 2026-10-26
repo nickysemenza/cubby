@@ -105,6 +105,26 @@ export default defineEntity(
         hero: { extraActions: ["moveTo", "adjustAmount"] },
         // A deliberate member edit of the count, not a recount: verifiedAt is untouched.
         quickActions: ["moveTo", "adjustAmount"],
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "productId",
+              "locationId",
+              "amount",
+              "placement",
+              "ownerLedgerPartyId",
+            ],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["verifiedAt"],
+          },
+        ],
       },
       list: {
         titleSubtitle: true,

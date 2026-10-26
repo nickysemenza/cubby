@@ -66,6 +66,27 @@ export default defineEntity({
         firstRecords: { descriptor: "batchId" },
         withdrawnRecords: { descriptor: "withdrawalImportId" },
       },
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "id",
+            "source",
+            "label",
+            "fingerprint",
+            "dateKind",
+            "rowCountDeclared",
+            "observedAt",
+            "completedAt",
+            "notes",
+            "createdAt",
+            "updatedAt",
+            "rowCountStored",
+          ],
+        },
+      ],
     },
   },
   model: {

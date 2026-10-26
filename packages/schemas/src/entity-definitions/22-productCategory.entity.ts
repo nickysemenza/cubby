@@ -59,7 +59,36 @@ export default defineEntity({
         },
       ],
 
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "emoji",
+            "spendingCategoryMode",
+            "spendingCategoryId",
+            "name",
+            "aliases",
+            "description",
+            "parentId",
+            "sortOrder",
+            "feature",
+            "stockTracked",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: [
+            "effectiveSpendingCategory",
+            "path",
+            "productCount",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
         {
           kind: "slot",
           id: "spending-classification",

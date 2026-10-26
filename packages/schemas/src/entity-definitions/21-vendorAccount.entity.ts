@@ -75,7 +75,26 @@ export default defineEntity({
 
       activityRelations: [{ relation: "purchases", dateField: "date" }],
 
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["vendorId", "ledgerPartyId", "inventoryOwnerDefaultEnabled"],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: [
+            "displayName",
+            "lastRunAt",
+            "lastSuccessAt",
+            "purchaseCount",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
         {
           kind: "relation",
           id: "emails",

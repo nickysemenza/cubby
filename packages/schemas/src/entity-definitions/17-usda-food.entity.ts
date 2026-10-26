@@ -67,6 +67,23 @@ export default defineEntity(
             fields: ["legacyFoodInfo"],
           },
         ],
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "fdc_id",
+              "brandedFoodInfo",
+              "foodInfo",
+              "legacyFoodInfo",
+              "nutritionInfo",
+              "portionInfoRaw",
+              "inferredUnitMappings",
+              "linkedProducts",
+            ],
+          },
+        ],
       },
       list: {
         primarySearch: {
