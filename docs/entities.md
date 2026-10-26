@@ -2533,6 +2533,14 @@ tracer (`derived/repo/read-set.integration.test.ts`) fails CI when a compute
 reads a table its declaration does not list. A deploy that
 changes a value's rules marks it in its migration.
 
+That same synthetic corpus verifies reconciliation and empty-cache rebuilds
+for every stored-value target, every searchable entity, Product conversion
+coverage and Recipe totals. It compares semantic values and sort keys while
+excluding computation clocks and disposable physical cache IDs. The test uses
+the real sink publishers with an offline USDA lookup port and fails on any
+remaining mark, including a deferred failure. This is fixture-level evidence,
+not a production rebuild or exhaustive coverage of every input branch.
+
 Reads never compute or repair: lists compile a stored field to one primary-key
 lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
 missing value reads as unknown, never zero. List pages and record reads carry a
