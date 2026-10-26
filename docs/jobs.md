@@ -479,6 +479,14 @@ raises `over_capacity` past it, and producers pace themselves (see Producers).
 
 ## Producers
 
+Queue messages are best-effort wake-ups for intent already committed in
+PostgreSQL. The shared `wakeJobs` sender uses the fetch request's `waitUntil`
+lifetime, so a slow queue send does not delay a committed mutation receipt.
+Without a request context (including queue and cron invocations), the caller
+still awaits the send. Queue failures are logged and cron recovers committed
+work; transaction rollback schedules no wake. Producers use this same sender
+rather than implementing their own request-lifetime branch.
+
 A producer must not enqueue faster than the drain can serve. One unbounded
 connection-discovery pass once enqueued an evaluation for every household
 record (~55k), which starved every other kind for days.
