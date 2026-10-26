@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { and, eq, inArray } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
@@ -34,6 +34,7 @@ import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-stat
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAiRefreshPage } from "~/server/domains/run/service/ai-refresh";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import * as kindPolicy from "~/server/generic/jobs/kind-policy";
 import {
   claimJob,
   claimJobPage,
@@ -158,6 +159,49 @@ describe("finite AI evaluation pages", () => {
           .where(eq(job.id, targets[1]!.claim.id))
       )[0]?.generation,
     ).toBe(before);
+  }, 30_000);
+
+  it("shares capped kind admission with single claims until every page lease settles", async () => {
+    const seeded = await seed(102);
+    const original = kindPolicy.jobKindPolicy;
+    // #3322 supplies this policy on main; keep this lane on its original base.
+    const policy = vi
+      .spyOn(kindPolicy, "jobKindPolicy")
+      .mockImplementation((kind) => ({
+        ...original(kind),
+        ...(kind === "ai.evaluation" ? { maxInFlight: 1 } : {}),
+      }));
+    try {
+      const first = await countTestDbQueries(() =>
+        claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id, 100),
+      );
+      expect(first.result).toHaveLength(100);
+      expect(first.queryCount).toBe(15);
+      const owned = new Set(first.result.map((target) => target.claim.id));
+      const remaining = seeded.jobs.filter((row) => !owned.has(row.id));
+      const blocked = await Promise.all([
+        claimAiEvaluationPage(ctx.db, remaining[0]!.id),
+        claimJob(ctx.db, remaining[1]!.id),
+      ]);
+      expect(blocked).toEqual([[], null]);
+      for (let offset = 1; offset < first.result.length; offset += 25)
+        await finish(first.result.slice(offset, offset + 25));
+      expect(await claimJob(ctx.db, remaining[0]!.id)).toBeNull();
+      await finish(first.result.slice(0, 1));
+      const [page, single] = await Promise.all([
+        claimAiEvaluationPage(ctx.db, remaining[0]!.id, 1),
+        claimJob(ctx.db, remaining[1]!.id),
+      ]);
+      expect(page.length + Number(single !== null)).toBe(1);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(and(eq(job.kind, "ai.evaluation"), eq(job.state, "running"))),
+      ).toHaveLength(1);
+    } finally {
+      policy.mockRestore();
+    }
   }, 30_000);
 
   it("SKIP LOCKED does not wait on a foreign open transaction", async () => {

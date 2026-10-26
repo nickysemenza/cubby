@@ -378,17 +378,19 @@ export async function prepareFencedProductIdentityPairs(
       "Product pair preparation requires a database outside a transaction",
     );
   const ids = expected.map((pair) => pair.productIds);
-  const before = await productIdentityEvidenceFences(db, ids);
+  const targets = ids.map((productIds) => ({ key: productIdentityPairKey(productIds), productIds }));
+  const before = await productIdentityEvidenceFences(db, targets);
   const pairs = await prepareProductIdentityPairs(db, ids);
-  const after = await productIdentityEvidenceFences(db, ids);
-  return pairs.map((pair, index) => {
-    const input = expected[index]!;
+  const after = await productIdentityEvidenceFences(db, targets);
+  return expected.map((input) => {
+    const key = productIdentityPairKey(input.productIds);
+    const pair = pairs.get(key);
     if (
       !pair ||
       (input.fingerprint && pair.fingerprint !== input.fingerprint) ||
-      before[index] !== after[index]
+      before.get(key) !== after.get(key)
     )
       throw new Error("Product pair evidence changed during inference");
-    return { pair, fence: before[index]! };
+    return { pair, fence: before.get(key)! };
   });
 }

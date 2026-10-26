@@ -596,7 +596,11 @@ activation and pending/result-ready state before adopting the claims. Claim
 reads Run authority without a lock and skips cancellation's item locks.
 Queued obsolete generations retire in sets before inference; paused authority
 parks its Jobs without spending attempts. No model work holds a claim
-transaction open. Heartbeats renew the exact token/generation set in one
+transaction open. Page and single claims use the same `job-kind:<kind>`
+nonblocking admission lock and fresh live-lease count when `maxInFlight` is
+configured. With a cap of one, a page enters once and its per-target leases
+keep the kind occupied until the last live target settles. Active Run
+exemptions follow the shared kind policy. Heartbeats renew the exact token/generation set in one
 statement; replaced tokens are reported separately and cannot publish.
 
 The drain admits at most one page per feature/class turn in a fair batch,

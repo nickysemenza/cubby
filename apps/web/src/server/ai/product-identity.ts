@@ -566,7 +566,7 @@ export async function evaluatePreparedProductIdentityPair(
   } = {},
 ) {
   const pair = preparedProductIdentityPair.parse(raw);
-  const current = await prepareProductIdentityPair(db, pair.productIds);
+  const current = options.preparedPage ? pair : await prepareProductIdentityPair(db, pair.productIds);
   return evaluateCurrentProductIdentityPair(db, pair, current, runId, options);
 }
 
@@ -590,9 +590,6 @@ async function evaluateCurrentProductIdentityPair(
     usage: options.usage ?? { db, runId, operation: "product-identity" },
   };
   const model = decisionModelFor(question);
-  const current = options.preparedPage
-    ? pair
-    : await prepareProductIdentityPair(db, pair.productIds);
   if (!current || current.fingerprint !== pair.fingerprint)
     throw new Error("Product identity evidence changed during evaluation");
   const decision = pair.exact
@@ -685,7 +682,7 @@ export async function evaluatePreparedProductIdentityPairs(
     pairs.map((pair) => pair.productIds),
   );
   return settleDecisionWorkItems(
-    pairs.map((pair, index) => ({ pair, current: current[index] ?? null })),
+    pairs.map((pair) => ({ pair, current: current.get(productIdentityPairKey(pair.productIds)) ?? null })),
     ({ pair, current }) =>
       evaluateCurrentProductIdentityPair(db, pair, current, runId, options),
   );

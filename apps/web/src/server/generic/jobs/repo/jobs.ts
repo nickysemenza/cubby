@@ -460,11 +460,6 @@ export const jobRunOwned = () => {
   return sql<boolean>`(("Job"."runId" IS NOT NULL AND ${runOwningJob()}) OR ("Job".kind='ai.evaluation' AND "Job".key IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e WHERE ${demand})))`;
 };
 
-/** Same feature turn for source and pair shapes; claims still keep shapes separate. */
-const jobServiceKey = () => sql<string>`CASE WHEN "Job".kind='ai.evaluation'
-  THEN coalesce(page_e.feature, "Job".kind)
-  ELSE "Job".kind END`;
-
 /** Run execution and work of any active Run bypass background admission. */
 const jobCapExempt = () =>
   sql<boolean>`(${job.kind} = 'run.execute' OR ${related(
@@ -472,6 +467,30 @@ const jobCapExempt = () =>
     (r) =>
       sql`${r.id} = ${outer(job.runId)} AND ${r.status} = ${runStatus.enum.running}`,
   ).exists()})`;
+
+/** Shared with single claims: a page reserves capacity through its live per-target leases. */
+async function admitJobKind(tx: Database, kind: string, now: Date, pageToken?: string) {
+  const policy = jobKindPolicy(kind);
+  const cap = policy.maxInFlight;
+  const maxPages = pageToken === undefined ? undefined : policy.maxInFlightPages;
+  if (cap === undefined && maxPages === undefined) return true;
+  // Match #3322's cross-Worker fence. Never wait while holding candidate Jobs.
+  const admission = await getDb(tx).execute<{ locked: boolean }>(sql`
+    SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${kind}`}, 0)) AS locked`);
+  if (!admission.rows[0]?.locked) return false;
+  const [live] = await getDb(tx)
+    .select({ count: sql<number>`count(*)::int`, otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${pageToken ?? null}::uuid))::int` })
+    .from(job)
+    .where(
+      and(
+        eq(job.kind, kind),
+        eq(job.state, "running"),
+        gt(job.leaseExpiresAt, now),
+        not(jobCapExempt()),
+      ),
+    );
+  return (cap === undefined || (live?.count ?? 0) < cap) && (maxPages === undefined || (live?.otherPages ?? 0) < maxPages);
+}
 
 const kindLimits = Object.keys(JOB_KIND_POLICY).map((kind) => {
   const policy = jobKindPolicy(kind);
@@ -495,7 +514,7 @@ const fairlyOrderedDueJobs = (
   { excludeIds = [], excludeKinds = [] }: DueJobSelection = {},
 ) => sql`
   WITH active_runs AS MATERIALIZED (
-    SELECT id, purpose IN (${sql.join(
+    SELECT id, NOT (purpose = 'ai_refresh' AND trigger = 'scheduled') AND purpose IN (${sql.join(
       VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
       sql`, `,
     )}) AS visible
@@ -919,39 +938,8 @@ export async function claimJob(
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const available = candidate.row;
-    const policy = jobKindPolicy(available.kind);
-    const maxInFlight = policy.maxInFlight;
-    const maxPages =
-      pageToken === undefined ? undefined : policy.maxInFlightPages;
-    if (
-      (maxInFlight !== undefined || maxPages !== undefined) &&
-      !candidate.capExempt
-    ) {
-      // Selection is advisory. Serialize admission across Worker invocations,
-      // then count in a fresh READ COMMITTED statement before issuing a lease.
-      // Never wait here while holding a Job row another executor may need.
-      const admission = await getDb(tx).execute<{ locked: boolean }>(sql`
-        SELECT pg_try_advisory_xact_lock(hashtextextended(${`job-kind:${available.kind}`}, 0)) AS locked`);
-      if (!admission.rows[0]?.locked) return null;
-      const live = await getDb(tx)
-        .select({
-          count: sql<number>`count(*)::int`,
-          otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${token}::uuid))::int`,
-        })
-        .from(job)
-        .where(
-          and(
-            eq(job.kind, available.kind),
-            eq(job.state, "running"),
-            gt(job.leaseExpiresAt, now),
-            not(jobCapExempt()),
-          ),
-        );
-      if (maxInFlight !== undefined && (live[0]?.count ?? 0) >= maxInFlight)
-        return null;
-      if (maxPages !== undefined && (live[0]?.otherPages ?? 0) >= maxPages)
-        return null;
-    }
+    if (!candidate.capExempt && !(await admitJobKind(tx, available.kind, now, pageToken)))
+      return null;
     const moved = candidate.pendingCapture;
     const restart =
       moved &&
@@ -1056,11 +1044,12 @@ export async function claimJobPage(
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();
   return withTransactionDatabase(db, async (tx) => {
-    const candidates = await getDb(tx)
+    const selected = await getDb(tx)
       .select({
         row: job,
         pendingCapture: unobservedJobInvalidation(),
         markerRestartsPass: jobInvalidation.restartsPass,
+        capExempt: jobCapExempt(),
       })
       .from(job)
       .leftJoin(jobInvalidation, eq(jobInvalidation.key, job.key))
@@ -1068,6 +1057,20 @@ export async function claimJobPage(
       .orderBy(sql`${job.priority} DESC`, job.updatedAt, job.id)
       .limit(options.limit)
       .for("update", { of: job, skipLocked: true });
+    const denied = new Set<string>();
+    for (const kind of [
+      ...new Set(
+        selected
+          .filter((entry) => !entry.capExempt)
+          .map((entry) => entry.row.kind),
+      ),
+    ].sort())
+      if (!(await admitJobKind(tx, kind, now))) denied.add(kind);
+    // At cap=1 the entire page enters once; any surviving target lease keeps
+    // the kind occupied until the page finishes, including across Workers.
+    const candidates = selected.filter(
+      (entry) => entry.capExempt || !denied.has(entry.row.kind),
+    );
     const exhausted: JobRow["id"][] = [];
     const admitted = candidates.flatMap(
       ({ row, pendingCapture, markerRestartsPass }) => {
