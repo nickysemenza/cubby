@@ -11,7 +11,8 @@ struct SearchHitTests {
         #expect(hits[0].key == .product)
         #expect(hits[0].imageURL?.host() == "images.example")
         #expect(hits[1].key == .location)
-        #expect(hits[1].subtitle == "Home › Garage › Shelf A")
+        #expect(hits[0].facts == ["Home › Garage › Shelf A", "2 on hand"])
+        #expect(hits[1].facts == ["Home › Garage › Shelf A › Bin 1"])
         #expect(hits[1].typeHint == "box")
     }
 

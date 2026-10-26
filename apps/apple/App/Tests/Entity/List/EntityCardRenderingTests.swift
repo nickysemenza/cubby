@@ -24,6 +24,59 @@ struct EntityCardRenderingTests {
         let minimumTwoRowHeight: CGFloat
     }
 
+    @Test func shelfSubtitleUsesDeclaredFieldsInsteadOfTheRowCaption() throws {
+        let descriptor = EntityCatalog[.purchase]
+        let row = try #require(
+            descriptor.row(from: [
+                "id": "PUR-2345", "displayName": "Synthetic purchase",
+                "vendorId": "VEN-2345", "vendorName": "Synthetic supplier",
+                "displayLabel": "Replacement parts",
+            ]))
+        let shelf = EntityShelfView(descriptor: descriptor, rows: [row])
+        let facts = shelf.subtitleFacts(for: row)
+
+        #expect(facts.map(\.id) == descriptor.presentation.shelfSubtitle)
+        #expect(facts.map(\.value) == ["Synthetic supplier", "Replacement parts"])
+    }
+
+    /// Mac table columns size from the declared `display.width` bucket; an undeclared field takes
+    /// `md` and the title column `lg`.
+    @Test func tableColumnWidthsFollowTheDeclaredBucket() throws {
+        let widths = ["xs", "sm", "md", "lg", "xl"].map { bucket in
+            let width = EntityTableColumnWidth(bucket: bucket)
+            return [width.min, width.ideal, width.max]
+        }
+        #expect(
+            widths == [[48, 64, 88], [80, 104, 140], [120, 160, 240], [180, 240, 400], [240, 320, 600]])
+        #expect(EntityTableColumnWidth(bucket: nil) == EntityTableColumnWidth(bucket: "md"))
+        #expect(EntityTableColumnWidth.title == EntityTableColumnWidth(bucket: "lg"))
+
+        let notes = try #require(EntityCatalog[.product].field("notes"))
+        #expect(notes.width == "xl")
+        #expect(EntityTableColumnWidth(notes) == EntityTableColumnWidth(bucket: "xl"))
+    }
+
+    /// A table title cell stays one line however long its title and subtitle run, and the cell
+    /// frame holds the row at 20 points.
+    @Test func tableTitleCellStaysOnOneLine() throws {
+        func height(_ view: some View) throws -> Int {
+            let renderer = ImageRenderer(
+                content: view.frame(width: 180).environment(\.dynamicTypeSize, .large))
+            renderer.scale = 2
+            return try #require(renderer.cgImage).height
+        }
+        let short = EntityTableTitleCell(
+            title: "Skillet", subtitle: nil, imageURL: nil, symbol: "shippingbox", emoji: nil)
+        let long = EntityTableTitleCell(
+            title: "Extra-Long Household Inventory Record Name for Layout Review",
+            subtitle: "Pantry shelf · extended descriptive caption", imageURL: nil,
+            symbol: "shippingbox", emoji: nil)
+        #expect(try height(long) == height(short))
+        #expect(
+            try height(long.entityTableCell())
+                == Int(EntityTableLayout.cellContentHeight * 2))
+    }
+
     @Test func rendersDensityAppearanceAndAccessibilityEvidence() throws {
         let specs = [
             Spec(

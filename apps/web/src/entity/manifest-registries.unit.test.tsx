@@ -154,6 +154,23 @@ describe("manifest registries", () => {
     expect(uncovered).toEqual([]);
   });
 
+  it("offers every quick action on the surface that promotes it", () => {
+    // Detail quick actions lead the page header; list quick actions lead the
+    // row menu, so each needs a definition on exactly that surface.
+    const uncovered = entities.flatMap((entity) => {
+      const { detail, list } = entitySummary[entity];
+      return [
+        ...detail.quickActions
+          .filter((verb) => !covers(verb, entity, ["detail"]))
+          .map((verb) => `${entity}.detail.${verb}`),
+        ...list.quickActions
+          .filter((verb) => !covers(verb, entity, ["row"]))
+          .map((verb) => `${entity}.list.${verb}`),
+      ];
+    });
+    expect(uncovered).toEqual([]);
+  });
+
   // A structured detail field with no domain renderer falls back to readable
   // JSON. That never crashes, but it is a page showing a raw payload — so a
   // new json field has to be claimed here (by a renderer, a reference, a

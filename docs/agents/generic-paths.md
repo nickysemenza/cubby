@@ -43,12 +43,12 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Run detail: web renders `GenericEntityDetail` with the declared `run` slots; on Apple
   every Run route (`Route.entityDetail(.run, …)`) opens `RunConsoleView`, the
   declared hero and `run` slots through `DetailSlotRegistry`. Its status follows the batched
-  report poll (`ReportBatchModel.status`/`revision`), never a second Run poll. Specialist
-  reviews are slots or owned sections of it: a photo Run's review is the `photo-batch` slot
-  (`RunPhotoReviewSections` with `.photoReviewConfirmations` on the console's list), led
-  ahead of the reports. Successful photo commands advance `RunReviewSession.actionRevision`
-  to refresh the report batch even while stopped; ordinary session refreshes never advance it
-  or feed back into polling. Never link a Run slot back to the Run screen.
+  report poll (`ReportBatchModel.status`/`revision`), never a second Run poll. A photo Run
+  adds `RunPhotoProgressSection` (upload, descriptions, recovery, Start grouping); its group
+  review is web's, so the `photo-batch` slot is a handoff row led ahead of the reports.
+  Starting grouping advances `RunConsoleSession.actionRevision` to refresh the report batch
+  even while stopped; ordinary session refreshes never advance it or feed back into polling.
+  Never link a Run slot back to the Run screen.
 - Edit forms: generated intents plus the typed `editHooks` map in
   `apps/web/src/entity/editing/`.
 - Saved views: `presentation.list.views` on the declaration.

@@ -955,6 +955,9 @@ export const listProductsRead = async (
           inventories,
           prices,
           ledgers: new Map(ledgered.map((row) => [row.id, row.quantityLedger])),
+          placements: new Map(
+            ledgered.map((row) => [row.id, row.primaryPlacement]),
+          ),
         };
       });
       const owners = bind.batch(({ rows }) =>
@@ -1089,6 +1092,7 @@ export const listProductsRead = async (
           productListItemOut.pick({
             pricing: true,
             fieldResolutions: true,
+            primaryPlacement: true,
             quantityLedger: true,
             onHandUnits: true,
             quantityVariance: true,
@@ -1122,6 +1126,7 @@ export const listProductsRead = async (
             return {
               pricing,
               fieldResolutions,
+              primaryPlacement: loaded.placements.get(row.id) ?? null,
               ...quantity,
               ...productStockContext({
                 category: row.category,

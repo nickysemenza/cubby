@@ -2,7 +2,10 @@ import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
-import { productReadSchemas } from "../product-read-fields";
+import {
+  productPrimaryPlacement,
+  productReadSchemas,
+} from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
 import { type DerivedStoredInput, defineEntity } from "./definition.js";
 import {
@@ -132,10 +135,22 @@ export default defineEntity(
       detail: {
         summary: [
           {
+            kind: "report",
+            id: "stock",
+            title: "On hand & locations",
+            slot: "product.stock-summary",
+          },
+          {
             kind: "fields",
             id: "brand",
             title: "Brand",
             fields: ["brandId"],
+          },
+          {
+            kind: "report",
+            id: "uses",
+            title: "Used in",
+            slot: "product.use-summary",
           },
           {
             kind: "report",
@@ -145,9 +160,9 @@ export default defineEntity(
           },
           {
             kind: "report",
-            id: "stock",
-            title: "On hand & locations",
-            slot: "product.stock-summary",
+            id: "purchase-pricing",
+            title: "Purchases & charges",
+            slot: "product.pricing-summary",
           },
           {
             kind: "chart",
@@ -156,22 +171,10 @@ export default defineEntity(
             viewKey: "relation:expenses",
           },
           {
-            kind: "report",
-            id: "purchase-pricing",
-            title: "Purchases & charges",
-            slot: "product.pricing-summary",
-          },
-          {
             kind: "records",
             id: "purchase-projects",
             title: "Purchase projects",
             viewKey: "purchase-projects",
-          },
-          {
-            kind: "report",
-            id: "uses",
-            title: "Used in",
-            slot: "product.use-summary",
           },
           {
             kind: "report",
@@ -190,7 +193,12 @@ export default defineEntity(
           { relation: "images", dateField: "capturedAt" },
         ],
         overviewSections: [
-          "overview",
+          "identity",
+          "names-and-tags",
+          "stock-and-price",
+          "identifiers",
+          "garden-source",
+          "coverage",
           "ownership",
           "notes",
           "labels",
@@ -217,32 +225,10 @@ export default defineEntity(
         // whose target happens to also be Product — say what's missing
         // instead of what type it is.
         hero: {
+          breadcrumb: "primaryPlacement",
           extraActions: ["addToInventory", "recordSale", "discard"],
         },
-        additionalSections: [
-          { kind: "slot", id: "ownership", title: "Ownership & evidence" },
-          { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
-          { kind: "slot", id: "runs", title: "Enrichment history" },
-          {
-            kind: "fields",
-            id: "nutrition-links",
-            title: "Nutrition sources",
-            fields: ["fdc_id", "ingredientId"],
-          },
-          {
-            kind: "fields",
-            id: "notes",
-            title: "Notes",
-            fields: ["notes"],
-            placement: "full",
-          },
-          {
-            kind: "relation",
-            id: "plantings",
-            title: "Plantings",
-            relation: "plantings",
-            filter: { descriptor: "sourceProductId" },
-          },
+        sections: [
           {
             kind: "relation",
             id: "stocked-at",
@@ -258,6 +244,33 @@ export default defineEntity(
             ],
           },
           {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["name", "model", "brandId", "commodity", "categoryId"],
+          },
+          {
+            kind: "fields",
+            id: "notes",
+            title: "Notes",
+            fields: ["notes"],
+            placement: "full",
+          },
+          {
+            kind: "fields",
+            id: "stock-and-price",
+            title: "Stock & price",
+            fields: ["price", "stockTracked", "kind", "acquisitionOrigin"],
+          },
+          { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
+          { kind: "slot", id: "ownership", title: "Ownership & evidence" },
+          {
+            kind: "timeline",
+            id: "movements",
+            title: "Movements",
+            placement: "full",
+          },
+          {
             kind: "relation",
             id: "tasks",
             title: "Tasks",
@@ -267,14 +280,27 @@ export default defineEntity(
             sort: { field: "dueDate", direction: "desc" },
           },
           {
-            kind: "timeline",
-            id: "movements",
-            title: "Movements",
-            placement: "full",
+            kind: "relation",
+            id: "plantings",
+            title: "Plantings",
+            relation: "plantings",
+            filter: { descriptor: "sourceProductId" },
           },
           { kind: "slot", id: "labels", title: "Labels" },
           { kind: "slot", id: "nutrition", title: "Nutrition summary" },
+          {
+            kind: "fields",
+            id: "nutrition-links",
+            title: "Nutrition sources",
+            fields: ["fdc_id", "ingredientId"],
+          },
           { kind: "slot", id: "unit-mappings", title: "Unit mappings" },
+          {
+            kind: "fields",
+            id: "garden-source",
+            title: "Nutrition",
+            fields: ["growsPlantId"],
+          },
           { kind: "slot", id: "fits-with", title: "Similar products" },
           { kind: "slot", id: "cookbooks", title: "Cookbooks" },
           {
@@ -282,6 +308,25 @@ export default defineEntity(
             id: "recipe-appearances",
             title: "Appears in recipes",
           },
+          {
+            kind: "fields",
+            id: "names-and-tags",
+            title: "Names & tags",
+            fields: ["tags"],
+          },
+          {
+            kind: "fields",
+            id: "identifiers",
+            title: "Identifiers",
+            fields: ["externalIds"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["primaryPlacement", "id", "primaryGtin", "unitPrice"],
+          },
+          { kind: "slot", id: "runs", title: "Enrichment history" },
         ],
       },
       list: {
@@ -794,6 +839,10 @@ export default defineEntity(
           display: {
             columnGroup: "Purchasing",
             columnLabel: "Origin",
+            // Near-constant (Unclassified or Purchased) on most rows; ordered
+            // after price so the Purchasing band does not lead the table.
+            listHidden: true,
+            listOrderOverride: 22,
             optionRole: "category",
             optionColor: "domain-pantry",
             optionGlyph: { phosphor: "Package", sfSymbol: "shippingbox" },
@@ -833,6 +882,27 @@ export default defineEntity(
               .describe("Product name")
               .meta({ mock: "commerce.productName" })
               .optional(),
+          },
+        },
+        {
+          key: "primaryPlacement",
+          kind: "json",
+          nullable: true,
+          labelOverride: "Where",
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "inventory" }, { entity: "location" }],
+          },
+          display: {
+            width: "md",
+            readPath: "primaryPlacement.path",
+            detailLabelPath: "primaryPlacement.path",
+            mobile: { slot: "trailing", priority: 6 },
+          },
+          validation: {
+            read: productPrimaryPlacement.nullable(),
+            create: null,
+            update: null,
           },
         },
         {
@@ -999,7 +1069,7 @@ Rules:
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { columnGroup: "Catalog", width: "md", listHidden: true },
+          display: { columnGroup: "Catalog", width: "xl", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().optional(),
@@ -1578,6 +1648,8 @@ Rules:
           display: {
             columnGroup: "Food",
             detail: false,
+            // Empty for everything that is not a USDA-linked food.
+            listHidden: true,
             labelPath: "food.foodInfo.description",
             renderer: { list: "usda-food-link" },
           },
@@ -1709,6 +1781,8 @@ Rules:
           display: {
             columnGroup: "Stock",
             columnLabel: "Owner",
+            // Owner follows Where, ahead of catalog and price columns.
+            listOrderOverride: 4,
             width: "md",
             format: "resolvedList",
             emptyLabel: "Owner unknown",
@@ -1778,6 +1852,8 @@ Rules:
           display: {
             columnGroup: "Stock",
             detail: false,
+            // Zero except for kits and sets.
+            listHidden: true,
             width: "sm",
             mobile: { slot: "meta", priority: 44 },
           },
@@ -1806,6 +1882,8 @@ Rules:
             columnGroup: "Stock",
             detail: false,
             columnLabel: "As location",
+            // Zero except for products installed as a location.
+            listHidden: true,
             width: "sm",
             readPath: "quantityLedger.locationCount",
             format: "count",

@@ -114,6 +114,21 @@ describe("entity manifest", () => {
     expect(sorted(withTable)).toEqual(sorted(shortcodeEntities));
   });
 
+  it("keeps every root in native Browse unless it is declared web-only plumbing", () => {
+    // A new entity defaults into native Browse; opting out is a declaration.
+    const webOnly = allEntities.filter(
+      (entity) => !entitySummary[entity].nativeBrowse,
+    );
+    expect(sorted(webOnly)).toEqual(
+      sorted([
+        "imageJob",
+        "job",
+        "sourceTransactionRecord",
+        "transactionImport",
+      ]),
+    );
+  });
+
   it("keeps legacy aliases out of the manifest and pointed at real prefixes", () => {
     // The parser's alias table is inbound-only: every target entity mints a
     // canonical prefix, and no descriptor advertises the legacy form.

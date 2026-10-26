@@ -7,19 +7,13 @@ import SwiftUI
     import UIKit
 #endif
 
-/// Server and session preferences, shown in the sidebar pane or an iPhone navigation stack.
+/// Settings, in four sections: Server, Notifications, Advanced (this device's automatic work,
+/// image-job slots and photo analysis) and About. iPhone pushes it from Today and iPad shows it as
+/// a sidebar pane; Mac opens the same sections as panes of its Settings window (`SettingsWindow`).
 struct SettingsView: View {
     var isSidebarRoot = false
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedServer = SettingsServer.production
-    @State private var draftURL = ""
-    @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
-        .rawValue
-    @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
-    @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
-    @State private var photoStorageSummary: PhotoAnalysisStorageSummary?
-    @State private var photosReady = false
     /// On iOS Settings is a view-based `NavigationLink` destination. Pushing Dev through the
     /// tab's value path before popping Settings makes SwiftUI animate two independent stacks at
     /// once, which can leave the destination visually blank. Pop first, then append the route
@@ -27,102 +21,14 @@ struct SettingsView: View {
     @State private var opensDeveloperToolsAfterDismissal = false
 
     var body: some View {
-        @Bindable var model = model
         Form {
-            Section {
-                Picker("Server", selection: serverSelection) {
-                    ForEach(SettingsServer.allCases) { server in
-                        Text(server.title).tag(server)
-                    }
-                }
-                .accessibilityIdentifier("settings.serverPicker")
-
-                if selectedServer == .custom {
-                    TextField("Custom server URL", text: $draftURL)
-                        .keyboardDismissBar()
-                        .font(.fieldGuideCode)
-                        .autocorrectionDisabled()
-                        #if os(iOS)
-                            .keyboardType(.URL)
-                            .textInputAutocapitalization(.never)
-                        #endif
-                        .onSubmit(applyCustomServer)
-                        .accessibilityIdentifier("settings.customServerURL")
-                        .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-
-                    if let customURLValidationMessage {
-                        Text(customURLValidationMessage)
-                            .font(.fieldGuideLabel)
-                            .foregroundStyle(FieldGuideTokens.destructive)
-                    }
-
-                    if customServerURL != model.baseURL {
-                        Button("Use custom server", action: applyCustomServer)
-                            .disabled(customServerURL == nil)
-                            .accessibilityIdentifier("settings.useCustomServer")
-                    }
-                }
-            } header: {
-                Eyebrow("Server")
-            } footer: {
-                Text(
-                    "Each host keeps its own credential, so switching never sends one server's token to another."
-                )
-                .font(.fieldGuideLabel)
-                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            }
-
-            Section {
-                LabeledContent("Host") {
-                    Text(CubbyBaseURL.host(of: model.baseURL)).font(.fieldGuideCode)
-                }
-                .id(model.baseURL)
-                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-                LabeledContent("Credential") {
-                    Text(model.credentialSummary).font(.fieldGuideData)
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-                if model.phase == .signedIn {
-                    Button("Sign out", role: .destructive) {
-                        Task {
-                            await model.signOut()
-                            #if os(iOS)
-                                dismiss()
-                            #endif
-                        }
-                    }
-                    .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-                }
-            } header: {
-                Eyebrow("Session")
-            }
-
-            if model.phase == .signedIn {
-                DeviceParticipationSection(showPauseAnalysis: photosReady)
-                ImageWorkConcurrencySection()
-            }
-
+            ServerSettingsSection()
             NotificationSettingsSection()
-
             if model.phase == .signedIn {
-                Section("Utilities") {
-                    Button("Developer tools", systemImage: "wrench.and.screwdriver") {
-                        #if os(iOS)
-                            if isSidebarRoot {
-                                model.navigator.openDev()
-                            } else {
-                                opensDeveloperToolsAfterDismissal = true
-                                dismiss()
-                            }
-                        #else
-                            model.navigator.openDev()
-                        #endif
-                    }
-                    .accessibilityIdentifier("settings.developerTools")
-                }
+                AdvancedSettingsSection(openDeveloperTools: openDeveloperTools)
+                if model.photoAnalysisStore != nil { PhotoAnalysisSettingsSection() }
             }
-
-            if model.phase == .signedIn, photosReady { photosSection }
+            AboutSettingsSection()
         }
         .formStyle(.grouped)
         .font(.fieldGuideBody)
@@ -130,23 +36,11 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
-        #endif
-        .onAppear {
-            synchronizeServerSelection()
-            photosReady = model.photoAnalysisStore != nil
-        }
-        #if os(iOS)
             .onDisappear {
                 guard opensDeveloperToolsAfterDismissal else { return }
                 opensDeveloperToolsAfterDismissal = false
                 model.navigator.openDev()
             }
-        #endif
-        .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
-        .photoAnalysisLifecycle(ready: photosReady, model: model, paused: photoAnalysisPaused) {
-            await loadPhotoAnalysisSummary()
-        }
-        #if os(iOS)
             .toolbar {
                 if !isSidebarRoot {
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
@@ -155,55 +49,143 @@ struct SettingsView: View {
         #endif
     }
 
-    /// Split out of `body` to keep its expression under the 200ms type-check budget
-    /// (apps/apple/AGENTS.md, "Language and style").
-    private var photosSection: some View {
-        Section {
-            Picker("Analysis window", selection: photoAnalysisWindowBinding) {
-                ForEach(PhotoAnalysisWindow.allCases) { window in
-                    Text(window.title).tag(window)
+    private func openDeveloperTools() {
+        #if os(iOS)
+            if isSidebarRoot {
+                model.navigator.openDev()
+            } else {
+                opensDeveloperToolsAfterDismissal = true
+                dismiss()
+            }
+        #else
+            model.navigator.openDev()
+        #endif
+    }
+}
+
+#if os(macOS)
+    /// The Mac Settings window (app menu › Settings…, ⌘,), one pane per Settings section. It is a
+    /// separate window, so checking a setting never replaces what the main window shows, and it
+    /// works before sign-in for server setup.
+    struct SettingsWindow: View {
+        @Environment(AppModel.self) private var model
+        @Environment(\.openWindow) private var openWindow
+
+        var body: some View {
+            TabView {
+                Tab("Server", systemImage: "server.rack") {
+                    pane { ServerSettingsSection() }
+                }
+                Tab("Notifications", systemImage: "bell.badge") {
+                    pane { NotificationSettingsSection() }
+                }
+                if model.phase == .signedIn {
+                    Tab("Advanced", systemImage: "gearshape.2") {
+                        pane {
+                            AdvancedSettingsSection {
+                                model.navigator.openDev()
+                                openWindow(id: "main")
+                            }
+                            if model.photoAnalysisStore != nil { PhotoAnalysisSettingsSection() }
+                        }
+                    }
+                }
+                Tab("About", systemImage: "info.circle") {
+                    pane { AboutSettingsSection() }
                 }
             }
-            LabeledContent("Analysed") { Text(photoAnalysisSummaryText) }
-                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-            PhotoStorageRows(summary: photoStorageSummary)
-        } header: {
-            Eyebrow("Photos")
-        } footer: {
-            Text(
-                "On-device category classification runs quietly while the Photos tab is open. This database is an on-device cache Cubby can rebuild at any time."
-            )
-            .font(.fieldGuideLabel)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+            .frame(width: 540, height: 460)
+        }
+
+        private func pane(@ViewBuilder _ content: () -> some View) -> some View {
+            Form(content: content)
+                .formStyle(.grouped)
+                .font(.fieldGuideBody)
         }
     }
+#endif
 
-    private var photoAnalysisWindowBinding: Binding<PhotoAnalysisWindow> {
-        Binding(
-            get: { PhotoAnalysisWindow(rawValue: photoAnalysisWindowRaw) ?? .thisYear },
-            set: { window in
-                photoAnalysisWindowRaw = window.rawValue
-                model.photoClassificationSweep?.setWindow(window)
-            })
+extension View {
+    /// iOS rows keep a comfortable touch height; the Mac grouped form uses system row metrics.
+    fileprivate func settingsRowHeight() -> some View {
+        #if os(iOS)
+            frame(minHeight: FieldGuideTokens.touchTarget - 12)
+        #else
+            self
+        #endif
     }
+}
 
-    private var photoAnalysisSummaryText: String {
-        guard let photoAnalysisSummary else { return "…" }
-        return "\(photoAnalysisSummary.analysed) of \(photoAnalysisSummary.total)"
-    }
+/// Server choice, the active host and credential, and Sign out.
+private struct ServerSettingsSection: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedServer = SettingsServer.production
+    @State private var draftURL = ""
 
-    private func loadPhotoAnalysisSummary() async {
-        guard let analysisStore = model.photoAnalysisStore else { return }
-        let total = model.photoLibrary.count
-        let analysed =
-            (try? await analysisStore.classifiedCount(
-                newerThan: PhotoClassificationSweep.classifyVersion)) ?? 0
-        photoAnalysisSummary = (analysed, total)
-        do {
-            photoStorageSummary = try await analysisStore.storageSummary(
-                classifyVersion: PhotoClassificationSweep.classifyVersion)
-        } catch {
-            Diagnostics.report(error, context: "settings.photoStorage")
+    var body: some View {
+        Section {
+            Picker("Server", selection: serverSelection) {
+                ForEach(SettingsServer.allCases) { server in
+                    Text(server.title).tag(server)
+                }
+            }
+            .accessibilityIdentifier("settings.serverPicker")
+            .onAppear(perform: synchronizeServerSelection)
+            .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
+
+            if selectedServer == .custom {
+                TextField("Custom server URL", text: $draftURL)
+                    .keyboardDismissBar()
+                    .font(.fieldGuideCode)
+                    .autocorrectionDisabled()
+                    #if os(iOS)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                    #endif
+                    .onSubmit(applyCustomServer)
+                    .accessibilityIdentifier("settings.customServerURL")
+                    .settingsRowHeight()
+
+                if let customURLValidationMessage {
+                    Text(customURLValidationMessage)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.destructive)
+                }
+
+                if customServerURL != model.baseURL {
+                    Button("Use custom server", action: applyCustomServer)
+                        .disabled(customServerURL == nil)
+                        .accessibilityIdentifier("settings.useCustomServer")
+                }
+            }
+
+            LabeledContent("Host") {
+                Text(CubbyBaseURL.host(of: model.baseURL)).font(.fieldGuideCode)
+            }
+            .id(model.baseURL)
+            .settingsRowHeight()
+            LabeledContent("Credential") {
+                Text(model.credentialSummary).font(.fieldGuideData)
+            }
+            .settingsRowHeight()
+            if model.phase == .signedIn {
+                Button("Sign out", role: .destructive) {
+                    Task {
+                        await model.signOut()
+                        #if os(iOS)
+                            dismiss()
+                        #endif
+                    }
+                }
+                .settingsRowHeight()
+            }
+        } header: {
+            Text("Server")
+        } footer: {
+            Text(
+                "Each host keeps its own credential, so switching never sends one server's token to another."
+            )
         }
     }
 
@@ -238,7 +220,189 @@ struct SettingsView: View {
     }
 }
 
-/// The "Database" / "Size" / "Rows" rows under Settings → Photos, plus the platform reveal action.
+/// This device's share of household work: the master "Automatic work" switch and what it
+/// controls, how many image jobs run at once, the temporary "Pause analysis" toggle while photo
+/// analysis is ready, and the way into Dev.
+private struct AdvancedSettingsSection: View {
+    let openDeveloperTools: () -> Void
+    @Environment(AppModel.self) private var model
+    @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
+
+    var body: some View {
+        Section {
+            Toggle("Automatic work on this device", isOn: automaticWorkBinding)
+                .settingsRowHeight()
+                .accessibilityIdentifier("settings.device.automaticWork")
+            let worker = model.companionImageActivity
+            if worker.remotePaused || worker.phase == .updateRequired {
+                LabeledContent("Status") {
+                    Text(worker.statusTitle)
+                        .foregroundStyle(FieldGuideTokens.destructive)
+                }
+                .settingsRowHeight()
+            }
+            ImageWorkConcurrencyRow()
+            LabeledContent("Apple image descriptions") {
+                Text(FoundationModelsImageDescriber().unavailableReason() ?? "Available")
+                    .textSelection(.enabled)
+            }
+            if model.photoAnalysisStore != nil {
+                Toggle("Pause analysis", isOn: pausedBinding)
+                    .settingsRowHeight()
+            }
+            Button("Developer tools", systemImage: "wrench.and.screwdriver", action: openDeveloperTools)
+                .accessibilityIdentifier("settings.developerTools")
+        } header: {
+            Text("Advanced")
+        } footer: {
+            Text(
+                "Automatic work covers companion image jobs, library matching, and background analysis on this device; explicit photo imports always work. Image descriptions and subject lifts share the image job slots, and Automatic uses the value measured for this kind of device."
+            )
+        }
+    }
+
+    private var automaticWorkBinding: Binding<Bool> {
+        Binding(
+            get: { model.participation.automaticWork },
+            set: { model.setParticipation(automaticWork: $0) })
+    }
+
+    private var pausedBinding: Binding<Bool> {
+        Binding(
+            get: { photoAnalysisPaused },
+            set: {
+                photoAnalysisPaused = $0
+                model.photoClassificationSweep?.setPaused($0)
+            })
+    }
+}
+
+/// How many image jobs this device runs at once, one pool shared by descriptions and subject
+/// lifts. Stored per device; 0 is Automatic. The worker picks up a change on its next pull.
+private struct ImageWorkConcurrencyRow: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(CompanionImageConcurrency.defaultsKey) private var stored = 0
+
+    var body: some View {
+        Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
+            LabeledContent("Image jobs at once") {
+                Text(
+                    stored == 0
+                        ? "Automatic (\(CompanionImageConcurrency.automatic))"
+                        : "\(CompanionImageConcurrency.slots(for: stored))"
+                )
+                .monospacedDigit()
+            }
+        }
+        .settingsRowHeight()
+        .accessibilityIdentifier("settings.imageWork.jobs")
+    }
+
+    /// Stepping below 1 returns to Automatic (stored 0).
+    private var choice: Binding<Int> {
+        Binding(
+            get: { stored },
+            set: {
+                stored = $0
+                model.applyImageWorkConcurrency()
+            })
+    }
+}
+
+/// The on-device photo analysis window, its progress, and the cache database it lives in. Shown
+/// once `AppModel.photoAnalysisStore` is open.
+private struct PhotoAnalysisSettingsSection: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage("photoAnalysisWindow") private var photoAnalysisWindowRaw = PhotoAnalysisWindow.thisYear
+        .rawValue
+    @State private var photoAnalysisSummary: (analysed: Int, total: Int)?
+    @State private var photoStorageSummary: PhotoAnalysisStorageSummary?
+
+    var body: some View {
+        Section {
+            Picker("Analysis window", selection: photoAnalysisWindowBinding) {
+                ForEach(PhotoAnalysisWindow.allCases) { window in
+                    Text(window.title).tag(window)
+                }
+            }
+            LabeledContent("Analysed") { Text(photoAnalysisSummaryText) }
+                .settingsRowHeight()
+                .task(id: model.photoLibrary.count) { await loadPhotoAnalysisSummary() }
+            PhotoStorageRows(summary: photoStorageSummary)
+        } header: {
+            Text("Photo analysis")
+        } footer: {
+            Text(
+                "On-device category classification runs quietly while Photos is open. This database is an on-device cache Cubby can rebuild at any time."
+            )
+        }
+    }
+
+    private var photoAnalysisWindowBinding: Binding<PhotoAnalysisWindow> {
+        Binding(
+            get: { PhotoAnalysisWindow(rawValue: photoAnalysisWindowRaw) ?? .thisYear },
+            set: { window in
+                photoAnalysisWindowRaw = window.rawValue
+                model.photoClassificationSweep?.setWindow(window)
+            })
+    }
+
+    private var photoAnalysisSummaryText: String {
+        guard let photoAnalysisSummary else { return "…" }
+        return "\(photoAnalysisSummary.analysed) of \(photoAnalysisSummary.total)"
+    }
+
+    private func loadPhotoAnalysisSummary() async {
+        guard let analysisStore = model.photoAnalysisStore else { return }
+        let total = model.photoLibrary.count
+        let analysed =
+            (try? await analysisStore.classifiedCount(
+                newerThan: PhotoClassificationSweep.classifyVersion)) ?? 0
+        photoAnalysisSummary = (analysed, total)
+        do {
+            photoStorageSummary = try await analysisStore.storageSummary(
+                classifyVersion: PhotoClassificationSweep.classifyVersion)
+        } catch {
+            Diagnostics.report(error, context: "settings.photoStorage")
+        }
+    }
+}
+
+/// The installed version and build, the TestFlight update while the server refuses this build's
+/// writes (the same latch as `UpdateAvailableBanner`), and the web app on the selected server.
+private struct AboutSettingsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section("About") {
+            LabeledContent("Version") {
+                Text(Self.version).monospacedDigit().textSelection(.enabled)
+            }
+            .settingsRowHeight()
+            if model.requestTrace.clientUpdateRequired {
+                LabeledContent("Update") {
+                    Text("Required to save changes").foregroundStyle(FieldGuideTokens.destructive)
+                }
+                .settingsRowHeight()
+                OpenTestFlightButton()
+            }
+            Link(destination: model.webHandoff.url(.route(path: "/"))) {
+                Label("Open Cubby on the web", systemImage: "arrow.up.forward.app")
+            }
+            .accessibilityIdentifier("settings.openOnWeb")
+        }
+    }
+
+    /// `MARKETING_VERSION (CURRENT_PROJECT_VERSION)`, the pair TestFlight lists for a build.
+    static var version: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info["CFBundleVersion"] as? String ?? "0"
+        return "\(version) (\(build))"
+    }
+}
+
+/// The "Database" / "Size" / "Rows" rows under Settings › Photo analysis, plus the platform reveal action.
 /// Takes a plain value rather than reading `AppModel` directly, so it renders in a `#Preview`
 /// without opening a real on-disk `PhotoAnalysisStore`.
 private struct PhotoStorageRows: View {
@@ -257,17 +421,17 @@ private struct PhotoStorageRows: View {
                         .textSelection(.enabled)
                 }
             }
-            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
+            .settingsRowHeight()
             LabeledContent("Size") {
                 Text(summary.bytesOnDisk, format: .byteCount(style: .file))
             }
-            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
+            .settingsRowHeight()
             LabeledContent("Rows") {
                 Text(
                     "\(summary.hashedCount.formatted()) hashed · \(summary.classifiedCount.formatted()) classified · \(summary.syncedSightingCount.formatted()) synced"
                 )
             }
-            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
+            .settingsRowHeight()
             #if os(macOS)
                 Button("Show in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
@@ -279,24 +443,7 @@ private struct PhotoStorageRows: View {
             #endif
         } else {
             LabeledContent("Database") { Text("…") }
-                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-        }
-    }
-}
-
-extension View {
-    /// Bundled into one modifier (rather than two more chained calls in `body`) so `SettingsView`'s
-    /// `body` stays under the 200ms type-check budget.
-    fileprivate func photoAnalysisLifecycle(
-        ready: Bool, model: AppModel, paused: Bool, loadSummary: @escaping () async -> Void
-    ) -> some View {
-        task(id: ready ? model.photoLibrary.count : nil) {
-            guard ready else { return }
-            await loadSummary()
-        }
-        .onChange(of: paused) { _, paused in
-            guard ready else { return }
-            model.photoClassificationSweep?.setPaused(paused)
+                .settingsRowHeight()
         }
     }
 }
@@ -386,170 +533,29 @@ extension AppModel {
     }
 }
 
-/// The master "Automatic work on this device" switch and what it controls, plus (when photos are
-/// ready) the existing temporary "Pause analysis" toggle. Split out of `SettingsView.body` to keep
-/// its expression under the 200ms type-check budget (apps/apple/AGENTS.md, "Language and style").
-private struct DeviceParticipationSection: View {
-    let showPauseAnalysis: Bool
-    @Environment(AppModel.self) private var model
-    @AppStorage("photoAnalysisPaused") private var photoAnalysisPaused = false
-
-    var body: some View {
-        Section {
-            Toggle("Automatic work on this device", isOn: automaticWorkBinding)
-                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-                .accessibilityIdentifier("settings.device.automaticWork")
-            LabeledContent("Apple image descriptions") {
-                Text(FoundationModelsImageDescriber().unavailableReason() ?? "Available")
-                    .textSelection(.enabled)
-            }
-            let worker = model.companionImageActivity
-            if worker.remotePaused || worker.phase == .updateRequired {
-                LabeledContent("Status") {
-                    Text(worker.statusTitle)
-                        .foregroundStyle(FieldGuideTokens.destructive)
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-            }
-            if showPauseAnalysis {
-                Toggle("Pause analysis", isOn: $photoAnalysisPaused)
-                    .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-            }
-        } header: {
-            Eyebrow("This device")
-        } footer: {
-            Text(
-                "Controls companion image jobs, library matching, and background analysis on this device. Explicit photo imports always work, on or off."
-            )
-            .font(.fieldGuideLabel)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-        }
-    }
-
-    private var automaticWorkBinding: Binding<Bool> {
-        Binding(
-            get: { model.participation.automaticWork },
-            set: { model.setParticipation(automaticWork: $0) })
-    }
-}
-
-/// Settings › Image work: how many image jobs this device runs at once, one pool shared by
-/// descriptions and subject lifts. Stored per device; 0 is Automatic. The worker picks up a
-/// change on its next pull.
-struct ImageWorkConcurrencySection: View {
-    @Environment(AppModel.self) private var model
-    @AppStorage(CompanionImageConcurrency.defaultsKey) private var stored = 0
-
-    var body: some View {
-        Section {
-            ProcessImageQueueButton()
-            Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
-                LabeledContent("Jobs at once") {
-                    Text(
-                        stored == 0
-                            ? "Automatic (\(CompanionImageConcurrency.automatic))"
-                            : "\(CompanionImageConcurrency.slots(for: stored))"
-                    )
-                    .monospacedDigit()
-                }
-            }
-            .frame(minHeight: FieldGuideTokens.touchTarget - 12)
-            .accessibilityIdentifier("settings.imageWork.jobs")
-        } header: {
-            Eyebrow("Image work")
-        } footer: {
-            Text(
-                "Image descriptions and subject lifts share these slots. This device pulls new work only while a slot is free. Automatic uses the value measured for this kind of device."
-            )
-            .font(.fieldGuideLabel)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-        }
-    }
-
-    /// Stepping below 1 returns to Automatic (stored 0).
-    private var choice: Binding<Int> {
-        Binding(
-            get: { stored },
-            set: {
-                stored = $0
-                model.applyImageWorkConcurrency()
-            })
-    }
-}
-
-#Preview("Image work", traits: .modifier(SignedInPreview())) {
-    Form { ImageWorkConcurrencySection() }
+#Preview("Advanced", traits: .modifier(SignedInPreview())) {
+    Form { AdvancedSettingsSection {} }
         .formStyle(.grouped)
 }
 
-#Preview("This device — on", traits: .modifier(SignedInPreview())) {
-    Form { DeviceParticipationSection(showPauseAnalysis: true) }
-        .formStyle(.grouped)
-        .environment(PreviewFixtures.signedInModel())
-}
-
-#Preview("This device — paused from the web") {
+#Preview("Advanced — automatic work on") {
     let model = PreviewFixtures.signedInModel()
     model.setParticipation(automaticWork: true)
-    return Form { DeviceParticipationSection(showPauseAnalysis: false) }
+    return Form { AdvancedSettingsSection {} }
         .formStyle(.grouped)
         .environment(model)
 }
 
-/// The one-time "Help process photos on this device?" prompt: shown once per install right after
-/// sign-in, while `participation.answeredAt == nil` (`RootView`'s `.signedIn` case). Until it is
-/// answered the master switch stays off (`DeviceParticipation`'s default), so a fresh install is a
-/// plain viewer until the person opts in.
-struct DeviceParticipationOnboardingSheet: View {
-    @Environment(AppModel.self) private var model
-    @Environment(\.dismiss) private var dismiss
-    @ScaledMetric(relativeTo: .largeTitle) private var heroGlyphSize: CGFloat = 44
+#Preview("About", traits: .modifier(SignedInPreview())) {
+    Form { AboutSettingsSection() }
+        .formStyle(.grouped)
+}
 
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: FieldGuideTokens.Space.lg) {
-                Spacer()
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.system(size: heroGlyphSize))
-                    .foregroundStyle(FieldGuideTokens.interaction)
-                Text("Help process photos on this device?")
-                    .font(.fieldGuideTitle)
-                    .multilineTextAlignment(.center)
-                Text(
-                    "This device can process companion image jobs, match your photo library against Cubby, and run background photo analysis. You can change this anytime in Settings."
-                )
-                .font(.fieldGuideBody)
-                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                .multilineTextAlignment(.center)
-                Spacer()
-                Button("Help process photos") {
-                    model.setParticipation(automaticWork: true)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityIdentifier("settings.participation.optIn")
-                Button("Just browse") {
-                    model.setParticipation(automaticWork: false)
-                    dismiss()
-                }
-                .accessibilityIdentifier("settings.participation.optOut")
-            }
-            .padding(FieldGuideTokens.Space.lg)
-            .navigationTitle("This device")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-        }
-        .nativeSheet(.adjustment)
-        .interactiveDismissDisabled()
+#if os(macOS)
+    #Preview("Mac Settings window", traits: .modifier(SignedInPreview())) {
+        SettingsWindow()
     }
-}
-
-#Preview("First sign-in — unanswered", traits: .modifier(SignedInPreview())) {
-    Color.clear
-        .sheet(isPresented: .constant(true)) { DeviceParticipationOnboardingSheet() }
-}
+#endif
 
 #Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { SettingsView() }

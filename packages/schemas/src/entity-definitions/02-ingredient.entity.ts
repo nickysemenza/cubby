@@ -87,7 +87,19 @@ export default defineEntity(
           eaters:
             "Who ate it is per-portion meal data; the Meals table on this page shows each meal and its eaters.",
         },
-        additionalSections: [
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: ["name", "aliases", "usuallyOnHand"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["nutritionSourceProductId", "createdAt", "updatedAt"],
+          },
           { kind: "slot", id: "recipe-usages", title: "Recipe lines" },
           { kind: "slot", id: "nutrition-product", title: "Nutrition" },
         ],

@@ -346,6 +346,64 @@ test("approves two selected photo groups with one reviewed batch action", async 
   ).toHaveCount(2);
 });
 
+// Moved from the retired native journey (qa-photo-selected-approval.ad): selecting only the
+// second of two ready groups commits that group alone; the first stays proposed.
+test("approves only the selected ready group and leaves the other proposed", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    `Selected one ${Date.now()}`,
+    e2eRuntime.objectStorageUrl,
+  );
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    { runId: seed.runId, groups: seed.groups },
+  );
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-batch`,
+    page.getByRole("heading", { name: "Photo review", exact: true }),
+  );
+
+  await page.getByRole("checkbox", { name: /Select .* solo find/ }).check();
+  await expect(
+    page.getByRole("checkbox", { name: /Select Gray crew t-shirt/ }),
+  ).not.toBeChecked();
+  const approval = page.waitForResponse((response) =>
+    dispatchOperations(response.request()).some(
+      (operation) => operation.operation === "photoImport.approveGroups",
+    ),
+  );
+  await page
+    .getByRole("button", { name: "Apply 1 selected item", exact: true })
+    .click();
+  const outcome = await operationResult(
+    await approval,
+    "photoImport.approveGroups",
+    reviewPhotoGroupsOutput,
+  );
+  expect(
+    outcome.results.map((result) => [result.groupKey, result.outcome]),
+  ).toEqual([["g2", "committed"]]);
+  expect(
+    outcome.proposals
+      .map((proposal) => [proposal.groupKey, proposal.state])
+      .sort(),
+  ).toEqual([
+    ["g1", "proposed"],
+    ["g2", "committed"],
+  ]);
+  await expect(
+    page.getByText("1 to review · 1 settled · 0 photos not in a group", {
+      exact: true,
+    }),
+  ).toBeVisible();
+});
+
 test("reviews, approves, and discards proposed photo groups on the photo-inventory run page", async ({
   page,
   e2eRuntime,

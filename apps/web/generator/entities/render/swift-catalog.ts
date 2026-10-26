@@ -33,6 +33,7 @@ import {
   requireNativeCoverage,
   nativeHeroActionPlans,
 } from "@cubby/schemas/compiler/native-coverage";
+import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { generatedHeader } from "../../artifacts.ts";
 import { parseRangeBounds } from "@cubby/shared/filter";
@@ -405,7 +406,12 @@ const fieldJSON = (
     resolution: resolutionJSON(field.resolution),
     ...fieldControlJSON(field.control),
     ...fieldControlInputJSON(field.control),
-    valueSchema: valueSchemaForField(context, field, where, entityForPrefix),
+    valueSchema:
+      field.control?.renderer === "structured-field" &&
+      requireNativeCoverage("structuredField", `${context}.${field.key}`)
+        .status === "handoff"
+        ? null
+        : valueSchemaForField(context, field, where, entityForPrefix),
     collection:
       field.collection && field.collection.key !== "value"
         ? {
@@ -613,7 +619,9 @@ const presentationJSON = (
   return {
     detailVariant: detail.variant,
     heroChip: detail.hero.chip ?? null,
-    summarySlots: detail.summary.map((slot) => {
+    // Web-only slots and sections never reach the native manifest.
+    summarySlots: detail.summary.flatMap((slot) => {
+      if (!onDetailSurface(slot, "native")) return [];
       switch (slot.kind) {
         case "fields":
           return {
@@ -647,13 +655,17 @@ const presentationJSON = (
       : null,
     heroImages: detail.hero.images,
     heroActions: [...detail.hero.actions],
+    // Omitted when none are declared; CubbyKit reads an absent list as [].
+    detailQuickActions: detail.quickActions.length
+      ? [...detail.quickActions]
+      : undefined,
     activityRelations: detail.activityRelations.map((entry) => ({
       relation: entry.relation,
       dateField: entry.dateField,
     })),
-    detailSections: detail.sections.map((section) =>
-      detailSectionJSON(entity, section),
-    ),
+    detailSections: detail.sections
+      .filter((section) => onDetailSurface(section, "native"))
+      .map((section) => detailSectionJSON(entity, section)),
     connectedViews: entityConnectedViews.map((view) => ({
       key: view.key,
       title: view.title,
@@ -670,6 +682,9 @@ const presentationJSON = (
     shelfSubtitle: [...(list.shelf?.subtitle ?? [])],
     titleSubtitle: list.titleSubtitle,
     listActions: [...list.actions],
+    listQuickActions: list.quickActions.length
+      ? [...list.quickActions]
+      : undefined,
     timelineFields: [...(list.timeline?.fields ?? [])],
     lifecycle:
       list.timeline?.lifecycle == null
@@ -761,6 +776,12 @@ const entityJSON = (
     recordEmojiField: entity.inspector.recordEmojiField,
     recordIconEntityField: entity.inspector.recordIconEntityField,
     searchable,
+    nativeBrowse: entity.inspector.nativeBrowse,
+    emptyState: {
+      title: entity.inspector.emptyState.title,
+      description: entity.inspector.emptyState.description,
+      actionLabel: entity.inspector.emptyState.actionLabel,
+    },
     primarySearch,
     timeline: entity.timeline,
     fields: entity.fieldModel.fields.map((field) =>
@@ -869,7 +890,9 @@ export const renderSwiftEntityCatalog = (
     detailSlot: used(
       entities.flatMap((entity) =>
         entity.inspector.detail.sections.flatMap((section) =>
-          section.kind === "slot" ? [`${entity.key}.${section.id}`] : [],
+          section.kind === "slot" && onDetailSurface(section, "native")
+            ? [`${entity.key}.${section.id}`]
+            : [],
         ),
       ),
     ),
@@ -877,6 +900,15 @@ export const renderSwiftEntityCatalog = (
       entities.flatMap((entity) =>
         entity.inspector.list.views.flatMap((view) =>
           isSlotListView(view) ? [`${entity.key}.${view.id}`] : [],
+        ),
+      ),
+    ),
+    structuredField: used(
+      entities.flatMap((entity) =>
+        entity.fieldModel.fields.flatMap((field) =>
+          field.control?.renderer === "structured-field"
+            ? [`${entity.key}.${field.key}`]
+            : [],
         ),
       ),
     ),
@@ -889,11 +921,27 @@ export const renderSwiftEntityCatalog = (
     return Object.fromEntries(
       ids.map((id) => {
         const entry = requireNativeCoverage(kind, id);
+        if (entry.status !== "handoff") return [id, { status: entry.status }];
+        // A detail slot hands off to a section its own record declares (the web hash).
+        const [owner] = id.split(".");
+        const section = entry.web.section;
+        if (
+          (kind === "detailSlot" || kind === "structuredField") &&
+          section !== undefined &&
+          !entities.some(
+            (entity) =>
+              entity.key === owner &&
+              entity.inspector.detail.sections.some(
+                (declared) => declared.id === section,
+              ),
+          )
+        )
+          throw new Error(
+            `native-coverage.ts: ${kind} ${JSON.stringify(id)} hands off to section ${JSON.stringify(section)}, which ${owner} does not declare`,
+          );
         return [
           id,
-          entry.status === "unsupported"
-            ? { status: entry.status, reason: entry.reason }
-            : { status: entry.status },
+          { status: entry.status, web: entry.web, reason: entry.reason },
         ];
       }),
     );
@@ -933,6 +981,10 @@ export const renderSwiftEntityCatalog = (
     heroAction: classified("heroAction", coverageVocabulary.heroAction),
     detailSlot: classified("detailSlot", coverageVocabulary.detailSlot),
     listSlot: classified("listSlot", coverageVocabulary.listSlot),
+    structuredField: classified(
+      "structuredField",
+      coverageVocabulary.structuredField,
+    ),
     sectionAction: classified(
       "sectionAction",
       coverageVocabulary.sectionAction,

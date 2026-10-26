@@ -6,6 +6,20 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
+    @Test func productPlacementUsesTheServerPath() throws {
+        let descriptor = EntityCatalog[.product]
+        let row = try #require(
+            descriptor.row(from: [
+                "id": "PRD-2345", "name": "Synthetic wrench",
+                "primaryPlacement": [
+                    "locationId": "LOC-2345", "path": "Home › Garage › Drawer", "onHand": 2,
+                ],
+            ]))
+        let presentation = EntityRowPresentation.resolve(
+            descriptor: descriptor, row: row, columns: ["primaryPlacement"])
+        #expect(presentation.facts.first { $0.id == "primaryPlacement" }?.value == "Home › Garage › Drawer")
+    }
+
     // A self-label timestamp must still reach the shared date presentation, not print raw ISO text.
     @Test func runActivitySelfLabelRetainsDatePresentation() throws {
         let timestamp = "2026-09-12T10:00:00.000Z"

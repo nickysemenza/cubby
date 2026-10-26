@@ -40,6 +40,7 @@ struct DeviceWorkLiveActivitySelectionTests {
         #expect(selected.additionalCount == 2)
         #expect(selected.progress == 0.2)
         #expect(selected.contentState().localActivityID == "upload")
+        #expect(selected.contentState().symbol == "arrow.up.doc")
         #expect(DeviceWorkLiveSelection.select([], at: now) == nil)
     }
 
@@ -56,7 +57,55 @@ struct DeviceWorkLiveActivitySelectionTests {
         #expect(state.detail == queue.detail)
         #expect(state.progress == 0.25)
         #expect(state.estimatedRemaining == nil)
+        #expect(state.symbol == "photo.badge.gearshape")
+        #expect(state.destinationURL?.absoluteString == "cubby://activity")
         #expect(DeviceWorkLiveSelection.select([], at: now) == nil)
+    }
+
+    @Test func importProgressOpensItsServerRunInsteadOfALocalActivity() throws {
+        let now = Date.now
+        let upload = BackgroundActivity(
+            id: "synthetic-import", kind: .upload, title: "Importing photos",
+            phase: .running, progress: 0.5, detail: "Uploading", startedAt: now,
+            link: .serverRun("RUN-ABCD"), isUserInitiated: true, isCancellable: false)
+        let selected = try #require(DeviceWorkLiveSelection.select([upload], at: now))
+        let state = selected.contentState()
+        let presentation = DeviceWorkAttributes(sessionID: "synthetic").presentation(for: state)
+        #expect(presentation.url?.absoluteString == "cubby://activity/RUN-ABCD")
+        #expect(presentation.symbol == "arrow.up.doc")
+        let ended = DeviceWorkAttributes(sessionID: "synthetic").presentation(for: state.ending())
+        #expect(ended.isRunning == false)
+        #expect(ended.progress == nil)
+        #expect(ended.url == presentation.url)
+    }
+
+    @Test func runPushAttentionAndFinalStatesUseTheSharedPresentation() throws {
+        // The server's APNs content-state remains decodable without a local-only symbol field.
+        let payload = Data(
+            #"{"phase":"needs_attention","title":"Photo import needs attention","detail":"2 descriptions failed","completed":3,"total":5,"needsAttention":true}"#
+                .utf8)
+        let state = try JSONDecoder().decode(PhotoRunActivityAttributes.ContentState.self, from: payload)
+        let attributes = PhotoRunActivityAttributes(runId: "RUN-ABCD")
+        let presentation = attributes.presentation(for: state)
+        #expect(presentation.symbol == "exclamationmark.circle")
+        #expect(presentation.isRunning == false)
+        #expect(presentation.url?.absoluteString == "cubby://activity/RUN-ABCD")
+        #expect(state.shouldEnd)
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        #expect(state.dismissalDate(at: now).timeIntervalSince(now) == 1_200)
+
+        let complete = PhotoRunActivityAttributes.ContentState(
+            phase: "completed", title: "Photo import complete", detail: "5 photos imported",
+            completed: 5, total: 5, needsAttention: false)
+        #expect(complete.shouldEnd)
+        #expect(attributes.presentation(for: complete).symbol == "checkmark.circle")
+        #expect(attributes.presentation(for: complete).isRunning == false)
+        let processing = PhotoRunActivityAttributes.ContentState(
+            phase: "describing", title: "Describing photos", detail: "3 of 5",
+            completed: 3, total: 5, needsAttention: false)
+        #expect(processing.shouldEnd == false)
+        #expect(attributes.presentation(for: processing).symbol == "photo.stack")
+        #expect(attributes.presentation(for: processing).isRunning)
     }
 
     @Test func estimateNeedsObservedProgressAndResetsForAnotherTask() throws {

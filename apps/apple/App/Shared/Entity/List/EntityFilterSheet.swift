@@ -119,6 +119,105 @@ struct EntityFilterDraft: Hashable {
         if let name = filter.excludeParam { state.remove(name) }
     }
 
+    /// One active filter side as a removable chip at the top of the sheet. The "is" and "is not"
+    /// sides are separate chips, so removing the exclusions keeps the picks.
+    struct Chip: Hashable, Identifiable {
+        let columnId: String
+        let side: Side
+        let label: String
+        var id: String { "\(columnId).\(side)" }
+    }
+
+    static func chips(in descriptor: EntityDescriptor, state: EntityFilterState) -> [Chip] {
+        sections(of: descriptor).flatMap { filter in
+            [
+                includedSummary(filter, in: descriptor, state: state).map {
+                    Chip(columnId: filter.columnId, side: .include, label: $0)
+                },
+                excludedSummary(filter, in: descriptor, state: state).map {
+                    Chip(columnId: filter.columnId, side: .exclude, label: $0)
+                },
+            ].compactMap(\.self)
+        }
+    }
+
+    mutating func remove(_ chip: Chip, in descriptor: EntityDescriptor) {
+        guard let filter = descriptor.filters.first(where: { $0.columnId == chip.columnId }) else { return }
+        switch chip.side {
+        case .include:
+            let excluded = filter.excludeParam.flatMap { state[$0] }
+            clear(filter)
+            if let name = filter.excludeParam, let excluded { state.set(excluded, for: name) }
+        case .exclude:
+            clearExcluded(filter)
+        }
+    }
+
+    /// Everything but the "is not" side as one line: "Category is Outerwear or No value",
+    /// "Verified from 2026-01-01"; nil when that side is unset.
+    static func includedSummary(
+        _ filter: FilterDescriptor, in descriptor: EntityDescriptor, state: EntityFilterState
+    ) -> String? {
+        let draft = EntityFilterDraft(state)
+        let label = label(for: filter, in: descriptor)
+        var parts: [String] = []
+        switch filter.kind {
+        case .multiselect, .idMulti:
+            let labels = Dictionary(
+                options(for: filter, in: descriptor).map { ($0.value, $0.label) },
+                uniquingKeysWith: { first, _ in first })
+            var values = draft.values(filter).map {
+                labels[$0] ?? displayName(forFilterValue: $0, in: filter)
+            }
+            switch draft.presence(filter) {
+            case anyValue: values.append("Any value")
+            case noValue: values.append("No value")
+            default: break
+            }
+            if !values.isEmpty {
+                parts.append(
+                    "\(label) is \(values.joined(separator: draft.matchesAll(filter) ? " and " : " or "))")
+            }
+            if !draft.includesSubtree(filter) {
+                let target = filter.targetEntity.map { EntityCatalog[$0].plural.lowercased() } ?? "records"
+                parts.append(parts.isEmpty ? "\(label) without sub-\(target)" : "without sub-\(target)")
+            }
+        case .range:
+            if case .param = filter.wire {
+                let value = draft.value(filter)
+                guard !value.isEmpty else { return nil }
+                let option = options(for: filter, in: descriptor).first { $0.value == value }
+                return "\(label): \(option?.label ?? value)"
+            }
+            let range = draft.range(filter)
+            let bound = { (value: String) in RelativeDate.offset(value).map(RelativeDate.describe) ?? value }
+            switch (range.from.isEmpty, range.to.isEmpty) {
+            case (false, false): parts.append("\(label) \(bound(range.from)) – \(bound(range.to))")
+            case (false, true): parts.append("\(label) from \(bound(range.from))")
+            case (true, false): parts.append("\(label) to \(bound(range.to))")
+            case (true, true): break
+            }
+            switch range.presence {
+            case anyValue: parts.append(parts.isEmpty ? "\(label) has a value" : "has a value")
+            case noValue: parts.append(parts.isEmpty ? "\(label) has no value" : "or no value")
+            default: break
+            }
+        case .text, .presence, .boolean:
+            let value = draft.value(filter)
+            guard !value.isEmpty else { return nil }
+            let shown: String =
+                switch (filter.kind, value) {
+                case (.presence, "has"): "Has"
+                case (.presence, "none"): "None"
+                case (.boolean, "true"): "Yes"
+                case (.boolean, "false"): "No"
+                default: value
+                }
+            return "\(label): \(shown)"
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
     /// The presence parameter's values: Any value (`has`) and No value (`none`).
     static let anyValue = "has"
     static let noValue = "none"
@@ -283,6 +382,7 @@ struct EntityFilterSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                activeChips
                 ForEach(EntityFilterDraft.sections(of: descriptor), id: \.columnId) { filter in
                     Section {
                         control(for: filter)
@@ -338,6 +438,41 @@ struct EntityFilterSheet: View {
             }
         }
         .nativeSheet(.editor)
+    }
+
+    /// The draft's active filters as chips; removing one clears that side of its filter.
+    @ViewBuilder
+    private var activeChips: some View {
+        let chips = EntityFilterDraft.chips(in: descriptor, state: draft.state)
+        if !chips.isEmpty {
+            Section("Active") {
+                WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
+                    ForEach(chips) { chip in
+                        Button {
+                            draft.remove(chip, in: descriptor)
+                        } label: {
+                            HStack(spacing: FieldGuideTokens.Space.xs) {
+                                Text(chip.label).lineLimit(1)
+                                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                            }
+                            .font(.callout)
+                            .padding(.horizontal, FieldGuideTokens.Space.sm)
+                            .padding(.vertical, FieldGuideTokens.Space.xs)
+                            .background(Capsule().fill(FieldGuideTokens.inset))
+                            .overlay(Capsule().strokeBorder(FieldGuideTokens.hairline))
+                            #if os(iOS)
+                                .frame(minHeight: FieldGuideTokens.touchTarget)
+                            #endif
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Remove \(chip.label)")
+                        .accessibilityIdentifier("filter.chip.\(chip.id)")
+                    }
+                }
+                .padding(.vertical, FieldGuideTokens.Space.xs)
+            }
+        }
     }
 
     /// The ids the picker preselects: real records only, never a token.

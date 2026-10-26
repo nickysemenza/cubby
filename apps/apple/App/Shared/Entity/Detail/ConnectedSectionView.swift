@@ -177,7 +177,7 @@ struct ConnectedRecordsListView: View {
             model = next
             await next.loadInitial()
         }
-        .refreshable { await model?.refresh() }
+        .refreshControl { await model?.refresh() }
     }
 }
 

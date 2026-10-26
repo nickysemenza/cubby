@@ -14,7 +14,7 @@ struct UpdateAvailableBanner: View {
             }
             .font(.footnote)
             Spacer(minLength: 0)
-            Link("Open TestFlight", destination: URL(string: "https://testflight.apple.com")!)
+            OpenTestFlightButton()
                 .font(.footnote.weight(.semibold))
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -23,6 +23,21 @@ struct UpdateAvailableBanner: View {
         .padding(.vertical, FieldGuideTokens.Space.sm)
         .frame(maxWidth: .infinity)
         .background(.bar)
+    }
+}
+
+/// Opens the TestFlight app (`itms-beta://`), falling back to the TestFlight web page when no app
+/// takes the scheme. Shared by the banner and Settings › About.
+struct OpenTestFlightButton: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button("Open TestFlight") {
+            openURL(URL(string: "itms-beta://")!) { accepted in
+                if !accepted { openURL(URL(string: "https://testflight.apple.com")!) }
+            }
+        }
+        .accessibilityIdentifier("update.openTestFlight")
     }
 }
 

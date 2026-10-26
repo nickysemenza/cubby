@@ -22,6 +22,8 @@ private struct EntityListSearchModifier: ViewModifier {
     @Binding var text: String
     @Binding var isPresented: Bool
     let prompt: String
+    let plural: String
+    var focused: FocusState<Bool>.Binding
 
     @ViewBuilder
     func body(content: Content) -> some View {
@@ -30,7 +32,11 @@ private struct EntityListSearchModifier: ViewModifier {
                 content.searchable(
                     text: $text, isPresented: $isPresented, placement: .navigationBarDrawer, prompt: prompt)
             #else
+                // Edit › Find (⌘F) filters this list instead of leaving it for global Search.
                 content.searchable(text: $text, isPresented: $isPresented, prompt: prompt)
+                    .searchFocused(focused)
+                    .focusedSceneValue(
+                        \.listSearch, ListSearchAction(plural: plural) { focused.wrappedValue = true })
             #endif
         } else {
             content
@@ -54,20 +60,31 @@ struct EntityListView: View {
     let key: EntityKey
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Phone table column widths grow with Dynamic Type so cells wrap less as text scales; the
-    /// header and every row read the same metrics, keeping columns aligned.
+    /// Regular-width iPad table columns grow with Dynamic Type; compact width uses List or Cards.
+    /// The header and every row read the same metrics, keeping columns aligned.
     @ScaledMetric(relativeTo: .body) private var titleColumnWidth: CGFloat = 240
     @ScaledMetric(relativeTo: .body) private var fieldColumnWidth: CGFloat = 180
+    #if os(iOS)
+        @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
     @State private var model: GenericEntityListModel?
     @State private var showingFilters = false
     @State private var creating = false
     @State private var searchText = ""
     @State private var searchPresented = false
+    @FocusState private var searchFieldFocused: Bool
     @State private var retainedSearchText = ""
     @State private var clearingSearchExplicitly = false
     @State private var cardDensity = ListPresentationChoice.cards
     @State private var browsePresentation = BrowsePresentation.list
     @State private var hiddenTableColumns = Set<String>()
+    #if os(macOS)
+        /// Column hides, order and widths per entity, restored with the window.
+        @SceneStorage private var columnCustomization: TableColumnCustomization<EntityRow>
+    #endif
+    @State private var quickActions = RowQuickActionRunner()
+    @State private var selectedTableRecordID: String?
+    @State private var openedRecord: RecordSelection?
     private let initialFilters: EntityFilterState
     private let initialSavedView: SavedView?
     private let usesBrowseSelection: Bool
@@ -90,11 +107,21 @@ struct EntityListView: View {
         _model = State(initialValue: model)  // state-init-ok
         _browsePresentation = State(initialValue: presentation)  // state-init-ok: route-scoped lifetime
         _hiddenTableColumns = State(  // state-init-ok: manifest defaults for this route's entity
-            initialValue: Set(EntityCatalog[key].fields.filter(\.listHidden).map(\.key))
-                .subtracting(EntityRowPresentation.listContextKeys(descriptor: EntityCatalog[key])))
+            initialValue: Self.defaultHiddenTableColumns(EntityCatalog[key]))
+        #if os(macOS)
+            _columnCustomization = SceneStorage(
+                wrappedValue: TableColumnCustomization<EntityRow>(), "cubby.table.\(key.rawValue)")
+        #endif
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
+
+    /// Table columns start hidden where the manifest declares `listHidden`, except a relation's
+    /// context fields, which stand in for a column web shows.
+    private static func defaultHiddenTableColumns(_ descriptor: EntityDescriptor) -> Set<String> {
+        Set(descriptor.fields.filter(\.listHidden).map(\.key))
+            .subtracting(EntityRowPresentation.listContextKeys(descriptor: descriptor))
+    }
 
     /// Filtering by the coverage registry keeps an entity-qualified slot from being mistaken
     /// for a built-in view during initial selection or picker changes.
@@ -102,7 +129,26 @@ struct EntityListView: View {
         NativePresentationCoverage.listViews(for: descriptor)
     }
 
+    private var offersNativeTable: Bool {
+        #if os(iOS)
+            horizontalSizeClass == .regular
+        #else
+            true
+        #endif
+    }
+
     private var presentationChoices: [PresentationChoice] {
+        if !offersNativeTable {
+            return [
+                PresentationChoice(
+                    id: "list", label: "List", symbol: "list.bullet",
+                    view: .table, density: nil, browsePresentation: .list),
+                PresentationChoice(
+                    id: ListPresentationChoice.cards.rawValue, label: "Cards", symbol: "rectangle.grid.2x2",
+                    view: .shelf, density: .cards, browsePresentation: nil),
+            ]
+        }
+
         let shared = renderableViews.filter { $0 == .shelf }
         let specialist = renderableViews.filter { $0 != .table && $0 != .shelf }
         let browse = [BrowsePresentation.list, .table].map { presentation in
@@ -162,7 +208,9 @@ struct EntityListView: View {
                 text: $searchText,
                 isPresented: $searchPresented,
                 prompt: descriptor.primarySearch?.placeholder
-                    ?? "Search \(descriptor.plural.lowercased()) or shortcode"
+                    ?? "Search \(descriptor.plural.lowercased()) or shortcode",
+                plural: descriptor.plural,
+                focused: $searchFieldFocused
             )
         )
         .onChange(of: searchText) { _, value in applySearchText(value) }
@@ -191,6 +239,7 @@ struct EntityListView: View {
         .refreshControl { [model] in
             if let model { await refreshVisible(model) }
         }
+        .rowQuickActionHost(quickActions)
         .sheet(isPresented: $showingFilters) {
             if let model {
                 EntityFilterSheet(descriptor: descriptor, filters: model.filters) { filters in
@@ -287,6 +336,13 @@ struct EntityListView: View {
                     }
                     .accessibilityIdentifier("browse.\(key.rawValue).view.\(choice.id)")
                 }
+                listHandoffItems
+                if !offersNativeTable {
+                    OpenOnWebButton(
+                        target: .route(path: "/\(descriptor.basePath)"), label: "Open table on web"
+                    )
+                    .accessibilityIdentifier("browse.\(key.rawValue).open-table-web")
+                }
             }
         }
         if let model, !descriptor.grouping.isEmpty {
@@ -325,6 +381,7 @@ struct EntityListView: View {
                 if !allTableFields.isEmpty {
                     columnsMenu
                 }
+                listHandoffItems
             }
             .accessibilityIdentifier("browse.\(key.rawValue).view-menu")
         }
@@ -362,14 +419,14 @@ struct EntityListView: View {
                     Toggle(
                         field.label,
                         isOn: Binding(
-                            get: { !hiddenTableColumns.contains(field.key) },
-                            set: { visible in
-                                if visible {
-                                    hiddenTableColumns.remove(field.key)
-                                } else {
-                                    hiddenTableColumns.insert(field.key)
+                            get: {
+                                switch columnCustomization[visibility: field.key] {
+                                case .visible: true
+                                case .hidden: false
+                                default: !hiddenTableColumns.contains(field.key)
                                 }
-                            })
+                            },
+                            set: { columnCustomization[visibility: field.key] = $0 ? .visible : .hidden })
                     )
                     .accessibilityIdentifier("browse.\(key.rawValue).column.\(field.key)")
                 }
@@ -378,6 +435,19 @@ struct EntityListView: View {
             .accessibilityIdentifier("browse.\(key.rawValue).columns")
         }
     #endif
+
+    @ViewBuilder
+    private var listHandoffItems: some View {
+        ForEach(descriptor.presentation.listViews, id: \.id) { view in
+            if case .slot(let id, _, _) = view,
+                let web = NativePresentationCoverage.listSlot(id).handoff
+            {
+                OpenOnWebButton(
+                    target: .route(path: "/\(descriptor.basePath)", query: web.query),
+                    label: web.label)
+            }
+        }
+    }
 
     /// Every declared Group by choice; one that cannot group stays listed, disabled, with its
     /// reason as the subtitle. While the list cannot group (Timeline, search), every choice
@@ -544,6 +614,9 @@ struct EntityListView: View {
         let filters = specialistFilters(model)
         if let slot = ImplementedListSlotID(rawValue: id) {
             ListSlotRegistry.view(slot, client: appModel.client, filters: filters)
+        } else if let web = NativePresentationCoverage.listSlot(id).handoff {
+            OpenOnWebButton(
+                target: .route(path: "/\(descriptor.basePath)", query: web.query), label: web.label)
         } else {
             ContentUnavailableView("View unavailable", systemImage: "square.dashed")
         }
@@ -632,23 +705,29 @@ struct EntityListView: View {
                             listSummary(meta: meta, filtered: !model.filters.isEmpty)
                         }
                     #endif
+                    // Unfiltered copy and the create label are the declared `emptyState`, as on web.
+                    let empty = descriptor.emptyState
                     ContentUnavailableView {
                         Label(
-                            model.filters.isEmpty
-                                ? "No \(descriptor.plural) yet" : "No matching \(descriptor.plural)",
+                            model.filters.isEmpty ? empty.title : "No matching \(descriptor.plural)",
                             systemImage: entitySymbol(for: key))
+                    } description: {
+                        if model.filters.isEmpty { Text(empty.description) }
                     } actions: {
                         if !model.filters.isEmpty {
                             Button("Clear filters") {
                                 Task { await model.apply(filters: EntityFilterState()) }
                             }
+                        } else if let actionLabel = empty.actionLabel, key.nativeActions.contains(.create) {
+                            Button(actionLabel) { creating = true }
+                                .accessibilityIdentifier("browse.\(key.rawValue).empty.create")
                         }
                     }
                 }
             }
         } else if model.view == .shelf {
             cardGrid(model, rows: model.rows, meta: model.summaryMeta)
-        } else if model.view == .table && browsePresentation == .table {
+        } else if model.view == .table && browsePresentation == .table && offersNativeTable {
             tableView(model)
         } else {
             rowList(model)
@@ -680,7 +759,7 @@ struct EntityListView: View {
                 }
             } else if model.view == .shelf {
                 cardGrid(model, rows: search.rows, meta: search.summaryMeta)
-            } else if model.view == .table && browsePresentation == .table {
+            } else if model.view == .table && browsePresentation == .table && offersNativeTable {
                 tableView(model)
             } else {
                 rowList(model)
@@ -705,7 +784,8 @@ struct EntityListView: View {
                 #endif
                 EntityShelfView(
                     descriptor: descriptor, rows: rows, density: cardDensity,
-                    section: .browse,
+                    section: appModel.navigator.section,
+                    usesColumn: usesBrowseSelection,
                     sections: model.sections,
                     sectionActions: sectionActions(model))
                 loadMore(model).padding(FieldGuideTokens.Space.md)
@@ -748,23 +828,43 @@ struct EntityListView: View {
             usesBrowseSelection
                 ? Binding(
                     get: { appModel.navigator.selectedRecords[.browse] },
-                    set: { appModel.navigator.selectRecord($0, in: .browse) }) : nil
+                    set: { record in
+                        if let record {
+                            open(record)
+                        } else {
+                            appModel.navigator.selectRecord(nil, in: .browse)
+                        }
+                    }) : nil
         #else
             nil
         #endif
     }
 
+    private func open(_ record: RecordSelection) {
+        appModel.navigator.open(
+            record,
+            from: usesBrowseSelection
+                ? .column(.browse, compactDestination: $openedRecord) : .stack($openedRecord))
+    }
+
     #if os(macOS)
+        /// Edit › Copy (⌘C) on the selected row puts its `RecordCopyText` on the pasteboard.
+        private func copyItems(_ id: String?, in rows: [EntityRow]) -> [String] {
+            guard let id, let row = rows.first(where: { $0.id == id }) else { return [] }
+            return [RecordCopyText.text(key: key, id: id, title: row.title)]
+        }
+
         private var tableSelection: Binding<String?> {
             Binding(
-                get: { usesBrowseSelection ? appModel.navigator.selectedRecords[.browse]?.id : nil },
+                get: {
+                    usesBrowseSelection
+                        ? appModel.navigator.selectedRecords[.browse]?.id : selectedTableRecordID
+                },
                 set: { id in
                     if usesBrowseSelection {
-                        appModel.navigator.selectRecord(
-                            id.map { RecordSelection(key: key, id: $0) }, in: .browse)
-                    } else if let id {
-                        appModel.navigator.paths[appModel.navigator.section, default: []]
-                            .append(.entityDetail(key, id: id))
+                        selection?.wrappedValue = id.map { RecordSelection(key: key, id: $0) }
+                    } else {
+                        selectedTableRecordID = id
                     }
                 })
         }
@@ -792,7 +892,17 @@ struct EntityListView: View {
 
     @ViewBuilder
     private func rowList(_ model: GenericEntityListModel) -> some View {
-        List(selection: selection) { rows(model) }.listStyle(.plain)
+        List(selection: selection) { rows(model) }
+            .listStyle(.plain)
+            #if os(macOS)
+                .copyable(
+                    copyItems(
+                        selection?.wrappedValue.flatMap { $0.key == key ? $0.id : nil },
+                        in: model.isSearching ? (model.searchModel?.rows ?? []) : model.rows))
+            #endif
+            .navigationDestination(item: $openedRecord) { record in
+                RouteDestinationView(route: .entityDetail(record.key, id: record.id))
+            }
     }
 
     private var tableFields: [FieldDescriptor] {
@@ -832,7 +942,7 @@ struct EntityListView: View {
             let nextSort = current == key ? "-\(key)" : key
             Task { await model.apply(sort: nextSort) }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: FieldGuideTokens.Space.xs) {
                 Text(title)
                 if let key, model.sort == key || model.sort == "-\(key)" {
                     Image(systemName: model.sort == key ? "arrow.up" : "arrow.down")
@@ -874,26 +984,15 @@ struct EntityListView: View {
             EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)?.value,
             row.subtitle, titleParts.subtitle,
         ].compactMap { $0 }.first(where: EntityRowPresentation.isVisibleListFactValue)
-        return HStack(spacing: FieldGuideTokens.Space.xs) {
-            Thumb(
-                url: row.imageURL, size: 18, symbol: descriptor.recordSymbol(in: row),
-                emoji: descriptor.recordEmoji(in: row))
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.xs) {
-                Text(titleParts.title)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                if descriptor.presentation.titleSubtitle, let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier("browse.\(key.rawValue).table.row.\(row.id)")
-        }
-        .frame(minHeight: 24, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
+        return EntityTableTitleCell(
+            title: titleParts.title,
+            subtitle: descriptor.presentation.titleSubtitle ? subtitle : nil,
+            imageURL: row.imageURL, symbol: descriptor.recordSymbol(in: row),
+            emoji: descriptor.recordEmoji(in: row)
+        )
+        .entityTableCell()
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("browse.\(key.rawValue).table.row.\(row.id)")
     }
 
     @ViewBuilder
@@ -902,11 +1001,16 @@ struct EntityListView: View {
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         let sections = model.sections
         let actions = sectionActions(model)
-        let fields = tableFields
+        let hasMore = model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore
         #if os(macOS)
+            // Every column is declared so hides persist; manifest `listHidden` sets the default.
+            let fields = allTableFields
+            let defaultHidden = hiddenTableColumns
             // Native table cells are rehosted when sorting replaces the rows, so capture the
             // owning model before that boundary for their reference actions.
             let cellAppModel = appModel
+        #else
+            let fields = tableFields
         #endif
         VStack(spacing: 0) {
             tableControls(model)
@@ -920,7 +1024,10 @@ struct EntityListView: View {
                 }
             #endif
             #if os(macOS)
-                Table(of: EntityRow.self, selection: tableSelection, sortOrder: tableSortOrder(model)) {
+                Table(
+                    of: EntityRow.self, selection: tableSelection, sortOrder: tableSortOrder(model),
+                    columnCustomization: $columnCustomization
+                ) {
                     if descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(
                             Text(tableTitleLabel),
@@ -928,15 +1035,17 @@ struct EntityListView: View {
                         ) { row in
                             tableTitle(row)
                         }
-                        .width(min: 240)
+                        .width(.title)
                         .customizationID("title")
+                        .disabledCustomizationBehavior(.visibility)
                     }
                     if !descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(Text(tableTitleLabel)) { (row: EntityRow) in
                             tableTitle(row)
                         }
-                        .width(min: 240)
+                        .width(.title)
                         .customizationID("title")
+                        .disabledCustomizationBehavior(.visibility)
                     }
                     TableColumnForEach(fields, id: \.key) { field in
                         if let sortKey = sortKey(for: field) {
@@ -946,16 +1055,18 @@ struct EntityListView: View {
                                 tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
-                            .width(min: 180)
+                            .width(EntityTableColumnWidth(field))
                             .customizationID(field.key)
+                            .defaultVisibility(defaultHidden.contains(field.key) ? .hidden : .automatic)
                         }
                         if sortKey(for: field) == nil {
                             TableColumn(columnHeader(field)) { (row: EntityRow) in
                                 tableCell(field, row: row, fact: tableFact(field, row: row))
                                     .environment(cellAppModel)
                             }
-                            .width(min: 180)
+                            .width(EntityTableColumnWidth(field))
                             .customizationID(field.key)
+                            .defaultVisibility(defaultHidden.contains(field.key) ? .hidden : .automatic)
                         }
                     }
                 } rows: {
@@ -971,15 +1082,30 @@ struct EntityListView: View {
                     } else {
                         ForEach(visibleRows) { TableRow($0) }
                     }
+                    // Load more is the table's last row, so paging stays inside the scrolled
+                    // content instead of a footer below it.
+                    if hasMore {
+                        Section {
+                            ForEach([EntityRow]()) { TableRow($0) }
+                        } header: {
+                            HStack { loadMore(model) }.frame(maxWidth: .infinity)
+                        }
+                    }
                 }
                 .tableStyle(.inset(alternatesRowBackgrounds: true))
+                .environment(\.defaultMinListRowHeight, EntityTableLayout.rowHeight)
+                .copyable(copyItems(tableSelection.wrappedValue, in: visibleRows))
                 .contextMenu(forSelectionType: String.self) { records in
                     if let id = records.first {
                         Button("Copy link", systemImage: "link") {
-                            Clipboard.copy(appModel.webURL(for: key, id: id).absoluteString)
+                            Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: id)).absoluteString)
                         }
                         Button("Copy shortcode", systemImage: "number") { Clipboard.copy(id) }
-                        ShareLink(item: appModel.webURL(for: key, id: id))
+                        ShareLink(item: appModel.webHandoff.url(.record(key: key, id: id)))
+                    }
+                } primaryAction: { records in
+                    if !usesBrowseSelection, let id = records.first {
+                        open(RecordSelection(key: key, id: id))
                     }
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
@@ -1007,29 +1133,34 @@ struct EntityListView: View {
                         if let sections {
                             ForEach(sections) { section in
                                 Section {
-                                    ForEach(section.rows) { row in compactTableRow(row, fields: fields) }
+                                    ForEach(section.rows) { row in regularTableRow(row, fields: fields) }
                                 } header: {
                                     EntityListSectionHeader(
                                         section: section, entity: key, actions: actions(section))
                                 }
                             }
                         } else {
-                            ForEach(visibleRows) { row in compactTableRow(row, fields: fields) }
+                            ForEach(visibleRows) { row in regularTableRow(row, fields: fields) }
                         }
                     }
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).table")
             #endif
-            if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore {
-                loadMore(model)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, FieldGuideTokens.Space.sm)
-            }
+            #if !os(macOS)
+                if hasMore {
+                    loadMore(model)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, FieldGuideTokens.Space.sm)
+                }
+            #endif
+        }
+        .navigationDestination(item: $openedRecord) { record in
+            RouteDestinationView(route: .entityDetail(record.key, id: record.id))
         }
     }
 
     #if !os(macOS)
-        private func compactTableRow(_ row: EntityRow, fields: [FieldDescriptor]) -> some View {
+        private func regularTableRow(_ row: EntityRow, fields: [FieldDescriptor]) -> some View {
             // A fact depends only on its own field, so one resolve serves every cell in the row.
             let facts = EntityRowPresentation.resolve(
                 descriptor: descriptor, row: row, columns: fields.map(\.key)
@@ -1043,7 +1174,9 @@ struct EntityListView: View {
                 .first(where: EntityRowPresentation.isVisibleListFactValue)
             return VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                    Button {
+                        open(RecordSelection(key: key, id: row.id))
+                    } label: {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(titleParts.title)
                                 .font(.body.weight(.medium))
@@ -1073,11 +1206,12 @@ struct EntityListView: View {
                 .frame(minHeight: FieldGuideTokens.touchTarget)
                 .contentShape(Rectangle())
                 .contextMenu {
+                    RowQuickActionButtons(key: key, row: row, runner: quickActions)
                     Button("Copy link", systemImage: "link") {
-                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: key, id: row.id))
+                    ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id)))
                 }
                 Divider()
             }
@@ -1106,9 +1240,9 @@ struct EntityListView: View {
         }
     }
 
-    private var tableCellMinimumHeight: CGFloat {
+    private var tableCellMinimumHeight: CGFloat? {
         #if os(macOS)
-            24
+            nil
         #else
             FieldGuideTokens.touchTarget
         #endif
@@ -1120,6 +1254,8 @@ struct EntityListView: View {
         }
     #endif
 
+    /// Mac cells are one line: the provenance caption iPhone stacks below a value is dropped,
+    /// and only a cell with an action (a reference) takes keyboard focus.
     @ViewBuilder
     private func tableCell(
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
@@ -1128,59 +1264,73 @@ struct EntityListView: View {
             if let reason = field.displayApplicabilityRefusal(in: row.raw) {
                 Text("—").foregroundStyle(.tertiary)
                     .help(reason)
-                    .focusable()
                     .accessibilityLabel("\(field.label): Not applicable. \(reason)")
             } else if let fact {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    HStack(spacing: FieldGuideTokens.Space.xs) {
-                        DerivedValueStatus(raw: row.raw, field: field.key)
-                        if field.listRenderer == .dataQuality {
-                            if EntityRowPresentation.needsData(in: row) {
-                                HStack(spacing: FieldGuideTokens.Space.xs) {
-                                    Circle().fill(.orange).frame(width: 6, height: 6)
-                                    Text("Needs data")
-                                }
-                            } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
-                                Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
-                            }
-                        } else if let reference = EntityFieldValue.reference(
-                            in: row.raw, field: field, surface: "list")
-                        {
-                            tableReference(reference, value: fact.value)
-                                .buttonStyle(.borderless)
-                                .accessibilityIdentifier(
-                                    "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
-                            if fact.inherited { InheritedMarker() }
-                        } else if let option = EntityFieldValue.option(
-                            in: row.raw, field: field, surface: "list"),
-                            let chip = StatusChip(text: fact.value, option: option)
-                        {
-                            chip
-                        } else {
-                            Group {
-                                if let date = fact.dateValue {
-                                    #if os(macOS)
-                                        DateDisplay(date, compact: true)
-                                    #else
-                                        DateDisplay(date, compact: true, stacked: true)
-                                    #endif
-                                } else {
-                                    InheritedMarker.text(fact.segments)
-                                        .accessibilityLabel(fact.spokenValue)
-                                }
-                            }
-                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        }
+                #if os(macOS)
+                    tableValue(field, row: row, fact: fact)
+                #else
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        tableValue(field, row: row, fact: fact)
+                        DerivedProvenanceCaption(raw: row.raw, field: field.key)
                     }
-                    DerivedProvenanceCaption(raw: row.raw, field: field.key)
-                }
+                #endif
             } else {
                 Text("—").foregroundStyle(.tertiary)
             }
         }
-        .frame(minHeight: tableCellMinimumHeight, alignment: .leading)
+        #if os(macOS)
+            .entityTableCell()
+        #else
+            .frame(minHeight: tableCellMinimumHeight, alignment: .leading)
+        #endif
+    }
+
+    @ViewBuilder
+    private func tableValue(
+        _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact
+    ) -> some View {
+        HStack(spacing: FieldGuideTokens.Space.xs) {
+            DerivedValueStatus(raw: row.raw, field: field.key)
+            if field.listRenderer == .dataQuality {
+                if EntityRowPresentation.needsData(in: row) {
+                    HStack(spacing: FieldGuideTokens.Space.xs) {
+                        Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
+                        Text("Needs data")
+                    }
+                } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
+                    Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
+                }
+            } else if let reference = EntityFieldValue.reference(
+                in: row.raw, field: field, surface: "list")
+            {
+                tableReference(reference, value: fact.value)
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier(
+                        "browse.\(key.rawValue).table.reference.\(row.id).\(field.key)")
+                if fact.inherited { InheritedMarker() }
+            } else if let option = EntityFieldValue.option(
+                in: row.raw, field: field, surface: "list"),
+                let chip = StatusChip(text: fact.value, option: option)
+            {
+                chip
+            } else {
+                Group {
+                    if let date = fact.dateValue {
+                        #if os(macOS)
+                            DateDisplay(date, compact: true)
+                        #else
+                            DateDisplay(date, compact: true, stacked: true)
+                        #endif
+                    } else {
+                        InheritedMarker.text(fact.segments)
+                            .accessibilityLabel(fact.spokenValue)
+                    }
+                }
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+            }
+        }
     }
 
     @ViewBuilder
@@ -1213,12 +1363,18 @@ struct EntityListView: View {
         let columns = EntityRowPresentation.defaultColumns(descriptor: descriptor)
         return ForEach(rows) { row in
             rowContent(row, columns: columns)
+                #if os(iOS)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        RowQuickActionButtons(key: key, row: row, runner: quickActions)
+                    }
+                #endif
                 .contextMenu {
+                    RowQuickActionButtons(key: key, row: row, runner: quickActions)
                     Button("Copy link", systemImage: "link") {
-                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: key, id: row.id))
+                    ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id)))
                 }
                 .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
         }
@@ -1289,14 +1445,20 @@ struct EntityListView: View {
                     EntityRowView(key: key, row: row, columns: columns)
                         .tag(RecordSelection(key: key, id: row.id))
                 } else {
-                    NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                    Button {
+                        open(RecordSelection(key: key, id: row.id))
+                    } label: {
                         EntityRowView(key: key, row: row, columns: columns)
                     }
+                    .buttonStyle(.plain)
                 }
             #else
-                NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                Button {
+                    open(RecordSelection(key: key, id: row.id))
+                } label: {
                     EntityRowView(key: key, row: row, columns: columns)
                 }
+                .buttonStyle(.plain)
             #endif
         }
         .listRowInsets(
@@ -1320,7 +1482,7 @@ struct EntityQualityFact: View {
                 in: EntityRow(id: id, title: "", subtitle: nil, imageURL: nil, raw: raw))
         {
             HStack(spacing: FieldGuideTokens.Space.xs) {
-                Circle().fill(.orange).frame(width: 6, height: 6)
+                Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                 Text("Needs data")
             }
             .font(.caption.weight(.medium))
@@ -1409,7 +1571,7 @@ struct EntityRowView: View {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 DerivedValueStatus(raw: row.raw, field: nil)
                 if layout.needsData {
-                    Circle().fill(.orange).frame(width: 6, height: 6)
+                    Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                 }
                 let facts =
                     ([layout.needsData ? "Needs data" : nil, layout.subtitleText]

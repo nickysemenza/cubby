@@ -1,3 +1,4 @@
+import { humanize } from "@cubby/shared/text-case";
 import { z } from "zod";
 import {
   shortcodeSchema,
@@ -34,7 +35,7 @@ const reasonOptions = jobWaitingOnReason.options.map((value) => ({
 }));
 const stateOptions = jobState.options.map((value) => ({
   value,
-  label: value.replaceAll("_", " "),
+  label: humanize(value),
 }));
 
 /** Execution records are read-only; their owning queue controls their lifecycle. */
@@ -49,6 +50,8 @@ export default defineEntity({
     domain: null,
     description:
       "Durable background work, its executor, waits and diagnostics.",
+    // Executor diagnostics for operators; the work's own records open natively.
+    nativeBrowse: false,
     emptyState: {
       title: "No matching Jobs",
       description: "Background work appears here when it is scheduled.",
@@ -91,6 +94,29 @@ export default defineEntity({
           description:
             "Failed Jobs or repeated failures that continue retrying.",
           filters: [{ id: "needsAttention", value: "true" }],
+        },
+      ],
+    },
+    detail: {
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "kind",
+            "lane",
+            "state",
+            "waitingOn",
+            "runId",
+            "imageId",
+            "locationId",
+            "attempts",
+            "error",
+            "leaseExpiresAt",
+            "createdAt",
+            "updatedAt",
+          ],
         },
       ],
     },

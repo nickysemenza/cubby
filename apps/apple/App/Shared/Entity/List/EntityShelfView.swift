@@ -18,6 +18,7 @@ struct EntityShelfView: View {
     let rows: [EntityRow]
     var density: ListPresentationChoice = .cards
     var section: AppSection = .browse
+    var usesColumn = true
     var subtitleOverride: ((EntityRow) -> String?)? = nil
     /// The list's Group by sections; each gets a header pinned while its cards scroll.
     var sections: [EntityListSection]? = nil
@@ -26,6 +27,7 @@ struct EntityShelfView: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var openedRecord: RecordSelection?
 
     private var columns: [GridItem] {
         [
@@ -55,6 +57,13 @@ struct EntityShelfView: View {
     }
 
     var body: some View {
+        grid
+            .navigationDestination(item: $openedRecord) { record in
+                RouteDestinationView(route: .entityDetail(record.key, id: record.id))
+            }
+    }
+
+    @ViewBuilder private var grid: some View {
         if let sections {
             LazyVGrid(
                 columns: columns, alignment: .leading, spacing: gridSpacing,
@@ -87,10 +96,10 @@ struct EntityShelfView: View {
                 .contextMenu {
                     Button("Copy link", systemImage: "link") {
                         Clipboard.copy(
-                            appModel.webURL(for: descriptor.key, id: row.id).absoluteString)
+                            appModel.webHandoff.url(.record(key: descriptor.key, id: row.id)).absoluteString)
                     }
                     Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
-                    ShareLink(item: appModel.webURL(for: descriptor.key, id: row.id))
+                    ShareLink(item: appModel.webHandoff.url(.record(key: descriptor.key, id: row.id)))
                 }
                 .accessibilityIdentifier(accessibilityIdentifier(for: row))
         }
@@ -112,30 +121,23 @@ struct EntityShelfView: View {
             selected: isSelected(row)
         )
 
-        #if os(macOS)
-            Button {
-                appModel.navigator.selectRecord(
-                    RecordSelection(key: descriptor.key, id: row.id), in: section)
-            } label: {
-                card
-            }
-            .buttonStyle(.plain)
-        #else
-            NavigationLink(value: Route.entityDetail(descriptor.key, id: row.id)) {
-                card
-            }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    if section == .search { RecentEntities.record(row.id) }
-                })
-        #endif
+        Button {
+            if section == .search { RecentEntities.record(row.id) }
+            appModel.navigator.open(
+                RecordSelection(key: descriptor.key, id: row.id),
+                from: usesColumn
+                    ? .column(section, compactDestination: $openedRecord) : .stack($openedRecord))
+        } label: {
+            card
+        }
+        .buttonStyle(.plain)
     }
 
     private func isSelected(_ row: EntityRow) -> Bool {
         #if os(macOS)
-            appModel.navigator.selectedRecords[section]
-                == RecordSelection(key: descriptor.key, id: row.id)
+            usesColumn
+                && appModel.navigator.selectedRecords[section]
+                    == RecordSelection(key: descriptor.key, id: row.id)
         #else
             false
         #endif
@@ -148,15 +150,14 @@ struct EntityShelfView: View {
 
     /// The declared subtitle fields with a value, read once per card for both the pieces and
     /// the joined string.
-    private func subtitleFacts(for row: EntityRow) -> [EntityRowPresentation.Fact] {
+    func subtitleFacts(for row: EntityRow) -> [EntityRowPresentation.Fact] {
         descriptor.presentation.shelfSubtitle.compactMap { key -> EntityRowPresentation.Fact? in
-            guard let field = descriptor.field(key),
-                let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
-            else { return nil }
-            let date = EntityFieldValue.dateValue(in: row.raw, field: field, surface: "list")
+            guard let fact = EntityRowPresentation.fact(key, descriptor: descriptor, row: row) else {
+                return nil
+            }
             return EntityRowPresentation.Fact(
-                id: key, label: date == nil ? nil : field.label, value: value,
-                isDate: date != nil, dateValue: date)
+                id: fact.id, label: fact.dateValue == nil ? nil : fact.label, segments: fact.segments,
+                isDate: fact.isDate, dateValue: fact.dateValue)
         }
     }
 

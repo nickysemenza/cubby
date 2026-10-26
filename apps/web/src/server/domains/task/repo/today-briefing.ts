@@ -15,6 +15,7 @@ import { repositoryQueries as getDb } from "~/server/db/repository-access.bounda
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 
 import { openTaskBlockingCtes } from "./blocking-sql";
+import { completeTaskCommand } from "./briefing-commands";
 
 type BriefingRow = {
   nextCount: number;
@@ -114,23 +115,24 @@ export async function getTaskTodayBriefing(
 
   const first = result.rows[0];
   return {
-    next: result.rows.flatMap((row) =>
-      row.id && row.name && row.status
-        ? [
-            {
-              id: parseShortcodeFor("task", row.id),
-              name: row.name,
-              status: row.status,
-              due: dateRangeFromDates(row.dueDate, row.dueEndDate),
-              projectId: row.projectId
-                ? parseShortcodeFor("project", row.projectId)
-                : null,
-              projectName: row.projectName,
-              projectEmoji: row.projectEmoji,
-            },
-          ]
-        : [],
-    ),
+    next: result.rows.flatMap((row) => {
+      if (!row.id || !row.name || !row.status) return [];
+      const id = parseShortcodeFor("task", row.id);
+      return [
+        {
+          id,
+          name: row.name,
+          status: row.status,
+          due: dateRangeFromDates(row.dueDate, row.dueEndDate),
+          projectId: row.projectId
+            ? parseShortcodeFor("project", row.projectId)
+            : null,
+          projectName: row.projectName,
+          projectEmoji: row.projectEmoji,
+          commands: [completeTaskCommand(id)],
+        },
+      ];
+    }),
     nextCount: Number(first?.nextCount ?? 0),
     laterCount: Number(first?.laterCount ?? 0),
     blockedCount: Number(first?.blockedCount ?? 0),

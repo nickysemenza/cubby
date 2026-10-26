@@ -6,8 +6,8 @@ import Foundation
 /// manifest's slot id, so `ReportSlot(rawValue: slot.rawValue)` maps a declared slot.
 
 /// The server-composed `entityReport.get` blocks as plain values the one generic report view
-/// draws. The server owns every figure, series and schedule row; this only formats a number and
-/// answers view questions (a stack's scale, which schedule rows a collapse hides).
+/// draws. The server owns every figure and series; this only formats numbers and answers
+/// view questions such as a stack's scale.
 public struct ReportPresentation: Hashable, Sendable {
     public enum Tone: String, Hashable, Sendable { case positive, warning, destructive, muted }
     public enum Mark: Hashable, Sendable { case bar, stack, line }
@@ -67,53 +67,6 @@ public struct ReportPresentation: Hashable, Sendable {
         public let rows: [Row]
         public let empty: String?
         public let truncated: Bool
-    }
-
-    public struct Schedule: Hashable, Sendable {
-        public struct Segment: Hashable, Sendable, Identifiable {
-            public let id: String
-            public let label: String
-            public let start: Date
-            /// Nil for a milestone (a single day).
-            public let end: Date?
-        }
-
-        public struct Row: Hashable, Sendable, Identifiable {
-            public let id: String
-            public let entity: String
-            public let name: String
-            public let depth: Int
-            public let expandable: Bool
-            public let meta: String
-            public let metaShort: String
-            public let segments: [Segment]
-            public let noDateLabel: String?
-            public let blockedByIDs: [String]
-            public let blockingIDs: [String]
-        }
-
-        /// Every row in tree order; collapse is the viewer's own state.
-        public let rows: [Row]
-
-        /// The rows left after hiding the subtrees under `collapsed` rows.
-        public func visibleRows(collapsed: Set<String>) -> [Row] {
-            var visible: [Row] = []
-            var hiddenBelow: Int?
-            for row in rows {
-                if let depth = hiddenBelow, row.depth > depth { continue }
-                hiddenBelow = nil
-                visible.append(row)
-                if row.expandable, collapsed.contains(row.id) { hiddenBelow = row.depth }
-            }
-            return visible
-        }
-
-        /// The dated extent of the schedule; undated rows do not stretch it.
-        public var domain: ClosedRange<Date>? {
-            let dates = rows.flatMap(\.segments).flatMap { [$0.start, $0.end ?? $0.start] }
-            guard let first = dates.min(), let last = dates.max() else { return nil }
-            return first...last
-        }
     }
 
     /// Precision-aware report time, retaining unrecognized wire values for diagnostics.
@@ -346,7 +299,6 @@ public struct ReportPresentation: Hashable, Sendable {
         case stats(title: String?, figures: [Figure])
         case chart(Chart)
         case table(Table)
-        case schedule(Schedule)
         case note(String, tone: Tone?, strong: Bool)
         case unsupported(JSONValue)
     }
@@ -439,22 +391,9 @@ public struct ReportPresentation: Hashable, Sendable {
                             ref: row.ref.map { Ref(entity: $0.entity, id: $0.id) })
                     },
                     empty: table.empty, truncated: table.truncated ?? false))
-        case .schedule(let schedule):
-            return .schedule(
-                Schedule(
-                    rows: schedule.rows.map { row in
-                        Schedule.Row(
-                            id: row.id, entity: row.entity.rawValue, name: row.name, depth: row.depth,
-                            expandable: row.expandable, meta: row.meta, metaShort: row.metaShort,
-                            segments: row.segments.compactMap { segment in
-                                guard let start = day(segment.startDate) else { return nil }
-                                return Schedule.Segment(
-                                    id: segment.id, label: segment.label, start: start,
-                                    end: segment.endDate.flatMap(day))
-                            },
-                            noDateLabel: row.noDateLabel, blockedByIDs: row.blockedByIds,
-                            blockingIDs: row.blockingIds)
-                    }))
+        case .schedule:
+            // Schedule slots hand off before loading a report; retain unexpected wire blocks.
+            return .unsupported((try? JSONValue(encoding: block)) ?? .null)
         case .note(let note):
             return .note(
                 note.text, tone: note.tone.flatMap { Tone(rawValue: $0.rawValue) },
@@ -577,10 +516,6 @@ public struct ReportPresentation: Hashable, Sendable {
         return money ? DisplayFormat.currency(value) : DisplayFormat.number(value)
     }
 
-    /// A household calendar day (`yyyy-MM-dd`) as the start of that day in UTC.
-    private static func day(_ string: String) -> Date? {
-        PlainDate(rawValue: string).date(in: .gmt)
-    }
 }
 
 extension ReportPresentation {
@@ -593,7 +528,6 @@ extension ReportPresentation {
                 records.rows.isEmpty && (records.totalCount ?? 0) == 0 && records.footer == nil
             case .table(let table): table.rows.isEmpty
             case .chart(let chart): chart.bars.isEmpty
-            case .schedule(let schedule): schedule.rows.isEmpty
             case .note(let text, _, _): text.isEmpty
             case .progress, .unsupported: false
             }

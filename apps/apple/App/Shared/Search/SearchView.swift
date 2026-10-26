@@ -2,8 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// The Search tab: search-as-you-type across every intent-exposed entity, scoped by kind, with a
-/// scanner sheet for the barcode/ISBN/label path. Owns a `SearchModel` created per host, mirroring
-/// `CaptureView`/`CaptureModel`.
+/// scanner sheet for the barcode/ISBN/label path on iOS (Mac resolves codes typed into the field).
+/// Owns a `SearchModel` created per host, mirroring `CaptureView`/`CaptureModel`.
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var search: SearchModel?
@@ -49,7 +49,9 @@ struct SearchContent: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismissSearch) private var dismissSearch
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var scanning = false
+    #if os(iOS)
+        @State private var scanning = false
+    #endif
     @State private var creatingProduct = false
     @State private var presentation = ListPresentationChoice.list
     @FocusState private var searchFieldFocused: Bool
@@ -126,20 +128,24 @@ struct SearchContent: View {
                         )
                     }
                 }
-                ToolbarItem {
-                    Button {
-                        scanning = true
-                    } label: {
-                        Label("Scan a code", systemImage: "barcode.viewfinder")
+                #if os(iOS)
+                    ToolbarItem {
+                        Button {
+                            scanning = true
+                        } label: {
+                            Label("Scan a code", systemImage: "barcode.viewfinder")
+                        }
                     }
-                }
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     presentationPicker
                 }
             }
-            .sheet(isPresented: $scanning) {
-                ScanLookupSheet(onTextResolved: { search.query = $0 }).nativeSheet(.picker)
-            }
+            #if os(iOS)
+                .sheet(isPresented: $scanning) {
+                    ScanLookupSheet(onTextResolved: { search.query = $0 }).nativeSheet(.picker)
+                }
+            #endif
             .task { applyPendingFocusRequest() }
             .onChange(of: model.navigator.focusSearchRequest) { applyPendingFocusRequest() }
     }
@@ -156,7 +162,11 @@ struct SearchContent: View {
 
     @ViewBuilder
     private var content: some View {
-        if let outcome = search.lookupOutcome {
+        if let error = search.lookupError {
+            LoadFailureView(title: "Couldn't look up code", message: error) {
+                await handleSubmit()
+            }
+        } else if let outcome = search.lookupOutcome {
             ScrollView {
                 codePanel(for: outcome)
                     .padding(FieldGuideTokens.Space.lg)
@@ -206,14 +216,16 @@ struct SearchContent: View {
     }
 
     /// The un-searched state: recents alone don't need a big empty view (they show as
-    /// suggestions), so this is mostly an invitation to scan instead of type.
+    /// suggestions), so on iOS this is mostly an invitation to scan instead of type.
     private var emptyState: some View {
         ContentUnavailableView {
             Label("Search Cubby", systemImage: "magnifyingglass")
         } description: {
             Text("Find a product, location, recipe, or anything else.")
         } actions: {
-            Button("Scan a code") { scanning = true }
+            #if os(iOS)
+                Button("Scan a code") { scanning = true }
+            #endif
         }
     }
 
@@ -245,7 +257,22 @@ struct SearchContent: View {
             }
         }
         .listStyle(.plain)
+        #if os(macOS)
+            .copyable(copyItems(groups))
+        #endif
     }
+
+    #if os(macOS)
+        /// Edit › Copy (⌘C) on the selected hit puts its `RecordCopyText` on the pasteboard.
+        private func copyItems(_ groups: [SearchModel.ResultGroup]) -> [String] {
+            guard let selected = model.navigator.selectedRecords[.search],
+                let hit = groups.first(where: { $0.key == selected.key })?.hits.first(where: {
+                    $0.id == selected.id
+                })
+            else { return [] }
+            return [RecordCopyText.text(key: selected.key, id: hit.id, title: hit.title)]
+        }
+    #endif
 
     private func resultsGrid(
         _ groups: [SearchModel.ResultGroup], density: ListPresentationChoice
@@ -296,12 +323,7 @@ struct SearchContent: View {
     private func openEntity(_ key: EntityKey, id: String) {
         RecentEntities.record(id)
         dismissSearch()
-        #if os(iOS)
-            // Search can live under TabView's More controller; its in-place path does not push there.
-            model.navigator.open(.entity(key, id: id))
-        #else
-            model.navigator.openInPlace(.entity(key, id: id))
-        #endif
+        model.navigator.openInPlace(.entity(key, id: id))
     }
 
     private func handleSubmit() async {
@@ -328,7 +350,7 @@ struct SearchContent: View {
             dismissSearch()
             model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
         } catch {
-            model.handle(error)
+            model.handle(error) { await createProduct(code: code) }
         }
     }
 }
@@ -338,10 +360,7 @@ private struct SearchHitRow: View {
     let hit: SearchHit
 
     private var context: String? {
-        let parts = [hit.subtitle, hit.key.map { EntityCatalog[$0].singular }]
-            .compactMap { $0 }
-            .filter { !$0.isEmpty }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+        hit.facts.isEmpty ? nil : hit.facts.joined(separator: " · ")
     }
 
     var body: some View {
@@ -373,7 +392,8 @@ private struct SearchHitRow: View {
                     SearchHitRow(
                         hit: SearchHit(
                             id: row.id, entityKind: "product", title: row.title, subtitle: row.subtitle,
-                            typeHint: nil, imageUrl: row.imageURL?.absoluteString, matchKind: .prefix,
+                            typeHint: nil, imageUrl: row.imageURL?.absoluteString, facts: [],
+                            matchKind: .prefix,
                             matchField: .title, matchReason: "name", matchTerms: []))
                 }
             }

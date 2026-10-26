@@ -44,7 +44,7 @@ struct AdjustCountSheet: View {
                 } footer: {
                     if hasValidationError {
                         Label("Enter an amount greater than zero.", systemImage: "exclamationmark.circle")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(FieldGuideTokens.destructive)
                             .accessibilityIdentifier("audit.adjust-count.error")
                     }
                 }

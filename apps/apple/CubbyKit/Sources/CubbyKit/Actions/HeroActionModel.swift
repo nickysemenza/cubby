@@ -38,8 +38,12 @@ public final class HeroActionModel: Identifiable {
         self.itemID = itemID
         self.runner = runner
         var seed = HeroActionRunner.defaults(for: plan.fields, now: now)
-        // A field picker starts on the row's current value.
-        if case .setField(let field) = plan.kind, let current = row.raw[field] { seed[field] = current }
+        // A field picker or editor starts on the row's current value; a preset value seeds nothing.
+        switch plan.kind {
+        case .setField(let field, nil), .editField(let field):
+            if let current = row.raw[field] { seed[field] = current }
+        default: break
+        }
         values = seed
     }
 
@@ -115,12 +119,25 @@ public final class HeroActionModel: Identifiable {
     /// none chosen). A stale, failed, or missing preview keeps Submit off.
     public var canSubmit: Bool {
         guard !isRunning else { return false }
+        if case .editField(let field) = plan.kind { return Self.isFilled(values[field]) }
         guard case .operation(let operation) = plan.kind else { return true }
         if operation.preview != nil {
             guard let current = currentPreview else { return false }
             if case .discard(let discard) = current, discard.needsShelfChoice { return false }
         }
         return (try? HeroActionRunner.resolvedValues(operation.fields, values: values)) != nil
+    }
+
+    /// A single-field edit has something to send: an amount needs a positive value and a unit.
+    private static func isFilled(_ value: JSONValue?) -> Bool {
+        switch value {
+        case nil, .null?: return false
+        case .string(let text)?: return !text.trimmingCharacters(in: .whitespaces).isEmpty
+        case .object(let fields)? where fields["value"] != nil:
+            return (fields["value"]?.doubleValue ?? 0) > 0
+                && !(fields["unit"]?.stringValue ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+        default: return true
+        }
     }
 
     public func refreshPreview() async {

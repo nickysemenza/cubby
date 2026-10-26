@@ -18,7 +18,7 @@ public final class GenericEntityEditModel {
     public var draft: [String: JSONValue]
     /// The record as loaded, for update; the diff base and the read-only rules' subject.
     public private(set) var original: JSONValue?
-    /// Per-field messages from `validationIssues[].path[0]`, or a cleared non-nullable key.
+    /// Per-field messages from the server's validation paths, or a cleared non-nullable key.
     public private(set) var fieldErrors: [String: String] = [:]
     /// Messages for a position inside a structured field's value: `validationIssues[].path` past
     /// the key, for the issues the structured editor has a place to draw (`StructuredValue.draws`).
@@ -43,6 +43,7 @@ public final class GenericEntityEditModel {
     public private(set) var originalImageOrder: [ImageCode] = []
 
     private let client: CubbyClient
+    private var initialDraft: [String: JSONValue] = [:]
     /// Create-mode keys to leave unseeded even when `FieldDescriptor.initial` names a default —
     /// a caller that supplies its own binding for a key (e.g. a photo's capture date) needs the
     /// field to come up empty when that binding has no value, not silently fall back to the
@@ -64,6 +65,7 @@ public final class GenericEntityEditModel {
         case .update:
             if let original { seed(original: original) }
         }
+        initialDraft = draft
     }
 
     public var isCreate: Bool {
@@ -74,6 +76,12 @@ public final class GenericEntityEditModel {
     public var recordID: String? {
         if case .update(let id) = mode { return id }
         return nil
+    }
+
+    /// Seeded defaults and prefills are clean; staged edits and image changes need review
+    /// before dismissal, even when validation prevents saving them.
+    public var isDirty: Bool {
+        draft != initialDraft || hasImageChanges
     }
 
     /// Fetches the current update record. A supplied detail projection may predate a save's
@@ -170,6 +178,7 @@ public final class GenericEntityEditModel {
             saved["fieldResolutions"] = .object(resolutions)
         }
         original = .object(saved)
+        initialDraft[key] = value
         if (draft[key] ?? .null) == reviewedDraftValue { draft[key] = value }
     }
 
@@ -427,11 +436,20 @@ public final class GenericEntityEditModel {
         {
             var named: [String: String] = [:]
             var nested: [String: [[String]: String]] = [:]
+            var unplaced: [String] = []
+            let visibleKeys = Set(visibleFields.map(\.key))
             for issue in issues {
-                guard let key = issue.path.first else { continue }
+                // Kernel command validation includes the mutation's `data` envelope; domain
+                // validation starts at the field. Do not guess a key from deeper positions.
+                let path = issue.path.first == "data" ? Array(issue.path.dropFirst()) : issue.path
+                guard let key = path.first, visibleKeys.contains(key) else {
+                    let prefix = issue.path.isEmpty ? "" : "\(issue.path.joined(separator: ".")): "
+                    unplaced.append("\(prefix)\(issue.message)")
+                    continue
+                }
                 // A structured field's issue lands where the editor draws that position; one it
                 // cannot place (a whole-value rule, a hidden key) stays on the field.
-                let inner = Array(issue.path.dropFirst())
+                let inner = Array(path.dropFirst())
                 if let schema = descriptor.field(key)?.valueSchema,
                     StructuredValue.draws(path: inner, in: draft[key], schema: schema)
                 {
@@ -443,7 +461,11 @@ public final class GenericEntityEditModel {
             }
             fieldErrors = named
             nestedErrors = nested
-            if named.isEmpty && nested.isEmpty { bannerError = error.userMessage }
+            if apiError.detail?.diagnostics != nil {
+                bannerError = error.userMessage
+            } else if !unplaced.isEmpty {
+                bannerError = unplaced.joined(separator: "\n")
+            }
             return
         }
         bannerError = error.userMessage
@@ -494,6 +516,7 @@ public final class GenericEntityEditModel {
             }
         }
         draft = seeded
+        initialDraft = seeded
         let existing =
             original["attachments"]?.arrayValue?.compactMap {
                 $0["id"]?.stringValue.map { ImageCode($0) }

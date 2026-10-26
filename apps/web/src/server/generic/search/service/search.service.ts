@@ -7,15 +7,18 @@ import {
   type SearchQueryInput,
   searchHitSchema,
   searchableEntities,
+  searchableEntitySchema,
 } from "@cubby/schemas/search";
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
-import { type SQL, sql } from "drizzle-orm";
+import { type SQL, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
+import { wasmFormat } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
+import { loadProductPlacementFacts } from "~/server/domains/product/repo/quantity-ledger";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadRecordEmojiReferences } from "~/server/entity-kernel/repo/entity-emoji";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
@@ -39,11 +42,9 @@ import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("search");
 
-const candidateSchema = searchHitSchema
-  .omit({ imageUrl: true, locationPath: true })
-  .extend({
-    entityId: z.uuid(),
-  });
+const candidateSchema = searchHitSchema.omit({ imageUrl: true }).extend({
+  entityId: z.uuid(),
+});
 export type InternalSearchCandidate = z.output<typeof candidateSchema>;
 export type InternalSearchHit = SearchHit & { entityId: string };
 type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
@@ -95,32 +96,103 @@ async function hydrateThumbnails(
   );
 }
 
-const withThumbnails = async (
+const searchLocationSchema = z.object({
+  entityId: z.string(),
+  locationId: z.string(),
+  name: z.string(),
+});
+
+/** Location and inventory hits share one bounded location read and ancestor batch. */
+const loadHitPaths = async (
   db: Database,
   candidates: InternalSearchCandidate[],
-): Promise<SearchHit[]> => {
-  const [emojis, images, paths] = await Promise.all([
+) => {
+  const refs = candidates.filter(
+    (hit) => hit.entityKind === "location" || hit.entityKind === "inventory",
+  );
+  if (refs.length === 0) return new Map<string, string>();
+  const values = sql.join(
+    refs.map((hit) => sql`(${hit.entityKind}::text, ${hit.entityId}::uuid)`),
+    sql`, `,
+  );
+  const locations = await executeSearchDocumentSql(
+    db,
+    searchLocationSchema,
+    sql`
+    WITH refs(kind, id) AS (VALUES ${values})
+    SELECT refs.id::text AS "entityId", l.id::text AS "locationId", l.name
+    FROM refs
+    LEFT JOIN "InventoryEntry" i ON refs.kind = ${searchableEntitySchema.enum.inventory} AND i.id = refs.id AND ${isNull(sql`i."deletedAt"`)}
+    JOIN "Location" l ON l.id = CASE WHEN refs.kind = ${searchableEntitySchema.enum.location} THEN refs.id ELSE i."locationId" END
+      AND ${isNull(sql`l."deletedAt"`)}
+  `,
+  );
+  const paths = await loadLocationAncestors(
+    db,
+    locations.map((row) => parseEntityId("location", row.locationId)),
+  );
+  return new Map(
+    locations.map((row) => [
+      row.entityId,
+      [
+        ...(paths.get(parseEntityId("location", row.locationId)) ?? []).map(
+          (rung) => rung.name,
+        ),
+        row.name,
+      ].join(" › "),
+    ]),
+  );
+};
+
+const hydrateHits = async (
+  db: Database,
+  candidates: InternalSearchCandidate[],
+): Promise<InternalSearchHit[]> => {
+  const [emojis, images, paths, stock] = await Promise.all([
     loadRecordEmojiReferences(db, candidates),
     hydrateThumbnails(db, candidates),
-    loadLocationAncestors(
+    loadHitPaths(db, candidates),
+    loadProductPlacementFacts(
       db,
       candidates
-        .filter((candidate) => candidate.entityKind === "location")
-        .map((candidate) => parseEntityId("location", candidate.entityId)),
+        .filter((hit) => hit.entityKind === "product")
+        .map((hit) => parseEntityId("product", hit.entityId)),
     ),
   ]);
-  return candidates.map(({ entityId, ...candidate }) => ({
-    ...candidate,
-    emoji: emojis.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
-    imageUrl: images.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
-    ...(candidate.entityKind === "location" && {
-      locationPath:
-        paths
-          .get(parseEntityId("location", entityId))
-          ?.map(({ id, name }) => ({ id, name })) ?? [],
-    }),
-  }));
+  return candidates.map((candidate) => {
+    const { entityId } = candidate;
+    const placement =
+      candidate.entityKind === "product"
+        ? stock.get(parseEntityId("product", entityId))
+        : undefined;
+    const path = paths.get(entityId);
+    const facts =
+      candidate.entityKind === "product"
+        ? placement
+          ? [
+              placement.primaryPlacement.path,
+              ...(placement.onHandUnits === null
+                ? []
+                : [
+                    `${wasmFormat.format_number(placement.onHandUnits)} on hand`,
+                  ]),
+            ]
+          : []
+        : path
+          ? [path]
+          : [];
+    return {
+      ...candidate,
+      facts,
+      emoji: emojis.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
+      imageUrl:
+        images.get(entityRefKey(candidate.entityKind, entityId)) ?? null,
+    };
+  });
 };
+
+const publicHits = (hits: InternalSearchHit[]): SearchHit[] =>
+  hits.map(({ entityId: _entityId, ...hit }) => hit);
 
 /** One indexed lexical candidate query; rank before applying the caller limit. */
 export async function findLexicalSearchCandidates(
@@ -239,7 +311,9 @@ export async function findSearchHits(
   db: Database,
   input: ServiceSearchQueryInput,
 ): Promise<SearchHit[]> {
-  return withThumbnails(db, await findLexicalSearchCandidates(db, input, 50));
+  return publicHits(
+    await hydrateHits(db, await findLexicalSearchCandidates(db, input, 50)),
+  );
 }
 
 /** Ranked semantic candidates without presentation hydration. */
@@ -308,7 +382,7 @@ export async function findRelatedSearchHits(
   return {
     status: "ready",
     complete: related.complete,
-    results: await withThumbnails(db, related.results),
+    results: publicHits(await hydrateHits(db, related.results)),
   };
 }
 
@@ -351,13 +425,5 @@ export async function hydrateSearchHitRefs(
       ORDER BY refs.ordinal
     `,
   );
-  const [images, emojis] = await Promise.all([
-    hydrateThumbnails(db, rows),
-    loadRecordEmojiReferences(db, rows),
-  ]);
-  return rows.map((row) => ({
-    ...row,
-    emoji: emojis.get(entityRefKey(row.entityKind, row.entityId)) ?? null,
-    imageUrl: images.get(`${row.entityKind}:${row.entityId}`) ?? null,
-  }));
+  return hydrateHits(db, rows);
 }

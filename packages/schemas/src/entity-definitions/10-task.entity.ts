@@ -74,27 +74,27 @@ export default defineEntity({
         },
         {
           kind: "records",
-          id: "assignee",
-          title: "Assignee",
-          viewKey: "relation:assignee",
-        },
-        {
-          kind: "records",
           id: "project",
           title: "Project",
           viewKey: "relation:project",
         },
         {
           kind: "records",
-          id: "subject-product",
-          title: "Subject Product",
-          viewKey: "relation:subject",
+          id: "assignee",
+          title: "Assignee",
+          viewKey: "relation:assignee",
         },
         {
           kind: "records",
           id: "blocked-by",
           title: "Blocked by",
           viewKey: "relation:blocked-by",
+        },
+        {
+          kind: "records",
+          id: "subject-product",
+          title: "Subject Product",
+          viewKey: "relation:subject",
         },
         {
           kind: "records",
@@ -131,9 +131,25 @@ export default defineEntity({
       },
       hero: {
         chip: "status",
-        extraActions: ["bulkEdit", "delete"],
+        extraActions: ["complete", "bulkEdit", "delete"],
       },
-      additionalSections: [
+      quickActions: ["complete"],
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "name",
+            "status",
+            "assigneeId",
+            "projectId",
+            "subjectProductId",
+            "parentTaskId",
+            "trade",
+          ],
+        },
+        { kind: "fields", id: "schedule", title: "Schedule", fields: ["due"] },
         {
           kind: "fields",
           id: "dependencies",
@@ -228,6 +244,8 @@ export default defineEntity({
         },
         "timeline",
       ],
+      extraActions: ["complete"],
+      quickActions: ["complete"],
       timeline: {
         fields: ["due.start", "due.end"],
         lifecycle: {
@@ -453,6 +471,8 @@ export default defineEntity({
         display: {
           columnGroup: "Assignment",
           columnLabel: "Product",
+          // Empty except for tasks about one product.
+          listHidden: true,
           width: "md",
           mobile: { slot: "meta", priority: 35, interactive: true },
         },
@@ -526,7 +546,8 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Dependencies" },
+        // Empty except for subtasks.
+        display: { columnGroup: "Dependencies", listHidden: true },
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),

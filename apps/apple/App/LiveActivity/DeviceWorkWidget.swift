@@ -2,71 +2,70 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-struct DeviceWorkWidget: Widget {
+struct DeviceWorkWidget<Attributes: DeviceWorkActivityAttributes>: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: DeviceWorkAttributes.self) { context in
+        ActivityConfiguration(for: Attributes.self) { context in
+            let state = context.attributes.presentation(for: context.state)
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(context.state.title).font(.headline)
+                    Label(state.title, systemImage: state.symbol).font(.headline)
                     Spacer()
-                    if context.state.additionalCount > 0 {
-                        Text("+\(context.state.additionalCount)").font(.caption).foregroundStyle(.secondary)
+                    if state.additionalCount > 0 {
+                        Text("+\(state.additionalCount)").font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 HStack {
-                    Text(context.state.detail)
+                    Text(state.detail)
                     Spacer()
-                    if let progress = context.state.progress {
+                    if let progress = state.progress {
                         Text(progress, format: .percent.precision(.fractionLength(0)))
                             .monospacedDigit()
                     }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                if let progress = context.state.progress { ProgressView(value: progress) }
-                if let remaining = context.state.estimatedRemaining {
+                if let progress = state.progress { ProgressView(value: progress) }
+                if let remaining = state.estimatedRemaining {
                     Text("\(remaining) left").font(.caption2).foregroundStyle(.secondary)
                 }
             }
             .padding()
-            .widgetURL(
-                URL(
-                    string: context.state.localActivityID == "companion-image-queue"
-                        ? "cubby://activity" : "cubby://activity/local/\(context.state.localActivityID)"))
+            .widgetURL(state.url)
         } dynamicIsland: { context in
-            DynamicIsland {
-                DynamicIslandExpandedRegion(.leading) {
-                    Text(context.state.title).font(.headline)
-                }
-                DynamicIslandExpandedRegion(.trailing) {
-                    if let progress = context.state.progress {
-                        Text(progress, format: .percent.precision(.fractionLength(0)))
+            let state = context.attributes.presentation(for: context.state)
+            return
+                DynamicIsland {
+                    DynamicIslandExpandedRegion(.leading) {
+                        Label(state.title, systemImage: state.symbol).font(.headline)
                     }
-                }
-                DynamicIslandExpandedRegion(.bottom) {
-                    VStack(alignment: .leading) {
-                        Text(context.state.detail).font(.caption)
-                        if let progress = context.state.progress { ProgressView(value: progress) }
-                        if let remaining = context.state.estimatedRemaining {
-                            Text("\(remaining) left").font(.caption2).foregroundStyle(.secondary)
+                    DynamicIslandExpandedRegion(.trailing) {
+                        if let progress = state.progress {
+                            Text(progress, format: .percent.precision(.fractionLength(0)))
                         }
                     }
+                    DynamicIslandExpandedRegion(.bottom) {
+                        VStack(alignment: .leading) {
+                            Text(state.detail).font(.caption)
+                            if let progress = state.progress { ProgressView(value: progress) }
+                            if let remaining = state.estimatedRemaining {
+                                Text("\(remaining) left").font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } compactLeading: {
+                    Image(systemName: state.symbol)
+                        .accessibilityLabel(state.title)
+                } compactTrailing: {
+                    if let progress = state.progress {
+                        Text(progress, format: .percent.precision(.fractionLength(0)))
+                    } else if state.isRunning {
+                        ProgressView()
+                    }
+                } minimal: {
+                    Image(systemName: state.symbol)
+                        .accessibilityLabel(state.title)
                 }
-            } compactLeading: {
-                Image(systemName: "shippingbox")
-            } compactTrailing: {
-                if let progress = context.state.progress {
-                    Text(progress, format: .percent.precision(.fractionLength(0)))
-                } else {
-                    ProgressView()
-                }
-            } minimal: {
-                Image(systemName: "shippingbox")
-            }
-            .widgetURL(
-                URL(
-                    string: context.state.localActivityID == "companion-image-queue"
-                        ? "cubby://activity" : "cubby://activity/local/\(context.state.localActivityID)"))
+                .widgetURL(state.url)
         }
     }
 }
@@ -74,7 +73,8 @@ struct DeviceWorkWidget: Widget {
 @main
 struct CubbyLiveActivityBundle: WidgetBundle {
     var body: some Widget {
-        DeviceWorkWidget()
-        PhotoRunWidget()
+        DeviceWorkWidget<DeviceWorkAttributes>()
+        DeviceWorkWidget<PhotoRunActivityAttributes>()
+        CaptureControl()
     }
 }

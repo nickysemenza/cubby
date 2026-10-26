@@ -291,8 +291,9 @@ describe("GenericEntityDetail", () => {
   });
 
   it("derives a cohort action exactly for fields a list filter can select on", () => {
-    // Manufacturer has a multiselect descriptor on product; model only a
-    // text one, so it must not gain a link the list cannot honour exactly.
+    // Category has a multiselect descriptor on product; model only a text
+    // one, so it must not gain a link the list cannot honour exactly. (Brand
+    // reads in its summary cell, so the facts omit it.)
     const record = recordFor("product");
     const product = {
       ...record,
@@ -321,11 +322,6 @@ describe("GenericEntityDetail", () => {
     );
     expect(
       screen.getByRole("link", {
-        name: "Show all products with brand Milwaukee",
-      }),
-    ).toHaveAttribute("href", "/products?brandId=VEN-TEST");
-    expect(
-      screen.getByRole("link", {
         name: "Show all products with category Tools",
       }),
     ).toHaveAttribute("href", "/products?category=CAT-2224");
@@ -340,11 +336,12 @@ describe("GenericEntityDetail", () => {
     expect(categoryRecord.contains(categoryFilter)).toBe(false);
   });
 
-  it("keeps default record facts before workflow sections despite legacy overview ids", () => {
-    const { container } = render(
+  it("keeps record facts before workflow sections and leaves summarized fields to the summary", () => {
+    const record = recordFor("product");
+    const { container, rerender } = render(
       <GenericEntityDetail
         entity="product"
-        record={recordFor("product")}
+        record={{ ...record, brandId: testShortcode("vendor", "VEN-TEST") }}
         operations={operations}
       />,
       { wrapper: harness.wrapper },
@@ -356,7 +353,7 @@ describe("GenericEntityDetail", () => {
     }
     // The first fields section is the record's facts aside, ahead of the
     // groups when the columns stack.
-    for (const label of ["Name", "Brand", "Category"]) {
+    for (const label of ["Name", "Category"]) {
       const fact = within(container).getByText(label, {
         selector: '[data-slot="fact-label"]',
       });
@@ -364,13 +361,33 @@ describe("GenericEntityDetail", () => {
         fact.compareDocumentPosition(work) & Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
-    expect(overview.querySelector("#summaries")).not.toBeNull();
+    // Brand has its own summary cell, so the facts do not repeat it.
+    expect(
+      within(container).queryByText("Brand", {
+        selector: '[data-slot="fact-label"]',
+      }),
+    ).toBeNull();
+    expect(overview.querySelector("#coverage")).not.toBeNull();
+    // An empty one-field cell is omitted, so the facts keep Brand fillable.
+    rerender(
+      <GenericEntityDetail
+        entity="product"
+        record={{ ...record, brandId: null }}
+        operations={operations}
+      />,
+    );
+    expect(
+      within(container).getByText("Brand", {
+        selector: '[data-slot="fact-label"]',
+      }),
+    ).toBeVisible();
   });
 
   it("labels a book barcode as its ISBN and keeps the declared field order", () => {
     const record = recordFor("product");
     const book = {
       ...record,
+      brandId: testShortcode("vendor", "VEN-TEST"),
       primaryGtin: "09780306406157",
       externalIds: [],
       ingredient: null,
@@ -396,6 +413,11 @@ describe("GenericEntityDetail", () => {
     );
     expect(labels).toContain("Name");
     expect(labels).toContain("ISBN-13");
+    const summarized = new Set<string>(
+      entitySummary.product.detail.summary.flatMap((slot) =>
+        slot.kind === "fields" ? slot.fields : [],
+      ),
+    );
     for (const section of entitySummary.product.detail.sections) {
       if (section.kind !== "fields") continue;
       const sectionLabels = Array.from(
@@ -404,12 +426,15 @@ describe("GenericEntityDetail", () => {
         ),
         (element) => element.textContent,
       );
-      const declared = section.fields.map((key) =>
-        key === "primaryGtin"
-          ? "ISBN-13"
-          : (entityFieldModels.product.fields.find((field) => field.key === key)
-              ?.label ?? key),
-      );
+      const declared = section.fields
+        .filter((key) => !summarized.has(key))
+        .map((key) =>
+          key === "primaryGtin"
+            ? "ISBN-13"
+            : (entityFieldModels.product.fields.find(
+                (field) => field.key === key,
+              )?.label ?? key),
+        );
       expect(sectionLabels).toEqual(declared);
     }
   });

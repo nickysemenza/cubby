@@ -60,28 +60,16 @@ export default defineEntity(
       detail: {
         summary: [
           {
-            kind: "records",
-            id: "product",
-            title: "Product",
-            viewKey: "relation:product",
-          },
-          {
             kind: "fields",
             id: "placement-amount",
             title: "Placement & amount",
             fields: ["placement", "amount"],
           },
           {
-            kind: "records",
-            id: "location",
-            title: "Location",
-            viewKey: "relation:location",
-          },
-          {
             kind: "fields",
-            id: "ownership",
-            title: "Ownership",
-            fields: ["effectiveOwnership"],
+            id: "last-verified",
+            title: "Last verified",
+            fields: ["verifiedAt"],
           },
           {
             kind: "fields",
@@ -91,15 +79,53 @@ export default defineEntity(
           },
           {
             kind: "fields",
-            id: "last-verified",
-            title: "Last verified",
-            fields: ["verifiedAt"],
+            id: "ownership",
+            title: "Ownership",
+            fields: ["effectiveOwnership"],
+          },
+          {
+            kind: "records",
+            id: "product",
+            title: "Product",
+            viewKey: "relation:product",
+          },
+          {
+            kind: "records",
+            id: "location",
+            title: "Location",
+            viewKey: "relation:location",
           },
           {
             kind: "records",
             id: "product-purchases",
             title: "Product purchase history",
             viewKey: "purchases",
+          },
+        ],
+        hero: {
+          breadcrumb: "locationId",
+          extraActions: ["moveTo", "adjustAmount"],
+        },
+        // A deliberate member edit of the count, not a recount: verifiedAt is untouched.
+        quickActions: ["moveTo", "adjustAmount"],
+        sections: [
+          {
+            kind: "fields",
+            id: "overview",
+            title: "Record",
+            fields: [
+              "productId",
+              "locationId",
+              "amount",
+              "placement",
+              "ownerLedgerPartyId",
+            ],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["verifiedAt"],
           },
         ],
       },
@@ -252,6 +278,7 @@ export default defineEntity(
           },
         ],
         extraActions: ["moveTo"],
+        quickActions: ["moveTo"],
         links: [{ label: "Suggestions", path: "/meals/suggestions" }],
       },
     },
@@ -324,6 +351,8 @@ export default defineEntity(
           },
           display: {
             columnGroup: "Stock",
+            // "Stock" on most rows.
+            listHidden: true,
             optionRole: "category",
             optionColor: "domain-pantry",
           },
@@ -376,6 +405,8 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "entity-select" },
           display: {
             columnGroup: "Ownership",
+            // Owner leads; the Stock band (valuation, verified) follows it.
+            listOrderOverride: 2,
             columnLabel: "Owner",
             width: "md",
             labelPath: "effectiveOwnership.effectiveOwner.name",

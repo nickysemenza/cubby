@@ -7,7 +7,6 @@
 		<string>com.nickysemenza.cubby.photo-matching</string>
 		<string>com.nickysemenza.cubby.library-sync</string>
 		<string>com.nickysemenza.cubby.image-queue</string>
-		<string>com.nickysemenza.cubby.image-queue.continued.*</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
@@ -56,9 +55,13 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Cubby scans barcodes to add items to a location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cubby uses selected photos for garden journals and product images.</string>
+	<string>Cubby scans your photo library to match photos with your products and garden records and import the photos you choose.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.nickysemenza.cubby.cook</string>
+	</array>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

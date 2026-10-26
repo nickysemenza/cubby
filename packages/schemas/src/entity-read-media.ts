@@ -3,6 +3,7 @@ import { z } from "zod";
 import { displayImagesField } from "./display-images";
 import { derivedSidecar } from "./derived-value";
 import { entityAttachmentRoleValues } from "./entity-attachment";
+import { detailBreadcrumbSchema } from "./entity-detail-summary";
 import { imageOut } from "./entity-definitions/field-primitives";
 
 export const entityAttachmentRole = z.enum(entityAttachmentRoleValues);
@@ -23,6 +24,8 @@ const detailMediaFields = z.object({
   redirectedFrom: z.string().nullable(),
   /** Codes of entities merged into this one; each still redirects here. */
   previousShortcodes: z.array(z.string()),
+  /** Records above this one, from a declared `hero.breadcrumb` field. */
+  breadcrumb: detailBreadcrumbSchema.optional(),
   /** Where facts about this record were seen, newest first. */
 });
 

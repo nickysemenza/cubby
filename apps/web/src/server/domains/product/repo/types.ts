@@ -72,6 +72,9 @@ export type ProductDeepDB = ProductSelect & {
     image: MappableImageRecord;
     deletedAt?: Date | null;
   }>;
+  primaryPlacement?:
+    | import("@cubby/schemas/product").ProductPrimaryPlacement
+    | null;
   quantityLedger: QuantityLedger;
   componentCount: number;
   cookbooks?: Array<
@@ -108,5 +111,8 @@ export type ProductListDB = ProductSelect & {
   // repo/purchase.ts.
   expenseTotal: number;
   purchaseDate: string | null;
+  primaryPlacement?:
+    | import("@cubby/schemas/product").ProductPrimaryPlacement
+    | null;
   quantityLedger: QuantityLedger;
 };

@@ -48,9 +48,9 @@ struct HeadlessPhotoImport: AsyncParsableCommand {
             guard progress.uploaded == photos.count else {
                 throw CLIError.message("Native uploader did not finalize every photo")
             }
-            let review = RunReviewSession()
-            await review.refresh(runID: runID, client: client)
-            if let error = review.error { throw CLIError.message(error) }
+            let console = RunConsoleSession()
+            await console.refresh(runID: runID, client: client)
+            if let error = console.error { throw CLIError.message(error) }
             print("Headless native photo import verified: \(runID)")
         }
     }

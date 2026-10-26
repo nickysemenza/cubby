@@ -43,6 +43,7 @@ export function taskBriefingReport(
                   },
                 ]
               : [],
+          commands: row.commands,
         })),
         footer:
           data.nextCount > data.next.length

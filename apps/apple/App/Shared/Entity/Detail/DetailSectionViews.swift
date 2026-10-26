@@ -27,36 +27,62 @@ struct EntityHeroView<Actions: View>: View {
         self.actions = actions()
     }
 
+    /// iPhone leads with the photo across the full width; iPad and Mac keep it beside the title.
+    private var photoLeads: Bool {
+        #if os(iOS)
+            UIDevice.current.userInterfaceIdiom == .phone
+        #else
+            false
+        #endif
+    }
+
     var body: some View {
-        HStack(alignment: .center, spacing: FieldGuideTokens.Space.md) {
-            if let photo = heroPhoto {
-                photoButton(photo)
-            } else {
-                Thumb(
-                    url: row.imageURL, size: 56, symbol: descriptor.recordSymbol(in: row),
-                    emoji: descriptor.recordEmoji(in: row)
-                )
-                .accessibilityHidden(true)
+        if let photo = heroPhoto, photoLeads {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                photoButton(photo, fullWidth: true)
+                summary
             }
-            summary
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .center, spacing: FieldGuideTokens.Space.md) {
+                if let photo = heroPhoto {
+                    photoButton(photo, fullWidth: false)
+                } else {
+                    Thumb(
+                        url: row.imageURL, size: 56, symbol: descriptor.recordSymbol(in: row),
+                        emoji: descriptor.recordEmoji(in: row)
+                    )
+                    .accessibilityHidden(true)
+                }
+                summary
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         actions
     }
 
-    private func photoButton(_ photo: PhotoAttachment) -> some View {
+    private func photoButton(_ photo: PhotoAttachment, fullWidth: Bool) -> some View {
         Button {
             showingPhoto = true
         } label: {
-            PhotoAttachmentImage(photo: photo, renderedWidth: 56)
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
-                .background(FieldGuideTokens.inset)
-                .clipped()
-                .overlay {
-                    Rectangle().strokeBorder(
-                        FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+            Group {
+                if fullWidth {
+                    // Capped near a third of the viewport so the glance stays on the first screen.
+                    PhotoAttachmentImage(photo: photo, renderedWidth: 430)
+                        .frame(maxWidth: .infinity)
+                        .containerRelativeFrame(.vertical) { length, _ in min(320, length / 3) }
+                } else {
+                    PhotoAttachmentImage(photo: photo, renderedWidth: 56)
+                        .frame(width: 56, height: 56)
                 }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
+            .background(FieldGuideTokens.inset)
+            .clipped()
+            .overlay {
+                Rectangle().strokeBorder(
+                    FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Preview \(photo.filename)")
@@ -78,21 +104,15 @@ struct EntityHeroView<Actions: View>: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var headerMetadata: some View {
-        let fact =
-            row.subtitle.flatMap { $0.isEmpty ? nil : $0 }
-            ?? presentation.summaryFieldKeys.lazy.compactMap { key in
-                descriptor.field(key).flatMap {
-                    EntityFieldValue.text(in: row.raw, field: $0, surface: "detail")
-                }
-            }.first
-        return Text(
-            "\(descriptor.singular) · \(Text(row.id).font(.fieldGuideCode))\(fact.map { " · \($0)" } ?? "")"
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(2)
-        .textSelection(.enabled)
+    @ViewBuilder private var headerMetadata: some View {
+        // The record code lives in More → Copy shortcode, not the header line.
+        if let line = DetailHeaderLine.text(descriptor: descriptor, row: row) {
+            Text(line)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+        }
     }
 
     private var heroPhoto: PhotoAttachment? {
@@ -102,6 +122,28 @@ struct EntityHeroView<Actions: View>: View {
             imageID: descriptor.key == .image ? nil : row.raw["coverImageId"]?.stringValue)
     }
 
+}
+
+/// The hero's caption: "Home › Shelf B · Ordered 2026-09-08" from the detail read's projected
+/// breadcrumb and the declared `hero.when`; the record's first summary fact when it has neither.
+enum DetailHeaderLine {
+    static func text(descriptor: EntityDescriptor, row: EntityRow) -> String? {
+        let crumbs = (row.raw["breadcrumb"]?.arrayValue ?? []).compactMap { $0["name"]?.stringValue }
+        let when = descriptor.presentation.heroWhen.flatMap { when -> String? in
+            guard let field = descriptor.field(when.field),
+                let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+            else { return nil }
+            return "\(when.label ?? field.label) \(value)"
+        }
+        let parts = [crumbs.isEmpty ? nil : crumbs.joined(separator: " › "), when].compactMap { $0 }
+        if !parts.isEmpty { return parts.joined(separator: " · ") }
+        return row.subtitle.flatMap { $0.isEmpty ? nil : $0 }
+            ?? descriptor.presentation.summaryFieldKeys.lazy.compactMap { key in
+                descriptor.field(key).flatMap {
+                    EntityFieldValue.text(in: row.raw, field: $0, surface: "detail")
+                }
+            }.first
+    }
 }
 
 #Preview("Entity hero") {
@@ -423,13 +465,17 @@ struct FieldsSectionView: View {
     }
 
     private var rows: [FieldDescriptor] {
-        keys.compactMap { key in
+        // A field a summary slot shows has its home there; later sections omit it, as on web.
+        let summarized = summary ? [] : Set(descriptor.presentation.summaryFieldKeys)
+        return keys.compactMap { key in
             // The hero is the title's and the id's home; repeating them here is a form, not a record.
-            guard let field = descriptor.field(key), key != descriptor.titleField, key != "id" else {
+            guard let field = descriptor.field(key), key != descriptor.titleField, key != "id",
+                !summarized.contains(key)
+            else {
                 return nil
             }
             if field.displayApplicabilityRefusal(in: row.raw) != nil { return field }
-            if NativePresentationCoverage.unsupportedDetail(field) != nil { return nil }
+            if NativePresentationCoverage.detailHandoff(field) != nil { return field }
             if field.detailRenderer == .expenseSpendingCategory
                 || field.detailRenderer == .spendingCategorySummary
             {
@@ -451,7 +497,11 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
-        if let reason = field.displayApplicabilityRefusal(in: row.raw) {
+        if let handoff = NativePresentationCoverage.detailHandoff(field) {
+            LabeledContent(field.label) {
+                OpenOnWebButton(target: handoff.target(key: descriptor.key, id: row.id), label: handoff.label)
+            }
+        } else if let reason = field.displayApplicabilityRefusal(in: row.raw) {
             LabeledContent(field.label) { inapplicableValue(field, reason: reason) }
         } else if field.reference?.multiple == true {
             RecordReferenceList(
@@ -775,56 +825,9 @@ private struct FieldExplanationPresenter: ViewModifier {
                             }
                         }
                     }
-                    Divider()
-                    explanationSectionLabel("Technical details")
-                    Text(resolved.rule.description).font(.callout)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("Rule: \(resolved.rule.id) · r\(resolved.rule.revision)")
-                        .font(.caption.monospaced()).textSelection(.enabled)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Evaluated:")
-                        DateDisplay(date: resolved.evaluatedAt)
-                    }.font(.caption).foregroundStyle(.secondary)
-                    if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value) {
-                        if value.objectValue != nil || value.arrayValue != nil {
-                            ExplanationEvidenceValue(value: value)
-                        } else if let code = value.stringValue, code != resolved.interpretation?.result {
-                            Text("Result code: \(code)").font(.caption.monospaced())
-                        }
-                    }
-                    ForEach(Array(resolved.actions.enumerated()), id: \.offset) { _, action in
-                        if action.kind.rawValue == "editSource",
-                            let entity = EntityKey(rawValue: action.target.entityKind.rawValue)
-                        {
-                            NavigationLink(
-                                action.label, value: Route.entityDetail(entity, id: action.target.entityId))
-                        }
-                    }
-                    if let breakdown = resolved.qualityBreakdown {
-                        Text("Score calculation").font(.headline)
-                        Text(breakdown.summary).font(.callout.monospacedDigit())
-                        ForEach(breakdown.checks, id: \.check) { check in
-                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                                Text(check.label).font(.callout.weight(.semibold))
-                                Text("\(check.stateLabel) · \(check.weightLabel)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                if check.state.rawValue == "gap" { Text(check.description).font(.callout) }
-                                DataExceptionControl(
-                                    draft: .init(entityID: subject.id, check: check.check),
-                                    isGap: check.state.rawValue == "gap",
-                                    options: check.exceptionReasons.map {
-                                        .init(reason: $0.reason, label: $0.label)
-                                    },
-                                    recorded: check.exception.map {
-                                        ($0.reason, $0.note, $0.state.rawValue == "stale")
-                                    },
-                                    onChanged: reloadExplanation
-                                )
-                                Text("\(check.facet) · \(check.check)").font(.caption.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+                    OpenOnWebButton(
+                        target: .record(key: subject.entity, id: subject.id),
+                        label: "Review data quality on web")
                     if case .value(.some(let evidence)) = resolved.resolutionEvidence {
                         Divider()
                         explanationSectionLabel(evidence.chain.title ?? "Resolution order")
@@ -904,12 +907,6 @@ private struct FieldExplanationPresenter: ViewModifier {
         #endif
         .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.sheet)
-    }
-
-    /// Re-explains after an exception changed; `resolved` is shadowed inside the popover body.
-    private func reloadExplanation() {
-        resolved = nil
-        Task { await loadExplanation() }
     }
 
     private func loadExplanation() async {
@@ -1184,22 +1181,22 @@ struct RelationSectionView: View {
 
     var body: some View {
         Group {
-            if macLayout {
+            let fields = FieldsSectionView(
+                descriptor: model.source, row: row, keys: model.spec.contextFields, macGrid: macLayout)
+            if model.isLoadedEmpty && !fields.hasVisibleRows {
+                // An empty relation is one quiet row, not a headed section.
+                if macLayout { quietRow } else { Section { quietRow } }
+            } else if macLayout {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                    let fields = FieldsSectionView(
-                        descriptor: model.source, row: row, keys: model.spec.contextFields,
-                        macGrid: true)
                     if fields.hasVisibleRows { fields }
                     content
                 }
             } else {
                 Section {
-                    let fields = FieldsSectionView(
-                        descriptor: model.source, row: row, keys: model.spec.contextFields)
                     if fields.hasVisibleRows { fields }
                     content
                 } header: {
-                    Text(model.section.title ?? model.target.plural).detailContentsHeader(empty: false)
+                    Text(model.countedTitle).detailContentsHeader(empty: false)
                 }
             }
         }
@@ -1289,6 +1286,14 @@ struct RelationSectionView: View {
         .accessibilityElement(children: .contain)
     }
 
+    private var quietRow: some View {
+        Text(model.spec.empty ?? "\(model.title) · 0")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+            .accessibilityIdentifier("relation.empty.\(model.id)")
+    }
+
     @ViewBuilder
     private var content: some View {
         let list = model.list
@@ -1299,7 +1304,7 @@ struct RelationSectionView: View {
             InlineLoadFailure(message: message) { await list.loadInitial() }
         case .loaded:
             if list.rows.isEmpty {
-                Text(model.spec.empty ?? "No items").foregroundStyle(.secondary)
+                Text(model.spec.empty ?? "No \(model.target.plural.lowercased())").foregroundStyle(.secondary)
                     .preference(key: DetailSectionEmpty.self, value: true)
             }
             ForEach(list.rows) { row in
@@ -1315,24 +1320,27 @@ struct RelationSectionView: View {
                 }
             }
             if let error = contextError {
-                Text(error).font(.caption).foregroundStyle(.secondary)
-                Button("Retry relation evidence") { Task { await loadFinancialContext() } }
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
+                InlineLoadFailure(message: error) { await loadFinancialContext() }
             }
             if let error = model.connectionError {
-                Text(error).font(.caption).foregroundStyle(.secondary)
-                Button("Retry paths") { Task { await model.loadConnectionEvidence() } }
+                InlineLoadFailure(message: error) { await model.loadConnectionEvidence() }
             }
             if list.hasMore {
-                Button("Open all · \(list.meta.map { "\($0.totalCount)" } ?? "")") {
-                    Task {
-                        await list.loadNextPage()
-                        await model.loadConnectionEvidence()
-                    }
+                NavigationLink(value: Route.entityList(model.target.key, filters: list.filters)) {
+                    Text("Open all · \(list.meta.map { "\($0.totalCount)" } ?? "")")
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
+                .accessibilityIdentifier("relation.openAll.\(model.id)")
             }
         }
     }
+}
+
+extension RelationSectionModel {
+    var title: String { section.title ?? target.plural }
+    /// "Photos · 12" once the first page reports the relation's total.
+    var countedTitle: String { list.meta.map { "\(title) · \($0.totalCount)" } ?? title }
+    var isLoadedEmpty: Bool { list.phase == .loaded && list.rows.isEmpty }
 }
 
 // MARK: - Journal
@@ -1435,6 +1443,8 @@ struct EntityJournalEntryRow: View {
 
 // MARK: - Raw record
 
+/// Pretty-printed JSON. The record-level disclosure is developer-overlay content
+/// (`EntityDetailContent`); USDA detail also uses it for supplied values it cannot itemize.
 struct RawRecordDisclosure: View {
     let raw: JSONValue
 

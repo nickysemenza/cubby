@@ -57,7 +57,9 @@ struct EntityFieldControl: View {
             Text(error)
                 .font(.caption)
                 .foregroundStyle(FieldGuideTokens.destructive)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("\(field.label) error: \(error)")
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).error")
         }
     }
 
@@ -294,7 +296,7 @@ struct EntityFieldControl: View {
     @ViewBuilder
     private var specialized: some View {
         if let schema = field.valueSchema {
-            StructuredValueControl(field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
+            StructuredValueControl(field: field, schema: schema, model: model)
         } else if let renderer = field.controlRenderer, let drawing = Self.drawing(for: renderer) {
             switch drawing {
             case .entityReference:

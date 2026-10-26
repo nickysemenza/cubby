@@ -10,10 +10,14 @@ struct SectionView: View {
         Group {
             switch section {
             case .today: TodayView()
-            case .activity: ActivityView().imageQueueProcessingToolbar()
+            case .activity: ActivityView()
             case .capture: CaptureView()
             case .photos: PhotosRootView()
-            case .browse: BrowseRootView()
+            case .browse:
+                // The Mac split view draws Browse's lists itself; only iOS has a catalog.
+                #if os(iOS)
+                    BrowseRootView()
+                #endif
             case .search: SearchView()
             case .dev: DevView()
             case .settings: SettingsView(isSidebarRoot: true)
@@ -55,10 +59,9 @@ struct RouteDestinationView: View {
     let route: Route
     var body: some View {
         switch route {
-        case .activityList: ActivityView().imageQueueProcessingToolbar()
+        case .activityList: ActivityView()
         case .auditHistory: AuditHistoryView()
         case .photosLibrary: PhotosRootView()
-        case .browseCatalog: BrowseRootView()
         case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .nutrition(let day): DailyNutritionView(day: day)
         case .localActivity(let id): LocalActivityDetailView(id: id)

@@ -5,16 +5,35 @@ public enum NativeCoverageStatus: Equatable, Sendable {
     case implemented
     case generic
     case ownedElsewhere
-    case unsupported(String)
+    /// A reviewed web-only surface: native shows one row that opens it on web.
+    case handoff(NativeWebHandoff)
 
-    public var isUnsupported: Bool {
-        if case .unsupported = self { return true }
-        return false
+    public var handoff: NativeWebHandoff? {
+        if case .handoff(let handoff) = self { return handoff }
+        return nil
+    }
+}
+
+/// Where a `handoff` surface lives on web, the text that names it, and why it stays there.
+public struct NativeWebHandoff: Equatable, Sendable {
+    /// A detail section id the entity declares (the web hash); nil opens the page itself.
+    public let section: String?
+    /// List-route query parameters for a list-level handoff; empty otherwise.
+    public let query: [String: String]
+    public let label: String
+    public let reason: String
+
+    public init(section: String? = nil, query: [String: String] = [:], label: String, reason: String) {
+        self.section = section
+        self.query = query
+        self.label = label
+        self.reason = reason
     }
 }
 
 extension NativeCoverageStatus: Decodable {
-    private enum CodingKeys: String, CodingKey { case status, reason }
+    private enum CodingKeys: String, CodingKey { case status, web, reason }
+    private enum WebKeys: String, CodingKey { case section, query, label }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -22,7 +41,14 @@ extension NativeCoverageStatus: Decodable {
         case "implemented": self = .implemented
         case "generic": self = .generic
         case "ownedElsewhere": self = .ownedElsewhere
-        case "unsupported": self = .unsupported(try container.decode(String.self, forKey: .reason))
+        case "handoff":
+            let web = try container.nestedContainer(keyedBy: WebKeys.self, forKey: .web)
+            self = .handoff(
+                NativeWebHandoff(
+                    section: try web.decodeIfPresent(String.self, forKey: .section),
+                    query: try web.decodeIfPresent([String: String].self, forKey: .query) ?? [:],
+                    label: try web.decode(String.self, forKey: .label),
+                    reason: try container.decode(String.self, forKey: .reason)))
         case let other:
             throw DecodingError.dataCorruptedError(
                 forKey: .status, in: container, debugDescription: "Unknown native coverage status \(other)")
@@ -41,6 +67,8 @@ public struct NativeCoverageManifest: Decodable, Sendable {
     public let heroAction: [String: NativeCoverageStatus]
     public let detailSlot: [String: NativeCoverageStatus]
     public let listSlot: [String: NativeCoverageStatus]
+    /// Entity-qualified structured fields, whose editors may hand off independently of their renderer.
+    public let structuredField: [String: NativeCoverageStatus]
     /// The verbs a `summary` or `recordList` section offers, keyed by `SectionActionID`.
     public let sectionAction: [String: NativeCoverageStatus]
     /// The runner plan for each `implemented` hero action, keyed by its manifest id.

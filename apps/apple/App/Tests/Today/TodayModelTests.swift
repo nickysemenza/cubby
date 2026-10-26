@@ -96,11 +96,9 @@ struct TodayModelTests {
         var pendingIterator = pendingRequests.makeAsyncIterator()
         let firstPendingValue = await pendingIterator.next()
         let firstPending = try #require(firstPendingValue)
-        let secondPendingValue = await pendingIterator.next()
-        let secondPending = try #require(secondPendingValue)
 
         await waitUntil { Self.loadedTaskName(model.tasks) == "Water seedlings" }
-        #expect(model.mealsIsLoading && model.problemsIsLoading)
+        #expect(model.mealsIsLoading)
         #expect(Self.loadedTaskName(model.tasks) == "Water seedlings")
         if case .loaded(let briefing) = model.tasks {
             let figures = ReportPresentation(briefing).blocks.flatMap {
@@ -112,7 +110,6 @@ struct TodayModelTests {
             #expect(figures.first { $0.label == "Later" }?.value == 2)
         }
         TodayModelStub.respond(to: firstPending, status: 500, data: Self.failurePayload)
-        TodayModelStub.respond(to: secondPending, status: 500, data: Self.failurePayload)
         pendingContinuation.finish()
         await refresh.value
     }
@@ -145,6 +142,62 @@ struct TodayModelTests {
         #expect(model.tasksIsLoading == false)
     }
 
+    @Test
+    func todayReadingOrderLeadsWithTasks() {
+        #expect(TodaySection.allCases == [.tasks, .meals, .nutrition, .views])
+    }
+
+    @Test
+    func taskRowsLeadAndOnlyUsefulStatsRemain() throws {
+        let report = try JSONDecoder().decode(EntityReportOut.self, from: Self.tasksPayload)
+        let presentation = TodayBriefingPresentation(report)
+        #expect(presentation.moreReady == ["2 more ready"])
+        guard case .records(let records) = try #require(presentation.tasks.blocks.first) else {
+            Issue.record("Expected task rows first")
+            return
+        }
+        #expect(records.footer == nil)
+        #expect(records.rows.first?.trailing != "2026-10-25")
+        #expect(Self.loadedTaskName(.loaded(presentation.tasks)) == "Water seedlings")
+        let stats = ReportPresentation(presentation.stats).blocks
+        guard case .stats(_, let figures) = try #require(stats.first) else {
+            Issue.record("Expected summary figures")
+            return
+        }
+        #expect(figures.map(\.label) == ["Due this week"])
+        #expect(!presentation.tasks.blocks.contains { if case .stats = $0 { true } else { false } })
+    }
+
+    @Test
+    func allFailedKeepsOneRawDiagnosticAndPartialSuccessStaysVisible() async throws {
+        defer { TodayModelStub.handler.withLock { $0 = nil } }
+        TodayModelStub.handler.withLock { handler in
+            handler = { _, stub in stub.respond(status: 503, data: Self.failurePayload) }
+        }
+        let model = TodayModel(client: try makeClient())
+        await model.refresh()
+        #expect(
+            TodayModel.failureMessage(
+                tasks: model.tasks, meals: model.meals,
+                nutrition: .failed("TEST: Still offline"), changesError: "TEST: Still offline"
+            ) == "TEST: Still offline")
+        #expect(
+            TodayModel.failureMessage(
+                tasks: model.tasks, meals: model.meals,
+                nutrition: .failed("NUTRITION: Upstream response"), changesError: "TEST: Still offline"
+            ) == "TEST: Still offline\n\nNUTRITION: Upstream response")
+        #expect(
+            TodayModel.failureMessage(
+                tasks: model.tasks, meals: .loaded([]),
+                nutrition: .failed("TEST: Still offline"), changesError: "TEST: Still offline"
+            ) == nil)
+        #expect(
+            TodayModel.failureMessage(
+                tasks: model.tasks, meals: model.meals,
+                nutrition: .loading, changesError: "TEST: Still offline"
+            ) == nil)
+    }
+
     private func makeClient() throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
@@ -156,7 +209,7 @@ struct TodayModelTests {
     }
 
     nonisolated private static let tasksPayload = Data(
-        #"{"blocks":[{"kind":"stats","figures":[{"label":"Due this week","value":1,"format":"count"},{"label":"Later","value":2,"format":"count"}]},{"kind":"records","empty":"No tasks","rows":[{"entity":"task","id":"TSK-2345","title":"Water seedlings","trailing":null}]}]}"#
+        #"{"blocks":[{"kind":"stats","figures":[{"label":"Due this week","value":1,"format":"count"},{"label":"Later","value":2,"format":"count"}]},{"kind":"records","empty":"No tasks","rows":[{"entity":"task","id":"TSK-2345","title":"Water seedlings","trailing":"2026-10-25"}],"footer":"2 more ready"}]}"#
             .utf8
     )
     nonisolated private static let failurePayload = Data(

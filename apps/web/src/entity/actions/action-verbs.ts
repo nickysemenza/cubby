@@ -14,6 +14,7 @@ import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { NotePencilIcon } from "@phosphor-icons/react/dist/csr/NotePencil";
 import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PlusMinusIcon } from "@phosphor-icons/react/dist/csr/PlusMinus";
 import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
@@ -85,6 +86,7 @@ export const actionVerbs = {
   moveTo: { label: "Move to...", icon: ArrowsLeftRightIcon },
   moveUnder: { label: "Move under...", icon: FolderSimplePlusIcon },
   setStatus: { label: "Set status...", icon: ListChecksIcon },
+  adjustAmount: { label: "Adjust amount...", icon: PlusMinusIcon },
   bulkEdit: { label: "Bulk edit...", icon: NotePencilIcon },
   createProjectFrom: {
     label: "Create project from selected...",
@@ -123,6 +125,7 @@ export const actionVerbs = {
   regenerate: { label: "Regenerate flow", icon: SparkleIcon },
 
   // — immediate ——————————————————————————————————————————————————————
+  complete: { label: "Complete", icon: CheckCircleIcon },
   markPurchased: { label: "Mark purchased", icon: CheckCircleIcon },
   markInstalled: { label: "Mark installed", icon: WrenchIcon },
   markAsStock: { label: "Mark as stock", icon: WrenchIcon },

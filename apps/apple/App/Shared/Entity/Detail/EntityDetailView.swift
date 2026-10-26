@@ -34,9 +34,16 @@ struct EntityDetailView: View {
         let titled =
             content
             .fieldGuideScreen()
-            .navigationTitle(descriptor.singular)
             #if os(iOS)
+                .navigationTitle(descriptor.singular)
                 .navigationBarTitleDisplayMode(.inline)
+            #else
+                // The window title, Window menu and Back history name the record; the kind is the
+                // subtitle. The cramped iPhone bar keeps the kind alone.
+                .navigationTitle(model?.row?.title ?? descriptor.singular)
+                .navigationSubtitle(model?.row == nil ? "" : descriptor.singular)
+                .copyable(
+                    model?.row.map { [RecordCopyText.text(key: key, id: $0.id, title: $0.title)] } ?? [])
             #endif
             .toolbar { detailToolbar }
         sheets(on: lifecycle(on: titled, model: model))
@@ -57,7 +64,7 @@ struct EntityDetailView: View {
             .refreshControl { await refresh() }
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
-                activity.webpageURL = appModel.webURL(for: key, id: row.id)
+                activity.webpageURL = appModel.webHandoff.url(.record(key: key, id: row.id))
                 activity.title = row.title
                 activity.isEligibleForHandoff = true
                 // Spotlight indexing is a separate path (`SpotlightIndexer`); this activity is
@@ -131,15 +138,24 @@ struct EntityDetailView: View {
                         .accessibilityIdentifier("detail.\(key.rawValue).edit")
                 }
             }
-            ToolbarItem {
-                ShareLink(item: appModel.webURL(for: key, id: row.id)) {
-                    Label("Share", systemImage: "square.and.arrow.up")
+            #if os(iOS)
+                ToolbarItem {
+                    ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
                 }
-            }
+            #endif
             ToolbarItem {
                 Menu {
+                    webMenuItems(row: row)
+                    #if os(macOS)
+                        // The Mac toolbar keeps Edit and More; Share joins Copy link here.
+                        ShareLink(item: appModel.webHandoff.url(.record(key: key, id: row.id))) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    #endif
                     Button {
-                        Clipboard.copy(appModel.webURL(for: key, id: row.id).absoluteString)
+                        Clipboard.copy(appModel.webHandoff.url(.record(key: key, id: row.id)).absoluteString)
                     } label: {
                         Label("Copy link", systemImage: "link")
                     }
@@ -155,6 +171,16 @@ struct EntityDetailView: View {
                 } label: {
                     Label("More", systemImage: "ellipsis.circle")
                 }
+            }
+        }
+    }
+
+    /// The record on web, then each surface this record hands off to web, named after it.
+    @ViewBuilder private func webMenuItems(row: EntityRow) -> some View {
+        Section {
+            OpenOnWebButton(target: .record(key: key, id: row.id), label: "Open on web")
+            ForEach(NativePresentationCoverage.recordHandoffs(descriptor, row: row), id: \.label) { handoff in
+                OpenOnWebButton(target: handoff.target(key: key, id: row.id), label: handoff.label)
             }
         }
     }
@@ -193,16 +219,41 @@ struct EntityDetailView: View {
         }
         if !declared.isEmpty {
             Section("Create") {
-                ForEach(declared) { section in
-                    Button(
-                        section.id == journalRelationID ? "Log entry" : "New \(section.target.singular)",
-                        systemImage: "plus"
-                    ) {
-                        creatingRelation = section
+                ForEach(Self.relationCreationGroups(declared), id: \.first!.target.key) { group in
+                    if let first = group.first {
+                        if group.count == 1 {
+                            Button(
+                                first.id == journalRelationID ? "Log entry" : "New \(first.target.singular)",
+                                systemImage: "plus"
+                            ) { creatingRelation = first }
+                        } else {
+                            Menu("New \(first.target.singular)", systemImage: "plus") {
+                                ForEach(group) { section in
+                                    Button(section.section.title ?? section.target.plural) {
+                                        creatingRelation = section
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    /// Identical create drafts appear once; distinct prefills share a target submenu in declaration order.
+    static func relationCreationGroups(_ sections: [RelationSectionModel]) -> [[RelationSectionModel]] {
+        var groups: [[RelationSectionModel]] = []
+        for section in sections {
+            if let index = groups.firstIndex(where: { $0.first?.target.key == section.target.key }) {
+                if !groups[index].contains(where: { $0.createPrefill == section.createPrefill }) {
+                    groups[index].append(section)
+                }
+            } else {
+                groups.append([section])
+            }
+        }
+        return groups
     }
 
     private var journalRelationID: String? {
@@ -226,7 +277,9 @@ struct EntityDetailView: View {
                     descriptor: descriptor, row: row,
                     relationSections: relationSections,
                     connectedRecords: connectedRecords,
-                    onChanged: { Task { await refresh() } }
+                    onChanged: { Task { await refresh() } },
+                    onQuickAction: startHeroAction,
+                    quickActionsBusy: heroBusy
                 )
             }
         } else if let model {
@@ -259,10 +312,8 @@ struct EntityDetailView: View {
             }
             .buttonStyle(.bordered)
             .accessibilityIdentifier("detail.\(key.rawValue).missing.search")
-            Link(destination: appModel.webURL(for: key, id: id)) {
-                Label("Open on web", systemImage: "safari")
-            }
-            .accessibilityIdentifier("detail.\(key.rawValue).missing.web")
+            OpenOnWebButton(target: .record(key: key, id: id), label: "Open on web")
+                .accessibilityIdentifier("detail.\(key.rawValue).missing.web")
         }
     }
 
@@ -300,9 +351,11 @@ struct EntityDetailView: View {
     }
 
     /// The manifest's hero actions this entity declares and native implements, from the one
-    /// generic runner (`edit` stays the toolbar's Edit; `bulkEdit` is a list verb).
+    /// generic runner (`edit` stays the toolbar's Edit; `bulkEdit` is a list verb). Quick actions
+    /// are the buttons under the hero, not More items.
     @ViewBuilder private var heroActionButtons: some View {
-        let plans = descriptor.presentation.heroActions.compactMap { verb in
+        let quick = descriptor.presentation.detailQuickActionIDs
+        let plans = descriptor.presentation.heroActions.filter { !quick.contains($0) }.compactMap { verb in
             HeroActionRunner.plan(for: verb, on: key).map { (verb, $0) }
         }
         let routine = plans.filter { $0.1.confirmation != .destructive }
@@ -337,7 +390,7 @@ struct EntityDetailView: View {
         guard let row = model?.row else { return }
         let runner = HeroActionRunner(client: appModel.client)
         switch plan.kind {
-        case .toggleField, .create:
+        case .toggleField, .create, .setField(_, _?):
             // No input and nothing destructive: one explicit tap runs it. The flag flips before
             // the task is scheduled so a second tap cannot start a second write.
             guard !heroBusy else { return }
@@ -353,7 +406,7 @@ struct EntityDetailView: View {
                     appModel.handle(error)
                 }
             }
-        case .delete, .operation, .setField:
+        case .delete, .operation, .setField, .editField:
             heroAction = HeroActionModel(plan: plan, entity: key, row: row, runner: runner)
         }
     }
@@ -391,8 +444,12 @@ struct EntityDetailContent: View {
     var relationSections: [RelationSectionModel] = []
     var connectedRecords: ConnectedRecordsPreviewModel? = nil
     var onChanged: () -> Void = {}
+    /// Runs a declared quick action; nil (previews) draws none.
+    var onQuickAction: ((HeroActionPlan) -> Void)? = nil
+    var quickActionsBusy = false
 
     @Environment(AppModel.self) private var appModel
+    @Environment(\.developerOverlays) private var developerOverlays
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
     @State private var activityEvents: [DetailActivityEvent] = []
@@ -419,20 +476,6 @@ struct EntityDetailContent: View {
             && (!activityLoaded || activityError != nil || !activityEvents.isEmpty || activityCursor != nil)
     }
 
-    private var hasUnsupportedPresentation: Bool {
-        let unsupportedField = descriptor.fields.contains {
-            $0.showInDetail && NativePresentationCoverage.unsupportedDetail($0) != nil
-        }
-        let unsupportedSlot = presentation.detailSections.contains { section in
-            guard case .slot = section.kind else { return false }
-            return NativePresentationCoverage.unsupportedSlot(section.id) != nil
-        }
-        let unsupportedHero = presentation.heroActions.contains {
-            NativePresentationCoverage.unsupportedHeroAction($0) != nil
-        }
-        return unsupportedField || unsupportedSlot || unsupportedHero
-    }
-
     /// The journal variant's leading section: the first declared relation.
     private var journalSection: RelationSectionModel? {
         guard presentation.detailVariant == .journal else { return nil }
@@ -451,6 +494,28 @@ struct EntityDetailContent: View {
         #endif
     }
 
+    /// The declared quick actions (at most two) as the record's only filled buttons; every other
+    /// verb stays in More.
+    @ViewBuilder private var quickActionButtons: some View {
+        let actions = HeroActionRunner.quickActions(
+            presentation.detailQuickActionIDs, on: descriptor.key, row: row)
+        if let onQuickAction, !actions.isEmpty {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                ForEach(actions, id: \.0) { verb, plan in
+                    Button {
+                        onQuickAction(plan)
+                    } label: {
+                        Label(plan.label, systemImage: plan.symbol)
+                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(quickActionsBusy)
+                    .accessibilityIdentifier("detail.\(descriptor.key.rawValue).quick.\(verb.rawValue)")
+                }
+            }
+        }
+    }
+
     #if os(macOS)
         private var macBody: some View {
             ScrollView {
@@ -464,12 +529,11 @@ struct EntityDetailContent: View {
                         .foregroundStyle(.secondary)
                     }
                     EntityHeroView(descriptor: descriptor, row: row) {
-                        if let supplement = DetailSlotRegistry.supplement(
-                            for: descriptor.key, row: row, onChanged: onChanged)
-                        {
+                        if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
                             supplement
                         }
                     }
+                    quickActionButtons
                     DetailSummaryGrid(descriptor: descriptor, row: row)
                     HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
@@ -496,16 +560,6 @@ struct EntityDetailContent: View {
                             ForEach(presentation.detailSections) { section in
                                 if section.id != journalSection?.id { macDeclared(section) }
                             }
-                            if hasUnsupportedPresentation {
-                                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                                    Text("More details").font(.headline)
-                                    Text("Additional details are available on web.").foregroundStyle(
-                                        .secondary)
-                                    Link(
-                                        "Open on web",
-                                        destination: appModel.webURL(for: descriptor.key, id: row.id))
-                                }
-                            }
                             if let connectedRecords, connectedHasRows || connectedRecords.error != nil {
                                 DisclosureGroup(isExpanded: $connectedExpanded) {
                                     ConnectedRecordsSection(model: connectedRecords)
@@ -513,10 +567,12 @@ struct EntityDetailContent: View {
                                     Text("Connected records").font(.headline)
                                 }
                             }
-                            DisclosureGroup(isExpanded: $rawExpanded) {
-                                RawRecordDisclosure(raw: row.raw)
-                            } label: {
-                                Text("Raw record").font(.headline)
+                            if developerOverlays {
+                                DisclosureGroup(isExpanded: $rawExpanded) {
+                                    RawRecordDisclosure(raw: row.raw)
+                                } label: {
+                                    Text("Raw record").font(.headline)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -548,7 +604,6 @@ struct EntityDetailContent: View {
                 await loadActivity()
             }
             .modifier(DetailContentsNavigation(entries: contentsEntries))
-            .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
             .environment(\.reportBatchStore, reportBatches)
             .task { reportBatches.onRecordStale = onChanged }
         }
@@ -566,13 +621,15 @@ struct EntityDetailContent: View {
                     }
                 }
             case .relation:
-                if let model = relationSections.first(where: { $0.id == section.id }),
-                    !(model.list.phase == .loaded && model.list.rows.isEmpty)
-                {
-                    DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                if let model = relationSections.first(where: { $0.id == section.id }) {
+                    if model.isLoadedEmpty {
                         RelationSectionView(model: model, row: row, macLayout: true)
-                    } label: {
-                        Text(section.title ?? model.target.plural).font(.headline)
+                    } else {
+                        DisclosureGroup(isExpanded: macSectionBinding(section.id)) {
+                            RelationSectionView(model: model, row: row, macLayout: true)
+                        } label: {
+                            Text(model.countedTitle).font(.headline)
+                        }
                     }
                 }
             case .timeline:
@@ -636,14 +693,15 @@ struct EntityDetailContent: View {
             }
             Section {
                 EntityHeroView(descriptor: descriptor, row: row) {
-                    if let supplement = DetailSlotRegistry.supplement(
-                        for: descriptor.key, row: row, onChanged: onChanged)
-                    {
+                    if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
                         supplement
                     }
                 }
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+                quickActionButtons
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
                 if !row.previousShortcodes.isEmpty {
                     LabeledContent(
                         "Previous shortcodes", value: row.previousShortcodes.joined(separator: ", "))
@@ -678,13 +736,6 @@ struct EntityDetailContent: View {
             if activityInsertionSectionID == nil {
                 phoneActivitySection
             }
-            if hasUnsupportedPresentation {
-                Section("More details") {
-                    Text("Additional details are available on web.")
-                        .foregroundStyle(.secondary)
-                    Link("Open on web", destination: appModel.webURL(for: descriptor.key, id: row.id))
-                }
-            }
             if let connectedRecords {
                 if connectedHasRows || connectedRecords.error != nil {
                     DisclosureGroup("Connected records", isExpanded: $connectedExpanded) {
@@ -693,10 +744,12 @@ struct EntityDetailContent: View {
                     .detailContentsAnchor("connected-records")
                 }
             }
-            DisclosureGroup("Raw record", isExpanded: $rawExpanded) {
-                RawRecordDisclosure(raw: row.raw)
+            if developerOverlays {
+                DisclosureGroup("Raw record", isExpanded: $rawExpanded) {
+                    RawRecordDisclosure(raw: row.raw)
+                }
+                .detailContentsAnchor("raw-record")
             }
-            .detailContentsAnchor("raw-record")
         }
         #if os(iOS)
             .listStyle(.insetGrouped)
@@ -714,7 +767,6 @@ struct EntityDetailContent: View {
             await loadActivity()
         }
         .modifier(DetailContentsNavigation(entries: contentsEntries))
-        .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
         .environment(\.reportBatchStore, reportBatches)
         .task { reportBatches.onRecordStale = onChanged }
     }
@@ -747,9 +799,7 @@ struct EntityDetailContent: View {
             }
         case .relation:
             if let model = relationSections.first(where: { $0.id == section.id }) {
-                if !(model.list.phase == .loaded && model.list.rows.isEmpty) {
-                    RelationSectionView(model: model, row: row)
-                }
+                RelationSectionView(model: model, row: row)
             }
         case .timeline:
             if !timelineIsEmpty {
@@ -798,7 +848,7 @@ struct EntityDetailContent: View {
                 }
             case .relation:
                 guard let relation = relationSections.first(where: { $0.id == section.id }),
-                    !(relation.list.phase == .loaded && relation.list.rows.isEmpty)
+                    !relation.isLoadedEmpty
                 else { return nil }
             case .timeline:
                 guard !timelineIsEmpty else { return nil }
@@ -814,7 +864,8 @@ struct EntityDetailContent: View {
                         id: "connected-records", title: "Connected records", group: "Relations")
                 ]
                 : [])
-            + [DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")]
+            + (developerOverlays
+                ? [DetailContentsEntry(id: "raw-record", title: "Raw record", group: "Provenance")] : [])
     }
 
     private func loadTimelineIfDeclared() async {
@@ -870,66 +921,6 @@ struct EntityDetailContent: View {
     }
 
 }
-
-#if os(macOS)
-    /// Uses the loaded generic row; the inspector never starts a second record query.
-    private struct FieldGuideRecordInspector: ViewModifier {
-        let descriptor: EntityDescriptor
-        let row: EntityRow
-        @State private var isPresented = false
-
-        func body(content: Content) -> some View {
-            content
-                .toolbar {
-                    Button {
-                        isPresented.toggle()
-                    } label: {
-                        Label("Inspector", systemImage: "sidebar.right")
-                    }
-                    .help(isPresented ? "Hide inspector" : "Show inspector")
-                    .accessibilityIdentifier("detail.inspectorToggle")
-                }
-                .inspector(isPresented: $isPresented) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                            Text("Record notes")
-                                .font(.fieldGuideHeadline)
-                            Divider()
-                            LabeledContent("Type", value: descriptor.singular)
-                            LabeledContent("Code", value: row.id)
-                            ForEach(descriptor.presentation.summaryFieldKeys, id: \.self) { key in
-                                if let field = descriptor.field(key),
-                                    let value = EntityFieldValue.text(
-                                        in: row.raw, field: field, surface: "detail")
-                                {
-                                    LabeledContent(field.label) {
-                                        if let date = EntityFieldValue.dateValue(
-                                            in: row.raw, field: field, surface: "detail")
-                                        {
-                                            DateDisplay(date)
-                                        } else {
-                                            Text(value)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        .padding(FieldGuideTokens.Space.lg)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    .background(FieldGuideTokens.surface)
-                    .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
-                }
-        }
-    }
-#else
-    private struct FieldGuideRecordInspector: ViewModifier {
-        let descriptor: EntityDescriptor
-        let row: EntityRow
-
-        func body(content: Content) -> some View { content }
-    }
-#endif
 
 /// Developer overlays layer 4/7: shortcode plus fetched-at/age. No `uuid` field — the generic
 /// entity API never exposes the underlying uuid, only the public shortcode (`row.id`).

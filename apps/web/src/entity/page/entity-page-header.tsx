@@ -1,4 +1,8 @@
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
+import {
+  detailBreadcrumbSchema,
+  type DetailBreadcrumb as DetailBreadcrumbProjection,
+} from "@cubby/schemas/entity-detail-summary";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -6,7 +10,11 @@ import { z } from "zod";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { entityHeroWhen } from "~/entity/display/entity-display";
-import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import {
+  entities,
+  entityDetailParams,
+  isBrowserRoutedEntity,
+} from "~/entity/entities";
 import { getEntityNavGroup } from "~/entity/navigation/nav-items";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -45,7 +53,10 @@ const heroStampVariant = {
 } as const satisfies Record<"ink" | "red" | "green", BadgeVariant>;
 
 const detailRawDataSchema = z
-  .object({ createdAt: z.union([z.string(), z.date()]).optional() })
+  .object({
+    createdAt: z.union([z.string(), z.date()]).optional(),
+    breadcrumb: detailBreadcrumbSchema.optional(),
+  })
   .passthrough();
 
 function Separator() {
@@ -53,18 +64,21 @@ function Separator() {
 }
 
 /**
- * `Pantry / Products / 4K7M`: the entity's domain (or nav group), its plural
- * label linking back to the list, and the copyable code as the current leaf.
- * The code repeats in the facts line below `md`, so the trail hides it there.
+ * `Pantry / Products / Garage / Shelf B / 4K7M`: the entity's domain (or nav
+ * group), its plural label linking back to the list, the record's projected
+ * `breadcrumb`, and the copyable code as the current leaf. The code repeats in
+ * the facts line below `md`, so the trail hides it there.
  */
 function DetailBreadcrumb({
   entity,
   heroNo,
   wayfinding,
+  crumbs,
 }: {
   entity: Entity;
   heroNo?: string;
   wayfinding?: DetailWayfinding;
+  crumbs: DetailBreadcrumbProjection;
 }) {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
@@ -94,6 +108,25 @@ function DetailBreadcrumb({
       >
         {def.pluralLabel}
       </Link>
+      {crumbs.map((crumb) => {
+        const parsed = entitySchema.safeParse(crumb.entity);
+        return (
+          <span key={crumb.id} className="inline-flex items-center gap-x-1">
+            <Separator />
+            {parsed.success && isBrowserRoutedEntity(parsed.data) ? (
+              <Link
+                to={entities[parsed.data].routes.detail}
+                params={entityDetailParams(crumb.id)}
+                className="hover:text-foreground"
+              >
+                {crumb.name}
+              </Link>
+            ) : (
+              <span>{crumb.name}</span>
+            )}
+          </span>
+        );
+      })}
       {heroNo && (
         <span className="inline-flex items-center gap-x-1 max-md:hidden">
           <Separator />
@@ -188,6 +221,9 @@ export function DetailPageHeader({
             entity={entity}
             heroNo={heroNo}
             wayfinding={wayfinding}
+            crumbs={
+              (parsedRawData.success && parsedRawData.data.breadcrumb) || []
+            }
           />
         ) : undefined
       }

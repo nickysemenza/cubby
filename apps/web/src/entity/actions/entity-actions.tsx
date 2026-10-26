@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import type { ReactNode } from "react";
 import {
@@ -589,10 +590,21 @@ export function useEntityActions<TRow extends EntityActionRow>(
 
   const selectionActions = selectionActionItems.map(entityActionBulkAction);
 
-  const rowCapable = resolved.filter(
-    ({ definition }) =>
-      definition.arity !== "multi" && appliesTo(definition, entity, "row"),
-  );
+  // The declared `list.quickActions` lead the row menu, in declared order.
+  const quickVerbs: readonly string[] = entitySummary[entity].list.quickActions;
+  const quickRank = (verb: string) => {
+    const index = quickVerbs.indexOf(verb);
+    return index === -1 ? quickVerbs.length : index;
+  };
+  const rowCapable = resolved
+    .filter(
+      ({ definition }) =>
+        definition.arity !== "multi" && appliesTo(definition, entity, "row"),
+    )
+    .sort(
+      (left, right) =>
+        quickRank(left.definition.verb) - quickRank(right.definition.verb),
+    );
   // Keyed by stable action id, not by array position: a definition's handles
   // are rendered as siblings, and a registry entry that appears conditionally
   // (an action with no `run` this render) would otherwise shift every later key.
@@ -771,12 +783,18 @@ export function EntityActionButtons({
   record,
   surface = "detail",
   verbs,
+  quickVerbs = [],
   overflow = "menu",
   additionalActions,
 }: {
   entity: Entity;
   record: EntityActionRow;
   surface?: "detail" | "inspector";
+  /**
+   * The declared `detail.quickActions`: each available one renders as a
+   * leading primary button, ahead of the primary verb and the overflow.
+   */
+  quickVerbs?: readonly string[];
   /**
    * Only these verbs render (the manifest's declared `hero.actions`); the
    * registry's full roster otherwise. `copyCodes` always stays reachable —
@@ -805,19 +823,34 @@ export function EntityActionButtons({
     const availability = action.availability(record);
     return availability.status === "hidden" ? [] : [{ action, availability }];
   });
+  const quick = quickVerbs.flatMap((verb) =>
+    visible.filter(
+      ({ action, availability }) =>
+        action.verb === verb && availability.status === "available",
+    ),
+  );
+  const rest = visible.filter((entry) => !quick.includes(entry));
 
   return (
     <>
+      {quick.map(({ action }) => (
+        <VerbButton
+          key={action.id}
+          verb={action.verb}
+          variant="default"
+          onClick={() => action.run(record)}
+        />
+      ))}
       {overflow === "inline" ? (
-        <InlineActionButtons visible={visible} record={record} />
+        <InlineActionButtons visible={rest} record={record} />
       ) : overflow === "panel" ? (
         <PanelActionButtons
-          visible={visible}
+          visible={rest}
           record={record}
           additionalActions={additionalActions}
         />
       ) : (
-        <MenuActionButtons visible={visible} record={record} />
+        <MenuActionButtons visible={rest} record={record} />
       )}
       {dialogs}
     </>

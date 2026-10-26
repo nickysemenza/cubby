@@ -425,16 +425,12 @@ public actor CompanionImageWorker {
     }
 
     /// The system background task owns this HTTP window; it does not reopen an iOS subscription.
-    public func runInBackground(
-        client: CubbyClient,
-        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)? = nil
-    ) async -> Bool {
-        await runInBackground(transport: client, hello: hello(foreground: false), progress: progress)
+    public func runInBackground(client: CubbyClient) async -> Bool {
+        await runInBackground(transport: client, hello: hello(foreground: false))
     }
 
     func runInBackground(
-        transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello,
-        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)? = nil
+        transport: any CompanionImageBackgroundTransport, hello: ImageProcessingHello
     ) async -> Bool {
         guard shouldRun, isParticipating, !updateRequired, backgroundTask == nil else { return false }
         // One executor owns the shared slots. Settle any resident pull before the HTTP window.
@@ -453,8 +449,7 @@ public actor CompanionImageWorker {
                 transport: transport, hello: hello, maximumJobs: Int.max,
                 maximumConcurrentCommands: { await self.maximumConcurrentCommands },
                 activity: { processed, running in
-                    await self.reportBackgroundProgress(
-                        processed: processed, running: running, progress: progress)
+                    await self.reportBackgroundProgress(processed: processed, running: running)
                 })
         }
         backgroundTask = task
@@ -1090,16 +1085,12 @@ public actor CompanionImageWorker {
         reportActivity()
     }
 
-    private func reportBackgroundProgress(
-        processed: Int, running: Int,
-        progress: (@MainActor @Sendable (CompanionImageWorkerActivity) -> Void)?
-    ) async {
+    private func reportBackgroundProgress(processed: Int, running: Int) {
         if running > 0 { beginQueueSession() }
         queueProgress?.completedCount += max(0, processed - backgroundCompletedCount)
         backgroundCompletedCount = processed
         backgroundProcessingCount = running
         reportActivity()
-        await progress?(currentActivity())
     }
 
     /// Reports only changes, so observers see each transition once.

@@ -2,7 +2,7 @@ import CubbyKit
 import SwiftUI
 
 /// The one editor for every structured field (`externalIds`, `unitMappings`, `labelNutrition`,
-/// `sourceAliases`, `sourceRefs`, `structuredField`): it draws the field's declared `ValueSchema`,
+/// `sourceAliases`, `sourceRefs`): it draws the field's declared `ValueSchema`,
 /// recursively, into `GenericEntityEditModel.draft`. There is no per-entity or per-field view;
 /// validation stays on the server and its issues arrive at `model.nestedError` by position.
 ///
@@ -13,14 +13,13 @@ struct StructuredValueControl: View {
     let field: FieldDescriptor
     let schema: ValueSchema
     @Bindable var model: GenericEntityEditModel
-    @Binding var pickedTitles: [String: String]
 
     var body: some View {
         if field.collection?.primary != nil {
-            CollectionValueControl(field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
+            CollectionValueControl(field: field, schema: schema, model: model)
         } else {
             StructuredSchemaView(
-                context: StructuredEditorContext(field: field, model: model, pickedTitles: $pickedTitles),
+                context: StructuredEditorContext(field: field, model: model),
                 schema: schema,
                 title: model.isRequired(field) ? "\(field.label) *" : field.label,
                 path: []
@@ -33,10 +32,9 @@ private struct CollectionValueControl: View {
     let field: FieldDescriptor
     let schema: ValueSchema
     @Bindable var model: GenericEntityEditModel
-    @Binding var pickedTitles: [String: String]
 
     private var context: StructuredEditorContext {
-        StructuredEditorContext(field: field, model: model, pickedTitles: $pickedTitles)
+        StructuredEditorContext(field: field, model: model)
     }
 
     var body: some View {
@@ -138,7 +136,6 @@ private struct CollectionValueControl: View {
 struct StructuredEditorContext {
     let field: FieldDescriptor
     let model: GenericEntityEditModel
-    let pickedTitles: Binding<[String: String]>
 
     func value(_ path: [String]) -> JSONValue {
         StructuredValue.value(at: path, in: model.draft[field.key] ?? .null)
@@ -221,16 +218,12 @@ private struct StructuredSchemaView: View {
                 isOn: Binding(
                     get: { value.boolValue ?? false }, set: { context.set(path, .bool($0)) }))
         case .enum(let options): enumRow(options)
-        case .reference(let entity):
-            StructuredReferenceRow(
-                context: context, entity: entity, title: title, path: path, clearable: schema.nullable)
         case .amount(let upper): amountRow(upper: upper)
         case .constant: EmptyView()
         case .object(let fields): fieldRows(fields)
         case .array(let item): arrayRows(item)
         case .map(let keys, let item): mapRows(keys, item)
-        case .variant(let discriminator, let cases):
-            variantRows(discriminator, cases, locked: schema.createOnly == true && !context.model.isCreate)
+        case .reference, .variant: EmptyView()
         }
     }
 
@@ -456,80 +449,6 @@ private struct StructuredSchemaView: View {
         }
     }
 
-    @ViewBuilder
-    private func variantRows(_ discriminator: String, _ cases: [ValueSchema.Case], locked: Bool) -> some View
-    {
-        let tag = value[discriminator]?.stringValue
-        let selected = cases.first { $0.value == tag }
-        let pickerTitle = title.isEmpty ? discriminator.capitalized : "\(title) \(discriminator)"
-        Picker(
-            pickerTitle,
-            selection: Binding(
-                get: { tag ?? "" },
-                set: { chosen in
-                    guard chosen != tag, let next = cases.first(where: { $0.value == chosen }) else {
-                        return
-                    }
-                    context.set(path, StructuredValue.blankCase(discriminator, next))
-                })
-        ) {
-            if selected == nil { Text("Choose").tag("") }
-            ForEach(cases, id: \.value) { Text($0.label).tag($0.value) }
-        }
-        .disabled(locked)
-        .accessibilityIdentifier(context.identifier(path + [discriminator]))
-        if let selected { fieldRows(selected.fields) }
-    }
-}
-
-/// A shortcode field the person picks from the target entity's records rather than typing.
-private struct StructuredReferenceRow: View {
-    let context: StructuredEditorContext
-    let entity: EntityKey
-    let title: String
-    let path: [String]
-    let clearable: Bool
-    @State private var picking = false
-
-    private var id: String? {
-        context.value(path).stringValue.flatMap { $0.isEmpty ? nil : $0 }
-    }
-
-    var body: some View {
-        HStack {
-            Button {
-                picking = true
-            } label: {
-                LabeledContent(title) {
-                    if let id {
-                        Text(context.pickedTitles.wrappedValue[id] ?? id)
-                            .foregroundStyle(FieldGuideTokens.graphite)
-                            .lineLimit(1)
-                    } else {
-                        Text("None").foregroundStyle(.secondary)
-                    }
-                }
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(context.identifier(path))
-            if id != nil, clearable {
-                Button("Clear", systemImage: "xmark.circle.fill") { context.set(path, .null) }
-                    .labelStyle(.iconOnly)
-                    .foregroundStyle(.secondary)
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel("Clear \(title)")
-            }
-        }
-        .sheet(isPresented: $picking) {
-            EntityPickerSheet(target: entity, selected: [id].compactMap { $0 }) { picks in
-                guard let pick = picks.first else { return }
-                context.set(path, .string(pick.id))
-                context.pickedTitles.wrappedValue[pick.id] = pick.title
-            }
-        }
-    }
 }
 
 extension ValueSchema {
@@ -543,7 +462,6 @@ extension ValueSchema {
 }
 
 #Preview("Product unit mappings and label nutrition") {
-    @Previewable @State var pickedTitles: [String: String] = [:]
     let model = GenericEntityEditModel(
         descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"),
         client: PreviewFixtures.signedInModel().client,
@@ -558,21 +476,8 @@ extension ValueSchema {
         ForEach(["unitMappings", "labelNutrition"], id: \.self) { key in
             if let field = EntityCatalog[.product].field(key), let schema = field.valueSchema {
                 StructuredValueControl(
-                    field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
+                    field: field, schema: schema, model: model)
             }
-        }
-    }
-    .environment(PreviewFixtures.signedInModel())
-}
-
-#Preview("Financial account identity") {
-    @Previewable @State var pickedTitles: [String: String] = [:]
-    let model = GenericEntityEditModel(
-        descriptor: EntityCatalog[.financialAccount], mode: .create(prefill: [:]),
-        client: PreviewFixtures.signedInModel().client)
-    return Form {
-        if let field = EntityCatalog[.financialAccount].field("identity"), let schema = field.valueSchema {
-            StructuredValueControl(field: field, schema: schema, model: model, pickedTitles: $pickedTitles)
         }
     }
     .environment(PreviewFixtures.signedInModel())

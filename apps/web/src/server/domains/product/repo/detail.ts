@@ -1,3 +1,4 @@
+import type { DetailBreadcrumb } from "@cubby/schemas/entity-detail-summary";
 import type { ProductWithFoodOut } from "@cubby/schemas/product";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
@@ -27,6 +28,7 @@ import { enrichProductRowsWithPricing } from "~/server/domains/product/repo/pric
 import {
   EMPTY_QUANTITY_LEDGER,
   loadProductDetailQuantityLedgers,
+  loadProductPlacementFacts,
 } from "~/server/domains/product/repo/quantity-ledger";
 import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -54,7 +56,7 @@ const emptyRecipeUsages = {
 export async function readProductDetail(
   context: ProductDetailReadContext,
   shortcode: string,
-): Promise<ProductWithFoodOut | null> {
+): Promise<(ProductWithFoodOut & { breadcrumb: DetailBreadcrumb }) | null> {
   const parsed = parseShortcode(shortcode);
   if (parsed?.type !== "product") return null;
 
@@ -93,6 +95,7 @@ export async function readProductDetail(
     row.id,
     row.category,
   );
+  const placementsPromise = loadProductPlacementFacts(context.db, [row.id]);
   const ownersPromise = loadProductOwners(context.db, [row.id]);
   const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
@@ -173,6 +176,7 @@ export async function readProductDetail(
     food,
     ownership,
     owners,
+    placements,
   ] = await Promise.all([
     pricingPromise,
     quantityPromise,
@@ -184,8 +188,18 @@ export async function readProductDetail(
     foodPromise,
     ownershipPromise,
     ownersPromise,
+    placementsPromise,
   ]);
   const coverImageUrl = covers.get(row.id) ?? null;
+  const primaryPlacement = placements.get(row.id)?.primaryPlacement ?? null;
+  // The hero breadcrumb walks the primary placement's ancestry, which the
+  // breadcrumbs phase already loaded for every stocked location.
+  const placed =
+    primaryPlacement === null
+      ? undefined
+      : breadcrumbed.inventoryEntry.find(
+          (entry) => entry.location.shortcode === primaryPlacement.locationId,
+        )?.location;
 
   const mapped = dbProductToAPI(
     {
@@ -199,6 +213,18 @@ export async function readProductDetail(
   );
   return {
     ...mapped,
+    primaryPlacement,
+    breadcrumb:
+      placed === undefined
+        ? []
+        : [
+            ...(placed.ancestors ?? []).map(({ id, name }) => ({
+              entity: "location",
+              id,
+              name,
+            })),
+            { entity: "location", id: placed.shortcode, name: placed.name },
+          ],
     ...productUnitPriceDetailFields({ ...mapped, food }),
     ownershipEvidence: ownership,
     owners: owners.get(row.id) ?? [],

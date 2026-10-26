@@ -6,10 +6,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 #if os(iOS)
+    import AVFoundation
     import Photos
     import PhotosUI
     import UIKit
 #elseif os(macOS)
+    import AppKit
     import UniformTypeIdentifiers
 #endif
 
@@ -20,6 +22,7 @@ struct PhotoSourceButtons: View {
     let maxSelectionCount: Int
     let reviewsUploads: Bool
     @Environment(AppModel.self) private var appModel
+    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @State private var matchingSession = UUID()
     @State private var showingLibrary = false
@@ -48,6 +51,8 @@ struct PhotoSourceButtons: View {
     #endif
     #if os(iOS)
         @State private var showingCamera = false
+        @State private var showingCameraPermission = false
+        @State private var cameraPreparation = CameraPhotoPreparation()
     #elseif os(macOS)
         @State private var showingFileImporter = false
         @State private var failedURLs: [URL] = []
@@ -72,7 +77,11 @@ struct PhotoSourceButtons: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Retry failed photos") {
                     #if os(iOS)
-                        preparationTask = Task { await retryPicked() }
+                        if let data = cameraPreparation.pendingData {
+                            preparationTask = Task { await receiveCameraData(data) }
+                        } else {
+                            preparationTask = Task { await retryPicked() }
+                        }
                     #elseif os(macOS)
                         if fileImportActive {
                             handleFileImport(.success(failedURLs), retrying: true)
@@ -105,8 +114,21 @@ struct PhotoSourceButtons: View {
             }
         #endif
         #if os(iOS)
+            .alert("Camera access is off", isPresented: $showingCameraPermission) {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "Allow Camera access for Cubby in Settings to take photos. If access is restricted, check the device’s restrictions."
+                )
+            }
             .fullScreenCover(isPresented: $showingCamera) {
-                CameraPicker { data in Task { await receiveCameraData(data) } }
+                CameraPicker { data in
+                    preparationTask?.cancel()
+                    preparationTask = Task { await receiveCameraData(data) }
+                }
                 .ignoresSafeArea()
             }
         #elseif os(macOS)
@@ -160,7 +182,20 @@ struct PhotoSourceButtons: View {
             #if os(iOS)
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button {
-                        showingCamera = true
+                        Task {
+                            let status = AVCaptureDevice.authorizationStatus(for: .video)
+                            if status == .authorized {
+                                showingCamera = true
+                            } else if status == .notDetermined {
+                                if await AVCaptureDevice.requestAccess(for: .video) {
+                                    showingCamera = true
+                                } else {
+                                    showingCameraPermission = true
+                                }
+                            } else {
+                                showingCameraPermission = true
+                            }
+                        }
                     } label: {
                         ActionTile(title: "Take photo", symbol: "camera", detail: "Use the camera")
                     }
@@ -212,6 +247,8 @@ struct PhotoSourceButtons: View {
             preparing = true
             #if os(macOS)
                 fileImportActive = false
+            #elseif os(iOS)
+                cameraPreparation.pendingData = nil
             #endif
             preparationProgress = 0
             pendingPickedItems = items
@@ -292,13 +329,18 @@ struct PhotoSourceButtons: View {
     #endif
     #if os(iOS)
         private func receiveCameraData(_ data: Data) async {
+            pickError = nil
+            preparing = true
+            pendingPickedItems = []
+            pendingSelections = []
+            failedIndexes = []
+            defer { preparing = false }
             do {
-                let selection = try await Task.detached(priority: .userInitiated) {
-                    let file = try PhotoFile.materialize(
-                        data: data, filename: "camera-photo.jpg", contentType: "image/jpeg", capturedAt: .now)
-                    return PhotoSelectionItem(file: file, preview: try file.thumbnail())
-                }.value
+                let selection = try await cameraPreparation.prepare(data)
+                guard !Task.isCancelled else { return }
                 deliver([selection])
+            } catch is CancellationError {
+                return
             } catch {
                 pickError = error.localizedDescription
                 Diagnostics.report(error, context: "photo.camera.prepare")
@@ -351,6 +393,56 @@ struct PhotoSourceButtons: View {
             if failedIndexes.isEmpty { finishPending(skipFailed: false) }
         }
     #endif
+}
+
+/// Keep the source until preparation succeeds so a camera failure can retry the same photo.
+@MainActor
+@Observable
+final class CameraPhotoPreparation {
+    var pendingData: Data?
+
+    func prepare(
+        _ data: Data,
+        using prepare: (Data) async throws -> PhotoSelectionItem = prepareSelection
+    ) async throws -> PhotoSelectionItem {
+        pendingData = data
+        let selection = try await prepare(data)
+        pendingData = nil
+        return selection
+    }
+
+    private static func prepareSelection(_ data: Data) async throws -> PhotoSelectionItem {
+        try await Task.detached(priority: .userInitiated) {
+            let file = try PhotoFile.materialize(
+                data: data, filename: "camera-photo.jpg", contentType: "image/jpeg", capturedAt: .now)
+            return PhotoSelectionItem(file: file, preview: try file.thumbnail())
+        }.value
+    }
+}
+
+/// Permission recovery belongs beside the blocked photo source, on both platforms.
+struct PhotoAccessSettingsButton: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        #if os(iOS)
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
+        #elseif os(macOS)
+            Button("Open System Settings") {
+                if let url = URL(
+                    string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Photos")
+                {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        #endif
+    }
+}
+
+#Preview("Permission settings") {
+    PhotoAccessSettingsButton()
 }
 
 #Preview {

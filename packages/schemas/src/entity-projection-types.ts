@@ -80,7 +80,7 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
       standard: "name" | "image" | null;
       detailOrder: number | null;
       listOrder: number | null;
-      width: "xs" | "sm" | "md" | "lg" | null;
+      width: "xs" | "sm" | "md" | "lg" | "xl" | null;
       readPath: string | null;
       labelPath: string | null;
       emptyLabel?: string | null;

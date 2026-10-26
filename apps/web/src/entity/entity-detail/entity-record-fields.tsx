@@ -48,6 +48,9 @@ function inlineEditableKeys(
     model.fields
       .filter(
         (field) =>
+          // A summary cell may name a field hidden from detail; it stays
+          // read-only there.
+          field.display.detail &&
           updateRoster.includes(field.key) &&
           field.control !== null &&
           (field.reference === null
@@ -90,17 +93,17 @@ function useInlineFieldOverrides(
   );
 }
 
-export function EntityRecordFields<E extends GenericDetailEntity>({
-  entity,
-  record,
-  fields,
-}: {
-  entity: E;
-  record: DetailRecordOf<E>;
-  fields: readonly string[];
-}) {
-  const bag = record;
-  const inline = useInlineFieldOverrides(entity, bag, fields);
+/**
+ * The renderer each named field shows on a detail surface, shared by field
+ * sections and summary cells so a fact keeps its interaction wherever it is
+ * placed.
+ */
+export function useDetailFieldOverrides<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+  fields: readonly string[],
+) {
+  const inline = useInlineFieldOverrides(entity, record, fields);
   // A domain renderer for a structured field wins over the generic cell; the
   // inline editor covers the plain scalars a renderer never claims.
   const renderers = detailFieldRenderersFor(entity) ?? {};
@@ -111,11 +114,24 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
     // renderers, each typed against the record this page received.
     overrides[key] = () => render(record as never);
   }
+  return overrides;
+}
+
+export function EntityRecordFields<E extends GenericDetailEntity>({
+  entity,
+  record,
+  fields,
+}: {
+  entity: E;
+  record: DetailRecordOf<E>;
+  fields: readonly string[];
+}) {
+  const overrides = useDetailFieldOverrides(entity, record, fields);
   return (
     <EntityBasicInfo
       entity={entity}
       fields={fields}
-      record={bag}
+      record={record}
       overrides={overrides}
     />
   );

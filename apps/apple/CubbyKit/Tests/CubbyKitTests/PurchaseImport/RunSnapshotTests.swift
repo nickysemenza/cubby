@@ -3,8 +3,8 @@ import Testing
 
 @testable import CubbyKit
 
-// The generic snapshot must retain frozen finding fingerprints and raw errors, reject malformed
-// required metadata, and never let a later refresh replace the review that owns an approval.
+// The generic snapshot must retain raw errors, reject malformed required metadata, and never let
+// an older or cancelled refresh replace what the Run console shows.
 @Suite("Run snapshot")
 struct RunSnapshotTests {
     private func snapshot(_ fingerprint: String = "reviewed") throws -> RunSnapshot {
@@ -19,29 +19,6 @@ struct RunSnapshotTests {
             "operations": [["error": "SQLSTATE 23505: synthetic failure"]],
             "futureEvidence": ["keep": true],
         ])
-    }
-
-    @Test func frozenDocumentRetainsEvidenceAndRequiresTheShownFingerprint() throws {
-        let frozen = RunReviewDocument(runID: "RUN-2345", snapshot: try snapshot(), review: nil)
-        let restored = try JSONDecoder.cubby().decode(
-            RunReviewDocument.self, from: JSONEncoder.cubby().encode(frozen))
-        #expect(restored.snapshot?.raw["futureEvidence"] == ["keep": true])
-        #expect(restored.snapshot?.operationErrors == ["SQLSTATE 23505: synthetic failure"])
-        let input = try restored.findingInput(
-            runID: "RUN-2345", id: "finding-1", apply: true, reviewedFingerprint: "reviewed")
-        #expect(input.reviewedFingerprint == "reviewed")
-        #expect(throws: (any Error).self) {
-            try restored.findingInput(
-                runID: "RUN-2345", id: "finding-1", apply: true, reviewedFingerprint: "refreshed")
-        }
-        #expect(throws: (any Error).self) {
-            try restored.findingInput(
-                runID: "RUN-3456", id: "finding-1", apply: false, reviewedFingerprint: nil)
-        }
-        #expect(throws: (any Error).self) {
-            try restored.findingInput(
-                runID: "RUN-2345", id: "absent", apply: false, reviewedFingerprint: nil)
-        }
     }
 
     @Test func operationErrorsPreserveEmptyStringsAndRejectOtherTypes() throws {
@@ -65,43 +42,8 @@ struct RunSnapshotTests {
 
     }
 
-    @Test func photoApprovalKeepsOnlySelectedFrozenRevisions() throws {
-        func group(_ key: String) -> PhotoGroupProposal {
-            .init(
-                groupKey: key, steps: [], blockedReason: nil, state: .proposed, images: [], skip: [],
-                product: .create(.init(kind: .create, create: .init(name: "Fixture garment"))),
-                committedProduct: nil, inventory: nil, evidence: "Synthetic review", origin: nil,
-                conflict: nil, lastError: nil, missingImageCount: 0, committedAt: nil,
-                updatedAt: "2026-10-01T12:00:00Z")
-        }
-        var blocked = group("blocked")
-        blocked.blockedReason = "Review the identity conflict"
-        let review = PhotoRunReviewResponse(
-            review: .init(
-                runId: "RUN-2345", runStatus: .running,
-                proposals: [group("selected"), group("other"), blocked],
-                unassignedImageIds: []),
-            images: [],
-            lifecycle: .init(
-                processor: .cubby, phase: .readyForReview, plannedImageCount: 0,
-                openBatchCount: 0, finalizedImageCount: 0, describedImageCount: 0,
-                failedImageIds: [], withoutCloudDescriptionCount: 0, skippedImageCount: 0,
-                proposedGroupCount: 3,
-                committedGroupCount: 0, dispatchError: nil))
-        let document = RunReviewDocument(runID: "RUN-2345", snapshot: try snapshot(), review: review)
-        let selected = try document.photoGroups(runID: "RUN-2345", keys: ["selected"])
-        #expect(selected.map(\.groupKey) == ["selected"])
-        #expect(selected.first?.updatedAt == "2026-10-01T12:00:00Z")
-        #expect(throws: (any Error).self) {
-            try document.photoGroups(runID: "RUN-2345", keys: ["selected", "selected"])
-        }
-        #expect(throws: (any Error).self) {
-            try document.photoGroups(runID: "RUN-2345", keys: ["blocked"])
-        }
-    }
-
     @Test @MainActor func newerRefreshOwnsTheSnapshot() async throws {
-        let session = RunReviewSession()
+        let session = RunConsoleSession()
         let gate = Gate()
         let old = try snapshot("old")
         let latest = try snapshot("latest")
@@ -120,9 +62,9 @@ struct RunSnapshotTests {
         #expect(session.snapshot?.raw == latest.raw)
     }
 
-    @Test @MainActor func malformedRefreshRetainsTheReviewAndShowsRawDiagnostics() async throws {
+    @Test @MainActor func malformedRefreshRetainsTheShownRunAndRawDiagnostics() async throws {
         let old = try snapshot()
-        let session = RunReviewSession(snapshot: old)
+        let session = RunConsoleSession(snapshot: old)
         var malformed = try #require(old.raw.objectValue)
         malformed["status"] = 42
         await session.refresh(
@@ -134,10 +76,10 @@ struct RunSnapshotTests {
         #expect(message.contains("42"))
     }
 
-    @Test @MainActor func cancelledRefreshRetainsTheFrozenReview() async throws {
+    @Test @MainActor func cancelledRefreshRetainsTheShownRun() async throws {
         let old = try snapshot("reviewed")
         let next = try snapshot("unseen")
-        let session = RunReviewSession(snapshot: old)
+        let session = RunConsoleSession(snapshot: old)
         let gate = Gate()
         let refresh = Task {
             await session.refresh(

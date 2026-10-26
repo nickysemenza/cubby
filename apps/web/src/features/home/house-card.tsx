@@ -3,6 +3,10 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  CommandButton,
+  useReportCommands,
+} from "~/entity/entity-detail/report-commands";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -67,6 +71,7 @@ function taskBriefingSecondary(briefing: {
 
 export function TodayAttention() {
   const { query: briefing, count, rows } = useTaskBriefing();
+  const commands = useReportCommands();
   const secondary = rows
     ? taskBriefingSecondary({
         nextCount: count("Ready"),
@@ -123,14 +128,24 @@ export function TodayAttention() {
                   </div>
                 </DenseCellContext.Provider>
               </div>
-              {item.trailing ? (
-                <DateDisplay
-                  start={item.trailing}
-                  stacked
-                  due
-                  className="text-right text-xs text-muted-foreground"
-                />
-              ) : null}
+              <div className="flex items-start gap-2">
+                {item.trailing ? (
+                  <DateDisplay
+                    start={item.trailing}
+                    stacked
+                    due
+                    className="text-right text-xs text-muted-foreground"
+                  />
+                ) : null}
+                {(item.commands ?? []).map((command) => (
+                  <CommandButton
+                    key={command.id}
+                    command={command}
+                    commands={commands}
+                    quiet
+                  />
+                ))}
+              </div>
             </li>
           ))}
         </HomeList>

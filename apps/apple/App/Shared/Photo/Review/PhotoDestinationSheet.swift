@@ -7,6 +7,7 @@ struct PhotoDestinationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.developerOverlays) private var developerOverlays
+    @Environment(\.undoManager) private var undoManager
     let manifest: PhotoImportManifest
     let onDone: ([String]) -> Void
     @State private var path: [PhotoImportNavigationDestination] = []
@@ -35,6 +36,11 @@ struct PhotoDestinationSheet: View {
             reviewContent
         }
         .nativeSheet(.photoReview)
+        .onAppear { manifest.undoManager = undoManager }
+        .onDisappear {
+            manifest.undoManager?.removeAllActions(withTarget: manifest)
+            manifest.undoManager = nil
+        }
         .draftDismissal(
             $draftDismissal, isDirty: manifest.hasStagedChanges, isSaving: manifest.isCommitting
         ) { dismiss() }
@@ -231,7 +237,6 @@ struct PhotoDestinationSheet: View {
                 Button("Undo", systemImage: "arrow.uturn.backward") {
                     manifest.undoLastMove()
                 }
-                .keyboardShortcut("z", modifiers: .command)
                 .accessibilityIdentifier("photos.manifest.undo")
             }
         }

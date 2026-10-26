@@ -1,4 +1,7 @@
-import { detailSummarySchema } from "../entity-detail-summary";
+import {
+  detailSummarySchema,
+  detailSurfacesSchema,
+} from "../entity-detail-summary";
 import { displayImageQualityCheck } from "./data-quality-image";
 import {
   colorTokenSchema,
@@ -452,9 +455,12 @@ const buildMetadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
-      /** List column width bucket; the shared table maps it to a class. */
+      /**
+       * List column width bucket; the shared table maps it to a class and the
+       * Mac table to a width range. `xl` is for long prose such as notes.
+       */
       width: z
-        .enum(["xs", "sm", "md", "lg"])
+        .enum(["xs", "sm", "md", "lg", "xl"])
         .nullable()
         .optional()
         .default(null),
@@ -1349,10 +1355,12 @@ const buildMetadataSchemas = () => {
     placement: sectionPlacement,
     /** Focused detail workspace; omission follows the section's semantic kind. */
     workspace: sectionWorkspace.optional(),
+    surfaces: detailSurfacesSchema,
   };
   /**
-   * One detail section. `fields` names every `display.detail` field exactly
-   * once across the sections; `relation` renders the target entity's list
+   * One detail section, in reading order. `fields` names `display.detail`
+   * fields at most once across the sections (every one that is not
+   * `listHidden` or shown by a summary slot must be named); `relation` renders the target entity's list
    * filtered by the named descriptor against this record; `timeline` mounts
    * the entity's timeline capability; `slot` is the one per-platform
    * hand-written fill, rendered only where a registry provides it.
@@ -1435,6 +1443,7 @@ const buildMetadataSchemas = () => {
         explanationField: fieldKey.nullable().optional().default(null),
         workspace: sectionWorkspace.optional(),
         placement: sectionPlacement,
+        surfaces: detailSurfacesSchema,
       })
       .strict(),
   ]);
@@ -1502,6 +1511,15 @@ const buildMetadataSchemas = () => {
       domain: z.enum(WAYFINDING_DOMAINS).nullable(),
       /** One sentence for the records catalog and nav. */
       description: nonEmptyString(),
+      /**
+       * `false` keeps a web-only root (operator plumbing) out of native
+       * Browse and the native sidebar; its records still open natively from
+       * links. Web navigation ignores it.
+       */
+      nativeBrowse: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(true),
       emptyState: z
         .object({
           title: nonEmptyString(),
@@ -1538,7 +1556,11 @@ const buildMetadataSchemas = () => {
             .object({
               /** An enum or boolean field rendered as the title chip. */
               chip: fieldKey.nullable().optional().default(null),
-              /** A reference field rendered as the ancestry breadcrumb. */
+              /**
+               * The field the detail read's `breadcrumb` projection walks: a
+               * reference (a location's ancestry, else the one record), or a
+               * placement object carrying `locationId`.
+               */
               breadcrumb: fieldKey.nullable().optional().default(null),
               /**
                * A date or timestamp field recording when the thing happened,
@@ -1562,6 +1584,11 @@ const buildMetadataSchemas = () => {
               when,
               actions: extraActions,
             })),
+          /**
+           * One or two `hero.extraActions` verbs every client offers as the
+           * record's leading buttons, ahead of the More menu.
+           */
+          quickActions: z.array(actionKey).max(2).optional().default([]),
           /** Only these relations contribute dated records to merged activity. */
           activityRelations: z
             .array(
@@ -1581,13 +1608,14 @@ const buildMetadataSchemas = () => {
             .nullable()
             .optional()
             .default(null),
-          /** Omitted: one Overview section for all detail fields; [] opts out. */
-          sectionOverrides: z.array(detailSectionSchema).optional(),
-          /** Extra field groups, slots and timelines appended to inferred sections. */
-          additionalSections: z
-            .array(detailSectionSchema)
-            .optional()
-            .default([]),
+          /**
+           * The detail page's authored reading order. Edit sections group a
+           * form; these group a record for reading, so neither derives from
+           * the other. Undeclared `many` relations append derived sections.
+           */
+          sections: z.array(detailSectionSchema, {
+            error: "must author the detail page's sections",
+          }),
           /** Ambiguous relation back-filters, keyed by relation name. */
           relationFilterOverrides: z
             .record(
@@ -1617,26 +1645,25 @@ const buildMetadataSchemas = () => {
             .default({}),
         })
         .strict()
-        .prefault({})
         .transform(
           ({
-            sectionOverrides,
+            sections,
             summary,
             activityRelations,
             overviewSections,
-            additionalSections,
             relationFilterOverrides,
             variantOverride,
             hero,
+            quickActions,
             omitRelations,
           }) => ({
             variant: variantOverride,
             summary,
             hero,
-            sections: sectionOverrides,
+            quickActions,
+            sections,
             activityRelations,
             overviewSections,
-            additionalSections,
             relationFilterOverrides,
             omitRelations,
           }),
@@ -1850,6 +1877,11 @@ const buildMetadataSchemas = () => {
            * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
            */
           extraActions: z.array(actionKey).optional().default([]),
+          /**
+           * One or two `extraActions` verbs a row offers first: the leading
+           * swipe and the first row-menu items.
+           */
+          quickActions: z.array(actionKey).max(2).optional().default([]),
           links: z
             .array(
               z
@@ -1891,6 +1923,7 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             extraActions,
+            quickActions,
             views,
             viewAliases,
             totals,
@@ -1922,6 +1955,7 @@ const buildMetadataSchemas = () => {
             scopes,
             tree,
             actions: extraActions,
+            quickActions,
             links,
             timeline,
           }),

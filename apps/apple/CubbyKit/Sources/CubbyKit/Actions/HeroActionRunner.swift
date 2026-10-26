@@ -108,11 +108,26 @@ public struct HeroActionRunner: Sendable {
         return plan
     }
 
+    /// The quick actions `row` offers, in declared order (at most two): each with a plan for
+    /// `entity` whose requirement the record meets. A preset write the record already carries
+    /// (Done on a done task) is left out rather than offered as a no-op.
+    public static func quickActions(
+        _ ids: [EntityHeroActionID], on entity: EntityKey, row: EntityRow
+    ) -> [(EntityHeroActionID, HeroActionPlan)] {
+        ids.prefix(2).compactMap { id in
+            guard let plan = plan(for: id, on: entity), unmet(plan, in: row.raw) == nil else { return nil }
+            if case .setField(let field, let value?) = plan.kind, row.raw[field]?.stringValue == value {
+                return nil
+            }
+            return (id, plan)
+        }
+    }
+
     /// The generated HTTP operation id the plan executes for `entity`.
     public static func operationID(for plan: HeroActionPlan, on entity: EntityKey) -> String? {
         switch plan.kind {
         case .operation(let operation): return operation.operation
-        case .delete, .create, .setField, .toggleField: return "entity.mutate"
+        case .delete, .create, .setField, .editField, .toggleField: return "entity.mutate"
         }
     }
 
@@ -237,7 +252,7 @@ public struct HeroActionRunner: Sendable {
                             } ?? .absent)))
             default: throw HeroActionError.unsupported(preview.operation)
             }
-        case .create, .setField, .toggleField:
+        case .create, .setField, .editField, .toggleField:
             return nil
         }
     }
@@ -298,7 +313,14 @@ public struct HeroActionRunner: Sendable {
                 prefill[key] = filled
             }
             return .editor(entity: target, prefill: prefill, context: editor)
-        case .setField(let field):
+        case .setField(let field, let preset):
+            // A preset value is the plan's, never the form's: one tap writes exactly it.
+            guard let value = preset.map(JSONValue.string) ?? values[field], value != .null else {
+                throw HeroActionError.missing(field)
+            }
+            try await client.update(descriptor, id: row.id, patch: EntityPatch(values: [field: value]))
+            return .completed("\(descriptor.singular) updated", changed: [entity])
+        case .editField(let field):
             guard let value = values[field], value != .null else { throw HeroActionError.missing(field) }
             try await client.update(descriptor, id: row.id, patch: EntityPatch(values: [field: value]))
             return .completed("\(descriptor.singular) updated", changed: [entity])

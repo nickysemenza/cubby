@@ -47,6 +47,7 @@ import {
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
@@ -364,21 +365,24 @@ const buildEntityOperations = <
               : null,
           };
         })
-        .call("media", async ({ context }, { found }) =>
-          found.item === null
-            ? null
-            : {
-                ...(
-                  await withUniversalEntityMedia(
-                    context.db,
-                    binding.entity,
-                    [found.item],
-                    true,
-                  )
-                )[0],
-                redirectedFrom: found.redirectedFrom,
-              },
-        )
+        .call("media", async ({ context }, { found }) => {
+          if (found.item === null) return null;
+          const [item] = await withUniversalEntityMedia(
+            context.db,
+            binding.entity,
+            [found.item],
+            true,
+          );
+          const breadcrumb =
+            item === undefined
+              ? undefined
+              : await detailBreadcrumb(context.db, binding.entity, item);
+          return {
+            ...item,
+            ...(breadcrumb === undefined ? {} : { breadcrumb }),
+            redirectedFrom: found.redirectedFrom,
+          };
+        })
         .output(({ input, found, media }) => {
           if (media === null && input.missing !== "null")
             throw createAppError(

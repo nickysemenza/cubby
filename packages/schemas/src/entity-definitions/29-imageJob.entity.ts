@@ -88,6 +88,8 @@ export default defineEntity({
     domain: null,
     description:
       "Image processing work: subject lifts, descriptions and identifications, with every attempt.",
+    // Queue attempts for operators; images open from their owning records.
+    nativeBrowse: false,
     emptyState: {
       title: "No image jobs yet",
       description:
@@ -135,7 +137,32 @@ export default defineEntity({
       hero: {
         chip: "state",
       },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: [
+            "kind",
+            "state",
+            "imageId",
+            "runId",
+            "attempts",
+            "lastExecutor",
+            "lastError",
+            "waitingOn",
+            "leaseDeviceId",
+            "leaseExpiresAt",
+            "durationMs",
+            "chargedCost",
+            "standardCost",
+            "processorRevision",
+            "dispatchedAt",
+            "completedAt",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
         { kind: "slot", id: "attempts", title: "Attempts and events" },
       ],
     },

@@ -1,14 +1,13 @@
 import Foundation
 
 /// Consumer metadata over the frozen wire document. Reports own Run content; this seam reads
-/// only routing, observation and the evidence required to authorize an explicitly reviewed fix.
+/// only routing and observation.
 public struct RunSnapshot: Codable, Sendable {
     public let raw: JSONValue
     public let runID: String
     public let purpose: RunPurpose
     public let status: RunStatus
     public let operationErrors: [String]
-    private let findings: [JSONRead]
 
     public init(_ raw: JSONValue) throws {
         let reader = JSONRead(value: raw, context: "Run snapshot")
@@ -23,8 +22,7 @@ public struct RunSnapshot: Codable, Sendable {
             throw reader.malformed("status", expected: "a Run status")
         }
         self.status = status
-        findings = try reader.array("findings")
-        for finding in findings { _ = try finding.string("id") }
+        for finding in try reader.array("findings") { _ = try finding.string("id") }
         operationErrors = try reader.array("operations").compactMap { operation in
             guard operation.value.objectValue != nil else {
                 throw operation.malformed("", expected: "an operation object")
@@ -44,10 +42,6 @@ public struct RunSnapshot: Codable, Sendable {
 
     public func encode(to encoder: any Encoder) throws {
         try raw.encode(to: encoder)
-    }
-
-    func finding(id: String) -> JSONValue? {
-        findings.first { $0.value["id"]?.stringValue == id }?.value
     }
 
 }

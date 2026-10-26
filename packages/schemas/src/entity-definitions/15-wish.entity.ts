@@ -63,7 +63,19 @@ export default defineEntity({
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
       hero: { extraActions: ["markPurchased"] },
-      additionalSections: [
+      sections: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["name", "notes"],
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["acquiredAt", "createdAt", "updatedAt"],
+        },
         {
           kind: "fields",
           id: "candidates",
@@ -110,7 +122,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Decision" },
+        display: { columnGroup: "Decision", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

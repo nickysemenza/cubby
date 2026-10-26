@@ -183,16 +183,16 @@ export default defineEntity({
           slot: "project.budget",
         },
         {
-          kind: "chart",
-          id: "monthly-spend",
-          title: "Spend over 12 months",
-          viewKey: "relation:expenses",
-        },
-        {
           kind: "fields",
           id: "places-assignee",
           title: "Places & assignee",
           fields: ["locations", "assigneeId"],
+        },
+        {
+          kind: "records",
+          id: "sub-projects",
+          title: "Sub-projects",
+          viewKey: "relation:sub-projects",
         },
         {
           kind: "records",
@@ -201,10 +201,10 @@ export default defineEntity({
           viewKey: "relation:purchased-products",
         },
         {
-          kind: "records",
-          id: "sub-projects",
-          title: "Sub-projects",
-          viewKey: "relation:sub-projects",
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "relation:expenses",
         },
       ],
 
@@ -233,9 +233,7 @@ export default defineEntity({
 
         extraActions: ["setStatus"],
       },
-      additionalSections: [
-        { kind: "slot", id: "budget", title: "Budget" },
-        { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
+      sections: [
         {
           kind: "relation",
           id: "tasks",
@@ -246,15 +244,30 @@ export default defineEntity({
           sort: { field: "dueDate", direction: "desc" },
         },
         {
-          kind: "slot",
-          id: "contribution",
-          title: "Contribution",
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["emoji", "name", "status", "kind", "parentProjectId"],
         },
         {
           kind: "fields",
-          id: "resource-links",
-          title: "Resources",
-          fields: ["googleDriveFolderUrl", "notionPageUrl"],
+          id: "notes",
+          title: "Notes",
+          fields: ["notes"],
+        },
+        { kind: "slot", id: "schedule", title: "Schedule", placement: "full" },
+        {
+          kind: "fields",
+          id: "schedule-dates",
+          title: "Schedule",
+          fields: ["dates"],
+        },
+        { kind: "slot", id: "budget", title: "Budget" },
+        {
+          kind: "fields",
+          id: "budget-estimate",
+          title: "Budget",
+          fields: ["costEstimate"],
         },
         {
           kind: "fields",
@@ -264,15 +277,32 @@ export default defineEntity({
         },
         {
           kind: "fields",
-          id: "notes",
-          title: "Notes",
-          fields: ["notes"],
+          id: "defaults",
+          title: "Defaults",
+          fields: ["locations", "assigneeId", "defaultTrade"],
+        },
+        {
+          kind: "fields",
+          id: "resource-links",
+          title: "Resources",
+          fields: ["googleDriveFolderUrl", "notionPageUrl"],
+        },
+        {
+          kind: "slot",
+          id: "contribution",
+          title: "Contribution",
         },
         {
           kind: "slot",
           id: "analytics",
           title: "Analytics",
           placement: "full",
+        },
+        {
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: ["updatedAt"],
         },
       ],
     },
@@ -666,7 +696,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: { columnGroup: "Plan" },
+        display: { columnGroup: "Plan", width: "xl" },
         validation: {
           read: z.string().describe("Freeform markdown").nullable(),
           create: z.string().nullable().default(null),

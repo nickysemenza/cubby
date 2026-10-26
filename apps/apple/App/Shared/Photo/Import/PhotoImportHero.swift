@@ -195,6 +195,7 @@ private struct PhotoImportFilmstripThumb: View {
 }
 
 private struct PhotoImportProgressiveImage: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: PhotoSelectionItem
     let maxPixelSize: Int
     let loadsImmediately: Bool
@@ -287,7 +288,7 @@ private struct PhotoImportProgressiveImage: View {
                 .onEnded { _ in magnificationStart = zoomScale }
         )
         .onTapGesture(count: 2) {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                 zoomScale = zoomScale > 1.01 ? 1 : 2
                 magnificationStart = zoomScale
             }

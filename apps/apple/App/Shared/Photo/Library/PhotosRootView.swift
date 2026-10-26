@@ -148,6 +148,7 @@ private struct PhotoLibraryBrowser: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.developerOverlays) private var developerOverlays
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let maxSelectionCount: Int
     let picker: Bool
     let analysisStore: PhotoAnalysisStore?
@@ -233,6 +234,9 @@ private struct PhotoLibraryBrowser: View {
                     filter: $filter, selectedCategory: $selectedCategory,
                     dimPhotosInCubby: $dimPhotosInCubby, showsCategories: !picker,
                     unanalysedCount: unanalysedCount)
+                if !picker && appModel.participation.answeredAt == nil {
+                    DeviceParticipationPrompt()
+                }
                 ScrollViewReader { proxy in
                     ScrollView {
                         // `pinnedViews: .sectionHeaders` keeps each month's label on screen while
@@ -260,7 +264,7 @@ private struct PhotoLibraryBrowser: View {
                         }
                         .padding(.vertical, 12)
                     }
-                    .refreshControl(identifier: "photos.refresh") {
+                    .refreshControl {
                         await library.refresh(matches: matches, client: appModel.client, forceRematch: true)
                     }
                     .onAppear {
@@ -289,7 +293,9 @@ private struct PhotoLibraryBrowser: View {
                             Menu("Jump to month", systemImage: "calendar") {
                                 ForEach(library.months) { month in
                                     Button(month.id.formatted(.dateTime.month(.wide).year())) {
-                                        withAnimation { proxy.scrollTo(month.id, anchor: .top) }
+                                        withAnimation(reduceMotion ? nil : .default) {
+                                            proxy.scrollTo(month.id, anchor: .top)
+                                        }
                                     }
                                 }
                             }
@@ -435,10 +441,18 @@ private struct PhotoLibraryBrowser: View {
                         Task { await library.requestAccess(matches: matches, client: appModel.client) }
                     }.buttonStyle(.borderedProminent)
                 } else {
-                    Text(
-                        "Whole-library browsing needs full access. You can change Photos access in Settings, or select individual photos below."
-                    )
-                    .foregroundStyle(.secondary)
+                    #if os(macOS)
+                        Text(
+                            "Whole-library browsing needs full access. Allow Photos access for Cubby in System Settings > Privacy & Security > Photos, or select individual photos below."
+                        )
+                        .foregroundStyle(.secondary)
+                    #else
+                        Text(
+                            "Whole-library browsing needs full access. Allow Photos access for Cubby in Settings, or select individual photos below."
+                        )
+                        .foregroundStyle(.secondary)
+                    #endif
+                    PhotoAccessSettingsButton()
                 }
                 PhotoSourceButtons(maxSelectionCount: maxSelectionCount, onSelection: onSelection)
             }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)
@@ -576,6 +590,40 @@ private final class FilteredMonthAssetsCache {
         entries[month.id] = (filter, category, revision, categoryRevision, result)
         return result
     }
+}
+
+/// The once-per-install companion-work question, asked in place above the grid the first time
+/// Photos opens with full access rather than at sign-in. Until it is answered the master switch
+/// stays off (`DeviceParticipation`'s default); either answer sets `answeredAt`, so the row does
+/// not return. Settings › Advanced changes the answer later.
+private struct DeviceParticipationPrompt: View {
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        Panel(spacing: FieldGuideTokens.Space.sm) {
+            Text("Help process photos on this device?").font(.headline)
+            Text(
+                "This device can match your library against Cubby, analyse photos in the background, and run companion image jobs. Change this anytime in Settings."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                Button("Turn on") { appModel.setParticipation(automaticWork: true) }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("photos.participation.optIn")
+                Button("Not now") { appModel.setParticipation(automaticWork: false) }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("photos.participation.optOut")
+            }
+        }
+        .padding(.horizontal, FieldGuideTokens.Space.md)
+        .padding(.bottom, FieldGuideTokens.Space.sm)
+    }
+}
+
+#Preview("Participation prompt", traits: .modifier(SignedInPreview())) {
+    DeviceParticipationPrompt()
 }
 
 /// Tracks which months are on screen (via each `Section`'s `onAppear`/`onDisappear`) and keeps

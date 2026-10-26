@@ -10,8 +10,54 @@ struct ReportHost {
     var onChanged: () -> Void = {}
 }
 
+/// Where a report row goes (B1): one row is one link, to its record, else to its filtered list.
+/// Everything else the row names (a reference line, a URL, a list beside the record) is reached
+/// from its context menu, never as a second link in the cell.
+struct RecordRowLinks: Equatable {
+    struct Reference: Equatable {
+        let label: String
+        let record: RecordSelection
+    }
+
+    struct Web: Equatable {
+        let label: String
+        let url: URL
+    }
+
+    let destination: Route?
+    let references: [Reference]
+    let urls: [Web]
+    /// A list the row also counts ("12 recipes") when the record is the destination.
+    let list: (label: String, route: Route)?
+
+    init(_ row: ReportPresentation.RecordRow) {
+        let record = row.entity.flatMap { entity in row.recordID.map { Route.entityDetail(entity, id: $0) } }
+        let list = row.listLink.map { Route.entityList($0.entity, filters: $0.filterState) }
+        destination = record ?? list
+        self.list = record == nil ? nil : list.map { (row.trailing ?? "View records", $0) }
+        references = row.lines.compactMap { line in
+            guard let ref = line.ref, let entity = EntityKey(rawValue: ref.entity) else { return nil }
+            return Reference(label: line.text, record: RecordSelection(key: entity, id: ref.id))
+        }
+        urls =
+            row.lines.compactMap { line in line.url.map { Web(label: line.text, url: $0) } }
+            + [
+                row.externalLinkLabel.flatMap { label in
+                    row.externalLinkURL.map { Web(label: label, url: $0) }
+                }
+            ]
+            .compactMap { $0 }
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.destination == rhs.destination && lhs.references == rhs.references && lhs.urls == rhs.urls
+            && lhs.list?.label == rhs.list?.label && lhs.list?.route == rhs.list?.route
+    }
+}
+
 /// One server-composed row: an optional thumbnail, the title, its lines, badges, the trailing
-/// figure and instant. Opens the record it names.
+/// figure and instant. The whole row is the one link to what it names; its commands sit beside
+/// it, outside the link, so a tap on Done never also opens the record.
 struct RecordRowView: View {
     let row: ReportPresentation.RecordRow
     var large = false
@@ -19,28 +65,57 @@ struct RecordRowView: View {
     /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
     var model: ReportSlotModel?
 
+    @Environment(AppModel.self) private var appModel
+
     var body: some View {
+        let links = RecordRowLinks(row)
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            if let destination = links.destination {
+                NavigationLink(value: destination) { content(linked: true) }
+                    // Several rows share one list cell: each link takes only its own tap.
+                    .buttonStyle(.plain)
+                    .contextMenu { menu(links) }
+            } else {
+                content(linked: false)
+            }
+            if !informational, let model, !row.commands.isEmpty {
+                ReportCommandBar(commands: row.commands, model: model)
+            }
+        }
+    }
+
+    /// The row's other targets, ahead of nothing else: a long press never navigates.
+    @ViewBuilder private func menu(_ links: RecordRowLinks) -> some View {
+        ForEach(links.references, id: \.record) { reference in
+            Button(reference.label, systemImage: EntityCatalog[reference.record.key].sfSymbol) {
+                appModel.navigator.openRecord(reference.record)
+            }
+        }
+        if let list = links.list {
+            Button(list.label, systemImage: "list.bullet") { appModel.navigator.push(list.route) }
+        }
+        ForEach(links.urls, id: \.url) { web in
+            Link(destination: web.url) { Label(web.label, systemImage: "safari") }
+        }
+    }
+
+    private func content(linked: Bool) -> some View {
         RecordListRow(
             title: row.title,
-            titleDestination: row.entity.flatMap { entity in
-                row.recordID.map { Route.entityDetail(entity, id: $0) }
-            },
             imageURL: row.imageURL,
             symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "square.dashed",
             thumbnailSize: large ? 112 : 36
         ) {
             ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
-                if let ref = line.ref, let entity = EntityKey(rawValue: ref.entity) {
-                    NavigationLink(line.text, value: Route.entityDetail(entity, id: ref.id))
-                } else if let url = line.url {
-                    Link(line.text, destination: url)
+                if !linked, line.ref == nil, let url = line.url {
+                    Link(line.text, destination: url).buttonStyle(.borderless)
                 } else {
                     Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
                         .textSelection(.enabled)
                 }
             }
         } rail: {
-            if row.listLink == nil || informational, let trailing = row.trailing, !trailing.isEmpty {
+            if let trailing = row.trailing, !trailing.isEmpty {
                 Text(trailing)
             }
             if let time = row.time {
@@ -68,20 +143,14 @@ struct RecordRowView: View {
                 DateDisplay(date: at)
             }
         } supplement: {
-            extras
+            extras(linked: linked)
             if !row.paths.isEmpty { RecordPathView(paths: row.paths) }
-            if informational, let link = row.listLink {
-                NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
-                    Text(row.trailing ?? "View records").font(.caption)
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
-            }
         }
         .accessibilityElement(children: .contain)
     }
 
-    /// Toned badges, the raw block and commands a row carries beyond its title and lines.
-    @ViewBuilder private var extras: some View {
+    /// Toned badges, the raw block and an external link a row carries beyond its title and lines.
+    @ViewBuilder private func extras(linked: Bool) -> some View {
         if !row.badges.isEmpty {
             WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
                 ForEach(Array(row.badges.enumerated()), id: \.offset) { _, badge in
@@ -97,13 +166,15 @@ struct RecordRowView: View {
             .font(.caption)
         }
         if let label = row.externalLinkLabel, let url = row.externalLinkURL {
-            Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
+            if linked {
+                Text(label).font(.fieldGuideLabel)
+            } else {
+                Link(label, destination: url).font(.fieldGuideLabel).frame(minHeight: 44)
+                    .buttonStyle(.borderless)
+            }
             if let hint = row.externalLinkHint {
                 Text(hint).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
-        }
-        if !informational, let model, !row.commands.isEmpty {
-            ReportCommandBar(commands: row.commands, model: model)
         }
     }
 }
@@ -324,15 +395,10 @@ struct RecordsBlockView: View {
     @State private var reviewing: AIReviewRequest?
     @State private var notice: String?
     @State private var busy = false
-    // Finance verbs (`records.verbs`): the flows they open.
     @State private var selectedCapture: String?
     @State private var captureOffset = 0
-    @State private var statementMatch: StatementMatchSession?
+    // The one finance verb (`records.verbs`) native runs; the rest hand off to web.
     @State private var receiving: ReceivingModel?
-    @State private var splitting: ExpenseSplitSession?
-    @State private var linkingExpenses: PurchaseExpenseLinkSession?
-    @State private var linkingProducts: PurchaseProductLinkSession?
-    @State private var verbError: String?
     // The answers to the block's choices (a prepared import's per-line decisions).
     @State private var answers = ReportChoiceAnswers()
 
@@ -447,29 +513,8 @@ struct RecordsBlockView: View {
             }
             verbs
         }
-        .sheet(item: $statementMatch) { session in
-            StatementMatchSheet(session: session) {
-                appModel.recordEntityMutation(keys: [.financialTransaction, .purchase])
-            }
-            .nativeSheet(.editor)
-        }
         .sheet(item: $receiving) { model in
             ReceiveExpenseSheet(model: model)
-        }
-        .sheet(item: $splitting) { session in
-            SplitExpenseSheet(session: session) { splitSaved() }
-                .environment(appModel)
-                .nativeSheet(.editor)
-        }
-        .sheet(item: $linkingExpenses) { session in
-            LinkExpensesSheet(session: session) { attachSaved() }
-                .environment(appModel)
-                .nativeSheet(.editor)
-        }
-        .sheet(item: $linkingProducts) { session in
-            LinkProductsSheet(session: session) { attachSaved() }
-                .environment(appModel)
-                .nativeSheet(.editor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .sheet(item: $action) { model in
@@ -497,11 +542,6 @@ struct RecordsBlockView: View {
                 ReportChoiceView(
                     choice: choice, answers: $answers, disabled: model?.busyActionID != nil)
             }
-            if let link = row.listLink, let trailing = row.trailing {
-                NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
-                    Label(trailing, systemImage: "list.bullet").font(.fieldGuideLabel)
-                }
-            }
             ForEach(plans(row.actions, scope: .row), id: \.0) { id, plan in
                 if let itemID = row.recordID { actionButton(id, plan, itemID: itemID) }
             }
@@ -523,7 +563,8 @@ struct RecordsBlockView: View {
     }
 
     @ViewBuilder private var verbs: some View {
-        ForEach(records.verbs.filter { SectionActionRunner.coverage(of: $0.verb) == .implemented }) { verb in
+        ForEach(records.verbs.filter { NativePresentationCoverage.sectionAction($0.verb) == .implemented }) {
+            verb in
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 verbButton(verb)
                     .buttonStyle(.borderless)
@@ -532,34 +573,22 @@ struct RecordsBlockView: View {
                 }
             }
         }
-        if let verbError {
-            Text(verbError).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
-        }
-        let unsupported = records.verbs.compactMap { verb -> String? in
-            if case .unsupported(let reason) = SectionActionRunner.coverage(of: verb.verb) { return reason }
-            return nil
-        }
-        if let host, !unsupported.isEmpty {
-            ForEach(unsupported, id: \.self) { reason in
-                Text(reason).font(.caption).foregroundStyle(.secondary)
+        if let host {
+            let handoffs = records.verbs.compactMap {
+                NativePresentationCoverage.sectionAction($0.verb).handoff
             }
-            Link("Open on web", destination: appModel.webURL(for: host.entity, id: host.row.id))
+            ForEach(handoffs, id: \.label) { handoff in
+                OpenOnWebButton(
+                    target: handoff.target(key: host.entity, id: host.row.id), label: handoff.label
+                )
                 .font(.caption)
+            }
         }
     }
 
     @ViewBuilder
     private func verbButton(_ verb: ReportPresentation.Records.Verb) -> some View {
         switch verb.verb {
-        case .matchStatement:
-            Button(verb.label) {
-                verbError = nil
-                if let host {
-                    statementMatch = StatementMatchSession(purchaseID: host.row.id, client: appModel.client)
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.matchStatement")
         case .receiveExpense:
             let productID = host?.row.raw["productId"]?.stringValue
             Button {
@@ -571,72 +600,10 @@ struct RecordsBlockView: View {
             }
             .disabled(verb.disabledReason != nil || productID == nil)
             .accessibilityIdentifier("receive.open.\(host?.row.id ?? "")")
-        case .splitExpense:
-            Button(verb.label) {
-                open {
-                    try $0.splitSession(expenseID: $1, records: records)
-                } assign: {
-                    splitting = $0
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.splitExpense")
-        case .linkExpenses:
-            Button(verb.label) {
-                open {
-                    try $0.expenseLinkSession(purchaseID: $1, records: records)
-                } assign: {
-                    linkingExpenses = $0
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.linkExpenses")
-        case .linkProducts:
-            Button(verb.label) {
-                open {
-                    try $0.productLinkSession(purchaseID: $1, records: records)
-                } assign: {
-                    linkingProducts = $0
-                }
-            }
-            .disabled(verb.disabledReason != nil || host == nil)
-            .accessibilityIdentifier("section.linkProducts")
+        // Handed off to web (`native-coverage.ts`): `verbs` draws their web rows instead.
+        case .matchStatement, .splitExpense, .linkExpenses, .linkProducts:
+            EmptyView()
         }
-    }
-
-    /// Opens a verb's session on the record this report belongs to. The runner throws, sending
-    /// nothing, unless the server offers the verb available.
-    private func open<Session>(
-        _ make: (SectionActionRunner, String) throws -> Session, assign: (Session) -> Void
-    ) {
-        guard let host else { return }
-        verbError = nil
-        do {
-            assign(try make(SectionActionRunner(client: appModel.client), host.row.id))
-        } catch let error as SectionActionError {
-            verbError =
-                switch error {
-                case .unavailable(let reason), .unsupported(let reason): reason
-                }
-        } catch {
-            verbError = error.userMessage
-        }
-    }
-
-    /// The parts replaced the expense, so leave its screen for the purchase they were filed under.
-    private func splitSaved() {
-        appModel.recordEntityMutation(keys: [.expense, .purchase, .product])
-        if let purchaseID = host?.row.raw["purchaseId"]?.stringValue {
-            appModel.navigator.replaceCurrentRecord(
-                with: RecordSelection(key: .purchase, id: purchaseID))
-        } else {
-            host?.onChanged()
-        }
-    }
-
-    private func attachSaved() {
-        appModel.recordEntityMutation(keys: [.purchase, .expense, .product])
-        host?.onChanged()
     }
 
     private var noticeBinding: Binding<Bool> {

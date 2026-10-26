@@ -16,7 +16,6 @@ import {
 import { SECTION_ACTION_IDS } from "./entity-section-actions";
 import {
   NATIVE_COVERAGE_KINDS,
-  NATIVE_UNSUPPORTED_CEILING,
   nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
@@ -83,35 +82,74 @@ describe("native presentation coverage", () => {
     },
   );
 
-  it("explains every unsupported id", () => {
-    const unexplained = NATIVE_COVERAGE_KINDS.flatMap((kind) =>
+  it("hands off exactly the reviewed ids", () => {
+    // Adding a handoff moves a surface to web for native members: review it here.
+    const handoffs = NATIVE_COVERAGE_KINDS.flatMap((kind) =>
       entries(kind).flatMap(([id, entry]) =>
-        entry.status === "unsupported" && entry.reason.trim() === ""
-          ? [`${kind} ${id}`]
-          : [],
+        entry.status === "handoff" ? [`${kind} ${id}`] : [],
       ),
     );
-    expect(unexplained).toEqual([]);
+    expect(handoffs.sort()).toEqual([
+      "detailSlot expense.settlement",
+      "detailSlot productCategory.spending-classification",
+      "detailSlot project.analytics",
+      "detailSlot project.schedule",
+      "detailSlot purchase.reconciliation",
+      "detailSlot run.import-agent-live",
+      "detailSlot run.import-agent-stopped",
+      "detailSlot run.photo-batch",
+      "detailSlot vendor.spending-classification",
+      "listSlot expense.analytics",
+      "listSlot project.analytics",
+      "sectionAction linkExpenses",
+      "sectionAction linkProducts",
+      "sectionAction matchStatement",
+      "sectionAction splitExpense",
+      "structuredField expense.sourceClaims",
+      "structuredField financialAccount.authorizedUsers",
+      "structuredField financialAccount.cardNumbers",
+      "structuredField financialAccount.fundingPeriods",
+      "structuredField financialAccount.identity",
+      "structuredField financialTransaction.allocations",
+      "structuredField ledgerTransfer.sourceClaims",
+      "structuredField meal.recipes",
+      "structuredField recipe.meta",
+      "structuredField recipe.sections",
+      "structuredField recipe.yield",
+      "structuredField vendor.agentHints",
+    ]);
   });
 
-  it.each(NATIVE_COVERAGE_KINDS)(
-    "keeps the %s unsupported set at its reviewed ceiling",
-    (kind) => {
-      const actual = entries(kind).filter(
-        ([, entry]) => entry.status === "unsupported",
-      ).length;
-      const ceiling = NATIVE_UNSUPPORTED_CEILING[kind];
-      const verdict =
-        actual === ceiling
-          ? "within ceiling"
-          : `${actual} native-unsupported ${kind} ids, ceiling ${ceiling}. The unsupported ` +
-            `set only shrinks: implement the id natively in apps/apple, flip its status in ` +
-            `packages/schemas/src/native-coverage.ts, and lower ` +
-            `NATIVE_UNSUPPORTED_CEILING.${kind}. Raising the ceiling needs a reviewed ` +
-            `justification.`;
-      expect(verdict).toBe("within ceiling");
-    },
-  );
+  it("names a declared web section or a route query for every handoff", () => {
+    const sectionIds = new Map<string, readonly string[]>(
+      entityKeys.map((key) => [
+        key,
+        entitySummary[key].detail.sections.map((section) => section.id),
+      ]),
+    );
+    const anySection = new Set([...sectionIds.values()].flat());
+    const problems = NATIVE_COVERAGE_KINDS.flatMap((kind) =>
+      entries(kind).flatMap(([id, entry]) => {
+        if (entry.status !== "handoff") return [];
+        const { section, query, label } = entry.web;
+        const qualified =
+          kind === "detailSlot" ||
+          kind === "listSlot" ||
+          kind === "structuredField";
+        const sections = qualified
+          ? new Set(sectionIds.get(id.split(".")[0] ?? "") ?? [])
+          : anySection;
+        const target =
+          section === undefined
+            ? Object.keys(query ?? {}).length > 0
+            : sections.has(section);
+        return target && label.trim() !== "" && entry.reason.trim() !== ""
+          ? []
+          : [`${kind} ${id}`];
+      }),
+    );
+    expect(problems).toEqual([]);
+  });
 
   it("gives exactly the implemented hero actions a runner plan", () => {
     const implemented = entries("heroAction")
@@ -124,6 +162,25 @@ describe("native presentation coverage", () => {
     // Deleting a record and discarding stock must never run on one tap.
     expect(nativeHeroActionPlans.delete.confirmation).toBe("destructive");
     expect(nativeHeroActionPlans.discard.confirmation).toBe("destructive");
+  });
+
+  it("runs the quick-action verbs with the shape each needs", () => {
+    // Done is one tap with a preset option; Adjust amount asks for the one
+    // field; Move to asks for a location and moves the whole entry.
+    expect(nativeHeroActionPlans.complete).toMatchObject({
+      kind: "setField",
+      field: "status",
+      value: "done",
+    });
+    expect(nativeHeroActionPlans.adjustAmount).toMatchObject({
+      kind: "editField",
+      field: "amount",
+    });
+    expect(nativeHeroActionPlans.moveTo).toMatchObject({
+      kind: "operation",
+      operation: "inventory.moveEntries",
+      confirmation: "none",
+    });
   });
 
   it("opens Record sale in the same disposition editor web shows", () => {

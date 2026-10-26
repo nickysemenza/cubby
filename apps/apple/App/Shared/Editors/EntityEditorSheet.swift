@@ -1,15 +1,10 @@
 import CubbyKit
 import SwiftUI
 
-/// The generic create/update editor for any entity the generated client can write: the catalog's
-/// editor sections as a grouped `Form`, a photo block for an image-attachable entity, Cancel →
-/// Discard through `DraftDismissalState`, Save gated on `GenericEntityEditModel.canSave`.
-///
-/// Structured fields the catalog declares that native does not render remain in the web editor
-/// (product `unitMappings`, recipe `sections`/`yield`/`meta`, expense evidence, financial-account
-/// identity, and financial-transaction source refs). Typed generic controls, entity references,
-/// amounts, tags, vendor names, and expense attributions render through `EntityFieldControl`;
-/// image keys render through `EntityImageBlock`.
+/// Generic create/update fields follow the catalog's editor sections. Native structured controls
+/// edit identifiers, aliases, source references, unit mappings and label nutrition; structured-field
+/// editors retain a read-only summary and a named web handoff. Required web-only fields keep create
+/// on web. DraftDismissalState and inline validation preserve edits until Save or explicit discard.
 /// One field's resolution link a detail screen asks the editor to stage.
 struct ResolutionActionRequest: Hashable, Identifiable {
     let field: String
@@ -37,13 +32,13 @@ struct EntityEditorSheet: View {
     @State private var model: GenericEntityEditModel?
     @State private var suggestions: FieldSuggestionReviewModel?
     @State private var initializedIdentity: EditorIdentity?
-    @State private var initialDraft: [String: JSONValue] = [:]
     @State private var selections: [PhotoSelectionItem] = []
     @State private var pickedTitles: [String: String] = [:]
     @State private var uploadStatus: String?
     @State private var suggestionFeedbackError: String?
     @State private var isUploading = false
     @State private var draftDismissal = DraftDismissalState()
+    @State private var allowsDismissal = false
     @State private var saveTask: Task<Void, Never>?
 
     private struct EditorIdentity: Hashable {
@@ -62,16 +57,16 @@ struct EntityEditorSheet: View {
         return false
     }
 
-    private var unsupportedFields: [FieldDescriptor] {
+    private var handoffFields: [FieldDescriptor] {
         descriptor.fields.filter { field in
             let participates = isCreate ? field.inCreate : field.inUpdate
-            return participates && NativePresentationCoverage.unsupportedControl(field) != nil
+            return participates && NativePresentationCoverage.controlHandoff(field, entity: key) != nil
         }
     }
 
-    private var unsupportedRequiredFields: [FieldDescriptor] {
+    private var handoffRequiredFields: [FieldDescriptor] {
         guard isCreate else { return [] }
-        return unsupportedFields.filter(\.requiredOnCreate)
+        return handoffFields.filter(\.requiredOnCreate)
     }
 
     /// Keys the photo block owns; they never render as field controls. Derived from
@@ -102,12 +97,13 @@ struct EntityEditorSheet: View {
                     Button("Cancel") {
                         draftDismissal.request(isDirty: isDirty, isSaving: isSaving, dismiss: dismiss)
                     }
+                    .keyboardShortcut(.cancelAction)
                     .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { startSave() }
                         .disabled(
-                            !(model?.canSave ?? false) || !unsupportedRequiredFields.isEmpty || isSaving
+                            !(model?.canSave ?? false) || !handoffRequiredFields.isEmpty || isSaving
                         )
                         .accessibilityIdentifier("editor.\(key.rawValue).save")
                 }
@@ -115,9 +111,13 @@ struct EntityEditorSheet: View {
         }
         .nativeSheet(.editor)
         .draftDismissal(
-            $draftDismissal, isDirty: isDirty, isSaving: isSaving,
-            onDiscard: { dismiss() }
+            $draftDismissal, isDirty: isDirty && !allowsDismissal, isSaving: isSaving,
+            title: "Discard changes?", confirmInteractiveDismissal: true,
+            onDiscard: { allowsDismissal = true }
         )
+        .onChange(of: allowsDismissal) { _, allowed in
+            if allowed { dismiss() }
+        }
         .onDisappear {
             saveTask?.cancel()
             suggestions?.invalidate()
@@ -145,7 +145,7 @@ struct EntityEditorSheet: View {
 
     private var isDirty: Bool {
         guard let model else { return false }
-        return model.draft != initialDraft || !selections.isEmpty || model.hasImageChanges
+        return model.isDirty || !selections.isEmpty
     }
 
     private static let saveFailureID = "editor.saveFailure"
@@ -155,11 +155,36 @@ struct EntityEditorSheet: View {
             formContent(model)
                 // Save lives in the toolbar, so a refusal can arrive while the banner is
                 // scrolled out of view above the field being edited.
-                .onChange(of: model.bannerError) { _, banner in
+                .onChange(of: saveFailure(model)) { _, banner in
                     guard banner != nil else { return }
                     proxy.scrollTo(Self.saveFailureID, anchor: .top)
                 }
+                .onChange(of: model.fieldErrors) { _, _ in scrollToInvalidField(model, proxy: proxy) }
+                .onChange(of: model.nestedErrors) { _, _ in scrollToInvalidField(model, proxy: proxy) }
         }
+    }
+
+    private func scrollToInvalidField(_ model: GenericEntityEditModel, proxy: ScrollViewProxy) {
+        guard saveFailure(model) == nil,
+            let field = model.visibleFields.first(where: {
+                renders($0) && (model.fieldErrors[$0.key] != nil || model.nestedErrors[$0.key] != nil)
+            })
+        else { return }
+        proxy.scrollTo(field.key, anchor: .center)
+    }
+
+    /// Validation for an image key or web-only control has no input row here. Keep it visible
+    /// with non-field failures, without duplicating errors that the native controls draw inline.
+    private func saveFailure(_ model: GenericEntityEditModel) -> String? {
+        let hiddenErrors = model.visibleFields.filter { !renders($0) }.flatMap { field in
+            let fieldError = model.fieldErrors[field.key].map { "\(field.label): \($0)" }
+            let nested = (model.nestedErrors[field.key] ?? [:])
+                .sorted { $0.key.lexicographicallyPrecedes($1.key) }
+                .map { "\(field.label).\($0.key.joined(separator: ".")): \($0.value)" }
+            return [fieldError].compactMap { $0 } + nested
+        }
+        let messages = [model.bannerError].compactMap { $0 } + hiddenErrors
+        return messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
     private func formContent(_ model: GenericEntityEditModel) -> some View {
@@ -172,23 +197,13 @@ struct EntityEditorSheet: View {
             if let context {
                 Section { Text(context.description).foregroundStyle(.secondary) }
             }
-            if !unsupportedFields.isEmpty {
+            if !handoffRequiredFields.isEmpty {
                 Section {
-                    Text(
-                        unsupportedRequiredFields.isEmpty
-                            ? "Additional fields are available on web."
-                            : "This record needs additional fields available on web to create it."
-                    )
-                    .foregroundStyle(.secondary)
-                    if case .update(let id) = mode {
-                        Link(destination: appModel.webURL(for: key, id: id)) {
-                            Label("Open on web", systemImage: "safari")
-                        }
-                        .accessibilityIdentifier("editor.\(key.rawValue).openOnWeb")
-                    }
+                    Text("This record needs additional fields available on web to create it.")
+                        .foregroundStyle(.secondary)
                 }
             }
-            if let banner = model.bannerError {
+            if let banner = saveFailure(model) {
                 Section {
                     ActionFailureNotice(message: banner, canRetry: model.canSave && !isSaving) {
                         startSave()
@@ -200,25 +215,28 @@ struct EntityEditorSheet: View {
                 LoadingIndicator(label: "Loading \(descriptor.singular)")
             }
             ForEach(model.sections) { section in
-                let fields = section.fields.compactMap(descriptor.field).filter { renders($0) }
+                let fields = section.fields.compactMap(descriptor.field).filter {
+                    renders($0) || NativePresentationCoverage.controlHandoff($0, entity: key) != nil
+                }
                 if !fields.isEmpty {
                     if let title = section.title {
                         Section(title) {
                             ForEach(fields, id: \.key) { field in
-                                EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                                editorField(field, model: model)
+                                    .id(field.key)
                             }
                         }
                     } else {
                         ForEach(fields, id: \.key) { field in
-                            EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                            editorField(field, model: model)
+                                .id(field.key)
                         }
                     }
                 }
             }
             if let suggestions, !suggestions.fields.isEmpty {
                 EntityFieldSuggestionSection(review: suggestions, pickedTitles: pickedTitles) {
-                    field, value, label in
-                    initialDraft[field] = value
+                    _, value, label in
                     if let id = value.stringValue, let label { pickedTitles[id] = label }
                     appModel.recordEntityMutation(keys: [
                         key, .financialTransaction, .purchase, .expense, .product,
@@ -244,15 +262,42 @@ struct EntityEditorSheet: View {
         .accessibilityIdentifier("editor.\(key.rawValue)")
     }
 
-    /// Whether the field has a native control: everything but the image keys and the specialized
-    /// renderers this file's doc comment lists.
+    @ViewBuilder
+    private func editorField(_ field: FieldDescriptor, model: GenericEntityEditModel) -> some View {
+        if let handoff = NativePresentationCoverage.controlHandoff(field, entity: key) {
+            let raw = model.original ?? .object(model.draft)
+            let value = raw[field.key]
+            let summary =
+                EntityFieldValue.text(in: raw, field: field, surface: "detail")
+                ?? EntityFieldValue.text(value, field: field)
+                ?? (value == nil || value == .null || value?.arrayValue?.isEmpty == true
+                    ? "None" : "Value saved")
+            LabeledContent(field.label) {
+                Text(summary).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            OpenOnWebButton(
+                target: model.recordID.map { handoff.target(key: key, id: $0) }
+                    ?? .route(path: "/\(descriptor.basePath)/new"),
+                label: handoff.label
+            )
+            .accessibilityIdentifier("editor.\(key.rawValue).\(field.key).openOnWeb")
+        } else {
+            EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+        }
+    }
+
+    /// Image keys belong to the photo block; web-only fields have summaries rather than inputs.
     private func renders(_ field: FieldDescriptor) -> Bool {
-        if Self.imageKeys.contains(field.key) { return false }
+        if Self.imageKeys.contains(field.key)
+            || NativePresentationCoverage.controlHandoff(field, entity: key) != nil
+        {
+            return false
+        }
         guard field.controlKind == .specialized else { return true }
         guard let renderer = field.controlRenderer else { return false }
         switch NativePresentationCoverage.control(renderer) {
         case .implemented, .generic: return true
-        case .ownedElsewhere, .unsupported: return false
+        case .ownedElsewhere, .handoff: return false
         }
     }
 
@@ -281,6 +326,7 @@ struct EntityEditorSheet: View {
         suggestions?.invalidate()
         initializedIdentity = editorIdentity
         selections = []
+        allowsDismissal = false
         pickedTitles = [:]
         let identity = editorIdentity
         let created = GenericEntityEditModel(
@@ -299,10 +345,9 @@ struct EntityEditorSheet: View {
         finishLoad(model, identity: identity)
     }
 
-    /// Baselines the loaded draft, then applies the sheet's staged values and reference names.
+    /// Applies staged values after the model has baselined its loaded draft.
     private func finishLoad(_ loaded: GenericEntityEditModel, identity: EditorIdentity) {
         guard !Task.isCancelled, initializedIdentity == identity, model === loaded else { return }
-        initialDraft = loaded.draft
         if let resolutionAction { loaded.stageResolution(resolutionAction.kind, for: resolutionAction.field) }
         loaded.stage(stagedValues)
         seedPickedTitles(loaded)
@@ -340,7 +385,7 @@ struct EntityEditorSheet: View {
     }
 
     private func save() async {
-        guard let model, model.canSave else { return }
+        guard let model, model.canSave, handoffRequiredFields.isEmpty else { return }
         if !selections.isEmpty {
             isUploading = true
             defer { isUploading = false }
@@ -369,7 +414,7 @@ struct EntityEditorSheet: View {
         }
         onSaved(id)
         guard !Task.isCancelled else { return }
-        dismiss()
+        allowsDismissal = true
     }
 
     /// Uploads each picked photo once (an id a failed save already earned is reused) and hands

@@ -14,6 +14,16 @@ const presentation = {
   description: "Widgets.",
   emptyState: { title: "No widgets", description: "Add one." },
   icons: { phosphor: "Cube", sfSymbol: "cube", emoji: "🧊" },
+  detail: {
+    sections: [
+      {
+        kind: "fields",
+        id: "overview",
+        title: "Record",
+        fields: ["subject", "tags"],
+      },
+    ],
+  },
 } as const;
 
 const base = {

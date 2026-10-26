@@ -133,7 +133,7 @@ struct ReceiveExpenseSheet: View {
             }
             if let refusal = model.refusal {
                 Section {
-                    Text(refusal).foregroundStyle(.red).textSelection(.enabled)
+                    Text(refusal).foregroundStyle(FieldGuideTokens.destructive).textSelection(.enabled)
                         .accessibilityIdentifier("receive.refusal")
                 }
             }
@@ -151,11 +151,13 @@ struct ReceiveExpenseSheet: View {
                         "\(match.stockOnHand) on hand" + (match.evidence.map { " · \($0)" } ?? "")
                     )
                     .font(.caption)
-                    ForEach(match.warnings, id: \.self) { Text($0).font(.caption).foregroundStyle(.orange) }
+                    ForEach(match.warnings, id: \.self) {
+                        Text($0).font(.caption).foregroundStyle(FieldGuideTokens.warning)
+                    }
                     // There is no native Product match review yet; the candidate is read-only here.
-                    Link(
-                        "Review this match on web",
-                        destination: appModel.webURL(for: .product, id: match.candidateID.rawValue)
+                    OpenOnWebButton(
+                        target: .record(key: .product, id: match.candidateID.rawValue),
+                        label: "Review this match on web"
                     )
                     .font(.caption)
                 }

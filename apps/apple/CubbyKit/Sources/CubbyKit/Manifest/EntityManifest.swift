@@ -106,6 +106,10 @@ public enum EntityCatalog {
         byKey[key]!
     }
 
+    /// The entities native Browse and the sidebar list, in declaration order. A declared
+    /// `nativeBrowse: false` root (operator plumbing) stays reachable through record links.
+    public static var browsable: [EntityDescriptor] { all.filter(\.nativeBrowse) }
+
     /// The descriptor whose canonical shortcode prefix a code carries (`PRD-…` → product).
     /// Prefix match only: the server resolves legacy `P-`/`L-` labels and validates the body.
     public static func descriptor(forShortcode code: String) -> EntityDescriptor? {
@@ -113,6 +117,17 @@ public enum EntityCatalog {
         return all.first { descriptor in
             descriptor.shortcodePrefix.map { normalized.hasPrefix($0) } ?? false
         }
+    }
+}
+
+// Quick actions are omitted from the wire when none are declared.
+extension EntityPresentation {
+    /// The declared `detail.quickActions`: the record's leading buttons, at most two.
+    public var detailQuickActionIDs: [EntityHeroActionID] { detailQuickActions ?? [] }
+
+    /// The declared `list.quickActions` that are hero verbs, the only ones a row can run.
+    public var listQuickActionIDs: [EntityHeroActionID] {
+        (listQuickActions ?? []).compactMap(EntityHeroActionID.init(rawValue:))
     }
 }
 

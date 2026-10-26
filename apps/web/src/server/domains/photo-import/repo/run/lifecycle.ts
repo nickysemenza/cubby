@@ -39,7 +39,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 
 /**
  * A description waiting for a capable device is not settled either; matches
- * the Apple app's `PhotoReviewPolicy.groupingReadiness`.
+ * the Apple app's `PhotoGroupingReadiness`.
  */
 const DESCRIPTION_IN_FLIGHT = new Set([
   "pending",

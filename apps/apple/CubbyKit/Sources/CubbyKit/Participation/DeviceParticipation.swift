@@ -3,7 +3,8 @@ import Foundation
 /// This device's master "Automatic work on this device" switch, persisted locally and mirrored
 /// onto the `Device` entity's `automaticWork` column (`DeviceRegistration.sync`) so the web can see
 /// — and, via `Device.remotePaused`, override — it. Defaults to off: a freshly installed app is a
-/// plain viewer until the person answers the first-sign-in sheet, which sets `answeredAt`.
+/// plain viewer until the person answers Photos' inline prompt (or flips the switch in Settings),
+/// which sets `answeredAt`.
 public struct DeviceParticipation: Codable, Hashable, Sendable {
     private static let key = "cubby.participation"
 

@@ -79,10 +79,29 @@ final class Navigator {
         paths[section] = []
     }
 
+    enum RecordOrigin {
+        case column(AppSection, compactDestination: Binding<RecordSelection?>)
+        case stack(Binding<RecordSelection?>)
+    }
+
+    func open(_ record: RecordSelection, from origin: RecordOrigin) {
+        switch origin {
+        case .column(let section, let destination):
+            #if os(macOS)
+                selectRecord(record, in: section)
+            #else
+                destination.wrappedValue = record
+            #endif
+        case .stack(let destination):
+            // SwiftUI owns this destination, including when its stack is inside a sheet.
+            destination.wrappedValue = record
+        }
+    }
+
     func openRecord(_ record: RecordSelection) {
         #if os(macOS)
             if section == .browse || section == .search {
-                if selectedRecords[section] == nil {
+                if selectedRecords[section] == nil && paths[section, default: []].isEmpty {
                     selectRecord(record, in: section)
                 } else {
                     paths[section, default: []].append(.entityDetail(record.key, id: record.id))
@@ -92,6 +111,15 @@ final class Navigator {
             }
         #else
             paths[phoneTab.rootSection, default: []].append(.entityDetail(record.key, id: record.id))
+        #endif
+    }
+
+    /// Pushes `route` on the visible stack: a row's context-menu target that is not a record.
+    func push(_ route: Route) {
+        #if os(macOS)
+            paths[section, default: []].append(route)
+        #else
+            paths[phoneTab.rootSection, default: []].append(route)
         #endif
     }
 
@@ -136,6 +164,43 @@ final class Navigator {
     /// destination this launch. `RootSplitView`'s persisted-section restore checks this so a link
     /// that arrives either before or after the restore still wins — see that view's doc comment.
     private(set) var launchLinkApplied = false
+
+    /// Window-owned scene storage keeps this snapshot separate from other windows and sessions.
+    struct Restoration: Codable, Equatable {
+        var browseKey: EntityKey?
+        var paths: [AppSection: [Route]]
+        var selectedRecords: [AppSection: RecordSelection]
+        var selectedActivity: ActivitySelection?
+    }
+
+    var restoration: Restoration {
+        Restoration(
+            browseKey: browseKey, paths: paths, selectedRecords: selectedRecords,
+            selectedActivity: selectedActivity)
+    }
+
+    func restore(section storedSection: String, navigation data: Data?) {
+        guard !launchLinkApplied else { return }
+        if let section = AppSection(rawValue: storedSection) {
+            #if os(macOS)
+                // Mac Settings is its own window; an older build may have stored it as a section.
+                if section != .settings { self.section = section }
+            #else
+                self.section = section
+            #endif
+        }
+        guard let data, let saved = try? JSONDecoder().decode(Restoration.self, from: data) else { return }
+        browseKey = saved.browseKey
+        paths = saved.paths
+        selectedRecords = saved.selectedRecords
+        selectedActivity = saved.selectedActivity
+    }
+
+    /// Initial selection fills the Mac detail without replacing a restored or linked record.
+    func selectFirstRecordIfNeeded(_ records: [RecordSelection], in section: AppSection) {
+        guard selectedRecords[section] == nil, let first = records.first else { return }
+        selectedRecords[section] = first
+    }
 
     func path(for section: AppSection) -> Binding<[Route]> {
         Binding(
@@ -186,14 +251,6 @@ final class Navigator {
             pendingCliAuth = CliAuthRequest(port: port, nonce: nonce)
         }
     }
-
-    #if os(macOS)
-        func openSettings() {
-            launchLinkApplied = true
-            section = .settings
-            paths[.settings] = []
-        }
-    #endif
 
     /// Pushes Dev onto whatever section is currently showing on iOS, since it no longer has its
     /// own tab (`AppSection.tabs` excludes it there); on macOS, where it stays a sidebar row,
@@ -288,7 +345,7 @@ final class Navigator {
     }
 }
 
-enum ActivitySelection: Hashable, Identifiable {
+enum ActivitySelection: Hashable, Identifiable, Codable {
     case serverRun(String)
     case localActivity(String)
 
@@ -300,7 +357,7 @@ enum ActivitySelection: Hashable, Identifiable {
     }
 }
 
-struct RecordSelection: Hashable {
+struct RecordSelection: Hashable, Codable {
     let key: EntityKey
     let id: String
 }
@@ -313,7 +370,9 @@ enum SidebarDestination: Hashable {
 // Shared rows without a native screen remain browser actions, outside List selection.
 extension SidebarManifest.Destination {
     var nativeDestination: SidebarDestination? {
-        if let entity, entity.nativeActions.contains(.list) {
+        if let entity, EntityCatalog.browsable.contains(where: { $0.key == entity }),
+            entity.nativeActions.contains(.list)
+        {
             return .entity(entity)
         }
         switch route {
@@ -324,7 +383,5 @@ extension SidebarManifest.Destination {
         }
     }
 
-    func webURL(serverURL: URL) -> URL? {
-        URL(string: route, relativeTo: serverURL)?.absoluteURL
-    }
+    var webTarget: WebHandoff.Target { .route(path: route) }
 }

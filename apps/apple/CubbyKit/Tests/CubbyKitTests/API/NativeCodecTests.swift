@@ -232,7 +232,6 @@ struct NativeCodecTests {
         let value: DataCheck = try JSONValue.string("future-check").decoded()
         #expect(value.rawValue == "future-check")
         #expect(try JSONValue(encoding: value) == "future-check")
-        #expect(DataExceptionDraft(entityID: "synthetic-record", check: value.rawValue).clearInput() == nil)
     }
 
     @Test func timestampsAcceptBothWireSpellingsAndEncodeMilliseconds() throws {

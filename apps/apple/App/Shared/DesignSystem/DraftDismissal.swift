@@ -32,15 +32,23 @@ struct DraftDismissalState {
 }
 
 extension View {
-    /// Blocks gesture, Escape, and Cancel dismissal while a write is in flight. A failed write
-    /// leaves the draft in place, where Cancel can still offer an explicit discard.
+    /// Blocks dismissal during writes. Editors can opt into the system's dirty-draft dismissal
+    /// dialog for gestures; explicit Cancel requests share the same wording and discard action.
     func draftDismissal(
         _ state: Binding<DraftDismissalState>, isDirty: Bool, isSaving: Bool,
+        title: String = "Discard unsaved changes?", confirmInteractiveDismissal: Bool = false,
         onDiscard: @escaping () -> Void
     ) -> some View {
-        interactiveDismissDisabled(isDirty || isSaving)
+        interactiveDismissDisabled(isSaving || (isDirty && !confirmInteractiveDismissal))
+            .dismissalConfirmationDialog(
+                title, shouldPresent: confirmInteractiveDismissal && isDirty && !isSaving
+            ) {
+                // SwiftUI completes the pending dismissal after a non-cancel action.
+                Button("Discard Changes", role: .destructive) {}
+                Button("Keep Editing", role: .cancel) {}
+            }
             .confirmationDialog(
-                "Discard unsaved changes?",
+                title,
                 isPresented: confirmationBinding(state),
                 titleVisibility: .visible
             ) {

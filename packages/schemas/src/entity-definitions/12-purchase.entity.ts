@@ -98,10 +98,16 @@ export default defineEntity({
           viewKey: "relation:products",
         },
         {
-          kind: "chart",
-          id: "monthly-spend",
-          title: "Spend over 12 months",
-          viewKey: "relation:expenses",
+          kind: "report",
+          id: "settlement",
+          title: "Settlement",
+          slot: "purchase.financial-settlement",
+        },
+        {
+          kind: "records",
+          id: "shipping",
+          title: "Shipments",
+          viewKey: "relation:shipments",
         },
         {
           kind: "report",
@@ -110,22 +116,16 @@ export default defineEntity({
           slot: "purchase.project-allocation",
         },
         {
-          kind: "report",
-          id: "settlement",
-          title: "Settlement",
-          slot: "purchase.financial-settlement",
-        },
-        {
           kind: "records",
           id: "receipts",
           title: "Receipts",
           viewKey: "relation:images",
         },
         {
-          kind: "records",
-          id: "shipping",
-          title: "Shipments",
-          viewKey: "relation:shipments",
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "relation:expenses",
         },
       ],
 
@@ -142,7 +142,7 @@ export default defineEntity({
       hero: {
         when: { field: "date", label: "Ordered" },
       },
-      additionalSections: [
+      sections: [
         {
           kind: "relation",
           id: "expenses",
@@ -160,9 +160,48 @@ export default defineEntity({
             "trade",
           ],
         },
-        { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record",
+          fields: ["vendorId", "date", "statedTotal", "notes"],
+        },
         { kind: "slot", id: "receiving", title: "Receive into Inventory" },
-        { kind: "slot", id: "runs", title: "Import runs" },
+        { kind: "slot", id: "project-allocation", title: "Project allocation" },
+        {
+          kind: "fields",
+          id: "order",
+          title: "Order",
+          fields: [
+            "orderId",
+            "vendorAccountId",
+            "displayLabel",
+            "purchaserOverrideId",
+          ],
+        },
+        {
+          kind: "slot",
+          id: "financial-settlement",
+          title: "Financial settlement",
+          explanationField: "financialReconciliation",
+        },
+        {
+          kind: "slot",
+          id: "reconciliation",
+          title: "Reconciliation",
+          explanationField: "reconciliation",
+        },
+        {
+          kind: "fields",
+          id: "classification",
+          title: "Classification",
+          fields: [
+            "defaultProjectId",
+            "defaultTrade",
+            "spendingCategoryId",
+            "itemizationExpectation",
+          ],
+        },
         {
           kind: "relation",
           id: "emails",
@@ -173,17 +212,20 @@ export default defineEntity({
           // Linked, then suggestions to act on, then dismissals, newest first.
           sort: { field: "linkState", direction: "asc" },
         },
+        { kind: "slot", id: "runs", title: "Import runs" },
         {
-          kind: "slot",
-          id: "reconciliation",
-          title: "Reconciliation",
-          explanationField: "reconciliation",
-        },
-        {
-          kind: "slot",
-          id: "financial-settlement",
-          title: "Financial settlement",
-          explanationField: "financialReconciliation",
+          kind: "fields",
+          id: "coverage",
+          title: "Coverage and summaries",
+          fields: [
+            "purchaserId",
+            "bookingCoverage",
+            "documentCoverage",
+            "itemizationCoverage",
+            "productsCoverage",
+            "spendingCategorySummary",
+            "spendingCategoryOrigin",
+          ],
         },
       ],
     },
@@ -552,7 +594,12 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
-        display: { columnGroup: "Booking", columnLabel: "Fallback" },
+        // Empty on most rows; the expense categories column carries the booking.
+        display: {
+          columnGroup: "Booking",
+          columnLabel: "Fallback",
+          listHidden: true,
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -619,6 +666,9 @@ export default defineEntity({
         display: {
           columnGroup: "Evidence",
           columnLabel: "Evidence",
+          // A policy setting, Unknown on most rows; the coverage columns show
+          // the outcome.
+          listHidden: true,
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -714,6 +764,8 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Order",
+          // Vendor, date and total lead; the coverage statuses follow.
+          listOrderOverride: 1,
           labelPath: "vendorName",
           renderer: { list: "vendor-cell" },
         },
@@ -788,6 +840,7 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Order",
+          listOrderOverride: 2,
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },
@@ -812,6 +865,7 @@ export default defineEntity({
         },
         display: {
           columnGroup: "Booking",
+          listOrderOverride: 7,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
           width: "sm",
@@ -830,7 +884,7 @@ export default defineEntity({
           kind: "textarea",
           placeholder: "Anything worth remembering",
         },
-        display: { columnGroup: "Order" },
+        display: { columnGroup: "Order", width: "xl" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -1137,6 +1191,8 @@ export default defineEntity({
           columnGroup: "Evidence",
           columnBar: true,
           detail: false,
+          // Document coverage already reports whether evidence is attached.
+          listHidden: true,
           width: "xs",
           mobile: { slot: "meta", priority: 70 },
         },

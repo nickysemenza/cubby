@@ -123,10 +123,11 @@ exact-head GitHub merge gate.
 These commands exercise authored native file-selection and review scenarios.
 The iOS input journey selects a real Files CSV, reviews account/row choices,
 uploads 25 distinct synthetic photos through the authorized Library grid, closes the upload
-sheet while work continues, reopens the import and approves the proposed
-Product. Stored readback checks transaction/account, every original photo digest,
-capture dates and library sightings, current cloud-description jobs,
-no Product/Inventory write before approval, and one approved Product. The
+sheet while work continues and reopens the import. Stored readback checks
+transaction/account, every original photo digest, capture dates and library
+sightings, current cloud-description jobs, and no automatic Product, Inventory,
+Expense or transaction write. Group review is web's; `photo-group-review.spec.ts`
+covers it. The
 PhotosPicker fallback has separate authored scripts; this journey grants
 Photos access and exercises the Library grid. Files
 navigation handles the captured OS starting states; sheet review uses the
@@ -140,11 +141,7 @@ separate. Run on an unlocked host and retain a sealed artifact.
 pnpm test:e2e:sim -- --input-journey
 ```
 
-Use `--input-journey --photo-only` to isolate Library-grid intake and approval.
-It retains the 25-photo digest and no-automatic-write checks, and explicitly
-omits CSV interaction and transaction assertions from its artifact.
-
-The simulator scenario uses native CSV intake and photo review controls. The Mac
+The simulator scenario uses native CSV intake and photo upload controls. The Mac
 arrival-order scenarios that composed retailer browser capture were retired with
 the Mac browser bridge ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md));
 the backend arrival-order matrix still covers that logic, without a Mac UI run.

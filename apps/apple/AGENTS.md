@@ -92,7 +92,7 @@ graph, path inspector, and connection review UI; do not rebuild those in SwiftUI
 Entity details retain native fields and navigation, with a scoped full-screen
 Connections entry. iPhone/iPad use a full-screen cover; Mac uses a resizable
 workspace window. The global graph route hosts the same React workspace directly.
-Run overview, actions, photo review, and record routing remain native.
+Run overview, actions, photo progress, and record routing remain native.
 The browser-session POST is the explicit exception to generated entity routes;
 never send the bearer to WebKit or ambient cookies to bootstrap. Use a fresh
 nonpersistent store, exact-origin main-frame checks, and captured credential
@@ -147,9 +147,11 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | `Generated/PreviewFixtures/*.json`                                                                                       | `apps/web/tooling/checks/apple-preview-fixtures.ts` (edit its overrides)                                     |
 
 - **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
-  which manifest renderer, slot, and hero-action ids native draws. A new web-only id is
-  classified there (`unsupported` + reason, raising `NATIVE_UNSUPPORTED_CEILING` with a
-  justification in review). An `implemented` hero action needs a plan in `nativeHeroActionPlans`
+  which manifest renderer, slot, and hero-action ids native draws. Each id is `implemented`,
+  `generic`, `ownedElsewhere`, or `handoff`; `unsupported` no longer exists. A web-only id is a
+  reviewed `handoff` with `web: { section?, query?, label }` and a `reason`; the coverage unit test
+  pins the roster. Native draws it as one `OpenOnWebButton` row where the surface stood, plus a
+  record More item; build every web URL with `WebHandoff`. An `implemented` hero action needs a plan in `nativeHeroActionPlans`
   that `HeroActionRunner` runs; a collection verb needs a plan in `nativeCollectionActionPlans`.
   A new verb is a plan plus (for a new RPC) a typed case in the runner, never per-entity Swift or
   a slot view. An `implemented` slot or control needs its view path (`DetailSlotRegistry`,

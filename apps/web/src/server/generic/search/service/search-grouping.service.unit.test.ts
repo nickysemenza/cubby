@@ -26,6 +26,7 @@ const candidate = (
   matchKind: options.matchKind ?? "text",
   matchField: options.matchField ?? "title",
   matchReason: "unit fixture",
+  facts: [],
   matchTerms: [seed],
 });
 

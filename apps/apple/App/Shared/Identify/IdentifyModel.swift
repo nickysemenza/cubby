@@ -28,6 +28,18 @@ final class IdentifyModel {
     private(set) var candidates: [IdentificationCandidate] = []
     var probe: CGImage?
 
+    var isIndexing: Bool {
+        switch phase {
+        case .idle, .indexing: true
+        case .ready, .failed: false
+        }
+    }
+
+    var canIdentify: Bool {
+        if case .ready = phase { return true }
+        return false
+    }
+
     private let index: FeaturePrintIndex
     private let client: CubbyClient
 
@@ -39,9 +51,12 @@ final class IdentifyModel {
     /// Loads the disk cache if one exists; otherwise builds the index from scratch. Safe to call
     /// repeatedly (e.g. from `.task(id:)` re-running) since a populated cache short-circuits.
     func prepare() async {
+        guard phase == .idle else { return }
+        phase = .indexing(done: 0, total: 0)
         let cached = (try? await index.loadCache()) ?? 0
         if cached > 0 {
             phase = .ready(count: cached)
+            if let probe { await identify(probe) }
         } else {
             await buildIndex()
         }
@@ -49,6 +64,9 @@ final class IdentifyModel {
 
     /// Discards the cache and rebuilds from the current product list.
     func rebuild() async {
+        guard !isIndexing else { return }
+        phase = .indexing(done: 0, total: 0)
+        candidates = []
         await index.clear()
         await buildIndex()
     }
@@ -57,9 +75,14 @@ final class IdentifyModel {
     /// show what was searched alongside what matched.
     func identify(_ image: CGImage) async {
         probe = image
+        candidates = []
+        guard canIdentify else { return }
         do {
-            candidates = try await index.rank(image, limit: 5)
+            let ranked = try await index.rank(image, limit: 5)
+            guard canIdentify, probe === image else { return }
+            candidates = ranked
         } catch {
+            guard canIdentify, probe === image else { return }
             candidates = []
             phase = .failed(error.userMessage)
             Diagnostics.report(error, context: "identify.rank")
@@ -70,7 +93,8 @@ final class IdentifyModel {
     /// them), so page through the ids of products that have one, then fetch each detail for its
     /// cover with bounded concurrency.
     private func buildIndex() async {
-        phase = .indexing(done: 0, total: maxProducts)
+        phase = .indexing(done: 0, total: 0)
+        candidates = []
         do {
             let client = self.client
             let targetIDs = try await ListPage.collectAll(limit: maxProducts, pageSize: 100) { page, size in
@@ -95,17 +119,16 @@ final class IdentifyModel {
                 return collected
             }
 
-            // `progress` fires from `FeaturePrintIndex`'s actor context, not MainActor, so the
-            // observable `phase` mutation must hop back explicitly rather than writing to it
-            // directly here.
+            // Await the MainActor update so queued progress cannot overwrite the final ready state.
             await index.build(from: products, concurrency: 6) { done, total in
-                Task { @MainActor in
+                await MainActor.run {
                     self.phase = .indexing(done: done, total: total)
                 }
             }
             try await index.saveCache()
             let count = await index.count
             phase = .ready(count: count)
+            if let probe { await identify(probe) }
         } catch {
             phase = .failed(error.userMessage)
             Diagnostics.report(error, context: "identify.buildIndex")

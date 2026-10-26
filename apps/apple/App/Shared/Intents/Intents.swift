@@ -39,45 +39,48 @@ struct FindEntityIntent: AppIntent {
     }
 }
 
-/// "Where is my <product>?" — answers from the inventory list filtered to the product (the same
-/// read as the detail's declared "Stocked at" relation section).
+/// Constrains both typed matches and saved Shortcuts parameters to Products.
+nonisolated struct ProductIntentQuery: EntityStringQuery {
+    func entities(for identifiers: [String]) async throws -> [CubbyEntity] {
+        let products = identifiers.filter { EntityCatalog.descriptor(forShortcode: $0)?.key == .product }
+        return try await CubbyEntityQuery().entities(for: products)
+    }
+
+    func entities(matching string: String) async throws -> [CubbyEntity] {
+        let client = try await IntentContext.client()
+        return try await client.search(string, kinds: [.product], limit: 10).compactMap(
+            CubbyEntity.init(hit:))
+    }
+
+    func suggestedEntities() async throws -> [CubbyEntity] {
+        try await entities(for: RecentEntities.ids())
+    }
+}
+
+/// Answers from the selected Product's current, server-projected placement.
 struct WhereIsProductIntent: AppIntent {
     static let title: LocalizedStringResource = "Where Is a Product"
     static let description = IntentDescription("Says which location a product is stocked in.")
     static let supportedModes: IntentModes = .background
 
-    @Parameter(title: "Product")
-    var product: String
+    @Parameter(title: "Product", query: ProductIntentQuery())
+    var product: CubbyEntity
 
     nonisolated static var parameterSummary: some ParameterSummary {
         Summary("Where is \(\.$product)")
     }
 
     func perform() async throws -> some ProvidesDialog {
+        guard product.kind == .product else { throw IntentContext.Failure.notFound("product") }
         let client = try await IntentContext.client()
-        guard let hit = try await client.search(product, kinds: [.product], limit: 1).first else {
-            return .result(dialog: "No product in Cubby matches \(product).")
+        guard let row = try await client.row(EntityCatalog[.product], id: product.id) else {
+            throw IntentContext.Failure.notFound("product called \(product.title)")
         }
-        RecentEntities.record(hit.id)
-        let inventory = EntityCatalog[.inventory]
-        guard let filter = inventory.filter("productId"), case .param(let wire) = filter.wire else {
-            throw IntentContext.Failure.notFound("inventory product filter")
+        RecentEntities.record(row.id)
+        guard let path = row.raw["primaryPlacement"]?["path"]?.stringValue else {
+            return .result(dialog: "\(row.title) isn't stocked anywhere.")
         }
-        let page = try await client.list(
-            inventory, pageSize: 50, filters: EntityFilterState([wire: [hit.id]]))
-        let stocked = page.items.filter { $0.raw["placement"]?.stringValue != "installed" }
-        guard !stocked.isEmpty else {
-            return .result(dialog: "\(hit.title) isn't stocked anywhere.")
-        }
-        let places = stocked.prefix(3).map { row in
-            let location =
-                row.raw["locationName"]?.stringValue ?? row.raw["location"]?["name"]?.stringValue
-                ?? row.raw["location"]?["id"]?.stringValue ?? "an unknown location"
-            let amount = EntityFieldValue.amount(row.raw["amount"]).map { " — \($0)" } ?? ""
-            return "\(location)\(amount)"
-        }
-        let more = stocked.count > 3 ? " and \(stocked.count - 3) more" : ""
-        return .result(dialog: "\(hit.title) is in \(places.joined(separator: "; "))\(more).")
+        return .result(dialog: "\(row.title) is in \(path).")
     }
 }
 
@@ -102,13 +105,34 @@ struct OpenEntityIntent: AppIntent {
     }
 }
 
+/// Resolves any Location, including ones without stock, while preserving ambiguous matches
+/// for Shortcuts to disambiguate. Saved parameters are constrained by kind too.
+nonisolated struct AuditLocationIntentQuery: EntityStringQuery {
+    func entities(for identifiers: [String]) async throws -> [CubbyEntity] {
+        let locations = identifiers.filter { EntityCatalog.descriptor(forShortcode: $0)?.key == .location }
+        return try await CubbyEntityQuery().entities(for: locations)
+    }
+
+    func entities(matching string: String) async throws -> [CubbyEntity] {
+        let client = try await IntentContext.client()
+        return try await client.search(string, kinds: [.location], limit: 10).compactMap(
+            CubbyEntity.init(hit:))
+    }
+
+    func suggestedEntities() async throws -> [CubbyEntity] {
+        try await entities(for: RecentEntities.ids())
+    }
+}
+
 /// Starts a walk-the-shelf recount, optionally scoped to a location.
 struct StartAuditIntent: AppIntent {
     static let title: LocalizedStringResource = "Walk the Shelf"
     static let description = IntentDescription("Starts a recount of every stocked bin under a location.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
-    @Parameter(title: "Location")
+    @Parameter(
+        title: "Location", requestDisambiguationDialog: "Which location would you like to recount?",
+        query: AuditLocationIntentQuery())
     var location: CubbyEntity?
 
     nonisolated static var parameterSummary: some ParameterSummary {
@@ -116,7 +140,12 @@ struct StartAuditIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult {
-        let scope = location.flatMap { $0.kind == .location ? LocationCode($0.id) : nil }
+        // A connected Shortcut can still supply another kind despite the location-only query.
+        // Only an omitted value may select the household-wide scope.
+        if let location, location.kind != .location {
+            throw $location.needsValueError("Choose a location to recount instead of \(location.title).")
+        }
+        let scope = location.map { LocationCode($0.id) }
         await IntentContext.open(.audit(location: scope))
         return .result()
     }
@@ -197,6 +226,49 @@ struct LookUpCodeIntent: AppIntent {
     }
 }
 
+/// Recipe parameters stay constrained even when a saved Shortcut is edited.
+nonisolated struct RecipeIntentQuery: EntityStringQuery {
+    func entities(for identifiers: [String]) async throws -> [CubbyEntity] {
+        let recipes = identifiers.filter { EntityCatalog.descriptor(forShortcode: $0)?.key == .recipe }
+        return try await CubbyEntityQuery().entities(for: recipes)
+    }
+
+    func entities(matching string: String) async throws -> [CubbyEntity] {
+        let client = try await IntentContext.client()
+        return try await client.search(string, kinds: [.recipe], limit: 10).compactMap(CubbyEntity.init(hit:))
+    }
+
+    func suggestedEntities() async throws -> [CubbyEntity] {
+        try await entities(for: RecentEntities.ids())
+    }
+}
+
+struct CookRecipeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Cook a Recipe"
+    static let description = IntentDescription(
+        "Opens a recipe's cooking steps at the last position on this device.")
+    static let supportedModes: IntentModes = .foreground(.immediate)
+
+    @Parameter(title: "Recipe", query: RecipeIntentQuery())
+    var recipe: CubbyEntity
+
+    nonisolated static var parameterSummary: some ParameterSummary {
+        Summary("Cook \(\.$recipe)")
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard recipe.kind == .recipe else { throw IntentContext.Failure.notFound("recipe") }
+        let recipeID = recipe.id
+        try await MainActor.run {
+            guard let model = AppModel.active else { throw IntentContext.Failure.signedOut }
+            model.navigator.open(.entity(.recipe, id: recipeID))
+            model.recipeCooking.pending = .init(recipeID: recipeID)
+        }
+        RecentEntities.record(recipeID)
+        return .result()
+    }
+}
+
 nonisolated struct CubbyShortcuts: AppShortcutsProvider {
     static let shortcutTileColor: ShortcutTileColor = .navy
 
@@ -241,6 +313,12 @@ nonisolated struct CubbyShortcuts: AppShortcutsProvider {
             phrases: ["Look up a code in \(.applicationName)"],
             shortTitle: "Look up",
             systemImageName: "number.square"
+        )
+        AppShortcut(
+            intent: CookRecipeIntent(),
+            phrases: ["Cook a recipe in \(.applicationName)"],
+            shortTitle: "Cook",
+            systemImageName: "frying.pan"
         )
     }
 }

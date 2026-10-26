@@ -174,14 +174,30 @@ work keeps first priority.
 On iOS the same queue activity appears on the Lock Screen and Dynamic Island, with
 its counts, progress and server ETA. It ends when processing stops. A Live Activity
 only displays progress; it grants no background execution. Image processing requires
-the foreground, a granted **Process queue now** continued-processing task, or the
-opportunistic overnight charging window described below.
+the foreground or the opportunistic overnight charging window described below.
+
+Local work and photo-import Runs use the same `DeviceWorkWidget` presentation,
+with a symbol for the work kind and an attention symbol in every Dynamic Island
+size. Their feeds stay separate: the device owns local progress; the initiating
+install registers each photo-import batch for server ActivityKit pushes. When the
+app observes completion, failure or cancellation, imports end with their final
+state immediately in the Dynamic Island and retain it for 20 minutes on the Lock
+Screen. Server end pushes retain it for 15 minutes; a server failure delivered as
+an update still requires foreground reconciliation to end the Activity. Retrying
+a failed batch can start a fresh Activity. A Control Center **Capture** button opens the existing
+scanner and photo import tools; it does not start processing without a selection.
+
+Other server Run purposes still need the server registration/lifecycle work in
+[#2207](https://github.com/nickysemenza/cubby/issues/2207). APNs delivery, locked-device
+updates, Control Center launch and dismissal require real-device verification in
+[#3329](https://github.com/nickysemenza/cubby/issues/3329); unsigned builds and unit
+tests establish only compilation, payload and routing behavior.
 
 ### Companion worker lifecycle (app and CLI)
 
 Describe-image and subject-lift commands share one pool of slots
 (`CompanionImageConcurrency`); the worker asks for all free slots in one batch pull (`maxCommands`, up to 16), so the server keeps no
-per-device limit. Automatic is 8 on Mac and 4 on iPhone/iPad. Settings › Image work sets an
+per-device limit. Automatic is 8 on Mac and 4 on iPhone/iPad. Settings › Advanced sets an
 explicit 1–16 per device (UserDefaults `imageWork.concurrentJobs`, 0 = Automatic), applied on the
 next pull without a restart; `cubby companion --jobs N` sets it for the CLI.
 
@@ -219,35 +235,23 @@ from the web, automatic work off, asleep, disconnected with the last error). Whi
 waits for a device, a banner at the top reads `job.deviceBacklog` ("N images waiting for an Apple
 device · M working · about X at the current pace", the pace omitted without a server ETA) and, when
 no device claimed work recently and this one is not processing, says to keep Cubby open on a Mac.
-Processing image jobs are the generic imageJob rows of the `processing` saved view (live leases),
-each with its IPR code, its Run and a live lease countdown from `leaseExpiresAt`. Rows whose
-`leaseDeviceId` is this install's Device (matched by `installationId`, never by name) sit under
-the worker row; the rest group by Device under "Other devices", followed by one counted row per
-executor holding expired leases (the `job.queue` `leases` summary). Activity reloads every 15 s
-while on screen. The household queue reads `job.queue` (a failed refresh keeps the earlier counts
-beside an inline error): Apple-device and cloud-AI counts by waiting-on reason (funding waits with
-their reopening time), "Waiting for Apple · N" opening the imageJob `waiting-for-apple` view, and
-Jobs backing off; Runs needing attention (the manifest's `attention` saved view, which excludes
-system AI passes) carry their `job.runRollups` counts, stall flag and expired leases awaiting
-reclaim.
+Below the device, Activity lists Runs in progress and Runs needing attention (the manifest's
+`in-progress` and `attention` saved views, which exclude system AI passes, each bounded to 10) and
+reloads every 15 s while on screen. The
+household job queue — lanes, waiting reasons, Job retries and leases — is web's; Activity ends with
+one **Open work queue on web** row to `/work-queue`.
 
-On iOS 26+, **Process queue now** in Activity and Settings › Image work submits
-an immediate `BGContinuedProcessingTaskRequest`. The companion drains inside the
-system-granted window after locking the screen or backgrounding, reports its
-same session completion count and progress denominator to the system progress UI, and releases
-unrecorded claims before completing after expiration or system cancellation.
-A separate `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
+On iOS, a `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
 requires external power and network connectivity for opportunistic overnight
-work. Both windows use the shared slot setting, renew every 15 s, and retain
-undelivered results in the same outbox. A foreground subscription settles and
+work. The window uses the shared slot setting, renews every 15 s, and retains
+undelivered results in the same outbox as the resident worker. A foreground subscription settles and
 releases its claims before a system window starts, then resumes when the
 window ends if the app is active. Library sync retains its concurrent companion pass, so that window still processes
 image work alongside photo matching and metadata sync. Overlapping windows use the
 same worker; expiration cancels only the pass owned by that window.
-The OS chooses charging-window timing; a physical iPhone must verify continued
-processing, system cancellation and overnight scheduling without a debugger.
-Identifiers/background modes come from `project.yml`; iOS background GPU access
-is declared in the app entitlement and requested only on supported devices.
+The OS chooses charging-window timing; a physical iPhone must verify system
+cancellation and overnight scheduling without a debugger.
+Identifiers/background modes come from `project.yml`.
 macOS keeps its existing awake/background behavior.
 
 The worker subscribes to the `imageProcessing.work` doorbell (`/api/doorbell`). The ring carries
@@ -276,6 +280,14 @@ example, save `~/Library/LaunchAgents/com.example.cubby-companion.plist` with:
 
 Then run `launchctl bootstrap gui/$(id -u) <plist>`. Use `launchctl bootout` to stop it.
 launchd's SIGTERM-to-SIGKILL window (20s by default) is longer than the 10s stop grace.
+
+## On-device Identify
+
+Identify indexes Product covers by record ID before ranking: repeated records
+share one feature print and one result slot, and the indexed count is the number
+of unique Products. Photo and rebuild controls wait for indexing to finish.
+Progress updates complete before the ready state; a retained photo is ranked
+again after the index finishes or is rebuilt, so partial results are not final.
 
 ## Verification
 
@@ -326,8 +338,6 @@ Associated Domains for the identifier and create exactly these active profiles:
 - `AppStore com.nickysemenza.cubby.LiveActivity iOS` (`IOS_APP_STORE`, for the embedded Live
   Activity extension; register the `com.nickysemenza.cubby.LiveActivity` identifier first)
 - `AppStore com.nickysemenza.cubby macOS` (`MAC_APP_STORE`)
-
-Enable **Background GPU Access** on `com.nickysemenza.cubby` for the continued-processing GPU entitlement; capability changes invalidate App Store profiles, so regenerate (Edit → Save) both `AppStore com.nickysemenza.cubby iOS` and `AppStore com.nickysemenza.cubby macOS` afterwards.
 
 Configure these repository Actions secrets:
 

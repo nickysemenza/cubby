@@ -26,23 +26,17 @@ and normalized statement workflow. Statement evidence is recorded through
 The wardrobe journey checks exact replay, overlapping evidence, decoy charges,
 reviewed settlement, and preservation of Expense and inventory during convergence.
 
-`pnpm test:e2e:sim -- --qa-photo-completion` checks that approving the final selected
-ready group of a stopped `needs_review` photo Run updates the same open console’s
-hero and Progress report to completed without manual refresh. The fixture is synthetic;
-the runner reads the completed Run and committed proposal back and saves checksummed
-evidence through the usual QA artifact path. This guard also runs in the full QA lane.
-
 `pnpm test:e2e:sim -- --qa` seeds the shared connected exploration household
 (`tooling/scenarios/corpus.ts`, also used by dev and browser screenshots), adds
 journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
-every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice, statement match
-save, approving only the selected ready group of a photo Run, a structured
+every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice,
+approving only the selected ready group of a photo Run, a structured
 unit-mapping edit, external-ID Source/Identifier keyboard entry on an independent
 Product, and formatted barcode Add, additive preservation, explicit primary
 promotion and secondary-barcode sweep confirmation,
 recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
-(one unit from the chosen shelf only, both allocations, the one committed
+(one unit from the chosen shelf only, the one committed
 photo group and its Product, and exactly the selected location and two plantings) before writing the usual checksummed bundle under `artifacts/sim-qa-e2e/`. Add
 `--hold` to skip the scripted journeys and keep the server and simulator up after seeding
 (ids in `qa-ids.json`; `touch qa.stop` ends it) for manual driving. A held session is not
@@ -63,11 +57,17 @@ This journey does not establish Retry, logout, host switching, auth/update gates
 or record handoff and refresh acceptance.
 
 `pnpm test:e2e:sim -- --qa --journey qa-entity-table --video` checks the generic
-Product List/Table switch, sortable headers, column visibility, and record
+Product List ↔ Cards switch, the “Open table on web” menu item, and record
 navigation against the same synthetic QA world. The focused sort-model tests
 cover paging and pending-search response fencing; the simulator journey covers
-the controls and navigation boundary. Its evidence uses the usual checksummed
+the compact presentation controls and navigation boundary. Its evidence uses the usual checksummed
 QA artifact bundle.
+
+`pnpm test:e2e:sim -- --qa --journey qa-settings` pushes Settings from the Today
+toolbar and checks the Server, Notifications, Advanced and About sections,
+including the version row and Open Cubby on the web. The fixture install has
+already answered the participation question, so Photos' inline prompt is
+covered by `#Preview` only.
 
 Reach catalog targets with `scroll down 0.5 --until "id=…"` using the current
 shared driver, whose scroll command repeats passes until the target is visible.
@@ -76,7 +76,7 @@ If the driver reports no progress, inspect the current tree and scroll surface
 before adding another swipe. An identifier may be
 shared by its row and child nodes, so narrow catalog clicks with the entity
 label. Inspect the current accessibility tree before adding role constraints:
-iOS View choices are cells, column toggles and table headers are buttons, and
+iOS View choices are cells, regular-width column toggles and table headers are buttons, and
 the Columns control is a popup button. Use visible labels for menu choices.
 Assert table rows, headers, and
 visible totals rather than an unexposed layout container; the Columns popup
@@ -122,11 +122,12 @@ tests for file selection, navigation, sign-in controls, and review/save actions;
 use the longer composed Mac journey when a change crosses those UI boundaries.
 CLI/server workflows do not need an unlocked screen.
 
-`pnpm test:e2e:sim -- --headless --photo` uploads through Swift, saves the shared
-Run review, and approves those exact proposals through the CLI. It checks the
-resulting Products and item/label attachments without launching a browser or app.
-Web batch approval, image rendering, processing failures, and restart navigation
-remain covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
+`pnpm test:e2e:sim -- --headless --photo` uploads through Swift, reads the Run
+back through the console session, and approves the proposals through the web
+operation (group decisions are web's). It checks the resulting Products and
+item/label attachments without launching a browser or app. Web selection and batch
+approval, image rendering, processing failures, and restart navigation remain
+covered by `apps/web/tests/e2e/photo-group-review.spec.ts`.
 
 ## Recommended loop
 
@@ -137,6 +138,18 @@ include parentheses, for example
 Check the executed test count: `TEST SUCCEEDED` with zero tests is not validation.
 When only the selector changes, `test-without-building` reuses the existing test
 bundles and DerivedData without compiling again.
+
+For the full iOS App target, select `-only-testing:Cubby-iOS-Tests` with `test`;
+repeat with `test-without-building` against the same build inputs. Check the
+executed count and issue count in the result bundle, including repeated runs.
+`pnpm apple check app` compiles the target but does not execute its tests.
+
+Network fixtures must follow the operation wire contract: successful JSON is
+`{ok: true, data: ...}`, while HTTP errors and deliberately malformed responses
+retain their original bodies. Otherwise a negative photo test can fail at the
+transport envelope instead of reaching the matching or routing guard it owns.
+URLSession may supply request bytes through `httpBodyStream` on the simulator;
+stubs that inspect operation inputs must handle both that stream and `httpBody`.
 
 1. Edit a `CubbyKit` algorithm or model and run its focused Swift test. For a
    networked native change, run the affected headless journey with

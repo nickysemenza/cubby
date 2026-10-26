@@ -220,7 +220,21 @@ when a required state is missing rather than adding a parallel override path.
 
 `presentation.detail.summary` owns the ordered header cells for every entity.
 The generic header renders up to eight applicable cells beneath the identity
-and actions; it does not add another Overview section. Entries have stable
+and actions; it does not add another Overview section. The first four cells are
+the record's glance: native lays them two across under the hero (one column at
+accessibility sizes) and web fills the first grid row; the rest follow. There is
+no separate glance declaration, so order the slots so the first four answer the
+record's main question. A field a `fields` slot shows is omitted from later
+field sections and relation context fields on both clients, so on web the cell
+carries that field's domain renderer or inline editor. A one-field cell with no
+value is omitted and its field stays in the field sections. Keep fields whose
+renderer is a workflow form (Financial Transaction allocations' booking review)
+out of the web summary with `surfaces: ["native"]`.
+
+Summary slots and detail sections accept an optional `surfaces: ["web"]` or
+`["native"]` that limits the entry to one client; omitted, both render it. The
+native manifest drops the other surface's entries at generation and web filters
+them at render, so the shared declaration keeps one order. Entries have stable
 `id` and `title` values and one of four kinds:
 
 - `fields` groups one to four readable field keys, using the same effective
@@ -376,7 +390,15 @@ names (`phosphor` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
 as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
 data only, safe for eagerly-loaded client code), spreads it into the inspector,
-and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. The summary
+and writes `domain`/`sfSymbol`/`emptyState` onto the Swift `EntityDescriptor`:
+native list empty states print the declared title and description and offer
+`actionLabel` as a create button when the entity has a native create plan.
+`nativeBrowse` (default `true`) declares whether the root appears in native
+Browse and the native sidebar (`EntityCatalog.browsable`). Set it to `false`
+only for operator plumbing whose list serves no member task on a phone or Mac
+(Jobs, Image jobs, source transaction records, transaction imports), and say
+why beside the flag; its records still open natively from links, and web
+navigation ignores it. The summary
 also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
@@ -386,21 +408,32 @@ normal-update roster and the exclusions in the bulk edit contract below. Identit
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A `*Override` name is reserved for a
 value that replaces a default the compiler computes; an additive or required
-declaration (`detail.additionalSections`, `list.views`, `list.totals`,
+declaration (`detail.sections`, `list.views`, `list.totals`,
 `route.list`, `route.detail`) takes a plain name. The generator compiles each
 override without it and refuses one that changes nothing, so the Schema tab's
 override table lists only live deviations. `detail.hero` names the chip (an
-enum/boolean field), stat fields, a breadcrumb reference field, and `when` (a
+enum/boolean field), stat fields, a breadcrumb field, and `when` (a
 date or timestamp field, optional `label`) for when the thing happened, shown
 through the field's own renderer ahead of the ingest `createdAt`, which it
 replaces as the leading time and falls back to when empty; hero images follow
-the gallery capability. Actions derive from capabilities: the hero gets
+the gallery capability. The breadcrumb field is a reference or a placement
+(`{ locationId }`); the kernel detail read projects it as
+`breadcrumb: [{ entity, id, name }]`, outermost first: a location or placement
+yields the location and its ancestors, any other reference the one record, and
+Product supplies its primary placement's path. Web trails it in the header
+before the record code; native captions the hero with it and the `when`, and
+keeps the record code in More → Copy shortcode. Actions derive from capabilities: the hero gets
 `edit` with an update contract and `delete` for a mutable entity with kernel-owned
 deletion. Shared and additional hero actions are deduplicated. Web always offers
 Copy code independently of the hero allowlist. Merge remains a list/selection
 workflow rather than a universal detail action. A list gets `bulkEdit` (bulk update),
 `merge` (kernel merge), and `delete` (kernel delete). `hero.extraActions` and
 `list.extraActions` add workflow verbs; list extras precede the derived list actions.
+`detail.quickActions` and `list.quickActions` promote one or two of those
+declared verbs (generation fails on any other): web renders detail quick
+actions as filled header buttons and puts list quick actions first in row
+menus; native shows them as filled buttons under the hero and as the leading
+swipe (iOS) and first context-menu items (Mac). They leave the More menu.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 Collection verbs derive from the declared sections and `reportSlotActions`;
@@ -424,14 +457,16 @@ Vendor search and product indexing controls observe the same cached job/readines
 state as their worklists. Stored URLs, source mail links, map coordinates, and
 linked entity/identifier values remain facts rather than header actions.
 
-`detail.sectionOverrides` replaces the inferred Overview section with an ordered list of
-`fields` (a named subset of the `display.detail` fields — every such field is
-placed exactly once), `relation` (the target entity's list filtered by an
+`detail.sections` is required on every entity and lists the detail page's
+sections in reading order, under readable ids: `fields` (a named subset of the
+`display.detail` fields — every such field is placed exactly once, in a
+section, a `fields` summary slot or a relation's context fields, unless it is
+`listHidden`; the generator fails on an unplaced field), `relation` (the target entity's list filtered by an
 id/idMulti descriptor on the target whose `brandRef` points back here, with
 optional `columns`/`sort`/`limit`), `timeline` (the entity's timeline
 capability) and `slot` (the one per-platform hand-written fill, rendered
 only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
-`entity-manifest.ts` type those registries). Full record relation sections stay visible after an empty first read on web and Apple, with a secondary heading, explicit Empty cue and usable create action. Full-detail visibility and folding flags are absent from the declaration and generated catalogs. Pagination and show-more behavior remain declaration-owned.
+`entity-manifest.ts` type those registries). A loaded relation's heading carries its list total (`Photos · 12`) from the first page's `meta.totalCount`; at zero the section collapses to one quiet row showing the declared `empty` copy or `Title · 0`, and its create action stays reachable. Full-detail visibility and folding flags are absent from the declaration and generated catalogs. Pagination and show-more behavior remain declaration-owned.
 
 Run import report eligibility comes from `IMPORT_REPORT_RUN_PURPOSES` in the
 shared Run schema, including `mail_import`. Web and server use its shared
@@ -539,7 +574,10 @@ search) also use the `records` block: rows a person can open or check, plus the
 verbs that act on them (`SECTION_ACTION_IDS`). Each row's and verb's
 `disabledReason`, every amount and the footer are the server's; a verb runs an
 existing operation on each client that implements it, and any a client lacks is
-classified under `sectionAction` in `native-coverage.ts` (none today). Split,
+classified under `sectionAction` in `native-coverage.ts`: native runs only
+Receive into Inventory and hands statement match, split and both attaches off to
+web, as it does the reconciliation, expense settlement and spending
+classification slots. Split,
 attach expenses and attach products keep their rules on the server too:
 `purchase.splitStart` and `purchase.checkSplit` (a name each, whole cents that
 add up to the original exactly, one product part, an attribution choice, and the
@@ -673,14 +711,18 @@ the body those answers assemble (`commitPreparedInput`) with a fresh operation i
 is declared once, in `packages/schemas/src/native-coverage.ts`: every control,
 list, and detail renderer id, hero action, and (entity-qualified) detail and
 list slot has a status (`implemented`, `generic`, `ownedElsewhere`, or
-`unsupported` with a reason). The records are typed against the generated id
-unions, `native-coverage.unit.test.ts` fails when a new declared id is
-unclassified, and `NATIVE_UNSUPPORTED_CEILING` pins the per-kind unsupported
-count so the set only shrinks. `pnpm generate` writes it to the CubbyKit bundle
-as `native-coverage.json`, which `NativePresentationCoverage` reads. To add a
-web-only renderer, slot, or action, classify it `unsupported` and raise the
-ceiling with a justification in review; to close a gap, build the native view
-path, flip the status, and lower the ceiling.
+`handoff`). A `handoff` is a reviewed web-only surface with
+`web: { section?, query?, label }` and a `reason`: native draws one row that opens
+the record at the declared detail `section` (the web hash) or the list route
+with `query`. The records are typed against the generated id unions,
+`native-coverage.unit.test.ts` fails when a new declared id is unclassified, and
+it pins the handoff roster and checks that each handoff names a declared section
+or a query. `pnpm generate` writes it to the CubbyKit bundle as
+`native-coverage.json`, which `NativePresentationCoverage` reads, and refuses a
+detail-slot handoff to an undeclared section; the schema page lists each
+entity's handoffs. To move a surface to web, classify it `handoff` and add it to
+the roster in review; to bring it native, build the view path and flip the
+status.
 
 **Structured values.** A field whose control renderer is in
 `STRUCTURED_VALUE_RENDERERS` (`external-ids`, `label-nutrition`,
@@ -736,7 +778,9 @@ the server refuses a change too) locks it on edit, and `.meta({ notice })` shows
 An `implemented` hero action also needs a plan in `nativeHeroActionPlans` (same
 file, emitted as `heroActionPlan`): the declared verb maps to one generated
 operation from its contract, an input form, and a
-confirmation (`destructive` for delete and discard). The native
+confirmation (`destructive` for delete and discard). A `setField` plan with a
+`value` writes that option on one tap (a task's Done); `editField` asks for one
+updatable field seeded from the record (an inventory amount). The native
 `HeroActionRunner` executes every plan, and `pnpm generate` fails when the
 operation is not on the generated client or the body names a field the
 operation does not declare. A server `*Preview` query supplies any
@@ -1463,11 +1507,19 @@ lazy, and compatible union schemas; opaque transforms do not invent properties.
 It validates list labels on lists and detail labels/items on detail. Named
 renderers are classified by the existing `native-coverage.ts` owner during
 shared compilation. Whole-row renderers declare their minimum consumed inputs
-beside that disposition. `unsupported` remains a disclosed native gap; compiler
+beside that disposition. `handoff` remains a disclosed native web row; compiler
 schema checks do not prove executable web or native registration. `display.listHidden` owns a
 declared column's hidden-by-default state; pages retain
 `initialColumnVisibility` only for computed or relation columns outside the
-field model. `display.valueOptions` is the label/tone roster for an
+field model. Default columns have no separate roster: set `listHidden` on a
+column that is near-constant in practice ("1 each", "Stock", "Needs data",
+an identifier or flag empty on most rows) so the informative ones (placement,
+owner, value, due date, status) lead after the title. Order them with
+`listOrderOverride` when model order puts them late, and keep a band's members
+together: web paints a `columnGroup` at its first member's position, hidden or
+not, while native sorts by `listOrder` alone. Web tables, Mac tables and native
+rows all start from this state. `display.width` buckets a column as `xs`,
+`sm`, `md`, `lg` or `xl`; `xl` is for long prose such as notes. `display.valueOptions` is the label/tone roster for an
 enum-like value a field renders without a select control (a derived status, or
 the `kind`/`status` member of a JSON field); read it through
 `fieldEnumOptions(entity, key)`. A range filter's presets are declared as
@@ -2057,6 +2109,19 @@ Missing context fields are null. No free-text labels or extra keys are accepted.
 These assertions do not prove scale, cache warmth or deployment provenance;
 response versions remain independently observed. Invocation/warmup, concurrency,
 pagination and input equality fingerprints retain their existing meanings.
+
+Product complete list and detail reads carry `primaryPlacement` (nullable), computed
+in the quantity batch: the live location with the greatest on-hand amount, then
+most recent stock activity, then public location code. Its path includes ancestors
+and the location joined with `›`; identity Locations count as one owned unit.
+Service Products have no placement. The field is read-only and is the default
+column after Name, with a mobile trailing projection of its path.
+Search hits carry at most three ordered, preformatted `facts`: Products show their
+primary path and a known total on-hand label, Locations and Inventory show their
+full location path, and other kinds have none. Search destinations preserve these
+facts. Search rows and typed search pickers consume them directly; no structured
+`locationPath` field remains on a hit. Grouped inventory placement payloads retain
+their own `locationPath` string.
 
 ## Filters and search
 

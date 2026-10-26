@@ -1,6 +1,12 @@
-import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
+import {
+  classificationFieldDisplayRefusal,
+  classificationFieldRefusal,
+} from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
-import type { DetailSummarySlot } from "@cubby/schemas/entity-detail-summary";
+import {
+  onDetailSurface,
+  type DetailSummarySlot,
+} from "@cubby/schemas/entity-detail-summary";
 import {
   entityFieldModels,
   type EntityFieldModel,
@@ -32,11 +38,32 @@ import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { useDetailFieldOverrides } from "./entity-record-fields";
 import { ReportRowText, ReportTimeDisplay } from "./records-ledger";
 import { LIVE_REPORT_POLL_MS, ReportBlocks } from "./report-slot";
 import { MonthlySpendChart } from "./spend-chart";
 
 type Field = EntityFieldModel["fields"][number];
+
+/**
+ * A one-field cell with no value. The summary omits it, so the field stays in
+ * the record's field sections where the member can still fill it in.
+ */
+export function isEmptySummaryCell<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+  slot: DetailSummarySlot,
+): boolean {
+  if (slot.kind !== "fields" || slot.fields.length !== 1) return false;
+  const fields: readonly Field[] = entityFieldModels[entity].fields;
+  const field = fields.find((field) => field.key === slot.fields[0]);
+  return (
+    field !== undefined &&
+    fieldResolutionFor(record, field.key)?.mode !== "allocated" &&
+    field.readKey !== null &&
+    readPathValue(record, field.display.readPath ?? field.readKey) == null
+  );
+}
 
 function isRoutedReportEntity(
   value: string,
@@ -269,8 +296,9 @@ export function DetailSummary<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   compact?: boolean;
 }) {
-  const slots: readonly DetailSummarySlot[] =
+  const declared: readonly DetailSummarySlot[] =
     entitySummary[entity].detail.summary;
+  const slots = declared.filter((slot) => onDetailSurface(slot, "web"));
   const id = record.id;
   const [showContext, setShowContext] = useState(false);
   const records = slots.filter((slot) => slot.kind === "records");
@@ -304,6 +332,9 @@ export function DetailSummary<E extends GenericDetailEntity>({
   const fieldKeys = slots.flatMap((slot) =>
     slot.kind === "fields" ? slot.fields : [],
   );
+  // Later field sections omit these fields, so the cell carries their editor
+  // or domain renderer.
+  const overrides = useDetailFieldOverrides(entity, record, fieldKeys);
   const imageRefs = [
     ...fields
       .filter((field) => fieldKeys.includes(field.key))
@@ -316,6 +347,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
         ]) ?? [],
     ),
   ];
+  // The first four slots are the glance; later context folds behind a toggle.
   const secondary = new Set(
     slots
       .slice(4)
@@ -356,34 +388,26 @@ export function DetailSummary<E extends GenericDetailEntity>({
         className={cn(
           "grid grid-cols-1 border-y border-border sm:grid-cols-2 sm:[&>section:nth-child(odd)]:border-r",
           !compact &&
-            "xl:grid-cols-3 xl:[&>section]:border-r xl:[&>section:nth-child(3n)]:border-r-0",
+            "xl:grid-cols-4 xl:[&>section]:border-r xl:[&>section:nth-child(4n)]:border-r-0",
         )}
       >
         {slots.map((slot) => {
           let content: ReactNode;
           if (slot.kind === "fields") {
-            // Missing facts remain in the full record; they need no summary cell.
-            if (
-              slot.fields.length === 1 &&
-              slot.fields.every((key) => {
-                const field = fields.find((field) => field.key === key);
-                return (
-                  field &&
-                  fieldResolutionFor(record, field.key)?.mode !== "allocated" &&
-                  field.readKey !== null &&
-                  readPathValue(
-                    record,
-                    field.display.readPath ?? field.readKey,
-                  ) == null
-                );
-              })
-            )
-              return null;
+            if (isEmptySummaryCell(entity, record, slot)) return null;
             content = (
               <dl className="space-y-1">
                 {slot.fields.map((key) => {
                   const field = fields.find((field) => field.key === key);
                   if (!field) return null;
+                  const override =
+                    classificationFieldDisplayRefusal(
+                      entity,
+                      record,
+                      field.key,
+                    ) === null
+                      ? overrides[field.key]?.(record)?.value
+                      : undefined;
                   const allocated =
                     fieldResolutionFor(record, field.key)?.mode === "allocated";
                   const absent =
@@ -412,15 +436,16 @@ export function DetailSummary<E extends GenericDetailEntity>({
                         {field.label}
                       </dt>
                       <dd className="min-w-0 break-words">
-                        {(absent || value === null) &&
-                        !allocated &&
-                        classificationFieldRefusal(
-                          entity,
-                          record,
-                          field.key,
-                        ) === null
-                          ? "Not recorded"
-                          : renderDetailFieldValue(entity, record, field)}
+                        {override ??
+                          ((absent || value === null) &&
+                          !allocated &&
+                          classificationFieldRefusal(
+                            entity,
+                            record,
+                            field.key,
+                          ) === null
+                            ? "Not recorded"
+                            : renderDetailFieldValue(entity, record, field))}
                       </dd>
                     </div>
                   );

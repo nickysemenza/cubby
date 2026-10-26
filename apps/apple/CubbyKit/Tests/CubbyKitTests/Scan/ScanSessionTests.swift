@@ -59,6 +59,42 @@ private func stray(_ entry: String, ambiguous: Bool = false) -> ScanStrayOut {
 struct ScanSessionTests {
     let shelf = LocationCode("LOC-2345")
 
+    @Test func restoresLastLocationAcrossSessionsAfterValidation() async throws {
+        let suite = "ScanSessionTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let service = StubScanService { _, _ in StubScanService.result(.added) }
+        let first = ScanSession(service: service, locationDefaults: defaults)
+        first.location = LocationCode("LOC-3456")
+        first.location = shelf
+
+        let relaunched = ScanSession(service: service, locationDefaults: defaults)
+        #expect(relaunched.location == nil)
+        relaunched.restoreLocation { $0 == shelf }
+        #expect(relaunched.location == shelf)
+        #expect(relaunched.submit("012345678905"))
+        await relaunched.idle()
+        #expect(service.calls.first?.1 == shelf)
+    }
+
+    @Test func missingSavedLocationFallsBackToNone() throws {
+        let suite = "ScanSessionTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let service = StubScanService { _, _ in StubScanService.result(.added) }
+        let first = ScanSession(service: service, locationDefaults: defaults)
+        first.location = shelf
+
+        let relaunched = ScanSession(service: service, locationDefaults: defaults)
+        relaunched.restoreLocation { _ in false }
+        #expect(relaunched.location == nil)
+        #expect(relaunched.lastError == nil)
+        #expect(!relaunched.submit("012345678905"))
+        let nextLaunch = ScanSession(service: service, locationDefaults: defaults)
+        nextLaunch.restoreLocation { _ in true }
+        #expect(nextLaunch.location == nil)
+    }
+
     @Test func shelfAnnotationsFollowWhatEachCodeResolvedTo() async throws {
         let service = StubScanService { raw, _ in
             raw == "4006381333931"

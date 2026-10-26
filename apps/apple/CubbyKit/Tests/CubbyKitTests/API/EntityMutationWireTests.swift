@@ -84,32 +84,6 @@ struct EntityMutationWireTests {
         return data
     }
 
-    // The typed saveGroups request must restore nested required nulls instead of silently
-    // dropping a resolved concern or turning household ownership into the run member's stock.
-    @Test func photoReviewSaveRestoresNestedNulls() async throws {
-        let group: JSONValue = [
-            "groupKey": "shirt", "images": [["id": "IMG-4K7M", "purpose": "item"]],
-            "product": ["kind": "create", "create": ["name": "Synthetic shirt"]],
-            "review": [
-                "observedName": "Synthetic shirt", "unresolvedReason": .null, "stockIntent": "receive",
-            ],
-            "inventory": [
-                "locationId": "LOC-4K7M", "quantity": 2, "ownershipMode": "explicit", "ownerPartyId": .null,
-            ],
-        ]
-        let requests = try await capture { client in
-            await #expect(throws: CubbyAPIError.self) {
-                _ = try await client.savePhotoGroups(runID: "RUN-4K7M", groups: [group])
-            }
-        }
-        let request = try #require(requests.first)
-        #expect(request.method == "POST")
-        let saved = try #require(request.body["groups"]?.arrayValue?.first)
-        #expect(saved["review"]?["unresolvedReason"] == .null)
-        #expect(saved["inventory"]?["ownerPartyId"] == .null)
-        #expect(saved["product"]?["create"]?["name"]?.stringValue == "Synthetic shirt")
-    }
-
     /// The inventory create schema takes a `{value, unit}` amount; a bare count is its 400.
     @Test func inventoryCreateSendsACountAsAnEachAmount() async throws {
         let requests = try await capture { client in
@@ -149,24 +123,6 @@ struct EntityMutationWireTests {
             ])
         // The declared length is the sent body's own.
         #expect(request.contentLength == String(request.byteCount))
-    }
-
-    @Test func photoDraftBrandClearReachesServer() async throws {
-        let body: JSONValue = [
-            "runId": "RUN-4K7M", "groupKey": "synthetic-shirt", "name": "Canvas shirt",
-            "brandId": .null,
-        ]
-        let requests = try await capture { client in
-            await #expect(throws: CubbyAPIError.self) {
-                try await client.updatePhotoGroupDraft(body)
-            }
-        }
-        let request = try #require(requests.first)
-        #expect(requests.count == 1)
-        #expect(request.method == "POST")
-        #expect(request.path == "/api/operations/photoImport.updateDraft")
-        #expect(request.body["brandId"] == .null)
-        #expect(request.body["name"] == .string("Canvas shirt"))
     }
 
     /// A required, nullable key inside a structured value (an alias's `externalAccountId`) is
