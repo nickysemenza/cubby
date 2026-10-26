@@ -12,6 +12,7 @@ import {
 } from "~/server/domains/run/repo/connection-refresh";
 import {
   claimDerivedDiscovery,
+  memberStoppedDiscovery,
   prepareConnectionDiscoveryPage,
 } from "~/server/domains/run/repo/derived-discovery";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -22,6 +23,12 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 // Short: a full backlog drains within about a minute, and a longer wait idles
 // the pass rather than the queue.
 const DISCOVERY_BACKPRESSURE_MS = 30_000;
+
+/**
+ * A member's cancel of the pass's Run stops the pass until the next day's
+ * routine pass; continuing under a new Run made Stop ineffective.
+ */
+const MEMBER_STOP_MS = 24 * 60 * 60_000;
 
 const cursorSchema = z.object({
   after: z.string().nullable(),
@@ -43,6 +50,19 @@ export const connectionDiscoveryJobHandler = defineJobHandler(
     if (!activation?.enabled || !activation.manifest["entity-connections"])
       return { page: { done: true, result: { outcome: "disabled" } } };
     const previous = cursorSchema.parse(claim.cursor ?? { after: null });
+    if (
+      await memberStoppedDiscovery(
+        db,
+        [previous.runId, previous.replacing].filter((id) => id !== null),
+      )
+    )
+      return {
+        page: {
+          done: false,
+          cursor: { after: null, runId: null, replacing: null },
+          waitUntil: new Date(Date.now() + MEMBER_STOP_MS),
+        },
+      };
     // Backpressure: hold the cursor until the evaluation backlog drains.
     if (
       (await pendingConnectionEvaluations(db)) >=

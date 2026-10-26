@@ -5,6 +5,7 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
 import { readDeviceBacklog } from "../repo/device-backlog";
 import { listRunJobs, listSubjectJobs } from "../repo/job-diagnostics";
 import { readJobQueue, readRunRollups } from "../repo/job-queue";
+import { readWorkActivity } from "../repo/work-activity";
 import { readJobLogs } from "../service/job-logs";
 import { retryJobSetNow } from "../service/retry-now";
 
@@ -39,6 +40,7 @@ export const jobHandlers = implementOperationDomain(jobContract, {
     ),
   }),
   deviceBacklog: (context) => readDeviceBacklog(context.db),
+  activity: (context) => readWorkActivity(context.db),
   health: async (context) => ({
     snapshot: await (
       await import("~/server/workflows/queue-watchdog")

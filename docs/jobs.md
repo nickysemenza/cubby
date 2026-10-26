@@ -507,7 +507,9 @@ record (~55k), which starved every other kind for days.
   queue. It walks the newest records first, and never appends to a stopped Run. A changed
   record updates its queued slot in place, retaining its Job. Cancelled work whose Run
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
-  decision) is re-admitted at that pace; a member's cancel stays final.
+  decision) is re-admitted at that pace; a member's cancel stays final. A
+  member's cancel of the pass's Run also stops the pass: it resets its cursor
+  and waits a day rather than continuing under a new Run.
 - Publication correction work is one `assessment.correction` Job per
   publication commit (`targetAssessmentIds`), not one per assessment; sources are
   still resolved after commit under serializable isolation.

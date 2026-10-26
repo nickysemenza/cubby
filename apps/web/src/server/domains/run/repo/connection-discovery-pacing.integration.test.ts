@@ -447,4 +447,33 @@ describe("connection discovery pacing", () => {
       );
     expect(admitted).toHaveLength(CONNECTION_DISCOVERY_PENDING_CAP);
   });
+  it("stops the pass for a day when a member cancels its Run", async () => {
+    await tasks(["Synthetic member-stopped task"]);
+    const cancelled = await createDiscoveryRun(ctx.db);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, cancelled));
+    const saved = await claimDerivedDiscovery(ctx.db);
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Synthetic discovery Job was not claimable");
+    const before = Date.now();
+    const prepared = await connectionDiscoveryJobHandler.prepare(ctx.db, {
+      ...claim,
+      cursor: { after: "synthetic-cursor", runId: cancelled },
+    });
+    expect(prepared.page).toMatchObject({
+      done: false,
+      cursor: { after: null, runId: null, replacing: null },
+    });
+    const page = prepared.page as { waitUntil?: Date };
+    expect(page.waitUntil?.getTime()).toBeGreaterThanOrEqual(
+      before + 23 * 60 * 60_000,
+    );
+    const opened = await getDb(ctx.db)
+      .select({ id: run.id })
+      .from(run)
+      .where(eq(run.purpose, "connection_discovery"));
+    expect(opened.map((row) => row.id)).toEqual([cancelled]);
+  });
 });
