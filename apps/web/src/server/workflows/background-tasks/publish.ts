@@ -9,7 +9,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { getBackgroundQueue, getExecutionCtx } from "~/server/cf-env";
+import { afterResponse, getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
@@ -24,27 +24,32 @@ export interface PublishOptions {
   readonly source: string;
 }
 
-/** Queue failure affects latency only. Intent is already committed in Postgres. */
+/** Best-effort wake for intent already committed in Postgres. */
 export async function wakeJobs(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
-  try {
-    await queue.sendBatch([
-      {
-        body: {
-          version: BACKGROUND_TASK_MESSAGE_VERSION,
-          queueType: "background",
+  const send = async () => {
+    try {
+      await queue.sendBatch([
+        {
+          body: {
+            version: BACKGROUND_TASK_MESSAGE_VERSION,
+            queueType: "background",
+          },
         },
-      },
-    ]);
-  } catch (error) {
-    log.error("wake failed; cron will drain committed jobs", {
-      source: options.source,
-      error,
-    });
-  }
+      ]);
+    } catch (error) {
+      log.error("wake failed; cron will drain committed jobs", {
+        source: options.source,
+        error,
+      });
+    }
+  };
+  // Only the wake is deferred: callers commit durable intent before getting here.
+  // Queue and cron invocations have no request lifetime and still await the send.
+  await afterResponse(send());
 }
 
 function taskKey(task: BackgroundTaskInput) {
@@ -127,15 +132,7 @@ export async function publishBackgroundTasks(
         invalidate: true,
       });
     }
-    await runAfterCommit(tx, () => {
-      const wake = wakeJobs(options);
-      const ctx = getExecutionCtx();
-      if (ctx) {
-        ctx.waitUntil(wake);
-        return Promise.resolve();
-      }
-      return wake;
-    });
+    await runAfterCommit(tx, () => wakeJobs(options));
   });
   return { count: tasks.length };
 }
