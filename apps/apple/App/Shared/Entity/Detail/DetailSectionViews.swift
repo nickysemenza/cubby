@@ -261,9 +261,10 @@ struct FieldsSectionView: View {
                 includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
         }
         .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
-        .contextMenu {
-            resolutionActions(field)
-        }
+        .modifier(
+            FieldExplanationPresenter(
+                field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
+                menuActions: AnyView(resolutionActions(field))))
     }
 
     private var listRowMinimumHeight: CGFloat {
@@ -329,7 +330,10 @@ struct FieldsSectionView: View {
                     EntityFieldResolutionLabel(resolved: resolved, field: field)
                 }
             }
-            .contextMenu { resolutionActions(field) }
+            .modifier(
+                FieldExplanationPresenter(
+                    field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
+                    menuActions: AnyView(resolutionActions(field))))
         } else {
             fieldRowWithResolutionActions(field)
         }
@@ -352,7 +356,10 @@ struct FieldsSectionView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contextMenu { resolutionActions(field) }
+            .modifier(
+                FieldExplanationPresenter(
+                    field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
+                    menuActions: AnyView(resolutionActions(field))))
         } else if let value = displayText(field) {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 HStack(spacing: 6) {
@@ -380,7 +387,10 @@ struct FieldsSectionView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contextMenu { resolutionActions(field) }
+            .modifier(
+                FieldExplanationPresenter(
+                    field: field, subject: EntityRef(entity: descriptor.key, id: row.id),
+                    menuActions: AnyView(resolutionActions(field))))
         }
     }
 
@@ -588,11 +598,6 @@ struct FieldExplanationLabel: View {
     var emptyLabel = false
     var surface = "detail"
     var iconOnly = false
-    @Environment(AppModel.self) private var appModel
-    @State private var showingExplanation = false
-    @State private var resolved: FieldExplanationOutput?
-    @State private var loadError: String?
-
     var body: some View {
         Text(iconOnly ? "" : (labelOverride ?? field.label))
             .foregroundStyle(emptyLabel ? .secondary : .primary)
@@ -600,6 +605,27 @@ struct FieldExplanationLabel: View {
             .accessibilityIdentifier(
                 "field.explanation.\(subject.entity.rawValue).\(subject.id).\(field.key)"
             )
+            .modifier(FieldExplanationPresenter(field: field, subject: subject, surface: surface))
+            #if os(macOS)
+                .help(field.explanation?.description ?? field.label)
+            #endif
+    }
+}
+
+/// One row menu must own Explain and overrides; a parent override menu masks
+/// a nested label's context menu on iOS.
+private struct FieldExplanationPresenter: ViewModifier {
+    let field: FieldDescriptor
+    let subject: EntityRef
+    var surface = "detail"
+    var menuActions: AnyView? = nil
+    @Environment(AppModel.self) private var appModel
+    @State private var showingExplanation = false
+    @State private var resolved: FieldExplanationOutput?
+    @State private var loadError: String?
+
+    func body(content: Content) -> some View {
+        content
             .accessibilityAction(named: Text("Explain")) { presentExplanation() }
             .contextMenu {
                 if field.explanation != nil {
@@ -609,10 +635,8 @@ struct FieldExplanationLabel: View {
                         Button("Explain") { presentExplanation() }
                     #endif
                 }
+                menuActions
             }
-            #if os(macOS)
-                .help(field.explanation?.description ?? field.label)
-            #endif
             .onChange(of: subject) { _, _ in
                 showingExplanation = false
                 resolved = nil
