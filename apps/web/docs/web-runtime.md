@@ -256,7 +256,11 @@ tracking, enrichment patches, generation retries or separate summary requests.
 Loading and errors apply to the whole page. Normal query cancellation, stale
 page protection, infinite pagination and lazy tree expansion remain page-level
 concerns. Tree children and selected-record action reads use the same complete
-list contract.
+list contract. A detail relation section's count is its own list read's
+`meta.totalCount` ([detail sections](../../../docs/entities.md#one-declaration-several-consumers)),
+and default columns come from declared `listHidden`
+([column defaults](../../../docs/entities.md#bulk-edit)); add no count or
+column-roster read.
 Category reference pills share the complete vocabulary used by pickers and
 filters, including all pages and the inherited `effectiveFeature` value.
 Unresolved references distinguish pending pages, completed missing IDs and
