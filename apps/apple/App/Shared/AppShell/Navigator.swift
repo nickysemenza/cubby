@@ -373,7 +373,9 @@ enum SidebarDestination: Hashable {
 // Shared rows without a native screen remain browser actions, outside List selection.
 extension SidebarManifest.Destination {
     var nativeDestination: SidebarDestination? {
-        if let entity, entity.nativeActions.contains(.list) {
+        if let entity, EntityCatalog.browsable.contains(where: { $0.key == entity }),
+            entity.nativeActions.contains(.list)
+        {
             return .entity(entity)
         }
         switch route {
