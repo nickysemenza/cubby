@@ -633,6 +633,11 @@ the fallback date range allows the existing date index and keeps the inclusive
 45-day window.
 A single included link-state filter fixes the sort rank, so ordering reuses that
 constant and retains date and stable ties without computing the state again.
+After page selection, independent association, review, Purchase-link and owner
+facts start together; awaiting an array element before `Promise.all` adds a
+serial database stage. Review facts join each observation's canonical
+`email-observation:` Assessment publication key and check its subject lineage
+before reading member Feedback, reusing the Assessment judgment in that join.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers

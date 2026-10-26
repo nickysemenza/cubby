@@ -1,3 +1,4 @@
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   emailFilters,
@@ -24,6 +25,7 @@ import {
   expense,
   product,
   feedback,
+  assessment,
   emailClassificationObservation,
   ledgerParty,
   email as emailTable,
@@ -43,7 +45,7 @@ import {
 } from "~/server/domains/email/repo/email-purchase-links";
 import {
   emailAcceptedEvidenceSql,
-  emailFeedbackObservationIdSql,
+  EMAIL_OBSERVATION_PUBLICATION_PREFIX,
   emailFeedbackClassificationSql,
   emailFeedbackHasClassificationSql,
   emailLinkedSql,
@@ -337,7 +339,7 @@ const emailRead = (
       const [associations, reviews, purchaseLinks, owners] = await Promise.all([
         rows.length === 0
           ? []
-          : await unwrapDb(db)
+          : unwrapDb(db)
               .select({
                 id: emailTable.id,
                 linked: emailLinkedSql(),
@@ -356,11 +358,12 @@ const emailRead = (
               ),
         rows.length === 0
           ? []
-          : await unwrapDb(db)
+          : unwrapDb(db)
               .select({
                 emailId: emailTable.id,
                 classification: emailFeedbackClassificationSql(
                   sql`${feedback}`,
+                  sql`${assessment}`,
                 ),
                 reason: feedback.reason,
               })
@@ -380,15 +383,30 @@ const emailRead = (
                 ),
               )
               .innerJoin(
-                feedback,
+                assessment,
                 and(
+                  eq(assessment.family, assessmentFamily.enum.email_relevance),
                   eq(
-                    emailFeedbackObservationIdSql(sql`${feedback}`),
+                    assessment.publicationKey,
+                    sql`${EMAIL_OBSERVATION_PUBLICATION_PREFIX} || ${emailClassificationObservation.id}::text`,
+                  ),
+                  // The key finds the row; its subject remains the lineage authority.
+                  eq(
+                    sql`${assessment.subject}->>'observationId'`,
                     sql`${emailClassificationObservation.id}::text`,
                   ),
+                ),
+              )
+              .innerJoin(
+                feedback,
+                and(
+                  eq(feedback.assessmentId, assessment.id),
                   eq(feedback.authority, "member"),
                   eq(feedback.actorUserId, ledgerParty.userId),
-                  emailFeedbackHasClassificationSql(sql`${feedback}`),
+                  emailFeedbackHasClassificationSql(
+                    sql`${feedback}`,
+                    sql`${assessment}`,
+                  ),
                 ),
               )
               .where(
