@@ -37,13 +37,13 @@ struct EntityEditorSheet: View {
     @State private var model: GenericEntityEditModel?
     @State private var suggestions: FieldSuggestionReviewModel?
     @State private var initializedIdentity: EditorIdentity?
-    @State private var initialDraft: [String: JSONValue] = [:]
     @State private var selections: [PhotoSelectionItem] = []
     @State private var pickedTitles: [String: String] = [:]
     @State private var uploadStatus: String?
     @State private var suggestionFeedbackError: String?
     @State private var isUploading = false
     @State private var draftDismissal = DraftDismissalState()
+    @State private var allowsDismissal = false
     @State private var saveTask: Task<Void, Never>?
 
     private struct EditorIdentity: Hashable {
@@ -102,6 +102,7 @@ struct EntityEditorSheet: View {
                     Button("Cancel") {
                         draftDismissal.request(isDirty: isDirty, isSaving: isSaving, dismiss: dismiss)
                     }
+                    .keyboardShortcut(.cancelAction)
                     .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -115,9 +116,13 @@ struct EntityEditorSheet: View {
         }
         .nativeSheet(.editor)
         .draftDismissal(
-            $draftDismissal, isDirty: isDirty, isSaving: isSaving,
-            onDiscard: { dismiss() }
+            $draftDismissal, isDirty: isDirty && !allowsDismissal, isSaving: isSaving,
+            title: "Discard changes?", confirmInteractiveDismissal: true,
+            onDiscard: { allowsDismissal = true }
         )
+        .onChange(of: allowsDismissal) { _, allowed in
+            if allowed { dismiss() }
+        }
         .onDisappear {
             saveTask?.cancel()
             suggestions?.invalidate()
@@ -145,7 +150,7 @@ struct EntityEditorSheet: View {
 
     private var isDirty: Bool {
         guard let model else { return false }
-        return model.draft != initialDraft || !selections.isEmpty || model.hasImageChanges
+        return model.isDirty || !selections.isEmpty
     }
 
     private static let saveFailureID = "editor.saveFailure"
@@ -155,11 +160,32 @@ struct EntityEditorSheet: View {
             formContent(model)
                 // Save lives in the toolbar, so a refusal can arrive while the banner is
                 // scrolled out of view above the field being edited.
-                .onChange(of: model.bannerError) { _, banner in
+                .onChange(of: saveFailure(model)) { _, banner in
                     guard banner != nil else { return }
                     proxy.scrollTo(Self.saveFailureID, anchor: .top)
                 }
+                .onChange(of: model.fieldErrors) { _, _ in scrollToInvalidField(model, proxy: proxy) }
+                .onChange(of: model.nestedErrors) { _, _ in scrollToInvalidField(model, proxy: proxy) }
         }
+    }
+
+    private func scrollToInvalidField(_ model: GenericEntityEditModel, proxy: ScrollViewProxy) {
+        guard saveFailure(model) == nil,
+            let field = model.visibleFields.first(where: {
+                renders($0) && (model.fieldErrors[$0.key] != nil || model.nestedErrors[$0.key] != nil)
+            })
+        else { return }
+        proxy.scrollTo(field.key, anchor: .center)
+    }
+
+    /// Validation for an image key or web-only control has no input row here. Keep it visible
+    /// with non-field failures, without duplicating errors that the native controls draw inline.
+    private func saveFailure(_ model: GenericEntityEditModel) -> String? {
+        let hiddenErrors = model.visibleFields.filter { !renders($0) }.compactMap { field in
+            model.fieldErrors[field.key].map { "\(field.label): \($0)" }
+        }
+        let messages = [model.bannerError].compactMap { $0 } + hiddenErrors
+        return messages.isEmpty ? nil : messages.joined(separator: "\n")
     }
 
     private func formContent(_ model: GenericEntityEditModel) -> some View {
@@ -188,7 +214,7 @@ struct EntityEditorSheet: View {
                     }
                 }
             }
-            if let banner = model.bannerError {
+            if let banner = saveFailure(model) {
                 Section {
                     ActionFailureNotice(message: banner, canRetry: model.canSave && !isSaving) {
                         startSave()
@@ -206,19 +232,20 @@ struct EntityEditorSheet: View {
                         Section(title) {
                             ForEach(fields, id: \.key) { field in
                                 EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                                    .id(field.key)
                             }
                         }
                     } else {
                         ForEach(fields, id: \.key) { field in
                             EntityFieldControl(field: field, model: model, pickedTitles: $pickedTitles)
+                                .id(field.key)
                         }
                     }
                 }
             }
             if let suggestions, !suggestions.fields.isEmpty {
                 EntityFieldSuggestionSection(review: suggestions, pickedTitles: pickedTitles) {
-                    field, value, label in
-                    initialDraft[field] = value
+                    _, value, label in
                     if let id = value.stringValue, let label { pickedTitles[id] = label }
                     appModel.recordEntityMutation(keys: [
                         key, .financialTransaction, .purchase, .expense, .product,
@@ -281,6 +308,7 @@ struct EntityEditorSheet: View {
         suggestions?.invalidate()
         initializedIdentity = editorIdentity
         selections = []
+        allowsDismissal = false
         pickedTitles = [:]
         let identity = editorIdentity
         let created = GenericEntityEditModel(
@@ -302,7 +330,6 @@ struct EntityEditorSheet: View {
     /// Baselines the loaded draft, then applies the sheet's staged values and reference names.
     private func finishLoad(_ loaded: GenericEntityEditModel, identity: EditorIdentity) {
         guard !Task.isCancelled, initializedIdentity == identity, model === loaded else { return }
-        initialDraft = loaded.draft
         if let resolutionAction { loaded.stageResolution(resolutionAction.kind, for: resolutionAction.field) }
         loaded.stage(stagedValues)
         seedPickedTitles(loaded)
@@ -369,7 +396,7 @@ struct EntityEditorSheet: View {
         }
         onSaved(id)
         guard !Task.isCancelled else { return }
-        dismiss()
+        allowsDismissal = true
     }
 
     /// Uploads each picked photo once (an id a failed save already earned is reused) and hands
