@@ -531,7 +531,7 @@ const fairlyOrderedDueJobs = (
   { excludeIds = [], excludeKinds = [] }: DueJobSelection = {},
 ) => sql`
   WITH active_runs AS MATERIALIZED (
-    SELECT id, NOT (purpose = ${runPurpose.enum.ai_refresh} AND trigger = ${runTrigger.enum.scheduled}) AS member_demand, purpose IN (${sql.join(
+    SELECT id, "retiredAt" IS NULL AND NOT (purpose = ${runPurpose.enum.ai_refresh} AND trigger = ${runTrigger.enum.scheduled}) AS member_demand, purpose IN (${sql.join(
       VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
       sql`, `,
     )}) AS visible
