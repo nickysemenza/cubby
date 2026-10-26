@@ -191,15 +191,22 @@ export async function withJobFixtureExecution<T>(
   db: Database,
   input: import("@cubby/schemas/job").EnqueueJobInput,
   work: () => Promise<T>,
+  options: { releaseClaim?: true } = {},
 ) {
-  const { enqueueJob, externalJobClaim, claimJob } =
+  const { enqueueJob, externalJobClaim, claimJob, releaseJobClaim } =
     await import("~/server/generic/jobs/repo/jobs");
   const saved = await enqueueJob(db, input);
-  const claim =
-    (await externalJobClaim(db, saved.key)) ?? (await claimJob(db, saved.id));
+  const existing = await externalJobClaim(db, saved.key);
+  const claim = existing ?? (await claimJob(db, saved.id));
   if (!claim)
     throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
-  return (
-    await import("~/server/generic/jobs/repo/execution")
-  ).withJobExecution(db, claim, work);
+  try {
+    return await (
+      await import("~/server/generic/jobs/repo/execution")
+    ).withJobExecution(db, claim, work);
+  } finally {
+    // Completed fixture work can free admission capacity. Multi-step fence
+    // fixtures retain their token by default; borrowed claims stay with their caller.
+    if (options.releaseClaim && !existing) await releaseJobClaim(db, claim);
+  }
 }

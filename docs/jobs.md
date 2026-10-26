@@ -116,8 +116,10 @@ Declared entity fields carry the same facts to web, Apple and MCP:
 
 ## Priority and fairness
 
-`dueJobs` builds each fair selection of `JOB_DRAIN.batch` Jobs (up to the
-selected kind's batch width when a batch handler is present):
+`dueJobs` first selects `JOB_DRAIN.batch` fair seed Jobs. A selected batch
+handler then fills its page from the same kind and ownership class to its
+configured width, without consuming another kind's seed. The wake's remaining
+Job budget bounds the expanded selection:
 
 1. Jobs whose `runId` is a running, member-visible Run lead (routine Runs such
    as connection discovery do not).
@@ -128,9 +130,48 @@ selected kind's batch width when a batch handler is present):
    the least recently claimed kind goes first; within a kind, priority, then
    age.
 
-The drain runs up to `JOB_DRAIN.concurrency` pages of a batch at once, and the
+`JOB_KIND_POLICY.maxInFlight` optionally caps background claims across all
+drains. Selection admits only the remaining capacity; claim-time admission
+uses a nonblocking transaction advisory lock per kind and rechecks live leases
+before committing a claim. Only `running` Jobs with `leaseExpiresAt > now`
+count. Expired leases free capacity and remain reclaimable through the ordinary
+due/claim path; completion and release also free it. `run.execute` and work
+whose `runId` names any active Run bypass the cap and its accounting, including
+routine Runs that do not receive member-visible priority. Shared evaluations
+with no `runId` remain backfill.
+
+`ai.evaluation` defaults to **one live background claim globally**. This is
+deliberately stricter than one page per Worker: a blocked evaluation must not
+multiply across queue consumers. It leaves two of a Worker's three lanes for
+other kinds, including due embedding batches and image work. No separate
+scheduler or refresh-family behavior changes. Queue positions are exact for the admitted
+selection; work deferred by a cap is projected beyond that selection as an
+estimate.
+
+`embedding.refresh` fills **100 Jobs per page**, even with other kinds due.
+Its policy reserves one background page slot and caps it at one page per
+drain (`reservedConcurrentPages` / `maxConcurrentPages`); Run-owned work keeps
+priority and bypasses page caps. The fair seed selection still gives other
+kinds their turns. Batch width counts records, not sockets: claims and
+publications remain serial inside that one lane, keeping the three-page,
+five-socket Worker budget. Small remaining backlogs, the wake's remaining Job
+budget, competing claims, and provider token limits can produce a shorter page.
+The 25-seed window does not cap a batch's claim list at 25.
+
+The lease remains five minutes per Job, renewed every 30 seconds throughout
+batch claiming, preparation and checkpoint publication. The 20-second drain
+budget limits starting more work; it is not the lease duration. An in-flight
+provider call can cross that budget and still checkpoint, while unstarted
+claims are released. A blocked or failed sibling renewal does not prevent
+healthy siblings from renewing.
+
+The drain runs up to `JOB_DRAIN.concurrency` pages at once, and the
 queue consumer (`packages/shared/src/background-queue-consumer.json`) runs
-several drains. Every Job holds its own row lock and lease. AI evaluation Jobs
+several drains. Free lanes refill fair selections while sibling pages are
+still running, so a blocked page cannot hold the next selection behind a
+batch-wide wait. Selected groups are reserved within the invocation until
+execution finishes, including the unclaimed members of a batch. Page and time
+budgets still bound new starts. Every Job holds its own row lock and lease. AI evaluation Jobs
 carry no `runId` because shared evaluations serve several Runs; they compete
 as backfill. Run views still attribute them: a Run's demand (`runDemandPairs`)
 is its own Jobs plus the evaluation Jobs it owns or still requests (an

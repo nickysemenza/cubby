@@ -1,7 +1,8 @@
 /**
  * One wake's drain: at most `pageLimit` Job pages or `timeBudgetMs` of wall
- * time, reselecting `batch` due Jobs per fair round and running up to
- * `concurrency` of a round's pages at once. A drain that stops with due work
+ * time, reselecting `batch` due seed Jobs per fair round and running up to
+ * `concurrency` pages at once. Free lanes reselect while siblings run.
+ * A drain that stops with admitted due work
  * left publishes another wake.
  */
 export const JOB_DRAIN = {
