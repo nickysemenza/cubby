@@ -168,7 +168,8 @@ count. Expired leases free capacity and remain reclaimable through the ordinary
 due/claim path; completion and release also free it. `run.execute` and work
 whose `runId` names any active Run bypass the cap and its accounting, including
 routine Runs that do not receive member-visible priority. Shared evaluations
-with no `runId` remain backfill.
+with no `runId` remain subject to background admission; live member demand
+can still give them member-visible selection priority.
 
 Every drained kind, including unregistered kinds, inherits strict background
 shares: `maxConcurrentPages: 1` per drain and `maxInFlightPages: 2` across the
@@ -182,9 +183,11 @@ fence against its Job ID. Completion/release of the final live member frees
 the page. Expired tokens count nothing. Older individually tokened claims
 count conservatively as separate pages until they settle or expire.
 
-`ai.evaluation` defaults to **one live background claim globally**. This is
-deliberately stricter than one page per Worker: a blocked evaluation must not
-multiply across queue consumers. It leaves two of a Worker's three lanes for
+`ai.evaluation` defaults to **one live background page globally**. A finite
+AI page enters the kind cap once, then its independent target leases keep the
+cap occupied until the last live target settles. Single claims share the same
+admission lock and lease count. This is deliberately stricter than one page
+per Worker: a blocked evaluation must not multiply across queue consumers. It leaves two of a Worker's three lanes for
 other kinds, including due embedding batches and image work. No separate
 scheduler or refresh-family behavior changes. Queue positions are exact for the admitted
 selection; work deferred by a cap is projected beyond that selection as an
