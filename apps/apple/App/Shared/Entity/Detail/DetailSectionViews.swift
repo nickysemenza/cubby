@@ -1496,6 +1496,8 @@ struct EntityJournalEntryRow: View {
 
 // MARK: - Raw record
 
+/// Pretty-printed JSON. The record-level disclosure is developer-overlay content
+/// (`EntityDetailContent`); USDA detail also uses it for supplied values it cannot itemize.
 struct RawRecordDisclosure: View {
     let raw: JSONValue
 
