@@ -1,0 +1,85 @@
+apps/apple/App/Shared/Intents/Intents.swift
+  s_01e2d2cf933447::t_61fc612b5d8ffe 42-60,66-67,74,76-77,79-81,83
+apps/apple/App/Shared/Search/SearchView.swift
+  s_01e2d2cf933447::t_64aa17b30618ee 341,373-374
+apps/apple/App/Shared/Spotlight/SpotlightIndexer.swift
+  s_01e2d2cf933447::t_d5fc02829cde4a 76-77,79-81
+apps/apple/App/Tests/Entity/List/EntityRowPresentationTests.swift
+  s_01e2d2cf933447::t_d97ec9d404f18f 9-22
+apps/apple/App/Tests/Search/SearchModelTests.swift
+  s_01e2d2cf933447::t_b46f32fda5f759 172-185,195
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/SearchHitTests.swift
+  s_01e2d2cf933447::t_42664243c0bd1b 14-15
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/product-get.json
+  s_01e2d2cf933447::t_14d8446271b5d9 79
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/search-find.json
+  s_01e2d2cf933447::t_7437661d7bf1c8 7,22,37
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/EntityRowTests.swift
+  s_01e2d2cf933447::t_5b29050571cadb 205
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/IntentSurfaceTests.swift
+  s_01e2d2cf933447::t_379efcbb5d0994 7-12
+apps/web/src/entity/picker/combobox-builders.tsx
+  s_01e2d2cf933447::t_513a63e0ae3a53 186-187
+apps/web/src/entity/picker/combobox-builders.unit.test.tsx
+  s_01e2d2cf933447::t_dbf806d393bc63 21,125,127,131
+apps/web/src/features/command-menu/command-menu.tsx
+  s_01e2d2cf933447::t_d4e901c1395a9b 682,764,766
+apps/web/src/features/image/image-selects.unit.test.tsx
+  s_01e2d2cf933447::t_104b81bb73bb79 73
+apps/web/src/features/search/product-family.tsx
+  s_01e2d2cf933447::t_4225a936917aed 109,127
+apps/web/src/features/search/search-page.tsx
+  s_01e2d2cf933447::t_a8eff364e4092d 380,382,498,571,616-619,622
+apps/web/src/server/domains/product/repo/crud.ts
+  s_01e2d2cf933447::t_78ba8d280b9e33 958-960,1095,1129
+apps/web/src/server/domains/product/repo/detail.ts
+  s_01e2d2cf933447::t_469bbbdb9c82f2 30,97,178,190,206
+apps/web/src/server/domains/product/repo/list.integration.test.ts
+  s_01e2d2cf933447::t_91f01263ae0bad 304,318-333,346-350,358-360
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_01e2d2cf933447::t_1762d5d35381a5 456,618
+apps/web/src/server/domains/product/repo/quantity-ledger.integration.test.ts
+  s_01e2d2cf933447::t_d779c0a57f8ac9 3,10,28-29,599-677
+apps/web/src/server/domains/product/repo/quantity-ledger.ts
+  s_01e2d2cf933447::t_4e965c40938c88 1-5,11,14,23,412-492,501,503-514,522
+apps/web/src/server/domains/product/repo/types.ts
+  s_01e2d2cf933447::t_b8875ae617b2f2 75-77,114-116
+apps/web/src/server/generic/entity-report/repo/summary.ts
+  s_01e2d2cf933447::t_70925118a2aa3d 6,118-123,128,145-147
+apps/web/src/server/generic/search/service/search-grouping.service.ts
+  s_01e2d2cf933447::t_5e152ee1e78c87 57
+apps/web/src/server/generic/search/service/search-grouping.service.unit.test.ts
+  s_01e2d2cf933447::t_6771157a0e8a90 29
+apps/web/src/server/generic/search/service/search-location-path.integration.test.ts
+  s_01e2d2cf933447::t_f2a64b9a487d19 1,8-10,38,60-96
+apps/web/src/server/generic/search/service/search.service.ts
+  s_01e2d2cf933447::t_357750766bfb08 10,14,18,21,45-47,99-106,109-151,154-155,158-159,162-191,194-196,314-316,385,428
+apps/web/src/server/generic/search/service/search.service.unit.test.ts
+  s_01e2d2cf933447::t_3786fedce571e4 1,41-47
+docs/entities.md
+  s_01e2d2cf933447::t_f2e96a78f6e76b 2033-2045
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_01e2d2cf933447::t_23dc0c64fa5224 5-8,841-860
+packages/schemas/src/product-read-fields.ts
+  s_01e2d2cf933447::t_c55c1133f1c33c 104-111,113
+packages/schemas/src/product.ts
+  s_01e2d2cf933447::t_258905ed4b8da0 13-14,669-671
+packages/schemas/src/search.ts
+  s_01e2d2cf933447::t_eaf80a92ac00c2 146,165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "400b989b728adc578649847805d9539738332fce",
+  "prompts": {},
+  "sessions": {
+    "s_01e2d2cf933447": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17934-42e1-71b1-8ce8-11b887aaf48b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
