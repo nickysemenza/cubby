@@ -1,0 +1,19 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_144d6894ba8042::t_6b63720adeb917 639-640,643,645-646,652-654
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "329d460b8a7bb19d27aa08ad837d51b2b929b690",
+  "prompts": {},
+  "sessions": {
+    "s_144d6894ba8042": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f09c77a7-a3f4-48ec-9cec-08733cd15ce7",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

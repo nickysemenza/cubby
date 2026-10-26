@@ -1,0 +1,55 @@
+apps/web/src/entity/display/entity-display.unit.test.tsx
+  s_144d6894ba8042::t_7ec5aff6fcc454 921,926
+apps/web/src/entity/table/list-workbench.unit.test.tsx
+  s_144d6894ba8042::t_8a602b47142ac8 11-14,28,289-313
+docs/entities.md
+  s_144d6894ba8042::t_5a431aad524e76 375-383,1490-1498
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_144d6894ba8042::t_e281631a3282d2 842-845,1072,1651-1652,1784-1785,1855-1856,1885-1886
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_144d6894ba8042::t_54ae11bd634605 302
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_144d6894ba8042::t_eb879ee9daf88f 468-469,523
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_144d6894ba8042::t_f0af5f40c01c88 324-325,356-357,410-411
+packages/schemas/src/entity-definitions/07-ledgerParty.entity.ts
+  s_144d6894ba8042::t_5c6f73173b1819 145
+packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts
+  s_144d6894ba8042::t_99ecf2d39496e2 199
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_144d6894ba8042::t_228898922ae322 699
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_144d6894ba8042::t_ace16be4e2451a 474-475,549-550
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_144d6894ba8042::t_41b62aa43aaf65 536
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_144d6894ba8042::t_db1d69f403c9be 597-602,669-671,767-768,843,868,887,1194-1195
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_144d6894ba8042::t_b538d17f5005e8 457
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_144d6894ba8042::t_d12424fc2e224b 941-946
+packages/schemas/src/entity-definitions/15-wish.entity.ts
+  s_144d6894ba8042::t_4a483e5213dac2 125
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_144d6894ba8042::t_32e457e4e6845e 473-474,583-584,721,734-735,827-828
+packages/schemas/src/entity-definitions/20-gardenEntry.entity.ts
+  s_144d6894ba8042::t_96ceab7fde2e0a 199
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/EntityManifestTests.swift
+  s_144d6894ba8042::t_2d77c8188fb861 82-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "63ee0d3cd4ff3ed102539c1047201afa0aab10f6",
+  "prompts": {},
+  "sessions": {
+    "s_144d6894ba8042": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f09c77a7-a3f4-48ec-9cec-08733cd15ce7",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
