@@ -14,5 +14,8 @@ export const JOB_DRAIN = {
   concurrency: 3,
 } satisfies Record<string, number>;
 
+/** A batch page's serial claims stop at this share of its remaining drain budget. */
+export const JOB_BATCH_CLAIM_SHARE = 0.4;
+
 /** A running page renews its lease this often. */
 export const JOB_HEARTBEAT_MS = 30_000;
