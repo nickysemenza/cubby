@@ -168,6 +168,14 @@ same outcome without prescribing an agent runtime.
 
 ## Vendor export
 
+For an interactive account-history sweep, enumerate every page and keep an
+order-by-order worklist through import, settlement and Product enrichment.
+Continue until each source order has a verified outcome or a specific blocker;
+the size of the history or a progress report is not a stopping condition.
+Compare the worklist with existing Purchases before creating anything, and use
+the financial-evidence skill to check available statement sources. A candidate
+charge is not a settlement until the settlement checks establish the match.
+
 1. Resolve the Vendor (`vendorId`, or `vendor.name`). A name resolves by
    Sender proof first (an exact sender address one Vendor records, or a sender
    at the website domain of exactly one Vendor; either saves the name as a
@@ -295,7 +303,7 @@ credit sum and each existing allocation before writing. These associations
 retain the checksum and account review through later deletion or account drift;
 they never change money, account aliases, allocations or stock.
 
-An interrupted mutation is recovered through
+An interrupted mutation or a tool response that does not show a usable result is recovered through
 `purchase_import_read.operation_status` with its original operation id. Repeating
 the source payload is replay, not a way to revise a reviewed decision; a
 correction creates a linked successor run and new decision revision.
