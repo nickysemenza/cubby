@@ -80,16 +80,22 @@ export default defineEntity(
             slot: "recipe.availability",
           },
           {
-            kind: "report",
-            id: "estimated-cost-coverage",
-            title: "Estimated cost & coverage",
-            slot: "recipe.costing-coverage",
-          },
-          {
             kind: "fields",
             id: "nutrition",
             title: "Nutrition",
             fields: ["calories", "protein", "carbs", "fat"],
+          },
+          {
+            kind: "fields",
+            id: "source",
+            title: "Source",
+            fields: ["source"],
+          },
+          {
+            kind: "report",
+            id: "estimated-cost-coverage",
+            title: "Estimated cost & coverage",
+            slot: "recipe.costing-coverage",
           },
           {
             kind: "records",
@@ -102,12 +108,6 @@ export default defineEntity(
             id: "meals",
             title: "Meals",
             viewKey: "relation:meals",
-          },
-          {
-            kind: "fields",
-            id: "source",
-            title: "Source",
-            fields: ["source"],
           },
         ],
 

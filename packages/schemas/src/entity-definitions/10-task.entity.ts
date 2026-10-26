@@ -74,27 +74,27 @@ export default defineEntity({
         },
         {
           kind: "records",
-          id: "assignee",
-          title: "Assignee",
-          viewKey: "relation:assignee",
-        },
-        {
-          kind: "records",
           id: "project",
           title: "Project",
           viewKey: "relation:project",
         },
         {
           kind: "records",
-          id: "subject-product",
-          title: "Subject Product",
-          viewKey: "relation:subject",
+          id: "assignee",
+          title: "Assignee",
+          viewKey: "relation:assignee",
         },
         {
           kind: "records",
           id: "blocked-by",
           title: "Blocked by",
           viewKey: "relation:blocked-by",
+        },
+        {
+          kind: "records",
+          id: "subject-product",
+          title: "Subject Product",
+          viewKey: "relation:subject",
         },
         {
           kind: "records",

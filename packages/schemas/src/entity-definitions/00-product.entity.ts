@@ -135,10 +135,22 @@ export default defineEntity(
       detail: {
         summary: [
           {
+            kind: "report",
+            id: "stock",
+            title: "On hand & locations",
+            slot: "product.stock-summary",
+          },
+          {
             kind: "fields",
             id: "brand",
             title: "Brand",
             fields: ["brandId"],
+          },
+          {
+            kind: "report",
+            id: "uses",
+            title: "Used in",
+            slot: "product.use-summary",
           },
           {
             kind: "report",
@@ -148,9 +160,9 @@ export default defineEntity(
           },
           {
             kind: "report",
-            id: "stock",
-            title: "On hand & locations",
-            slot: "product.stock-summary",
+            id: "purchase-pricing",
+            title: "Purchases & charges",
+            slot: "product.pricing-summary",
           },
           {
             kind: "chart",
@@ -159,22 +171,10 @@ export default defineEntity(
             viewKey: "relation:expenses",
           },
           {
-            kind: "report",
-            id: "purchase-pricing",
-            title: "Purchases & charges",
-            slot: "product.pricing-summary",
-          },
-          {
             kind: "records",
             id: "purchase-projects",
             title: "Purchase projects",
             viewKey: "purchase-projects",
-          },
-          {
-            kind: "report",
-            id: "uses",
-            title: "Used in",
-            slot: "product.use-summary",
           },
           {
             kind: "report",
@@ -230,65 +230,6 @@ export default defineEntity(
         },
         sections: [
           {
-            kind: "fields",
-            id: "identity",
-            title: "Identity",
-            fields: ["name", "model", "brandId", "commodity", "categoryId"],
-          },
-          {
-            kind: "fields",
-            id: "names-and-tags",
-            title: "Names & tags",
-            fields: ["tags"],
-          },
-          {
-            kind: "fields",
-            id: "stock-and-price",
-            title: "Stock & price",
-            fields: ["price", "stockTracked", "kind", "acquisitionOrigin"],
-          },
-          {
-            kind: "fields",
-            id: "identifiers",
-            title: "Identifiers",
-            fields: ["externalIds"],
-          },
-          {
-            kind: "fields",
-            id: "garden-source",
-            title: "Nutrition",
-            fields: ["growsPlantId"],
-          },
-          {
-            kind: "fields",
-            id: "coverage",
-            title: "Coverage and summaries",
-            fields: ["primaryPlacement", "id", "primaryGtin", "unitPrice"],
-          },
-          { kind: "slot", id: "ownership", title: "Ownership & evidence" },
-          { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
-          { kind: "slot", id: "runs", title: "Enrichment history" },
-          {
-            kind: "fields",
-            id: "nutrition-links",
-            title: "Nutrition sources",
-            fields: ["fdc_id", "ingredientId"],
-          },
-          {
-            kind: "fields",
-            id: "notes",
-            title: "Notes",
-            fields: ["notes"],
-            placement: "full",
-          },
-          {
-            kind: "relation",
-            id: "plantings",
-            title: "Plantings",
-            relation: "plantings",
-            filter: { descriptor: "sourceProductId" },
-          },
-          {
             kind: "relation",
             id: "stocked-at",
             title: "Stocked at",
@@ -303,6 +244,33 @@ export default defineEntity(
             ],
           },
           {
+            kind: "fields",
+            id: "identity",
+            title: "Identity",
+            fields: ["name", "model", "brandId", "commodity", "categoryId"],
+          },
+          {
+            kind: "fields",
+            id: "notes",
+            title: "Notes",
+            fields: ["notes"],
+            placement: "full",
+          },
+          {
+            kind: "fields",
+            id: "stock-and-price",
+            title: "Stock & price",
+            fields: ["price", "stockTracked", "kind", "acquisitionOrigin"],
+          },
+          { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
+          { kind: "slot", id: "ownership", title: "Ownership & evidence" },
+          {
+            kind: "timeline",
+            id: "movements",
+            title: "Movements",
+            placement: "full",
+          },
+          {
             kind: "relation",
             id: "tasks",
             title: "Tasks",
@@ -312,14 +280,27 @@ export default defineEntity(
             sort: { field: "dueDate", direction: "desc" },
           },
           {
-            kind: "timeline",
-            id: "movements",
-            title: "Movements",
-            placement: "full",
+            kind: "relation",
+            id: "plantings",
+            title: "Plantings",
+            relation: "plantings",
+            filter: { descriptor: "sourceProductId" },
           },
           { kind: "slot", id: "labels", title: "Labels" },
           { kind: "slot", id: "nutrition", title: "Nutrition summary" },
+          {
+            kind: "fields",
+            id: "nutrition-links",
+            title: "Nutrition sources",
+            fields: ["fdc_id", "ingredientId"],
+          },
           { kind: "slot", id: "unit-mappings", title: "Unit mappings" },
+          {
+            kind: "fields",
+            id: "garden-source",
+            title: "Nutrition",
+            fields: ["growsPlantId"],
+          },
           { kind: "slot", id: "fits-with", title: "Similar products" },
           { kind: "slot", id: "cookbooks", title: "Cookbooks" },
           {
@@ -327,6 +308,25 @@ export default defineEntity(
             id: "recipe-appearances",
             title: "Appears in recipes",
           },
+          {
+            kind: "fields",
+            id: "names-and-tags",
+            title: "Names & tags",
+            fields: ["tags"],
+          },
+          {
+            kind: "fields",
+            id: "identifiers",
+            title: "Identifiers",
+            fields: ["externalIds"],
+          },
+          {
+            kind: "fields",
+            id: "coverage",
+            title: "Coverage and summaries",
+            fields: ["primaryPlacement", "id", "primaryGtin", "unitPrice"],
+          },
+          { kind: "slot", id: "runs", title: "Enrichment history" },
         ],
       },
       list: {

@@ -138,12 +138,6 @@ export default defineEntity(
             fields: ["allocations"],
           },
           {
-            kind: "chart",
-            id: "monthly-spend",
-            title: "Spend over 12 months",
-            viewKey: "relation:expenses",
-          },
-          {
             kind: "records",
             id: "expenses",
             title: "Expenses",
@@ -166,6 +160,12 @@ export default defineEntity(
               "productsCoverage",
             ],
           },
+          {
+            kind: "chart",
+            id: "monthly-spend",
+            title: "Spend over 12 months",
+            viewKey: "relation:expenses",
+          },
         ],
 
         activityRelations: [
@@ -182,13 +182,13 @@ export default defineEntity(
             id: "overview",
             title: "Record",
             fields: [
-              "itemizationExpectation",
+              "amount",
               "accountId",
               "kind",
               "status",
-              "amount",
-              "sourceRefs",
               "allocations",
+              "itemizationExpectation",
+              "sourceRefs",
             ],
           },
           {
