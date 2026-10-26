@@ -438,10 +438,10 @@ describe("finite AI evaluation pages", () => {
       .where(eq(job.id, member.jobs[0]!.id));
     expect(owned[0]?.owned).toBe(true);
     const first = await dueJobs(ctx.db);
-    // Main admits one background AI page at a time, even for shared member demand.
-    expect(
-      first.filter((entry) => entry.kind === "ai.evaluation"),
-    ).toHaveLength(1);
+    // Each priority class contributes at most one AI feature anchor under main's cap.
+    const aiAnchors = first.filter((entry) => entry.kind === "ai.evaluation");
+    expect(aiAnchors).toHaveLength(2);
+    expect(new Set(aiAnchors.map((entry) => entry.pageKey)).size).toBe(2);
     expect(first.some((entry) => entry.id === other.id)).toBe(true);
     const visits: string[] = [];
     const scalar = defineJobHandler(z.object({}), async () => ({

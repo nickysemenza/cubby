@@ -167,9 +167,15 @@ export async function prepareEntityConnections(
           .slice(offset, offset + 16)
           .map((input, index) => ({ key: String(index), input })),
       );
+      if (prepared.length !== identity.pairs.slice(offset, offset + 16).length)
+        throw new Error("Product pair evidence changed during inference");
       for (const publication of prepared)
         publishers.push(async (transactionDb) => {
-          await publishProductPairPublications(transactionDb, [publication]);
+          const [result] = await publishProductPairPublications(transactionDb, [
+            publication,
+          ]);
+          if (!result?.valid)
+            throw new Error("Product pair evidence changed during inference");
         });
     }
   }

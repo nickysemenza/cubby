@@ -603,6 +603,11 @@ keep the kind occupied until the last live target settles. Active Run
 exemptions follow the shared kind policy. Heartbeats renew the exact token/generation set in one
 statement; replaced tokens are reported separately and cannot publish.
 
+Feature fairness uses bounded prefixes per feature and exemption class, then
+a bounded prefix per kind before window ranking. It does not rank the entire
+due backlog. Queue diagnostics retain the existing projected-position query;
+the admitted selection carries feature anchors through the same snapshot.
+
 The drain admits at most one page per feature/class turn in a fair batch,
 removes duplicate anchors, and then reselects. Other features and Job kinds
 keep their turns and backfill retains its reserve. Queue and Run counts still

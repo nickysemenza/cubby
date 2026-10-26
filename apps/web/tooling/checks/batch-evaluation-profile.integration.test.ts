@@ -121,7 +121,7 @@ describe("batch evaluation baseline profile", () => {
     jobClaim: jobRepo.claimJob,
     source: snapshot.productIdentitySnapshot,
     pair: snapshot.prepareProductIdentityPair,
-    request: snapshot.prepareProductIdentityPairRequest,
+    request: snapshot.prepareProductIdentityPairRequests,
     catalog: identity.prepareProductIdentityCatalog,
     decision: identity.evaluatePreparedProductIdentityPair,
     publication: publication.prepareProductPairPublication,
@@ -178,12 +178,15 @@ describe("batch evaluation baseline profile", () => {
     vi.spyOn(fences, "productIdentityEvidenceFence").mockImplementation(
       (...args) => measure("fences.evidence", () => original.fence(...args)),
     );
-    vi.spyOn(snapshot, "prepareProductIdentityPairRequest").mockImplementation(
+    vi.spyOn(snapshot, "prepareProductIdentityPairRequests").mockImplementation(
       async (...args) => {
-        const publish = await measure("publication.prepare_request", () =>
+        const publishers = await measure("publication.prepare_request", () =>
           original.request(...args),
         );
-        return (db) => measure("publication.request", () => publish(db));
+        return publishers.map(
+          (publish) => (db) =>
+            measure("publication.request", () => publish(db)),
+        );
       },
     );
     vi.spyOn(publication, "prepareProductPairPublication").mockImplementation(

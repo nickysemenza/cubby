@@ -956,9 +956,22 @@ export async function executeAiRefreshTarget(
             );
           return result ? [result] : [];
         });
-        const rulePublications = await prepareProductPairPublications(
+        const preparedRules = await prepareProductPairPublications(
           db,
           rules.map((input, index) => ({ key: String(index), input })),
+        );
+        if (preparedRules.length !== rules.length)
+          throw new Error("Product pair evidence changed during inference");
+        const rulePublications = preparedRules.map(
+          (prepared) => async (transactionDb: Database) => {
+            const [result] = await publishProductPairPublications(
+              transactionDb,
+              [prepared],
+            );
+            if (!result?.valid)
+              throw new Error("Product pair evidence changed during inference");
+            return result.row;
+          },
         );
         const requests = await prepareProductIdentityPairRequests(
           db,
@@ -970,10 +983,7 @@ export async function executeAiRefreshTarget(
           requestIndex = 0;
         for (const pair of batch) {
           const publish = pair.exact
-            ? (
-                (prepared) => (transactionDb: Database) =>
-                  publishProductPairPublications(transactionDb, [prepared])
-              )(rulePublications[ruleIndex++]!)
+            ? rulePublications[ruleIndex++]!
             : requests[requestIndex++]!;
           await publishAiEvaluation(
             db,
