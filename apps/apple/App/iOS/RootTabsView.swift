@@ -100,7 +100,12 @@ struct RootTabsView: View {
         TabView(
             selection: Binding(
                 get: { navigator.phoneTab },
-                set: { navigator.phoneTab = $0 })
+                set: { tab in
+                    if tab == .work, navigator.phoneTab == .work {
+                        navigator.paths[.today] = []
+                    }
+                    navigator.phoneTab = tab
+                })
         ) {
             ForEach(PhoneTab.primary) { tab in
                 Tab(
