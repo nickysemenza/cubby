@@ -431,9 +431,18 @@ const expandFanouts = async (tx: Executor, marks: readonly Mark[]) => {
       RETURNING target, ref::text AS ref
     ), cleared AS (
       DELETE FROM "DerivedDirty" d
-      USING jsonb_to_recordset(${JSON.stringify(observed)}::jsonb)
-        AS m(target text, ref uuid, ticket bigint)
-      WHERE d.target = m.target AND d.ref = m.ref AND d.ticket = m.ticket
+      USING (
+        SELECT held.target, held.ref, held.ticket FROM "DerivedDirty" held
+        JOIN jsonb_to_recordset(${JSON.stringify(observed)}::jsonb)
+          AS m(target text, ref uuid, ticket bigint)
+          ON held.target = m.target AND held.ref = m.ref AND held.ticket = m.ticket
+        -- Finish dependent writes before clearing sources. An active writer
+        -- may own a source mark while waiting on a dependent we just wrote;
+        -- skip that mark rather than closing a deadlock cycle.
+        WHERE (SELECT count(*) FROM written) >= 0
+        FOR UPDATE OF held SKIP LOCKED
+      ) held
+      WHERE d.target = held.target AND d.ref = held.ref AND d.ticket = held.ticket
     ) SELECT target, ref FROM written`);
   // Several inputs can reach the same dependent. Grouping above both keeps the
   // highest priority and avoids updating one conflict row twice in a statement.

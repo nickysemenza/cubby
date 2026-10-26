@@ -1,3 +1,4 @@
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   makeCookbookExtraction,
@@ -91,11 +92,11 @@ export async function seedCostedIngredientPrerequisite(
   page: Page,
   name: string,
 ) {
-  return createFixtureGraph(page, async (create) => {
+  return createFixtureGraph(page, async (create, db) => {
     const ingredient = await create("ingredient", { name });
-    const brand = await create("vendor", { name: "E2E fixture" });
+    const brandId = await resolveProductBrandName(db, "E2E fixture");
     const product = await create("product", {
-      brandId: brand.id,
+      brandId,
       name: `${name} Brand Product`,
       ingredientId: ingredient.id,
       unitMappings: [
@@ -122,7 +123,7 @@ export async function seedNutritionPrerequisite(
 ) {
   const { measured, incomplete, recipe } = await createFixtureGraph(
     page,
-    async (create) => {
+    async (create, db) => {
       const measured = await create("ingredient", {
         name: `${name} measured`,
       });
@@ -144,9 +145,9 @@ export async function seedNutritionPrerequisite(
           options.missingCalories ? [] : [{ value: 50, unit: "kcal" }],
         ],
       ] as const) {
-        const brand = await create("vendor", { name: "E2E fixture" });
+        const brandId = await resolveProductBrandName(db, "E2E fixture");
         await create("product", {
-          brandId: brand.id,
+          brandId,
           name: `${ingredient.id} nutrition source`,
           ingredientId: ingredient.id,
           unitMappings: mappings.map((b) => ({
@@ -217,7 +218,7 @@ export async function seedMealNutritionPrerequisite(
     inlineDate,
     meal,
     futureMeal,
-  } = await createFixtureGraph(page, async (create) => {
+  } = await createFixtureGraph(page, async (create, db) => {
     const member = await create("ledgerParty", {
       name: `${name} member`,
       kind: "member",
@@ -229,9 +230,9 @@ export async function seedMealNutritionPrerequisite(
     const ingredient = await create("ingredient", {
       name: `${name} snack ingredient`,
     });
-    const brand = await create("vendor", { name: "E2E fixture" });
+    const brandId = await resolveProductBrandName(db, "E2E fixture");
     const product = await create("product", {
-      brandId: brand.id,
+      brandId,
       name: `${name} snack`,
       ingredientId: ingredient.id,
       labelNutrition: {

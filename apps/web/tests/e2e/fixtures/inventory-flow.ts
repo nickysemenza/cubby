@@ -1,3 +1,4 @@
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import type { Page } from "@playwright/test";
 
 import { createFixtureGraph } from "./core";
@@ -18,10 +19,10 @@ export async function seedLedgerProduct(
     stocked?: { locationId: string; quantity: number };
   },
 ) {
-  return createFixtureGraph(page, async (create) => {
-    const brand = await create("vendor", { name: "E2E fixture" });
+  return createFixtureGraph(page, async (create, db) => {
+    const brandId = await resolveProductBrandName(db, "E2E fixture");
     const product = await create("product", {
-      brandId: brand.id,
+      brandId,
       name: opts.name,
       categoryId: opts.categoryId,
     });

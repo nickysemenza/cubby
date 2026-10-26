@@ -1,3 +1,4 @@
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { EntityOverrides } from "#web/tooling/factories/build.ts";
 import { taxonomyShortcode } from "#web/tooling/product-category-fixtures.ts";
@@ -75,12 +76,12 @@ export const seedProductPrerequisite = (
   page: Page,
   opts: EntityOverrides<"product"> & { name: string; brandName?: string },
 ) =>
-  createFixtureGraph(page, async (create) => {
+  createFixtureGraph(page, async (create, db) => {
     const { brandName, brandId, ...product } = opts;
     const reference =
       brandId !== undefined
         ? brandId
-        : (await create("vendor", { name: brandName ?? "E2E fixture" })).id;
+        : await resolveProductBrandName(db, brandName ?? "E2E fixture");
     return create("product", { ...product, brandId: reference });
   });
 
@@ -105,18 +106,18 @@ export const seedInventoryPrerequisites = (
     products: Array<{ name: string; quantity: number; unit: string }>;
   },
 ) =>
-  createFixtureGraph(page, async (create) => {
+  createFixtureGraph(page, async (create, db) => {
     const location = await create("location", {
       name: opts.locationName,
       type: "room",
       parentId: null,
     });
-    const brand = await create("vendor", { name: "E2E fixture" });
+    const brandId = await resolveProductBrandName(db, "E2E fixture");
     const products = [];
     for (const product of opts.products) {
       const created = await create("product", {
         name: product.name,
-        brandId: brand.id,
+        brandId,
         tags: [],
       });
       await create("inventory", {
@@ -136,8 +137,8 @@ export async function seedToolFlowPrerequisite(
     productNames: readonly string[];
   }>,
 ) {
-  return createFixtureGraph(page, async (create) => {
-    const brand = await create("vendor", { name: "Flow fixture maker" });
+  return createFixtureGraph(page, async (create, db) => {
+    const brandId = await resolveProductBrandName(db, "Flow fixture maker");
     const located = [];
     for (const group of groups) {
       const location = await create("location", {
@@ -149,7 +150,7 @@ export async function seedToolFlowPrerequisite(
       for (const name of group.productNames) {
         const product = await create("product", {
           name,
-          brandId: brand.id,
+          brandId,
           categoryId: taxonomyShortcode("tools"),
         });
         await create("inventory", {
@@ -213,7 +214,7 @@ export async function seedPlacementReviewPrerequisite(
 
 /** One catalog garment, two independently owned quantities in different places. */
 export async function seedWardrobePrerequisites(page: Page, name: string) {
-  return createFixtureGraph(page, async (create) => {
+  return createFixtureGraph(page, async (create, db) => {
     const owner = await create("ledgerParty", {
       name: `${name} owner`,
       kind: "member",
@@ -232,10 +233,10 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
       type: "room",
       parentId: null,
     });
-    const brand = await create("vendor", { name: "Fixture" });
+    const brandId = await resolveProductBrandName(db, "Fixture");
     const product = await create("product", {
       name: `${name} shirt`,
-      brandId: brand.id,
+      brandId,
       categoryId: taxonomyShortcode("apparel"),
     });
     const entry = await create("inventory", {
