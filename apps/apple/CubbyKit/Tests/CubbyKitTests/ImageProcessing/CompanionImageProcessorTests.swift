@@ -184,7 +184,7 @@ struct CompanionImageProcessorTests {
         #expect(pixelSize.height == artifact.height)
     }
 
-    @Test("Retains an already transparent original without uploading another cutout")
+    @Test("Retains an already cut-out original without uploading another cutout")
     func transparentOriginalDoesNotUpload() async throws {
         let context = try #require(
             CGContext(
@@ -193,7 +193,7 @@ struct CompanionImageProcessorTests {
                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
         context.clear(CGRect(x: 0, y: 0, width: 16, height: 16))
         context.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1))
-        context.fill(CGRect(x: 4, y: 4, width: 8, height: 8))
+        context.fillEllipse(in: CGRect(x: 2, y: 2, width: 12, height: 12))
         let bytes = try ImageEncoding.encode(#require(context.makeImage()), as: .png)
         let upload = UploadProbe()
         let processor = CompanionImageProcessor(
@@ -208,6 +208,55 @@ struct CompanionImageProcessorTests {
                 contentType: "image/png"))
         #expect(result == .alreadyTransparent)
         #expect(await upload.count == 0)
+    }
+
+    // Regression: a vendor photo padded onto a transparent square was skipped as "already
+    // transparent" on every attempt, so its subject was never lifted.
+    @Test("Treats only a transparent subject outline as a cutout")
+    func cutoutDetection() throws {
+        #expect(!CompanionImageProcessor.isCutout(TestImages.canvas(width: 64, height: 48, subject: true)))
+        #expect(
+            !CompanionImageProcessor.isCutout(
+                TestImages.canvas(width: 64, height: 48, subject: true, alpha: true)))
+        #expect(
+            !CompanionImageProcessor.isCutout(
+                try Self.padded(TestImages.canvas(width: 64, height: 48, subject: true))))
+
+        let cutout = try #require(
+            CGContext(
+                data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        cutout.clear(CGRect(x: 0, y: 0, width: 64, height: 64))
+        cutout.setFillColor(CGColor(red: 0, green: 0, blue: 1, alpha: 1))
+        cutout.fillEllipse(in: CGRect(x: 8, y: 8, width: 48, height: 48))
+        #expect(CompanionImageProcessor.isCutout(try #require(cutout.makeImage())))
+    }
+
+    @Test("Lifts the subject of a photo padded onto a transparent canvas", .requiresVisionHardware)
+    func liftsPaddedOriginal() async throws {
+        let sourceBytes = try ImageEncoding.encode(
+            Self.padded(TestImages.canvas(width: 600, height: 400, subject: true)), as: .png)
+        let upload = UploadProbe()
+        let processor = CompanionImageProcessor(
+            download: { _ in sourceBytes },
+            put: { data, url, contentType in
+                await upload.record(data, url: url, contentType: contentType)
+            })
+
+        let result = try await processor.makeTransparentCutout(
+            source: CompanionImageSource(
+                url: URL(string: "https://images.example.invalid/padded.png")!,
+                sha256: Self.sha256(sourceBytes), contentType: "image/png"),
+            output: CompanionImageOutput(
+                uploadURL: URL(string: "https://uploads.example.invalid/cutout.png")!,
+                contentType: "image/png"))
+
+        guard case .completed = result else {
+            Issue.record("Expected Vision to lift the padded subject, got \(result)")
+            return
+        }
+        #expect(await upload.count == 1)
     }
 
     @Test("Returns no subject without uploading a uniform canvas")
@@ -311,6 +360,23 @@ struct CompanionImageProcessorTests {
                 base64Encoded:
                     "AAAAHGZ0eXBhdmlmAAAAAG1pZjFhdmlmbWlhZgAAANZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAAA+gABAAAAAAAAACEAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABhdjAxAAAAAA5waXRtAAAAAAABAAAAVmlwcnAAAAA4aXBjbwAAAAxhdjFDgUBsAAAAABRpc3BlAAAAAAAAAAIAAAADAAAAEHBpeGkAAAAAAwwMDAAAABZpcG1hAAAAAAAAAAEAAQOBAgMAAAApbWRhdBIACghYAHNaAhoNwjITGUeHhiGJpppmgAAAkD+bDGCKZg=="
             ))
+    }
+
+    /// An opaque photo centered on a transparent square canvas, as vendor listings pad images.
+    private static func padded(_ image: CGImage) throws -> CGImage {
+        let side = max(image.width, image.height) + 40
+        let context = try #require(
+            CGContext(
+                data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.clear(CGRect(x: 0, y: 0, width: side, height: side))
+        context.draw(
+            image,
+            in: CGRect(
+                x: (side - image.width) / 2, y: (side - image.height) / 2, width: image.width,
+                height: image.height))
+        return try #require(context.makeImage())
     }
 
     private static func sha256(_ data: Data) -> String {

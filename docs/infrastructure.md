@@ -804,7 +804,9 @@ their original intent age.
 
 Apple subject lift is independent of cloud cutout eligibility and attachment
 purpose. Supported images reach Apple, which reports a cutout, no foreground
-subject, an already-transparent input, or an unsupported format. The cloud
+subject, an already-cut-out input, or an unsupported format. An input counts as
+cut out only when its visible region itself has transparent area; an opaque
+photo padded onto a transparent canvas is still lifted. The cloud
 classification remains descriptive evidence, not a dispatch gate. A processor
 revision change lets previously policy-skipped images be queued again without
 rewriting their retained history.
