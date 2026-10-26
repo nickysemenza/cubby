@@ -89,6 +89,7 @@ public final class ScanSession {
     public var location: LocationCode? {
         didSet {
             if location != oldValue {
+                locationDefaults?.set(location?.rawValue, forKey: Self.locationKey)
                 drain.anchor = location
                 reset()
             }
@@ -97,14 +98,32 @@ public final class ScanSession {
 
     private let service: any ScanService
     private let drain: ScanDrain<Event>
+    private let locationDefaults: UserDefaults?
+    private static let locationKey = "capture.lastLocation"
 
-    public init(service: any ScanService, location: LocationCode? = nil) {
+    public init(
+        service: any ScanService, location: LocationCode? = nil, locationDefaults: UserDefaults? = nil
+    ) {
         self.service = service
         self.location = location
+        self.locationDefaults = locationDefaults
         drain = ScanDrain(anchor: location, debounceInterval: Self.debounceInterval) { read in
             await Self.perform(read, service: service)
         }
         drain.onSettle = { [weak self] token, event in self?.settle(token, event) }
+    }
+
+    /// Restore only after a successful location load. A deleted location is no longer a scan
+    /// target; failed loads leave the preference intact for the next attempt.
+    public func restoreLocation(ifAvailable isAvailable: (LocationCode) -> Bool) {
+        let saved = locationDefaults?.string(forKey: Self.locationKey).map { LocationCode($0) }
+        guard let candidate = location ?? saved else { return }
+        if isAvailable(candidate) {
+            location = candidate
+        } else {
+            location = nil
+            locationDefaults?.removeObject(forKey: Self.locationKey)
+        }
     }
 
     /// Accepts a raw scanner or keyboard value. Returns `false` when it was a debounced repeat.

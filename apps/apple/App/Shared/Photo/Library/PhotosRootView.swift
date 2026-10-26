@@ -435,10 +435,18 @@ private struct PhotoLibraryBrowser: View {
                         Task { await library.requestAccess(matches: matches, client: appModel.client) }
                     }.buttonStyle(.borderedProminent)
                 } else {
-                    Text(
-                        "Whole-library browsing needs full access. You can change Photos access in Settings, or select individual photos below."
-                    )
-                    .foregroundStyle(.secondary)
+                    #if os(macOS)
+                        Text(
+                            "Whole-library browsing needs full access. Allow Photos access for Cubby in System Settings > Privacy & Security > Photos, or select individual photos below."
+                        )
+                        .foregroundStyle(.secondary)
+                    #else
+                        Text(
+                            "Whole-library browsing needs full access. Allow Photos access for Cubby in Settings, or select individual photos below."
+                        )
+                        .foregroundStyle(.secondary)
+                    #endif
+                    PhotoAccessSettingsButton()
                 }
                 PhotoSourceButtons(maxSelectionCount: maxSelectionCount, onSelection: onSelection)
             }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)

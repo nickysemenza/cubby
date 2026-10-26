@@ -4,6 +4,7 @@ import SwiftUI
 struct LocationPickerSheet: View {
     @Bindable var capture: CaptureModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
 
     private var filtered: [CaptureModel.LocationOption] {
@@ -28,18 +29,26 @@ struct LocationPickerSheet: View {
                             Text(option.name)
                                 .font(.fieldGuideBody)
                                 .foregroundStyle(FieldGuideTokens.graphite)
-                                .lineLimit(1)
+                                .fixedSize(horizontal: false, vertical: true)
                             if let path = option.path, !path.isEmpty {
                                 Text(path)
                                     .font(.fieldGuideLabel)
                                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                    .lineLimit(1)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if dynamicTypeSize.isAccessibilitySize {
+                                Text(option.id.rawValue)
+                                    .font(.fieldGuideCode)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             }
                         }
+                        .layoutPriority(1)
                         Spacer(minLength: FieldGuideTokens.Space.sm)
-                        Text(option.id.rawValue)
-                            .font(.fieldGuideCode)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Text(option.id.rawValue)
+                                .font(.fieldGuideCode)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        }
                         if option.id == capture.session.location {
                             Image(systemName: "checkmark")
                                 .font(.caption.weight(.semibold))
