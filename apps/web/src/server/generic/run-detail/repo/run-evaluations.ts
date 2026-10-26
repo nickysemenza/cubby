@@ -22,7 +22,7 @@ const OPEN = [S.queued, S.retry_wait, S.result_ready, S.blocked];
  * Durations are each Job's last claim to its settlement. Reads stay within
  * the Run (`AiEvaluation_run_state_idx`); Jobs join by their unique key.
  */
-export async function readRunEvaluations(
+async function readRunEvaluations(
   db: Database,
   input: { runId: string; purpose: string; failedOnly?: boolean },
   now = new Date(),

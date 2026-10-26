@@ -155,12 +155,10 @@ export async function prepareEntityConnections(
     for (let offset = 0; offset < identity.pairs.length; offset += 16) {
       const prepared = await prepareProductPairPublications(
         db,
-        identity.pairs
-          .slice(offset, offset + 16)
-          .map((input) => ({
-            key: productPairKey(...input.productIds),
-            input,
-          })),
+        identity.pairs.slice(offset, offset + 16).map((input) => ({
+          key: productPairKey(...input.productIds),
+          input,
+        })),
       );
       if (prepared.length !== identity.pairs.slice(offset, offset + 16).length)
         throw new Error("Product pair evidence changed during inference");
