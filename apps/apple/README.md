@@ -177,6 +177,23 @@ only displays progress; it grants no background execution. Image processing requ
 the foreground, a granted **Process queue now** continued-processing task, or the
 opportunistic overnight charging window described below.
 
+Local work and photo-import Runs use the same `DeviceWorkWidget` presentation,
+with a symbol for the work kind and an attention symbol in every Dynamic Island
+size. Their feeds stay separate: the device owns local progress; the initiating
+install registers each photo-import batch for server ActivityKit pushes. When the
+app observes completion, failure or cancellation, imports end with their final
+state immediately in the Dynamic Island and retain it for 20 minutes on the Lock
+Screen. Server end pushes retain it for 15 minutes; a server failure delivered as
+an update still requires foreground reconciliation to end the Activity. Retrying
+a failed batch can start a fresh Activity. A Control Center **Capture** button opens the existing
+scanner and photo import tools; it does not start processing without a selection.
+
+Other server Run purposes still need the server registration/lifecycle work in
+[#2207](https://github.com/nickysemenza/cubby/issues/2207). APNs delivery, locked-device
+updates, Control Center launch and dismissal require real-device verification in
+[#3329](https://github.com/nickysemenza/cubby/issues/3329); unsigned builds and unit
+tests establish only compilation, payload and routing behavior.
+
 ### Companion worker lifecycle (app and CLI)
 
 Describe-image and subject-lift commands share one pool of slots
