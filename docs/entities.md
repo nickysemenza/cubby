@@ -624,6 +624,15 @@ Accepted-source association reads resolve message and attachment source keys
 through the composite identity index, then use the canonical root and alias
 indexes. Attachment keys still require the original to belong to the Email
 owner. An Email's family lookup must not scan unrelated accepted mailbox history.
+Link-state lists evaluate exact source-identity candidates and order-event
+presence once per statement before applying the full evidence policy. Emails
+with neither have state `none`; candidates still pass all owner, lifecycle and
+scope checks. Suggestion reads split disjoint exact-order and amount/date
+Purchase candidates so order matches do not scan the Vendor's entire history;
+the fallback date range allows the existing date index and keeps the inclusive
+45-day window.
+A single included link-state filter fixes the sort rank, so ordering reuses that
+constant and retains date and stable ties without computing the state again.
 
 **Report choices.** A `records` row may carry a `choice` (a decision the person makes) and the block
 a `form` (its own choices, the progress wording, a `disabledReason` and the one command the answers

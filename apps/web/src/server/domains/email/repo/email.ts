@@ -219,29 +219,35 @@ export async function hasAcceptedEmailAssociation(
 
 // Link order is relative to the list's scope filter, so it reads the scope
 // the request resolves.
-const emailScope = listPrepare((db, filters) =>
-  resolveEmailScope(db, emailScopeFilters.parse(filters)),
-);
+const emailScope = listPrepare(async (db, filters) => {
+  const parsed = emailScopeFilters.parse(filters);
+  return {
+    scope: await resolveEmailScope(db, parsed),
+    fixedLinkState: oneOrManyValues(parsed.linkState)?.length === 1,
+  };
+});
 const emailScopeFilters = emailFilters.pick({
   purchaseId: true,
   vendorId: true,
   vendorAccountId: true,
+  linkState: true,
 });
 
 // One scope record across the three filters (`resolveEmailScope`), so each
 // filter that names it applies the same condition.
-const inScope = emailScope.predicate((scope) =>
+const inScope = emailScope.predicate(({ scope }) =>
   scope ? emailInScopeSql(scope) : undefined,
 );
 
 const scaffold = listScaffold("email", emailTable, {
   derived: {
     // Ties read newest first in either direction.
-    linkState: emailScope.value((scope) => [
-      emailLinkRankSql(scope),
+    linkState: emailScope.value(({ scope, fixedLinkState }) => [
+      // A single included state fixes the rank; retain date and stable ties.
+      fixedLinkState ? sql`0::integer` : emailLinkRankSql(scope),
       { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
     ]),
-    scopeLinkState: emailScope.value((scope) => emailLinkStateSql(scope)),
+    scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
     linked: emailLinkedSql(),
     reviewConflict: emailReviewConflictSql(),
     purchaseId: inScope,
@@ -509,7 +515,7 @@ const emailListRead =
     const request = { filters, sorts, pagination, projection, readIntent };
     const context = await scaffold.context(db, request);
     const scope = context.has(emailScope)
-      ? context.get(emailScope)
+      ? context.get(emailScope).scope
       : await resolveEmailScope(db, filters);
     return scaffold.read(db, request, {
       context,

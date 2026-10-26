@@ -14,6 +14,7 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -74,10 +75,22 @@ export const emailPurchaseEvidenceSql = (
   SELECT p."id", event."id", ${KIND.suggested}::text, false, ${PROPOSER.heuristic}::text
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "Purchase" p ON p."deletedAt" IS NULL AND (
-    p."vendorId" = original."vendorId"
-    OR (original."vendorId" IS NULL AND p."orderId" = event."orderId")
-  )
+  -- Exact-order and amount/date candidates are disjoint; each gets its own lookup.
+  INNER JOIN LATERAL (
+    SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
+    WHERE p."orderId" = event."orderId"
+      AND (original."vendorId" IS NULL OR p."vendorId" = original."vendorId")
+    UNION ALL
+    SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
+    WHERE p."vendorId" = original."vendorId"
+        AND (event."orderId" IS NULL OR p."orderId" IS NULL)
+        AND event."amount" IS NOT NULL AND p."statedTotal" IS NOT NULL
+        AND abs(event."amount" - p."statedTotal") < 0.01
+        AND "Email"."receivedAt" IS NOT NULL AND p."date" IS NOT NULL
+        AND p."date" BETWEEN
+          ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))} - ${SUGGESTION_WINDOW_DAYS}::integer
+          AND ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))} + ${SUGGESTION_WINDOW_DAYS}::integer
+  ) p ON p."deletedAt" IS NULL
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
@@ -86,17 +99,6 @@ export const emailPurchaseEvidenceSql = (
     AND NOT EXISTS (
       SELECT 1 FROM "AssessmentEmailLink" decided
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id"
-    )
-    AND (
-      (event."orderId" IS NOT NULL AND p."orderId" = event."orderId")
-      OR (
-        p."vendorId" = original."vendorId"
-        AND (event."orderId" IS NULL OR p."orderId" IS NULL)
-        AND event."amount" IS NOT NULL AND p."statedTotal" IS NOT NULL
-        AND abs(event."amount" - p."statedTotal") < 0.01
-        AND "Email"."receivedAt" IS NOT NULL AND p."date" IS NOT NULL
-        AND abs(p."date" - ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))}) <= ${SUGGESTION_WINDOW_DAYS}
-      )
     )
 `;
 
@@ -138,12 +140,32 @@ export const emailInScopeSql = (scope: EmailPurchaseScope): SQL => {
   }
 };
 
+// An accepted association needs an exact source identity; decisions and
+// suggestions need an order event. This superset is evaluated once per statement;
+// the evidence policy below still decides ownership, lifecycle and scope.
+const emailMayHavePurchaseEvidenceSql = sql`(
+  "Email"."id" IN (
+    SELECT candidate."id" FROM "ImportSourceClaim" claim
+    INNER JOIN "Email" candidate ON candidate."ledgerPartyId" = claim."ledgerPartyId"
+      AND claim."kind" = ${importSourceKind.enum.mail_message}
+      AND claim."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId"
+    UNION
+    SELECT candidate."id" FROM "ImportSourceClaim" claim
+    INNER JOIN "OrderMailAttachment" attachment ON claim."kind" = ${importSourceKind.enum.mail_attachment}
+    INNER JOIN "OrderMail" original ON original."id" = attachment."orderMailId"
+      AND original."ledgerPartyId" = claim."ledgerPartyId"
+    INNER JOIN "Email" candidate ON candidate."orderMailId" = original."id"
+      AND candidate."ledgerPartyId" = original."ledgerPartyId"
+      AND claim."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:' || attachment."providerAttachmentId"
+  ) OR "Email"."orderMailId" IN (SELECT event."orderMailId" FROM "OrderMailEvent" event)
+)`;
+
 /**
  * The scope-relative link state of the correlated `"Email"`: its strongest
  * pair inside the scope (everywhere when unscoped), else `none`.
  */
 export const emailLinkStateSql = (scope: EmailPurchaseScope | null): SQL =>
-  sql`(
+  sql`CASE WHEN ${emailMayHavePurchaseEvidenceSql} THEN (
     SELECT CASE
       WHEN bool_or(evidence."kind" IN (${KIND.accepted}, ${KIND.linked})) THEN ${STATE.linked}::text
       WHEN bool_or(evidence."kind" = ${KIND.suggested}) THEN ${STATE.suggested}::text
@@ -152,7 +174,7 @@ export const emailLinkStateSql = (scope: EmailPurchaseScope | null): SQL =>
     END
     FROM (${emailPurchaseEvidenceSql()}) evidence
     ${scope ? sql`WHERE ${inScope(scope, sql`evidence."purchaseId"`)}` : sql``}
-  )`;
+  ) ELSE ${STATE.none}::text END`;
 
 /** Linked first, then suggestions to act on, then nothing, then dismissals. */
 export const emailLinkRankSql = (scope: EmailPurchaseScope | null): SQL =>
