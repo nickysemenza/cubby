@@ -1,0 +1,23 @@
+apps/apple/App/Tests/Photo/Import/PhotoImportFlowTests.swift
+  s_37b21563b51dcd::t_9cdfed54325072 665-666
+apps/apple/App/Tests/Photo/Review/PhotoMatchStoreTests.swift
+  s_37b21563b51dcd::t_79d17497202b31 549-557
+apps/apple/ITERATION.md
+  s_37b21563b51dcd::t_f2a12d48cb1a4a 141-152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6446834df071c47e9bd51dcc3c7c4095a80bafc8",
+  "prompts": {},
+  "sessions": {
+    "s_37b21563b51dcd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1794f-72c4-75b0-baf3-efd63f098565",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
