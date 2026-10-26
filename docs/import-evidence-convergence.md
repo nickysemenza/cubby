@@ -319,8 +319,15 @@ policy. No policy requires a document: attachments are optional evidence and
 never a gap. Itemization is derived from the lines, not recorded: at least one
 live, incurred principal `item_line`, no `allocation` line, and every principal
 line whose Product is expected links one (services, tax, shipping, fees and
-discounts never need one). A lone productless goods line is a lump. Totals stay
-with paperwork and settlement reconciliation. Itemization, Product resolution,
+discounts never need one). A lone productless goods line is a lump.
+Unknown category Product expectation also admits principal item lines to
+Product-resolution and quantity research; it does not silently exempt them.
+Explicit `not_expected` / `not_allowed` policies, services and allocations
+retain their exemptions. Coverage keeps its three-valued policy status, and
+research admission does not assign a spending category or copy a Vendor default.
+Existing lines are re-evaluated by the normal stored-derived drain after a
+rule-change migration marks their Expense quality and Purchase quality.
+Totals stay with paperwork and settlement reconciliation. Itemization, Product resolution,
 and Expense booking have separate coverage; a charge is itemized only when
 every Purchase it settles is.
 Gift and previously-owned Product provenance needs no purchase proof.
