@@ -69,7 +69,7 @@ import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
 import {
   prepareSearchDocuments,
-  hasUnembeddedSearchDocuments,
+  searchCoverageIncomplete,
 } from "~/server/generic/search/repo/search-document";
 
 export const productIdentityPrompt = (subject: string) => ({
@@ -335,7 +335,7 @@ async function retrieveProductIdentitySemanticPage(
         ),
       )
       .limit(1);
-    const missing = await hasUnembeddedSearchDocuments(db, config, ["product"]);
+    const missing = await searchCoverageIncomplete(db, config, ["product"]);
     for (const wave of chunk(ids, 4))
       await Promise.all(
         wave.map(async (id) => {
@@ -566,7 +566,9 @@ export async function evaluatePreparedProductIdentityPair(
   } = {},
 ) {
   const pair = preparedProductIdentityPair.parse(raw);
-  const current = options.preparedPage ? pair : await prepareProductIdentityPair(db, pair.productIds);
+  const current = options.preparedPage
+    ? pair
+    : await prepareProductIdentityPair(db, pair.productIds);
   return evaluateCurrentProductIdentityPair(db, pair, current, runId, options);
 }
 
@@ -682,7 +684,10 @@ export async function evaluatePreparedProductIdentityPairs(
     pairs.map((pair) => pair.productIds),
   );
   return settleDecisionWorkItems(
-    pairs.map((pair) => ({ pair, current: current.get(productIdentityPairKey(pair.productIds)) ?? null })),
+    pairs.map((pair) => ({
+      pair,
+      current: current.get(productIdentityPairKey(pair.productIds)) ?? null,
+    })),
     ({ pair, current }) =>
       evaluateCurrentProductIdentityPair(db, pair, current, runId, options),
   );

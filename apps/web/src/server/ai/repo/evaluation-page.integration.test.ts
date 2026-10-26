@@ -125,6 +125,15 @@ describe("finite AI evaluation pages", () => {
 
   it("claims disjoint pages concurrently and renews only exact live tokens", async () => {
     const seeded = await seed(12);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ runId: seeded.runId })
+      .where(
+        inArray(
+          job.id,
+          seeded.jobs.map((row) => row.id),
+        ),
+      );
     const pages = await Promise.all([
       claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id, 6),
       claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id, 6),
@@ -164,7 +173,7 @@ describe("finite AI evaluation pages", () => {
   it("shares capped kind admission with single claims until every page lease settles", async () => {
     const seeded = await seed(102);
     const original = kindPolicy.jobKindPolicy;
-    // #3322 supplies this policy on main; keep this lane on its original base.
+    // Exercise the same cross-Worker cap used by the configured AI policy.
     const policy = vi
       .spyOn(kindPolicy, "jobKindPolicy")
       .mockImplementation((kind) => ({
@@ -206,6 +215,15 @@ describe("finite AI evaluation pages", () => {
 
   it("SKIP LOCKED does not wait on a foreign open transaction", async () => {
     const seeded = await seed(4);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ runId: seeded.runId })
+      .where(
+        inArray(
+          job.id,
+          seeded.jobs.map((row) => row.id),
+        ),
+      );
     const holding = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const owner = withTransactionDatabase(ctx.db, async (tx) => {
@@ -408,7 +426,7 @@ describe("finite AI evaluation pages", () => {
   it("admits one feature turn per fair round and preserves backfill's reserved share", async () => {
     const catalog = await seed(40);
     const member = await seed(1, "field-suggestion", "ai_suggest");
-    const connection = await seed(1, "entity-connections", "ai_suggest");
+    await seed(1, "entity-connections", "ai_suggest");
     const other = await enqueueJob(ctx.db, {
       key: "synthetic-other-kind",
       kind: "synthetic.other",
@@ -420,10 +438,10 @@ describe("finite AI evaluation pages", () => {
       .where(eq(job.id, member.jobs[0]!.id));
     expect(owned[0]?.owned).toBe(true);
     const first = await dueJobs(ctx.db);
-    expect(first.some((entry) => entry.id === member.jobs[0]!.id)).toBe(true);
-    expect(first.some((entry) => entry.id === connection.jobs[0]!.id)).toBe(
-      true,
-    );
+    // Main admits one background AI page at a time, even for shared member demand.
+    expect(
+      first.filter((entry) => entry.kind === "ai.evaluation"),
+    ).toHaveLength(1);
     expect(first.some((entry) => entry.id === other.id)).toBe(true);
     const visits: string[] = [];
     const scalar = defineJobHandler(z.object({}), async () => ({

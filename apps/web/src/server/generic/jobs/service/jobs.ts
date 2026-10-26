@@ -319,6 +319,7 @@ export async function drainDueJobs(
   const spent = () => scheduled >= limit || Date.now() >= deadline;
   const refill = async () => {
     const settledBefore = settledPages;
+    const groupsBefore = groups.length;
     const remaining =
       limit -
       scheduled -
@@ -352,7 +353,7 @@ export async function drainDueJobs(
     }
     // A page may finish or skip while selection is in flight. Reselect before
     // every idle lane exits on an empty result from that older snapshot.
-    return candidates.length > 0 || settledBefore !== settledPages;
+    return groups.length > groupsBefore || settledBefore !== settledPages;
   };
   const nextGroup = async () => {
     while (!spent()) {
@@ -407,7 +408,8 @@ export async function drainDueJobs(
       const batch = handlers[candidate.kind]?.batch;
       try {
         const page = handlers[candidate.kind]?.advancePage;
-        if (page && candidate.pageKey) outcomes.push(await page(db, candidate.id));
+        if (page && candidate.pageKey)
+          outcomes.push(await page(db, candidate.id));
         else if (batch)
           outcomes.push(
             ...(await advanceBatch(
