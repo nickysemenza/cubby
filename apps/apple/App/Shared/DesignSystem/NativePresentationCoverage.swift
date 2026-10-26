@@ -47,6 +47,11 @@ enum NativePresentationCoverage {
         coverage.listSlot[id] ?? unknown("Unknown native list slot.")
     }
 
+    /// A report `records` block's verb: `implemented` ones run natively, the rest draw a web row.
+    static func sectionAction(_ action: SectionActionID) -> Status {
+        coverage.sectionAction[action.rawValue] ?? unknown("This action is available on web.")
+    }
+
     static func listViews(for descriptor: EntityDescriptor) -> [ListView] {
         descriptor.presentation.listViews.filter {
             guard case .slot(let id, _, _) = $0 else { return true }

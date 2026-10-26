@@ -556,7 +556,10 @@ search) also use the `records` block: rows a person can open or check, plus the
 verbs that act on them (`SECTION_ACTION_IDS`). Each row's and verb's
 `disabledReason`, every amount and the footer are the server's; a verb runs an
 existing operation on each client that implements it, and any a client lacks is
-classified under `sectionAction` in `native-coverage.ts` (none today). Split,
+classified under `sectionAction` in `native-coverage.ts`: native runs only
+Receive into Inventory and hands statement match, split and both attaches off to
+web, as it does the reconciliation, expense settlement and spending
+classification slots. Split,
 attach expenses and attach products keep their rules on the server too:
 `purchase.splitStart` and `purchase.checkSplit` (a name each, whole cents that
 add up to the original exactly, one product part, an attribution choice, and the

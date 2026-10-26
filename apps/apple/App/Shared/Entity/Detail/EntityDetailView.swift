@@ -528,9 +528,7 @@ struct EntityDetailContent: View {
                         .foregroundStyle(.secondary)
                     }
                     EntityHeroView(descriptor: descriptor, row: row) {
-                        if let supplement = DetailSlotRegistry.supplement(
-                            for: descriptor.key, row: row, onChanged: onChanged)
-                        {
+                        if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
                             supplement
                         }
                     }
@@ -693,9 +691,7 @@ struct EntityDetailContent: View {
             }
             Section {
                 EntityHeroView(descriptor: descriptor, row: row) {
-                    if let supplement = DetailSlotRegistry.supplement(
-                        for: descriptor.key, row: row, onChanged: onChanged)
-                    {
+                    if let supplement = DetailSlotRegistry.supplement(for: descriptor.key, row: row) {
                         supplement
                     }
                 }

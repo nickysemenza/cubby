@@ -29,6 +29,19 @@ struct NativeCoverageViewPathTests {
         #expect(unknown?.section == nil && unknown?.reason == "Unknown native detail slot.")
     }
 
+    /// Reconciliation and its verbs are web's; receiving what an expense bought stays native.
+    @Test func financeReconciliationHandsOffAndReceivingStaysNative() {
+        #expect(NativePresentationCoverage.sectionAction(.receiveExpense) == .implemented)
+        #expect(
+            NativePresentationCoverage.sectionAction(.matchStatement).handoff?.section
+                == "financial-settlement")
+        let purchase = EntityRow(
+            id: "PUR-4K7M", title: "Synthetic order", subtitle: nil, imageURL: nil, raw: ["id": "PUR-4K7M"])
+        #expect(
+            NativePresentationCoverage.recordHandoffs(EntityCatalog[.purchase], row: purchase).map(\.label)
+                == ["Review reconciliation on web"])
+    }
+
     /// A handoff slot draws its row only where web's slot predicate would draw the slot.
     @Test func importAgentHandoffFollowsTheRunsPurposeAndLiveness() throws {
         func run(_ purpose: String, _ status: String) -> EntityRow {

@@ -160,6 +160,29 @@ struct ReportPresentationTests {
         #expect(none.figureValue("weightGrams") == nil)
     }
 
+    @Test func recordRowsKeepTheServersWordsAmountsAndRefusals() throws {
+        let report = try JSONDecoder.cubby().decode(
+            EntityReportOut.self,
+            from: Data(
+                #"""
+                {"blocks":[{"kind":"records","empty":"","actions":[],"rows":[
+                  {"entity":null,"id":null,"title":"Example Hardware · 2026-03-03",
+                   "trailing":"$42.50","key":"FTX-4K7M","disabledReason":null},
+                  {"entity":"run","id":"RUN-4K7M","title":"Example Garden · 2026-03-04",
+                   "trailing":"$12.00","key":"FTX-5N8P","disabledReason":"Already matched."}
+                ]}]}
+                """#.utf8))
+        guard case .records(let records) = ReportPresentation(report).blocks[0] else {
+            Issue.record("expected records")
+            return
+        }
+        #expect(records.rows.compactMap(\.key) == ["FTX-4K7M", "FTX-5N8P"])
+        #expect(records.rows[0].trailing == "$42.50")
+        #expect(records.rows[1].entity == .run)
+        #expect(records.rows[1].recordID == "RUN-4K7M")
+        #expect(records.rows[1].disabledReason == "Already matched.")
+    }
+
     @Test func aBlocksOwnCommandsAreCarriedBesideItsRows() throws {
         let report = try JSONDecoder.cubby().decode(
             EntityReportOut.self,

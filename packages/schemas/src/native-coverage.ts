@@ -353,8 +353,6 @@ export const nativeCoverage = {
       "run.import-controls",
       "run.photo-batch",
       "purchase.receiving",
-      "vendor.spending-classification",
-      "productCategory.spending-classification",
       "product.ownership",
       "product.nutrition",
       "product.unit-mappings",
@@ -397,12 +395,10 @@ export const nativeCoverage = {
       "shipment.tracking",
       "purchase.runs",
       "location.ai-description",
-      // Finance slots: the same report view draws their `records` rows (checked rows, footer and
-      // verbs included); the verbs are classified under `sectionAction`.
-      "purchase.reconciliation",
+      // Read-only finance status: the same report view draws their `records` rows; a verb the
+      // server offers there is classified under `sectionAction`.
       "purchase.project-allocation",
       "purchase.financial-settlement",
-      "expense.settlement",
       // A run's progress, findings, transcript, log, usage and changes: the same report
       // view draws the server's `records` rows, polls (one batched read) while the run is live,
       // and runs the commands the server offers (apply, dismiss, retry) only
@@ -440,21 +436,52 @@ export const nativeCoverage = {
       { section: "import-agent-stopped", label: "Open agent history on web" },
       "The agent conversation streams from the import-run agent route, which native has no client for. Review the agent's history on web.",
     ),
+    // Reconciliation is web's: attaching expenses and products, splitting, and the totals they
+    // change are reviewed beside the line evidence web draws.
+    "purchase.reconciliation": handoff(
+      { section: "reconciliation", label: "Review reconciliation on web" },
+      "Attaching expenses and products to an order, and the totals that change with them, are reviewed on web.",
+    ),
+    "expense.settlement": handoff(
+      { section: "settlement", label: "Review settlement on web" },
+      "Splitting an expense and reviewing its settlement are web's. Receive into Inventory stays on the expense.",
+    ),
+    "vendor.spending-classification": handoff(
+      { section: "spending-classification", label: "Classify spending on web" },
+      "A vendor's spending defaults change only after a historical-impact review, which web draws.",
+    ),
+    "productCategory.spending-classification": handoff(
+      { section: "spending-classification", label: "Classify spending on web" },
+      "A category's spending mapping changes only after a historical-impact review, which web draws.",
+    ),
   },
   /**
-   * Finance verbs a report's `records` block offers. Native offers the `implemented` ones;
-   * `RecordsBlockView.verbButton` switches over every verb, each through the same operation
-   * web's handler calls; the report says per record whether the verb is available, so
-   * native never offers one the server would refuse.
+   * Finance verbs a report's `records` block offers. `RecordsBlockView.verbButton` switches over
+   * every verb: an `implemented` one runs the same operation web's handler calls, only when the
+   * report says it is available; a `handoff` one draws its web row in the block. `section` is
+   * the detail section web offers the verb in.
    */
   sectionAction: {
-    ...implemented([
-      "matchStatement",
-      "receiveExpense",
-      "splitExpense",
-      "linkExpenses",
-      "linkProducts",
-    ]),
+    ...implemented(["receiveExpense"]),
+    matchStatement: handoff(
+      {
+        section: "financial-settlement",
+        label: "Match statement activity on web",
+      },
+      "Allocating a statement charge across orders is reviewed on web.",
+    ),
+    splitExpense: handoff(
+      { section: "settlement", label: "Split expense on web" },
+      "Splitting an expense replaces it with its parts; web reviews the split.",
+    ),
+    linkExpenses: handoff(
+      { section: "reconciliation", label: "Attach expenses on web" },
+      "Attaching expenses moves them onto the order; web reviews the change to its total.",
+    ),
+    linkProducts: handoff(
+      { section: "reconciliation", label: "Attach products on web" },
+      "Attaching products to an order is reviewed on web.",
+    ),
   },
   /**
    * `implemented` slots are the generated `ImplementedListSlotID`, which `ListSlotRegistry`
