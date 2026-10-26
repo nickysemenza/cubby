@@ -2092,7 +2092,29 @@ Meals and Tasks can move, planned Expenses can move, and Purchase events,
 actual Expenses, Projects and Planting milestones are read-only.
 
 Calendar layout is already arranged by date; table grouping stays in URL state
-and is unavailable with a reason in calendar mode. The existing Schedule mode
+and is unavailable with a reason in calendar mode. The combined desktop calendar
+offers Week, Fortnight, Month, 3 months, 6 months, Year and Schedule in one view
+picker. Long periods use calendar quarters, Jan–Jun/Jul–Dec and calendar years;
+previous/next steps by the selected period. Their continuous day grid fits the
+remaining viewport below the existing shell and calendar controls. Align weekdays
+defaults on and persists locally: aligned rows use multiples of seven columns,
+while free wrapping uses the available proportions. Weekend shading and month
+boundaries remain visible in both modes. Padding cells do not extend the range
+query beyond its 366-day budget. Event bars reuse the calendar lane packing;
+hidden events retain per-day overflow counts, inline with the date in short
+cells. Selecting a date opens an anchored
+day popover; selecting one of its events closes it and opens the standard record
+inspector. These overview modes do not support dragging. Phones retain the
+existing short-period agenda and do not offer the long-period choices.
+
+Calendar queries show a hydration-stable initial loading state, including after
+date/filter scope changes, instead of painting an apparently empty calendar or
+the previous scope's events. Same-scope background refresh keeps current events
+mounted and uses the shell's shared syncing indicator. Failed reads expose raw
+diagnostics and Retry; retained-data errors leave the calendar usable. Empty
+messages appear only after a successful response.
+
+The existing Schedule mode
 keeps Task and Planting lanes, including its existing undated scheduling rows.
 Other source filters remain in URL state, disabled with a reason and suspended
 until returning to the date grid. Calendar range and schedule reads take nested
