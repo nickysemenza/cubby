@@ -67,7 +67,7 @@ describe("calendar effective attribution", () => {
       kind: "purchase",
       cost: 11,
       startDate: "2026-09-19",
-      spendingContext: { projectNames: [second.name], partyNames: [] },
+      spendingContext: { projectNames: [second.name], parties: [] },
     });
     expect(scoped.days["2026-09-19"]).toMatchObject({
       actualSpend: 11,
