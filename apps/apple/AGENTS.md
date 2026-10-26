@@ -188,9 +188,10 @@ None is committed; edit the generator or its inputs, never the output. A missing
   `ValueFormat`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
   `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
   directly; Swift `DisplayFormatTests` / `ValueFormatTests` and web
-  `display-format.unit.test.ts` / `format-amount.unit.test.ts` check the bindings. Only
-  `plainDate` stays per platform (no timezone database in Rust; `DisplayFormat.plainDate` /
-  `formatCalendarDay`) and timestamps stay locale-aware platform code. Never format a catalog value
+  `display-format.unit.test.ts` / `format-amount.unit.test.ts` check the bindings. Plain dates,
+  grouped counts and empty text also use Rust through `DisplayFormat` / `ValueFormat` and the web
+  formatting helpers; plain dates need no timezone conversion. Timestamps stay locale-aware
+  platform code. Never format a catalog value
   with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the
   vector, then Rust.
 - Recipe scaling is single-sourced in Rust too (`recipebridge/src/scaling.rs` plus `scale_amount`):
