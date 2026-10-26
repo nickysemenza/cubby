@@ -41,6 +41,7 @@ final class AppModel {
     /// Loaded once at init; every change goes through `setParticipation(automaticWork:)`.
     private(set) var participation: DeviceParticipation
     let navigator = Navigator()
+    let recipeCooking = RecipeCookingState()
     let browseCounts = BrowseCountsModel()
     let spotlight = SpotlightIndexer()
     /// One on-device index of product covers, shared by Identify and by Add photo (which indexes

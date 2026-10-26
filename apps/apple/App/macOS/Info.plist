@@ -52,6 +52,10 @@
 	<string>Cubby scans barcodes to add items to a location.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Cubby uses selected photos for garden journals and product images.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.nickysemenza.cubby.cook</string>
+	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

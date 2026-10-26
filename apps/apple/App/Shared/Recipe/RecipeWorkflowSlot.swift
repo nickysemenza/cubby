@@ -1,6 +1,10 @@
 import CubbyKit
 import SwiftUI
 
+#if os(iOS)
+    import UIKit
+#endif
+
 /// `recipe.workflow`: scale a recipe and cook it step by step. Scaling is Rust through CubbyKit's
 /// `RecipeScaling` (the same code web runs as WASM); the scale and the cook-mode position are
 /// local view state, never written back, as on web where they live only in the URL. What the
@@ -27,7 +31,7 @@ struct RecipeWorkflowView: View {
     @State private var customText = ""
     @State private var weightText = ""
     @State private var weightOpen = false
-    @State private var cooking = false
+    @Environment(AppModel.self) private var appModel
     /// The unscaled total weight in grams, from the server's costing report; nil until it loads
     /// or when no ingredient line reaches grams.
     @State private var baseWeight: Double?
@@ -59,7 +63,7 @@ struct RecipeWorkflowView: View {
                 }
             }
             Button {
-                cooking = true
+                appModel.recipeCooking.open(recipeID: recipeID, plan: plan, factor: factor)
             } label: {
                 Label("Start cooking", systemImage: "frying.pan")
                     .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
@@ -81,10 +85,6 @@ struct RecipeWorkflowView: View {
                 }
                 .accessibilityIdentifier("recipe.walkthrough")
             }
-        }
-        .sheet(isPresented: $cooking) {
-            RecipeCookModeView(plan: plan, factor: factor)
-                .nativeSheet(.preview)
         }
     }
 
@@ -196,106 +196,157 @@ private struct RecipeCoverageSection: View {
     }
 }
 
-/// Step progression through a recipe's method with that section's scaled ingredients beside it.
-/// The step index is local state; nothing about cooking is persisted.
+/// One method step per page, with its section's scaled quantities visible without disclosure.
 struct RecipeCookModeView: View {
-    let plan: RecipeCookPlan
-    let factor: Double
-    @State private var index = 0
+    @Bindable var session: RecipeCookingState.Session
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    #if os(iOS)
+        @State private var previousIdleTimerDisabled: Bool?
+    #endif
 
-    private var step: RecipeCookPlan.Step { plan.steps[min(index, plan.steps.count - 1)] }
+    private var position: RecipeCookHandoff? {
+        session.recipeID.map { RecipeCookHandoff(recipeID: $0, step: session.index) }
+    }
 
     var body: some View {
         NavigationStack {
-            if plan.steps.isEmpty {
-                Text("This recipe has no method steps.").foregroundStyle(.secondary)
-            } else {
-                content
-            }
-        }
-        #if os(iOS)
-            // A phone on the counter must not lock mid-step.
-            .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-            .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
-        #endif
-    }
-
-    private var content: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-            ProgressView(value: Double(index + 1), total: Double(plan.steps.count))
-                .accessibilityLabel("Step \(index + 1) of \(plan.steps.count)")
-            ScrollView {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                    Text(
-                        step.sectionName.map { "\($0) · step \(step.numberInSection)" }
-                            ?? "Step \(step.numberInSection)"
-                    )
-                    .font(.subheadline).foregroundStyle(.secondary)
-                    Text(.init(step.text))
-                        .font(.title3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("recipe.cook.step")
-                    if !section.ingredients.isEmpty {
-                        DisclosureGroup("Ingredients for this part") {
-                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                                ForEach(section.ingredients) { line in
-                                    Text(plan.line(line, factor: factor))
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            HStack {
-                Button {
-                    index -= 1
-                } label: {
-                    Label("Previous", systemImage: "chevron.left")
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
-                }
-                .disabled(index == 0)
-                Spacer()
-                Text("Step \(index + 1) of \(plan.steps.count)")
-                    .font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                if index == plan.steps.count - 1 {
-                    Button("Done") { dismiss() }
-                        .buttonStyle(.borderedProminent)
-                        .frame(minHeight: FieldGuideTokens.touchTarget)
+            VStack(spacing: FieldGuideTokens.Space.md) {
+                if session.plan.steps.isEmpty {
+                    Text("This recipe has no method steps.").foregroundStyle(.secondary)
                 } else {
-                    Button {
-                        index += 1
-                    } label: {
-                        Label("Next", systemImage: "chevron.right")
-                            .labelStyle(.titleAndIcon)
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("recipe.cook.next")
+                    Text("Step \(session.index + 1) of \(session.plan.steps.count)")
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("recipe.cook.progress")
+                    pager
+                    controls
+                }
+            }
+            .padding(FieldGuideTokens.Space.md)
+            .navigationTitle(session.plan.title)
+            #if os(iOS)
+                .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                        .accessibilityIdentifier("recipe.cook.done")
                 }
             }
         }
-        .padding(FieldGuideTokens.Space.md)
-        .navigationTitle(plan.title)
+        .interactiveDismissDisabled()
+        .userActivity(RecipeCookHandoff.activityType, element: position) { position, activity in
+            position.update(activity, title: session.plan.title)
+        }
         #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                guard previousIdleTimerDisabled == nil else { return }
+                previousIdleTimerDisabled = UIApplication.shared.isIdleTimerDisabled
+                UIApplication.shared.isIdleTimerDisabled = true
+            }
+            .onDisappear {
+                if let previousIdleTimerDisabled {
+                    UIApplication.shared.isIdleTimerDisabled = previousIdleTimerDisabled
+                }
+                previousIdleTimerDisabled = nil
+            }
         #endif
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+    }
+
+    @ViewBuilder private var pager: some View {
+        #if os(iOS)
+            TabView(selection: $session.index) {
+                ForEach(session.plan.steps) { step in
+                    page(step).tag(step.id)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+        #else
+            page(session.plan.steps[session.index])
+        #endif
+    }
+
+    private func page(_ step: RecipeCookPlan.Step) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                if let name = step.sectionName {
+                    Text("\(name) · step \(step.numberInSection)")
+                        .font(.headline).foregroundStyle(.secondary)
+                }
+                Text(.init(step.text))
+                    .font(.title)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("recipe.cook.step.\(step.id)")
+                let section = session.plan.sections[step.sectionIndex]
+                if !section.ingredients.isEmpty {
+                    Text("Ingredients for this part").font(.headline)
+                    ForEach(section.ingredients) { line in
+                        Text(session.plan.line(line, factor: session.factor))
+                            .font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
         }
     }
 
-    private var section: RecipeCookPlan.Section { plan.sections[step.sectionIndex] }
+    private var controls: some View {
+        let layout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: FieldGuideTokens.Space.sm))
+            : AnyLayout(HStackLayout(spacing: FieldGuideTokens.Space.md))
+        return layout {
+            Button {
+                session.index -= 1
+            } label: {
+                Text("Previous")
+                    .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+            }
+            .buttonStyle(.bordered)
+            .disabled(session.index == 0)
+            .accessibilityIdentifier("recipe.cook.previous")
+            if session.index == session.plan.steps.count - 1 {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Done")
+                        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("recipe.cook.finish")
+            } else {
+                Button {
+                    session.index += 1
+                } label: {
+                    Text("Next")
+                        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("recipe.cook.next")
+            }
+        }
+        .font(.headline)
+        .fixedSize(horizontal: false, vertical: true)
+    }
 }
 
-#Preview("Recipe workflow") {
+#Preview("Recipe workflow", traits: .modifier(SignedInPreview())) {
     ScrollView { RecipeWorkflowView(plan: RecipeSlotPreviews.plan).padding() }
 }
 
 #Preview("Cook mode") {
-    RecipeCookModeView(plan: RecipeSlotPreviews.plan, factor: 2)
+    RecipeCookModeView(session: .init(recipeID: nil, plan: RecipeSlotPreviews.plan, factor: 2))
+}
+
+#Preview("Cook mode AX3") {
+    RecipeCookModeView(session: .init(recipeID: nil, plan: RecipeSlotPreviews.plan, factor: 2, index: 1))
+        .environment(\.dynamicTypeSize, .accessibility3)
 }
 
 enum RecipeSlotPreviews {

@@ -59,6 +59,10 @@
 	<string>Cubby uses selected photos for garden journals and product images.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.nickysemenza.cubby.cook</string>
+	</array>
 	<key>UIApplicationShortcutItems</key>
 	<array>
 		<dict>

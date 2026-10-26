@@ -93,6 +93,7 @@ struct CubbyApp: App {
 
     private var appContent: some View {
         RootView()
+            .modifier(RecipeCookingPresentation())
             .environment(model)
             .tint(FieldGuideTokens.interaction)
             .task {

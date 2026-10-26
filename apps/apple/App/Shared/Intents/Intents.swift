@@ -226,6 +226,49 @@ struct LookUpCodeIntent: AppIntent {
     }
 }
 
+/// Recipe parameters stay constrained even when a saved Shortcut is edited.
+nonisolated struct RecipeIntentQuery: EntityStringQuery {
+    func entities(for identifiers: [String]) async throws -> [CubbyEntity] {
+        let recipes = identifiers.filter { EntityCatalog.descriptor(forShortcode: $0)?.key == .recipe }
+        return try await CubbyEntityQuery().entities(for: recipes)
+    }
+
+    func entities(matching string: String) async throws -> [CubbyEntity] {
+        let client = try await IntentContext.client()
+        return try await client.search(string, kinds: [.recipe], limit: 10).compactMap(CubbyEntity.init(hit:))
+    }
+
+    func suggestedEntities() async throws -> [CubbyEntity] {
+        try await entities(for: RecentEntities.ids())
+    }
+}
+
+struct CookRecipeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Cook a Recipe"
+    static let description = IntentDescription(
+        "Opens a recipe's cooking steps at the last position on this device.")
+    static let supportedModes: IntentModes = .foreground(.immediate)
+
+    @Parameter(title: "Recipe", query: RecipeIntentQuery())
+    var recipe: CubbyEntity
+
+    nonisolated static var parameterSummary: some ParameterSummary {
+        Summary("Cook \(\.$recipe)")
+    }
+
+    func perform() async throws -> some IntentResult {
+        guard recipe.kind == .recipe else { throw IntentContext.Failure.notFound("recipe") }
+        let recipeID = recipe.id
+        try await MainActor.run {
+            guard let model = AppModel.active else { throw IntentContext.Failure.signedOut }
+            model.navigator.open(.entity(.recipe, id: recipeID))
+            model.recipeCooking.pending = .init(recipeID: recipeID)
+        }
+        RecentEntities.record(recipeID)
+        return .result()
+    }
+}
+
 nonisolated struct CubbyShortcuts: AppShortcutsProvider {
     static let shortcutTileColor: ShortcutTileColor = .navy
 
@@ -270,6 +313,12 @@ nonisolated struct CubbyShortcuts: AppShortcutsProvider {
             phrases: ["Look up a code in \(.applicationName)"],
             shortTitle: "Look up",
             systemImageName: "number.square"
+        )
+        AppShortcut(
+            intent: CookRecipeIntent(),
+            phrases: ["Cook a recipe in \(.applicationName)"],
+            shortTitle: "Cook",
+            systemImageName: "frying.pan"
         )
     }
 }
