@@ -3873,6 +3873,14 @@ Wrong), and Find suggestions, which estimates and starts a Sweep. A
 collapsible Automatic rules section lists each rule's state, measured
 precision and member switch (`suggestions_read.rules`/`setRule`; On only when
 eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
+Every multiselect filter, including Clean, offers **is / is not** through the
+shared filter editor. Excluded column values use the shared `__not__:` state
+prefix and `<column>Exclude` URL parameter. Quick pickers edit included values
+while preserving exclusions in the shared editor. The list API and MCP accept
+`where[column]` conditions with `in`, `notIn`, `min`, `max` and `search`;
+all supplied parts must hold. `in` and `notIn` each accept up to 200 column
+values. `notIn` rejects a row if any non-null value matches, including any
+member of a multi-valued column; null and absent values pass exclusion.
 Every entity list batches the same queue's pending counts and opens its shared
 inline review; detail pages show a scoped Suggestions section. Family declarations
 expand every affected record: both endpoints of connections and pairs, reference

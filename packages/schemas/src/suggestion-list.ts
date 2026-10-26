@@ -288,6 +288,8 @@ export type SuggestionListRow = z.infer<typeof suggestionListRow>;
 /** One column's condition; every given part must hold. */
 export const suggestionColumnFilter = z.object({
   in: z.array(suggestionColumnValue).max(200).optional(),
+  /** Exclude any matching non-null value; null and absent values pass. */
+  notIn: z.array(suggestionColumnValue).max(200).optional(),
   min: z.union([z.number(), z.string()]).optional(),
   max: z.union([z.number(), z.string()]).optional(),
   /** Case-insensitive substring of a text column. */

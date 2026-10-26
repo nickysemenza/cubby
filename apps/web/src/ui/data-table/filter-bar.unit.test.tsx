@@ -83,6 +83,50 @@ const openPanel = () =>
   fireEvent.click(screen.getByRole("button", { name: "Filters" }));
 
 describe("FilterBar", () => {
+  it("edits both sides of a rosterless multiselect without losing either", async () => {
+    const onChange = vi.fn();
+    render(
+      <StatefulBar
+        fields={[
+          {
+            key: "field",
+            label: "Field",
+            type: "multiselect",
+            freeText: true,
+            exclude: true,
+          },
+        ]}
+        onChange={onChange}
+        editRequest={{ key: "field" }}
+        initial={[
+          {
+            id: "field",
+            field: "field",
+            operator: "is_any_of",
+            values: ["name", `${FILTER_NOT_PREFIX}model`],
+          },
+        ]}
+      />,
+    );
+    const input = await screen.findByRole("textbox", { name: "Filter Field" });
+    expect(input).toHaveValue("name");
+    fireEvent.click(screen.getByRole("button", { name: "is not" }));
+    expect(input).toHaveValue("model");
+    fireEvent.change(input, { target: { value: "model, barcode" } });
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({
+        field: "field",
+        values: [
+          "name",
+          `${FILTER_NOT_PREFIX}model`,
+          `${FILTER_NOT_PREFIX}barcode`,
+        ],
+      }),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "is" }));
+    expect(input).toHaveValue("name");
+  });
+
   // Failure modes: an inactive filter rendered as a chip ("any" noise); an
   // edit that waits for Apply; the panel losing the active filters' place.
   it("shows only active filters as chips and reaches the rest through the panel", async () => {
