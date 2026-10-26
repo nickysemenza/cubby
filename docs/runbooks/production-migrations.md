@@ -126,8 +126,14 @@ not performed; migration success alone is not deployment verification.
 ## Derived values cutover
 
 `0037_derived_values` (ADR 0021) runs as one ordinary transaction with a
-two-second lock acquisition timeout: a writer holding a needed lock fails the
-migration for replay instead of queueing behind it. It creates `DerivedValue`,
+30-second lock acquisition timeout and first takes `ACCESS EXCLUSIVE` on every
+table it alters, drops, triggers or writes. A timeout or deadlock rolls the
+whole migration back for replay. In production the running Worker's queue
+traffic deadlocked against that lock statement on every attempt; the migration
+was applied from an operator machine (`application_name=cubby-migrate-0037`)
+while a sidecar terminated the backends in `pg_blocking_pids` of that
+connection every 100 ms, which is acceptable under the non-graceful cutover.
+Deploy afterwards finds the migration applied and only ships the Worker. It creates `DerivedValue`,
 `DerivedDirty` and the `DerivedTicket` sequence; drops `EntityQuality` and
 `EntityQualityCheck` (disposable, rebuilt by the drain); adds the generated
 `AiEvaluation.slotKey`, cancels older duplicate open evaluations per slot
