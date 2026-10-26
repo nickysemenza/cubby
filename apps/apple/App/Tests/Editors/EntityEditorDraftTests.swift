@@ -37,20 +37,58 @@ struct EntityEditorDraftTests {
         #expect(entry.createBody()["observedOn"]?.stringValue == PlainDate(.now).rawValue)
     }
 
-    /// The sheet asks `DraftDismissalState` with `isDirty = draft != initialDraft`; an untouched
-    /// create dismisses at once, a typed-into one needs Discard.
+    /// Cancel and its Escape shortcut use the model's dirty state. The system dismissal dialog
+    /// uses the same flag for swipe-down; an untouched create closes without confirmation.
     @Test func dismissalFollowsTheDraftDiff() {
         let entry = model(.gardenEntry)
-        let initial = entry.draft
         var state = DraftDismissalState()
         var dismissed = false
-        state.request(isDirty: entry.draft != initial, isSaving: false) { dismissed = true }
+        state.request(isDirty: entry.isDirty, isSaving: false) { dismissed = true }
         #expect(dismissed)
 
         entry.draft["notes"] = .string("Aphids on the lower leaves")
         dismissed = false
-        state.request(isDirty: entry.draft != initial, isSaving: false) { dismissed = true }
+        state.request(isDirty: entry.isDirty, isSaving: false) { dismissed = true }
         #expect(!dismissed)
         #expect(state.confirmation == .discardChanges)
+    }
+
+    @Test func revertedDraftClosesImmediatelyAndInvalidDraftStillAsksToDiscard() {
+        let entry = model(.gardenEntry, prefill: ["locationId": "LOC-2345"])
+        entry.draft["notes"] = "Inspect the leaves"
+        entry.draft["notes"] = .null
+        var state = DraftDismissalState()
+        var dismissed = false
+        state.request(isDirty: entry.isDirty, isSaving: false) { dismissed = true }
+        #expect(dismissed)
+        #expect(state.confirmation == nil)
+
+        entry.draft["locationId"] = .null
+        #expect(!entry.canSave)
+        dismissed = false
+        state.request(isDirty: entry.isDirty, isSaving: false) { dismissed = true }
+        #expect(!dismissed)
+        #expect(state.confirmation == .discardChanges)
+    }
+
+    @Test func stagedValuesAndPhotosNeedConfirmationWhileWritesBlockDismissal() {
+        let entry = model(.gardenEntry, prefill: ["locationId": "LOC-2345"])
+        #expect(entry.stage(["notes": "Review this observation"]))
+        var state = DraftDismissalState()
+        var dismissed = false
+        state.request(isDirty: entry.isDirty, isSaving: true) { dismissed = true }
+        #expect(!dismissed)
+        #expect(state.confirmation == nil)
+        state.request(isDirty: entry.isDirty, isSaving: false) { dismissed = true }
+        #expect(!dismissed)
+        #expect(state.confirmation == .discardChanges)
+
+        let product = model(.product)
+        #expect(!product.isDirty)
+        product.pendingUploads = [ImageCode("IMG-2345")]
+        var photoState = DraftDismissalState()
+        photoState.request(isDirty: product.isDirty, isSaving: false) { dismissed = true }
+        #expect(!dismissed)
+        #expect(photoState.confirmation == .discardChanges)
     }
 }

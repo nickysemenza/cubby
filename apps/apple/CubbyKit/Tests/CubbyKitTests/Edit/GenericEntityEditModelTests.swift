@@ -22,6 +22,41 @@ private final class EditStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityEditModel", .serialized)
 @MainActor
 struct GenericEntityEditModelTests {
+    @Test func dirtyStateTracksChangesAgainstSeededDefaultsAndPrefills() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.gardenEntry],
+            mode: .create(prefill: ["locationId": "LOC-2345"]), client: try makeClient())
+        #expect(!model.isDirty)
+        #expect(model.draft["observedOn"] != .null)
+        model.markEdited("notes")
+        #expect(!model.isDirty)
+        model.draft["locationId"] = .null
+        #expect(model.isDirty)
+        #expect(!model.canSave)
+        model.draft["locationId"] = "LOC-2345"
+        #expect(!model.isDirty)
+        #expect(model.stage(["notes": "Inspect the lower leaves"]))
+        #expect(model.isDirty)
+    }
+
+    @Test func dirtyStateIncludesImageOnlyChangesAndTheirReversal() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"),
+            client: try makeClient(), original: Self.productOriginal)
+        #expect(!model.isDirty)
+        model.pendingUploads = [ImageCode("IMG-5678")]
+        #expect(model.isDirty)
+        model.pendingUploads = []
+        model.removedImages = [ImageCode("IMG-3456")]
+        model.imageOrder.removeAll { $0 == ImageCode("IMG-3456") }
+        #expect(model.isDirty)
+        model.removedImages = []
+        model.imageOrder = model.originalImageOrder.reversed()
+        #expect(model.isDirty)
+        model.imageOrder = model.originalImageOrder
+        #expect(!model.isDirty)
+    }
+
     @Test func refusedAccountFieldsHaveNoEditorAndBecomeEditableForCreditCards() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.financialAccount], mode: .update(id: "FAC-2345"),
@@ -244,6 +279,9 @@ struct GenericEntityEditModelTests {
         #expect(model.draft["spendingCategoryId"] == .string("SPC-4K7M"))
         #expect(try model.patch().values["spendingCategoryId"] == nil)
         #expect(try model.patch().values["notes"] == .string("Unsaved sibling"))
+        #expect(model.isDirty)
+        model.draft["notes"] = "Saved note"
+        #expect(!model.isDirty)
     }
 
     @Test func inheritedReadDoesNotBecomeStoredDraftOrUnchangedPatch() throws {
@@ -478,6 +516,7 @@ struct GenericEntityEditModelTests {
         await model.load()
         #expect(model.original != nil)
         #expect(model.loadError == nil)
+        #expect(!model.isDirty)
     }
 
     /// Update editors open with the detail projection as a seed. When the fresh read fails, that
@@ -518,6 +557,48 @@ struct GenericEntityEditModelTests {
         #expect(model.bannerError == nil)
         #expect(model.draft["name"] == "x")
         #expect(model.savedID == nil)
+        #expect(model.isDirty)
+    }
+
+    @Test func kernelValidationPathsReachFieldsWithoutHidingOtherIssues() async throws {
+        defer { EditStub.handler.withLock { $0 = nil } }
+        _ = capture { _ in
+            (
+                400,
+                Data(
+                    #"{"code":"VALIDATION","message":"Invalid input","validationIssues":[{"code":"custom","path":["data","name"],"message":"Choose a longer name"},{"code":"custom","path":["name"],"message":"Name is reserved"},{"code":"custom","path":[],"message":"Record cannot be saved"},{"code":"custom","path":["data","unknownField"],"message":"Unsupported field"}]}"#
+                        .utf8)
+            )
+        }
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"),
+            client: try makeClient(), original: Self.productOriginal)
+        model.draft["name"] = "x"
+        #expect(!(await model.save()))
+        #expect(model.fieldErrors == ["name": "Choose a longer name; Name is reserved"])
+        #expect(model.bannerError == "Record cannot be saved\ndata.unknownField: Unsupported field")
+        #expect(model.draft["name"] == "x")
+        #expect(model.isDirty)
+    }
+
+    @Test func validationForUnavailableFieldsRemainsVisibleAsASaveFailure() async throws {
+        defer { EditStub.handler.withLock { $0 = nil } }
+        _ = capture { _ in
+            (
+                400,
+                Data(
+                    #"{"code":"VALIDATION","message":"Invalid input","validationIssues":[{"code":"custom","path":["data","id"],"message":"Record no longer exists"}]}"#
+                        .utf8)
+            )
+        }
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"),
+            client: try makeClient(), original: Self.productOriginal)
+        model.draft["name"] = "New name"
+        #expect(!(await model.save()))
+        #expect(model.fieldErrors.isEmpty)
+        #expect(model.bannerError == "data.id: Record no longer exists")
+        #expect(model.draft["name"] == "New name")
     }
 
     @Test func imageOrderTravelsOnlyWhenReordered() async throws {

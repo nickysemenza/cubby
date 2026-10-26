@@ -58,7 +58,9 @@ struct EntityFieldControl: View {
             Text(error)
                 .font(.caption)
                 .foregroundStyle(FieldGuideTokens.destructive)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel("\(field.label) error: \(error)")
+                .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key).error")
         }
     }
 
