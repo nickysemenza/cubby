@@ -662,7 +662,8 @@ struct PhotoImportFlowTests {
         PhotoRouteTestProtocol.response.withLock {
             $0 = Data(
                 (statusCode == 200
-                    ? json : "{\"code\":\"UPSTREAM_ERROR\",\"message\":\"Synthetic lookup refusal\"}").utf8)
+                    ? "{\"ok\":true,\"data\":\(json)}"
+                    : "{\"code\":\"UPSTREAM_ERROR\",\"message\":\"Synthetic lookup refusal\"}").utf8)
         }
         PhotoRouteTestProtocol.statusCode.withLock { $0 = statusCode }
         let configuration = URLSessionConfiguration.ephemeral

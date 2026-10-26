@@ -138,6 +138,18 @@ Check the executed test count: `TEST SUCCEEDED` with zero tests is not validatio
 When only the selector changes, `test-without-building` reuses the existing test
 bundles and DerivedData without compiling again.
 
+For the full iOS App target, select `-only-testing:Cubby-iOS-Tests` with `test`;
+repeat with `test-without-building` against the same build inputs. Check the
+executed count and issue count in the result bundle, including repeated runs.
+`pnpm apple check app` compiles the target but does not execute its tests.
+
+Network fixtures must follow the operation wire contract: successful JSON is
+`{ok: true, data: ...}`, while HTTP errors and deliberately malformed responses
+retain their original bodies. Otherwise a negative photo test can fail at the
+transport envelope instead of reaching the matching or routing guard it owns.
+URLSession may supply request bytes through `httpBodyStream` on the simulator;
+stubs that inspect operation inputs must handle both that stream and `httpBody`.
+
 1. Edit a `CubbyKit` algorithm or model and run its focused Swift test. For a
    networked native change, run the affected headless journey with
    `pnpm test:e2e:sim -- --headless` after batching related edits.
