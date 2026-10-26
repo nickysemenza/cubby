@@ -60,6 +60,8 @@ export interface VectorStorePort {
 }
 
 const MUTATION_BATCH = 1000;
+/** Vectorize rejects `getByIds` with more than 20 ids (VECTOR_GET_ERROR 40007). */
+export const VECTOR_GET_BATCH = 20;
 const queryOptions = (options: VectorQueryOptions): VectorizeQueryOptions => ({
   topK: Math.min(100, Math.max(1, options.topK)),
   returnMetadata: "none",
@@ -109,7 +111,7 @@ export const productionVectorStore: VectorStorePort = {
   },
   async getByIds(ids) {
     const vectors = [];
-    for (const batch of chunk(ids, MUTATION_BATCH)) {
+    for (const batch of chunk(ids, VECTOR_GET_BATCH)) {
       const observed = await requireIndex().getByIds(batch);
       vectors.push(
         ...z.array(observationSchema).parse(
@@ -198,6 +200,11 @@ export function createInMemoryVectorizeIndex(): VectorizeIndexBinding & {
         : { count: 0, matches: [] };
     },
     async getByIds(ids) {
+      // Same limit as the real index, so batched callers fail here too.
+      if (ids.length > VECTOR_GET_BATCH)
+        throw new Error(
+          `VECTOR_GET_ERROR (code = 40007): too many ids in payload; max id count is ${VECTOR_GET_BATCH}, got ${ids.length}`,
+        );
       return ids.flatMap((id) => {
         const vector = vectors.get(id);
         return vector ? [vector] : [];
