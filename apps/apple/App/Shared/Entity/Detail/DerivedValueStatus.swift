@@ -52,3 +52,120 @@ struct DerivedProvenanceCaption: View {
         }
     }
 }
+
+/// The explanation endpoint recomputes one record without publishing it.
+struct DerivedExplanationSummary: View {
+    let explanation: DerivedExplanation
+    let field: FieldDescriptor
+
+    private var stored: JSONValue? { try? JSONValue(encoding: explanation.stored) }
+    private var live: JSONValue? {
+        explanation.live.flatMap { try? JSONValue(encoding: $0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            if case .unrecognized(let state) = explanation.meta.state {
+                Text("Unsupported calculation state: \(state)").foregroundStyle(.secondary)
+            }
+            if ["stale", "waiting"].contains(explanation.meta.state.rawValue) {
+                Text("Updating").foregroundStyle(FieldGuideTokens.info)
+            }
+            LabeledContent("Published") {
+                if explanation.meta.state.rawValue == "missing" {
+                    Text("Not published")
+                } else {
+                    value(stored)
+                }
+            }
+            if let live {
+                if stored == live {
+                    Text("Live calculation matches the published value.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    LabeledContent("Live now") { value(live) }
+                }
+            } else {
+                Text("No live value to display.").foregroundStyle(.secondary)
+            }
+            if let asOf = explanation.meta.asOf, let label = DatePresentation.absolute(of: asOf) {
+                Text("Published \(label)").foregroundStyle(.secondary)
+            }
+            if explanation.meta.state.rawValue == "failed" {
+                Text("Calculation failed").foregroundStyle(FieldGuideTokens.warning)
+                if let error = explanation.meta.error.valueIfPresent ?? nil {
+                    Text(error).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .font(.caption)
+        .accessibilityIdentifier("field.explanation.derived")
+    }
+
+    @ViewBuilder
+    private func value(_ value: JSONValue?) -> some View {
+        if let value {
+            if let text = EntityFieldValue.text(value, field: field) {
+                Text(text)
+            } else {
+                switch value {
+                case .array, .object:
+                    DisclosureGroup("Evidence") { ExplanationEvidenceValue(value: value) }
+                default:
+                    ExplanationEvidenceValue(value: value)
+                }
+            }
+        } else {
+            Text("Unavailable")
+        }
+    }
+}
+
+#Preview("Structured calculation evidence") {
+    if let field = EntityCatalog[.product].field("dataQuality") {
+        let fixture: JSONValue = [
+            "meta": ["state": "waiting", "asOf": .null, "decidedBy": .null],
+            "stored": ["rulesVersion": 1, "score": 50, "checks": []],
+            "live": ["rulesVersion": 1, "score": 100, "checks": []],
+        ]
+        if let explanation = try? fixture.decoded(DerivedExplanation.self) {
+            DerivedExplanationSummary(explanation: explanation, field: field)
+                .padding(FieldGuideTokens.Space.md)
+        }
+    }
+}
+
+#Preview("Published and live calculations") {
+    if let field = EntityCatalog[.product].field("price") {
+        let fixtures: [JSONValue] = [
+            [
+                "meta": ["state": "stale", "asOf": "2026-01-01T12:00:00.000Z", "decidedBy": .null],
+                "stored": 12, "live": 18,
+            ],
+            ["meta": ["state": "fresh", "asOf": .null, "decidedBy": .null], "stored": 0, "live": 0],
+            [
+                "meta": ["state": "missing", "asOf": .null, "decidedBy": .null], "stored": .null,
+                "live": .null,
+            ],
+            [
+                "meta": [
+                    "state": "failed", "asOf": .null, "decidedBy": .null,
+                    "error": "Synthetic calculation failure",
+                ],
+                "stored": 12, "live": .null,
+            ],
+            [
+                "meta": ["state": "future-state", "asOf": .null, "decidedBy": .null],
+                "stored": 12, "live": .null,
+            ],
+        ]
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+            ForEach(Array(fixtures.enumerated()), id: \.offset) { _, fixture in
+                if let explanation = try? fixture.decoded(DerivedExplanation.self) {
+                    DerivedExplanationSummary(explanation: explanation, field: field)
+                }
+            }
+        }
+        .padding(FieldGuideTokens.Space.md)
+    }
+}

@@ -44,9 +44,14 @@ recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
 (one unit from the chosen shelf only, both allocations, the one committed
 photo group and its Product, and exactly the selected location and two plantings) before writing the usual checksummed bundle under `artifacts/sim-qa-e2e/`. Add
-`--hold` to keep the server and simulator up after seeding (ids in `qa-ids.json`; `touch qa.stop`
-ends it) for manual driving. Scroll to a target by counting from `scroll bottom`, not with
+`--hold` to skip the scripted journeys and keep the server and simulator up after seeding
+(ids in `qa-ids.json`; `touch qa.stop` ends it) for manual driving. A held session is not
+a passing journey. Scroll to a target by counting from `scroll bottom`, not with
 `--until` on a lazily loaded detail page.
+
+`pnpm test:e2e:sim -- --qa --journey qa-derived-explanation` checks that a Product
+row menu retains both Explain and Use inherited, opens the published/live
+comparison, and closes back to the same record without applying an override.
 
 `pnpm test:e2e:sim -- --qa --journey qa-run-evidence` checks the sole hosted
 Run evidence sheet against the synthetic approval Run: enter from the native
