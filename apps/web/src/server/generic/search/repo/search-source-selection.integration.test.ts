@@ -10,7 +10,7 @@ import {
   isFanoutInput,
   storedDerived,
 } from "~/server/db/derived-declarations";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -22,6 +22,7 @@ import {
 
 import {
   prepareSearchDocuments,
+  publishPreparedSearchDocuments,
   refreshSearchDocument,
   searchCoverageIncomplete,
 } from "./search-document";
@@ -121,6 +122,51 @@ describe("search source selection", () => {
     ).toEqual([{ id: subject.entityId, title: "Synthetic source gauge" }]);
     expect(measured.result.missing).toEqual([]);
     expect(measured.tables).not.toContain("GardenEntry");
+  });
+
+  it("publishes a search page without one database write per document", async () => {
+    const refs: Parameters<typeof prepareSearchDocuments>[1][number][] = [];
+    for (let index = 0; index < 8; index++) {
+      const item = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: `Synthetic publication ${index}` }),
+        ctx.actor,
+      );
+      refs.push({ entityKind: "product", entityId: item.entityId });
+    }
+    const prepared = await prepareSearchDocuments(ctx.db, refs);
+    const single = await countTestDbQueries(() =>
+      publishPreparedSearchDocuments(ctx.db, {
+        entries: prepared.entries.slice(0, 1),
+        missing: [],
+      }),
+    );
+    const page = await countTestDbQueries(() =>
+      publishPreparedSearchDocuments(ctx.db, prepared),
+    );
+    expect(page.result).toHaveLength(8);
+    expect(page.result.every((row) => row.status === "upserted")).toBe(true);
+    expect(page.queryCount).toBe(single.queryCount);
+    const stored = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM "SearchDocument"
+       WHERE "entityId" = ANY(${uuidArrayParam(refs.map((ref) => ref.entityId))})
+         AND "deletedAt" IS NULL`);
+    expect(stored.rows[0]?.count).toBe(8);
+    const missing = prepared.entries
+      .filter((_, index) => index % 3 === 0)
+      .map((entry) => entry.source);
+    const retained = prepared.entries.filter((_, index) => index % 3 !== 0);
+    const mixed = await publishPreparedSearchDocuments(ctx.db, {
+      entries: retained,
+      missing,
+    });
+    expect(mixed.filter((row) => row.status === "missing")).toHaveLength(3);
+    expect(mixed.filter((row) => row.status === "upserted")).toHaveLength(5);
+    const removed = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM "SearchDocument"
+       WHERE "entityId" = ANY(${uuidArrayParam(missing.map((ref) => ref.entityId))})
+         AND "deletedAt" IS NOT NULL`);
+    expect(removed.rows[0]?.count).toBe(3);
   });
 
   it("retains source columns and deduplicates mixed requested records", async () => {

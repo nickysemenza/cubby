@@ -682,6 +682,7 @@ async function upsertSearchDocumentBatch(
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "normalizedText", "sourceHash"
     )
+    ORDER BY input."entityKind", input."entityId"
     ON CONFLICT ("entityKind", "entityId") WHERE "deletedAt" IS NULL DO UPDATE SET
       title = EXCLUDED.title,
       subtitle = EXCLUDED.subtitle, "typeHint" = EXCLUDED."typeHint",
@@ -782,18 +783,30 @@ export async function publishPreparedSearchDocuments(
       entityRefKey(b.entityKind, b.entityId),
     ),
   );
+  const entriesByRef = new Map(
+    prepared.entries.map((entry) => [
+      entityRefKey(entry.source.entityKind, entry.source.entityId),
+      entry,
+    ]),
+  );
+  let pending: typeof prepared.entries = [];
+  const flush = async () => {
+    results.push(...(await upsertSearchDocumentBatch(db, pending)));
+    pending = [];
+  };
   for (const ref of refs) {
-    const entry = prepared.entries.find(
-      (entry) =>
-        entry.source.entityKind === ref.entityKind &&
-        entry.source.entityId === ref.entityId,
-    );
-    if (entry) results.push(...(await upsertSearchDocumentBatch(db, [entry])));
-    else
+    const entry = entriesByRef.get(entityRefKey(ref.entityKind, ref.entityId));
+    if (entry) pending.push(entry);
+    else {
+      // Preserve the global lock order across upserts and missing documents.
+      // Live runs share one batch instead of one round trip per document.
+      await flush();
       results.push(
         await markSearchDocumentMissing(db, ref.entityKind, ref.entityId),
       );
+    }
   }
+  await flush();
   return results;
 }
 
