@@ -1926,6 +1926,12 @@ read the household; task counts also group once across it so the tree does not
 add another dependent SQL stage. Count and unrequested rollup reads still skip
 these bindings.
 
+Product matched/mismatched quantity filters use the published Quantity Variance,
+as its sort key does. Existing live stock and direct-Expense eligibility gates
+remain; a null or missing published variance has no comparison state. An edit
+keeps the previous membership until publication instead of preparing catalog-wide
+stock and ledger folds in the filter.
+
 Create/update responses are bounded receipts across browser, native and MCP,
 including `entity.commands` batches. They return the stable shortcode, canonical
 saved scalar values limited to explicitly submitted fields, `appliedFields`,
@@ -2311,8 +2317,7 @@ one shape:
   may be `{ value, set }`: `set` selects `("id", "value")` for the whole list
   and its filters match `id IN (SELECT "id" FROM set WHERE …)`, so one
   set-based walk serves the filter while sort, group, and projection read the
-  per-row `value`, which must agree with it row for row (product
-  `ledgerExpectedQuantity` shares one kit walk). A filter's `value IN (…)`
+  per-row `value`, which must agree with it row for row. A filter's `value IN (…)`
   pushes into a set whose branches expose `value` from an indexed column, so
   purchase `effectivePurchaser` reads only the requested parties'
   candidates before confirming them. A `text` value that holds a record's

@@ -28,11 +28,9 @@ import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
 import { productList } from "~/server/domains/product/repo/crud";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import {
-  comparableQuantityHistoryFilterSql,
-  expectedQuantityFilterSql,
   expectedQuantityReadSql,
   expectedQuantitySql,
-  onHandUnitsFilterSql,
+  quantityVarianceSql,
 } from "~/server/domains/product/repo/quantity-ledger";
 import { projectList } from "~/server/domains/project/repo/lookup";
 import {
@@ -245,19 +243,13 @@ describe("state predicates re-declared as values", () => {
         ).data.map(({ id }) => id),
       );
 
-    // The retired `quantityVarianceState` predicate, without a read context.
+    // Live scalar calculation is the oracle for published filter membership.
     const comparable = sql`(EXISTS (SELECT 1 FROM "InventoryEntry" ie JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL)
       OR EXISTS (SELECT 1 FROM "Location" ol WHERE ol."productId" = ${product.id} AND ol."deletedAt" IS NULL))
-      AND EXISTS (SELECT 1 FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL)
-      AND ${comparableQuantityHistoryFilterSql(product.id)}`;
-    const onHand = onHandUnitsFilterSql(product.id);
-    const expected = expectedQuantityFilterSql(product.id);
-    const matched = await retired(
-      sql`${comparable} AND ${onHand} = ${expected}`,
-    );
-    const mismatched = await retired(
-      sql`${comparable} AND ${onHand} <> ${expected}`,
-    );
+      AND EXISTS (SELECT 1 FROM "Expense" e WHERE e."productId" = ${product.id} AND e."deletedAt" IS NULL)`;
+    const variance = sql.raw(quantityVarianceSql('"Product"'));
+    const matched = await retired(sql`${comparable} AND ${variance} = 0`);
+    const mismatched = await retired(sql`${comparable} AND ${variance} <> 0`);
     expect(matched).toEqual([all[0]!.id]);
     expect(mismatched).toEqual([all[1]!.id]);
     expect(await listed({ quantityVarianceFilter: ["matched"] })).toEqual(
@@ -316,6 +308,26 @@ describe("state predicates re-declared as values", () => {
       ).toEqual(old);
     }
     expect(await listed({ expectedQuantityMax: -1 })).toEqual([all[5]!.id]);
+
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic later acquisition",
+        productId: all[0]!.id,
+        productQuantity: 1,
+        cost: 1,
+      }),
+    );
+    // Membership follows the published variance until the drain catches up.
+    expect(await listed({ quantityVarianceFilter: ["matched"] })).toEqual(
+      matched,
+    );
+    await drainStoredDerived(ctx.db);
+    expect(await listed({ quantityVarianceFilter: ["matched"] })).toEqual([]);
+    expect(await listed({ quantityVarianceFilter: ["mismatched"] })).toEqual(
+      sorted([all[0]!.id, all[1]!.id]),
+    );
   });
 
   it("orders purchase reconciliation verdicts disjointly, as the ORs did", async () => {

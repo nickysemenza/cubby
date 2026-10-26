@@ -236,7 +236,6 @@ import {
   loadProductPickerQuantities,
   onHandUnitsFilterSql,
   onHandUnitsSql,
-  comparableQuantityHistoryFilterSql,
 } from "./quantity-ledger";
 import { productStockContext } from "./stock-context";
 import type { ProductDeepDB, ProductListDB } from "./types";
@@ -351,8 +350,7 @@ const productScaffold = listScaffold("product", product, {
     // note on the column in app/products/productlist.tsx for why the id is
     // the half that cannot move.
     expenseCount: productExpenseCountFilterSql(product.id),
-    // The range filter reads the catalog's one shared kit walk; the row value
-    // walks each product's kits.
+    // Ledger filters and sorts use the published typed projections.
     ledgerExpectedQuantity: storedDerivedSql(
       "product",
       "ledgerExpectedQuantity",
@@ -363,23 +361,17 @@ const productScaffold = listScaffold("product", product, {
       "quantityVariance",
       product.id,
     ),
-    // Variance only means reconciliation when both physical stock and ledger
-    // evidence exist. Locations count as on-hand here because the compared SQL
-    // projection counts them too.
-    quantityVarianceState: listReadValue((read) => {
-      const onHand = onHandUnitsFilterSql(product.id, read);
-      const expected = expectedQuantityFilterSql(product.id);
-      return sql`CASE WHEN ${and(
-        or(
-          inArray(product.id, productIdsWithLiveInventory),
-          inArray(product.id, productIdsServingAsLocations),
-        ),
-        inArray(product.id, productIdsWithExpenses),
-        comparableQuantityHistoryFilterSql(product.id),
-      )} THEN CASE ${onHand} = ${expected}
+    // Live stock/direct-Expense gates remain; state uses the published variance,
+    // including null for incomparable quantities, without preparing live folds.
+    quantityVarianceState: sql`CASE WHEN ${and(
+      or(
+        inArray(product.id, productIdsWithLiveInventory),
+        inArray(product.id, productIdsServingAsLocations),
+      ),
+      inArray(product.id, productIdsWithExpenses),
+    )} THEN CASE ${storedDerivedSql("product", "quantityVariance", product.id)} = 0
         WHEN true THEN ${productQuantityVarianceState.enum.matched}::text
-        WHEN false THEN ${productQuantityVarianceState.enum.mismatched}::text END END`;
-    }),
+        WHEN false THEN ${productQuantityVarianceState.enum.mismatched}::text END END`,
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
     upcPresence: inArray(
