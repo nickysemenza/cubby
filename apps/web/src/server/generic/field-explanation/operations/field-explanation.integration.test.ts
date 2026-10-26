@@ -873,6 +873,27 @@ describe("derived field explanations against canonical records", () => {
       }),
     ]);
 
+    const unitPrice = await explainField(requestContext, {
+      entityKind: "product",
+      entityId: product.id,
+      field: "unitPrice",
+      surface: "detail",
+    });
+    expect(unitPrice.value).toBe("$20.00/ea");
+    expect(unitPrice.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Complete unit conversion graph",
+          value: expect.arrayContaining([
+            expect.objectContaining({
+              a: { value: 1, unit: "each" },
+              b: { value: 20, unit: "dollar" },
+            }),
+          ]),
+        }),
+      ]),
+    );
+
     const count = await explainField(requestContext, {
       entityKind: "product",
       entityId: product.id,
