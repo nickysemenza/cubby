@@ -33,10 +33,13 @@ struct NavigationTests {
         for destination in destinations {
             if let entity = destination.entity {
                 #expect(EntityCatalog.all.contains { $0.key == entity })
-                if entity.nativeActions.contains(.list) {
+                if EntityCatalog.browsable.contains(where: { $0.key == entity }),
+                    entity.nativeActions.contains(.list)
+                {
                     #expect(destination.nativeDestination == .entity(entity))
                     continue
                 }
+                #expect(destination.nativeDestination == nil)
             }
             if destination.nativeDestination == nil {
                 let url = WebHandoff(baseURL: server).url(destination.webTarget)
@@ -51,6 +54,15 @@ struct NavigationTests {
         #expect(destinations.first { $0.route == "/graph" }?.nativeDestination == .section(.graph))
         #expect(destinations.first { $0.route == "/work-queue" }?.nativeDestination == nil)
         #expect(destinations.first { $0.route == "/problems" }?.nativeDestination == nil)
+    }
+
+    @Test func nonBrowsableEntityHasNoNativeSidebarOrLibraryList() throws {
+        let destination = try #require(
+            SidebarManifest.sections.flatMap(\.destinations).first { $0.entity == .job })
+        #expect(EntityKey.job.nativeActions.contains(.list))
+        #expect(!EntityCatalog.browsable.contains { $0.key == .job })
+        #expect(destination.nativeDestination == nil)
+        #expect(destination.webTarget == .route(path: destination.route))
     }
 
     @Test func sidebarEntitySelectionOwnsBrowseDestination() {

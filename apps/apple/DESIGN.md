@@ -130,7 +130,7 @@ server diagnostic. Retry is offered only when the caller retained the same actio
 its original control remains the retry path. Session and server changes discard retained retries.
 API diagnostics retain the server's complete diagnostic body, including nested causes.
 
-Library's recent-photo preview loads through `PhotoLibraryIO`, never a synchronous PhotoKit fetch on the main actor. Cold Photos-library initialization can wait on its database and stall the tab transition. Keep the Library controls available with a labelled preview placeholder while the fetch runs, and ignore results after its view task is cancelled.
+Library opens the declared browse roots directly, grouped and ordered by `SidebarManifest`. Native list rows use `EntityCatalog.browsable`; `nativeBrowse: false` roots and roots without a native list are browser handoff rows under More on web, never native list destinations. Counts use the plain, muted, tabular trailing style above. All photos and Graph remain compact Explore rows after the catalog; Library has no recent-photo thumbnail strip or PhotoKit fetch.
 
 iOS launch uses a static Cubby title on the system grouped background, matching the first runtime frame. Session restoration adds a labelled “Checking sign-in” indicator as soon as SwiftUI renders. Never add a timer or hold launch for branding; the system launch screen cannot animate while the process is starting or paused by a debugger.
 

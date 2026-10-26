@@ -1,17 +1,67 @@
 import CubbyKit
 import SwiftUI
 
-/// Every entity in `EntityCatalog`, grouped by domain line in the order the web rail uses. The
-/// catalog itself is static; the one thing this screen fetches is the per-entity row count, so
-/// each domain reads as "how much is in here" rather than just a directory.
+/// Declared browse roots in shared sidebar order. Native lists stay in the catalog; web-only
+/// roots retain an explicit browser entry point after the native sections.
 struct BrowseRootView: View {
+    var title = "Browse"
+
     @Environment(AppModel.self) private var model
     @State private var query = ""
 
     var body: some View {
         List {
+            ForEach(SidebarManifest.sections) { section in
+                let destinations = section.destinations.filter {
+                    $0.entity != nil && $0.nativeDestination != nil && matchesQuery($0)
+                }
+                if !destinations.isEmpty {
+                    Section {
+                        ForEach(destinations, id: \.route) { destination in
+                            if let key = destination.entity {
+                                row(for: EntityCatalog[key])
+                                    .listRowInsets(browseRowInsets)
+                            }
+                        }
+                    } header: {
+                        headerTitle(section.label, domain: section.domain.map { AppDomain($0) })
+                    }
+                }
+            }
+            if !webDestinations.isEmpty {
+                Section {
+                    ForEach(webDestinations, id: \.route) { destination in
+                        OpenOnWebButton(target: destination.webTarget) {
+                            HStack(spacing: FieldGuideTokens.Space.md) {
+                                if let key = destination.entity {
+                                    DomainMark(key, style: .symbol, size: 15)
+                                        .fieldGuideIconSlot()
+                                }
+                                Text("Open \(destination.label) on web")
+                                    .font(.fieldGuideBody)
+                                Spacer(minLength: FieldGuideTokens.Space.sm)
+                                Image(systemName: "arrow.up.right")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                        }
+                        .accessibilityIdentifier(
+                            "browse.web.\(destination.entity?.rawValue ?? destination.route)"
+                        )
+                        .listRowInsets(browseRowInsets)
+                    }
+                } header: {
+                    headerTitle("More on web")
+                }
+            }
             #if os(iOS)
                 Section {
+                    NavigationLink(value: Route.photosLibrary) {
+                        Label("All photos", systemImage: "photo.on.rectangle.angled")
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .accessibilityIdentifier("library.photos")
+                    .listRowInsets(browseRowInsets)
                     Button {
                         model.navigator.openGraph()
                     } label: {
@@ -23,30 +73,18 @@ struct BrowseRootView: View {
                     headerTitle("Explore")
                 }
             #endif
-            ForEach(AppDomain.allCases) { domain in
-                let group = descriptors(in: domain)
-                if !group.rows.isEmpty || !group.unlisted.isEmpty {
-                    Section {
-                        ForEach(group.rows, id: \.key) { descriptor in
-                            row(for: descriptor)
-                                .listRowInsets(browseRowInsets)
-                        }
-                        if !group.unlisted.isEmpty {
-                            unlistedFootnote(names: group.unlisted)
-                        }
-                    } header: {
-                        header(for: domain)
-                    }
-                }
-            }
         }
         .accessibilityIdentifier("browse.catalog")
         .listStyle(.automatic)
         .fieldGuideScreen()
-        .navigationTitle("Browse")
+        .navigationTitle(title)
         .searchable(text: $query)
         .overlay {
-            if descriptorsMatchingQuery.isEmpty {
+            if !query.isEmpty
+                && !SidebarManifest.sections.flatMap(\.destinations).contains(where: {
+                    $0.entity != nil && matchesQuery($0)
+                })
+            {
                 ContentUnavailableView.search(text: query)
             }
         }
@@ -58,12 +96,6 @@ struct BrowseRootView: View {
         }
     }
 
-    @ViewBuilder
-    private func header(for domain: AppDomain) -> some View {
-        headerTitle(domain.title, domain: domain)
-    }
-
-    @ViewBuilder
     private func headerTitle(_ title: String, domain: AppDomain? = nil) -> some View {
         HStack(spacing: FieldGuideTokens.Space.sm) {
             if let domain { DomainMark(domain) }
@@ -97,18 +129,7 @@ struct BrowseRootView: View {
         #endif
     }
 
-    /// A single quiet line for entities with no native list operation. Generated native actions
-    /// include both resource routes and the explicitly enabled RPC list exceptions.
-    private func unlistedFootnote(names: [String]) -> some View {
-        Text("Also: \(names.joined(separator: ", ")) — available in Search")
-            .font(.fieldGuideLabel)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            .padding(.vertical, FieldGuideTokens.Space.sm)
-            .listRowInsets(browseRowInsets)
-    }
-
-    /// The row owns its own 44pt height, so the list must not add its default vertical padding
-    /// on top of it.
+    /// The row owns its own 44pt height, so the list must not add its default vertical padding.
     private var browseRowInsets: EdgeInsets {
         EdgeInsets(
             top: 0, leading: FieldGuideTokens.Space.lg,
@@ -116,21 +137,16 @@ struct BrowseRootView: View {
         )
     }
 
-    private var descriptorsMatchingQuery: [EntityDescriptor] {
-        guard !query.isEmpty else { return EntityCatalog.all }
-        return EntityCatalog.all.filter { $0.plural.localizedCaseInsensitiveContains(query) }
+    private func matchesQuery(_ destination: SidebarManifest.Destination) -> Bool {
+        query.isEmpty || destination.label.localizedCaseInsensitiveContains(query)
+            || destination.entity.map { EntityCatalog[$0].plural.localizedCaseInsensitiveContains(query) }
+                == true
     }
 
-    /// Split for one domain: `rows` are listable (real `NavigationLink`s), `unlisted` are the
-    /// plural names of everything else in the domain, for the footnote line.
-    private func descriptors(in domain: AppDomain) -> (rows: [EntityDescriptor], unlisted: [String]) {
-        let matches = descriptorsMatchingQuery.filter { $0.key.domain == domain }
-        let rows = matches.filter { $0.key.nativeActions.contains(.list) }.sorted { $0.plural < $1.plural }
-        let unlisted = matches.filter { !$0.key.nativeActions.contains(.list) }.sorted {
-            $0.plural < $1.plural
+    private var webDestinations: [SidebarManifest.Destination] {
+        SidebarManifest.sections.flatMap(\.destinations).filter {
+            $0.entity != nil && $0.nativeDestination == nil && matchesQuery($0)
         }
-        .map(\.plural)
-        return (rows, unlisted)
     }
 }
 
