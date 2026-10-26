@@ -44,6 +44,7 @@ final class SearchModel {
     private(set) var phase: Phase = .idle
     private(set) var recents: [RecentRow] = []
     var lookupOutcome: LookupOutcome?
+    private(set) var lookupError: String?
 
     private let client: CubbyClient
     private let debouncer = SearchDebouncer()
@@ -113,6 +114,7 @@ final class SearchModel {
     /// cancels the lookup and prevents its late result from navigating or replacing the panel.
     func submit() async -> LookupOutcome {
         let raw = query
+        lookupError = nil
         lookupTask?.cancel()
         lookupGeneration += 1
         let generation = lookupGeneration
@@ -123,7 +125,9 @@ final class SearchModel {
             } catch is CancellationError {
                 return .text(raw)
             } catch {
+                guard generation == lookupGeneration, raw == query else { return .text(raw) }
                 Diagnostics.report(error, context: "search.submit")
+                lookupError = error.userMessage
                 return .text(raw)
             }
         }
@@ -171,6 +175,7 @@ final class SearchModel {
     }
 
     private func invalidateCurrentWork() {
+        lookupError = nil
         lookupOutcome = nil
         lookupTask?.cancel()
         lookupTask = nil

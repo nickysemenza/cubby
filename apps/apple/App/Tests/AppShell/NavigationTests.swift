@@ -167,16 +167,17 @@ struct NavigationTests {
         #endif
     }
 
-    @Test func inPlaceEntityLinkRetainsOriginatingHistory() {
+    @Test(arguments: [AppSection.today, .search])
+    func inPlaceEntityLinkRetainsOriginatingHistory(section: AppSection) {
         let navigator = Navigator()
-        navigator.section = .today
-        navigator.paths[.today] = [.needsPhoto(locationID: nil)]
+        navigator.section = section
+        navigator.paths[section] = [.needsPhoto(locationID: nil)]
 
         navigator.openInPlace(.entity(.product, id: "PRD-1"))
 
-        #expect(navigator.section == .today)
+        #expect(navigator.section == section)
         #expect(
-            navigator.paths[.today] == [
+            navigator.paths[section] == [
                 .needsPhoto(locationID: nil),
                 .entityDetail(.product, id: "PRD-1"),
             ])

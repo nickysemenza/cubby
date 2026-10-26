@@ -156,7 +156,11 @@ struct SearchContent: View {
 
     @ViewBuilder
     private var content: some View {
-        if let outcome = search.lookupOutcome {
+        if let error = search.lookupError {
+            LoadFailureView(title: "Couldn't look up code", message: error) {
+                await handleSubmit()
+            }
+        } else if let outcome = search.lookupOutcome {
             ScrollView {
                 codePanel(for: outcome)
                     .padding(FieldGuideTokens.Space.lg)
@@ -296,12 +300,7 @@ struct SearchContent: View {
     private func openEntity(_ key: EntityKey, id: String) {
         RecentEntities.record(id)
         dismissSearch()
-        #if os(iOS)
-            // Search can live under TabView's More controller; its in-place path does not push there.
-            model.navigator.open(.entity(key, id: id))
-        #else
-            model.navigator.openInPlace(.entity(key, id: id))
-        #endif
+        model.navigator.openInPlace(.entity(key, id: id))
     }
 
     private func handleSubmit() async {
@@ -328,7 +327,7 @@ struct SearchContent: View {
             dismissSearch()
             model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
         } catch {
-            model.handle(error)
+            model.handle(error) { await createProduct(code: code) }
         }
     }
 }

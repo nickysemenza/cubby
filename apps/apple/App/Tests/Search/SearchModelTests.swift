@@ -108,6 +108,26 @@ struct SearchModelTests {
     }
 
     @Test
+    func editingTheQueryClearsPublishedResultsBeforeTheNextRequest() async throws {
+        defer { SearchModelStub.handler.withLock { $0 = nil } }
+        SearchModelStub.handler.withLock { handler in
+            handler = { _ in (200, Self.searchPayload(title: "hammer")) }
+        }
+        let model = SearchModel(client: try makeClient())
+        model.query = "hammer"
+        model.retry()
+        await model.searchTask?.waitUnlessCancelled()
+        #expect(Self.resultTitle(in: model.phase) == "hammer")
+
+        model.query = "drill"
+        #expect(model.phase == .searching)
+        #expect(model.searchTask == nil)
+
+        model.query = " "
+        #expect(model.phase == .idle)
+    }
+
+    @Test
     func queryChangeCancelsAStaleSubmittedCodeLookup() async throws {
         defer { SearchModelStub.handler.withLock { $0 = nil } }
         let lookup = Gate()
@@ -128,7 +148,25 @@ struct SearchModelTests {
 
         #expect(outcome == .text("new words"))
         #expect(model.lookupOutcome == nil)
+        #expect(model.lookupError == nil)
         #expect(model.phase == .searching)
+    }
+
+    @Test
+    func submittedLookupFailureIsVisibleUntilTheQueryChanges() async throws {
+        defer { SearchModelStub.handler.withLock { $0 = nil } }
+        SearchModelStub.handler.withLock { handler in
+            handler = { _ in
+                (503, Data(#"{"code":"UPSTREAM","message":"Synthetic lookup unavailable"}"#.utf8))
+            }
+        }
+        let model = SearchModel(client: try makeClient())
+        model.query = "012345678905"
+        _ = await model.submit()
+        #expect(model.lookupError == "UPSTREAM: Synthetic lookup unavailable")
+
+        model.query = "new query"
+        #expect(model.lookupError == nil)
     }
 
     @Test
