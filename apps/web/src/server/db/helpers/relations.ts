@@ -229,25 +229,26 @@ const withProjectAndParentTaskNameOnly = {
   },
 } as const;
 
-/**
- * The identity product a Location IS — the bin, tote or rack itself, as
- * opposed to `inventoryEntries.product`, which is stock held at it. Carries
- * the cover image because a linked location renders from its SKU's photo.
- */
-const productCategoryProjection = {
+/** Compact Product embeds need labels, without classification evidence or stock policy. */
+const productIdentityProjection = {
   brandName: productBrandNameSql(product.brandId).as("brandName"),
+  category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+};
+
+const productCategoryProjection = {
+  ...productIdentityProjection,
   brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
   classificationEvidence: productClassificationEvidenceSql(
     sql`${product.id}`,
   ).as("classificationEvidence"),
-  category: categorySummarySql(sql`${product.categoryId}`).as("category"),
   categoryStockTracking: categoryStockTrackingSql(
     sql`${product.categoryId}`,
   ).as("categoryStockTracking"),
 };
 
+/** A Location's identity SKU; canonical media is resolved separately. */
 const locationIdentityProduct = {
-  extras: productCategoryProjection,
+  extras: productIdentityProjection,
 } as const;
 
 /**
@@ -541,7 +542,7 @@ export const relations = {
             // barcode is derived from its primary `gtin` identifier row.
             product: {
               extras: {
-                ...productCategoryProjection,
+                ...productIdentityProjection,
                 effectivePrice: storedValueOrSql(
                   product.id,
                   "price",

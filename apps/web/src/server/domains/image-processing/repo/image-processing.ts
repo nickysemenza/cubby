@@ -46,7 +46,6 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import {
   generateImageKey,
   PRESIGNED_URL_DEFAULT_EXPIRY_SECONDS,
@@ -76,6 +75,11 @@ import {
   parseImageDescriptionInputFingerprint,
   preferredImageDescriptionPolicy,
 } from "~/server/domains/image-processing/repo/description-policy";
+import {
+  imageRepresentationRowsSql,
+  imageRepresentationRow,
+  imageRepresentationsFromRows,
+} from "~/server/domains/image-processing/repo/image-representations";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
@@ -178,7 +182,10 @@ export function imageProcessingLane(job: {
 // Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
 export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
 // This policy revision changes eligibility, not the cutout format or algorithm.
-const compatibleSubjectLiftOutputs = [1, IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION];
+export const compatibleSubjectLiftOutputs = [
+  1,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+];
 
 /**
  * Jobs are unique by an integer revision. Derive that revision from every
@@ -1899,55 +1906,11 @@ export async function loadImageRepresentations(
   shortcodes: readonly string[],
 ): Promise<Map<string, ImageRepresentations>> {
   if (!shortcodes.length) return new Map();
-  const rows = await unwrapDb(db)
-    .select({
-      shortcode: image.shortcode,
-      key: image.key,
-      useOriginal: image.useOriginal,
-      derivativeKey: imageDerivative.key,
-    })
-    .from(image)
-    .leftJoin(
-      imageDerivative,
-      and(
-        eq(imageDerivative.imageId, image.id),
-        eq(imageDerivative.purpose, "transparent"),
-        eq(imageDerivative.sourceContentHash, image.sha256),
-        inArray(
-          imageDerivative.processorRevision,
-          compatibleSubjectLiftOutputs,
-        ),
-        eq(imageDerivative.status, "ready"),
-        notDeleted(imageDerivative),
-      ),
-    )
-    .where(
-      and(
-        inArray(image.shortcode, [...new Set(shortcodes)]),
-        notDeleted(image),
-      ),
-    )
-    .orderBy(
-      asc(imageDerivative.processorRevision),
-      asc(imageDerivative.createdAt),
-    );
-  return new Map(
-    rows.map((row) => {
-      const original = getR2PublicUrl(row.key);
-      const transparent = row.derivativeKey
-        ? getR2PublicUrl(row.derivativeKey)
-        : null;
-      return [
-        row.shortcode,
-        {
-          original,
-          transparent,
-          preferred: !row.useOriginal && transparent ? transparent : original,
-          preferredKind:
-            !row.useOriginal && transparent ? "transparent" : "original",
-        },
-      ];
-    }),
+  const result = await unwrapDb(db).execute(
+    imageRepresentationRowsSql(shortcodes, compatibleSubjectLiftOutputs),
+  );
+  return imageRepresentationsFromRows(
+    z.array(imageRepresentationRow).parse(result.rows),
   );
 }
 

@@ -1919,6 +1919,9 @@ media payloads and their counters, long text and nested collections; full reads 
 Problems and other narrow consumers retain explicit field projections over the
 same repository readers. External USDA data remains a bounded batch inside the
 Product page read; no list declares a separate lazy column request.
+Location identity and stock Product embeds load brand and category summaries;
+they do not compute classification evidence, brand codes or category stock policy
+that their response mappers do not read.
 
 SQL-backed diagnostics carry the sample/count intent to their canonical
 repository: count membership without loading presentation payloads, and limit
@@ -1946,6 +1949,14 @@ surface with the complete page; an abandoned row load does not leave an unhandle
 rejection. Expense Project and spending allocations use the ID path and start
 together, rather than waiting for the relation-loaded rows. This changes no
 allocation precedence, filter membership or response fields.
+
+Requested attachment galleries prefetch their image representations by page IDs
+alongside row hydration. One canonical media query returns display images and
+attachment representations. The same representation resolver handles public image
+codes and directly owned live attachments, including files excluded from display
+images. Display-image results keep their precedence; only authoritative results
+from this read seed nested hydration. Unknown nested references retain the batched
+fallback, and supplied DTO representations never count as trusted preloads.
 
 Project subtree reads load the tree beside household-grouped Expense and Task
 inputs, then apply the selected descendant scope in memory. A shared in-flight
