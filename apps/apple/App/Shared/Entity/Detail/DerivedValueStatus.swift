@@ -86,7 +86,7 @@ struct DerivedExplanationSummary: View {
                     LabeledContent("Live now") { value(live) }
                 }
             } else {
-                Text("Live value is not computed here.").foregroundStyle(.secondary)
+                Text("No live value to display.").foregroundStyle(.secondary)
             }
             if let asOf = explanation.meta.asOf, let label = DatePresentation.absolute(of: asOf) {
                 Text("Published \(label)").foregroundStyle(.secondary)
