@@ -406,7 +406,12 @@ const fieldJSON = (
     resolution: resolutionJSON(field.resolution),
     ...fieldControlJSON(field.control),
     ...fieldControlInputJSON(field.control),
-    valueSchema: valueSchemaForField(context, field, where, entityForPrefix),
+    valueSchema:
+      field.control?.renderer === "structured-field" &&
+      requireNativeCoverage("structuredField", `${context}.${field.key}`)
+        .status === "handoff"
+        ? null
+        : valueSchemaForField(context, field, where, entityForPrefix),
     collection:
       field.collection && field.collection.key !== "value"
         ? {
@@ -898,6 +903,15 @@ export const renderSwiftEntityCatalog = (
         ),
       ),
     ),
+    structuredField: used(
+      entities.flatMap((entity) =>
+        entity.fieldModel.fields.flatMap((field) =>
+          field.control?.renderer === "structured-field"
+            ? [`${entity.key}.${field.key}`]
+            : [],
+        ),
+      ),
+    ),
     sectionAction: used(SECTION_ACTION_IDS),
   } as const;
   const classified = (
@@ -912,7 +926,7 @@ export const renderSwiftEntityCatalog = (
         const [owner] = id.split(".");
         const section = entry.web.section;
         if (
-          kind === "detailSlot" &&
+          (kind === "detailSlot" || kind === "structuredField") &&
           section !== undefined &&
           !entities.some(
             (entity) =>
@@ -923,7 +937,7 @@ export const renderSwiftEntityCatalog = (
           )
         )
           throw new Error(
-            `native-coverage.ts: detailSlot ${JSON.stringify(id)} hands off to section ${JSON.stringify(section)}, which ${owner} does not declare`,
+            `native-coverage.ts: ${kind} ${JSON.stringify(id)} hands off to section ${JSON.stringify(section)}, which ${owner} does not declare`,
           );
         return [
           id,
@@ -967,6 +981,10 @@ export const renderSwiftEntityCatalog = (
     heroAction: classified("heroAction", coverageVocabulary.heroAction),
     detailSlot: classified("detailSlot", coverageVocabulary.detailSlot),
     listSlot: classified("listSlot", coverageVocabulary.listSlot),
+    structuredField: classified(
+      "structuredField",
+      coverageVocabulary.structuredField,
+    ),
     sectionAction: classified(
       "sectionAction",
       coverageVocabulary.sectionAction,

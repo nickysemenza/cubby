@@ -28,7 +28,7 @@ struct NativeCoverageTests {
     @Test func everyHandoffNamesItsSurfaceAndReason() {
         let all = [
             coverage.control, coverage.list, coverage.detail, coverage.heroAction, coverage.detailSlot,
-            coverage.listSlot, coverage.sectionAction,
+            coverage.listSlot, coverage.structuredField, coverage.sectionAction,
         ]
         for statuses in all {
             for case .handoff(let handoff) in statuses.values {

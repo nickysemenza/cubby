@@ -105,6 +105,18 @@ describe("native presentation coverage", () => {
       "sectionAction linkProducts",
       "sectionAction matchStatement",
       "sectionAction splitExpense",
+      "structuredField expense.sourceClaims",
+      "structuredField financialAccount.cardNumbers",
+      "structuredField financialAccount.authorizedUsers",
+      "structuredField financialAccount.fundingPeriods",
+      "structuredField financialAccount.identity",
+      "structuredField financialTransaction.allocations",
+      "structuredField ledgerTransfer.sourceClaims",
+      "structuredField meal.recipes",
+      "structuredField recipe.meta",
+      "structuredField recipe.sections",
+      "structuredField recipe.yield",
+      "structuredField vendor.agentHints",
     ]);
   });
 

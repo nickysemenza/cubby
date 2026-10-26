@@ -17,7 +17,7 @@ private final class StructuredStub: URLProtocol, @unchecked Sendable {
 }
 
 /// The structured-value editor's model: the manifest's `valueSchema` for every field a structured
-/// renderer draws, the read-payload round trip, the wire schema, and the mapping of the server's
+/// renderer still edits natively, the read-payload round trip, the wire schema, and the server's
 /// validation issues back onto positions inside a value. All data is synthetic.
 @Suite("StructuredValue", .serialized)
 @MainActor
@@ -60,25 +60,15 @@ struct StructuredValueTests {
                 if structured {
                     #expect(field.valueSchema != nil, "\(descriptor.key.rawValue).\(field.key) has no schema")
                 }
-                // The shared `structured-field` id is drawn only for the fields the generator opts in
-                // (`nativeCoverage.structuredField`); no other renderer carries a schema.
-                if field.valueSchema != nil {
-                    #expect(structured || field.controlRenderer == .structuredField)
+                if field.valueSchema != nil { #expect(structured) }
+                if field.controlRenderer == .structuredField {
+                    #expect(field.valueSchema == nil)
+                    #expect(
+                        NativeCoverageManifest.shared.structuredField[
+                            "\(descriptor.key.rawValue).\(field.key)"]?.handoff != nil)
                 }
             }
         }
-    }
-
-    @Test func aRecipeSectionLineReadsItsTargetsIdFromTheNestedRecord() throws {
-        let lines = try #require(
-            EntityCatalog[.recipe].field("sections")?.valueSchema)
-        guard case .array(let section) = lines.node, case .object(let sectionFields) = section.node,
-            let ingredients = sectionFields.first(where: { $0.key == "ingredients" })?.schema,
-            case .array(let line) = ingredients.node, case .variant(_, let cases) = line.node
-        else { throw Failure("recipe.sections is not an array of sections of variant lines") }
-        let targets = Dictionary(
-            uniqueKeysWithValues: cases.map { ($0.value, $0.fields.compactMap { $0.readPath }) })
-        #expect(targets == ["ingredient": ["ingredient.id"], "recipe": ["recipe.id"]])
     }
 
     @Test func unitMappingsDescribeRowsOfAmountsWithAnOpaqueId() throws {
@@ -100,26 +90,6 @@ struct StructuredValueTests {
         #expect(keys.contains(LabeledOption(value: "saturated_fat", label: "Saturated fat")))
         #expect(value.node == .number(integer: false))
     }
-
-    /// A synthetic variant schema, so the editor's variant handling is exercised without depending
-    /// on a declared field's exact cases.
-    private static let accountKind = ValueSchema(
-        node: .variant(
-            discriminator: "kind",
-            cases: [
-                .init(value: "cash", label: "Cash", fields: []),
-                .init(
-                    value: "bank", label: "Bank",
-                    fields: [
-                        .init(
-                            key: "institution", label: "Institution", required: true,
-                            schema: ValueSchema(nullable: true, node: .text(format: nil))),
-                        .init(
-                            key: "accountType", label: "Type", required: true,
-                            schema: ValueSchema(
-                                node: .enum(options: [LabeledOption(value: "checking", label: "Checking")]))),
-                    ]),
-            ]))
 
     // MARK: - Round trip
 
@@ -187,8 +157,11 @@ struct StructuredValueTests {
     @Test func everyEditedFieldRoundTripsItsReadPayloadToItsInput() throws {
         struct File: Decodable { let vectors: [Vector] }
         let vectors = try GoldenVectors.decode(File.self, named: "structured-roundtrip").vectors
-        let edited = EntityCatalog.all.flatMap { descriptor in
-            descriptor.fields.filter { $0.valueSchema != nil }.map { "\(descriptor.key.rawValue).\($0.key)" }
+        let covered = Set(vectors.map { "\($0.entity.rawValue).\($0.field)" })
+        for descriptor in EntityCatalog.all {
+            for field in descriptor.fields where field.valueSchema != nil {
+                #expect(covered.contains("\(descriptor.key.rawValue).\(field.key)"))
+            }
         }
         for vector in vectors {
             let schema = try schema(vector.entity, vector.field)
@@ -202,50 +175,6 @@ struct StructuredValueTests {
                 client: try makeClient(), original: .object([vector.field: vector.read]))
             #expect(try model.patch().isEmpty, "\(vector.entity.rawValue).\(vector.field) patch")
         }
-    }
-
-    /// A new account has no default identity kind: the form stays unsaveable until one is chosen.
-    @Test func aNewAccountMustChooseItsIdentityKind() throws {
-        let model = GenericEntityEditModel(
-            descriptor: EntityCatalog[.financialAccount], mode: .create(prefill: [:]),
-            client: try makeClient())
-        #expect(model.missingRequiredKeys.contains("identity"))
-        let identity = try schema(.financialAccount, "identity")
-        guard case .variant(let discriminator, let cases) = identity.node,
-            let cash = cases.first(where: { $0.value == "cash" })
-        else { throw Failure("identity is not a variant with a cash case") }
-        model.draft["identity"] = StructuredValue.blankCase(discriminator, cash)
-        #expect(!model.missingRequiredKeys.contains("identity"))
-    }
-
-    /// An edited claim goes back under the identity it was read with (`sourceKey`), never a
-    /// provider id the read cannot supply, so the server keeps the claim instead of rehashing it.
-    @Test func anEditedSourceClaimKeepsItsIdentityKey() throws {
-        let vector = try sourceClaimVector()
-        let model = GenericEntityEditModel(
-            descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-2222"),
-            client: try makeClient(), original: .object(["sourceClaims": vector.read]))
-        #expect(try model.patch().isEmpty)
-        let reviewed = StructuredValue.setting(
-            ["decision": "accept_target_amount", "note": "Reviewed"], at: ["0", "reconciliation"],
-            in: model.draft["sourceClaims"] ?? .null)
-        model.draft["sourceClaims"] = reviewed
-        let sent = try #require(model.patch().values["sourceClaims"]?.arrayValue?.first)
-        #expect(sent["sourceKey"] == vector.input.arrayValue?.first?["sourceKey"])
-        #expect(sent["providerId"] == nil)
-        #expect(sent["reconciliation"]?["decision"] == "accept_target_amount")
-    }
-
-    @Test func anAccountsIdentityKindIsCreateOnlyAndCardNumbersCarryANotice() throws {
-        #expect(try schema(.financialAccount, "identity").createOnly == true)
-        #expect(try schema(.financialAccount, "cardNumbers").notice?.contains("matched") == true)
-        #expect(try schema(.vendor, "agentHints").createOnly == nil)
-    }
-
-    private func sourceClaimVector() throws -> Vector {
-        struct File: Decodable { let vectors: [Vector] }
-        let vectors = try GoldenVectors.decode(File.self, named: "structured-roundtrip").vectors
-        return try #require(vectors.first { $0.entity == .expense && $0.field == "sourceClaims" })
     }
 
     @Test func storedEmptyTextOrNullsDoNotMakeAnUntouchedRowLookEdited() throws {
@@ -303,26 +232,15 @@ struct StructuredValueTests {
         #expect(sent == .object([:]))
     }
 
-    @Test func aMapDropsEmptyEntriesAndAVariantKeepsItsTag() throws {
+    @Test func aMapDropsEmptyEntries() throws {
         let nutrition = StructuredValue.wireValue(
             ["servingGrams": 44, "nutrients": ["protein": 3, "fat": .null], "source": .null],
             schema: try schema(.product, "labelNutrition"))
         #expect(nutrition["nutrients"] == ["protein": 3])
-        let identity = StructuredValue.wireValue(
-            ["kind": "bank", "institution": "", "accountType": "checking"], schema: Self.accountKind)
-        #expect(identity["kind"] == "bank")
-        #expect(identity["accountType"] == "checking")
-        #expect(identity["institution"] == .null)
+
     }
 
-    @Test func blankValuesCarryOnlyRequiredKeysAndAVariantsTag() throws {
-        let identity = Self.accountKind
-        // No case is chosen for the person: a default variant would be a silent identity.
-        #expect(StructuredValue.blank(identity) == .null)
-        guard case .variant(let discriminator, let cases) = identity.node,
-            let cash = cases.first(where: { $0.value == "cash" })
-        else { throw Failure("no cash case") }
-        #expect(StructuredValue.blankCase(discriminator, cash) == ["kind": "cash"])
+    @Test func blankValuesCarryOnlyRequiredKeys() throws {
         #expect(StructuredValue.blank(try schema(.product, "labelNutrition")) == .null)
         #expect(
             StructuredValue.blank(try schema(.product, "labelNutrition"), populated: true)
