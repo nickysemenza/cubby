@@ -187,12 +187,15 @@ fence against its Job ID. Completion/release of the final live member frees
 the page. Expired tokens count nothing. Older individually tokened claims
 count conservatively as separate pages until they settle or expire.
 
-`ai.evaluation` defaults to **one live background page globally**. A finite
-AI page enters the kind cap once, then its independent target leases keep the
-cap occupied until the last live target settles. Single claims share the same
-admission lock and lease count. This is deliberately stricter than one page
-per Worker: a blocked evaluation must not multiply across queue consumers. It leaves two of a Worker's three lanes for
-other kinds, including due embedding batches and image work. No separate
+`ai.evaluation` allows **two live background evaluations globally**, matching
+the inherited two-page share across queue consumers. A finite AI page enters
+the kind cap once, then its independent target leases keep the cap occupied
+until the last live target settles. Single claims share the same admission
+lock and lease count. Blocked evaluations therefore never occupy more than two
+of the four consumers or more than one of a Worker's three lanes, leaving room
+for other kinds, including due embedding batches and image work. The cap was
+one while a single Run's evaluations serialized on its row lock; with that
+backlog gone, one evaluation at a time left due work waiting over 20 minutes. No separate
 scheduler or refresh-family behavior changes. Queue positions are exact for the admitted
 selection; work deferred by a cap is projected beyond that selection as an
 estimate.
