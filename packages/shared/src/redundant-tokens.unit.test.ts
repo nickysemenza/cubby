@@ -17,12 +17,11 @@ describe("redundantTokens", () => {
     ]);
   });
 
-  it("never flags a collection tag or a token carrying a digit or slash", () => {
+  it("never flags a token carrying a digit or slash", () => {
     expect(
       redundantTokens({
-        values: ["collection:metal-working", "grinder-4.5in", "1/4-hex"],
+        values: ["grinder-4.5in", "1/4-hex"],
         restating: {
-          brandName: "collection",
           classification: ["grinder", "hex"],
         },
       }),

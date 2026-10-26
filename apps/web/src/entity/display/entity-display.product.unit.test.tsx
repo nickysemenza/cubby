@@ -231,6 +231,24 @@ function renderProductCell(columnId: string, row: ProductRow) {
 }
 
 describe("product list display columns", () => {
+  it("shows the effective family instead of the root category name", () => {
+    const category = categorySummaryFixture("tools");
+    render(
+      <>
+        {renderProductCell("categoryFeature", {
+          ...PRODUCT_ROW,
+          category: {
+            ...category,
+            name: "Synthetic hardware",
+            feature: "hardware",
+          },
+        })}
+      </>,
+    );
+    expect(screen.getByText("hardware")).toBeVisible();
+    expect(screen.queryByText(category.path[0]!.name)).not.toBeInTheDocument();
+  });
+
   it("keeps a healthy expected quantity in the primary text tier", () => {
     const { container } = render(
       <>{renderProductCell("ledgerExpectedQuantity", PRODUCT_ROW)}</>,

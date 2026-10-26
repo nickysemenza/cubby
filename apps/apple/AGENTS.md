@@ -176,7 +176,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
   `API/CubbyClient.swift`.
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
   `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`, `bin-plan.json`,
-  `display-format.json`, `household-day.json`, `collection-tag.json`). The Swift tests and the
+  `display-format.json`, `household-day.json`). The Swift tests and the
   web/Rust tests read the same files; change a rule by editing the vector first, then both
   implementations.
 - Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus

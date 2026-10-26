@@ -24,7 +24,6 @@ import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
 import { featureRegistry } from "~/entity/feature-registry";
 import type { FinancialTransactionFormValues } from "~/features/finance/financial-transaction-form";
 import { formatDateSpan } from "~/lib/date-span";
-import { AliasesField } from "~/ui/forms/aliases-field";
 import { Row, Stack } from "~/ui/layout";
 import type { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -207,34 +206,15 @@ function IngredientCaptureFields(props: EntityEditorFieldsProps) {
   );
 }
 
-/**
- * Location's rich fields beyond what `EntityIntentFields` renders generically:
- * `type` is a manifest `select` control (`control.suggest: { basis: ["name"] }`)
- * like any other suggestable enum, so `EntityIntentFields` renders it and its
- * auto-suggest hint with no hand-written wiring here. `collections` is a pure
- * editor-only pseudo field (folded into the stored `tags` at submit by
- * `locationBuildData` in `definitions.ts`) shown only once a location exists —
- * the create dialog stays a quick add; aliases/collections/photos are filled
- * in afterward from the edit dialog.
- */
-function LocationFields({ form, record }: EntityEditorFieldsProps) {
+/** Location fields use the declared capture and full intents. */
+function LocationFields({ record }: EntityEditorFieldsProps) {
   const editing = record !== undefined;
   return (
-    <>
-      <EntityIntentFields
-        entity="location"
-        intent={editing ? "full" : "capture"}
-        mode={editing ? "edit" : "create"}
-      />
-      {editing && (
-        <AliasesField
-          form={form}
-          name="collections"
-          title="Collections"
-          placeholder="e.g. painting"
-        />
-      )}
-    </>
+    <EntityIntentFields
+      entity="location"
+      intent={editing ? "full" : "capture"}
+      mode={editing ? "edit" : "create"}
+    />
   );
 }
 
@@ -677,14 +657,13 @@ const presentations = {
   "location:create:capture": {
     title: () => "Create New Location",
     description: () =>
-      "Alternate names, collections, and photos can be added afterward from the location's own page.",
+      "Alternate names, tags, and photos can be added afterward from the location's own page.",
     Fields: LocationFields,
     successMessage: (result) => `Added "${resultName(result, "location")}"`,
   },
   "location:update:full": {
     title: () => "Edit Location",
-    description: () =>
-      "Aliases and collections each replace their complete list.",
+    description: () => "Aliases and tags each replace their complete list.",
     submitLabel: "Save changes",
     size: "lg",
     Fields: LocationFields,

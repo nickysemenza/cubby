@@ -25,7 +25,6 @@ import {
   spendingCategoryFilters,
   spendingCategoryOut,
 } from "@cubby/schemas/spending-category";
-import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
   redundantTokens,
   type RedundantTokenMatch,
@@ -145,8 +144,7 @@ interface TextRosterSuggestSpec extends TextRosterSuggestDecision {
  * calls (`rules` + `subject`) on the rest.
  */
 export interface ArrayPruneSuggestSpec extends ArrayPruneSuggestDecision {
-  /** Every current entry eligible for pruning: the self-basis array minus
-   * `collection:*` (Collections' own namespace, never a prune candidate). */
+  /** Every current entry in the self-basis array is eligible for pruning. */
   candidates(basis: ResolvedBasis, raw: RawBasis): readonly string[];
   /** The subset of `candidates(...)` already redundant with no decision call. */
   deterministic(
@@ -336,13 +334,9 @@ function parseJsonStringArray(
   }
 }
 
-/** `raw[arrayKey]`'s current entries minus `collection:*` (Collections' own
- * namespace, never a prune candidate) — every `ArrayPruneSuggestSpec`'s
- * `candidates` is this same parse, so it is factored out once. */
+/** Current entries for an array prune suggestion. */
 function pruneCandidates(raw: RawBasis, arrayKey: string): readonly string[] {
-  return (parseJsonStringArray(raw[arrayKey] ?? null) ?? []).filter(
-    (value) => !isCollectionTag(value),
-  );
+  return parseJsonStringArray(raw[arrayKey] ?? null) ?? [];
 }
 
 const spendingRosterRow = spendingCategoryOut.pick({

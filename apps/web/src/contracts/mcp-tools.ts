@@ -77,9 +77,6 @@ export const MCP_TOOL_DESCRIPTIONS = {
     description:
       "Change household-wide frontier AI funding (every feature's frontier chat calls, not only Mail import); read it with ai_funding_read.status. Call only on the member's explicit instruction.",
   },
-  collection: {
-    description: "Manage household Collections and their member-defined tags.",
-  },
   data_exception: {
     description:
       "Explicit negative knowledge on one completeness check of a Product, Vendor, Purchase, FinancialTransaction, or Expense; each call returns the recomputed dataQuality.",

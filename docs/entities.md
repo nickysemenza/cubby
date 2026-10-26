@@ -23,6 +23,14 @@ then validates the complete graph against entity and module child storage.
 Image routing names actual model fields; disabled create routes do not count as
 active alternatives. Counterfactual override comparisons use this same pass.
 
+## Named groupings
+
+Named groupings use code-declared saved views with category, family, location,
+brand, or tag filters. Locations provide physical grouping; see
+[ADR 0022](adr/0022-named-groupings-are-saved-views.md). Product and Location
+tags are plain tags. The Product Category family column reads the effective
+inherited family, matching its filter.
+
 ## Declared board lists
 
 A `kind: "board"` list view configures grouping choices, card fields, intrinsic filters,

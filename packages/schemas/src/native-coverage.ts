@@ -148,9 +148,7 @@ export const nativeCoverage = {
     // (a golden read-to-input vector proves the round trip); the other fields of this renderer
     // are read-only, as on web.
     ...generic(["structured-field"]),
-    // Tags and Collections: the split and merge are `splitProductTags`/`mergeProductTags`
-    // (`@cubby/shared/collection-tag`), reproduced by `CollectionTag` over the generated
-    // `SharedConstants` and pinned by `golden-vectors/collection-tag.json`.
+    // Product tags use the ordinary token editor.
     ...implemented(["product-tags"]),
     // The editor's image block owns image ordering; it is never a field control.
     ...ownedElsewhere(["image-order"]),
