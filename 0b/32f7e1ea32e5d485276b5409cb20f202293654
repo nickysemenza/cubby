@@ -1,0 +1,43 @@
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_9d5cc5297ac020::t_e57a0ac6f34f60 207-222,229-243
+apps/apple/App/Tests/Entity/Detail/EntityFieldValueTests.swift
+  s_9d5cc5297ac020::t_8700f281100498 9-26
+apps/apple/DESIGN.md
+  s_9d5cc5297ac020::t_04319111213e8b 27-28,49-50
+apps/apple/App/Shared/Photo/Import/PhotoImportManifest.swift
+  s_9d5cc5297ac020::t_a1d4fc31d6cbd6 48,863,1168-1174
+apps/apple/App/Shared/Photo/PhotoSourceButtons.swift
+  s_9d5cc5297ac020::t_d7266b87da9138 55,80-84,128-131,250-251,332-337,339-340,342-343,398-422
+apps/apple/App/Shared/Photo/Review/PhotoDestinationSheet.swift
+  s_9d5cc5297ac020::t_fa596e949e5ebc 10,39-43
+apps/apple/App/Tests/Capture/ScannerStartupTests.swift
+  s_9d5cc5297ac020::t_b4582d7979ed10 1-21
+apps/apple/App/Tests/Photo/Import/PhotoImportFlowTests.swift
+  s_9d5cc5297ac020::t_52fa87662b9569 12-55
+apps/apple/App/iOS/DataScannerView.swift
+  s_144d6894ba8042::t_bfa0d776f1a7ea 16-17,23-40,87-102,111,129,138-140,144,159-160,170-180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0b32f7e1ea32e5d485276b5409cb20f202293654",
+  "prompts": {},
+  "sessions": {
+    "s_144d6894ba8042": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f09c77a7-a3f4-48ec-9cec-08733cd15ce7",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9d5cc5297ac020": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a179b1-772f-7ab3-80bf-b86f659b429e",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
