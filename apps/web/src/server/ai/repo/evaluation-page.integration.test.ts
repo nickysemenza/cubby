@@ -438,10 +438,11 @@ describe("finite AI evaluation pages", () => {
       .where(eq(job.id, member.jobs[0]!.id));
     expect(owned[0]?.owned).toBe(true);
     const first = await dueJobs(ctx.db);
-    // Each priority class contributes at most one AI feature anchor under main's cap.
+    // Each feature contributes at most one anchor per round. Both member Run
+    // features lead; the background feature fits within the kind cap.
     const aiAnchors = first.filter((entry) => entry.kind === "ai.evaluation");
-    expect(aiAnchors).toHaveLength(2);
-    expect(new Set(aiAnchors.map((entry) => entry.pageKey)).size).toBe(2);
+    expect(aiAnchors).toHaveLength(3);
+    expect(new Set(aiAnchors.map((entry) => entry.pageKey)).size).toBe(3);
     expect(first.some((entry) => entry.id === other.id)).toBe(true);
     const visits: string[] = [];
     const scalar = defineJobHandler(z.object({}), async () => ({

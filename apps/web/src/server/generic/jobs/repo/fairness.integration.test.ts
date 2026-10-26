@@ -6,6 +6,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
+import { jobKindPolicy } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
@@ -332,7 +333,8 @@ describe("fair drain under a flood", () => {
     },
   );
 
-  it("admits only one background evaluation across concurrent claims and reclaims expired capacity", async () => {
+  it("admits background evaluations only up to the kind cap across concurrent claims and reclaims expired capacity", async () => {
+    const cap = jobKindPolicy("ai.evaluation").maxInFlight!;
     const flood = [];
     for (let index = 0; index < 12; index++)
       flood.push(
@@ -342,18 +344,20 @@ describe("fair drain under a flood", () => {
           input: {},
         }),
       );
+    // One drain runs one page of a kind; the global cap spans concurrent drains.
     expect(
       (await dueJobs(ctx.db)).filter((row) => row.kind === "ai.evaluation"),
     ).toHaveLength(1);
     const claims = (
       await Promise.all(flood.map((row) => claimJob(ctx.db, row.id)))
     ).filter((claim) => claim !== null);
-    expect(claims).toHaveLength(1);
+    expect(claims).toHaveLength(cap);
     const first = claims[0]!;
+    const claimedIds = new Set(claims.map((claim) => claim.id));
     expect(await dueJobs(ctx.db)).toHaveLength(0);
     const waiting = await loadJobWaitingOn(
       ctx.db,
-      flood.filter((row) => row.id !== first.id),
+      flood.filter((row) => !claimedIds.has(row.id)),
     );
     expect([...waiting.values()]).toEqual(
       expect.arrayContaining([
@@ -373,7 +377,7 @@ describe("fair drain under a flood", () => {
     expect(reclaimed?.leaseToken).not.toBe(first.leaseToken);
     expect(reclaimed).not.toBeNull();
     if (!reclaimed) return;
-    const other = flood.find((row) => row.id !== first.id)!;
+    const other = flood.find((row) => !claimedIds.has(row.id))!;
     expect(await claimJob(ctx.db, other.id)).toBeNull();
     expect(await releaseJobClaim(ctx.db, reclaimed)).toBe(true);
     expect(await claimJob(ctx.db, other.id)).not.toBeNull();
@@ -382,12 +386,18 @@ describe("fair drain under a flood", () => {
   it.each(["maintenance", "connection_discovery"] as const)(
     "lets active Run work bypass a saturated kind cap (%s)",
     async (purpose) => {
-      const background = await enqueueJob(ctx.db, {
-        key: "synthetic.busy",
-        kind: "ai.evaluation",
-        input: {},
-      });
-      expect(await claimJob(ctx.db, background.id)).not.toBeNull();
+      for (
+        let index = 0;
+        index < jobKindPolicy("ai.evaluation").maxInFlight!;
+        index++
+      ) {
+        const background = await enqueueJob(ctx.db, {
+          key: `synthetic.busy.${index}`,
+          kind: "ai.evaluation",
+          input: {},
+        });
+        expect(await claimJob(ctx.db, background.id)).not.toBeNull();
+      }
       await enqueueJob(ctx.db, {
         key: "synthetic.cap-waiting",
         kind: "ai.evaluation",

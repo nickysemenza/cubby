@@ -97,8 +97,9 @@ export const JOB_KIND_POLICY = {
     ...SERVER,
     lane: "frontier_ai",
     maxQueued: 2_000,
-    // One blocked evaluation must leave the other drain lanes available.
-    maxInFlight: 1,
+    // Matches the inherited two-page share: blocked evaluations still leave
+    // the other drain lanes and consumers available.
+    maxInFlight: 2,
   },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
   "embedding.refresh": {
