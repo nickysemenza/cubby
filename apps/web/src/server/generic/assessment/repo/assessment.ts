@@ -291,7 +291,11 @@ export async function recordFeedbackWithInsertion(
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const [prediction] = await client
-      .select({ served: assessment.served, family: assessment.family })
+      .select({
+        served: assessment.served,
+        family: assessment.family,
+        subject: assessment.subject,
+      })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
       .limit(1);
@@ -346,11 +350,19 @@ export async function recordFeedbackWithInsertion(
       inserted &&
       (prediction.family === "email_relevance" ||
         prediction.family === "email_link")
-    )
+    ) {
       await recordChange(transactionDb, {
         kind: "source",
         categories: ["email"],
       });
+      // Member review is an Email quality input no column path reaches.
+      // Calls the generated mark function directly: importing the derived
+      // repo here broke the Worker's Env type inference.
+      if ("recordId" in prediction.subject && prediction.subject.recordId)
+        await client.execute(
+          sql`SELECT derived_mark('email.dataQuality', ARRAY[${prediction.subject.recordId}::uuid])`,
+        );
+    }
     return { event: row, inserted: inserted !== undefined };
   });
 }

@@ -9,8 +9,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 
 /**
  * The server owns tree nesting: `roots` and `children` are judged against the
@@ -55,11 +54,12 @@ describe("list nesting scope", () => {
 
   const readRuns = (input: {
     filters?: { purpose?: string[] };
-    nesting?: unknown;
+    nesting?: import("@cubby/schemas/pagination").ListNesting;
     pageIndex?: number;
     pageSize?: number;
   }) =>
-    ENTITY_LIST_READ_OPERATIONS.run.base(kernel(), {
+    executeEntityAs(kernel(), "list", {
+      entity: "run",
       filters: input.filters ?? {},
       sort: [{ orderBy: "startedAt", direction: "asc" }],
       pagination: {
@@ -79,7 +79,7 @@ describe("list nesting scope", () => {
   it("pages roots with their filtered child counts", async () => {
     const runs = await seedRuns();
     const roots = await readRuns({ nesting: { scope: "roots" } });
-    expect(outline(roots.data)).toEqual(
+    expect(outline(roots.items)).toEqual(
       sorted([runs.parent, 2], [runs.root, 0]),
     );
     expect(roots.meta.totalCount).toBe(2);
@@ -90,16 +90,26 @@ describe("list nesting scope", () => {
         readRuns({ nesting: { scope: "roots" }, pageIndex, pageSize: 1 }),
       ),
     );
-    expect(pages.map((page) => page.data.length)).toEqual([1, 1]);
+    expect(pages.map((page) => page.items.length)).toEqual([1, 1]);
     expect(pages.map((page) => page.meta.totalCount)).toEqual([2, 2]);
-    expect(outline(pages.flatMap((page) => page.data))).toEqual(
-      sorted([runs.parent, 2], [runs.root, 0]),
-    );
+    expect(
+      outline(
+        pages.flatMap((page) =>
+          page.items.map((row) => ({
+            id: row.id,
+            childCount: "childCount" in row ? row.childCount : undefined,
+          })),
+        ),
+      ),
+    ).toEqual(sorted([runs.parent, 2], [runs.root, 0]));
   });
 
   it("reads one parent's children with their own paging", async () => {
     const runs = await seedRuns();
-    const children = { scope: "children", parentId: runs.parent };
+    const children = {
+      scope: "children",
+      parentId: runs.parent,
+    } satisfies import("@cubby/schemas/pagination").ListNesting;
     const first = await readRuns({ nesting: children, pageSize: 1 });
     const second = await readRuns({
       nesting: children,
@@ -107,7 +117,7 @@ describe("list nesting scope", () => {
       pageSize: 1,
     });
     expect(first.meta.totalCount).toBe(2);
-    expect(outline([...first.data, ...second.data])).toEqual(
+    expect(outline([...first.items, ...second.items])).toEqual(
       sorted([runs.sameChild, 0], [runs.otherChild, 0]),
     );
 
@@ -116,7 +126,7 @@ describe("list nesting scope", () => {
       nesting: children,
       filters: { purpose: ["background"] },
     });
-    expect(outline(filtered.data)).toEqual([[runs.sameChild, 0]]);
+    expect(outline(filtered.items)).toEqual([[runs.sameChild, 0]]);
     expect(filtered.meta.totalCount).toBe(1);
   });
 
@@ -126,7 +136,7 @@ describe("list nesting scope", () => {
       nesting: { scope: "roots" },
       filters: { purpose: ["ai_suggest"] },
     });
-    expect(outline(ai.data)).toEqual(
+    expect(outline(ai.items)).toEqual(
       sorted([runs.otherChild, 0], [runs.root, 0]),
     );
     const mail = await readRuns({
@@ -134,7 +144,7 @@ describe("list nesting scope", () => {
       filters: { purpose: ["background"] },
     });
     // The parent counts only the child that matches the same filters.
-    expect(outline(mail.data)).toEqual([[runs.parent, 1]]);
+    expect(outline(mail.items)).toEqual([[runs.parent, 1]]);
   });
 
   it("promotes the children of a deleted parent to roots", async () => {
@@ -144,7 +154,7 @@ describe("list nesting scope", () => {
       .set({ deletedAt: new Date() })
       .where(eq(runTable.id, runs.parentId));
     const roots = await readRuns({ nesting: { scope: "roots" } });
-    expect(outline(roots.data)).toEqual(
+    expect(outline(roots.items)).toEqual(
       sorted([runs.sameChild, 0], [runs.otherChild, 0], [runs.root, 0]),
     );
   });
@@ -153,7 +163,7 @@ describe("list nesting scope", () => {
     const runs = await seedRuns();
     const flat = await readRuns({});
     expect(flat.meta.totalCount).toBe(4);
-    expect(flat.data.every((row) => !("childCount" in row))).toBe(true);
+    expect(flat.items.every((row) => !("childCount" in row))).toBe(true);
 
     const listed = await executeEntity(kernel(), {
       action: "list",
@@ -183,12 +193,12 @@ describe("list nesting scope", () => {
       { name: "Nesting spices", parentId: pantry.id },
       { faker },
     );
-    const operation = ENTITY_LIST_READ_OPERATIONS.productCategory;
-    const roots = await operation.base(context, {
+    const roots = await executeEntityAs(context, "list", {
+      entity: "productCategory",
       filters: { search: "Nesting" },
       nesting: { scope: "roots" },
     });
-    expect(outline(roots.data)).toEqual([[pantry.id, 1]]);
+    expect(outline(roots.items)).toEqual([[pantry.id, 1]]);
     // The complete list read (MCP, HTTP, the hierarchy chart) re-parses each
     // row with the entity's output schema; `childCount` must survive it.
     const listed = await executeEntity(context, {
@@ -200,14 +210,16 @@ describe("list nesting scope", () => {
     if (listed.action !== "list") throw new Error("Wrong list action");
     expect(outline(listed.items)).toEqual([[pantry.id, 1]]);
     // A search match whose parent does not match stays reachable as a root.
-    const orphan = await operation.base(context, {
+    const orphan = await executeEntityAs(context, "list", {
+      entity: "productCategory",
       filters: { search: "spices" },
       nesting: { scope: "roots" },
     });
-    expect(outline(orphan.data)).toEqual([[spices.id, 0]]);
+    expect(outline(orphan.items)).toEqual([[spices.id, 0]]);
 
     await expect(
-      ENTITY_LIST_READ_OPERATIONS.product.base(context, {
+      executeEntityAs(context, "list", {
+        entity: "product",
         filters: {},
         nesting: { scope: "roots" },
       }),

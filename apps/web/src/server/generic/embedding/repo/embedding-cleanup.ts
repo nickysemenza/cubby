@@ -3,12 +3,12 @@ import { jobState } from "@cubby/schemas/job";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { entityEmbedding } from "~/server/db/retained-tables";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 /** Physical IDs are never selected again after retirement, including explicit retries. */
-export async function prepareEmbeddingCleanupPage(
+async function prepareEmbeddingCleanupPage(
   db: Database,
   after?: string,
   limit = 25,
@@ -45,6 +45,17 @@ export async function prepareEmbeddingCleanupPage(
         });
     },
   };
+}
+
+/** Queue one page of retired artifacts for physical deletion, in its own transaction. */
+export async function queueEmbeddingCleanupPage(
+  db: Database,
+  after?: string,
+  limit = 25,
+) {
+  const prepared = await prepareEmbeddingCleanupPage(db, after, limit);
+  await withTransactionDatabase(db, (tx) => prepared.publish(tx));
+  return { queued: prepared.pending, nextCursor: prepared.nextCursor };
 }
 
 export async function assertEmbeddingArtifactCanBeDeleted(

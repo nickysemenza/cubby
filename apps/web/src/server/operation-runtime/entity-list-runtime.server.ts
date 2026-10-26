@@ -2,9 +2,6 @@ import { entityListContract } from "~/contracts/entity-list.contract";
 import {
   entityListInputSchema,
   getEntityListOutputSchema,
-  entityListBaseOutputSchema,
-  entityListEnrichmentOutputSchema,
-  entityListSummaryOutputSchema,
 } from "~/entity/generated/entity-lists.gen";
 import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
@@ -17,18 +14,6 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
  */
 export const entityListHandlers = implementOperationDomain(entityListContract, {
   selectionIds: (context, input) => executeEntitySelectionIds(context, input),
-  listBase: async (context, input) =>
-    entityListBaseOutputSchema.parse(
-      await ENTITY_LIST_READ_OPERATIONS[input.entity].base(context, input),
-    ),
-  listEnrichment: async (context, input) =>
-    entityListEnrichmentOutputSchema.parse(
-      await ENTITY_LIST_READ_OPERATIONS[input.entity].enrich(context, input),
-    ),
-  listSummary: async (context, input) =>
-    entityListSummaryOutputSchema.parse(
-      await ENTITY_LIST_READ_OPERATIONS[input.entity].summary(context, input),
-    ),
   facetCounts: (context, input) =>
     ENTITY_LIST_READ_OPERATIONS[input.entity].facets(context, input),
   viewCounts: (context, input) =>

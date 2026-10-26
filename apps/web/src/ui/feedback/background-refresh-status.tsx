@@ -28,15 +28,18 @@ export function ShellStatusSlot({ children }: { children: ReactNode }) {
 
 export function BackgroundRefreshStatus({
   compact = false,
+  idle = null,
 }: {
   compact?: boolean;
+  /** Shell work status shown in the same slot while nothing is syncing. */
+  idle?: ReactNode;
 }) {
   const fetching = useIsFetching({
     predicate: (query) =>
       query.state.data !== undefined && Boolean(query.meta?.cacheTags?.length),
   });
   const visible = useDelayedRefresh(fetching > 0);
-  if (!visible) return null;
+  if (!visible) return idle;
   return (
     <output
       aria-label="Syncing"

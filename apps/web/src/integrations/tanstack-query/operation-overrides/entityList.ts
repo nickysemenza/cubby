@@ -13,10 +13,6 @@ const stableIndexEntities = new Set<ListEntity>([
 ]);
 
 export const entityListOverrides = {
-  listBase: {
-    cache: (input) =>
-      stableIndexEntities.has(input.entity) ? "browse" : undefined,
-  },
   list: {
     parse: (result, input) =>
       getEntityListOutputSchema(input.entity).parse(result),

@@ -1,37 +1,14 @@
-import type {
-  ListGroupBy,
-  ListGroupMembership,
-  ListGroupSummary,
-  ListNesting,
-} from "@cubby/schemas/pagination";
+import type { paginatedMetaSchema } from "@cubby/schemas/pagination";
+import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
 import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
+import type { z } from "zod";
 
-import type {
-  DeferredListGroup,
-  LoadListEnrichment,
-} from "../../entity/hooks/progressive-list";
 import type { TableStateReturn } from "../../entity/table/use-table-state";
-
-/** Full-filtered-set aggregates: column sums and the declared totals' server text. */
-export interface ListTotals {
-  /** Column aggregates (footer totals), by column id. */
-  sums?: Record<string, number>;
-  /** Declared list totals as the server words them, by total id. */
-  totalLabels?: Record<string, string>;
-}
 
 export interface ListQueryResponse<TData> {
   items: TData[];
-  deferredGroups?: DeferredListGroup[];
-  meta: ListTotals & {
-    pageIndex: number;
-    pageSize: number;
-    totalCount: number;
-    groups?: ListGroupSummary[];
-    memberships?: ListGroupMembership[];
-    membershipCount?: number;
-  };
+  meta: z.output<typeof paginatedMetaSchema>;
 }
 
 /**
@@ -49,10 +26,6 @@ export interface ListQueryPlan<
   queryKey: QueryKey;
   meta?: QueryMeta;
   execute: (signal: AbortSignal) => Promise<TPage>;
-  progressive?: {
-    enrich: LoadListEnrichment;
-    summary: (signal: AbortSignal) => Promise<ListTotals>;
-  };
 }
 
 /**

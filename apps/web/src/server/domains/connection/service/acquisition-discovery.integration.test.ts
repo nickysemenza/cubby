@@ -17,7 +17,7 @@ import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service
 import {
   refreshSearchDocument,
   getSearchDocumentEmbeddingText,
-  hasUnembeddedSearchDocuments,
+  searchCoverageIncomplete,
 } from "~/server/generic/search/repo/search-document";
 import {
   createProductIdentityFixture,
@@ -117,7 +117,7 @@ describe("acquisition Expense discovery gating", () => {
     await refreshSearchDocument(ctx.db, "product", missing.entityId);
     expect(semanticEmbeddingsConfigured()).toBe(true);
     expect(
-      await hasUnembeddedSearchDocuments(ctx.db, getSemanticEmbeddingConfig(), [
+      await searchCoverageIncomplete(ctx.db, getSemanticEmbeddingConfig(), [
         "product",
       ]),
     ).toBe(true);

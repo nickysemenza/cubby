@@ -153,7 +153,7 @@ describe("Product valuation price resolution on canonical reads", () => {
         { pageIndex: 0, pageSize: 50 },
         "page",
         undefined,
-        { kind: "enrichment", groups: ["derived"] },
+        { kind: "selected", fields: Object.keys(priceRead.shape) },
       );
       expect(deferred.data).toHaveLength(1);
       expect(priceRead.parse(deferred.data[0])).toEqual(detail);

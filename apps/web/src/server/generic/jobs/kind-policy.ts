@@ -79,9 +79,9 @@ export const JOB_KIND_POLICY = {
   "image.device.wake": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   "jobs.retention": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   "ai-refresh.activate": { ...SERVER, internal: true },
-  // Derived refresh passes never restart on capture, so no capture can wake
-  // a failed one; they back off instead of failing.
-  "refresh.family": { ...SERVER, retry: MAINTENANCE_RETRY },
+  // The derived drain and reconcile never fail: a failing page backs off (ADR 0021).
+  "derived.drain": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
+  "derived.reconcile": { ...SERVER, internal: true, retry: MAINTENANCE_RETRY },
   "ai.evaluation": {
     ...SERVER,
     lane: "frontier_ai",

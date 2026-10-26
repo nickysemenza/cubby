@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { listEnrichmentGroups } from "~/entity/model/list-read-fields";
-import { listReadFields } from "~/entity/model/list-read-schema";
+import { isListMediaField } from "~/entity/model/list-read-fields";
+import { listReadSchema } from "~/entity/model/list-read-schema";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -199,7 +199,7 @@ describe("entity_read field selection", () => {
       resultDetail: "compact",
     });
     expect(listed.isError).not.toBe(true);
-    const declared = new Set(Object.values(listReadFields("purchase")).flat());
+    const declared = new Set(Object.keys(listReadSchema("purchase").shape));
     const [item] = rows.parse(listed.structuredContent).items;
     expect(item).toHaveProperty("expenseTotal", 12.5);
     for (const [key, value] of Object.entries(item!)) {
@@ -415,12 +415,12 @@ describe("entity_read field selection", () => {
           }
         };
         const inspectEntity = async (entity: (typeof listEntities)[number]) => {
-          const declared = listReadFields(entity);
+          const keys = Object.keys(listReadSchema(entity).shape);
           const fields = [
-            ...declared.core.filter((field) => field !== "id").slice(0, 1),
-            ...listEnrichmentGroups.flatMap((group) =>
-              declared[group].slice(0, 1),
-            ),
+            ...new Set([
+              ...keys.filter((field) => field !== "id").slice(0, 5),
+              ...keys.filter(isListMediaField),
+            ]),
           ];
           const listedCompact = rows.safeParse(
             (await call({ action: "list", entity, resultDetail: "compact" }))

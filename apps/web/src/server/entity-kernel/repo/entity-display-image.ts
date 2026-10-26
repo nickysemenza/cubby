@@ -38,6 +38,7 @@ import { z } from "zod";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { mapImages } from "~/server/db/helpers/transform";
 import { entityAttachment, image } from "~/server/db/schema";
@@ -462,6 +463,8 @@ const displayImageRowSchema = z.object({
       key: z.string(),
       useOriginal: z.boolean(),
       derivativeKey: z.string().nullable(),
+      priority: z.number(),
+      sourceId: z.string().nullable(),
     }),
   ),
 });
@@ -485,6 +488,66 @@ async function resolveDisplayImageListsFromSqlRefs(
   refsSql: SQL,
   sourceTypes: ReadonlySet<Entity>,
 ): Promise<Map<string, DisplayImageSummary[]>> {
+  const ranked = await resolveRankedDisplayImages(db, refsSql, sourceTypes);
+  return new Map(
+    [...ranked].map(([key, images]) => [key, images.map(({ image }) => image)]),
+  );
+}
+
+/** One displayable image with its precedence level and the record it comes from. */
+export interface RankedDisplayImage {
+  readonly image: DisplayImageSummary;
+  /** 0 for the record's own images; borrowed sources follow in declared order. */
+  readonly priority: number;
+  /** The record the image is attached to, when borrowed; null for its own. */
+  readonly sourceId: string | null;
+}
+
+/** The display-image chain of one record (ADR 0021 image explanation). */
+export async function resolveEntityDisplayImageChain(
+  db: Database | DrizzleTransaction,
+  ref: EntityDisplayImageRef,
+): Promise<RankedDisplayImage[]> {
+  if (!DISPLAY_IMAGE_ENTITIES.has(ref.entityKind)) return [];
+  const key = entityRefKey(ref.entityKind, ref.entityId);
+  const ranked = await resolveRankedDisplayImages(
+    db,
+    sql`refs("entityKind", "entityId", "refKey") AS (VALUES (${ref.entityKind}::text, ${ref.entityId}::uuid, ${key}::text))`,
+    new Set([ref.entityKind]),
+  );
+  return ranked.get(key) ?? [];
+}
+
+/** Public refs of the records a chain borrows from, keyed by internal id. */
+export async function loadDisplayImageSources(
+  db: Database | DrizzleTransaction,
+  chain: readonly RankedDisplayImage[],
+): Promise<Map<string, PublicEntityRef>> {
+  const ids = [
+    ...new Set(chain.flatMap(({ sourceId }) => (sourceId ? [sourceId] : []))),
+  ];
+  if (ids.length === 0) return new Map();
+  const rows = await unwrapDb(db)
+    .select({
+      id: entityIdentity.id,
+      kind: entityIdentity.kind,
+      shortcode: entityIdentity.shortcode,
+    })
+    .from(entityIdentity)
+    .where(inArray(entityIdentity.id, ids));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { entityKind: row.kind, entityId: row.shortcode ?? row.id },
+    ]),
+  );
+}
+
+async function resolveRankedDisplayImages(
+  db: Database | DrizzleTransaction,
+  refsSql: SQL,
+  sourceTypes: ReadonlySet<Entity>,
+): Promise<Map<string, RankedDisplayImage[]>> {
   // Unrelated entity arms still incur planner/JIT costs even when their WHERE
   // clauses can never match. Compile only the source types in this batch.
   const selectedBranches = DISPLAY_BRANCHES.filter(({ entity }) =>
@@ -539,7 +602,9 @@ async function resolveDisplayImageListsFromSqlRefs(
             'id', candidates.shortcode,
             'key', candidates.key,
             'useOriginal', selected_image."useOriginal",
-            'derivativeKey', derivative.key
+            'derivativeKey', derivative.key,
+            'priority', candidates.priority,
+            'sourceId', candidates."group0Id"
           )
           ORDER BY candidates.priority, ${displayGroupOrder("candidates")},
                    candidates."sortOrder", candidates."createdAt", candidates."imageId"
@@ -582,15 +647,19 @@ async function resolveDisplayImageListsFromSqlRefs(
           : null;
         const preferTransparent = !img.useOriginal && transparent !== null;
         return {
-          id: img.id,
-          url: original,
-          representations: {
-            original,
-            transparent,
-            preferred: preferTransparent ? transparent : original,
-            preferredKind: preferTransparent
-              ? ("transparent" as const)
-              : ("original" as const),
+          priority: img.priority,
+          sourceId: img.sourceId === row.entityId ? null : img.sourceId,
+          image: {
+            id: img.id,
+            url: original,
+            representations: {
+              original,
+              transparent,
+              preferred: preferTransparent ? transparent : original,
+              preferredKind: preferTransparent
+                ? ("transparent" as const)
+                : ("original" as const),
+            },
           },
         };
       }),

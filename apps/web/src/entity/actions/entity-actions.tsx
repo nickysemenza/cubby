@@ -386,18 +386,6 @@ let registeredActions: readonly EntityActionDefinition[] | undefined;
 /** The registry, built on first use: feature-owned actions come from the installed feature registry. */
 const entityActions = () => (registeredActions ??= buildEntityActions());
 
-/** The row fields `entity`'s registered row actions read beyond its columns. */
-export const rowActionReadFields = (entity: Entity): readonly string[] => [
-  ...new Set(
-    entityActions().flatMap((definition) =>
-      definition.entities.includes(entity) &&
-      (definition.surfaces ?? DEFAULT_SURFACES).includes("row")
-        ? (definition.readFields ?? [])
-        : [],
-    ),
-  ),
-];
-
 export interface EntityActionCatalogDescriptor extends Omit<
   EntityActionDefinition,
   "use" | "surfaces"

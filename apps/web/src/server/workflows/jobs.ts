@@ -17,6 +17,10 @@ import { imageProcessingJobHandler } from "~/server/domains/image-processing/ser
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
+import {
+  derivedDrainHandler,
+  derivedReconcileHandler,
+} from "~/server/generic/derived/service/drain-job";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
@@ -26,13 +30,13 @@ import {
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { embeddingJobHandler } from "~/server/workflows/background-tasks/embedding";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 import {
   runJobHandler,
   aiEvaluationJobHandler,
 } from "~/server/workflows/runs/job-execution";
 
 import { aiRefreshActivationHandler } from "./ai-refresh-startup";
+import { derivedComputes } from "./derived-computes";
 import { jobRetentionHandler, queueWatchdogHandler } from "./queue-watchdog";
 
 const background = defineJobHandler(
@@ -63,7 +67,8 @@ const backgroundHandlers = {
 export const productionJobHandlers: JobHandlers = {
   ...backgroundHandlers,
   "assessment.correction": correctionPropagationHandler,
-  "refresh.family": refreshFamilyHandler,
+  "derived.drain": derivedDrainHandler(derivedComputes),
+  "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
   "embedding.refresh": embeddingJobHandler(),
   "embedding.cleanup": embeddingCleanupHandler(),

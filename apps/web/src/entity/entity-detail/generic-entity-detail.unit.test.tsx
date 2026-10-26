@@ -93,6 +93,9 @@ function recordFor<E extends GenericDetailEntity>(
 // Relation tables and timeline sections read through the transport; canned
 // empty reads keep the page's structure under test without a server.
 const operations = {
+  imageChain: fieldExplanation.imageChain.withTransport(async () => ({
+    levels: [],
+  })).queryOptions,
   displayImages: entityMedia.displayImages.withTransport(async () => ({}))
     .queryOptions,
   list: {
@@ -219,11 +222,7 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     expect(container.querySelector("section#import-targets")).toBeNull();
-    expect(
-      await screen.findByText(/Target outcomes · Defect/, {
-        selector: "button span",
-      }),
-    ).toBeVisible();
+    expect(await screen.findByText(/Target outcomes · Defect/)).toBeVisible();
     const jump = screen
       .getByRole("navigation", { name: "Quality issues" })
       .querySelector("a");

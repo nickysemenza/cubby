@@ -1,3 +1,4 @@
+import { automaticFields } from "./automatic-fields";
 import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
@@ -78,16 +79,13 @@ export default defineEntity({
       ],
     },
     list: {
-      read: {
-        relations: ["parentId", "productCategories"],
-        derived: ["fieldResolutions"],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-      },
       tree: {},
     },
   },
   model: {
+    stored: {
+      automaticFields: automaticFields("spendingCategory", "SpendingCategory"),
+    },
     hierarchy: { parentField: "parentId", maxDepth: 10 },
     fields: [
       {

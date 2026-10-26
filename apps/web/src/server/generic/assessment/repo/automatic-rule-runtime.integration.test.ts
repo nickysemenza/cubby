@@ -50,6 +50,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
+import { automaticFieldsComputes } from "~/server/generic/assessment/repo/automatic-fields";
 import {
   applyAutomaticRules,
   listAutomaticRules,
@@ -62,6 +63,11 @@ import {
   canAutomaticallyFillField,
   acceptSuggestion,
 } from "~/server/generic/assessment/repo/suggestion-review";
+import {
+  claimDerivedMarks,
+  prepareDerivedPage,
+  publishDerivedPage,
+} from "~/server/generic/derived/repo/drain";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Ctx = ReturnType<typeof withTestDb>;
@@ -909,6 +915,99 @@ describe("automatic field assignments", () => {
       expect(await productCategoryId(ctx.db, item.id)).toBe(
         confidence >= 0.85 ? taxonomyId("food") : null,
       );
+    },
+  );
+  // Failure: receipt-backed provenance survives a member edit, ABA edit, or confirmation.
+  it.each(["edit", "restore", "confirm"] as const)(
+    "clears list auto provenance after member %s",
+    async (action) => {
+      const item = await productFixture(ctx, "Synthetic automatic provenance");
+      const sweep = await startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId"],
+          filters: { ids: [item.id] },
+        },
+        { context: kernelCtx(ctx), ...categoryPorts(0.9) },
+      );
+      const [state] = await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.runId, sweep.id));
+      expect(state?.status).toBe("applied");
+      if (!state) throw new Error("Missing automatic application");
+      const drain = async () => {
+        for (let page = 0; page < 10; page++) {
+          const marks = (await claimDerivedMarks(ctx.db)).filter((mark) =>
+            mark.target.startsWith("product.automaticFields"),
+          );
+          if (!marks.length) return;
+          const plan = await prepareDerivedPage(
+            ctx.db,
+            automaticFieldsComputes,
+            marks,
+          );
+          expect([...plan.failed]).toEqual([]);
+          await publishDerivedPage(ctx.db, plan);
+        }
+        throw new Error("Automatic provenance did not settle");
+      };
+      const list = async () =>
+        executeEntity(kernelCtx(ctx), {
+          action: "list",
+          entity: "product",
+          filters: { ids: [item.id] },
+          pagination: { pageIndex: 0, pageSize: 10 },
+        });
+      await drain();
+      expect(await list()).toMatchObject({
+        meta: {
+          derived: {
+            [item.id]: {
+              categoryId: {
+                state: "fresh",
+                decidedBy: { level: "suggested", auto: true, confidence: 0.9 },
+              },
+            },
+          },
+        },
+      });
+      expect(JSON.stringify((await list()).meta?.derived)).not.toContain(
+        '"automaticFields"',
+      );
+      if (action === "confirm") {
+        await reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: state.id,
+          operationId: "synthetic-auto-confirmation",
+          verdict: "correct",
+          intent: "history",
+        });
+      } else {
+        await executeEntity(
+          kernelCtx(ctx),
+          entityCommandSchema.parse({
+            action: "update",
+            entity: "product",
+            id: item.id,
+            data: { categoryId: taxonomyShortcode("tools") },
+          }),
+        );
+        if (action === "restore")
+          await executeEntity(
+            kernelCtx(ctx),
+            entityCommandSchema.parse({
+              action: "update",
+              entity: "product",
+              id: item.id,
+              data: { categoryId: taxonomyShortcode("food") },
+            }),
+          );
+      }
+      await drain();
+      expect(
+        (await list()).meta?.derived?.[item.id]?.categoryId?.decidedBy,
+      ).not.toMatchObject({ auto: true });
     },
   );
   // Failure: stored NULL hides a populated effective value derived from order evidence.

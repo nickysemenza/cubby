@@ -153,7 +153,6 @@ export interface RTableProps<TItem extends RowData> {
   /** Responsive top-level inspector toggle; omitted by embedded/specialist tables. */
   inspectorToggle?: ReactNode;
   isLoading?: boolean;
-  isFieldReady?: (id: string, field: string) => boolean;
   error?: unknown;
   ariaLabel?: string;
   timing?: QueryTiming;
@@ -1543,7 +1542,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     >
       <RecordSuggestionsProvider
         viewportOnly
-        isFieldReady={props.isFieldReady}
         statusTarget={statusTarget}
         entity={entity}
         records={

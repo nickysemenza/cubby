@@ -2,8 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-
-import { ReadableExplanationValue } from "./field-explanation";
+import { ReadableExplanationValue } from "~/ui/derived/why-value";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {

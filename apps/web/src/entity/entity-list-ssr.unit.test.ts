@@ -1,11 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  compileEntityListInput,
-  entityListFor,
-  entityListBaseFor,
-} from "~/entity/entity-list";
+import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
@@ -123,7 +119,7 @@ describe("ensureEntityListSsr", () => {
       entity: "task",
       search: { view: "timeline", groupBy: [{ key: "status" }] },
     });
-    const ungrouped = entityListBaseFor("task").infiniteQueryOptions(
+    const ungrouped = entityListFor("task").infiniteQueryOptions(
       compileEntityListInput(
         "task",
         {},

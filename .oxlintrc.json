@@ -347,6 +347,7 @@
         "packages/schemas/src/entity-detail-summary.ts",
         "packages/schemas/src/entity-report-slots.ts",
         "packages/schemas/src/field-resolution.ts",
+        "packages/schemas/src/derived-value.ts",
         "packages/schemas/src/spending-classification.ts",
         "packages/schemas/src/financial-reconciliation.ts",
         "packages/schemas/src/purchase-evidence-policy.ts",

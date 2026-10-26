@@ -4,12 +4,13 @@
  * legacy mailbox again. Only a pending, ownership-resolved legacy copy of the
  * same message settles; reviewed history and other messages are untouched.
  */
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/schema";
+import { derivedMarkTickets } from "~/server/testing/background-queue";
 
 import {
   memberImportWorld,
@@ -57,29 +58,18 @@ describe("legacy mailbox Email supersession", () => {
       messageId: metadata.mail.messageId,
       checksum: "e".repeat(64),
     });
-    // Supersession appends search input without changing policy or execution.
-    const search = async () =>
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT j.generation, j.xmin::text AS xmin, (SELECT count(*)::int FROM "JobInvalidationCapture" c WHERE c.key = m.key) AS captures, m.xmin::text AS "markerXmin"
-            FROM "Job" j JOIN "JobInvalidation" m ON m.key = j.key WHERE j.key = 'refresh:search'`,
-        )
-      ).rows[0];
-    const original = await search();
+    const qualityTickets = () =>
+      derivedMarkTickets(ctx.db, "email.dataQuality");
+    const original = await qualityTickets();
     await saveMailboxMetadata(ctx.db, metadata);
     expect(await readEmail(ctx.db, identity)).toEqual(current);
     expect(
       await readEmail(ctx.db, { ...identity, mailboxId: `legacy:${party.id}` }),
     ).toMatchObject({ orderMailId: legacy.id, status: "excluded" });
-    const superseded = await search();
-    expect(superseded?.captures).toBe(Number(original?.captures) + 1);
-    expect(superseded?.markerXmin).toBe(original?.markerXmin);
-    expect({
-      generation: superseded?.generation,
-      xmin: superseded?.xmin,
-    }).toEqual({ generation: original?.generation, xmin: original?.xmin });
+    const superseded = await qualityTickets();
+    expect(superseded).not.toEqual(original);
     await saveMailboxMetadata(ctx.db, metadata);
-    expect(await search()).toEqual(superseded);
+    expect(await qualityTickets()).toEqual(superseded);
   });
 
   it("excludes a pending legacy copy once the current mailbox holds the message", async () => {

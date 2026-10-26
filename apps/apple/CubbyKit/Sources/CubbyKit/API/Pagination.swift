@@ -5,13 +5,9 @@ import CubbyAPI
 public struct ListPage<T: Sendable>: Sendable {
     public let items: [T]
     public let meta: ListPageMeta
-    /// Native presentation work captured for this exact query/page; legacy callers leave it nil.
-    public let deferred: EntityListDeferred?
-
-    public init(items: [T], meta: ListPageMeta, deferred: EntityListDeferred? = nil) {
+    public init(items: [T], meta: ListPageMeta) {
         self.items = items
         self.meta = meta
-        self.deferred = deferred
     }
 
     /// Pages through `fetch(page, pageSize)` until a short page, the server total, or `limit`

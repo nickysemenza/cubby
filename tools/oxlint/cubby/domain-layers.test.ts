@@ -296,3 +296,30 @@ test("services consume the nominal handle, not storage table or query capabiliti
     assert.equal(violation(service, `${S}/${target}`, true), "serviceDb");
   assert.equal(violation(service, `${S}/db/database`, true), undefined);
 });
+
+test("derived UI composes entity decisions without opening shared UI to features", () => {
+  assert.equal(
+    violation(
+      "apps/web/src/ui/derived/decision-chain.tsx",
+      "apps/web/src/entity/fields/field-resolution.tsx",
+      false,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(
+      "apps/web/src/ui/common/facts.tsx",
+      "apps/web/src/entity/fields/field-resolution.tsx",
+      false,
+    ),
+    "uiUpward",
+  );
+  assert.equal(
+    violation(
+      "apps/web/src/ui/derived/decision-chain.tsx",
+      "apps/web/src/features/product/detail.tsx",
+      false,
+    ),
+    "uiUpward",
+  );
+});

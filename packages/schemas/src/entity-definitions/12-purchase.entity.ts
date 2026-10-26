@@ -1,3 +1,5 @@
+import { imageDescriptionInputs } from "./image-description-inputs";
+import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { labelField } from "./label-field.js";
 import { purchaseChildren } from "../child-tables/purchase.js";
@@ -235,37 +237,6 @@ export default defineEntity({
           sort: [{ id: "date", desc: true }],
         },
       ],
-      read: {
-        relations: [
-          "vendorId",
-          "vendorAccountId",
-          "defaultProjectId",
-          "vendorName",
-          "orderUrl",
-          "spendingCategoryName",
-        ],
-        media: ["vendorLogo", "images", "displayImages"],
-        derived: [
-          "purchaserId",
-          "expenseCountLabel",
-          "reconciliationLabel",
-          "financialReconciliationLabel",
-          "bookingCoverage",
-          "documentCoverage",
-          "itemizationCoverage",
-          "productsCoverage",
-          "coverage",
-          "spendingCategorySummary",
-          "fieldResolutions",
-          "expenseCount",
-          "unpricedExpenseCount",
-          "expenseTotal",
-          "reconciliation",
-          "financialReconciliation",
-          "documentCount",
-        ],
-        quality: ["dataQuality"],
-      },
       totals: [
         {
           id: "expenseTotal",
@@ -283,6 +254,7 @@ export default defineEntity({
     },
   },
   model: {
+    stored: { automaticFields: automaticFields("purchase", "Purchase") },
     research: { fillFields: ["spendingCategoryId"] },
     fields: [
       {
@@ -2076,9 +2048,409 @@ export default defineEntity({
       },
     },
   ],
-  search: "lexical",
+  // Related rows the search document reads (ADR 0021).
+  search: {
+    mode: "lexical",
+    inputs: [
+      ...imageDescriptionInputs("purchase"),
+      { table: "Vendor", match: { id: "vendorId" } },
+    ],
+  },
   capabilities: {
     dataQuality: {
+      // Rows the stored evaluator reads beyond its own row (ADR 0021).
+      inputs: [
+        {
+          table: "Email",
+          match: { id: "id" },
+          columns: ["orderMailId", "ledgerPartyId", "deletedAt"],
+          path: [
+            { table: "Email", from: "id", to: "orderMailId" },
+            { table: "OrderMailEvent", from: "orderMailId", to: "id" },
+            {
+              table: "AssessmentState",
+              from: "data",
+              to: "data",
+              where: { family: "email_link" },
+              fromJsonKey: "eventId",
+              jsonKey: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "OrderMail",
+          match: { id: "id" },
+          path: [
+            { table: "OrderMailEvent", from: "orderMailId", to: "id" },
+            {
+              table: "AssessmentState",
+              from: "data",
+              to: "data",
+              where: { family: "email_link" },
+              fromJsonKey: "eventId",
+              jsonKey: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "OrderMailEvent",
+          match: { id: "id" },
+          path: [
+            {
+              table: "AssessmentState",
+              from: "data",
+              to: "data",
+              where: { family: "email_link" },
+              fromJsonKey: "eventId",
+              jsonKey: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "OrderMailAttachment",
+          match: { orderMailId: "id" },
+          path: [
+            { table: "OrderMailEvent", from: "orderMailId", to: "id" },
+            {
+              table: "AssessmentState",
+              from: "data",
+              to: "data",
+              where: { family: "email_link" },
+              fromJsonKey: "eventId",
+              jsonKey: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "LedgerParty",
+          match: { id: "id" },
+          path: [
+            { table: "VendorAccount", from: "ledgerPartyId", to: "id" },
+            { table: "Purchase", from: "vendorAccountId", to: "id" },
+          ],
+        },
+        {
+          table: "EntityLink",
+          match: { fromEntityId: "id" },
+          where: { kind: "purchaseProduct" },
+        },
+
+        {
+          table: "EntityExternalId",
+          match: { entityId: "id" },
+          where: { entityKind: "purchase" },
+        },
+
+        {
+          table: "AssessmentState",
+          match: { data: "id" },
+          where: { family: "email_link" },
+          json: { key: "purchaseId" },
+        },
+        {
+          table: "AssessmentState",
+          match: { recordId: "id" },
+          where: { entity: "purchase" },
+        },
+
+        {
+          table: "Expense",
+          match: { purchaseId: "id" },
+          columns: [
+            "deletedAt",
+            "productId",
+            "purchaseId",
+            "projectId",
+            "lineKind",
+          ],
+          path: [{ table: "Purchase", from: "id", to: "id" }],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Product", from: "id", to: "id" },
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Product", from: "id", to: "id" },
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [{ table: "Purchase", from: "vendorId", to: "id" }],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Purchase", from: "vendorId", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Purchase", from: "vendorId", to: "id" },
+          ],
+        },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "brandId"],
+          path: [
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Vendor",
+          match: { id: "id" },
+          columns: ["deletedAt", "id"],
+          path: [
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "EntityAttachment",
+          match: { entityId: "id" },
+          columns: ["deletedAt", "imageId", "purpose", "role"],
+          path: [
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "Image",
+          match: { id: "id" },
+          columns: [
+            "deletedAt",
+            "renderStatus",
+            "storageStatus",
+            "detectedContentType",
+          ],
+          path: [
+            { table: "EntityAttachment", from: "imageId", to: "entityId" },
+            { table: "Vendor", from: "id", to: "id" },
+            { table: "Product", from: "brandId", to: "id" },
+            { table: "Expense", from: "productId", to: "purchaseId" },
+            { table: "Purchase", from: "id", to: "id" },
+          ],
+        },
+        {
+          table: "FinancialTransactionAllocation",
+          match: { purchaseId: "id" },
+        },
+        {
+          table: "FinancialTransaction",
+          match: { id: "id" },
+          path: [
+            {
+              table: "FinancialTransactionAllocation",
+              from: "transactionId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "FinancialAccount",
+          match: { id: "id" },
+          path: [
+            { table: "FinancialTransaction", from: "accountId", to: "id" },
+            {
+              table: "FinancialTransactionAllocation",
+              from: "transactionId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "FinancialAccount",
+          match: { providerVendorId: "id" },
+          columns: [
+            "identity",
+            "ledgerPartyId",
+            "providerVendorId",
+            "deletedAt",
+          ],
+          path: [{ table: "Purchase", from: "vendorId", to: "id" }],
+        },
+        {
+          table: "EntityLink",
+          match: { fromEntityId: "id" },
+          where: { kind: "purchasePaymentAccount" },
+        },
+        {
+          table: "FinancialAccount",
+          match: { id: "id" },
+          path: [
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "purchasePaymentAccount" },
+            },
+          ],
+        },
+        { table: "ImportSourceOrder", match: { purchaseId: "id" } },
+        { table: "PurchasePaymentEvidence", match: { purchaseId: "id" } },
+        {
+          table: "SpendingCategory",
+          match: { id: "spendingCategoryId" },
+          columns: ["deletedAt", "itemizationExpectation"],
+        },
+        { table: "VendorAccount", match: { id: "vendorAccountId" } },
+        {
+          table: "Product",
+          match: { id: "id" },
+          columns: ["deletedAt", "categoryId"],
+          path: [
+            {
+              table: "EntityLink",
+              from: "toEntityId",
+              to: "fromEntityId",
+              where: { kind: "purchaseProduct" },
+            },
+          ],
+        },
+        {
+          table: "ProductCategory",
+          match: { id: "id" },
+          columns: [
+            "parentId",
+            "feature",
+            "spendingCategoryId",
+            "spendingCategoryMode",
+            "deletedAt",
+          ],
+          path: [
+            { table: "Product", from: "categoryId", to: "id" },
+            { table: "Expense", from: "productId", to: "purchaseId" },
+          ],
+        },
+        {
+          table: "Email",
+          match: { ledgerPartyId: "id" },
+          path: [
+            { table: "ImportSourceClaim", from: "ledgerPartyId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "sourceClaimId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "ImportSourceClaim",
+          match: { ledgerPartyId: "id" },
+          path: [
+            { table: "ImportSourceClaim", from: "ledgerPartyId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "sourceClaimId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "OrderMail",
+          match: { ledgerPartyId: "id" },
+          path: [
+            { table: "ImportSourceClaim", from: "ledgerPartyId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "sourceClaimId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "LedgerParty",
+          match: { id: "id" },
+          path: [
+            { table: "ImportSourceClaim", from: "ledgerPartyId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "sourceClaimId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "LedgerParty",
+          match: { id: "id" },
+          path: [{ table: "Purchase", from: "purchaserOverrideId", to: "id" }],
+        },
+        {
+          table: "OrderMailEvent",
+          match: { orderMailId: "id" },
+          path: [
+            { table: "Email", from: "orderMailId", to: "ledgerPartyId" },
+            { table: "ImportSourceClaim", from: "ledgerPartyId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "sourceClaimId",
+              to: "purchaseId",
+            },
+          ],
+        },
+        {
+          table: "OrderMailAttachment",
+          match: { orderMailId: "id" },
+          path: [
+            { table: "Email", from: "orderMailId", to: "ledgerPartyId" },
+            { table: "ImportSourceClaim", from: "ledgerPartyId", to: "id" },
+            {
+              table: "ImportSourceOrder",
+              from: "sourceClaimId",
+              to: "purchaseId",
+            },
+          ],
+        },
+
+        { table: "Expense", match: { purchaseId: "id" } },
+        { table: "Vendor", match: { id: "vendorId" } },
+      ],
       exceptions: true,
       related: ["product"],
       checks: [

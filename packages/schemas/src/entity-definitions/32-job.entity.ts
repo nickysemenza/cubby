@@ -51,7 +51,6 @@ export default defineEntity({
     },
     icons: { phosphor: "Robot", sfSymbol: "gearshape", emoji: "⚙️" },
     list: {
-      read: { media: ["displayImages"] },
       savedViews: [
         {
           id: "in-progress",
@@ -327,7 +326,12 @@ export default defineEntity({
         name: "Job_subject_check",
         sql: "({subjectKind} IS NULL) = ({subjectId} IS NULL)",
       },
-      { name: "Job_kind_retired_check", sql: "{kind} <> 'image.processing'" },
+      // Retired kinds have no handler; a pre-cutover Worker's write fails here
+      // instead of landing as work nothing serves (ADR 0021 retired refresh.family).
+      {
+        name: "Job_kind_retired_check",
+        sql: "{kind} NOT IN ('image.processing', 'refresh.family')",
+      },
       {
         name: "Job_attempts_check",
         sql: "{attempts} >= 0 AND {maxAttempts} > 0",

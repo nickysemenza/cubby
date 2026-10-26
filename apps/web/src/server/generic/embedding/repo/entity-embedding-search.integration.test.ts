@@ -1,11 +1,10 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -95,10 +94,9 @@ describe("validated semantic candidates", () => {
         )
       ).complete,
     ).toBe(true);
-    await getDb(ctx.db)
-      .update(job)
-      .set({ state: "failed", error: "Synthetic embedding family exhausted" })
-      .where(eq(job.key, "refresh:embeddings"));
+    await getDb(ctx.db).execute(
+      sql`SELECT derived_mark('product.searchDocument', ARRAY[${first.subject.entityId}::uuid])`,
+    );
     const degraded = await findSemanticEntityCandidates(
       ctx.db,
       productionVectorStore,

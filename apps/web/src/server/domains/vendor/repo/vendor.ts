@@ -790,7 +790,15 @@ export const vendorListRead = async (
             spend,
             latestPurchaseDate,
             fieldResolutions,
-            mailSearch: vendorMailSearchSql(context.get(vendorMailSearch)),
+            // A selected read prepares mail search only when that field is requested.
+            ...(projection.kind !== "selected" ||
+            projection.fields.includes("mailSearch")
+              ? {
+                  mailSearch: vendorMailSearchSql(
+                    context.get(vendorMailSearch),
+                  ),
+                }
+              : {}),
           })),
           ...listGroupFields(projection, "media", () => ({ logo })),
         })

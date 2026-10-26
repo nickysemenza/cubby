@@ -373,7 +373,7 @@ async function loadSpendingCategoryRoster(
       spendingCategoryFilters.parse({}),
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex, pageSize: MAX_PAGE_SIZE },
-      { kind: "selected", fields: ["id", "name", "parentId"], groups: [] },
+      { kind: "selected", fields: ["id", "name", "parentId"] },
     );
     rows.push(...spendingRosterRow.array().parse(page.data));
     if (rows.length >= page.count || page.data.length === 0) break;

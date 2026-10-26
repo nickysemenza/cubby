@@ -12,9 +12,8 @@
  * production went stale until it was noticed.
  *
  * So these tests call `computeLocationValuations` end-to-end over a tree that
- * contains a product-linked location, check `directValuationSql` (the list
- * filter/sort's SQL twin of the same figure) agrees with it, and check the
- * Home summary.
+ * contains a product-linked location, check the list filter/sort's stored
+ * direct value (ADR 0021) agrees with it, and check the Home summary.
  */
 
 import { withTestDb } from "tooling/test-setup";
@@ -23,6 +22,7 @@ import { describe, expect, it } from "vitest";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { getLocationById } from "~/server/domains/location/repo/crud";
 import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -94,7 +94,7 @@ describe("location valuation — computed on read", () => {
     });
   });
 
-  it("agrees with the list filter/sort's directValuationSql, and the Home summary", async () => {
+  it("agrees with the list filter/sort's stored direct value, and the Home summary", async () => {
     const [cheap, pricey] = await Promise.all([
       createProductFixture(
         ctx.db,
@@ -149,6 +149,7 @@ describe("location valuation — computed on read", () => {
     expect(lowValuation).toBe(10);
     expect(highValuation).toBe(40);
 
+    await drainStoredDerived(ctx.db);
     // Filter: only the shelf whose rollup direct value clears the bar.
     const filtered = await locationList(ctx.db, { valuationMin: 40 }, [], page);
     const filteredIds = filtered.data.map((l) => l.id);

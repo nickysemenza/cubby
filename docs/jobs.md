@@ -200,8 +200,8 @@ failed) is released in the same transaction and counts nothing.
 ## Durable invalidation
 
 A source capture appends its own UUID row to `JobInvalidationCapture` in the
-save's transaction (`recordJobInvalidation`; refresh families through
-`invalidateRefreshFamily`). It never updates another capture, a long-lived
+save's transaction (`recordJobInvalidation`; the generated derived mark
+function captures `derived:drain` once per writing transaction, ADR 0021). It never updates another capture, a long-lived
 Job's execution row or the stable `JobInvalidation` policy. Genuine concurrent
 source and image publications therefore share no mutable capture counter.
 A rolled-back save leaves no capture. First-key policy, Job and capture
@@ -215,20 +215,14 @@ locks its Job and acknowledges exactly the pending captures visible in that
 transaction, together with its new generation, empty cursor/result and fresh
 budget. There is no maximum UUID, timestamp or allocation-order frontier:
 an earlier-started capture that commits later stays pending. A refused or
-rolled-back claim acknowledges nothing. `restartsPass: false` (every refresh
-family) lets a pass in progress keep its cursor and leaves newer captures
-pending. The finished Job is then due for a full pass from the first record.
-Passes run
-back to back only while real writes keep arriving: ordinary source writes
-capture every family and Run-only source writes capture quality, while a
-`derived_refresh` Run's own create and complete register projection changes
-and capture none. The scheduled repeat (`scheduleRefreshFamilies` from
-catch-up, after `REFRESH_INTERVAL_MS`) reruns a quiet family. A pass that
-keeps its cursor also waits out its backoff after a capture; only a completed
-Job, or a restarting marker, wakes at once. Restarting on each capture kept broad passes from
-ever finishing under ordinary household writes (search reached generation
-~29k with new records unindexed); `image.device.wake` still restarts.
-Refresh families never exhaust: a failing page backs off (1 min doubling to
+rolled-back claim acknowledges nothing. `restartsPass: false` (the derived
+drain) lets a page in progress finish and leaves newer captures pending, so the
+finished Job is due again. Catch-up repeats a quiet drain each minute
+(`scheduleDerivedJobs`) so backed-off marks resume. Restarting on each capture
+kept broad passes from ever finishing under ordinary household writes (search
+reached generation ~29k with new records unindexed); `image.device.wake` still
+restarts.
+The derived drain and reconcile never exhaust: a failing page backs off (1 min doubling to
 15 min) and resumes. Never-exhausted kinds (`NEVER_EXHAUSTED_JOB_KINDS`) have
 no terminal failure at all: the `Job_never_exhausted_failure` trigger (0033)
 stores any `failed` write of one, such as an older build's final attempt, as
@@ -432,7 +426,7 @@ record (~55k), which starved every other kind for days.
 - Routine connection discovery (`discovery.connections`) holds its cursor while
   `CONNECTION_DISCOVERY_PENDING_CAP` connection evaluations wait (`rate_limit`),
   walks the newest records first, and never appends to a stopped Run. A changed
-  record's new evaluation cancels its older queued one. Cancelled work whose Run
+  record updates its queued slot in place, retaining its Job. Cancelled work whose Run
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
   decision) is re-admitted at that pace; a member's cancel stays final.
 - Publication correction work is one `assessment.correction` Job per
@@ -440,6 +434,25 @@ record (~55k), which starved every other kind for days.
   still resolved after commit under serializable isolation.
 - `run.funding-resume` is one Job per funding window; its handler resumes every
   paused Run.
+
+Each AI evaluation slot identifies feature, entity, record, field and (for a
+Product pair) the other Product. A generated text key uses UTF-8 length prefixes;
+input and option fingerprints remain execution evidence, outside the slot key.
+A partial unique index permits one `queued` or `retry_wait` row per slot.
+The pending share-key lookup is nonunique: input can revert to a running
+attempt while a queued successor already exists in the slot.
+Changed input updates that row's snapshot, target, provenance and work key in
+place and clears any result, receipt or error captured for its older input.
+A running or result-ready row keeps its captured evidence; one queued
+successor may wait beside it. A failed running attempt becomes obsolete when a
+queued successor already occupies its slot; it cannot re-enter `retry_wait` beside
+that successor. Automatic refresh does not queue completed current input again;
+a member's request gets its own evaluation, which the AI response cache answers.
+Reverting after another input was evaluated creates a new row and reuses the
+AI response cache. Declined input (`blocked`, `obsolete`, or cancelled as
+superseded) receives at most three automatic attempts; member-cancelled Runs
+veto automatic readmission. Attempt suffixes keep work keys unique without
+receipt chains. Explicit member retries retain their `retryEvaluationId` receipt.
 
 ### Embedding execution
 

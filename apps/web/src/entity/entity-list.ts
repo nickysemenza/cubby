@@ -1,15 +1,12 @@
 import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import type { z } from "zod";
 
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,
 } from "~/integrations/tanstack-query/operation-catalog";
-import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { defaultPagination } from "~/ui/data-table/table-utils";
-import { readListEnrichmentGroup } from "~/ui/hooks/list-enrichment";
 
 import { listGroupBy } from "./entity-list/list-grouping";
 import type { ListSearch } from "./entity-list/list-slot-types";
@@ -30,10 +27,6 @@ import {
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
-import {
-  type ListEnrichmentGroup,
-  type ListReadRow,
-} from "./model/list-read-fields";
 import { entityListDefaultSort } from "./sortable-fields";
 
 export type EntityListParams<E extends ListEntity> =
@@ -195,153 +188,3 @@ export function entityListFor<E extends ListEntity>(
 export type EntityListScoped<E extends ListEntity> = ReturnType<
   typeof entityListFor<E>
 >;
-
-/** Partial standard rows use the generated base schema, never the full parser. */
-export function entityListBaseFor<E extends ListEntity>(entity: E) {
-  const base = entityList.listBase.forEntity(entity);
-  const enrichment = entityList.listEnrichment.forEntity(entity);
-  const summary = entityList.listSummary.forEntity(entity);
-  const inputFor = (input: EntityListParams<E>) =>
-    parseEntityListInput(entity, entityListInputFor(entity, input));
-  const listQueryPlan = (input: EntityListParams<E>) => {
-    const parsed = inputFor(input);
-    const options = base.queryOptions(parsed);
-    return {
-      queryKey: options.queryKey,
-      meta: options.meta,
-      execute: async (signal: AbortSignal) => {
-        const result = await base.call(parsed, { signal });
-        return {
-          items: result.data,
-          meta: result.meta,
-          deferredGroups: result.groups,
-        };
-      },
-      progressive: {
-        enrich: (ids: string[], fields: string[], signal: AbortSignal) =>
-          enrichment.call({ entity, ids, fields }, { signal }),
-        summary: async (signal: AbortSignal) => {
-          const { sums, totalLabels } = await summary.call(parsed, { signal });
-          return { sums, totalLabels };
-        },
-      },
-    };
-  };
-  const baseInfiniteQueryOptions = (input: EntityListParams<E>) => {
-    const firstPage = {
-      ...input,
-      pagination: { ...input.pagination, pageIndex: 0 },
-    };
-    const plan = listQueryPlan(firstPage);
-    return infiniteQueryOptions({
-      queryKey: infiniteOperationQueryKey(plan.queryKey),
-      meta: plan.meta,
-      ...base.policy(inputFor(firstPage)).freshness,
-      queryFn: ({ pageParam, signal }) =>
-        listQueryPlan({
-          ...firstPage,
-          pagination: { ...firstPage.pagination, pageIndex: pageParam },
-        }).execute(signal),
-      initialPageParam: 0,
-      getNextPageParam: (lastPage) => {
-        const { pageIndex, pageSize, totalCount } = lastPage.meta;
-        return (pageIndex + 1) * pageSize < totalCount
-          ? pageIndex + 1
-          : undefined;
-      },
-    });
-  };
-  return {
-    listQueryPlan,
-    infiniteQueryOptions: baseInfiniteQueryOptions,
-    /** Complete vocabularies need their declared fields, not full media/quality hydration.
-     * Base page size and the enrichment schema's ID cap must stay aligned:
-     * each page is completed by one enrichment call. */
-    projectedInfiniteQueryOptions: <
-      Schema extends z.ZodObject<{ id: z.ZodString }>,
-    >(
-      input: EntityListParams<E>,
-      groups: readonly ListEnrichmentGroup[],
-      schema: Schema,
-    ) => {
-      const selected = [...new Set(groups)].sort();
-      const firstPage = {
-        ...input,
-        pagination: { ...input.pagination, pageIndex: 0 },
-      };
-      const firstPlan = listQueryPlan(firstPage);
-      const baseKey = firstPlan.queryKey;
-      const payload = {
-        ...baseKey[2],
-        projection: {
-          groups: selected,
-          fields: Object.keys(schema.shape).sort(),
-        },
-      };
-      type BasePage = Awaited<ReturnType<typeof firstPlan.execute>>;
-      type ProjectedPage = Omit<BasePage, "items"> & {
-        items: z.output<Schema>[];
-      };
-      const parsePage = (
-        page: Omit<BasePage, "items"> & { items: ListReadRow[] },
-      ): ProjectedPage => ({
-        ...page,
-        items: schema.array().parse(page.items),
-      });
-      return infiniteQueryOptions({
-        queryKey: infiniteOperationQueryKey([baseKey[0], baseKey[1], payload]),
-        meta: firstPlan.meta,
-        ...base.policy(inputFor(firstPage)).freshness,
-        initialPageParam: 0,
-        getNextPageParam: (lastPage: ProjectedPage) => {
-          const { pageIndex, pageSize, totalCount } = lastPage.meta;
-          return (pageIndex + 1) * pageSize < totalCount
-            ? pageIndex + 1
-            : undefined;
-        },
-        queryFn: async ({ pageParam, signal }): Promise<ProjectedPage> => {
-          const plan = listQueryPlan({
-            ...firstPage,
-            pagination: { ...firstPage.pagination, pageIndex: pageParam },
-          });
-          const page = await plan.execute(signal);
-          const requested = page.deferredGroups
-            .filter((group) => selected.includes(group.id))
-            .map((group) => ({
-              ...group,
-              fields: group.fields.filter((field) => field in schema.shape),
-            }))
-            .filter((group) => group.fields.length > 0);
-          if (page.items.length === 0 || requested.length === 0)
-            return parsePage(page);
-          const response = await plan.progressive.enrich(
-            page.items.map((row) => row.id),
-            requested.flatMap((group) => group.fields),
-            signal,
-          );
-          const patches = new Map<string, ListReadRow>();
-          const missing = new Set(response.missingIds);
-          for (const { id, fields } of requested) {
-            const group = response.groups.find((entry) => entry.id === id);
-            if (!group) throw new Error(`No ${id} enrichment returned`);
-            if (group.state === "error")
-              throw new StartOperationError(group.error);
-            for (const patch of readListEnrichmentGroup({
-              ids: page.items.map((row) => row.id),
-              requested: { id, fields },
-              result: group,
-              missingIds: response.missingIds,
-            }).values())
-              patches.set(patch.id, { ...patches.get(patch.id), ...patch });
-          }
-          return parsePage({
-            ...page,
-            items: page.items
-              .filter((row) => !missing.has(row.id))
-              .map((row) => ({ ...row, ...patches.get(row.id) })),
-          });
-        },
-      });
-    },
-  };
-}

@@ -1,13 +1,12 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { productCategoryUpdateData } from "@cubby/schemas/product-category";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { job } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   ensureGlobalUnknownLocation,
@@ -20,8 +19,8 @@ import {
 } from "~/server/domains/product-category/repo/product-category";
 import { upsertCookbookRecipe } from "~/server/domains/recipe/repo/crud";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
   createImageFixture,
@@ -38,7 +37,6 @@ import {
   makeRecipeInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { loadDataQualities } from "./hydrate";
 
@@ -49,26 +47,7 @@ import { loadDataQualities } from "./hydrate";
  */
 describe("data quality: pantry and garden entities", () => {
   const ctx = withTestDb();
-  const refreshQuality = async () => {
-    for (let page = 0; page < 8; page++) {
-      const [intent] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent) throw new Error("Expected quality intent from source write");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await unwrapDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic pantry quality pass exceeded page budget");
-  };
+  const refreshQuality = () => drainStoredDerived(ctx.db);
 
   it("recipe: ingredients, instructions and source", async () => {
     const gap = await createRecipeFixture(

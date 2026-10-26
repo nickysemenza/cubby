@@ -32,20 +32,7 @@ export default defineEntity({
         },
       ],
     },
-    list: {
-      read: {
-        relations: [
-          "fromPartyId",
-          "toPartyId",
-          "toPartyName",
-          "sourceClaims",
-          "evidenceTransactionIds",
-        ],
-        media: ["displayImages"],
-        quality: ["dataQuality"],
-        derived: ["classification"],
-      },
-    },
+    list: {},
     titleField: "fromPartyName",
     domain: "finance",
     description: "Transfers recorded between ledger parties.",
@@ -528,6 +515,14 @@ export default defineEntity({
     delete: { mode: "soft", bulk: true },
     merge: false,
     dataQuality: {
+      inputs: [
+        {
+          table: "FinancialTransaction",
+          match: { ledgerTransferId: "id" },
+          columns: ["deletedAt", "status"],
+        },
+      ],
+
       // A cash transfer with no statement records why, instead of staying open.
       exceptions: true,
       checks: [

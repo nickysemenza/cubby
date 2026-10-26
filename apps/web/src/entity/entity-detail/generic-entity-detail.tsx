@@ -48,13 +48,17 @@ import {
   readDisplayReferenceField,
 } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
-import { FieldExplanation } from "~/entity/fields/field-explanation";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
 import { FactsAddProvider } from "~/ui/common/facts";
+import {
+  RecordImageChain,
+  type ImageChainQueryOptions,
+} from "~/ui/derived/image-chain";
+import { WhyValue } from "~/ui/derived/why-value";
 import { Section } from "~/ui/layout";
 import {
   Breadcrumb,
@@ -256,6 +260,7 @@ interface GenericEntityDetailOperations {
   list?: EntityRelationTableOperations;
   timeline?: EntityTimelineOperations;
   displayImages?: EntityDisplayImagesQueryOptions;
+  imageChain?: ImageChainQueryOptions;
 }
 
 function declaredSections<E extends GenericDetailEntity>(
@@ -374,7 +379,7 @@ function declaredSections<E extends GenericDetailEntity>(
             title,
             collapsed: slot.collapsed,
             headerAction: section.explanationField ? (
-              <FieldExplanation
+              <WhyValue
                 entity={entity}
                 id={bag.id}
                 field={section.explanationField}
@@ -617,16 +622,23 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     // schema above only widens it to string.
     sections.push({
       id: "images",
-      title: "Photos",
+      title: "Images",
       count: images.length,
       icon: ImageIcon,
       placement: "primary",
       content: (
-        <EntityPhotosSection
-          entity={entity as never}
-          id={bag.id as never}
-          images={images}
-        />
+        <>
+          <RecordImageChain
+            entity={entity}
+            id={bag.id}
+            explain={operations.imageChain}
+          />
+          <EntityPhotosSection
+            entity={entity as never}
+            id={bag.id as never}
+            images={images}
+          />
+        </>
       ),
     });
   } else {
@@ -636,7 +648,16 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       count: images.length,
       icon: ImageIcon,
       placement: "primary",
-      content: <EntityImageList images={images} />,
+      content: (
+        <>
+          <RecordImageChain
+            entity={entity}
+            id={bag.id}
+            explain={operations.imageChain}
+          />
+          <EntityImageList images={images} />
+        </>
+      ),
     });
   }
   sections.push({

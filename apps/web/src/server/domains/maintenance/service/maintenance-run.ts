@@ -1,5 +1,6 @@
 import { imageId, type ImageId } from "@cubby/schemas/identifiers";
 import type { RunStepError, RunStepMeta } from "@cubby/schemas/run-step";
+import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
 
 import { getAppOrigin } from "~/server/cf-env";
@@ -100,6 +101,67 @@ function onceStep(
         ...(outcome.errors?.length && { errors: outcome.errors }),
         ...(outcome.meta && { meta: outcome.meta }),
         done: !outcome.more,
+      };
+    },
+  };
+}
+
+const SEARCH_CLEANUP_PAGE = 200;
+const searchCleanupCursor = z
+  .object({
+    phase: z.enum(["documents", "vectors"]),
+    entityKind: searchableEntitySchema.optional(),
+    entityId: z.uuid().optional(),
+    after: z.string().optional(),
+  })
+  .nullable();
+
+/** Retire orphaned search documents, then queue retired embedding vectors for deletion. */
+function searchArtifactCleanupStep(): StepDriver {
+  return {
+    page: async ({ db, step }) => {
+      const cursor = searchCleanupCursor.parse(step.cursor ?? null) ?? {
+        phase: "documents" as const,
+      };
+      if (cursor.phase === "documents") {
+        const [
+          { getSearchDocumentOrphanPage },
+          { retireStillOrphanedSearchArtifacts },
+        ] = await Promise.all([
+          import("~/server/generic/search/repo/search-document"),
+          import("~/server/generic/embedding/repo/entity-embedding-cleanup"),
+        ]);
+        const page = await getSearchDocumentOrphanPage(db, {
+          cursor:
+            cursor.entityKind && cursor.entityId
+              ? { entityKind: cursor.entityKind, entityId: cursor.entityId }
+              : undefined,
+          pageSize: SEARCH_CLEANUP_PAGE,
+        });
+        const retired = await retireStillOrphanedSearchArtifacts(db, page.refs);
+        return {
+          kind: "progress",
+          delta: { done: retired },
+          cursor: page.nextCursor
+            ? { phase: "documents", ...page.nextCursor }
+            : { phase: "vectors" },
+          done: false,
+        };
+      }
+      const { queueEmbeddingCleanupPage } =
+        await import("~/server/generic/embedding/repo/embedding-cleanup");
+      const page = await queueEmbeddingCleanupPage(
+        db,
+        cursor.after,
+        SEARCH_CLEANUP_PAGE,
+      );
+      return {
+        kind: "progress",
+        delta: { done: page.queued },
+        ...(page.nextCursor
+          ? { cursor: { phase: "vectors", after: page.nextCursor } }
+          : {}),
+        done: !page.nextCursor,
       };
     },
   };
@@ -338,12 +400,10 @@ export function maintenanceStepDrivers(
         ),
       };
     }),
-    "derived-refresh": onceStep(async ({ db }) => {
-      await (
-        await import("~/server/generic/derived-refresh/repo/families")
-      ).scheduleRefreshFamilies(db, { invalidate: true });
-      return { done: 0, meta: detail({ admitted: true }) };
-    }),
+    // Derived values reconcile through their own hourly buckets (ADR 0021);
+    // this step owns the search artifacts no mark reaches: documents of
+    // records removed before their triggers existed, and retired vectors.
+    "derived-refresh": searchArtifactCleanupStep(),
     calendar: onceStep(async () => {
       const origin = getAppOrigin();
       if (!origin) return { done: 0, meta: detail({ refreshed: false }) };

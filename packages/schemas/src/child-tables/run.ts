@@ -819,6 +819,13 @@ export const runChildren = [
         notNull: true,
         reference: { table: "run", column: "id" },
       },
+      {
+        key: "slotKey",
+        kind: "text",
+        notNull: true,
+        // Length prefixes preserve arbitrary field names without delimiter collisions.
+        generated: `octet_length({feature})::text || ':' || {feature} || octet_length(COALESCE({target}->>'entity', ''))::text || ':' || COALESCE({target}->>'entity', '') || octet_length(COALESCE({target}->>'recordId', ''))::text || ':' || COALESCE({target}->>'recordId', '') || octet_length(COALESCE({target}->>'field', ''))::text || ':' || COALESCE({target}->>'field', '') || octet_length(COALESCE({target}->>'otherId', ''))::text || ':' || COALESCE({target}->>'otherId', '')`,
+      },
       { key: "workKey", kind: "text", notNull: true },
       { key: "shareKey", kind: "text" },
       {
@@ -864,10 +871,19 @@ export const runChildren = [
       { module: "@cubby/schemas/identifiers", exports: ["RunId"] },
     ],
     indexes: [
+      {
+        name: "AiEvaluation_open_slot_key",
+        unique: true,
+        on: ["slotKey"],
+        where: "{state} IN ('queued','retry_wait')",
+      },
+      {
+        name: "AiEvaluation_slot_history_idx",
+        on: ["slotKey", "createdAt", "id"],
+      },
       { name: "AiEvaluation_work_key", unique: true, on: ["workKey"] },
       {
         name: "AiEvaluation_pending_share_key",
-        unique: true,
         on: ["shareKey"],
         where:
           "{shareKey} IS NOT NULL AND {state} IN ('queued','running','result_ready','retry_wait')",

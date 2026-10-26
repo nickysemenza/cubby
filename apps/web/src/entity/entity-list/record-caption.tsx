@@ -5,9 +5,6 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { renderCompactFieldValue } from "~/entity/display/entity-display";
-import type { ListGroupState } from "~/entity/hooks/progressive-list";
-
-import { DeferredListValue } from "./deferred-list-value";
 
 /** A list row as a caption reads it: its id and whichever fields it names. */
 const captionRowSchema = z.looseObject({ id: z.string() });
@@ -21,22 +18,12 @@ const captionRowSchema = z.looseObject({ id: z.string() });
 export function recordCaption(
   entity: BrowserRoutedEntity,
   row: z.infer<typeof captionRowSchema>,
-  options: {
-    enrichmentState?: (id: string, field: string) => ListGroupState | undefined;
-  } = {},
 ): ReactNode {
   const subtitle = entitySummary[entity].list.shelf?.subtitle ?? [];
   const fields = entityFieldModels[entity].fields;
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
     if (!field) continue;
-    const state = options.enrichmentState?.(row.id, field.readKey ?? field.key);
-    if (state && state.state !== "ready")
-      return (
-        <span className="block h-4 leading-4">
-          <DeferredListValue state={state} />
-        </span>
-      );
     const value = row[field.readKey ?? field.key];
     if (
       value == null ||
@@ -46,7 +33,5 @@ export function recordCaption(
       continue;
     return renderCompactFieldValue(entity, row, field);
   }
-  return options.enrichmentState && subtitle.length > 0 ? (
-    <span className="block h-4" />
-  ) : undefined;
+  return undefined;
 }

@@ -152,7 +152,7 @@ narrow their public results. Only declared fields with matching stored/read
 representations patch existing records. Inline reference/inherited edits fetch
 one authoritative detail projection before releasing their editor, following
 replacement reads if another write cancels the first attempt. Its declared read
-fields update loaded rows, including deferred references; a genuine read failure
+fields update loaded rows, including resolved references; a genuine read failure
 is reported separately from the accepted write. Confirmed deletes
 and merged-away identities retire centrally. Never seed full detail from a
 partial receipt or retain a second committed value in a cell.
@@ -172,7 +172,7 @@ Loaded views retain data during reconciliation. Background refetch feedback belo
 to the shell status slot; refresh failures and Retry remain inline with the view. Server reads own membership, ordering, counts and paging: a
 saved row may briefly remain in its previous position. Do not append offset pages
 while the current list is reconciling or its refresh has failed. Retained
-progressive enrichment must not overwrite confirmed base fields.
+page refreshes must preserve confirmed fields until the complete replacement arrives.
 
 Clipboard paste prepares all changed fields before issuing one update per row.
 Invalid rows issue no writes; successful sibling rows remain saved. Errors keep
@@ -247,33 +247,21 @@ when neither the URL nor a caller supplies an override. SSR preloads, secondary
 lists and mounted table state share the same lightweight sort-roster owner.
 Lexical search still omits the ordinary default sort so relevance remains authoritative.
 
-Extend the generic list enrichment pipeline for data shared across rows,
-including saved suggestion outcomes and review status. Batch server reads and
-share preparation across the bounded record set; HTTP batching alone still
-repeats work when each operation prepares and queries independently. Preserve
-per-record cache identity, errors, cancellation and progressive delivery.
-Category reference pills share the complete projected vocabulary used by pickers
-and filters. Its `effectiveFeature` scalar uses the declared category inheritance
-resolver; displaying a reference must not load the full nested hierarchy or
-category stock, mapping and product-count provenance. Hierarchy views retain
-server-defined nesting. Unresolved references distinguish pending pages, completed
-missing IDs and failed reads; cached matches remain visible during refresh errors.
-Progressive row views preserve the data array and unaffected record objects
-until their immutable base pages or enrichment patches change; loading and
-summary-only updates must not rebuild the table dataset.
-Custom renderers declare additional row reads in column metadata; Project task
-progress requests its rollup alongside its textual value. Action admission parses
-only the identity and fields consumed by the action, so deferred list fields
-cannot hide actions on a selected base row.
-Column read demand includes declared label paths for server-composed values,
-including non-reference fields such as Shipment event spans. It also includes
-the top-level roots of declared explanation source
-dependencies, so explanation evidence remains available when reads are narrowed.
-Reference demand includes canonical labels, allocations and assignment
-resolutions. Visible suggestion targets add their basis and context inputs
-through the same target declarations used by request construction. Progressive
-tables admit automatic suggestions only after those inputs are ready; an
-explicit null target remains eligible.
+Every entity page reads complete rows, exact counts, full-filter totals and a
+derived-state sidecar in one `entity.list` request. Batch shared row bindings
+inside that read and run independent loads concurrently. Stored metadata uses
+internal page IDs while the response keys its sidecar by public ID. Columns,
+actions, captions and providers consume complete rows; no client field-readiness
+tracking, enrichment patches, generation retries or separate summary requests.
+Loading and errors apply to the whole page. Normal query cancellation, stale
+page protection, infinite pagination and lazy tree expansion remain page-level
+concerns. Tree children and selected-record action reads use the same complete
+list contract.
+Category reference pills share the complete vocabulary used by pickers and
+filters, including all pages and the inherited `effectiveFeature` value.
+Unresolved references distinguish pending pages, completed missing IDs and
+failed reads; cached matches remain visible during refresh errors.
+
 Saved-view counts forward count intent through the canonical repository reader.
 They retain the same filters, prepared membership facts and custom counts as the
 list, while skipping row selection, presentation bindings, ordering and group
@@ -329,9 +317,9 @@ conflicting writers fail before selection; count and empty pages never load
 bindings. A skipped field remains absent, and a required field missing from a
 selected source or binding fails before schema defaults run.
 Any requested output admits its entire binding. Split outputs whose inputs have
-different readiness: a core identity must not share a binding that requires a
-deferred relation column. Selected-field regressions should omit that relation
-and verify both the public patch and the work it avoids.
+different inputs: an identity must not share a binding that requires an
+otherwise unused relation. Selected-field regressions should omit that relation
+and verify both the public projection and the work it avoids.
 
 A list page costs one network round trip per sequential statement in
 production (about 50-75 ms through Hyperdrive), so `listScaffold.list` keeps
@@ -371,19 +359,17 @@ transport-owning mutation only when the workflow requires it; a presentation
 wrapper awaiting that command must not acquire the same scope. Ordinary entity
 commands share neither a global nor entity-wide serialization scope.
 
-List actions must accept the base row before progressive enrichment arrives.
+List actions consume the complete page row.
 Merge row guards validate the owner identifier and required display fields;
 optional statistics such as a Product barcode cannot gate opening the dialog.
 
-Same-query list refreshes retain completed enrichment while cancelling obsolete
-reads. Invalidation and base-page refetch must not turn loaded cells back into
-skeletons; filter/sort scope changes must not reuse another scope's enrichment.
-Fresh enrichment replaces retained values, and failures still expose diagnostics.
-The same scope retains completed totals during refresh. Related previews send
-at most 1000 source IDs per request and send none when no relation is visible;
-loading and raw read errors belong to the affected batch's cells.
-Live suggestions wait for their target projection; an absent deferred field is
-not an empty saved value. Explicit nulls and resolved references remain eligible.
+Same-query refreshes retain complete rows and totals while the replacement
+page loads. Filter/sort changes never mix rows or metadata from different scopes.
+Whole-page failures expose diagnostics and retry through the normal query.
+Related previews send at most 1000 source IDs per request and send none when no
+relation is visible; loading and raw read errors belong to the affected batch's
+cells. Live suggestions read complete target projections; explicit nulls and
+resolved references remain eligible.
 Stored suggestion reads split grouped-list rosters into at most 250 record IDs
 before validation, and split full result pages further to avoid truncation.
 

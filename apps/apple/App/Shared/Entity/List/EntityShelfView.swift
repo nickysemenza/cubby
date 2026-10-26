@@ -109,9 +109,7 @@ struct EntityShelfView: View {
             symbol: descriptor.recordSymbol(in: row),
             emoji: descriptor.recordEmoji(in: row),
             density: density,
-            selected: isSelected(row),
-            loadingDetails: !row.pendingFields.isEmpty,
-            failedDetails: !row.failedFields.isEmpty
+            selected: isSelected(row)
         )
 
         #if os(macOS)

@@ -18,16 +18,11 @@ import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
 import {
   ledgerPartyListItem,
-  getEntityListOutputSchema,
   mealListItem,
   parseEntityListInput,
   productListItem,
 } from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
-import {
-  listReadFields,
-  projectListRows,
-} from "~/entity/model/list-read-schema";
 import { listPage } from "~/entity/routing/list-page";
 import { mealNameUpdate } from "~/features/meal/list-columns";
 import { installFeatures } from "~/features/registry";
@@ -90,46 +85,6 @@ async function renderListPage(
   await harness.loadRouter();
   return render(<div />, { wrapper: harness.routerWrapper });
 }
-
-describe("list manifest and deferred rows", () => {
-  // Provider hydration, subject menus, unit mapping and tree nesting execute
-  // before deferred cells. Each must tolerate a core-only page.
-  it.each(["inventory", "ingredient", "wish", "product"] as const)(
-    "renders %s core rows while relation enrichment is pending",
-    async (entity) => {
-      const fields = listReadFields(entity);
-      const full = mock(getEntityListOutputSchema(entity));
-      const rows = projectListRows(entity, full.items, { kind: "base" });
-      const operation: ListQueryOptionsFn<object, { id: string }> = (
-        params,
-      ) => ({
-        queryKey: ["deferred-provider", entity, params],
-        execute: async () => ({
-          items: rows,
-          meta: { pageIndex: 0, pageSize: 100, totalCount: 1 },
-          deferredGroups: (
-            ["media", "quality", "relations", "derived"] as const
-          ).map((id) => ({ id, fields: fields[id] })),
-        }),
-        progressive: {
-          enrich: async () => new Promise(() => {}),
-          summary: async () => ({}),
-        },
-      });
-      await renderListPage(
-        entity,
-        `${entities[entity].routes.list}?view=table`,
-        rows,
-        operation,
-      );
-      await waitFor(() =>
-        expect(
-          screen.getByRole("checkbox", { name: "Select row" }),
-        ).toBeInTheDocument(),
-      );
-    },
-  );
-});
 
 describe("listPage", () => {
   it("renders the manifest's header links, universal List/Cards/Compact choices, and Group by", async () => {

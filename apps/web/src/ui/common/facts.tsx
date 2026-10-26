@@ -4,12 +4,15 @@ import {
   type CSSProperties,
   type ReactNode,
   useContext,
-  useId,
-  useState,
 } from "react";
 
 import { cn } from "~/lib/utils";
 import { Button } from "~/ui/primitives/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 import { Ledger, LedgerCell, LedgerRow } from "./ledger";
 import type { RecordTone } from "./record-list";
@@ -190,8 +193,6 @@ export function Facts({ facts, layout, columnOf, className }: FactsProps) {
 }
 
 function FactRow({ fact }: { fact: Fact }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
   return (
     <LedgerRow as="div" id={fact.anchor} data-full-width={fact.fullWidth}>
       <LedgerCell
@@ -224,31 +225,27 @@ function FactRow({ fact }: { fact: Fact }) {
           <div className="flex flex-wrap items-center justify-end gap-2">
             {fact.filterAction}
             {fact.explanation ? (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                data-slot="fact-explain"
-                aria-label={`How ${fact.label.toLowerCase()} is determined`}
-                aria-expanded={open}
-                aria-controls={panelId}
-                onClick={() => setOpen(!open)}
-              >
-                <InfoIcon className="size-3.5" />
-              </Button>
+              <Popover>
+                <PopoverTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      data-slot="fact-explain"
+                      aria-label={`How ${fact.label.toLowerCase()} is determined`}
+                    />
+                  }
+                >
+                  <InfoIcon className="size-3.5" />
+                </PopoverTrigger>
+                <PopoverContent className="max-h-[min(42rem,85dvh,var(--available-height))] w-[min(25rem,calc(100vw-1rem))] overflow-y-auto p-0">
+                  {fact.explanation}
+                </PopoverContent>
+              </Popover>
             ) : null}
           </div>
         </LedgerCell>
       )}
-      {fact.explanation && open ? (
-        <LedgerCell
-          as="dd"
-          slot="detail"
-          id={panelId}
-          className="border-t border-border py-2"
-        >
-          {fact.explanation}
-        </LedgerCell>
-      ) : null}
     </LedgerRow>
   );
 }

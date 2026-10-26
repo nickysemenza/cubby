@@ -65,8 +65,8 @@ import { purchaseProductsRelationAdapter } from "./purchase-products";
 // Full-filter totals must include unloaded purchases and credits, without summing stated totals.
 describe("purchase list totals", () => {
   const ctx = withTestDb();
-  // Core category identity must not admit a binding requiring deferred vendor columns.
-  it("reads only category identity without loading deferred vendor fields", async () => {
+  // Category-only rows still carry stored freshness, without hydrating Vendor fields.
+  it("reads category identity and stored freshness without loading vendor fields", async () => {
     const vendorId = await vendorShortcodeByName(
       ctx.db,
       "Base purchase vendor",
@@ -93,7 +93,8 @@ describe("purchase list totals", () => {
     });
     expect(page.result.data[0]).not.toHaveProperty("vendorId");
     expect(page.result.data[0]).not.toHaveProperty("orderUrl");
-    expect(page.queryCount).toBe(2);
+    expect(page.tables).toContain("DerivedValue");
+    expect(page.queryCount).toBe(3);
   });
   it("sums live ledger rows across pages and respects the purchase filter", async () => {
     const vendorId = await vendorShortcodeByName(

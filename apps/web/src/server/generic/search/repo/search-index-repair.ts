@@ -8,27 +8,31 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
+import {
+  DERIVED_DRAIN_JOB_KEY,
+  markAllStoredDerived,
+} from "~/server/generic/derived/repo/drain";
 import { enqueueJob, retryJob } from "~/server/generic/jobs/repo/jobs";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
+/** Mark every search document for rebuild; the derived drain does the work (ADR 0021). */
 export const scheduleSearchRepair = (db: Database) =>
   withTransactionDatabase(db, async (tx) => {
-    const ids: string[] = [];
-    for (const family of ["search", "orphans", "embeddings"] as const) {
-      let execution = await enqueueJob(tx, {
-        key: `refresh:${family}`,
-        kind: "refresh.family",
-        input: { family },
-        invalidate: true,
-      });
-      if (["failed", "paused", "cancelled"].includes(execution.state))
-        execution = (await retryJob(tx, execution.id)) ?? execution;
-      ids.push(execution.id);
-    }
+    await markAllStoredDerived(tx, (declaration) =>
+      declaration.compute.startsWith("search."),
+    );
+    let execution = await enqueueJob(tx, {
+      key: DERIVED_DRAIN_JOB_KEY,
+      kind: "derived.drain",
+      input: {},
+      invalidate: true,
+    });
+    if (["failed", "paused", "cancelled"].includes(execution.state))
+      execution = (await retryJob(tx, execution.id)) ?? execution;
     await runAfterCommit(tx, () =>
       wakeJobs({ source: "search.explicit-repair" }),
     );
-    return ids;
+    return [execution.id];
   });
 
 export const readSearchRepairJobs = (db: Database, ids: string[]) =>

@@ -3,21 +3,32 @@ import {
   aiProvenance,
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import {
+  enqueueAiEvaluation,
+  evaluationSlotKey,
+} from "~/server/ai/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, job, product, run } from "~/server/db/schema";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import {
+  captureBackgroundQueue,
+  withJobFixtureExecution,
+} from "~/server/testing/background-queue";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import { scheduleEvaluationRun } from "./ai-refresh-state";
+import {
+  recordAiRefreshAttemptFailure,
+  insertEvaluationTargets,
+  scheduleEvaluationRun,
+} from "./ai-refresh-state";
 import { ensureRun, systemActor } from "./ensure-run";
 
 // Real transactions expose races between shared Jobs and their requesters.
@@ -235,12 +246,8 @@ describe("AI refresh scheduling admission", () => {
     }
   });
 
-  // Production finding: each photo description that landed changed a
-  // Product's identity fingerprint, and the ai_refresh pass queued another
-  // evaluation each time beside the older ones (7,812 queued for 3,373
-  // Products, up to 24 for one). A newer fingerprint now replaces the older
-  // queued evaluation, as connection evaluations already did.
-  it("replaces a Product's older queued identity evaluation", async () => {
+  // Repeated enrichment must leave one durable row and one Job, not a backlog.
+  it("updates one Product slot and Job across three successive input changes", async () => {
     const recordId = crypto.randomUUID();
     const productTarget = (inputFingerprint: string) => ({
       target: aiEvaluationTarget.parse({
@@ -283,12 +290,16 @@ describe("AI refresh scheduling admission", () => {
         }),
       }),
     ]);
-    expect(rows.filter((row) => row.state === "cancelled")).toHaveLength(2);
+    expect(rows).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "ai.evaluation")),
+    ).toHaveLength(1);
   });
 
-  // Review finding: the supersede matched only feature and record, so a
-  // catalog evaluation of P cancelled a queued P-Q pair evaluation another
-  // Run may have requested.
+  // Catalog and pair targets have distinct slots, even for the same Product.
   it("never replaces a shared pair evaluation with a catalog one", async () => {
     const recordId = crypto.randomUUID();
     const request = {
@@ -343,9 +354,7 @@ describe("AI refresh scheduling admission", () => {
     expect(states.map((row) => row.state).sort()).toEqual(["queued", "queued"]);
   });
 
-  // Review finding: reopening superseded work used the reopen budget, so an
-  // input alternating before anything ran was refused for good after three
-  // returns, leaving the current fingerprint unevaluated.
+  // Queued input changes spend no declined-attempt budget.
   it("keeps re-admitting a Product whose input keeps changing back", async () => {
     const recordId = crypto.randomUUID();
     const productTarget = (inputFingerprint: string) => ({
@@ -402,73 +411,177 @@ describe("AI refresh scheduling admission", () => {
     expect(jobs.filter((row) => row.state === "queued")).toHaveLength(1);
   });
 
-  // Review finding: reopen keys were numbered from the rows the chain walk
-  // reached, so a reopen row beyond the walk's bound made the next reopen
-  // reuse its key, hit the conflict, and schedule nothing again.
-  it("numbers a reopen after every reopen row that exists", async () => {
-    const recordId = crypto.randomUUID();
-    const productTarget = (inputFingerprint: string) => ({
-      target: aiEvaluationTarget.parse({
-        kind: "product",
-        entity: "product",
-        recordId,
-        field: null,
-        assessmentIds: [],
-      }),
-      provenance: aiProvenance.parse({
-        dependencies: [],
-        inputFingerprint,
-        optionFingerprint: "",
-        model: null,
-      }),
-      snapshot: {},
-    });
-    const request = {
-      ...input("product-unreached"),
-      input: aiRefreshRunInput.parse({
-        ...input("product-unreached").input,
-        mailboxId: undefined,
-      }),
+  it("bounds declined attempts of the same input without linking receipts", async () => {
+    const owner = await ensureRun(
+      ctx.db,
+      systemActor(),
+      input("decline-budget"),
+    );
+    const item = target();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      expect(await insertEvaluationTargets(ctx.db, owner, [item])).toBe(1);
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({ state: "obsolete" })
+        .where(eq(aiEvaluation.runId, owner));
+    }
+    expect(await insertEvaluationTargets(ctx.db, owner, [item])).toBe(0);
+    const rows = await getDb(ctx.db).select().from(aiEvaluation);
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((row) => row.workKey)).size).toBe(3);
+    expect(rows.every((row) => row.receipt === null)).toBe(true);
+    expect(
+      await insertEvaluationTargets(ctx.db, owner, [
+        {
+          ...item,
+          provenance: {
+            ...item.provenance,
+            inputFingerprint: "synthetic-changed",
+          },
+        },
+      ]),
+    ).toBe(1);
+  });
+
+  it("retains running input and one queued successor, and creates a new row on a settled revert", async () => {
+    const owner = await ensureRun(ctx.db, systemActor(), input("running-slot"));
+    const item = target();
+    const changed = {
+      ...item,
+      provenance: { ...item.provenance, inputFingerprint: "synthetic-next" },
+      snapshot: { revision: 2 },
     };
-    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-      productTarget("synthetic-a"),
-    ]);
-    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-      productTarget("synthetic-b"),
-    ]);
-    const [first] = await getDb(ctx.db)
+    await insertEvaluationTargets(ctx.db, owner, [item]);
+    const [first] = await getDb(ctx.db).select().from(aiEvaluation);
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "running" })
+      .where(eq(aiEvaluation.id, first!.id));
+    expect(await insertEvaluationTargets(ctx.db, owner, [item])).toBe(0);
+    expect(await insertEvaluationTargets(ctx.db, owner, [changed])).toBe(1);
+    const [queued] = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(
-        and(
-          eq(aiEvaluation.feature, "product-identity"),
-          eq(aiEvaluation.state, "cancelled"),
-        ),
-      );
-    if (!first) throw new Error("Expected the superseded evaluation");
-    // A reopen row of A that no receipt links to (beyond any walk).
+      .where(eq(aiEvaluation.state, "queued"));
+    const third = {
+      ...changed,
+      provenance: {
+        ...changed.provenance,
+        inputFingerprint: "synthetic-third",
+      },
+    };
     await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values({
-        ...first,
-        id: crypto.randomUUID(),
-        workKey: `${first.workKey}:reopen:1`,
-        state: "obsolete",
-        receipt: null,
-      });
-    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-      productTarget("synthetic-a"),
-    ]);
-    const queued = await getDb(ctx.db)
-      .select({ workKey: aiEvaluation.workKey })
-      .from(aiEvaluation)
-      .where(
-        and(
-          eq(aiEvaluation.feature, "product-identity"),
-          eq(aiEvaluation.state, "queued"),
-        ),
-      );
-    expect(queued).toEqual([{ workKey: `${first.workKey}:reopen:2` }]);
+      .update(aiEvaluation)
+      .set({
+        state: "retry_wait",
+        result: { input: "synthetic-next" },
+        receipt: { reason: "synthetic-old-input" },
+        error: "Synthetic earlier failure",
+      })
+      .where(eq(aiEvaluation.id, queued!.id));
+    await insertEvaluationTargets(ctx.db, owner, [third]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, queued!.id))
+      )[0],
+    ).toMatchObject({
+      snapshot: changed.snapshot,
+      provenance: third.provenance,
+      result: null,
+      receipt: null,
+      error: null,
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, first!.id))
+      )[0]?.provenance,
+    ).toEqual(item.provenance);
+    await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: `ai-evaluation:${first!.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: first!.id },
+      },
+      async () => {
+        const token = currentJobExecution()?.claim.leaseToken;
+        if (!token) throw new Error("Expected synthetic evaluation lease");
+        await recordAiRefreshAttemptFailure(ctx.db, first!.id, token, {
+          state: "retry_wait",
+          error: "Synthetic provider failure",
+        });
+      },
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, first!.id))
+      )[0]?.state,
+    ).toBe("obsolete");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(inArray(aiEvaluation.state, ["queued", "retry_wait"])),
+    ).toHaveLength(1);
+    await getDb(ctx.db).update(aiEvaluation).set({ state: "completed" });
+    expect(await insertEvaluationTargets(ctx.db, owner, [third])).toBe(0);
+    expect(await insertEvaluationTargets(ctx.db, owner, [item])).toBe(1);
+    const rows = await getDb(ctx.db).select().from(aiEvaluation);
+    expect(rows).toHaveLength(3);
+    expect(rows.filter((row) => row.state === "queued")).toHaveLength(1);
+    expect(new Set(rows.map((row) => row.workKey)).size).toBe(3);
+  });
+
+  it("enforces queued slot uniqueness in SQL and matches UTF-8 key lengths", async () => {
+    const owner = await ensureRun(ctx.db, systemActor(), input("slot-index"));
+    const item = {
+      ...target(),
+      target: aiEvaluationTarget.parse({
+        kind: "field",
+        entity: "product",
+        recordId: crypto.randomUUID(),
+        field: "synthetic:café",
+        assessmentIds: [],
+      }),
+    };
+    await insertEvaluationTargets(ctx.db, owner, [item]);
+    const [first] = await getDb(ctx.db).select().from(aiEvaluation);
+    expect(first?.slotKey).toBe(
+      evaluationSlotKey({ feature: "field-suggestion", target: item.target }),
+    );
+    expect(
+      await getDb(ctx.db)
+        .insert(aiEvaluation)
+        .values({
+          runId: owner,
+          feature: "field-suggestion",
+          workKey: "synthetic-duplicate-slot",
+          target: item.target,
+          provenance: {
+            ...item.provenance,
+            inputFingerprint: "synthetic-other",
+          },
+          snapshot: {},
+          state: "retry_wait",
+        })
+        .onConflictDoNothing()
+        .returning(),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(inArray(aiEvaluation.state, ["queued", "retry_wait"])),
+    ).toHaveLength(1);
   });
 
   it("does not join a new activation's work to an older policy Run", async () => {

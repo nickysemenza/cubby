@@ -9,13 +9,10 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import {
   email,
-  entityQuality,
-  job,
   ledgerParty,
   orderMail,
   orderMailAttachment,
   run as runTable,
-  jobInvalidationCapture,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
@@ -28,12 +25,17 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
-import { invalidateRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
-import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
+import {
+  storedQuality,
+  storedQualityIds,
+} from "~/server/testing/quality.fixtures";
 
 import { emailChecks, EMAIL_QUALITY_RULES_VERSION } from "./checks/email";
 import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
@@ -44,28 +46,7 @@ import { gapCondition } from "./sql";
 // reads publish repairs or source writes fail to enroll the quality family.
 describe("Email data quality", () => {
   const ctx = withTestDb();
-  const refresh = async () => {
-    // Low-level historical fixtures deliberately bypass source writers.
-    await invalidateRefreshFamily(ctx.db, "quality");
-    for (let page = 0; page < 8; page++) {
-      const [intent] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, "refresh:quality"));
-      if (!intent) throw new Error("Expected quality refresh intent");
-      expect(
-        await advanceJob(ctx.db, intent.id, {
-          "refresh.family": refreshFamilyHandler,
-        }),
-      ).toBe("succeeded");
-      const [current] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.id, intent.id));
-      if (current?.state === "completed") return;
-    }
-    throw new Error("Synthetic Email quality pass exceeded page budget");
-  };
+  const refresh = () => drainStoredDerived(ctx.db);
 
   it("batch-loads original presence only for the scored Emails", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -227,14 +208,12 @@ describe("Email data quality", () => {
         { dataGap: ["email_not_imported"] },
         [{ orderBy: "dataQuality", direction: "asc" }],
         { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+        { kind: "selected", fields: ["dataQuality"] },
       ),
     );
     expect(filtered.result.count).toBe(4);
     expect(filtered.result.data).toHaveLength(4);
-    expect(filtered.tables).toEqual(
-      expect.arrayContaining(["EntityQuality", "EntityQualityCheck"]),
-    );
+    expect(filtered.tables).toEqual(expect.arrayContaining(["DerivedValue"]));
     expect(
       filtered.tables.filter((table) =>
         [
@@ -253,26 +232,26 @@ describe("Email data quality", () => {
         { dataGap: ["email_not_imported"] },
         [],
         { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: [], groups: [] },
+        { kind: "selected", fields: [] },
         "count",
       ),
     );
     expect(count.result.count).toBe(4);
     expect(count.queryCount).toBe(1);
-    expect(count.tables).toEqual(["Email", "EntityQualityCheck"]);
+    expect(count.tables).toEqual(["DerivedValue", "Email"]);
     const facet = await countTestDbQueries(() =>
       listEmailsRead(
         ctx.db,
         { dataStatus: ["needs_data"] },
         [],
         { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: [], groups: [] },
+        { kind: "selected", fields: [] },
         "count",
       ),
     );
     expect(facet.result.count).toBe(6);
     expect(facet.queryCount).toBe(1);
-    expect(facet.tables).toEqual(["Email", "EntityQualityCheck"]);
+    expect(facet.tables).toEqual(["DerivedValue", "Email"]);
     const measuredQueue = await countTestDbQueries(() =>
       readWorkQueue(
         ctx.db,
@@ -285,7 +264,7 @@ describe("Email data quality", () => {
       ),
     );
     const queue = measuredQueue.result;
-    expect(measuredQueue.tables).toContain("EntityQualityCheck");
+    expect(measuredQueue.tables).toContain("DerivedValue");
     expect(
       measuredQueue.tables.filter((table) =>
         [
@@ -338,21 +317,13 @@ describe("Email data quality", () => {
         await loadQualityBreakdown(ctx.db, "email", message.shortcode)
       ).checks.map((check) => check.check),
     ).toContain("email_original_missing");
-    expect(await getDb(ctx.db).select().from(entityQuality)).toEqual([]);
+    expect(await storedQualityIds(ctx.db)).toEqual([]);
     await refresh();
-    const [stored] = await getDb(ctx.db)
-      .select()
-      .from(entityQuality)
-      .where(eq(entityQuality.entityId, message.id));
+    const stored = await storedQuality(ctx.db, message.id);
     expect(stored?.rulesVersion).toBe(EMAIL_QUALITY_RULES_VERSION);
-    // A source write appends capture input without replacing the Job row.
+    // A source write marks the Email's stored quality with a fresh ticket.
     const generation = async () =>
-      (
-        await getDb(ctx.db)
-          .select({ revision: sql<number>`count(*)::int` })
-          .from(jobInvalidationCapture)
-          .where(eq(jobInvalidationCapture.key, "refresh:quality"))
-      )[0]!.revision;
+      Math.max(0, ...(await derivedMarkTickets(ctx.db, "email.dataQuality")));
     const enrolled = async <T>(write: () => Promise<T>) => {
       const before = await generation();
       const result = await write();

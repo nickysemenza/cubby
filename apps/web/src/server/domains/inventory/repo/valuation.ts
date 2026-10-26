@@ -6,10 +6,10 @@
  * "4 roll" of a four-pack worth one pack rather than four. Nothing stores the
  * result: a price or mapping change is reflected on the next read, so there is
  * no recompute fan-out to forget and no stale figure to disagree with the
- * product page. {@link loadInventoryValuations} prices specific rows;
- * {@link loadLiveInventoryValuations} prices every live row for the list's
- * sort, filter and footer total, which SQL cannot compute (the graph is WASM),
- * and {@link inventoryValuationSql} hands that map back to SQL.
+ * product page. {@link loadInventoryValuations} prices specific rows (the
+ * stored `inventory.valuation` compute and reports); lists read the stored
+ * value (ADR 0021). {@link inventoryValuationSql} hands a computed map back to
+ * SQL for reports that price on read.
  *
  * A repo helper rather than a service on purpose — it is data access plus a
  * call into lib compute, and a `*.service.ts` here would be the empty
@@ -29,6 +29,7 @@ import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { loadExactEffectivePrices } from "~/server/domains/product/repo/pricing";
 import { getProductUnitMappingsByProductIds } from "~/server/domains/product/repo/unit-mappings";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 
 /**
  * Every requested Product's valuation graph: its stored conversion rows plus
@@ -89,6 +90,10 @@ const loadValuationGraphs = async (
     ]),
   );
 };
+
+const storedValuationColumn = sql<
+  number | null
+>`${storedDerivedSql("inventory", "valuation", inventoryEntry.id)}`;
 
 /** The columns valuing one inventory row needs. */
 export interface InventoryValuationRow {
@@ -172,27 +177,6 @@ export const enrichProductRowsWithInventoryValuations = async <
 };
 
 /**
- * Every live inventory row's valuation. Used where SQL has to sort, filter or
- * sum by valuation over the whole population (the population is the household's
- * inventory — about a thousand rows — so one pass per list request is cheap).
- */
-export const loadLiveInventoryValuations = async (
-  db: Database | DrizzleTransaction,
-): Promise<InventoryValuations> =>
-  loadInventoryValuations(
-    db,
-    await unwrapDb(db)
-      .select({
-        id: inventoryEntry.id,
-        productId: inventoryEntry.productId,
-        amountValue: inventoryEntry.amountValue,
-        amountUnit: inventoryEntry.amountUnit,
-      })
-      .from(inventoryEntry)
-      .where(notDeleted(inventoryEntry)),
-  );
-
-/**
  * A computed valuation map as a SQL scalar for `idColumn`'s row, so the list's
  * `ORDER BY`, `WHERE` and `SUM` see exactly the figure the mappers display.
  * The map travels as ONE jsonb parameter (`{ "<uuid>": 12.5 | null }`) and each
@@ -206,3 +190,23 @@ export const inventoryValuationSql = (
   sql<
     number | null
   >`((${JSON.stringify(Object.fromEntries(valuations))}::jsonb ->> (${idColumn})::text)::double precision)`;
+
+/**
+ * Published valuations (ADR 0021) for live inventory rows, or for `ids`. A row
+ * whose value is not yet computed reads `null`, the same honest unknown a
+ * missing price gives; its stale mark is pending in the drain.
+ */
+export const loadStoredInventoryValuations = async (
+  db: Database | DrizzleTransaction,
+  ids?: readonly InventoryId[],
+): Promise<InventoryValuations> => {
+  const rows = await unwrapDb(db)
+    .select({ id: inventoryEntry.id, valuation: storedValuationColumn })
+    .from(inventoryEntry)
+    .where(
+      ids
+        ? and(inArray(inventoryEntry.id, [...ids]), notDeleted(inventoryEntry))
+        : notDeleted(inventoryEntry),
+    );
+  return new Map(rows.map((row) => [row.id, row.valuation]));
+};

@@ -41,8 +41,8 @@ const recipeTotalsAreStale = sql`(${recipe.totalsComputedAt} IS NULL OR ${recipe
 const updateRecipeTotalsBatch = async (
   db: Database | DrizzleTransaction,
   entries: ReadonlyArray<{ id: RecipeId; totals: StoredRecipeTotals }>,
-): Promise<void> => {
-  if (entries.length === 0) return;
+): Promise<RecipeId[]> => {
+  if (entries.length === 0) return [];
   const computedAt = new Date();
   const values = sql.join(
     entries.map(
@@ -52,7 +52,10 @@ const updateRecipeTotalsBatch = async (
     sql`, `,
   );
   // Recalculation stamps advance even for equal totals; only value/readiness changes notify.
-  const changed = await unwrapDb(db).execute<{ changed: boolean }>(sql`
+  const changed = await unwrapDb(db).execute<{
+    id: RecipeId;
+    changed: boolean;
+  }>(sql`
     WITH input(id, totals) AS (VALUES ${values}), previous AS MATERIALIZED (
       SELECT ${recipe.id} AS id, ${recipe.totals} AS totals,
         ${recipe.totalsComputedAt} IS NULL AS stale
@@ -65,14 +68,14 @@ const updateRecipeTotalsBatch = async (
       ${sql.identifier("totalsComputedAt")} = ${computedAt}
     FROM input v, previous
     WHERE ${recipe.id} = v.id AND previous.id = v.id
-    RETURNING (previous.totals IS DISTINCT FROM v.totals OR previous.stale) AS changed
+    RETURNING "Recipe".id, (previous.totals IS DISTINCT FROM v.totals OR previous.stale) AS changed
   `);
   if (changed.rows.some((row) => row.changed))
     await recordChange(db, {
       kind: "projection",
       categories: ["recipe"],
-      refresh: ["quality"],
     });
+  return changed.rows.filter((row) => row.changed).map((row) => row.id);
 };
 
 /**
@@ -82,9 +85,12 @@ const updateRecipeTotalsBatch = async (
 const markRecipeTotalsFresh = async (
   db: Database | DrizzleTransaction,
   ids: RecipeId[],
-): Promise<void> => {
-  if (ids.length === 0) return;
-  const changed = await unwrapDb(db).execute<{ changed: boolean }>(sql`
+): Promise<RecipeId[]> => {
+  if (ids.length === 0) return [];
+  const changed = await unwrapDb(db).execute<{
+    id: RecipeId;
+    changed: boolean;
+  }>(sql`
     WITH previous AS MATERIALIZED (
       SELECT ${recipe.id} AS id, ${recipe.totalsComputedAt} IS NULL AS stale
       FROM ${recipe}
@@ -98,10 +104,11 @@ const markRecipeTotalsFresh = async (
     SET ${sql.identifier("totalsComputedAt")} = ${new Date()}
     FROM previous
     WHERE ${recipe.id} = previous.id
-    RETURNING previous.stale AS changed
+    RETURNING "Recipe".id, previous.stale AS changed
   `);
   if (changed.rows.some((row) => row.changed))
     await recordChange(db, { kind: "projection", categories: ["recipe"] });
+  return changed.rows.filter((row) => row.changed).map((row) => row.id);
 };
 
 /** Persist stale totals and refresh intent together, including standalone callers. */
@@ -113,6 +120,11 @@ export const markRecipesStale = async (
   await withTransactionOn(db, async (tx) => {
     await unwrapDb(tx).execute(sql`UPDATE ${recipe} SET "totalsComputedAt"=NULL
       WHERE ${inArray(recipe.id, ids)} AND ${notDeleted(recipe)}`);
+    // `totalsComputedAt` is the value's own output, which its trigger
+    // ignores; mark the recompute explicitly (ADR 0021).
+    await unwrapDb(tx).execute(
+      sql`SELECT derived_mark('recipe.totals', ${`{${ids.join(",")}}`}::uuid[])`,
+    );
     await recordChange(tx, { kind: "source", categories: ["recipe"] });
   });
 };
@@ -201,12 +213,14 @@ export const commitRecipeTotals = async (
     freshOnlyIds: RecipeId[];
     validateInputs?: (tx: DrizzleTransaction) => Promise<void>;
   },
-): Promise<void> => {
-  await withTransaction(db, async (tx) => {
+): Promise<RecipeId[]> => {
+  return withTransaction(db, async (tx) => {
     await assertCurrentJob(tx);
     await input.validateInputs?.(tx);
-    await updateRecipeTotalsBatch(tx, input.updates);
-    await markRecipeTotalsFresh(tx, input.freshOnlyIds);
+    const updated = await updateRecipeTotalsBatch(tx, input.updates);
+    const fresh = await markRecipeTotalsFresh(tx, input.freshOnlyIds);
+    // Timestamp-only recalculations must not keep cyclic dependencies dirty.
+    return [...new Set([...updated, ...fresh])];
   });
 };
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { householdLocalDate } from "~/lib/household-date";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import { projectDashboardSummary } from "./dashboard-summary";
 import { projectList } from "./lookup";
@@ -58,6 +59,7 @@ describe("project dashboard attribution", () => {
         lineKind: "principal",
       });
     }
+    await drainStoredDerived(ctx.db);
     const rows = await projectList(
       ctx.db,
       { search: "Sort " },

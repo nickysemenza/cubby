@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -92,6 +93,7 @@ describe("loadProductQuantityLedgers", () => {
       productQuantity: 100,
       future: true,
     });
+    await drainStoredDerived(ctx.db);
     const where = await buildProductWhere(ctx.db, {
       expectedQuantityMin: -8,
       expectedQuantityMax: -2,

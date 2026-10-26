@@ -8,6 +8,7 @@ import {
   getInventoryEntryByShortcode,
   inventoryentryList,
 } from "~/server/domains/inventory/repo/crud";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -20,13 +21,12 @@ const page = { pageIndex: 0, pageSize: 50 };
 const each = (value: number) => ({ value, unit: "each" }) as const;
 
 /**
- * `InventoryEntry.valuation` is computed on every read from the amount, the
- * product's unit-mapping graph and its current price. Nothing stores it, so a
- * price moved by ANY path (here a bare UPDATE, with no sync step to forget) is
- * reflected on the next read — the stored column used to go stale until a
- * fan-out remembered to rewrite it.
+ * `InventoryEntry.valuation` is a stored derived value (ADR 0021): the record
+ * read values the entry live, and lists read the published figure. A price
+ * moved by ANY path (here a bare UPDATE, with no sync step to forget) marks
+ * the entry through the generated trigger, so the drain republishes it.
  */
-describe("inventory valuation — computed on read", () => {
+describe("inventory valuation — stored and recomputed on change", () => {
   const ctx = withTestDb();
 
   const seed = async (
@@ -54,6 +54,7 @@ describe("inventory valuation — computed on read", () => {
 
   it("reads amount × price, and follows a price change with no write to the entry", async () => {
     const { sku, entry } = await seed("Valuation Widget", 10, 2);
+    await drainStoredDerived(ctx.db);
 
     expect(
       (await getInventoryEntryByShortcode(ctx.db, entry.id))?.valuation,
@@ -68,6 +69,8 @@ describe("inventory valuation — computed on read", () => {
     expect(
       (await getInventoryEntryByShortcode(ctx.db, entry.id))?.valuation,
     ).toBe(60);
+    // The price edit marked the entry; the drain republishes the list figure.
+    await drainStoredDerived(ctx.db);
     const list = await inventoryentryList(ctx.db, {}, [], page);
     expect(list.data.find((row) => row.id === entry.id)?.valuation).toBe(60);
     expect(list.sums!.valuation).toBeGreaterThanOrEqual(60);
@@ -79,6 +82,7 @@ describe("inventory valuation — computed on read", () => {
       seed("Sort Pricey", 50, 1),
       seed("Sort Unpriced", undefined, 1),
     ]);
+    await drainStoredDerived(ctx.db);
     const ids: string[] = [cheap, pricey, unpriced].map(
       ({ entry }) => entry.id,
     );

@@ -5,15 +5,16 @@ import type { ReactNode } from "react";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { DateDisplay } from "~/ui/common/date-display";
+import { DecisionLevels } from "~/ui/derived/decision-levels";
 import { Row, Stack } from "~/ui/layout";
-import {
-  Disclosure,
-  DisclosureBody,
-  DisclosureRoot,
-  DisclosureTrigger,
-} from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 /** The manifest fields a field's decision reads: Jev and Clef return no
  * prose, so these, the runner-up and provenance are the suggestion's "why". */
@@ -57,6 +58,7 @@ export interface SuggestionBodyProps {
   onReject: () => void;
   /** Writes another value to the record and records this suggestion as a Miss. */
   onUseDifferent?: () => void;
+  explain?: (pending: ReactNode) => ReactNode;
 }
 
 function stop(event: { stopPropagation: () => void }) {
@@ -118,6 +120,7 @@ export function SuggestionBody({
   onAccept,
   onReject,
   onUseDifferent,
+  explain,
 }: SuggestionBodyProps) {
   const accept = (
     <Button
@@ -181,6 +184,23 @@ export function SuggestionBody({
       </Disclosure>
     </Stack>
   );
+  const pendingLevel = (
+    <div className="grid gap-2">
+      <div className="text-foreground">{proposed}</div>
+      <span>Confidence: {formatConfidence(probability, confidence)}</span>
+      {accept}
+      {evidenceBody}
+    </div>
+  );
+  const chain = explain ? (
+    explain(pendingLevel)
+  ) : (
+    <DecisionLevels deciding={current !== null ? "own" : undefined}>
+      {(level) =>
+        level === "own" ? current : level === "pending" ? pendingLevel : null
+      }
+    </DecisionLevels>
+  );
   return (
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Review controls own keyboard behavior; this wrapper only blocks the record row click.
     <div
@@ -189,35 +209,40 @@ export function SuggestionBody({
       onClick={stop}
       onMouseDown={stop}
     >
-      <div className="suggestion-proposal flex min-w-0 flex-wrap items-center gap-2">
-        {current !== null ? (
+      {compact ? (
+        <div className="suggestion-proposal flex min-w-0 flex-wrap items-center gap-2">
+          {current !== null ? (
+            <span className="suggestion-value">
+              <span className="suggestion-value-label">Current</span>
+              <span>{current}</span>
+            </span>
+          ) : null}
           <span className="suggestion-value">
-            <span className="suggestion-value-label">Current</span>
-            <span>{current}</span>
+            <span className="suggestion-value-label">
+              {removal ? "Proposed removal" : "Proposed"}
+            </span>
+            <span className="suggestion-proposed-value">{proposed}</span>
           </span>
-        ) : null}
-        <span className="suggestion-value">
-          <span className="suggestion-value-label">
-            {removal ? "Proposed removal" : "Proposed"}
+          <span className="suggestion-confidence">
+            Confidence: {formatConfidence(probability, confidence)}
           </span>
-          <span className="suggestion-proposed-value">{proposed}</span>
-        </span>
-        <span className="suggestion-confidence">
-          Confidence: {formatConfidence(probability, confidence)}
-        </span>
-        {accept}
-      </div>
+          {compact ? accept : null}
+        </div>
+      ) : null}
       {compact ? (
         // Parts, not `Disclosure`: the trigger sits on the proposal line and the
         // evidence wraps to a full-width line beneath it (ledger.css).
-        <DisclosureRoot state={{}} className="suggestion-disclosure">
-          <DisclosureTrigger>Review</DisclosureTrigger>
-          <DisclosureBody className="suggestion-evidence">
-            <div className="border-t border-border pt-2">{evidenceBody}</div>
-          </DisclosureBody>
-        </DisclosureRoot>
+        <Popover>
+          <PopoverTrigger render={<Button variant="link" size="xs" />}>
+            Review
+          </PopoverTrigger>
+          <PopoverContent className="max-h-[85dvh] w-[min(25rem,calc(100vw-1rem))] overflow-y-auto">
+            <h3 className="mb-2 text-sm font-semibold">Why this value</h3>
+            {chain}
+          </PopoverContent>
+        </Popover>
       ) : (
-        <div className="pt-2">{evidenceBody}</div>
+        <div className="pt-2">{chain}</div>
       )}
       {failure !== null ? (
         <Description size="xs" role="alert">

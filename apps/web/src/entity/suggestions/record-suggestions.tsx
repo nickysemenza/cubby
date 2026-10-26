@@ -82,6 +82,7 @@ import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CellFrame } from "~/ui/data-table/cell-frame";
+import { WhyValueContents } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -127,7 +128,6 @@ import {
   suggestTargetsFor,
   suggestionContextKeys,
   visibleSuggestTargets,
-  suggestionReadFields,
   type SuggestTargets,
 } from "./suggestion-targets";
 import { useFinanceCategoryApply } from "./use-finance-category-apply";
@@ -532,7 +532,6 @@ function suggestionRequestsForRecord(
   record: SuggestionRecord,
   plans: ReturnType<typeof suggestionTargetPlans>,
   runKey: string,
-  isFieldReady?: (id: string, field: string) => boolean,
 ) {
   const resolutions = recordFieldResolutions(record);
   return plans.flatMap(({ target, ownTargets, basisTargets, field }) => {
@@ -546,10 +545,6 @@ function suggestionRequestsForRecord(
       currentValue !== null;
     if (
       !loaded ||
-      (isFieldReady &&
-        !suggestionReadFields(entity, basisTargets).every((key) =>
-          isFieldReady(record.id, key),
-        )) ||
       !isBasisSufficient(entity, ownTargets, basis) ||
       (entity === "expense" &&
         target.key === "projectId" &&
@@ -663,7 +658,6 @@ export function RecordSuggestionsProvider({
   mutationPort,
   readRecord,
   storedSuggestionOperations,
-  isFieldReady,
 }: {
   entity: Entity | undefined;
   records: readonly unknown[];
@@ -678,7 +672,6 @@ export function RecordSuggestionsProvider({
     id: string,
   ) => Promise<SuggestionRecord | null>;
   storedSuggestionOperations?: StoredSuggestionOperations;
-  isFieldReady?: (id: string, field: string) => boolean;
 }) {
   const crud = generatedBrowserCrudEntities.find(
     (candidate) => candidate === entity,
@@ -696,7 +689,6 @@ export function RecordSuggestionsProvider({
         mutationPort={mutationPort}
         readRecord={readRecord}
         storedSuggestionOperations={storedSuggestionOperations}
-        isFieldReady={isFieldReady}
       >
         {children}
       </BoundRecordSuggestions>
@@ -726,7 +718,6 @@ function requestsForRecords(
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
-  isFieldReady?: (id: string, field: string) => boolean,
 ) {
   if (targets.targets.length === 0) return [];
   const plans = suggestionTargetPlans(entity, targets);
@@ -734,13 +725,7 @@ function requestsForRecords(
     const parsed = recordSchema.safeParse(raw);
     if (!parsed.success || parseShortcode(parsed.data.id)?.type !== entity)
       return [];
-    return suggestionRequestsForRecord(
-      entity,
-      parsed.data,
-      plans,
-      runKey,
-      isFieldReady,
-    );
+    return suggestionRequestsForRecord(entity, parsed.data, plans, runKey);
   });
 }
 
@@ -1137,7 +1122,6 @@ function BoundRecordSuggestions({
   readRecord = async (currentEntity, id) =>
     recordSchema.parse(await entityDetailFor(currentEntity).readFresh(id)),
   storedSuggestionOperations = productionStoredSuggestionOperations,
-  isFieldReady,
 }: {
   entity: StandardEntity;
   records: readonly unknown[];
@@ -1152,7 +1136,6 @@ function BoundRecordSuggestions({
     id: string,
   ) => Promise<SuggestionRecord | null>;
   storedSuggestionOperations?: StoredSuggestionOperations;
-  isFieldReady?: (id: string, field: string) => boolean;
 }) {
   const visit = useSuggestionVisit();
   const [activeRecordIds, setActiveRecordIds] = useState<ReadonlySet<string>>(
@@ -1309,13 +1292,7 @@ function BoundRecordSuggestions({
   for (const key of accepted.keys()) stored.delete(key);
   // Every target is its own request; settled questions are read only for
   // requests the stored read leaves uncovered.
-  const pageRequests = requestsForRecords(
-    entity,
-    records,
-    targets,
-    runKey,
-    isFieldReady,
-  );
+  const pageRequests = requestsForRecords(entity, records, targets, runKey);
   const recordReady = (id: string) =>
     pageFields.length === 0 || knownRecordIds.has(id);
   const readyRecords = records.filter((record) =>
@@ -1844,9 +1821,10 @@ function ResolvedFieldSuggestion({
     source,
   ]);
   const resolution = recordFieldResolutions(row.record)[field];
-  const resolutionPolicy = entityFieldModels[context.entity].fields.find(
+  const definition = entityFieldModels[context.entity].fields.find(
     (candidate) => candidate.key === field,
-  )?.resolution;
+  );
+  const resolutionPolicy = definition?.resolution;
   const usesInheritedValue =
     resolution?.canReset === true &&
     resolutionPolicy?.redundancy === "eligible" &&
@@ -1928,6 +1906,19 @@ function ResolvedFieldSuggestion({
   return (
     <RecordSuggestionScope value={row}>
       <SuggestionReview
+        explain={
+          definition?.explanation
+            ? (pending) => (
+                <WhyValueContents
+                  entity={context.entity}
+                  id={row.record.id}
+                  field={field}
+                  label={definition.label}
+                  pendingSuggestion={pending}
+                />
+              )
+            : undefined
+        }
         suggestion={suggestion}
         currentValue={current.value}
         currentLabel={current.label}

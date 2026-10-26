@@ -3,11 +3,12 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { image, searchDocument, job } from "~/server/db/schema";
+import { image, searchDocument } from "~/server/db/schema";
 import { backfillImageSearchDocuments } from "~/server/domains/image/service/image-search-backfill.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   captureBackgroundQueue,
+  derivedMarkTickets,
   drainDerivedRefreshFrontier,
 } from "~/server/testing/background-queue";
 
@@ -71,14 +72,10 @@ describe("backfillImageSearchDocuments", () => {
     for (const row of rows) {
       expect(await liveDocuments(row.id)).toHaveLength(0);
     }
-    expect(
-      await getDb(ctx.db)
-        .select({ kind: job.kind, state: job.state, input: job.input })
-        .from(job)
-        .where(eq(job.key, "refresh:search")),
-    ).toEqual([
-      { kind: "refresh.family", state: "queued", input: { family: "search" } },
-    ]);
+    for (const row of rows)
+      expect(
+        await derivedMarkTickets(ctx.db, "image.searchDocument", row.id),
+      ).toHaveLength(1);
     await drainDerivedRefreshFrontier(ctx.db);
     for (const row of rows) expect(await liveDocuments(row.id)).toHaveLength(1);
     expect(await liveDocuments(deleted.id)).toHaveLength(0);

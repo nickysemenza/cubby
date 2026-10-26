@@ -9,8 +9,8 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  *
  * This file drives EVERY declared filter (one at a time) and EVERY declared
  * sort field, for EVERY kernel entity with a list operation, through the real
- * production list readers against real Postgres. Plan probes use progressive
- * core reads, avoiding unrelated media/quality hydration. Baselines and
+ * production list readers against real Postgres. Plan probes use selected
+ * identity reads, avoiding unrelated media/quality hydration. Baselines and
  * unmatched-ID checks use the same core reader; complete kernel output and
  * enrichment compatibility belongs to list-read.integration.test.ts.
  * Postgres raises an alias mismatch at PLAN
@@ -253,7 +253,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
     const seededCodes = new Set(universe.shortcodeByPrefix.values());
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       const binding = ENTITY_KERNEL_BINDINGS[entity];
-      const progressive = z.enum(listEntities).safeParse(entity);
+      const listEntity = z.enum(listEntities).safeParse(entity);
       // Plan probes need selected rows/counts, not media/quality hydration.
       // Full reads and every enrichment group retain their composition owner.
       const readPlan = async (
@@ -262,12 +262,11 @@ describe("entity list smoke — shared selection/count FROM context", () => {
           "action" | "entity"
         >,
       ) => {
-        if (progressive.success) {
-          const page = await ENTITY_LIST_READ_OPERATIONS[progressive.data].base(
-            kernelCtx,
-            input,
-          );
-          return { items: page.data, meta: page.meta };
+        if (listEntity.success) {
+          const page = await ENTITY_LIST_READ_OPERATIONS[
+            listEntity.data
+          ].listFields(kernelCtx, input, ["id"]);
+          return { items: page.items, meta: page.meta };
         }
         return executeEntity(kernelCtx, { action: "list", entity, ...input });
       };

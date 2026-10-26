@@ -574,7 +574,6 @@ export async function retireObsoleteImageProcessingJobs(
     kind: "projection",
     categories: ["imageJob"],
     changes: await imageProcessingRecordChanges(db, ids),
-    refresh: ["quality"],
   });
   return ids.length;
 }
@@ -915,7 +914,6 @@ export async function claimImageProcessingJob(
             [candidate.id],
             [parseEntityId("image", candidate.imageId)],
           ),
-          refresh: ["quality"],
         });
       const {
         previousAttemptId: _previousAttemptId,
@@ -1222,7 +1220,6 @@ export async function retryImageProcessingNow(
       kind: "projection",
       categories: ["imageJob"],
       changes: await imageProcessingRecordChanges(tx, ids),
-      refresh: ["quality"],
     });
     return ids;
   });
@@ -1758,12 +1755,19 @@ export async function completeImageProcessingJob(
       kind: "projection",
       categories: ["image", "imageJob", "relatedData"],
       changes: await imageProcessingRecordChanges(tx, [job.id], [job.imageId]),
-      // Selected descriptions are inputs to image and attached-owner search documents.
-      refresh:
-        job.kind === "describe_image"
-          ? (["quality", "search"] as const)
-          : (["quality"] as const),
     });
+    // A selected description is search text of the image and every record it
+    // is attached to: an input no column path reaches (ADR 0021).
+    if (job.kind === "describe_image")
+      await unwrapDb(tx).execute(sql`
+        SELECT derived_mark(owner.target, ARRAY[owner.ref])
+          FROM (
+            SELECT 'image.searchDocument' AS target, ${job.imageId}::uuid AS ref
+            UNION
+            SELECT a."entityKind" || '.searchDocument', a."entityId"
+              FROM "EntityAttachment" a
+             WHERE a."imageId" = ${job.imageId}::uuid
+          ) owner`);
     if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };
   });

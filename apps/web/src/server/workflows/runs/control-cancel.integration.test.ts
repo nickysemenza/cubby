@@ -40,7 +40,8 @@ describe("Run AI work cancel", () => {
         target: {
           kind: "field",
           entity: "product",
-          recordId: product.entityId,
+          // One open evaluation per target slot: each is its own target.
+          recordId: index === 0 ? product.entityId : crypto.randomUUID(),
           field: "categoryId",
           assessmentIds: [],
         },

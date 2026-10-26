@@ -208,7 +208,7 @@ describe("effective Product stock tracking", () => {
         { pageIndex: 0, pageSize: 10 },
         "page",
         undefined,
-        { kind: "enrichment", groups: ["derived"] },
+        { kind: "selected", fields: ["fieldResolutions"] },
       );
       expect(
         stockTrackingRead

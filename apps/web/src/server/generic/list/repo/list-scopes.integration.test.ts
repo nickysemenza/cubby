@@ -34,6 +34,7 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
@@ -65,14 +66,15 @@ describe("declared list scopes", () => {
     entity: "ingredient" | "task" | "expense",
     filters: ListFilterValues,
   ) => {
-    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].base(
+    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
       context(),
       {
         filters,
         pagination: page,
       },
+      ["id"],
     );
-    return sorted(pageResult.data.map((row) => row.id));
+    return sorted(pageResult.items.map((row) => row.id));
   };
   /** Codes of `rows` matching `where`, sorted. */
   const matching = async (
@@ -269,6 +271,7 @@ describe("declared list scopes", () => {
       sql`${effectiveFieldSql("task", "projectId")} = ANY(${uuidArrayParam(
         await retiredScopeProjects(old),
       )})`;
+    await drainStoredDerived(ctx.db);
     const actual = [];
     const expected = [];
     for (const [old, scope] of cases) {
