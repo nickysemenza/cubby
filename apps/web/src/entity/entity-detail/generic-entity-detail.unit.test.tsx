@@ -337,10 +337,11 @@ describe("GenericEntityDetail", () => {
   });
 
   it("keeps record facts before workflow sections and leaves summarized fields to the summary", () => {
-    const { container } = render(
+    const record = recordFor("product");
+    const { container, rerender } = render(
       <GenericEntityDetail
         entity="product"
-        record={recordFor("product")}
+        record={{ ...record, brandId: testShortcode("vendor", "VEN-TEST") }}
         operations={operations}
       />,
       { wrapper: harness.wrapper },
@@ -367,12 +368,26 @@ describe("GenericEntityDetail", () => {
       }),
     ).toBeNull();
     expect(overview.querySelector("#coverage")).not.toBeNull();
+    // An empty one-field cell is omitted, so the facts keep Brand fillable.
+    rerender(
+      <GenericEntityDetail
+        entity="product"
+        record={{ ...record, brandId: null }}
+        operations={operations}
+      />,
+    );
+    expect(
+      within(container).getByText("Brand", {
+        selector: '[data-slot="fact-label"]',
+      }),
+    ).toBeVisible();
   });
 
   it("labels a book barcode as its ISBN and keeps the declared field order", () => {
     const record = recordFor("product");
     const book = {
       ...record,
+      brandId: testShortcode("vendor", "VEN-TEST"),
       primaryGtin: "09780306406157",
       externalIds: [],
       ingredient: null,

@@ -18,11 +18,14 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import type { DetailRecordOf } from "./detail-record";
 import { DetailSummary } from "./detail-summary";
+
+installFeatures();
 
 const rows = [
   "Long synthetic garden storage organizer with removable trays",
