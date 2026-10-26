@@ -1,0 +1,31 @@
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_5179a923bdfd2e::t_6c627547db4ef8 339,384,439-451,617-619
+apps/apple/App/Shared/Entity/List/SpecialistListViews.swift
+  s_5179a923bdfd2e::t_e4acfb74b0493b 6
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_5179a923bdfd2e::t_d12b5bcecc0003 9-10,394-396
+apps/apple/CubbyKit/Tests/CubbyKitTests/Report/ReportPresentationTests.swift
+  s_5179a923bdfd2e::t_527bba0c05283c 8,127
+apps/apple/DESIGN.md
+  s_5179a923bdfd2e::t_b918f3af7f891a 113
+packages/schemas/src/native-coverage.ts
+  s_5179a923bdfd2e::t_38545918f970ba 373,428-435,529-537
+packages/schemas/src/native-coverage.unit.test.ts
+  s_5179a923bdfd2e::t_fdedb56fd5a5fc 95-96,102-103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6e82fb8d18c9bc2cebb8ac77d265cd5136ed608b",
+  "prompts": {},
+  "sessions": {
+    "s_5179a923bdfd2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a24-b465-7303-96da-d76d9c4ec5dd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
