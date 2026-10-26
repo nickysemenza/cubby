@@ -1,6 +1,5 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
-import { SmartCollectionProvider } from "~/features/collection/smart-collection-state";
 import { installFeatures } from "~/features/registry";
 
 export const Route = createFileRoute("/_authenticated")({
@@ -25,9 +24,5 @@ function AuthenticatedLayout() {
   // feature code stays out of the Worker's first-request closure. Route
   // chunks load before SSR render and hydration; idempotent.
   installFeatures();
-  return (
-    <SmartCollectionProvider>
-      <Outlet />
-    </SmartCollectionProvider>
-  );
+  return <Outlet />;
 }

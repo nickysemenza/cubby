@@ -214,6 +214,36 @@ function changesFundingDate(
 }
 
 /**
+ * Verification refusals end reconciliation. Evidence that already agrees with
+ * the booking needs no write, so it never reopens a member-reviewed or drifted
+ * booking for review (#3395); any required write still passes the
+ * automatic-booking guards.
+ */
+function settledBeforeBookingGuards(
+  verification: Awaited<
+    ReturnType<FinancialEvidenceCorrectionInput["verifyCurrentEvidence"]>
+  >,
+  amount: number | null,
+  observation: typeof sourceTransactionRecord.$inferSelect,
+  row: typeof financialTransaction.$inferSelect,
+  addsReference: boolean,
+): FinancialEvidenceCorrectionResult | null {
+  if (verification.status === "review") return verification;
+  // Automatic bookings record each new observation's reference below. A
+  // member-reviewed booking stays linked through the accepted charge key.
+  const automatic = row.bookingDecisionFingerprint?.startsWith("automatic:");
+  // Null-status evidence has no lifecycle, so its date must agree directly;
+  // a moved date stays review work for dated allocations and Expenses.
+  return row.status !== "void" &&
+    !(addsReference && automatic) &&
+    [row.transactionDate, row.postedDate].includes(observation.statementDate) &&
+    isSameAmount(amount, row.amount) &&
+    Object.keys(sourceLifecycle(observation, row)).length === 0
+    ? { status: "unchanged", reason: "already_current" }
+    : null;
+}
+
+/**
  * Correct one untouched generated lump booking, retaining every observation,
  * settlement reference, attribution share and reviewed correction receipt.
  * Caller-owned transactions must supply snapshot/serializable isolation too.
@@ -275,8 +305,14 @@ export async function reconcileFinancialEvidenceCorrection(
       )
         ? refs
         : [...refs, { source: input.source, externalId: input.externalId }];
-      const verification = await input.verifyCurrentEvidence(txDb, observation);
-      if (verification.status === "review") return verification;
+      const settled = settledBeforeBookingGuards(
+        await input.verifyCurrentEvidence(txDb, observation),
+        input.amount,
+        observation,
+        row,
+        refs.length !== nextRefs.length,
+      );
+      if (settled) return settled;
       if (
         row.ledgerTransferId ||
         !purchaseSettlementKinds.some((kind) => kind === row.kind)

@@ -28,10 +28,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  availableEvaluationWorkKey,
-  evaluationSlotKey,
-} from "~/server/ai/repo/ai-evaluation-requests";
+import { evaluationSlotKey } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -50,7 +47,7 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJobs } from "~/server/generic/jobs/repo/jobs";
 
 import {
   hasAiRefreshRunCapacity,
@@ -98,145 +95,215 @@ const targetFeature = (target: AiEvaluationTarget) =>
         ? "product-identity"
         : "mailbox-triage";
 
-async function slotAdmission(db: Database, item: EvaluationTargetInput) {
-  const slotKey = evaluationSlotKey({
-    feature: targetFeature(item.target),
-    target: item.target,
-  });
-  const rows = await getDb(db)
-    .select({
-      item: aiEvaluation,
-      failureCode: run.failureCode,
-      sameInput: sql<boolean>`(${aiEvaluation.provenance} - ${aiProvenance.keyof().enum.model}::text) = (${JSON.stringify(item.provenance)}::jsonb - ${aiProvenance.keyof().enum.model}::text)`,
-    })
+async function slotAdmissions(
+  db: Database,
+  targets: readonly EvaluationTargetInput[],
+) {
+  if (!targets.length) return [];
+  const unique = [
+    ...new Map(
+      targets.map((item) => [
+        evaluationSlotKey({
+          feature: targetFeature(item.target),
+          target: item.target,
+        }),
+        item,
+      ]),
+    ).entries(),
+  ];
+  const history = await getDb(db)
+    .select({ item: aiEvaluation, failureCode: run.failureCode })
     .from(aiEvaluation)
     .innerJoin(run, eq(run.id, aiEvaluation.runId))
-    .where(eq(aiEvaluation.slotKey, slotKey))
+    .where(
+      inArray(
+        aiEvaluation.slotKey,
+        unique.map(([key]) => key),
+      ),
+    )
     .orderBy(desc(aiEvaluation.createdAt), desc(aiEvaluation.id));
-  const open = rows.find(
-    ({ item }) => item.state === "queued" || item.state === "retry_wait",
-  );
-  if (open)
-    return !open.sameInput &&
-      !item.blockedReason &&
-      open.failureCode !== "user_cancelled"
-      ? { kind: "update" as const, row: open.item }
-      : { kind: "unchanged" as const };
-  const same = rows.filter((row) => row.sameInput);
-  const declined = (row: (typeof rows)[number]) =>
-    row.item.state === "blocked" ||
-    row.item.state === "obsolete" ||
-    (row.item.state === "cancelled" &&
-      row.failureCode === SUPERSEDED_RUN_FAILURE);
-  if (
-    same[0]?.failureCode === "user_cancelled" ||
-    same.some(
-      ({ item }) => item.state === "running" || item.state === "result_ready",
-    ) ||
-    same.filter(declined).length >= MAX_REOPENS ||
-    (rows[0]?.sameInput && (item.blockedReason || !declined(rows[0])))
-  )
-    return { kind: "unchanged" as const };
-  return { kind: "insert" as const };
+  return unique.map(([slotKey, input]) => {
+    const rows = history
+      .filter((row) => row.item.slotKey === slotKey)
+      .map((row) => ({
+        ...row,
+        sameInput:
+          JSON.stringify(
+            aiProvenance.omit({ model: true }).parse(row.item.provenance),
+          ) ===
+          JSON.stringify(
+            aiProvenance.omit({ model: true }).parse(input.provenance),
+          ),
+      }));
+    const open = rows.find(
+      ({ item }) => item.state === "queued" || item.state === "retry_wait",
+    );
+    const common = { input, slotKey, history: rows.map((row) => row.item) };
+    if (open)
+      return {
+        ...common,
+        kind:
+          !open.sameInput &&
+          !input.blockedReason &&
+          open.failureCode !== "user_cancelled"
+            ? ("update" as const)
+            : ("unchanged" as const),
+        row: open.item,
+      };
+    const same = rows.filter((row) => row.sameInput);
+    const declined = (row: (typeof rows)[number]) =>
+      row.item.state === "blocked" ||
+      row.item.state === "obsolete" ||
+      (row.item.state === "cancelled" &&
+        row.failureCode === SUPERSEDED_RUN_FAILURE);
+    const unchanged =
+      same[0]?.failureCode === "user_cancelled" ||
+      same.some(
+        ({ item }) => item.state === "running" || item.state === "result_ready",
+      ) ||
+      same.filter(declined).length >= MAX_REOPENS ||
+      (rows[0]?.sameInput && (input.blockedReason || !declined(rows[0])));
+    return {
+      ...common,
+      kind: unchanged ? ("unchanged" as const) : ("insert" as const),
+      row: undefined,
+    };
+  });
 }
 
-/** Whether a slot needs new input or a new attempt, without walking receipts. */
+/** Whether any logical slot admits current input, using one history read. */
 export async function hasAdmissibleTarget(
   db: Database,
   targets: readonly EvaluationTargetInput[],
 ) {
-  for (const item of targets)
-    if ((await slotAdmission(db, item)).kind !== "unchanged") return true;
-  return false;
+  return (await slotAdmissions(db, targets)).some(
+    (entry) => entry.kind !== "unchanged",
+  );
 }
 
-async function insertTarget(
+/** Admit/update a finite slot set with one history read and set-based writes. */
+export async function insertEvaluationTargets(
   db: Database,
   runId: string,
-  item: EvaluationTargetInput,
-): Promise<number> {
-  const { target, provenance, blockedReason } = item;
-  const feature = targetFeature(target);
-  const slotKey = evaluationSlotKey({ feature, target });
-  const baseKey = await targetWorkKey(item);
+  targets: readonly EvaluationTargetInput[],
+  options: { updatesOnly?: boolean } = {},
+) {
+  if (!targets.length) return 0;
+  const keys = [
+    ...new Set(
+      targets.map((item) =>
+        evaluationSlotKey({
+          feature: targetFeature(item.target),
+          target: item.target,
+        }),
+      ),
+    ),
+  ].sort();
   return withTransactionDatabase(db, async (tx) => {
-    // Serialize admission even when the slot has no row yet. The partial unique
-    // index also fences producers outside this path and concurrent member retries.
     await getDb(tx).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${slotKey}, 0))`,
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(key, 0)) FROM unnest(ARRAY[${sql.join(
+        keys.map((key) => sql`${key}`),
+        sql`, `,
+      )}]::text[]) key ORDER BY key`,
     );
-    const admission = await slotAdmission(tx, item);
-    if (admission.kind === "unchanged") return 0;
-    const workKey = await availableEvaluationWorkKey(tx, {
-      baseKey,
-      slotKey,
-      updatingId: admission.kind === "update" ? admission.row.id : undefined,
-    });
-    if (admission.kind === "update") {
-      // A Job may claim the row after the admission read. Never overwrite an
-      // executing snapshot; rediscovery will queue current input beside it.
-      const updated = await getDb(tx)
+    const admissions = (await slotAdmissions(tx, targets)).filter(
+      (entry) =>
+        entry.kind !== "unchanged" &&
+        (!options.updatesOnly || entry.kind === "update"),
+    );
+    const prepared = await Promise.all(
+      admissions.map(async (entry) => {
+        const base = await targetWorkKey(entry.input);
+        const held = new Set(
+          entry.history
+            .filter(
+              (row) =>
+                row.id !==
+                (entry.kind === "update" ? entry.row?.id : undefined),
+            )
+            .map((row) => row.workKey),
+        );
+        let workKey = base;
+        for (let attempt = 1; held.has(workKey); attempt++)
+          workKey = `${base}:attempt:${attempt}`;
+        return { ...entry, workKey };
+      }),
+    );
+    const updates = prepared.flatMap((entry) =>
+      entry.kind === "update" && entry.row
+        ? [{ ...entry, row: entry.row }]
+        : [],
+    );
+    let changed = 0;
+    if (updates.length) {
+      const values = sql.join(
+        updates.map(
+          (entry) =>
+            sql`(${entry.row.id}::uuid, ${JSON.stringify(entry.input.target)}::jsonb, ${JSON.stringify(entry.input.provenance)}::jsonb, ${JSON.stringify(jsonSnapshot(entry.input.snapshot))}::jsonb, ${entry.workKey}::text)`,
+        ),
+        sql`, `,
+      );
+      const written = await getDb(tx)
         .update(aiEvaluation)
         .set({
-          provenance,
-          snapshot: jsonSnapshot(item.snapshot),
-          workKey,
-          target,
-          // Retry-wait rows can retain a prior provider result. New input must
-          // never publish that result under its replacement provenance.
+          target: sql`page.target`,
+          provenance: sql`page.provenance`,
+          snapshot: sql`page.snapshot`,
+          workKey: sql`page.work_key`,
           result: null,
           receipt: null,
           error: null,
           updatedAt: new Date(),
         })
+        .from(
+          sql`(VALUES ${values}) page(id, target, provenance, snapshot, work_key)`,
+        )
         .where(
           and(
-            eq(aiEvaluation.id, admission.row.id),
+            sql`${aiEvaluation.id}=page.id`,
             inArray(aiEvaluation.state, ["queued", "retry_wait"]),
           ),
         )
         .returning({ id: aiEvaluation.id });
-      return updated.length || insertTarget(tx, runId, item);
+      changed += written.length;
     }
-    const [row] = await getDb(tx)
-      .insert(aiEvaluation)
-      .values({
-        runId: runEntityId.parse(runId),
-        feature,
-        workKey,
-        target,
-        provenance,
-        snapshot: jsonSnapshot(item.snapshot),
-        ...(blockedReason
-          ? {
-              state: "blocked" as const,
-              error: blockedReason,
-              receipt: { reason: "mailbox_authorization_unavailable" },
-            }
-          : {}),
-      })
-      .onConflictDoNothing()
-      .returning({ id: aiEvaluation.id });
-    if (!row) return 0;
-    if (!blockedReason)
-      await enqueueJob(tx, {
-        key: `ai-evaluation:${row.id}`,
-        kind: "ai.evaluation",
-        input: { evaluationId: row.id },
-      });
-    return 1;
+    const fresh = prepared.filter((entry) => entry.kind === "insert");
+    if (fresh.length) {
+      const inserted = await getDb(tx)
+        .insert(aiEvaluation)
+        .values(
+          fresh.map((entry) => ({
+            runId: runEntityId.parse(runId),
+            feature: targetFeature(entry.input.target),
+            workKey: entry.workKey,
+            target: entry.input.target,
+            provenance: entry.input.provenance,
+            snapshot: jsonSnapshot(entry.input.snapshot),
+            ...(entry.input.blockedReason
+              ? {
+                  state: "blocked" as const,
+                  error: entry.input.blockedReason,
+                  receipt: { reason: "mailbox_authorization_unavailable" },
+                }
+              : {}),
+          })),
+        )
+        .onConflictDoNothing()
+        .returning();
+      await enqueueJobs(
+        tx,
+        inserted
+          .filter((entry) => entry.state !== "blocked")
+          .map((entry) => ({
+            key: `ai-evaluation:${entry.id}`,
+            kind: "ai.evaluation",
+            input: { evaluationId: entry.id },
+          })),
+      );
+      changed += inserted.length;
+    }
+    return changed;
   });
-}
-
-/** Admit current input once per slot; queued input updates retain their row and Job. */
-export async function insertEvaluationTargets(
-  db: Database,
-  runId: string,
-  targets: readonly EvaluationTargetInput[],
-) {
-  let inserted = 0;
-  for (const item of targets) inserted += await insertTarget(db, runId, item);
-  return inserted;
 }
 
 type ScheduleEvaluationResult =
@@ -265,15 +332,14 @@ export async function scheduleEvaluationRun(
     if (!(await hasAdmissibleTarget(tx, targets))) return { kind: "unchanged" };
     // Updating a queued slot keeps its original owner, even when a mailbox
     // roster is full or the caller would otherwise open a new Run.
-    let updatedOwner: RunId | undefined;
-    for (const item of targets) {
-      const admission = await slotAdmission(tx, item);
-      if (
-        admission.kind === "update" &&
-        (await insertTarget(tx, admission.row.runId, item))
-      )
-        updatedOwner = admission.row.runId;
-    }
+    const updates = (await slotAdmissions(tx, targets)).filter(
+      (entry) => entry.kind === "update" && entry.row,
+    );
+    const updatedOwner = updates[0]?.row?.runId;
+    if (updatedOwner)
+      await insertEvaluationTargets(tx, updatedOwner, targets, {
+        updatesOnly: true,
+      });
     if (!(await hasAdmissibleTarget(tx, targets)))
       return updatedOwner
         ? { kind: "scheduled", runId: updatedOwner }
@@ -339,8 +405,7 @@ export async function scheduleEvaluationRun(
         });
         owner = await lockRun(runId);
       }
-    let inserted = 0;
-    for (const item of targets) inserted += await insertTarget(tx, runId, item);
+    const inserted = await insertEvaluationTargets(tx, runId, targets);
     if (!inserted)
       await getDb(tx)
         .update(run)

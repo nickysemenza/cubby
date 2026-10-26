@@ -65,6 +65,31 @@ test("Work queue filters routing before paging and opens its source record", asy
         exact: true,
       }),
   ).toHaveCount(2);
+  await page
+    .getByRole("columnheader")
+    .filter({
+      has: page.getByRole("button", {
+        name: "Reason column menu",
+        exact: true,
+      }),
+    })
+    .hover();
+  await page
+    .getByRole("button", { name: "Reason column menu", exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Filter…", exact: true }).click();
+  await page.getByRole("button", { name: "is not", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Filter Reason", exact: true })
+    .fill("No settlement evidence");
+  await page
+    .getByRole("option", { name: "No settlement evidence", exact: true })
+    .click();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(
+    /reasonExclude=reconciliation(%3A|:)purchase-unsettled/,
+  );
+  await expect(product).toBeVisible();
   await page.getByRole("checkbox", { name: "Select all", exact: true }).check();
   await page.getByRole("button", { name: "Copy codes", exact: true }).click();
   await expect

@@ -6,10 +6,6 @@ import {
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
-import {
-  mergeProductTags,
-  splitProductTags,
-} from "@cubby/shared/collection-tag";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -58,19 +54,12 @@ import { mergeOwnedIds } from "../../entity/editing/shared-id-field";
 import type { EntityEditRecord } from "../../entity/editing/types";
 import { useProductBrandIngress } from "./use-product-brand-ingress";
 
-/**
- * `product.tags` split into two chip inputs — real compatibility tags and
- * Collections (`collection:*` entries), merged back into the one stored
- * `tags` column on every change. Replaces the retired `collections`
- * pseudo-field from `product-form.tsx`: there is no editor-only field here,
- * just a presentation split over one real field.
- */
+/** Compatibility tags with redundant-token suggestions. */
 export function ProductTagsField({
   form,
   field,
 }: SpecializedIntentRendererProps) {
   const tagsId = useId();
-  const collectionsId = useId();
   const [brandName, aliases, categoryId] = useWatch({
     control: form.control,
     name: ["brandName", "aliases", "categoryId"],
@@ -83,7 +72,7 @@ export function ProductTagsField({
   );
   const raw = useWatch({ control: form.control, name: field.key });
   const value = z.array(z.string()).catch([]).parse(raw);
-  const { tags, collections } = splitProductTags(value);
+  const tags = value;
   const redundant = useMemo(
     () =>
       new Map(
@@ -99,8 +88,8 @@ export function ProductTagsField({
       ),
     [tags, brandName, category, aliases],
   );
-  const write = (nextTags: string[], nextCollections: string[]) =>
-    form.setValue(field.key, mergeProductTags(nextTags, nextCollections), {
+  const write = (nextTags: string[]) =>
+    form.setValue(field.key, nextTags, {
       shouldDirty: true,
     });
   return (
@@ -109,7 +98,7 @@ export function ProductTagsField({
         <ChipsInput
           id={tagsId}
           value={tags}
-          onChange={(next) => write(next, collections)}
+          onChange={write}
           placeholder="e.g. grinder-4.5in, M18"
           chipClassName={(tag) =>
             redundant.has(tag) ? "border-warning text-warning-ink" : undefined
@@ -128,14 +117,6 @@ export function ProductTagsField({
               </span>
             );
           }}
-        />
-      </FormFieldGroup>
-      <FormFieldGroup label="Collections" htmlFor={collectionsId}>
-        <ChipsInput
-          id={collectionsId}
-          value={collections}
-          onChange={(next) => write(tags, next)}
-          placeholder="e.g. painting"
         />
       </FormFieldGroup>
     </Stack>

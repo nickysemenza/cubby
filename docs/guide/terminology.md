@@ -564,10 +564,6 @@ Plant, Planting and Garden Entry are defined under [Garden](#garden).
 Checked-in, source-specific planting windows associated with a Plant through its crop key. A guide preserves each source's microclimate and planting method. Household practice (how a crop is started, how often it is resown, crop-level days to maturity marked cited or estimate) is separate checked-in data under the same keys and never reads as a citation.
 _Avoid_: seasonal plan, consensus recommendation
 
-**Collection**:
-A named grouping of Products useful to browse together. Existing tag-backed Collections use direct Product assignments and inherited Location-subtree membership. Smart starters instead evaluate code-defined OR rules over Product Brand names, exact tags, current Location/ancestor names, and directly linked actual Expense Trades. Every matching source is explained, and Products are counted once even when several sources match. Starter names and rules can be edited temporarily in a browser tab; refresh restores the defaults. Neither evaluation nor temporary editing writes tags or membership records. A Collection is not a physical Location Area, an Expense/project Trade, a future Work Area, or a Product compatibility tag.
-_Avoid_: work area, trade, category
-
 **Book Product**:
 A physical book cataloged as a Product. Its ISBN is the book's GTIN identifier, editions or formats with distinct ISBNs are distinct Products, and a printed cookbook belongs here when recorded as a possession.
 _Avoid_: Cookbook, EPUB, ebook
@@ -607,7 +603,7 @@ _Avoid_: derived, computed, default; "Use no value"
 
 **My stuff**:
 The Inventory entries whose Owner is the viewing member. Wardrobe narrows My stuff to the apparel category family. Books (`books` family) and Records (`music` family) include both the viewing member (`@me`) and explicitly shared stock (`@household`); another member's stuff is My stuff with that member as Owner.
-_Avoid_: my products, my collection, belongings
+_Avoid_: my products, belongings
 
 **Device**:
 One registered native app instance on a phone or Mac, identified independently of a session or push token; a reinstall can retain the same identity. Optionally owned by a Ledger Party member and linked to the physical phone or Mac as a Product. An automatic-work switch, set on the device itself, and a remote-pause override, set from the web, together decide whether the job dispatcher sends it companion work; either one is enough to make it a plain viewer.

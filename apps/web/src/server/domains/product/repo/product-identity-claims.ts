@@ -60,7 +60,7 @@ export async function loadProductIdentifierClaims(
     onDropped?: (dropped: DroppedProductIdentifierClaim) => void;
   } = {},
 ) {
-  if (Array.isArray(targetId) && targetId.length === 0) return [];
+  if (targetId && typeof targetId !== "string" && !targetId.length) return [];
   const rows = await getDb(db)
     .select({
       bindingId: importSourceProduct.id,
@@ -115,19 +115,24 @@ export async function loadProductIdentifierClaims(
         notDeleted(product),
         notDeleted(purchase),
         targetId
-          ? typeof targetId === "string"
-            ? eq(product.id, targetId)
-            : inArray(product.id, [...targetId])
+          ? inArray(
+              product.id,
+              typeof targetId === "string" ? [targetId] : [...targetId],
+            )
           : undefined,
       ),
     )
     .orderBy(importSourceProduct.id);
   const candidates = [];
+  const orders = new Map<string, z.infer<typeof acceptedSourceOrder> | null>();
   for (const row of rows) {
-    const original = acceptedSourceOrder.safeParse(row.original);
-    if (!original.success || original.data.extraction.status !== "ready")
-      continue;
-    const line = original.data.extraction.candidate.lines[row.lineIndex];
+    if (!orders.has(row.sourceOrderId)) {
+      const parsed = acceptedSourceOrder.safeParse(row.original);
+      orders.set(row.sourceOrderId, parsed.success ? parsed.data : null);
+    }
+    const original = orders.get(row.sourceOrderId);
+    if (!original || original.extraction.status !== "ready") continue;
+    const line = original.extraction.candidate.lines[row.lineIndex];
     if (!line) continue;
     const asin = amazonAsin(line.productUrl);
     const identifiers = [
@@ -139,7 +144,7 @@ export async function loadProductIdentifierClaims(
     if (!identifiers.length) continue;
     candidates.push({
       row,
-      checksum: original.data.checksum,
+      checksum: original.checksum,
       line,
       identifiers,
     });

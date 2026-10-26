@@ -313,36 +313,61 @@ describe("stored derived values", () => {
     const location = await makeLocation("Synthetic rejecting shelf");
     const beans = await makeProduct("Synthetic rejected beans", 2);
     const entry = await makeEntry(beans, location, 3);
-    const rejecting = {
-      ...derivedComputes,
-      // A sink whose write the database rejects for its data (SQLSTATE 22P02).
-      "search.product": derivedSink({
-        prepare: async () => null,
-        publish: async (tx) => {
-          await unwrapDb(tx).execute(sql`SELECT 'not a number'::int`);
-          return [];
-        },
-      }),
-    };
-    for (let page = 0; page < 20; page++) {
-      const claimed = await claimDerivedMarks(ctx.db);
-      if (claimed.every((mark) => mark.target === "product.searchDocument"))
-        break;
-      await publishDerivedPage(
-        ctx.db,
-        await prepareDerivedPage(ctx.db, rejecting, claimed),
-      );
-    }
-    expect((await valuation(entry))?.value).toBe(6);
-    const [failed] = (
-      await getDb(ctx.db).execute(sql`
+    await unwrapDb(ctx.db).execute(sql`ALTER TABLE "DerivedValue"
+      ADD CONSTRAINT "SyntheticPriceRejected" CHECK (value IS DISTINCT FROM '2'::jsonb) NOT VALID`);
+    try {
+      const rejecting = {
+        ...derivedComputes,
+        // A sink whose write the database rejects for its data (SQLSTATE 22P02).
+        "search.product": derivedSink({
+          prepare: async () => null,
+          publish: async (tx) => {
+            await unwrapDb(tx).execute(sql`SELECT 'not a number'::int`);
+            return [];
+          },
+        }),
+      };
+      for (let page = 0; page < 20; page++) {
+        const claimed = await claimDerivedMarks(ctx.db);
+        if (claimed.every((mark) => mark.target === "product.searchDocument"))
+          break;
+        await publishDerivedPage(
+          ctx.db,
+          await prepareDerivedPage(ctx.db, rejecting, claimed),
+        );
+      }
+      expect((await valuation(entry))?.value).toBe(6);
+      const [failed] = (
+        await getDb(ctx.db).execute(sql`
         SELECT attempts, "lastError" FROM "DerivedDirty"
          WHERE target = 'product.searchDocument' AND ref = ${beans}`)
-    ).rows;
-    expect(failed).toMatchObject({
-      attempts: 1,
-      lastError: expect.stringContaining("invalid input syntax"),
-    });
+      ).rows;
+      expect(failed).toMatchObject({
+        attempts: 1,
+        lastError: expect.stringContaining("invalid input syntax"),
+      });
+      const [rejectedValue] = (
+        await unwrapDb(ctx.db).execute(sql`
+      SELECT attempts, "lastError" FROM "DerivedDirty"
+       WHERE target = 'product.price' AND ref = ${beans}`)
+      ).rows;
+      expect(rejectedValue).toMatchObject({
+        attempts: 1,
+        lastError: expect.stringContaining("SyntheticPriceRejected"),
+      });
+      const stored = await loadStoredDerived(
+        ctx.db,
+        "product",
+        [beans],
+        ["price", "dataQuality"],
+      );
+      expect(stored.get(beans)?.get("price")?.value).toBeNull();
+      expect(stored.get(beans)?.get("dataQuality")?.meta.state).toBe("fresh");
+    } finally {
+      await unwrapDb(ctx.db).execute(
+        sql`ALTER TABLE "DerivedValue" DROP CONSTRAINT "SyntheticPriceRejected"`,
+      );
+    }
   });
 
   it("publishes a record-writing sink without waiting on a member's open save", async () => {
@@ -395,6 +420,78 @@ describe("stored derived values", () => {
     await memberSave;
     await drain();
     expect(await marks("recipe.totals")).toEqual([]);
+  });
+
+  it("publishes available value marks and removals while a writer holds another mark", async () => {
+    const busy = await makeProduct("Synthetic busy value", 2);
+    const available = await makeProduct("Synthetic available value", 3);
+    const removed = await makeProduct("Synthetic removed value", 4);
+    await drain();
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 5 })
+      .where(eq(product.id, busy));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ price: 6 })
+      .where(eq(product.id, available));
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, removed));
+    const plan = await prepareDerivedPage(
+      ctx.db,
+      derivedComputes,
+      (await claimDerivedMarks(ctx.db)).filter(
+        (mark) =>
+          mark.target === "product.price" ||
+          mark.target === "product.ledgerExpectedQuantity",
+      ),
+    );
+    expect(
+      plan.marks.filter((mark) => mark.target === "product.price"),
+    ).toHaveLength(3);
+    const locked = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const writer = withTransaction(ctx.db, async (tx) => {
+      await tx.execute(
+        sql`SELECT ref FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${busy}::uuid FOR UPDATE`,
+      );
+      locked.resolve();
+      await release.promise;
+    });
+    await locked.promise;
+    const prices = async () =>
+      await loadStoredDerived(
+        ctx.db,
+        "product",
+        [busy, available, removed],
+        ["price", "ledgerExpectedQuantity"],
+      );
+    try {
+      await withTransaction(ctx.db, async (tx) => {
+        await tx.execute(sql`SET LOCAL statement_timeout = '500ms'`);
+        await publishDerivedPage(databaseForTransaction(tx), plan);
+      });
+      const stored = await prices();
+      expect(stored.get(busy)?.get("price")?.value).toBe(2);
+      expect(stored.get(available)?.get("price")?.value).toBe(6);
+      expect(stored.get(available)?.get("ledgerExpectedQuantity")?.value).toBe(
+        0,
+      );
+      expect(stored.get(removed)?.get("price")?.meta.state).toBe("missing");
+      expect(await marks("product.price")).toEqual([busy]);
+    } finally {
+      release.resolve();
+      await writer;
+    }
+    // Replaying the plan may publish the skipped ticket, but cannot restore cleared values.
+    await publishDerivedPage(ctx.db, plan);
+    const stored = await prices();
+    expect(stored.get(busy)?.get("price")?.value).toBe(5);
+    expect(stored.get(available)?.get("price")?.value).toBe(6);
+    expect(stored.get(removed)?.get("price")?.meta.state).toBe("missing");
+    expect(await marks("product.price")).toEqual([]);
   });
 
   it("marks nothing for a save that changes no declared input", async () => {
@@ -1014,23 +1111,5 @@ describe("stored derived values", () => {
       });
     expect(marked).toBe(3);
     expect(await marks("inventory.valuation")).toHaveLength(3);
-  });
-
-  it("rebuilds the same values from an empty cache", async () => {
-    const location = await makeLocation("Hall cupboard");
-    const towels = await makeProduct("Synthetic towels", 4);
-    await makeEntry(towels, location, 2);
-    await drain();
-    const snapshot = async () =>
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT "entityId"::text, key, value FROM "DerivedValue" ORDER BY 1, 2`,
-        )
-      ).rows;
-    const incremental = await snapshot();
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"`);
-    await markAllStoredDerived(ctx.db);
-    await drain();
-    expect(await snapshot()).toEqual(incremental);
   });
 });

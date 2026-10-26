@@ -89,7 +89,7 @@ describe("getProductRelatedness", () => {
 });
 
 describe("getProductTagPropagation", () => {
-  it("proposes only non-collection tags with three semantic-neighbour votes", async () => {
+  it("proposes tags with three semantic-neighbour votes", async () => {
     const dependencies = dependenciesFor({
       findSimilarEntities: async (): Promise<SimilarEntitiesOut> => ({
         source: { entityKind: "product", entityId: sourceId },
@@ -104,7 +104,7 @@ describe("getProductTagPropagation", () => {
       makeCandidateKey: async () => "candidate-key",
       getProductsByShortcodes: async () => [
         { id: sourceId, tags: ["already"] },
-        { id: oneId, tags: ["shared", "collection:tools"] },
+        { id: oneId, tags: ["shared", "low-vote"] },
         { id: twoId, tags: ["shared"] },
         { id: threeId, tags: ["shared", "already"] },
       ],

@@ -13,7 +13,6 @@ struct EntityFieldControl: View {
     @Binding var pickedTitles: [String: String]
     @State private var picking = false
     @State private var newToken = ""
-    @State private var newCollection = ""
 
     private var key: String { field.key }
     private var value: JSONValue { model.draft[key] ?? .null }
@@ -516,34 +515,16 @@ struct EntityFieldControl: View {
         ) { model.draft[key] = .array($0.map(JSONValue.string)) }
     }
 
-    /// `tags` as web's `ProductTagsField` draws it: compatibility Tags and Collections
-    /// (`collection:*` entries) as two lists over the one stored list, split and merged by the
-    /// shared `CollectionTag` rule.
+    /// Compatibility tags share the ordinary token editor.
     private var productTagsControl: some View {
-        let split = CollectionTag.split(value.arrayValue?.compactMap(\.stringValue) ?? [])
-        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-            TokenListRow(
-                title: "Tags", singular: "tag",
-                entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
-                tokens: split.tags, draft: $newToken,
-                normalize: { $0.trimmingCharacters(in: .whitespaces) }
-            ) { writeProductTags(tags: $0, collections: split.collections) }
-            TokenListRow(
-                title: "Collections", singular: "collection",
-                entryID: "editor.\(model.descriptor.key.rawValue).\(key).collection.add",
-                tokens: split.collections,
-                draft: $newCollection, normalize: CollectionTag.normalizedSlug
-            ) { writeProductTags(tags: split.tags, collections: $0) }
-        }
+        TokenListRow(
+            title: "Tags", singular: "tag",
+            entryID: "editor.\(model.descriptor.key.rawValue).\(key).add",
+            tokens: value.arrayValue?.compactMap(\.stringValue) ?? [], draft: $newToken,
+            normalize: { $0.trimmingCharacters(in: .whitespaces) }
+        ) { model.draft[key] = .array($0.map(JSONValue.string)) }
     }
 
-    private func writeProductTags(tags: [String], collections: [String]) {
-        model.draft[key] = .array(
-            CollectionTag.merge(tags: tags, collections: collections).map(JSONValue.string))
-    }
-
-    /// A list of removable tokens with an entry field. `normalize` shapes a typed entry; an empty
-    /// or repeated one is ignored.
     // MARK: - Dates
 
     /// A `date` control writes `yyyy-MM-dd` for a `date` field and an ISO instant for a

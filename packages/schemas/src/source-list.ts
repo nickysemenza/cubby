@@ -16,6 +16,9 @@ interface SourceListFilter {
   currentMember?: boolean;
   /** The presence field `No value` / `Any value` write (`has` | `none`). */
   nullable?: { field: string; label: string };
+  /** Static choices and an optional runtime declaration roster. */
+  choices?: { options?: GroupOptions; source?: string };
+  exclude?: { field: string };
 }
 
 type GroupOptions = readonly {
@@ -95,7 +98,30 @@ export function defineSourceList<
         `Group by ${choice.key} filters by undeclared column ${columnId}`,
       );
   }
-  return list;
+  return {
+    ...list,
+    filters: list.filters.map((filter) => ({
+      ...filter,
+      ...(filter.kind === "multiselect" || filter.kind === "idMulti"
+        ? { exclude: { field: `${filter.columnId}Exclude` } }
+        : {}),
+    })),
+  };
+}
+
+/** Resolve choices from their owning declarations, shared with cell labels. */
+export function sourceListFilterChoices(
+  list: SourceListDeclaration,
+  columnId: string,
+  sources: Readonly<Record<string, GroupOptions>> = {},
+): { value: string; label: string }[] {
+  const choices = list.filters.find(
+    (filter) => filter.columnId === columnId,
+  )?.choices;
+  return [
+    ...(choices?.options ?? []),
+    ...(choices?.source ? (sources[choices.source] ?? []) : []),
+  ];
 }
 
 /** The choices a read sections by: those without a reason. */

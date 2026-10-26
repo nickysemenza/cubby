@@ -40,6 +40,7 @@ import {
   gotoAuthenticatedPage,
   readExpense,
   uniqueName,
+  waitForAppHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { startOperation } from "./support/start-operation";
@@ -387,6 +388,37 @@ test("Suggestions lists every family with named records and category pills, and 
   await expect(
     field.locator(`a[href="/product-categories/${category.id}"]`),
   ).toContainText(categoryName);
+
+  // Exclusion survives route validation and a reload, and the shared editor
+  // can clear it without losing the scoped proposal.
+  await gotoAuthenticatedPage(
+    page,
+    `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
+  );
+  await expect(
+    suggestionsTable(page).getByRole("link", { name: productName }),
+  ).toHaveCount(0);
+  await page.reload();
+  await waitForAppHydration(page);
+  await expect(page.getByText("__not__:product", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: /^Entity:/ })
+    .click();
+  await expect(
+    page.getByLabel("Entity is or is not", { exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page
+    .getByRole("button", { name: "Clear Entity filter", exact: true })
+    .click();
+  await expect(
+    suggestionsTable(page).getByRole("link", { name: productName }),
+  ).toBeVisible();
+  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
 
   // The shared workbench must clear selected actions when server sort swaps
   // the query, without applying or dismissing the selected proposal.
@@ -889,7 +921,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
   const product = await seedProductPrerequisite(page, {
     name,
     brandName: "Synthetic brand",
-    tags: ["synthetic-brand", "collection:favorites", "mount"],
+    tags: ["synthetic-brand", "ecosystem", "mount"],
   });
   const id = await resolveOrThrow(db, "product", product.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
@@ -975,7 +1007,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
             .where(eq(productTable.id, id))
         )[0]?.tags,
     )
-    .toEqual(["collection:favorites", "mount"]);
+    .toEqual(["ecosystem", "mount"]);
   await expect
     .poll(
       async () =>

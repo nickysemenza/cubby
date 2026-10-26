@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/domains/image-processing/repo/image-representations.ts",
   "src/server/generic/relatedness/repo/relationship-query.ts",
   "src/server/db/computed/source-transaction-settlement-sql.ts",
   "src/server/domains/purchase/repo/purchase-purchaser.ts",
@@ -193,9 +194,6 @@ export const repositoryOwners = [
   "src/server/generic/assessment/repo/assessment-email-link.ts",
   "src/server/generic/assessment/repo/assessment-email.ts",
   "src/server/generic/audit-log/repo/audit-receipts.ts",
-  "src/server/generic/collection/repo/collection-items.ts",
-  "src/server/generic/collection/repo/collection-membership.ts",
-  "src/server/generic/collection/repo/smart-collection-membership.ts",
   "src/server/generic/data-quality/repo/exception-reasons.ts",
   "src/server/generic/data-quality/repo/registry.ts",
   "src/server/generic/embedding/repo/semantic/hash.ts",
@@ -204,6 +202,7 @@ export const repositoryOwners = [
   "src/server/generic/entity-links/repo/dependency-edges.ts",
   "src/server/generic/entity-report/repo/finance-section.ts",
   "src/server/generic/entity-report/repo/fold-repeats.ts",
+  "src/server/generic/entity-report/repo/record-items.ts",
   "src/server/generic/entity-report/repo/purchase-reconciliation.ts",
   "src/server/generic/field-explanation/repo/explanation-reference-values.ts",
   "src/server/generic/list/repo/hierarchy.ts",

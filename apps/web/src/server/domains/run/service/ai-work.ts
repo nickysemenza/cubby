@@ -28,6 +28,7 @@ import {
 } from "~/server/domains/purchase-import/service/gmail/reclassification-target";
 import {
   aiEvaluationsForRun,
+  readAiRefreshWorkSummary,
   guardAiEvaluationAttempt,
   pauseRunForAiWork,
   readAiEvaluation,
@@ -92,6 +93,34 @@ export async function advanceAiWorkRun(
     const prepared = await readRun(db, owner.id);
     if (!prepared) return null;
     Object.assign(owner, prepared);
+  }
+  if (owner.purpose === "ai_refresh") {
+    const summary = await readAiRefreshWorkSummary(
+      db,
+      owner.id,
+      params.attempt,
+    );
+    const complete = summary.pending.length === 0;
+    const failed = summary.progress.failed > 0;
+    const written = await writeRunningAttemptProgress(
+      db,
+      owner.id,
+      params.attempt,
+      {
+        progress: { ...summary.progress },
+        ...(complete
+          ? {
+              status: failed ? "failed" : "completed",
+              endedAt: new Date(),
+              failureCode: failed ? "ai_work_failed" : null,
+              dispatchError: summary.failureText,
+            }
+          : {}),
+      },
+      { requireNoOwnedPendingWork: complete },
+    );
+    if (complete && !written) return advanceAiWorkRun(db, params, ports);
+    return summary.pending;
   }
   const items = await aiWorkItems(db, owner);
   if (owner.purpose === "mail_reclassify" && !items.length)

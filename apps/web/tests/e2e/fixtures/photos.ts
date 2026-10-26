@@ -605,6 +605,10 @@ export async function seedMailImportReportRun(page: Page, name: string) {
     trigger: "manual",
     execution: false,
   });
+  await getDb(db)
+    .update(schema.email)
+    .set({ runId: id })
+    .where(eq(schema.email.orderMailId, original.id));
   const [run] = await getDb(db)
     .update(schema.run)
     .set({

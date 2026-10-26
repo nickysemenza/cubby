@@ -281,7 +281,8 @@ export async function additionalWorkProblemSelections(
   const includeUnrecorded = scopeAdmitsUnrecorded(scope);
   const includeAccounts =
     includeUnrecorded && includesWorkSource(scope, "account", "review");
-  if (scope.check || (!includeProblems && !includeAccounts)) return selections;
+  if (scope.gapChecks || (!includeProblems && !includeAccounts))
+    return selections;
   let attentionPromise: Promise<ProjectAttentionItem[]> | undefined;
   let projectLoadPromise:
     | ReturnType<typeof loadProjectSubtreeRollups>

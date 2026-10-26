@@ -53,7 +53,7 @@ import {
   runHistoryItems,
   phaseLabel,
   type UsageForItems,
-} from "~/server/generic/collection/repo/collection-items";
+} from "~/server/generic/entity-report/repo/record-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Who is asking, for the reads that are scoped to a member's own ledger party. */

@@ -104,8 +104,6 @@ const actionCapability = {
   "suggestions.review_batch": "member_decision",
   "suggestions.set_rule": "member_decision",
   "suggestions.enroll_corrections": "member_decision",
-  "collection.create": "member_decision",
-  "collection.set": "member_decision",
   "finance.commit_booking": "member_decision",
   "finance.commit_booking_correction": "member_decision",
   "finance.record": "generic_mutation",

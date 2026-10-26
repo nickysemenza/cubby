@@ -98,6 +98,8 @@ function matches(value: Value | undefined, filter: Filter) {
   const list = values(value);
   if (filter.in && !list.some((item) => filter.in?.includes(item)))
     return false;
+  if (list.some((item) => item !== null && filter.notIn?.includes(item)))
+    return false;
   const needle = filter.search?.toLowerCase();
   if (
     needle &&

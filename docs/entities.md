@@ -23,6 +23,14 @@ then validates the complete graph against entity and module child storage.
 Image routing names actual model fields; disabled create routes do not count as
 active alternatives. Counterfactual override comparisons use this same pass.
 
+## Named groupings
+
+Named groupings use code-declared saved views with category, family, location,
+brand, or tag filters. Locations provide physical grouping; see
+[ADR 0022](adr/0022-named-groupings-are-saved-views.md). Product and Location
+tags are plain tags. The Product Category family column reads the effective
+inherited family, matching its filter.
+
 ## Declared board lists
 
 A `kind: "board"` list view configures grouping choices, card fields, intrinsic filters,
@@ -110,6 +118,12 @@ or auto caption; the full native chain remains follow-up work.
 The `automaticFields` stored value contributes provenance to its listed fields,
 with its refresh state and timestamp; it never creates its own list column.
 Fields absent from that value retain their own or inherited provenance.
+
+Product detail exposes `unitPriceMappings` as list reads do. Its unit-price
+label and the explanation's complete conversion-graph evidence come from one
+shared calculation, including synthesized effective-price and food/nutrition
+edges. Raw stored `unitMappings` alone are not that complete graph. Service
+Products keep their not-applicable unit-price label.
 
 Before adding an inherited value or override, trace an existing field through its
 stored intent, effective read, `fieldResolutions` provenance, and declared
@@ -1953,6 +1967,9 @@ media payloads and their counters, long text and nested collections; full reads 
 Problems and other narrow consumers retain explicit field projections over the
 same repository readers. External USDA data remains a bounded batch inside the
 Product page read; no list declares a separate lazy column request.
+Location identity and stock Product embeds load brand and category summaries;
+they do not compute classification evidence, brand codes or category stock policy
+that their response mappers do not read.
 
 SQL-backed diagnostics carry the sample/count intent to their canonical
 repository: count membership without loading presentation payloads, and limit
@@ -1980,6 +1997,14 @@ surface with the complete page; an abandoned row load does not leave an unhandle
 rejection. Expense Project and spending allocations use the ID path and start
 together, rather than waiting for the relation-loaded rows. This changes no
 allocation precedence, filter membership or response fields.
+
+Requested attachment galleries prefetch their image representations by page IDs
+alongside row hydration. One canonical media query returns display images and
+attachment representations. The same representation resolver handles public image
+codes and directly owned live attachments, including files excluded from display
+images. Display-image results keep their precedence; only authoritative results
+from this read seed nested hydration. Unknown nested references retain the batched
+fallback, and supplied DTO representations never count as trusted preloads.
 
 Project subtree reads load the tree beside household-grouped Expense and Task
 inputs, then apply the selected descendant scope in memory. A shared in-flight
@@ -2147,6 +2172,23 @@ the agent's. Calendar sources reuse their entity list scaffolds, including
 prepared derived predicates and related scopes. Work queue declares its
 computed-row filters and grouping through `defineSourceList`; it retains its
 staged SQL population rather than inventing a storage entity.
+`defineSourceList` declares static choice options and named declaration rosters
+alongside each filter; cell labels and filter choices consume the same owners.
+A filter whose column differs from its request key declares `field`; `urlKey`
+controls only the URL codec and does not rename the compiled input.
+Its multiselects declare `<columnId>Exclude` by default and use the ordinary
+`FILTER_NOT_PREFIX` URL codec. Work queue compiles include/exclude through one
+predicate helper, negating exclusions with `NOT COALESCE((…), false)`.
+Reason uses each row's `reasonKeys`: branch keys, Problem definition keys, or
+one membership per failing gap check. The routed population applies Reason
+before counts and paging, without trimming displayed gap messages. Only an
+include composed entirely of gap-view checks prunes gap views and skips
+non-gap branches; mixed includes and exclusions retain the combined population.
+The former `check` input and URL key are removed without an alias. Awaiting
+posting has distinct branch keys prefixed with `awaiting_posting:`. Type's
+no-value choice selects Problem rows through `entityPresence`.
+RTable checks a bounded loaded sample in development for multiselect values
+missing from declared choices, skipping deferred and record-backed rosters.
 
 ### Calendar list presentations
 
@@ -2542,9 +2584,10 @@ them. Existing marks retain their priority through deployment; no queued work
 is discarded or guessed to be background work.
 
 The `derived.drain` Job claims ready marks, member edits first, then
-propagation, then reconciliation. It expands fanout marks, computes each
-target's batch outside the publication transaction through its adapter
-(`workflows/derived-computes.ts`), then publishes in the Job's transaction.
+propagation, then reconciliation. It computes each directly marked target's
+batch outside the publication transaction through its adapter
+(`workflows/derived-computes.ts`). The Job's transaction expands fanout marks
+and publishes prepared values; newly expanded targets compute on a later page.
 Publication writes only marks whose ticket is unchanged since the claim, so an
 edit that lands during compute keeps its record dirty, and a deleted-and-reset
 mark cannot be cleared by an older page. Only changed values propagate to
@@ -2552,15 +2595,21 @@ declared dependents, so cascades stop at the first unchanged hop. Sink adapters
 return only records whose output or readiness changed; a recipe recalculation
 that only advances its computation timestamp does not propagate. A failing
 target backs off (30 seconds doubling to 15 minutes) and other targets publish.
-Each target publishes in its own savepoint: a write the database rejects for
-that target's data (SQLSTATE classes 22, 23, 54) backs off the same way with
-the database's message, while transaction-level failures retry the page.
+Value targets publish together in one savepoint and one statement. Each input
+row carries its target, value key and observed ticket; locks skip busy tickets,
+and publication, removal and clearing all use that locked set. Busy or replaced
+marks keep their previous values and remain pending. If the database rejects
+the batch for its data (SQLSTATE classes 22, 23, 54), the savepoint rolls back
+and the same groups retry in individual savepoints. Only rejected targets back
+off, with the database's message; healthy targets publish. Transaction-level
+failures retry the page. Sink targets keep individual savepoints because they
+publish through their own repository writers.
 Preparation and publication failures retain the same bounded cause chain,
 innermost message first, so a long query wrapper cannot hide the underlying
 database or adapter error in the stored retry diagnostic.
-Value adapters write `DerivedValue`; sink adapters write their own tables
-(search documents with embedding admission, recipe totals, conversion
-coverage). Search publication uses one sorted upsert across live documents and
+Sink adapters retain their source-row
+locking and repository writers for their own tables (search documents with
+embedding admission, recipe totals, conversion coverage). Search publication uses one sorted upsert across live documents and
 existing documents marked missing, preserving the latter's content. It then
 retires the observed missing documents in one update within the same transaction.
 This retains stable lock order without splitting mixed backfill pages into
@@ -2576,6 +2625,14 @@ vectors for deletion. The read-set
 tracer (`derived/repo/read-set.integration.test.ts`) fails CI when a compute
 reads a table its declaration does not list. A deploy that
 changes a value's rules marks it in its migration.
+
+That same synthetic corpus verifies reconciliation and empty-cache rebuilds
+for every stored-value target, every searchable entity, Product conversion
+coverage and Recipe totals. It compares semantic values and sort keys while
+excluding computation clocks and disposable physical cache IDs. The test uses
+the real sink publishers with an offline USDA lookup port and fails on any
+remaining mark, including a deferred failure. This is fixture-level evidence,
+not a production rebuild or exhaustive coverage of every input branch.
 
 Reads never compute or repair: lists compile a stored field to one primary-key
 lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
@@ -3934,6 +3991,14 @@ Wrong), and Find suggestions, which estimates and starts a Sweep. A
 collapsible Automatic rules section lists each rule's state, measured
 precision and member switch (`suggestions_read.rules`/`setRule`; On only when
 eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
+Every multiselect filter, including Clean, offers **is / is not** through the
+shared filter editor. Excluded column values use the shared `__not__:` state
+prefix and `<column>Exclude` URL parameter. Quick pickers edit included values
+while preserving exclusions in the shared editor. The list API and MCP accept
+`where[column]` conditions with `in`, `notIn`, `min`, `max` and `search`;
+all supplied parts must hold. `in` and `notIn` each accept up to 200 column
+values. `notIn` rejects a row if any non-null value matches, including any
+member of a multi-valued column; null and absent values pass exclusion.
 Every entity list batches the same queue's pending counts and opens its shared
 inline review; detail pages show a scoped Suggestions section. Family declarations
 expand every affected record: both endpoints of connections and pairs, reference

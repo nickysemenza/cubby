@@ -27,7 +27,9 @@ export type WorkQueueScope = {
   sources?: readonly WorkQueueRow["source"][];
   kinds?: readonly WorkQueueRow["kind"][];
   /** Only gap-carrying branches survive, narrowed to these checks. */
-  check?: readonly DataCheck[];
+  gapChecks?: readonly DataCheck[];
+  /** Predicate memberships only; page hydration supplies all failing checks. */
+  reasonChecks?: readonly DataCheck[];
   record?: {
     entity: ShortcodeEntity;
     id: string;
@@ -128,7 +130,7 @@ export const NO_FACT_COLUMNS = factColumns(NO_FACTS);
 
 /** Whether a branch without its own record id or gaps survives this scope. */
 export const scopeAdmitsUnrecorded = (scope: WorkQueueScope) =>
-  !scope.record && !scope.check;
+  !scope.record && !scope.gapChecks;
 
 /** One record branch, or none when the scope excludes it. */
 export const workQueueCandidate = (
@@ -144,6 +146,7 @@ export const workQueueCandidate = (
     key,
     shared = false,
     carriesGaps = false,
+    reasonKeys,
   }: {
     entity: Entity;
     table: PgTable | SQL;
@@ -156,9 +159,10 @@ export const workQueueCandidate = (
     shared?: boolean | SQL;
     /** The branch's WHERE already narrows to the scope's checks. */
     carriesGaps?: boolean;
+    reasonKeys?: SQL;
   },
 ): SQL[] => {
-  if (scope.check && !carriesGaps) return [];
+  if (scope.gapChecks && !carriesGaps) return [];
   if (scope.record && scope.record.entity !== entity) return [];
   const record = scope.record
     ? sql` AND ${id}::text = ${scope.record.id}`
@@ -169,6 +173,7 @@ export const workQueueCandidate = (
   ${details.source}::text AS source, ${details.kind}::text AS kind,
   ${details.reason}::text AS reason, ${details.nextAction}::text AS "nextAction",
   ${owners}::uuid[] AS owners, ${shared}::boolean AS shared, NULL::text AS "problemKey",
+  ${reasonKeys ?? sql`ARRAY[${key}::text]`} AS reason_keys,
   ${factColumns(factsOf(entity), scope.facts)}
   FROM ${table} WHERE (${where ?? sql`true`})${record}`,
   ];
@@ -186,4 +191,5 @@ export const workDiagnosticCandidate = (
   ${details.source}::text AS source, ${details.kind}::text AS kind,
   ${details.reason}::text AS reason, ${details.nextAction}::text AS "nextAction",
   ${owners}::uuid[] AS owners, ${shared}::boolean AS shared, ${problemKey}::text AS "problemKey",
+  ARRAY[${problemKey}::text] AS reason_keys,
   ${NO_FACT_COLUMNS}`;

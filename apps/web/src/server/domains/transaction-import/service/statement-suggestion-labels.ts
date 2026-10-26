@@ -674,6 +674,12 @@ async function runStatementLabelBatch(
     after?: LabelCursor | null;
     /** Intersect retained charge identity, date and live resolved account scope. */
     scope?: StatementSuggestionScope;
+    /**
+     * `charge:<source>:<chargeKey>` refs this step generation already counted
+     * as failed. An inclusive cursor can reread them; skip so each charge
+     * counts once (#3397). "Retry failed" clears the set to re-admit them.
+     */
+    countedFailures?: ReadonlySet<string>;
   } = {},
 ): Promise<{
   labelled: number;
@@ -768,6 +774,7 @@ async function runStatementLabelBatch(
       return [];
     }
     const { source, chargeKey } = subject.data;
+    if (input.countedFailures?.has(`charge:${source}:${chargeKey}`)) return [];
     return [
       { charge: { source, chargeKey }, expected: row.evidenceFingerprint, row },
     ];
@@ -1226,7 +1233,8 @@ async function runStatementLabelBatch(
   }
   return {
     labelled: labelled.size,
-    completed: completed.size,
+    // A charge that settled in an earlier round and then failed counts once.
+    completed: [...completed].filter((key) => !failedCharges.has(key)).length,
     labels,
     stale,
     skippedIds,

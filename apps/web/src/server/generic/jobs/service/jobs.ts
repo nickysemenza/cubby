@@ -13,7 +13,11 @@ import {
   JobSupersededError,
 } from "~/server/generic/jobs/errors";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
-import { JOB_DRAIN, JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
+import {
+  JOB_BATCH_CLAIM_SHARE,
+  JOB_DRAIN,
+  JOB_HEARTBEAT_MS,
+} from "~/server/generic/jobs/limits";
 import {
   claimJob,
   dueJobs,
@@ -242,9 +246,14 @@ async function advanceBatch(
       pending.delete(id);
     }
   };
+  // Production regression: serial claims on a loaded database spent the whole
+  // budget, so every page released its claims unexecuted. Claiming may use at
+  // most this share of the remaining budget; execution keeps the rest.
+  const claimDeadline =
+    Date.now() + (deadline - Date.now()) * JOB_BATCH_CLAIM_SHARE;
   try {
     for (const id of ids) {
-      if (Date.now() >= deadline) break;
+      if (Date.now() >= claimDeadline) break;
       const claim = await claimJob(db, id, undefined, { pageToken });
       if (claim) pending.set(claim.id, claim);
       else {
@@ -296,6 +305,7 @@ export async function drainDueJobs(
   let scheduled = 0;
   const reserved = new Set<string>();
   const skipped = new Set<string>();
+  const activeServices = new Set<string>();
   const activePages = new Map<string, number>();
   const batchSizes = new Map(
     Object.entries(handlers).flatMap(([kind, handler]) =>
@@ -309,6 +319,7 @@ export async function drainDueJobs(
   const spent = () => scheduled >= limit || Date.now() >= deadline;
   const refill = async () => {
     const settledBefore = settledPages;
+    const groupsBefore = groups.length;
     const remaining =
       limit -
       scheduled -
@@ -327,6 +338,7 @@ export async function drainDueJobs(
     // one of the same three lanes; it never fans out publication transactions.
     const batches = new Map<string, Candidates>();
     for (const candidate of candidates) {
+      if (candidate.pageKey && activeServices.has(candidate.pageKey)) continue;
       reserved.add(candidate.id);
       const batch = handlers[candidate.kind]?.batch;
       const key = `${candidate.kind}:${candidate.runOwned}:${candidate.capExempt}`;
@@ -341,7 +353,7 @@ export async function drainDueJobs(
     }
     // A page may finish or skip while selection is in flight. Reselect before
     // every idle lane exits on an empty result from that older snapshot.
-    return candidates.length > 0 || settledBefore !== settledPages;
+    return groups.length > groupsBefore || settledBefore !== settledPages;
   };
   const nextGroup = async () => {
     while (!spent()) {
@@ -376,6 +388,7 @@ export async function drainDueJobs(
         scheduled += group.length;
         const first = group[0]!;
         activePages.set(first.kind, (activePages.get(first.kind) ?? 0) + 1);
+        if (first.pageKey) activeServices.add(first.pageKey);
         return group;
       }
       // Share selection, not execution: an idle lane can refill while another
@@ -394,7 +407,12 @@ export async function drainDueJobs(
       const candidate = group[0]!;
       const batch = handlers[candidate.kind]?.batch;
       try {
-        if (batch)
+        const page = handlers[candidate.kind]?.advancePage;
+        if (page && candidate.pageKey) {
+          const outcome = await page(db, candidate.id);
+          outcomes.push(outcome);
+          if (outcome === "skipped") skipped.add(candidate.id);
+        } else if (batch)
           outcomes.push(
             ...(await advanceBatch(
               db,
@@ -417,6 +435,7 @@ export async function drainDueJobs(
           candidate.kind,
           (activePages.get(candidate.kind) ?? 1) - 1,
         );
+        if (candidate.pageKey) activeServices.delete(candidate.pageKey);
         settledPages++;
       }
     }

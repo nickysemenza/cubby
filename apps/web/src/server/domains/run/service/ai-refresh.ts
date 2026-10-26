@@ -27,7 +27,10 @@ import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
+import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import {
   suggestFields,
@@ -43,29 +46,49 @@ import {
 import {
   evaluateProductIdentity,
   prepareProductIdentityCatalog,
-  evaluatePreparedProductIdentityPair,
   evaluatePreparedProductIdentityPairs,
+  evaluatePreparedProductIdentityPair,
+  prepareProductIdentityPage,
+  publishProductIdentityChunk,
+  type PreparedProductIdentityPageOutcome,
 } from "~/server/ai/product-identity";
 import {
   claimAiEvaluation,
   publishAiEvaluation,
+  publishAiEvaluationPage,
+  publishAiEvaluationContinuation,
+  failAiEvaluationPage,
+  type EvaluationPageFailure,
 } from "~/server/ai/repo/ai-evaluation";
+import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import {
   readAiRefreshActivation,
   readAiDiscoveryCursor,
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
+import type {
+  EvaluationPageAdapter,
+  EvaluationPageTarget,
+  EvaluationPagePreparation,
+  EvaluationPageOutcome,
+} from "~/server/ai/repo/evaluation-page";
+import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshot,
+  productIdentitySnapshots,
   prepareProductIdentityPair,
   prepareProductIdentityPairRequests,
   preparedProductIdentityPair,
+  productIdentityPairKey,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
+import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
   prepareProductPairPublication,
   prepareProductPairPublications,
+  publishProductPairPublications,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -83,12 +106,14 @@ import {
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { withJobExecution } from "~/server/generic/jobs/context";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
+import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import { checkConnectionSourceBeforeCommit } from "../repo/ai-refresh-state";
 import {
@@ -347,23 +372,40 @@ async function scheduleProductIdentityDiscovery(
   const products = cursor.productDone
     ? []
     : await liveProductIdsAfter(db, cursor.product, EMAIL_RECLASSIFY_LIMIT);
-  for (const item of products) {
-    const prepared = await productIdentitySnapshot(db, item.id);
-    if (!prepared) continue;
-    const provenance = aiProvenance.parse({
-      dependencies: dependencyStamps(activation.manifest, ["product-identity"]),
-      inputFingerprint: prepared.fingerprint,
-      optionFingerprint: "canonical-product-pairs-v1",
-      model: null,
-    });
-    const target = aiEvaluationTarget.parse({
-      kind: "product",
-      entity: "product",
-      recordId: item.id,
-      field: null,
-      assessmentIds: [],
-    });
-    const key = await sha256Hex(JSON.stringify([item.id, provenance]));
+  const snapshots = await productIdentitySnapshots(
+    db,
+    products.map((item) => item.id),
+  );
+  const targets = products.flatMap((item) => {
+    const prepared = snapshots.get(item.id);
+    if (!prepared) return [];
+    return [
+      {
+        target: aiEvaluationTarget.parse({
+          kind: "product",
+          entity: "product",
+          recordId: item.id,
+          field: null,
+          assessmentIds: [],
+        }),
+        provenance: aiProvenance.parse({
+          dependencies: dependencyStamps(activation.manifest, [
+            "product-identity",
+          ]),
+          inputFingerprint: prepared.fingerprint,
+          optionFingerprint: "canonical-product-pairs-v1",
+          model: null,
+        }),
+        snapshot: prepared.snapshot,
+      },
+    ];
+  });
+  if (targets.length) {
+    const key = await sha256Hex(
+      JSON.stringify(
+        targets.map((entry) => [entry.target.recordId, entry.provenance]),
+      ),
+    );
     const productRun = await scheduleEvaluationRun(
       db,
       ports.context?.actorContext ?? systemActor(),
@@ -371,16 +413,13 @@ async function scheduleProductIdentityDiscovery(
         purpose: "ai_refresh",
         trigger: "scheduled",
         status: "running",
-        clientKey: `ai-refresh:product:${key}`,
+        clientKey: `ai-refresh:product-page:${key}`,
         input: aiRefreshRunInput.parse({ kind: "ai_refresh", activation }),
       },
-      [{ target, provenance, snapshot: prepared.snapshot }],
+      targets,
     );
     if (productRun.kind === "scheduled") scheduledRuns.add(productRun.runId);
-    if (productRun.kind === "deferred") {
-      deferred = true;
-      break;
-    }
+    deferred = productRun.kind === "deferred";
   }
   return {
     runs: [...scheduledRuns],
@@ -917,9 +956,22 @@ export async function executeAiRefreshTarget(
             );
           return result ? [result] : [];
         });
-        const rulePublications = await prepareProductPairPublications(
+        const preparedRules = await prepareProductPairPublications(
           db,
-          rules,
+          rules.map((input, index) => ({ key: String(index), input })),
+        );
+        if (preparedRules.length !== rules.length)
+          throw new Error("Product pair evidence changed during inference");
+        const rulePublications = preparedRules.map(
+          (prepared) => async (transactionDb: Database) => {
+            const [result] = await publishProductPairPublications(
+              transactionDb,
+              [prepared],
+            );
+            if (!result?.valid)
+              throw new Error("Product pair evidence changed during inference");
+            return result.row;
+          },
         );
         const requests = await prepareProductIdentityPairRequests(
           db,
@@ -1202,4 +1254,650 @@ export async function executeAiRefreshTarget(
     if (!obsolete) throw error;
   }
   return true;
+}
+
+type ProductPagePreparation = PreparedProductIdentityPageOutcome & {
+  enrollment: { rulePairs: number; requestedPairs: number } | null;
+};
+
+type ProductPageOutcome =
+  | {
+      kind: "pair";
+      publication: PreparedProductPairPublication;
+      receipt: z.infer<ReturnType<typeof z.json>>;
+    }
+  | {
+      kind: "catalog";
+      preparation: PreparedProductIdentityPageOutcome;
+      receipt: z.infer<ReturnType<typeof z.json>>;
+    };
+
+function inEvaluationContext<T>(
+  db: Database,
+  target: EvaluationPageTarget,
+  work: () => Promise<T>,
+): Promise<T> {
+  return withJobExecution(db, target.claim, () =>
+    withWorkflowExecution(
+      {
+        runId: target.evaluation.runId,
+        attempt: target.claim.generation,
+        database: db,
+      },
+      work,
+    ),
+  );
+}
+
+/** Product preparation and publication stay set-based behind the stable page contract. */
+function productEvaluationPageAdapter(
+  ports: AiRefreshPorts = {},
+): EvaluationPageAdapter<ProductPagePreparation, ProductPageOutcome> {
+  return {
+    async prepare(db, targets) {
+      const byId = new Map(
+        targets.map((entry) => [entry.evaluation.id, entry]),
+      );
+      const prepared = await prepareProductIdentityPage(
+        db,
+        targets.map((entry) => {
+          const target = entry.target;
+          if (target.kind !== "product" && target.kind !== "product_pair")
+            throw new Error("Unsupported Product page target");
+          return target.kind === "product"
+            ? {
+                key: entry.evaluation.id,
+                kind: target.kind,
+                recordId: parseEntityId("product", target.recordId),
+              }
+            : {
+                key: entry.evaluation.id,
+                kind: target.kind,
+                recordId: parseEntityId("product", target.recordId),
+                otherId: parseEntityId("product", target.otherId),
+              };
+        }),
+      );
+      // Lane B returns source snapshots on candidate pairs. Sources without
+      // candidates need one additional set read to preserve their queued input hash.
+      const empty = prepared.filter(
+        (entry) => entry.productIds.length === 1 && !entry.pairs.length,
+      );
+      const emptySnapshots = await productIdentitySnapshots(
+        db,
+        empty.map((entry) => entry.productIds[0]),
+      );
+      const emptyFences = empty.length
+        ? await productIdentityEvidenceFences(
+            db,
+            empty.map((entry) => ({
+              key: entry.key,
+              productIds: entry.productIds,
+            })),
+          )
+        : new Map<string, string>();
+      return Promise.all(
+        prepared.map(
+          async (
+            entry,
+          ): Promise<EvaluationPagePreparation<ProductPagePreparation>> => {
+            const target = byId.get(entry.key);
+            if (!target)
+              throw new Error(
+                "Product preparation returned an unexpected target",
+              );
+            try {
+              if (
+                !entry.valid ||
+                (emptyFences.has(entry.key) &&
+                  emptyFences.get(entry.key) !== entry.fence)
+              )
+                throw new Error(
+                  "Product identity evidence changed during inference",
+                );
+              if (target.target.kind === "product_pair") {
+                const current = entry.pairs[0];
+                const frozen = preparedProductIdentityPair.parse(
+                  target.evaluation.snapshot,
+                );
+                if (
+                  !current ||
+                  current.fingerprint !==
+                    target.evaluation.provenance.inputFingerprint ||
+                  frozen.fingerprint !== current.fingerprint
+                )
+                  throw new Error(
+                    "Product pair evidence changed during inference",
+                  );
+                // Persisted JSONB ordering is part of the existing standalone question.
+                entry = {
+                  ...entry,
+                  pairs: [
+                    { ...current, first: frozen.first, second: frozen.second },
+                  ],
+                };
+              } else {
+                const pair = entry.pairs[0];
+                const source = pair
+                  ? pair.productIds[0] === target.target.recordId
+                    ? pair.first
+                    : pair.second
+                  : emptySnapshots.get(entry.productIds[0])?.snapshot;
+                const fingerprint =
+                  source === undefined
+                    ? null
+                    : await sha256Hex(canonicalJson(source));
+                if (
+                  fingerprint !== target.evaluation.provenance.inputFingerprint
+                )
+                  throw new Error(
+                    "AI evaluation target changed during inference",
+                  );
+              }
+              return {
+                kind: "ready",
+                target,
+                evidenceDigest: entry.fence,
+                prepared: { ...entry, enrollment: null },
+              };
+            } catch (error) {
+              return {
+                kind: "failed",
+                target,
+                error:
+                  error instanceof Error ? error : new Error(String(error)),
+              };
+            }
+          },
+        ),
+      );
+    },
+    async evaluate(db, entry, usage) {
+      const item = entry.target.evaluation;
+      const prepared = entry.prepared;
+      const evaluate = (pair: z.infer<typeof preparedProductIdentityPair>) =>
+        evaluatePreparedProductIdentityPair(db, pair, item.runId, {
+          ...ports.productIdentityPorts,
+          usage,
+          evaluationId: item.id,
+          provenance: item.provenance,
+          preparedPage: true,
+        });
+      if (entry.target.target.kind === "product_pair") {
+        const pair = prepared.pairs[0]!;
+        const result = await evaluate(pair);
+        return {
+          kind: "pair",
+          publication: {
+            key: item.id,
+            input: result,
+            pair,
+            fence:
+              prepared.pairFences.get(
+                productIdentityPairKey(pair.productIds),
+              ) ?? "",
+          },
+          receipt: {
+            pair: pair.productIds,
+            fingerprint: pair.fingerprint,
+            model: result.producer.model,
+            actionable: result.actionable,
+            conflict: result.conflict,
+          },
+        };
+      }
+      if (prepared.enrollment)
+        return {
+          kind: "catalog",
+          preparation: prepared,
+          receipt: jsonSnapshot({
+            eligible: prepared.eligible,
+            excluded: !prepared.eligible ? "misc_or_deleted" : null,
+            ...prepared.enrollment,
+            catalogEnumeration: true,
+            coverage: prepared.coverage,
+          }),
+        };
+      throw new Error(
+        "Product source enrollment must precede its enumeration receipt",
+      );
+    },
+    async publish(tx, outcomes) {
+      const pairs = outcomes.flatMap((entry) =>
+        entry.outcome.kind === "pair" ? [entry.outcome.publication] : [],
+      );
+      const published = pairs.length
+        ? await publishProductIdentityChunk(tx, pairs)
+        : [];
+      const validity = new Map(
+        published.map((entry) => [entry.key, entry.valid]),
+      );
+      const sources = outcomes.flatMap((entry) =>
+        entry.outcome.kind === "catalog"
+          ? [
+              {
+                key: entry.target.evaluation.id,
+                productIds: entry.outcome.preparation.productIds,
+              },
+            ]
+          : [],
+      );
+      const fences = await productIdentityEvidenceFences(tx, sources);
+      return outcomes.map((entry) => {
+        const valid =
+          entry.outcome.kind === "pair"
+            ? validity.get(entry.target.evaluation.id) === true
+            : fences.get(entry.target.evaluation.id) === entry.evidenceDigest;
+        return {
+          evaluationId: entry.target.evaluation.id,
+          state: valid ? ("completed" as const) : ("obsolete" as const),
+          receipt: valid
+            ? entry.outcome.receipt
+            : { reason: "Product identity evidence changed during inference" },
+        };
+      });
+    },
+  };
+}
+
+function pageFailure(
+  target: EvaluationPageTarget,
+  error: unknown,
+): EvaluationPageFailure {
+  const deferred = findErrorCause(
+    error,
+    (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+  );
+  const budget = findErrorCause(
+    error,
+    (cause): cause is AiBudgetExhaustedError =>
+      cause instanceof AiBudgetExhaustedError,
+  );
+  const capacity = aiWorkDeferral(error);
+  const message = scrubErrorMessage(
+    error instanceof Error ? error.message : String(error),
+  );
+  const obsolete =
+    /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists/.test(
+      message,
+    );
+  const admission = message.includes("AI Gateway admission is waiting");
+  const wait = deferred
+    ? { until: deferred.until, reason: deferred.reason }
+    : budget
+      ? {
+          until: new Date(budget.resumeAt),
+          reason: "ai_funding_window" as const,
+        }
+      : capacity
+        ? {
+            until: new Date(capacity.until),
+            reason: "provider_capacity" as const,
+          }
+        : admission
+          ? {
+              until: new Date(Date.now() + 30_000),
+              reason: "rate_limit" as const,
+            }
+          : undefined;
+  return {
+    target,
+    state: obsolete
+      ? "obsolete"
+      : !wait && target.claim.attempts >= target.claim.maxAttempts
+        ? "failed"
+        : "retry_wait",
+    error: message,
+    ...(wait ? { wait } : {}),
+  };
+}
+
+/** A finite decision scope; each continuation captures its own target authority. */
+export async function executeAiRefreshPage<P, O>(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  adapter: EvaluationPageAdapter<P, O>,
+  stage?: (
+    db: Database,
+    ready: readonly Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[],
+  ) => Promise<EvaluationPagePreparation<P>[]>,
+) {
+  const compiled = await compiledRefreshManifest();
+  const compatible = targets.filter((entry) =>
+    dependenciesCurrent(
+      {
+        ...entry.evaluation.provenance,
+        dependencies: entry.evaluation.provenance.dependencies.map((stamp) => ({
+          ...stamp,
+          generation: 0,
+        })),
+      },
+      compiled,
+    ),
+  );
+  const failures = targets
+    .filter((entry) => !compatible.includes(entry))
+    .map((target) =>
+      pageFailure(
+        target,
+        new Error("AI evaluation Worker prompt manifest is obsolete"),
+      ),
+    );
+  const prepared = await adapter.prepare(db, compatible);
+  if (
+    prepared.length !== compatible.length ||
+    new Set(prepared.map((entry) => entry.target.evaluation.id)).size !==
+      compatible.length
+  )
+    throw new Error("AI page adapter returned an unexpected preparation set");
+  const ready: Extract<EvaluationPagePreparation<P>, { kind: "ready" }>[] = [];
+  let preparedBytes = 0;
+  let overflow = false;
+  for (const entry of prepared) {
+    if (entry.kind === "failed") {
+      failures.push(pageFailure(entry.target, entry.error));
+      continue;
+    }
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(
+        [entry.prepared, entry.target.evaluation.snapshot],
+        (_key, value) => (value instanceof Map ? [...value] : value),
+      ),
+    ).byteLength;
+    if (bytes > 4 * 1024 * 1024) {
+      failures.push({
+        target: entry.target,
+        state: "failed",
+        error: "AI evaluation evidence exceeds the 4 MiB page bound",
+      });
+      continue;
+    }
+    overflow ||= preparedBytes + bytes > 4 * 1024 * 1024;
+    if (overflow) {
+      failures.push({
+        target: entry.target,
+        state: "retry_wait",
+        error: "AI page evidence suffix remains due",
+        wait: { until: new Date(), reason: "provider_capacity" },
+      });
+      continue;
+    }
+    preparedBytes += bytes;
+    ready.push(entry);
+  }
+  if (stage) {
+    const staged = await stage(db, ready);
+    ready.length = 0;
+    for (const entry of staged) {
+      if (entry.kind === "failed")
+        failures.push(pageFailure(entry.target, entry.error));
+      else ready.push(entry);
+    }
+  }
+  // Object identity is the existing DecisionRequestBatch's attribution boundary.
+  const groups = new Map<string, AiRunContext>();
+  const usageFor = (target: EvaluationPageTarget) => {
+    const key = JSON.stringify([
+      target.evaluation.runId,
+      target.evaluation.feature,
+      "product-identity",
+      false,
+      "default",
+    ]);
+    let usage = groups.get(key);
+    if (!usage) {
+      usage = {
+        db,
+        runId: target.evaluation.runId,
+        operation: "product-identity",
+      };
+      groups.set(key, usage);
+    }
+    return usage;
+  };
+  const outcomes: EvaluationPageOutcome<O>[] = [];
+  const settled = await settleDecisionWorkItems(ready, (entry) =>
+    inEvaluationContext(db, entry.target, async () => ({
+      target: entry.target,
+      evidenceDigest: entry.evidenceDigest,
+      outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
+    })),
+  );
+  settled.forEach((result, index) => {
+    if (result.status === "fulfilled") outcomes.push(result.value);
+    else failures.push(pageFailure(ready[index]!.target, result.reason));
+  });
+  const publishChunk = async (
+    chunk: readonly EvaluationPageOutcome<O>[],
+  ): Promise<void> => {
+    if (!chunk.length) return;
+    try {
+      const published = await publishAiEvaluationPage(db, chunk, (tx, valid) =>
+        adapter.publish(tx, valid),
+      );
+      const ids = new Set(published.map((entry) => entry.evaluationId));
+      for (const entry of chunk)
+        if (!ids.has(entry.target.evaluation.id))
+          failures.push(
+            pageFailure(
+              entry.target,
+              new Error("AI evaluation generation or Run is obsolete"),
+            ),
+          );
+    } catch (error) {
+      // Only a failed chunk splits; already committed siblings never replay.
+      if (chunk.length > 1) {
+        const middle = Math.ceil(chunk.length / 2);
+        await publishChunk(chunk.slice(0, middle));
+        await publishChunk(chunk.slice(middle));
+      } else failures.push(pageFailure(chunk[0]!.target, error));
+    }
+  };
+  for (let offset = 0; offset < outcomes.length; offset += 25)
+    await publishChunk(outcomes.slice(offset, offset + 25));
+  await failAiEvaluationPage(db, failures);
+  log.info("evaluation page", {
+    claimedSlots: targets.length,
+    prepared: ready.length,
+    completed:
+      outcomes.length -
+      failures.filter((entry) =>
+        outcomes.some((outcome) => outcome.target === entry.target),
+      ).length,
+    failed: failures.length,
+    publicationChunks: Math.ceil(outcomes.length / 25),
+    usageGroups: groups.size,
+    preparedBytes,
+  });
+}
+
+/** Source edges share explicit guarded chunks across the page before enumeration settles. */
+export async function executeProductAiRefreshPage(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  ports: AiRefreshPorts = {},
+) {
+  const adapter = productEvaluationPageAdapter(ports);
+  await executeAiRefreshPage(db, targets, adapter, async (database, ready) => {
+    type Ready = (typeof ready)[number];
+    type Edge = {
+      source: Ready;
+      pair: z.infer<typeof preparedProductIdentityPair>;
+      publication: PreparedProductPairPublication | null;
+      request: Parameters<typeof enqueueAiEvaluations>[1][number] | null;
+    };
+    const edges: Edge[] = [];
+    const failures = new Map<string, Error>();
+    for (const source of ready) {
+      if (source.target.target.kind !== "product") continue;
+      source.prepared.enrollment = { rulePairs: 0, requestedPairs: 0 };
+      const item = source.target.evaluation;
+      for (const pair of source.prepared.pairs) {
+        const key = `${item.id}:${productIdentityPairKey(pair.productIds)}`;
+        if (pair.exact) {
+          const input = await evaluatePreparedProductIdentityPair(
+            database,
+            pair,
+            item.runId,
+            {
+              ...ports.productIdentityPorts,
+              evaluationId: item.id,
+              provenance: item.provenance,
+              preparedPage: true,
+            },
+          );
+          edges.push({
+            source,
+            pair,
+            publication: {
+              key,
+              input,
+              pair,
+              fence:
+                source.prepared.pairFences.get(
+                  productIdentityPairKey(pair.productIds),
+                ) ?? "",
+            },
+            request: null,
+          });
+        } else {
+          const provenance = aiProvenance.parse({
+            ...item.provenance,
+            inputFingerprint: pair.fingerprint,
+          });
+          const shareKey = `product-identity:${await sha256Hex(canonicalJson({ productIds: pair.productIds, fingerprint: pair.fingerprint, dependencies: provenance.dependencies, optionFingerprint: provenance.optionFingerprint }))}`;
+          edges.push({
+            source,
+            pair,
+            publication: null,
+            request: {
+              input: {
+                runId: item.runId,
+                executionKind: "ai_refresh",
+                feature: "product-identity",
+                shareKey,
+                target: aiEvaluationTarget.parse({
+                  kind: "product_pair",
+                  entity: "product",
+                  recordId: pair.productIds[0],
+                  otherId: pair.productIds[1],
+                  field: null,
+                  assessmentIds: [],
+                }),
+                provenance,
+                snapshot: jsonSnapshot(pair),
+              },
+            },
+          });
+        }
+      }
+    }
+    const publish = async (submitted: readonly Edge[]): Promise<void> => {
+      const chunk = submitted.filter(
+        (edge) => !failures.has(edge.source.target.evaluation.id),
+      );
+      if (!chunk.length) return;
+      const sources = [
+        ...new Map(
+          chunk.map((edge) => [edge.source.target.evaluation.id, edge.source]),
+        ).values(),
+      ];
+      try {
+        await publishAiEvaluationContinuation(
+          database,
+          sources.map((source) => source.target),
+          async (tx) => {
+            const fences = await productIdentityEvidenceFences(tx, [
+              ...sources.map((source) => ({
+                key: source.target.evaluation.id,
+                productIds: source.prepared.productIds,
+              })),
+              ...chunk.map((edge, index) => ({
+                key: `edge:${index}`,
+                productIds: edge.pair.productIds,
+              })),
+            ]);
+            if (
+              sources.some(
+                (source) =>
+                  fences.get(source.target.evaluation.id) !==
+                  source.evidenceDigest,
+              ) ||
+              chunk.some(
+                (edge, index) =>
+                  fences.get(`edge:${index}`) !==
+                  edge.source.prepared.pairFences.get(
+                    productIdentityPairKey(edge.pair.productIds),
+                  ),
+              )
+            )
+              throw new Error(
+                "Product identity evidence changed during inference",
+              );
+            const exact = chunk.flatMap((edge) =>
+              edge.publication ? [edge.publication] : [],
+            );
+            if (
+              exact.length &&
+              (await publishProductIdentityChunk(tx, exact)).some(
+                (result) => !result.valid,
+              )
+            )
+              throw new Error(
+                "Product identity evidence changed during inference",
+              );
+            await enqueueAiEvaluations(
+              tx,
+              chunk.flatMap((edge) => (edge.request ? [edge.request] : [])),
+            );
+          },
+        );
+        for (const edge of chunk) {
+          const enrollment = edge.source.prepared.enrollment!;
+          if (edge.publication) enrollment.rulePairs++;
+          else enrollment.requestedPairs++;
+        }
+      } catch (error) {
+        if (chunk.length > 1) {
+          const middle = Math.ceil(chunk.length / 2);
+          await publish(chunk.slice(0, middle));
+          await publish(chunk.slice(middle));
+        } else
+          failures.set(
+            chunk[0]!.source.target.evaluation.id,
+            error instanceof Error ? error : new Error(String(error)),
+          );
+      }
+    };
+    // A source is the publication authority. Bound each transaction by 25
+    // sources, 25 business publications and 100 enrollment edges, rather than
+    // spending one guard transaction for every source's sparse candidate set.
+    let chunk: Edge[] = [];
+    let owners = new Set<string>();
+    let publications = 0;
+    for (const edge of edges) {
+      const owner = edge.source.target.evaluation.id;
+      if (
+        chunk.length &&
+        (chunk.length === 100 ||
+          (edge.publication && publications === 25) ||
+          (!owners.has(owner) && owners.size === 25))
+      ) {
+        await publish(chunk);
+        chunk = [];
+        owners = new Set();
+        publications = 0;
+      }
+      chunk.push(edge);
+      owners.add(owner);
+      if (edge.publication) publications++;
+    }
+    await publish(chunk);
+    return ready.map((entry) => {
+      const error = failures.get(entry.target.evaluation.id);
+      return error
+        ? { kind: "failed" as const, target: entry.target, error }
+        : entry;
+    });
+  });
 }

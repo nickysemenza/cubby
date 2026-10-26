@@ -6,15 +6,19 @@ import { useCallback, useMemo, useState } from "react";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import {
+  type ListQueryState,
   useFilterFacets,
   useListQuery,
   useViewCounts,
   withFacets,
 } from "~/entity/table/list-query-context";
+import { Popover, PopoverContent } from "~/ui/primitives/popover";
 
 import {
   FilterBar,
+  type FilterResultCount,
   type FilterSheetSwitch,
+  FiltersPanel,
   MobileFilterTier,
 } from "../../ui/data-table/filter-bar";
 import {
@@ -81,33 +85,23 @@ function getLedgerFields<TData extends RowData>(
     : fields;
 }
 
-export function LedgerFilters<TData extends RowData>({
+type OptionHints = Readonly<Record<string, Readonly<Record<string, string>>>>;
+
+/**
+ * One table's manifest filter state for whichever editor owns it: declared
+ * fields with facets for the open editor and active filters, and the live
+ * draft committed to the table's column filters.
+ */
+function useLedgerFilterState<TData extends RowData>({
   table,
   entity,
   optionHints,
-  variant = "desktop",
-  switches,
-  workbench = false,
+  query,
 }: {
   table: Table<TData>;
-  /** Drives the search placeholder ("Search products"); omitted tables get no plural. */
-  entity?: Entity;
-  /** Server facet counts by mounted column id then option value. */
-  optionHints?: Readonly<Record<string, Readonly<Record<string, string>>>>;
-  /**
-   * `mobile` renders the phone band's tier (search + `Filter` sheet with a
-   * count badge, active-chip strip) instead of the desktop chip row — same
-   * fields, same draft state, different presentation.
-   */
-  variant?: "desktop" | "mobile";
-  /**
-   * A page workbench: active chips render into the page list's strip above
-   * the records, with its facet counts and filtered total; elsewhere they
-   * follow the Filter button in place.
-   */
-  workbench?: boolean;
-  /** Phone only: the presentation switches, which live in the Filter sheet. */
-  switches?: readonly FilterSheetSwitch[] | undefined;
+  entity: Entity | undefined;
+  optionHints: OptionHints | undefined;
+  query: ListQueryState | null;
 }) {
   // TanStack v9 materializes leaf columns after the first table render. The
   // table/options references stay stable across that boundary, so they cannot
@@ -135,15 +129,6 @@ export function LedgerFilters<TData extends RowData>({
       primarySearch,
     ],
   );
-  // This bar owns the table's filter editors: a column header's Filter…
-  // opens the panel on that column's field.
-  const [editRequest, setEditRequest] = useState<{ key: string } | null>(null);
-  const requestEdit = useCallback(
-    (columnId: string) => setEditRequest({ key: columnId }),
-    [],
-  );
-  useColumnFilterEditRequests(table, requestEdit);
-  const query = useListQuery(workbench ? entity : undefined);
   const [openEditor, setOpenEditor] = useState<string | null>(null);
   const externalColumnFilters = table.state.columnFilters;
   const facets = useFilterFacets(query, [
@@ -154,7 +139,6 @@ export function LedgerFilters<TData extends RowData>({
     () => withFacets(declaredFields, facets),
     [declaredFields, facets],
   );
-  const { total } = useViewCounts(query?.entity);
   const externalFilters = useMemo(
     () => filterStateToBarFilters(externalColumnFilters, fields),
     [externalColumnFilters, fields],
@@ -169,11 +153,79 @@ export function LedgerFilters<TData extends RowData>({
     fields,
     commit,
   });
+  return {
+    fields,
+    draftFilters,
+    handleChange,
+    primarySearch,
+    setOpenEditor,
+  };
+}
 
-  const pluralLower =
-    entity && isBrowserRoutedEntity(entity)
-      ? entities[entity].pluralLabel.toLowerCase()
-      : undefined;
+function localResultCount<TData extends RowData>(
+  table: Table<TData>,
+  query: ListQueryState | null,
+  total: number | undefined,
+  noun: string | undefined,
+): FilterResultCount {
+  const local = table.options.meta?.completeLocalData;
+  return {
+    matching:
+      query?.matching ??
+      (local ? table.getFilteredRowModel().rows.length : undefined),
+    total: total ?? (local ? table.getCoreRowModel().rows.length : undefined),
+    noun,
+  };
+}
+
+function pluralLowerOf(entity: Entity | undefined) {
+  return entity && isBrowserRoutedEntity(entity)
+    ? entities[entity].pluralLabel.toLowerCase()
+    : undefined;
+}
+
+export function LedgerFilters<TData extends RowData>({
+  table,
+  entity,
+  optionHints,
+  variant = "desktop",
+  switches,
+  workbench = false,
+}: {
+  table: Table<TData>;
+  /** Drives the search placeholder ("Search products"); omitted tables get no plural. */
+  entity?: Entity;
+  /** Server facet counts by mounted column id then option value. */
+  optionHints?: OptionHints;
+  /**
+   * `mobile` renders the phone band's tier (search + `Filter` sheet with a
+   * count badge, active-chip strip) instead of the desktop chip row — same
+   * fields, same draft state, different presentation.
+   */
+  variant?: "desktop" | "mobile";
+  /**
+   * A page workbench: active chips render into the page list's strip above
+   * the records, with its facet counts and filtered total; elsewhere they
+   * follow the Filter button in place.
+   */
+  workbench?: boolean;
+  /** Phone only: the presentation switches, which live in the Filter sheet. */
+  switches?: readonly FilterSheetSwitch[] | undefined;
+}) {
+  // This bar owns the table's filter editors: a column header's Filter…
+  // opens the panel on that column's field.
+  const [editRequest, setEditRequest] = useState<{ key: string } | null>(null);
+  const requestEdit = useCallback(
+    (columnId: string) => setEditRequest({ key: columnId }),
+    [],
+  );
+  useColumnFilterEditRequests(table, requestEdit);
+  const query = useListQuery(workbench ? entity : undefined);
+  const { fields, draftFilters, handleChange, primarySearch, setOpenEditor } =
+    useLedgerFilterState({ table, entity, optionHints, query });
+  const { total } = useViewCounts(query?.entity);
+
+  const pluralLower = pluralLowerOf(entity);
   const searchPlaceholder =
     primarySearch?.placeholder ??
     (pluralLower ? `Search ${pluralLower}` : undefined);
@@ -208,19 +260,73 @@ export function LedgerFilters<TData extends RowData>({
       chipsTarget={query ? query.chipsTarget : undefined}
       onEditorChange={setOpenEditor}
       editRequest={editRequest}
-      resultCount={{
-        matching:
-          query?.matching ??
-          (table.options.meta?.completeLocalData
-            ? table.getFilteredRowModel().rows.length
-            : undefined),
-        total:
-          total ??
-          (table.options.meta?.completeLocalData
-            ? table.getCoreRowModel().rows.length
-            : undefined),
-        noun: pluralLower,
-      }}
+      resultCount={localResultCount(table, query, total, pluralLower)}
     />
+  );
+}
+
+/**
+ * The filter editor of a table without a toolbar: a column header's Filter…
+ * opens the shared focused panel beside that header. Filters stay in the
+ * table's own state; the page renders no chips for them.
+ */
+export function HeaderFilterEditor<TData extends RowData>({
+  table,
+  entity,
+  optionHints,
+}: {
+  table: Table<TData>;
+  entity?: Entity;
+  optionHints?: OptionHints;
+}) {
+  const [request, setRequest] = useState<{
+    key: string;
+    anchor: Element | null;
+    seq: number;
+  } | null>(null);
+  const requestEdit = useCallback(
+    (columnId: string, anchor?: Element | null) =>
+      setRequest((old) => ({
+        key: columnId,
+        anchor: anchor ?? null,
+        seq: (old?.seq ?? 0) + 1,
+      })),
+    [],
+  );
+  useColumnFilterEditRequests(table, requestEdit);
+  const query = useListQuery(entity);
+  const { fields, draftFilters, handleChange, primarySearch, setOpenEditor } =
+    useLedgerFilterState({ table, entity, optionHints, query });
+  return (
+    <Popover
+      open={request !== null}
+      onOpenChange={(open) => {
+        if (!open) setRequest(null);
+      }}
+    >
+      <PopoverContent
+        anchor={request?.anchor}
+        align="start"
+        className="w-[28rem] p-0"
+      >
+        {request ? (
+          <FiltersPanel
+            key={request.seq}
+            filters={draftFilters}
+            fields={fields}
+            onChange={handleChange}
+            searchKey={primarySearch?.key}
+            initialKey={request.key}
+            onEditorChange={setOpenEditor}
+            resultCount={localResultCount(
+              table,
+              query,
+              undefined,
+              pluralLowerOf(entity),
+            )}
+          />
+        ) : null}
+      </PopoverContent>
+    </Popover>
   );
 }

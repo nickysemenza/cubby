@@ -6,6 +6,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
+import { jobKindPolicy } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
@@ -70,7 +71,7 @@ describe("fair drain under a flood", () => {
         expired.push(row.id);
       }
       const healthy = await enqueueJob(ctx.db, {
-        key: "synthetic.unlocked-evaluation",
+        key: "ai-evaluation:synthetic-unlocked-evaluation",
         kind: "ai.evaluation",
         input: {},
       });
@@ -332,7 +333,8 @@ describe("fair drain under a flood", () => {
     },
   );
 
-  it("admits only one background evaluation across concurrent claims and reclaims expired capacity", async () => {
+  it("admits background evaluations only up to the kind cap across concurrent claims and reclaims expired capacity", async () => {
+    const cap = jobKindPolicy("ai.evaluation").maxInFlight!;
     const flood = [];
     for (let index = 0; index < 12; index++)
       flood.push(
@@ -342,18 +344,20 @@ describe("fair drain under a flood", () => {
           input: {},
         }),
       );
+    // One drain runs one page of a kind; the global cap spans concurrent drains.
     expect(
       (await dueJobs(ctx.db)).filter((row) => row.kind === "ai.evaluation"),
     ).toHaveLength(1);
     const claims = (
       await Promise.all(flood.map((row) => claimJob(ctx.db, row.id)))
     ).filter((claim) => claim !== null);
-    expect(claims).toHaveLength(1);
+    expect(claims).toHaveLength(cap);
     const first = claims[0]!;
+    const claimedIds = new Set(claims.map((claim) => claim.id));
     expect(await dueJobs(ctx.db)).toHaveLength(0);
     const waiting = await loadJobWaitingOn(
       ctx.db,
-      flood.filter((row) => row.id !== first.id),
+      flood.filter((row) => !claimedIds.has(row.id)),
     );
     expect([...waiting.values()]).toEqual(
       expect.arrayContaining([
@@ -373,7 +377,7 @@ describe("fair drain under a flood", () => {
     expect(reclaimed?.leaseToken).not.toBe(first.leaseToken);
     expect(reclaimed).not.toBeNull();
     if (!reclaimed) return;
-    const other = flood.find((row) => row.id !== first.id)!;
+    const other = flood.find((row) => !claimedIds.has(row.id))!;
     expect(await claimJob(ctx.db, other.id)).toBeNull();
     expect(await releaseJobClaim(ctx.db, reclaimed)).toBe(true);
     expect(await claimJob(ctx.db, other.id)).not.toBeNull();
@@ -382,12 +386,18 @@ describe("fair drain under a flood", () => {
   it.each(["maintenance", "connection_discovery"] as const)(
     "lets active Run work bypass a saturated kind cap (%s)",
     async (purpose) => {
-      const background = await enqueueJob(ctx.db, {
-        key: "synthetic.busy",
-        kind: "ai.evaluation",
-        input: {},
-      });
-      expect(await claimJob(ctx.db, background.id)).not.toBeNull();
+      for (
+        let index = 0;
+        index < jobKindPolicy("ai.evaluation").maxInFlight!;
+        index++
+      ) {
+        const background = await enqueueJob(ctx.db, {
+          key: `synthetic.busy.${index}`,
+          kind: "ai.evaluation",
+          input: {},
+        });
+        expect(await claimJob(ctx.db, background.id)).not.toBeNull();
+      }
       await enqueueJob(ctx.db, {
         key: "synthetic.cap-waiting",
         kind: "ai.evaluation",
@@ -709,6 +719,67 @@ describe("fair drain under a flood", () => {
     for (const id of ids.filter((id) => !selectedIds.has(id)))
       expect(predicted.get(id)).toBeGreaterThanOrEqual(JOB_DRAIN.batch);
   });
+
+  // Widening needs its own prefix in each exemption class. A top-N over the
+  // merged backfill would hide low-priority ordinary siblings behind routine
+  // Run work after both classes already won seeds.
+  it(
+    "fills both exemption classes from one selection without losing lower-priority siblings",
+    { timeout: 30_000 },
+    async () => {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "connection_discovery",
+        trigger: "scheduled",
+        execution: false,
+      });
+      const ordinary: string[] = [];
+      const routine: string[] = [];
+      for (let index = 0; index < 150; index++) {
+        ordinary.push(
+          (
+            await enqueueJob(ctx.db, {
+              key: `synthetic.pool-ordinary.${index}`,
+              kind: "embedding.refresh",
+              input: {},
+              priority: index < 2 ? 100 : 0,
+            })
+          ).id,
+        );
+        routine.push(
+          (
+            await enqueueJob(ctx.db, {
+              key: `synthetic.pool-routine.${index}`,
+              kind: "embedding.refresh",
+              input: {},
+              priority: 50,
+              runId,
+            })
+          ).id,
+        );
+      }
+      const selection = { batchSizes: new Map([["embedding.refresh", 100]]) };
+      const excluded = ordinary[0]!;
+      const selected = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, {
+        ...selection,
+        excludeIds: [excluded],
+      });
+      const embeddings = selected.filter(
+        (row) => row.kind === "embedding.refresh",
+      );
+      expect(embeddings.filter((row) => row.capExempt)).toHaveLength(100);
+      expect(embeddings.filter((row) => !row.capExempt)).toHaveLength(100);
+      expect(new Set(embeddings.map((row) => row.id)).size).toBe(200);
+      expect(embeddings.map((row) => row.id)).not.toContain(excluded);
+      expect(embeddings.every((row) => !row.runOwned)).toBe(true);
+      const predicted = await dueJobPositions(ctx.db, [
+        ...ordinary,
+        ...routine,
+      ]);
+      const admitted = await dueJobs(ctx.db, JOB_DRAIN.pageLimit, selection);
+      for (const [index, row] of admitted.entries())
+        expect(predicted.get(row.id)).toBe(index);
+    },
+  );
 
   // Review finding: beyond the first batch the drain re-ranks kinds by their
   // last service, so a position there is a projection, not a promise.

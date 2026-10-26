@@ -2374,6 +2374,37 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
+  // Regression #3397: an inclusive cursor reread charges the step had already
+  // counted failed, so a Sweep reported more processed labels than its total.
+  it("skips charges this step generation already counted as failed", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({ rawDescription: "SYNTHETIC COUNTED", providerAmount: -11 }),
+      rowInput({ rawDescription: "SYNTHETIC FRESH", providerAmount: -12 }),
+    ]);
+    await generate(ctx);
+    const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      10,
+    );
+    expect(pending).toHaveLength(2);
+    const [counted] = pending.map((row) =>
+      assessmentSubjects.statement_transaction.parse(row.subject),
+    );
+    const result = await runStatementLabels(ctx.db, {
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      spendingAdvice: await statementSpendingAdvice(ctx.db),
+      countedFailures: new Set([
+        `charge:${counted!.source}:${counted!.chargeKey}`,
+      ]),
+    });
+    expect(result).toMatchObject({ completed: 1, failed: [] });
+    expect(
+      await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
+    ).toMatchObject([{ subject: expect.objectContaining(counted) }]);
+  });
+
   it("checkpoints unstarted spending after the cooperative page deadline", async () => {
     await card(ctx);
     await record(
@@ -3375,7 +3406,8 @@ describe("statement Transaction suggestions", () => {
             ? business(input)
             : personal(input),
       });
-      expect(result).toMatchObject({ completed: 3, next: null });
+      // The refused suffix counts once, as failed, not also as completed (#3397).
+      expect(result).toMatchObject({ completed: 2, next: null });
       // The ordinary path also refuses this obsolete evidence in its later
       // rebuild round. Completing a no-action prefix must not bypass that fence.
       expect(result.failed).toHaveLength(1);
@@ -4928,6 +4960,39 @@ describe("statement Transaction suggestions", () => {
         }),
       ],
     });
+  });
+
+  // Regression #3396: provider rows without statement text matched every
+  // nearby transaction because two empty descriptions compared equal.
+  it("does not offer an unrelated nearby transaction when both descriptions are empty", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({
+        merchant: "Example Hotel",
+        rawDescription: "",
+        providerAmount: -4.19,
+      }),
+    ]);
+    await generate(ctx);
+    const [booked] = await suggestions(ctx);
+    await accept(ctx, booked!);
+    await record(
+      ctx,
+      [
+        rowInput({
+          merchant: "Example Shop",
+          rawDescription: "",
+          providerAmount: -16.26,
+          statementDate: "2026-05-06",
+        }),
+      ],
+      { fingerprint: "fp-unrelated" },
+    );
+    await generate(ctx);
+    const unrelated = (await suggestions(ctx)).find(
+      (row) => row.merchant === "Example Shop",
+    );
+    expect(unrelated).toMatchObject({ recommended: "create", candidates: [] });
   });
 
   // Failure mode: a charge the member set aside (ignored, or superseded by the

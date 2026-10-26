@@ -1,5 +1,3 @@
-import { isCollectionTag, normalizeCollectionSlug } from "./collection-tag";
-
 /** One sibling field (or derived fact) a tag might restate, keyed by a reason
  * string the caller controls (e.g. `"brandName"`, `"classification"`). A
  * value may be a single string (a name) or a list (a classification path, a
@@ -44,7 +42,11 @@ const singularize = (value: string): string => {
 /** Both the slug-normalized form and its singular, so either side of a
  * plural/singular pair (tag vs. restating value) still lines up. */
 const normalizedForms = (value: string): ReadonlySet<string> => {
-  const normalized = normalizeCollectionSlug(value);
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
   return new Set([normalized, singularize(normalized)]);
 };
 
@@ -77,8 +79,7 @@ const restatingCandidates = (
  * A tag restates a sibling field when it — after slug normalization and a
  * trivial singularizer — equals that field's own normalized value: a product
  * tagged "jacquemus" restates its brandName, "apparel" or "pants" restates
- * a classification path segment "Apparel"/"Pant". `collection:*` entries
- * (Collections owns those) and any token carrying a digit or `/` (`M18`,
+ * a classification path segment "Apparel"/"Pant". Tokens carrying a digit or `/` (`M18`,
  * `grinder-4.5in`, `1/4-hex` — real compatibility shapes, not prose) are
  * never flagged. Pure, synchronous, and order-preserving: every prune target
  * (client-side chip marking, server-side `ArrayPruneSuggestSpec`s) calls this
@@ -92,7 +93,7 @@ export function redundantTokens({
   if (candidates.length === 0) return [];
   const matches: RedundantTokenMatch[] = [];
   for (const value of values) {
-    if (isCollectionTag(value) || hasDigitOrSlash(value)) continue;
+    if (hasDigitOrSlash(value)) continue;
     const forms = normalizedForms(value);
     const hit = candidates.find((candidate) =>
       [...forms].some((form) => form.length > 0 && candidate.forms.has(form)),

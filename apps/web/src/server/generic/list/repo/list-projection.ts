@@ -10,7 +10,10 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import {
+  entityManifest,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
@@ -27,7 +30,8 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
 import {
-  resolveEntityDisplayImageLists,
+  resolveEntityDisplayMedia,
+  type EntityDisplayMedia,
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -104,7 +108,7 @@ type ListIdPage = {
 export type ListPagePrefetch = {
   page: ListIdPage;
   qualities?: ReturnType<typeof loadDataQualities>;
-  images?: Promise<Map<string, DisplayImageSummary[]>>;
+  media?: Promise<EntityDisplayMedia>;
 };
 
 export type ListReadValueContext = {
@@ -384,7 +388,7 @@ export function listReadPlan<Row>(
   /** Non-media entities take the plan-resolved images; media bindings own theirs. */
   const attachDisplayImages = (
     result: ListReadRow,
-    images: Map<string, DisplayImageSummary[]> | undefined,
+    images: ReadonlyMap<string, DisplayImageSummary[]> | undefined,
     id: string,
     projection: ListProjection,
   ) => {
@@ -435,14 +439,26 @@ export function listReadPlan<Row>(
               ),
             )
           : undefined,
-      images:
+      media:
         resolvesDisplayImages(projection) && ids.length
           ? settled(
               options.displayImages
-                ? options.displayImages(db, ids)
-                : resolveEntityDisplayImageLists(
+                ? options.displayImages(db, ids).then((displayImages) => ({
+                    displayImages,
+                    representations: new Map(),
+                  }))
+                : resolveEntityDisplayMedia(
                     db,
                     ids.map((id) => ({ entityKind: entity, entityId: id })),
+                    {
+                      attachments:
+                        entityManifest[entity].imageStorage !== false &&
+                        ["images", "labelImages"].some(
+                          (key) =>
+                            Object.hasOwn(schema.shape, key) &&
+                            wanted(projection, key),
+                        ),
+                    },
                   ),
             )
           : undefined,
@@ -529,9 +545,9 @@ export function listReadPlan<Row>(
           }
         }),
       );
-      const [qualities, images, links] = await Promise.all([
+      const [qualities, media, links] = await Promise.all([
         early.qualities,
-        early.images,
+        early.media,
         Promise.all(
           references.map(async (reference) => {
             const { instruction, key, target } = reference;
@@ -576,6 +592,7 @@ export function listReadPlan<Row>(
         ),
         Promise.all(admitted.map((binding) => binding.prepare?.(page))),
       ]);
+      const images = media?.displayImages;
       const dateRanges = (model?.fields ?? []).flatMap((field) =>
         "dateRange" in field &&
         field.dateRange &&
@@ -698,14 +715,8 @@ export function listReadPlan<Row>(
           return { id: identity.id, value: result };
         }),
       );
-      const completed = images
-        ? await withDisplayImages(
-            db,
-            entity,
-            mapped,
-            (row) => row.value,
-            images,
-          )
+      const completed = media
+        ? await withDisplayImages(db, entity, mapped, (row) => row.value, media)
         : mapped.map((row) => row.value);
       return projectListRows(entity, completed, projection);
     },

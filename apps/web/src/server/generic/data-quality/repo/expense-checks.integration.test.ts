@@ -35,6 +35,78 @@ describe("stored Expense quality", () => {
   const generation = async () =>
     Math.max(0, ...(await derivedMarkTickets(ctx.db, "expense.dataQuality")));
 
+  it("publishes unclassified principal item lines to Research without overriding category intent", async () => {
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic unclassified import vendor",
+    });
+    const order = await createRepoEntity(ctx, "purchase", {
+      displayLabel: "Synthetic unclassified import",
+      vendorId: vendor.output.id,
+    });
+    const exempt = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic no-product policy",
+      productExpectation: "not_expected",
+    });
+    const forbidden = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic no-product classification",
+      productExpectation: "not_allowed",
+    });
+    const inputs = [
+      { name: "Synthetic unclassified item" },
+      { name: "Synthetic service", costType: "services" },
+      { name: "Synthetic allocation", lineBasis: "allocation" },
+      { name: "Synthetic shipping", lineKind: "shipping" },
+      { name: "Synthetic exempt item", spendingCategoryId: exempt.shortcode },
+      {
+        name: "Synthetic forbidden item",
+        spendingCategoryId: forbidden.shortcode,
+      },
+    ] as const;
+    const lines = [];
+    for (const input of inputs)
+      lines.push(
+        await createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            purchaseId: order.output.id,
+            productId: null,
+            ...input,
+          }),
+        ),
+      );
+    await refresh();
+    const [principal, ...excluded] = lines;
+    if (!principal) throw new Error("Synthetic principal line missing");
+    expect(
+      (await storedQuality(ctx.db, principal.entityId))?.checks,
+    ).toMatchObject({ expense_product_resolution: "gap" });
+    for (const line of excluded)
+      expect(
+        (await storedQuality(ctx.db, line.entityId))?.checks,
+      ).toMatchObject({ expense_product_resolution: "not_applicable" });
+    const filtered = await expenseList(
+      ctx.db,
+      {
+        dataGap: ["expense_product_resolution"],
+      },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(filtered.data.map((line) => line.id)).toEqual([principal.output.id]);
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        reason: "expense_product_resolution",
+        pageSize: 1,
+      }),
+      false,
+    );
+    expect(queue.meta.totalCount).toBe(1);
+    expect(queue.items[0]?.id).toBe(principal.output.id);
+  });
+
   it("batch-loads scoped facts and preserves incurred, zero, quantity and role rules", async () => {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Synthetic merchandise policy",
@@ -125,6 +197,10 @@ describe("stored Expense quality", () => {
   });
 
   it("serves stored lists and queue outcomes while inherited changes converge through the family", async () => {
+    const exempt = await insertWithShortcode(ctx.db, "spendingCategory", {
+      name: "Synthetic initially exempt policy",
+      productExpectation: "not_expected",
+    });
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Synthetic inherited merchandise policy",
       productExpectation: "required",
@@ -135,6 +211,7 @@ describe("stored Expense quality", () => {
     const order = await createRepoEntity(ctx, "purchase", {
       displayLabel: "Synthetic inherited quality order",
       vendorId: vendor.output.id,
+      spendingCategoryId: exempt.shortcode,
     });
     const line = await createRepoEntity(
       ctx,
@@ -152,7 +229,7 @@ describe("stored Expense quality", () => {
         null,
         workQueueHouseholdInput.parse({
           query: line.output.name,
-          check: "expense_product_resolution",
+          reason: "expense_product_resolution",
         }),
         false,
       );

@@ -136,7 +136,13 @@ describe("finance entity reports", () => {
           observedAt: "2026-09-03T00:00:00Z",
           rowCountDeclared: 1,
         },
-        rows: [{ ...input.rows[0], providerData: { revision: 2 } }],
+        rows: [
+          {
+            ...input.rows[0],
+            providerNotes: "Synthetic revision",
+            providerData: { revision: 2 },
+          },
+        ],
       }),
       ctx.actor,
     );

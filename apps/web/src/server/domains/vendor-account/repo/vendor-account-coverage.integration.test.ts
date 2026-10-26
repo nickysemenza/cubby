@@ -69,7 +69,7 @@ describe("vendor identity and purchase account coverage", () => {
       ctx.db,
       null,
       workQueueHouseholdInput.parse({
-        check: ["vendor_logo"],
+        reason: ["vendor_logo"],
       }),
       false,
     );
@@ -115,7 +115,7 @@ describe("vendor identity and purchase account coverage", () => {
       "purchase_vendor_account",
     );
     const input = workQueueHouseholdInput.parse({
-      check: ["purchase_vendor_account"],
+      reason: ["purchase_vendor_account"],
     });
     const work = await readWorkQueue(ctx.db, null, input, false);
     expect(work.items.map((item) => item.id)).toContain(purchase.shortcode);

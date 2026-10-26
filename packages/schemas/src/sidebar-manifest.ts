@@ -166,11 +166,6 @@ export const SIDEBAR_SECTIONS = [
         entity: "productCategory",
       },
       {
-        label: "Collections",
-        route: "/collections",
-        sfSymbol: "square.stack",
-      },
-      {
         label: "Labels",
         route: "/labels",
         sfSymbol: "qrcode",
@@ -360,11 +355,6 @@ export const SIDEBAR_SECTIONS = [
         label: "Suggestions",
         route: "/suggestions",
         sfSymbol: "lightbulb",
-      },
-      {
-        label: "Collection assignments",
-        route: "/collections/assignments",
-        sfSymbol: "square.stack",
       },
       {
         label: "Entity explorer",

@@ -82,7 +82,7 @@ not rank the server drain, and leased or backing-off work needs no queue rank.
 `jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
 
 - `due`: claimable now; `aheadCount` in the drain's own selection order (the
-  fair order per class, interleaved per batch with backfill's reserve:
+  fair service order per class, interleaved per batch with backfill's reserve:
   `drainSelectionIndex`) and `etaSeconds` from claims over the last 30
   minutes. Only the next batch is exact: later batches re-rank kinds by their
   last service, so beyond `JOB_DRAIN.batch` the position is a projection and
@@ -138,9 +138,22 @@ Job budget bounds the expanded selection:
    the least recently claimed kind goes first; within a kind, priority, then
    age.
 
-The selector materializes the backlog weight once per kind. Numeric logarithms
-must not be evaluated for every candidate Job in a large backfill; the weight
-and all admission and ordering rules remain shared by selection and queue positions.
+Selection reads one database snapshot for fair seeds, reserved pages and batch
+widening. Timed Jobs and pending-capture wakes use separate scans, so terminal
+history is not searched to find pending captures. Run classification joins the
+active Runs once.
+Evaluation lookups parse canonical Job keys and join the evaluation UUID primary
+key, rather than scanning evaluation history through a concatenated text key.
+Noncanonical keys retain their unmatched behavior and never fail a UUID cast.
+Backlog counts still include all due Jobs after exclusions and
+compute the logarithmic weight once per kind. Each kind and ownership/exemption
+class contributes a bounded priority prefix before window ranking; an exempt routine Run cannot hide
+ordinary siblings needed to widen another selected page. The latest claim comes
+from the existing `(kind, lastClaimedAt)` index, including completed Jobs so that
+finishing a page never erases its service history. Queue positions reuse the same
+due snapshot and admitted selection; only their later-round projection ranks the
+full due backlog. Claim-time admission remains authoritative across concurrent
+drains.
 
 Job source writes also respect the derived drain's member-first ordering:
 root transactions in Job execution (including shared evaluation batches) mark
@@ -159,7 +172,8 @@ count. Expired leases free capacity and remain reclaimable through the ordinary
 due/claim path; completion and release also free it. `run.execute` and work
 whose `runId` names any active Run bypass the cap and its accounting, including
 routine Runs that do not receive member-visible priority. Shared evaluations
-with no `runId` remain backfill.
+with no `runId` remain subject to background admission; live member demand
+can still give them member-visible selection priority.
 
 Every drained kind, including unregistered kinds, inherits strict background
 shares: `maxConcurrentPages: 1` per drain and `maxInFlightPages: 2` across the
@@ -173,10 +187,15 @@ fence against its Job ID. Completion/release of the final live member frees
 the page. Expired tokens count nothing. Older individually tokened claims
 count conservatively as separate pages until they settle or expire.
 
-`ai.evaluation` defaults to **one live background claim globally**. This is
-deliberately stricter than one page per Worker: a blocked evaluation must not
-multiply across queue consumers. It leaves two of a Worker's three lanes for
-other kinds, including due embedding batches and image work. No separate
+`ai.evaluation` allows **two live background evaluations globally**, matching
+the inherited two-page share across queue consumers. A finite AI page enters
+the kind cap once, then its independent target leases keep the cap occupied
+until the last live target settles. Single claims share the same admission
+lock and lease count. Blocked evaluations therefore never occupy more than two
+of the four consumers or more than one of a Worker's three lanes, leaving room
+for other kinds, including due embedding batches and image work. The cap was
+one while a single Run's evaluations serialized on its row lock; with that
+backlog gone, one evaluation at a time left due work waiting over 20 minutes. No separate
 scheduler or refresh-family behavior changes. Queue positions are exact for the admitted
 selection; work deferred by a cap is projected beyond that selection as an
 estimate.
@@ -214,8 +233,9 @@ invocation, so locked expired rows cannot repeatedly consume its budget ahead
 of unlocked work; the next invocation may retry them. Completed Jobs are not
 excluded, so immediately runnable successive pages still progress. Every Job
 holds its own row lock and lease. AI evaluation Jobs
-carry no `runId` because shared evaluations serve several Runs; they compete
-as backfill. Run views still attribute them: a Run's demand (`runDemandPairs`)
+carry no `runId` because shared evaluations serve several Runs. Their live
+owner/requester Runs supply member-visible priority; routine refresh remains
+backfill. Within the AI kind, least recently served features take turns. Run views still attribute them: a Run's demand (`runDemandPairs`)
 is its own Jobs plus the evaluation Jobs it owns or still requests (an
 uncancelled `AiEvaluationRequest`), once each, for rollups, `job.queue` with a
 Run, Retry now and explain.
@@ -473,6 +493,14 @@ raises `over_capacity` past it, and producers pace themselves (see Producers).
 
 ## Producers
 
+Queue messages are best-effort wake-ups for intent already committed in
+PostgreSQL. The shared `wakeJobs` sender uses the fetch request's `waitUntil`
+lifetime, so a slow queue send does not delay a committed mutation receipt.
+Without a request context (including queue and cron invocations), the caller
+still awaits the send. Queue failures are logged and cron recovers committed
+work; transaction rollback schedules no wake. Producers use this same sender
+rather than implementing their own request-lifetime branch.
+
 A producer must not enqueue faster than the drain can serve. One unbounded
 connection-discovery pass once enqueued an evaluation for every household
 record (~55k), which starved every other kind for days.
@@ -500,8 +528,9 @@ place and clears any result, receipt or error captured for its older input.
 A running or result-ready row keeps its captured evidence; one queued
 successor may wait beside it. A failed running attempt becomes obsolete when a
 queued successor already occupies its slot; it cannot re-enter `retry_wait` beside
-that successor. Automatic refresh does not queue completed current input again;
-a member's request gets its own evaluation, which the AI response cache answers.
+that successor. Completed current input is not queued again for `ai_refresh`. Member-initiated
+sweep, reclassification and retry requests get a fresh evaluation; running
+work and pending slots can still be shared.
 Reverting after another input was evaluated creates a new row and reuses the
 AI response cache. Declined input (`blocked`, `obsolete`, or cancelled as
 superseded) receives at most three automatic attempts; member-cancelled Runs
@@ -536,6 +565,11 @@ the up-front claim attempt for exhausting kinds. The next wake reselects fairly,
 so newly arrived Run-owned work can lead instead of waiting for every long input
 in the original batch.
 
+Serial claiming stops once it has used `JOB_BATCH_CLAIM_SHARE` (40%) of the
+page's remaining drain budget; the claimed prefix executes and unclaimed members
+stay due for the next wake. On a saturated database a full-width claim loop
+otherwise spent the whole budget and released every claim unexecuted.
+
 One heartbeat renews only the batch's pending claims, serially on one database
 socket. Each renewal catches its own failure and uses `FOR UPDATE SKIP LOCKED`
 to avoid waiting on another transaction's Job-row lock. A refused or failed
@@ -563,14 +597,86 @@ provider call (plus existing application-cache-hit rows), attributes a shared
 call to the daily background Run without choosing an arbitrary entity, and records
 the provider's total tokens once. Embeddings remain outside frontier funding caps.
 
-## Planned: batch evaluation
+## AI evaluation pages
 
-Measured on 2026-10-25: one entity-connections evaluation page took ~4.7 s and
-each backlogged kind drained ~140 Jobs/h, while the Jev decision model allows
-80 requests/s and batches many records per request. The planned redesign runs
-many records per claim, executes them concurrently, packs decision calls into
-Jev batch requests, and decouples product identity from per-record `ai_suggest`
-Runs. Until then the producer caps above keep evaluation backlogs bounded.
+`ai.evaluation` keeps its existing `{evaluationId}` Job input and per-target
+slot, input hash, history, token and generation. Product and canonical
+`product_pair` refresh work run as transient pages of up to 100 compatible
+slots: one feature, preparation shape, execution kind and priority class.
+`claimJobPage` locks eligible Jobs with `FOR UPDATE SKIP LOCKED`, assigns
+independent tokens, then `claimAiEvaluationPage` rechecks live authorization,
+activation and pending/result-ready state before adopting the claims. Claim
+reads Run authority without a lock and skips cancellation's item locks.
+Queued obsolete generations retire in sets before inference; paused authority
+parks its Jobs without spending attempts. No model work holds a claim
+transaction open. Page and single claims use the same `job-kind:<kind>`
+nonblocking admission lock and fresh live-lease count when `maxInFlight` is
+configured. With a cap of one, a page enters once and its per-target leases
+keep the kind occupied until the last live target settles. Active Run
+exemptions follow the shared kind policy. Heartbeats renew the exact token/generation set in one
+statement; replaced tokens are reported separately and cannot publish.
+
+Feature fairness uses bounded prefixes per feature and exemption class, then
+a bounded prefix per kind before window ranking. It does not rank the entire
+due backlog. Queue diagnostics retain the existing projected-position query;
+the admitted selection carries feature anchors through the same snapshot.
+
+The drain admits at most one page per feature/class turn in a fair batch,
+removes duplicate anchors, and then reselects. Other features and Job kinds
+keep their turns and backfill retains its reserve. Queue and Run counts still
+count target Jobs; AI ahead positions are estimates because one page can
+capture many targets before the next selection. Ordinary ahead positions count
+page services; target counts remain unchanged.
+
+`EvaluationPageAdapter` in `ai/repo/evaluation-page.ts` owns finite feature
+preparation, decision evaluation and publication results. Every target carries
+its own evidence digest. Each preparation/provider continuation retains its
+own Job/workflow execution context. The executor interns one usage context
+per compatible Run/feature/operation/force/funding group; Product pages use
+`product-identity` with default force/funding policy. The shared context carries
+no target Job/entity id. Distinct Runs remain separate usage groups.
+`settleDecisionWorkItems` supplies finite waves; `DecisionRequestBatch` packs
+up to 64 questions/32,000 text bytes, with four request chunks in flight.
+Routing, response-cache keys and per-question avoided usage stay unchanged.
+An oversized question fails visibly. Page evidence is limited to 4 MiB; an
+unadmitted suffix stays due rather than completing its enumeration receipt.
+
+Publication commits at most 25 outcomes per SERIALIZABLE transaction, using
+the existing bounded snapshot-write retries. Locks follow Run, slot, item,
+then Job order, compatible with cancellation and admission. The explicit
+claim-set guard authorizes each target without borrowing a sibling's AsyncLocal
+context. The feature adapter revalidates each evidence digest and member
+decision before business writes. Evaluation state, uncancelled requester
+receipts and Jobs settle in sets in the same commit. Explicit
+`retryEvaluationId` receipts survive. One final activation/dependency fence
+and one set-based before-commit Job check cover the chunk; requester/owner
+coordinators wake through one deduplicated update and after-commit signal.
+
+Preparation/decision failures settle individually. A failed publication chunk
+splits only after its transaction rolls back; committed siblings never replay.
+Capacity/funding waits release affected claims without spending a failure
+attempt. Failure and stale-claim coordinator wakes run after commit, so they
+never reverse cancellation's Run/item/Job lock order. A failed old attempt
+cannot re-enter retry-wait beside its queued successor. Cancelled or replaced claims never gain publication authority from
+a fresh sibling. Source-to-pair enrollment finishes before the source receipt;
+Run completion still includes its requested pair work. Refresh coordinators
+read state counts, error summaries and bounded pending identities; they never
+reload frozen inference payloads just to update progress.
+
+Product discovery reads snapshots for the scan page and schedules one roster
+transaction, reusing the activation's shared refresh owner. Slot admission,
+evaluation/request insertion and fresh Job/Entity identity insertion use set
+writes. The Product adapter uses `prepareProductIdentityPage` and
+`publishProductIdentityChunk` for shared preparation and publication. Source
+edges enroll in guarded chunks of at most 25 sources, 25 business
+publications and 100 enrollment edges before enumeration receipts, and
+canonical pairs share decision waves. Standalone catalog evaluation reuses the
+candidate read's source eligibility instead of repeating its snapshot; pair
+evaluation and publication retain their current-input fences. Semantic coverage
+uses the shared direct/fanout dirty-mark probe once per page. [#3320](https://github.com/nickysemenza/cubby/issues/3320)
+owns full synthetic throughput acceptance.
+Full re-check scheduling remains gated on that acceptance; no production
+throughput improvement is established by the page lifecycle alone.
 
 ## Apple version gate
 

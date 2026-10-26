@@ -36,6 +36,7 @@ import {
   pauseJob,
   publishJobPage,
   renewJob,
+  recordJobInvalidation,
   retryJob,
 } from "./jobs";
 
@@ -813,6 +814,38 @@ describe("durable jobs", () => {
       error: null,
     });
   });
+
+  it.each([false, true])(
+    "selects timed and captured work once while respecting restart policy (%s)",
+    async (restartsPass) => {
+      const input = {
+        key: "synthetic.selector-capture",
+        kind: "synthetic.capture",
+        input: {},
+      };
+      const saved = await enqueueJob(ctx.db, input);
+      // Multiple pending captures must not duplicate a Job that is also timed due.
+      await recordJobInvalidation(ctx.db, { ...input, restartsPass });
+      await recordJobInvalidation(ctx.db, { ...input, restartsPass });
+      const selected = async () =>
+        (await dueJobs(ctx.db)).filter((row) => row.id === saved.id);
+      expect(await selected()).toHaveLength(1);
+      for (const { state, expected } of [
+        { state: "retry_wait", expected: restartsPass ? 1 : 0 },
+        { state: "completed", expected: 1 },
+        { state: "failed", expected: restartsPass ? 1 : 0 },
+        { state: "paused", expected: 0 },
+        { state: "cancelled", expected: 0 },
+      ] as const) {
+        // Seed historical terminal states without consuming their pending captures.
+        await getDb(ctx.db)
+          .update(job)
+          .set({ state, availableAt: new Date(Date.now() + 60_000) })
+          .where(eq(job.id, saved.id));
+        expect(await selected()).toHaveLength(expected);
+      }
+    },
+  );
 
   it("does not revive paused or exhausted work when a new broad capture arrives", async () => {
     const saved = await enqueue("synthetic.stopped-capture");

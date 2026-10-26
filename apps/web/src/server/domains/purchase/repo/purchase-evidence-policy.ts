@@ -3,7 +3,10 @@ import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { financialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
-import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
+import {
+  itemizationExpectation,
+  productExpectation,
+} from "@cubby/schemas/purchase-evidence-policy";
 import type {
   FinancialTransactionCoverage,
   PurchaseEvidenceCoverage,
@@ -219,7 +222,9 @@ const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
   ELSE COALESCE(${categoryPolicy(effectiveExpenseSpendingCategorySql(alias), "productExpectation")}, 'unknown') END)`;
 
 export const expenseProductExpectedSql = (alias: string): SQL =>
-  sql`(${expenseProductExpectationSql(alias)} = 'required')`;
+  // Unknown classification cannot hide an unresolved principal item. Keep
+  // explicit exemptions (including not_allowed), services and allocations.
+  sql`(${expenseProductExpectationSql(alias)} IN (${sqlEnumConstant(productExpectation, productExpectation.enum.required)}, ${sqlEnumConstant(productExpectation, productExpectation.enum.unknown)}))`;
 
 /** An incurred line still missing the Product its policy requires. */
 const unlinkedRequiredLineSql = (alias: string): SQL =>

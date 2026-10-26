@@ -110,7 +110,9 @@ export function deriveJobWaitingOn(
     reason: "due",
     lane,
     aheadCount: context.aheadCount ?? 0,
-    aheadIsEstimate: (context.aheadCount ?? 0) >= JOB_DRAIN.batch,
+    aheadIsEstimate:
+      job.kind === "ai.evaluation" ||
+      (context.aheadCount ?? 0) >= JOB_DRAIN.batch,
     etaSeconds: eta(context),
   };
 }

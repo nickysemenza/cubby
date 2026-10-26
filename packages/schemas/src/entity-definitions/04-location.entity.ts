@@ -312,9 +312,7 @@ export default defineEntity(
             read: z
               .array(z.string())
               .optional()
-              .describe(
-                "Namespaced Collection tags assigned directly to this location",
-              ),
+              .describe("Tags assigned directly to this location"),
             create: z
               .array(z.string())
               .describe("Tags assigned directly to this location")
@@ -762,7 +760,7 @@ Rules:
       grouping: ["type", "parent", "tags"],
       intents: {
         fields: {
-          // Quick add: alternate names, collections, and photos are filled in
+          // Quick add: alternate names, tags, and photos are filled in
           // afterward from the location's own edit dialog (`full`, below).
           capture: ["name", "type", "parentId", "productId"],
           full: [
@@ -772,7 +770,7 @@ Rules:
             "notes",
             "productId",
             "parentId",
-            "collections",
+            "tags",
             "pendingImageIds",
             "removeImageIds",
             "imageOrder",
@@ -782,11 +780,6 @@ Rules:
         },
         create: ["capture", "full"],
         update: ["full", "identity", "parent"],
-        // `collections` is a pure editor-only pseudo field: no model field, no
-        // stored column of its own — folded into `tags` at submit
-        // (`locationBuildData`, `entities/editing/definitions.ts`) and unfolded
-        // back out of the record's `tags` for edit-mode seeding.
-        editorFields: ["collections"],
       },
       output: [
         "id",

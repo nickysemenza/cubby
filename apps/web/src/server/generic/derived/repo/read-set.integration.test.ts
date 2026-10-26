@@ -5,14 +5,21 @@ import {
 } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
 import { countTestDbQueries, seedEntity, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { USDAClient } from "~/server/clients/usda";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
 import { getDb } from "~/server/db/helpers";
-import { entityAttachment, image, product } from "~/server/db/schema";
+import {
+  entityAttachment,
+  image,
+  ledgerParty,
+  product,
+} from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   createImageProcessingJob,
@@ -26,8 +33,9 @@ import {
   derivedSink,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
+import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
@@ -79,7 +87,7 @@ const computes = new Map<string, DerivedAdapter>([
       prepare: (db, ids) =>
         // SAFETY: the tracer samples Product ids for this declaration.
         prepareProductConversionCoverage(db, ids as ProductId[], offlineUsda),
-      publish: async () => [],
+      publish: (tx, ids, prepared) => prepared.publish(tx, ids),
     }),
   ],
 ]);
@@ -172,14 +180,21 @@ describe("stored derived read sets", () => {
     });
   }
 
-  it("reads only declared inputs", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
+  async function seedCorpus() {
+    const member = await createRepoEntity(ctx, "ledgerParty", {
       kind: "member",
       name: "Synthetic read-set member",
-      userId: ctx.actor.userId,
     });
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, member.entityId));
     await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 1 });
     await seedCorpusGaps();
+  }
+
+  it("reads only declared inputs", async () => {
+    await seedCorpus();
     const tableNames = new Set(
       (
         await getDb(ctx.db).execute(
@@ -245,5 +260,102 @@ describe("stored derived read sets", () => {
     expect(failed.join("\n")).toBe("");
     expect(unsampled.join("\n")).toBe("");
     expect(undeclared.join("\n")).toBe("");
+  });
+
+  it("reconciles and rebuilds every declared cache family from retained inputs", async () => {
+    await seedCorpus();
+    const adapters = Object.fromEntries(computes);
+    const drain = async () => {
+      await drainStoredDerived(ctx.db, 100, adapters);
+      // Ready-only draining must not hide deferred computations from this proof.
+      expect(
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT target, attempts, "lastError" FROM "DerivedDirty"`,
+          )
+        ).rows,
+      ).toEqual([]);
+    };
+    const snapshot = async () => ({
+      values: (
+        await getDb(ctx.db).execute(sql`
+          SELECT kind || '.' || key AS target, "entityId"::text AS id,
+            value, "sortNumber", "sortDate", "sortText"
+          FROM "DerivedValue" ORDER BY kind, "entityId", key`)
+      ).rows,
+      search: (
+        await getDb(ctx.db).execute(sql`
+          SELECT "entityKind", "entityId"::text, title, body,
+            "semanticText", "normalizedText", "sourceHash"
+          FROM "SearchDocument" WHERE "deletedAt" IS NULL
+          ORDER BY "entityKind", "entityId"`)
+      ).rows,
+      coverage: (
+        await getDb(ctx.db).execute(sql`
+          SELECT to_jsonb(c) - 'computedAt' AS value
+          FROM "ProductConversionCoverage" c ORDER BY "productId"`)
+      ).rows,
+      recipes: (
+        await getDb(ctx.db).execute(sql`
+          SELECT id::text, totals FROM "Recipe" WHERE "deletedAt" IS NULL ORDER BY "Recipe".id`)
+      ).rows,
+    });
+    await drain();
+    const incremental = await snapshot();
+    const targets = new Set(
+      z
+        .array(z.object({ target: z.string() }))
+        .parse(incremental.values)
+        .map((row) => row.target),
+    );
+    expect(
+      storedDerivedDeclarations()
+        .filter((declaration) => declaration.publishes === "derivedValue")
+        .map((declaration) => declaration.target)
+        .filter((target) => !targets.has(target)),
+    ).toEqual([]);
+    expect(
+      incremental.values.some(
+        (row) => row.target === "inventory.valuation" && row.value !== null,
+      ),
+    ).toBe(true);
+    const searchKinds = new Set(
+      z
+        .array(z.object({ entityKind: z.string() }))
+        .parse(incremental.search)
+        .map((row) => row.entityKind),
+    );
+    expect(
+      storedDerivedDeclarations()
+        .filter((declaration) => declaration.compute.startsWith("search."))
+        .map((declaration) => declaration.entity)
+        .filter((entity) => !searchKinds.has(entity)),
+    ).toEqual([]);
+    expect(
+      [
+        ...new Set(
+          storedDerivedDeclarations()
+            .filter((declaration) => declaration.publishes === "ownTable")
+            .map((declaration) => declaration.key),
+        ),
+      ].sort(),
+    ).toEqual(["conversionCoverage", "searchDocument", "totals"]);
+    expect(incremental.coverage.length).toBeGreaterThan(0);
+    expect(incremental.recipes.some((row) => row.totals !== null)).toBe(true);
+
+    await markAllStoredDerived(ctx.db);
+    await drain();
+    expect(await snapshot()).toEqual(incremental);
+
+    // Clear only disposable projections, leaving all household inputs in place.
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "SearchDocument"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "ProductConversionCoverage"`);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Recipe" SET totals = NULL, "totalsComputedAt" = NULL`,
+    );
+    await markAllStoredDerived(ctx.db);
+    await drain();
+    expect(await snapshot()).toEqual(incremental);
   });
 });

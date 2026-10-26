@@ -44,8 +44,6 @@ const STATIC_TRACE_ROUTES = new Set([
   "/automatic-decisions",
   "/calendar",
   "/cash-flow",
-  "/collections",
-  "/collections/assignments",
   "/connections",
   "/design",
   "/docs",
@@ -139,14 +137,6 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   {
     pattern: /^\/entities\/schema\/[^/]+$/u,
     template: "/entities/schema/:entity",
-  },
-  {
-    pattern: /^\/collections\/[^/]+$/u,
-    template: "/collections/:collection",
-  },
-  {
-    pattern: /^\/collections\/smart\/[^/]+$/u,
-    template: "/collections/smart/:starter",
   },
   {
     pattern: new RegExp(`^/(${DETAIL_COLLECTIONS})/[^/]+$`, "u"),

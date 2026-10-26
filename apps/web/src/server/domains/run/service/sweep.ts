@@ -463,6 +463,7 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
         runId: run.id,
         cooperative: true,
         work,
+        countedFailures: new Set(step.meta?.failedRefs ?? []),
         after: retrying
           ? null
           : z

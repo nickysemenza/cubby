@@ -15,6 +15,7 @@ describe("shared action explanations", () => {
       source: "research",
       kind: "research",
       reason: "Missing research",
+      reasonKeys: ["vendor_website", "vendor_logo"],
       gaps: [
         { check: "vendor_website", message: "No website is recorded." },
         { check: "vendor_logo", message: "No logo is recorded." },

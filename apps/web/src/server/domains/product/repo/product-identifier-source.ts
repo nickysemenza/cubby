@@ -1,7 +1,9 @@
 import { externalIdSource } from "@cubby/schemas/external-id";
+import { vendorId } from "@cubby/schemas/identifiers";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -199,13 +201,37 @@ export const lookupProductIdentifierSources = async (
 ): Promise<IdentifierSourceLookup[]> => {
   if (!inputs.length) return [];
   const database = unwrapDb(db);
-  const [vendors, sources] = await Promise.all([
-    database
-      .select(issuerFields)
-      .from(vendor)
-      .where(and(notDeleted(vendor), isNull(vendor.systemKey))),
-    database.select(registeredFields).from(externalSource),
-  ]);
+  // One registry snapshot per set load, including independent lookup errors.
+  const {
+    rows: [registryRow],
+  } = z
+    .object({
+      rows: z.tuple([
+        z.object({
+          vendors: z.array(
+            z.object({
+              id: vendorId,
+              shortcode: z.string(),
+              website: z.string().nullable(),
+              browserDomains: z.array(z.string()),
+            }),
+          ),
+          sources: z.array(
+            z.object({
+              slug: z.string(),
+              vendorId: vendorId.nullable(),
+              issuer: z.boolean(),
+            }),
+          ),
+        }),
+      ]),
+    })
+    .parse(
+      await database.execute(sql`SELECT
+    coalesce((SELECT jsonb_agg(jsonb_build_object('id', id, ${"shortcode"}::text, shortcode, 'website', website, 'browserDomains', "browserDomains")) FROM "Vendor" WHERE ${notDeleted(vendor)} AND "systemKey" IS NULL), '[]'::jsonb) AS vendors,
+    coalesce((SELECT jsonb_agg(jsonb_build_object('slug', slug, 'vendorId', "vendorId", 'issuer', issuer)) FROM "ExternalSource"), '[]'::jsonb) AS sources`),
+    );
+  const { vendors, sources } = registryRow;
   const registry: IssuerRegistry = {
     vendors,
     issuersByVendor: new Map(),

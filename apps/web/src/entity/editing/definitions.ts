@@ -18,11 +18,6 @@ import {
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
-import {
-  collectionSlugsFromTags,
-  collectionTagFromSlug,
-  normalizeCollectionSlug,
-} from "@cubby/shared/collection-tag";
 import { isNutrientKey } from "@cubby/usda";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -197,10 +192,8 @@ interface FieldOptions<E extends EditableEntity> {
   validate?: EditField<E>["validate"];
   /**
    * Override the generic record/create-default `initial` lookup — for an
-   * editor-only pseudo field with no model field to read a record value from
-   * (e.g. location's `collections`, folded from the stored `tags` at submit
-   * and unfolded back into a list here for edit-mode seeding), or for a
-   * model field whose form shape is a projection of the record's (rows
+   * editor-only pseudo field with no model field to read a record value from,
+   * or for a model field whose form shape is a projection of the record's (rows
    * reduced to their input shape). On update the same projection is the
    * baseline `toPatch` diffs against, so an untouched projected field emits
    * nothing and a cleared one emits `null`.
@@ -904,38 +897,6 @@ const normalizeFinancialTransaction = (
   return normalized;
 };
 
-/**
- * `collections` is an editor-only pseudo field (no model field, no stored
- * column): a friendlier list of bare slugs than the namespaced `tags` a
- * location actually stores. Folded into `tags` at submit, and unfolded back
- * out of the record's `tags` for edit-mode seeding (`initial` override below)
- * — kept next to `entity-primitive-fields.tsx`'s `location-collections`
- * renderer, which owns the RHF field this bag ultimately targets.
- */
-const foldCollectionsIntoTags = (collections: EntityEditValue): string[] => {
-  const parsed = z.array(z.string()).catch([]).parse(collections);
-  return parsed
-    .map((value) => value.trim())
-    .filter((value) => value !== "")
-    .map(normalizeCollectionSlug)
-    .filter((slug) => slug !== "")
-    .map(collectionTagFromSlug);
-};
-
-/**
- * `collections` folds into the stored `tags` column and never reaches the
- * create/update contract on its own. `type` is sent as chosen: a Product link
- * without one is stored as `furniture` by the server.
- */
-const locationBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
-  const data: EntityEditValueBag = { ...patch };
-  if ("collections" in data) {
-    data.tags = foldCollectionsIntoTags(data.collections);
-    delete data.collections;
-  }
-  return data;
-};
-
 /** Field fragments per semantic intent come from the entity declaration. */
 const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
   Object.entries(generatedEntityEditIntents[entity].fields).find(
@@ -1093,26 +1054,6 @@ const editHooks: EditHooksMap = {
         validate: productLabelNutritionValidate,
       },
     },
-  },
-  location: {
-    fields: {
-      // `collections` has no model field (editor-only, folded into `tags` at
-      // submit) — seed edit mode from the record's own `tags`, since the
-      // generic `initial` lookup has no `collections` key to read.
-      collections: {
-        initial: ({ record }) =>
-          record
-            ? collectionSlugsFromTags(
-                z.array(z.string()).catch([]).parse(record.tags),
-              )
-            : [],
-      },
-    },
-    create: {
-      capture: { buildData: locationBuildData },
-      full: { buildData: locationBuildData },
-    },
-    update: { full: { buildData: locationBuildData } },
   },
   // `notes` is accepted by the canonical task inputs but is not a scalar
   // model field (see `editorFields` in the declaration) — no field model

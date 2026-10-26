@@ -10,7 +10,6 @@ describe("shared read policy", () => {
       "problems.getByType",
       "recipeAvailability.getRecipeAvailability",
       "calendar.range",
-      "collection.detail",
       "expense.analytics",
       "image.projectSummaries",
       "ingredient.recipeUsages",

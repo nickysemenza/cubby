@@ -17,7 +17,7 @@ import {
   hydrateProductLocationBreadcrumbs,
 } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
-import { productUnitPriceDetailLabel } from "~/server/domains/product/repo/list-enrichment";
+import { productUnitPriceDetailFields } from "~/server/domains/product/repo/list-enrichment";
 import {
   dbProductToAPI,
   primaryGtinOf,
@@ -225,7 +225,7 @@ export async function readProductDetail(
             })),
             { entity: "location", id: placed.shortcode, name: placed.name },
           ],
-    unitPriceDetailLabel: productUnitPriceDetailLabel({ ...mapped, food }),
+    ...productUnitPriceDetailFields({ ...mapped, food }),
     ownershipEvidence: ownership,
     owners: owners.get(row.id) ?? [],
     nutritionDisplay: buildNutritionDisplay({

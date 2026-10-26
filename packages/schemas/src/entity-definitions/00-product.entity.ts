@@ -924,7 +924,7 @@ export default defineEntity(
           kind: "text-array",
           collection: { key: "value" },
           description:
-            "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+            "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. Leave empty when nothing fits.",
           control: {
             kind: "specialized",
             renderer: "product-tags",
@@ -953,13 +953,13 @@ Rules:
               .array(z.string())
               .default([])
               .describe(
-                "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+                "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. Leave empty when nothing fits.",
               ),
             update: z
               .union([z.array(z.string()), valueCollectionPatch])
               .optional()
               .describe(
-                "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. `collection:*` entries are managed by Collections. Leave empty when nothing fits.",
+                "Compatibility or ecosystem tokens only — battery platform, mount, thread, size standard. Never the manufacturer, a classification word, or a path node; those belong in manufacturer/categoryId. Leave empty when nothing fits.",
               ),
           },
         },
@@ -1146,12 +1146,12 @@ Rules:
           kind: "text",
           nullable: true,
           labelOverride: "Category family",
-          // The first node of the category path: the family a product rolls up to.
+          // Saved views expose this column; use the inherited family matched by its filter.
           display: {
             columnGroup: "Catalog",
             detail: false,
             listHidden: true,
-            readPath: "category.path[0].name",
+            readPath: "category.feature",
           },
           provenance: {
             kind: "derived",

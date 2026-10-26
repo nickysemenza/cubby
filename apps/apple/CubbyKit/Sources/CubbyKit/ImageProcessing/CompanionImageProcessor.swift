@@ -147,7 +147,7 @@ public struct CompanionImageProcessor: Sendable {
             return .unsupportedFormat
         }
         let image = try file.decodeFullResolution()
-        if Self.containsTransparency(image) { return .alreadyTransparent }
+        if Self.isCutout(image) { return .alreadyTransparent }
         let decodeMilliseconds = Self.milliseconds(since: decodeStarted)
         let orientation = Self.orientation(in: data)
         try Task.checkCancellation()
@@ -155,6 +155,11 @@ public struct CompanionImageProcessor: Sendable {
         let lifted = try await SubjectLift.lift(
             image, background: .transparent, cropToSubject: true)
         guard lifted.foundSubject else { return .noSubject }
+        // A padded original whose subject fills its opaque rectangle lifts to that same opaque
+        // rectangle, which the server rejects as a derivative; the transparent original stands.
+        guard Self.alphaCoverage(lifted.image)?.hasTransparency ?? false else {
+            return .alreadyTransparent
+        }
         try Task.checkCancellation()
 
         // The server decodes the derivative to verify transparency and rejects more than 64 MB of
@@ -179,26 +184,72 @@ public struct CompanionImageProcessor: Sendable {
                     orientation: orientation)))
     }
 
-    /// Alpha-bearing originals are already usable item renditions. Detect actual transparency,
-    /// since an opaque RGBA asset still benefits from subject lifting.
-    private static func containsTransparency(_ image: CGImage) -> Bool {
+    /// Share of non-opaque pixels inside the visible bounds above which an original reads as a
+    /// cutout. A rectangular photo padded onto a transparent canvas (vendor square listings)
+    /// measures under 1% from edge anti-aliasing; a product cutout measures well above.
+    static let cutoutInteriorTransparency = 0.02
+
+    /// Cutout originals are already usable item renditions. Transparency alone is not enough:
+    /// an opaque RGBA asset, or an opaque photo on transparent padding, still benefits from
+    /// subject lifting.
+    static func isCutout(_ image: CGImage) -> Bool {
+        guard let coverage = alphaCoverage(image), coverage.hasTransparency else { return false }
+        return coverage.interiorTransparency > cutoutInteriorTransparency
+    }
+
+    struct AlphaCoverage {
+        var hasTransparency: Bool
+        /// Fraction of pixels with alpha below 255 within the bounding box of visible pixels.
+        var interiorTransparency: Double
+    }
+
+    static func alphaCoverage(_ image: CGImage) -> AlphaCoverage? {
         switch image.alphaInfo {
-        case .none, .noneSkipFirst, .noneSkipLast: return false
+        case .none, .noneSkipFirst, .noneSkipLast:
+            return AlphaCoverage(hasTransparency: false, interiorTransparency: 0)
         default: break
         }
-        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
-        return pixels.withUnsafeMutableBytes { buffer in
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        return pixels.withUnsafeMutableBytes { buffer -> AlphaCoverage? in
             guard
                 let context = CGContext(
-                    data: buffer.baseAddress, width: image.width, height: image.height,
-                    bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                    data: buffer.baseAddress, width: width, height: height,
+                    bitsPerComponent: 8, bytesPerRow: width * 4,
                     space: CGColorSpaceCreateDeviceRGB(),
                     bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
                         | CGImageAlphaInfo.premultipliedLast.rawValue)
-            else { return false }
-            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            else { return nil }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
             let bytes = buffer.bindMemory(to: UInt8.self)
-            return stride(from: 3, to: bytes.count, by: 4).contains { bytes[$0] < 255 }
+            var minX = width
+            var maxX = -1
+            var minY = height
+            var maxY = -1
+            var hasTransparency = false
+            for y in 0..<height {
+                for x in 0..<width {
+                    let alpha = bytes[(y * width + x) * 4 + 3]
+                    if alpha < 255 { hasTransparency = true }
+                    guard alpha > 0 else { continue }
+                    minX = min(minX, x)
+                    maxX = max(maxX, x)
+                    minY = min(minY, y)
+                    maxY = max(maxY, y)
+                }
+            }
+            guard maxX >= 0 else {
+                return AlphaCoverage(hasTransparency: hasTransparency, interiorTransparency: 1)
+            }
+            var interior = 0
+            for y in minY...maxY {
+                for x in minX...maxX where bytes[(y * width + x) * 4 + 3] < 255 { interior += 1 }
+            }
+            let area = (maxX - minX + 1) * (maxY - minY + 1)
+            return AlphaCoverage(
+                hasTransparency: hasTransparency,
+                interiorTransparency: Double(interior) / Double(area))
         }
     }
 

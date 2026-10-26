@@ -339,7 +339,13 @@ export default defineConfig(async ({ command }) => {
             onLog: failOnUndefinedImport,
             // ASCII source avoids widening whole Worker script strings to
             // two-byte storage for a few Unicode literals. Values stay Unicode.
-            output: { keepNames: true, charset: "ascii" },
+            // Worker chunk splitting must initialize Drizzle's Column before
+            // PgColumn, even when schema and pool imports form a chunk cycle.
+            output: {
+              keepNames: true,
+              charset: "ascii",
+              strictExecutionOrder: true,
+            },
           } satisfies NonNullable<BuildEnvironmentOptions["rolldownOptions"]>,
         },
       },
