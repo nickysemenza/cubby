@@ -53,6 +53,7 @@
         "src/cf-server.ts!",
         "vite.config.ts!",
         "cloudflare.config.ts!",
+        "e2e.config.ts!",
         "src/styles.css!",
         "src/lib/sentry-cf-shim.ts!",
         "src/integrations/**/*.{ts,tsx}!",

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /** One test outcome in the combined CI summary, from either runner. */
 export const testRecordSchema = z.object({
-  runner: z.enum(["vitest", "playwright"]),
+  runner: z.enum(["vitest", "playwright", "tester-army"]),
   project: z.string(),
   /** Repository-relative path. */
   file: z.string(),
@@ -84,4 +84,141 @@ export function playwrightRecords(
   };
   for (const suite of report.suites) visit(suite, []);
   return records;
+}
+
+/** SDK evidence consumed by both the hosted report and the combined CI summary. */
+export const journeyFailureSchema = z.object({
+  code: z.string(),
+  category: z.string(),
+  message: z.string().optional(),
+  phase: z.string().optional(),
+});
+export const journeyReportSchema = z.object({
+  run: z.object({
+    status: z.string(),
+    startedAt: z.string(),
+    finishedAt: z.string(),
+    summary: z.object({
+      discovered: z.number().optional(),
+      selected: z.number(),
+      executed: z.number(),
+      passed: z.number(),
+      failed: z.number(),
+      skipped: z.number(),
+      flaky: z.number(),
+    }),
+    usage: z
+      .object({
+        modelTokens: z.number().optional(),
+        artifactBytes: z.number().optional(),
+      })
+      .optional(),
+    results: z.array(
+      z.object({
+        testId: z.string(),
+        file: z.string(),
+        targetId: z.string(),
+        titlePath: z.array(z.string()),
+        selected: z.boolean(),
+        status: z.string(),
+        attempts: z.array(
+          z.object({
+            status: z.string(),
+            startedAt: z.string(),
+            durationMs: z.number(),
+            error: journeyFailureSchema.optional(),
+            artifacts: z
+              .array(
+                z.object({
+                  kind: z.string(),
+                  path: z.string().optional(),
+                  mediaType: z.string().optional(),
+                }),
+              )
+              .default([]),
+            steps: z
+              .array(
+                z.object({
+                  api: z.string(),
+                  label: z.string(),
+                  status: z.string(),
+                  startedAt: z.string(),
+                  durationMs: z.number(),
+                  cache: z.json().optional(),
+                  events: z
+                    .array(
+                      z.object({
+                        kind: z.string(),
+                        detail: z.string().optional(),
+                      }),
+                    )
+                    .default([]),
+                }),
+              )
+              .default([]),
+          }),
+        ),
+      }),
+    ),
+    errors: z.array(z.unknown()),
+  }),
+});
+
+export function journeyFailureBoundary(
+  error: z.infer<typeof journeyFailureSchema> | undefined,
+) {
+  if (!error) return "unclassified";
+  if (/MODEL|PROVIDER|INFERENCE/u.test(error.code)) return "provider";
+  if (error.phase && error.phase !== "body") return "startup / fixture";
+  if (
+    /AGENT|AUTOMATION|BUDGET|STEP_LIMIT/u.test(error.code) ||
+    /255 options/u.test(error.message ?? "")
+  )
+    return "agent";
+  return "application / outcome";
+}
+
+export function testerArmyRecords(
+  report: z.infer<typeof journeyReportSchema>,
+): TestRecord[] {
+  return report.run.results
+    .filter((result) => result.selected)
+    .map((result) => {
+      const last = result.attempts.at(-1);
+      return {
+        runner: "tester-army",
+        project: result.targetId,
+        file: `apps/web/${result.file}`,
+        name: result.titlePath.join(" > "),
+        state:
+          result.status === "passed"
+            ? "passed"
+            : result.status === "skipped" || !last
+              ? "skipped"
+              : "failed",
+        durationMs: last?.durationMs ?? 0,
+        flaky:
+          result.status === "passed" &&
+          result.attempts.some((attempt) => attempt.status !== "passed"),
+        error: last?.error
+          ? `${journeyFailureBoundary(last.error)}: ${last.error.code}: ${last.error.message ?? ""}`
+          : undefined,
+      };
+    });
+}
+
+export function journeyPassed(
+  run: z.infer<typeof journeyReportSchema>["run"],
+  fixtureCount: number,
+) {
+  return (
+    run.status === "passed" &&
+    run.summary.selected > 0 &&
+    run.summary.executed === run.summary.selected &&
+    run.summary.failed === 0 &&
+    run.summary.skipped === 0 &&
+    run.summary.flaky === 0 &&
+    run.errors.length === 0 &&
+    fixtureCount === run.summary.executed
+  );
 }

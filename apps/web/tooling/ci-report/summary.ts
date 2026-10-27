@@ -3,7 +3,7 @@
  * Actions API, then failures, flaky tests and the slowest tests from the
  * merged Vitest records and the merged Playwright JSON report.
  *
- *   node tooling/ci-report/summary.ts <vitest-records.json> <playwright.json>
+ *   node tooling/ci-report/summary.ts <vitest-records.json> <playwright.json> [tester-army-records.json]
  *
  * A missing or malformed input (a lane that never produced a report) is
  * reported, not fatal: the summary must still render when the gate failed
@@ -31,9 +31,14 @@ const jobsSchema = z.object({
 type Job = z.infer<typeof jobsSchema>["jobs"][number];
 const runSchema = z.object({ run_started_at: z.string() });
 // Linux test lanes only; Rust and Apple report through their own jobs.
-const summarizedLanes = ["Validation", "E2E tests (desktop", "Vitest ("];
+const summarizedLanes = [
+  "Validation",
+  "E2E tests (desktop",
+  "Vitest (",
+  "Tester Army web journeys",
+];
 
-const [vitestPath, playwrightPath] = process.argv.slice(2);
+const [vitestPath, playwrightPath, testerArmyPath] = process.argv.slice(2);
 const env = process.env;
 const missing: string[] = [];
 
@@ -46,9 +51,14 @@ function readReport<T>(
     missing.push(label);
     return undefined;
   }
-  const parsed = schema.safeParse(JSON.parse(readFileSync(path, "utf8")));
-  if (!parsed.success) missing.push(`${label} (unexpected report shape)`);
-  return parsed.data;
+  try {
+    const parsed = schema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+    if (!parsed.success) missing.push(`${label} (unexpected report shape)`);
+    return parsed.data;
+  } catch {
+    missing.push(`${label} (unreadable JSON)`);
+    return undefined;
+  }
 }
 
 const vitest = readReport(vitestPath, "Vitest", z.array(testRecordSchema));
@@ -57,8 +67,27 @@ const playwright = readReport(
   "Playwright",
   playwrightReportSchema,
 );
+const testerArmy =
+  env.CUBBY_TESTER_ARMY_EXPECTED === "false" || !testerArmyPath
+    ? undefined
+    : readReport(
+        testerArmyPath,
+        "Tester Army",
+        z.object({
+          complete: z.boolean(),
+          missing: z.array(z.string()),
+          records: z.array(testRecordSchema),
+        }),
+      );
+if (testerArmy && !testerArmy.complete)
+  missing.push(
+    ...(testerArmy.missing.length
+      ? testerArmy.missing
+      : ["Tester Army failed / incomplete"]),
+  );
 const records = [
   ...(vitest ?? []),
+  ...(testerArmy?.records ?? []),
   ...(playwright ? playwrightRecords(playwright, "apps/web/tests/e2e") : []),
 ];
 
@@ -130,7 +159,7 @@ const lastFinish = Math.max(
 const wall =
   run && lastFinish ? lastFinish - Date.parse(run.run_started_at) : 0;
 lines.push(
-  `## ${failed.length > 0 || laneFailed ? "❌" : "✅"} CI tests · ${records.length.toLocaleString("en-US")} tests` +
+  `## ${failed.length > 0 || laneFailed || missing.length > 0 ? "❌" : "✅"} CI tests · ${records.length.toLocaleString("en-US")} tests` +
     (wall > 0 ? ` · ${minutes(wall)} wall clock` : ""),
   "",
 );
@@ -151,7 +180,11 @@ if (jobs.length > 0) {
       `${prefix.trim()}: ${minutes(low)}–${minutes(high)} (spread ${minutes(high - low)})`,
     ];
   };
-  const shardLines = [...balance("E2E tests "), ...balance("Vitest ")];
+  const shardLines = [
+    ...balance("E2E tests "),
+    ...balance("Vitest "),
+    ...balance("Tester Army web journeys "),
+  ];
   if (shardLines.length > 0)
     lines.push("", `**Shard balance:** ${shardLines.join(" · ")}`);
   lines.push("");
@@ -161,13 +194,13 @@ lines.push(
   "| Runner | Passed | Failed | Flaky | Skipped | Summed test time |",
   "| --- | ---: | ---: | ---: | ---: | ---: |",
 );
-for (const runner of ["vitest", "playwright"] as const) {
+for (const runner of ["vitest", "playwright", "tester-army"] as const) {
   const own = records.filter((record) => record.runner === runner);
   if (own.length === 0) continue;
   const count = (state: TestRecord["state"]) =>
     own.filter((record) => record.state === state).length;
   lines.push(
-    `| ${runner === "vitest" ? "Vitest" : "Playwright"} | ${count("passed")} | ${count("failed")} | ${own.filter((record) => record.flaky).length} | ${count("skipped")} | ${minutes(own.reduce((sum, record) => sum + record.durationMs, 0))} |`,
+    `| ${runner === "vitest" ? "Vitest" : runner === "playwright" ? "Playwright" : "Tester Army (optional)"} | ${count("passed")} | ${count("failed")} | ${own.filter((record) => record.flaky).length} | ${count("skipped")} | ${minutes(own.reduce((sum, record) => sum + record.durationMs, 0))} |`,
   );
 }
 lines.push("");
@@ -212,6 +245,8 @@ if (slowest.length > 0) {
 // unavailable (download, unzip, then open index.html through a local server).
 const reports = [
   env.CUBBY_VITEST_REPORT_URL && `[Vitest](${env.CUBBY_VITEST_REPORT_URL})`,
+  env.CUBBY_TESTER_ARMY_REPORT_URL &&
+    `[Tester Army](${env.CUBBY_TESTER_ARMY_REPORT_URL})`,
   env.CUBBY_PLAYWRIGHT_REPORT_URL &&
     `[Playwright](${env.CUBBY_PLAYWRIGHT_REPORT_URL})`,
 ].filter(Boolean);

@@ -17,6 +17,7 @@ Publication does not require loading every test, native-stack or performance rul
 | -------------------------------------------------- | --------------------------------------------------------------------------------- |
 | Add, retain or delete a test                       | [Test retention](#test-retention)                                                 |
 | Choose a test boundary                             | [Signal and speed](#signal-and-speed)                                             |
+| Run optional goal-driven web journeys              | [Tester Army](../tester-army.md)                                                  |
 | Run a focused check or diagnose a failure          | [During implementation](#during-implementation)                                   |
 | Run a TypeScript typecheck                         | [tsrs compiler entry points](validation-quality.md#quality-and-local-diagnostics) |
 | Choose evidence for the changed behavior           | [Before opening a PR](#before-opening-a-pr)                                       |

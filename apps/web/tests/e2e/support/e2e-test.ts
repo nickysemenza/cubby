@@ -1,6 +1,7 @@
 import { test as base, expect } from "@playwright/test";
 import { attachRecorder } from "playwright-recorder-plus";
-import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
+import { withDerivedRefresh } from "./derived-refresh";
+import { disableBrowserSentry } from "./browser-bootstrap";
 import { getFixtureDb } from "../fixtures/core";
 
 import { retryStaleKeepAlive } from "#web/tooling/stale-keep-alive.ts";
@@ -71,11 +72,7 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
     // Routing even one URL disables Chromium's HTTP cache for this context.
     // That made every full-page navigation refetch hundreds of immutable JS
     // assets. Set the test-only flag before app scripts run instead.
-    await context.addInitScript(() => {
-      Object.defineProperty(window, "__CUBBY_E2E_DISABLE_SENTRY__", {
-        value: true,
-      });
-    });
+    await context.addInitScript(disableBrowserSentry);
     if (
       Boolean(process.env.CI) ||
       process.env.CUBBY_E2E_STARTUP_PROFILE === "1"
@@ -105,32 +102,11 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
     retryStaleKeepAlive(request);
     await provide(request);
   },
-  // Offline lanes omit provider consumers, but user journeys still exercise
-  // eventual SQL projections through the real paged frontier.
+  // Miniflare does not run the scheduled dispatcher that wakes derived Jobs.
+  // Every profile settles projections through the real paged frontier.
   e2eDerivedRefresh: [
-    async ({ workerdProfile, e2eRuntime: _e2eRuntime }, provide) => {
-      if (workerdProfile !== "offline") return provide();
-      const controller = new AbortController();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let wake: (() => void) | undefined;
-      const pump = (async () => {
-        while (!controller.signal.aborted) {
-          await drainDerivedRefreshFrontier(getFixtureDb());
-          if (!controller.signal.aborted)
-            await new Promise<void>((resolve) => {
-              wake = resolve;
-              timer = setTimeout(resolve, 100);
-            });
-        }
-      })();
-      try {
-        await provide();
-      } finally {
-        controller.abort();
-        clearTimeout(timer);
-        wake?.();
-        await pump;
-      }
+    async ({ e2eRuntime: _e2eRuntime }, provide) => {
+      await withDerivedRefresh(getFixtureDb(), provide);
     },
     { auto: true },
   ],

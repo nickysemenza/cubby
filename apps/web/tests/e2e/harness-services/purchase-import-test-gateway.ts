@@ -6,6 +6,7 @@
  * validation, writer, and audit code all run unmodified.
  */
 import { z } from "zod";
+import { imageDescriptionResult } from "@cubby/schemas/image-processing";
 
 import { isModelPricingRead } from "#web/tooling/ai/model-pricing-transport.ts";
 
@@ -20,6 +21,7 @@ export type Fixture = {
   extractions: Extraction[];
   audit: unknown;
   decisions?: z.infer<typeof decisionFixture>[];
+  imageDescription?: z.infer<typeof imageDescriptionResult>;
 };
 
 let fixture: Fixture = {
@@ -141,6 +143,7 @@ const JEV_DEFAULT_LABEL = new Map([
   ["product-promotion", "promote"],
   ["reversal-kind", "return"],
   ["product-line-identity", "No listed choice is a suitable match."],
+  ["field-suggestion", "No listed choice is a suitable match."],
   ["product-variant-relation", "color unknown; size unknown"],
   // Synthetic order mail is addressed to its own recipient unless a scenario says otherwise.
   ["mail-attribution", "recipient"],
@@ -171,22 +174,31 @@ function jevChoice(feature: string, body: unknown) {
       throw new Error(
         "Configured decision label is absent from the actual request choices.",
       );
-    const key = Object.entries(criteria).find(
-      ([, value]) => value === label,
-    )?.[0];
+    const choices = Object.entries(criteria);
+    const neutral =
+      feature === "field-suggestion" &&
+      !configured &&
+      !Object.values(criteria).includes(label ?? "");
+    const key =
+      (neutral ? choices[0]?.[0] : undefined) ??
+      Object.entries(criteria).find(([, value]) => value === label)?.[0];
     if (!key)
       throw new Error(
         `No configured deterministic answer for gateway feature ${feature}.`,
       );
     return {
       id,
-      label: label ?? null,
+      label: neutral ? (criteria[key] ?? null) : (label ?? null),
       answer: {
         type: "choice",
         choice: key,
-        confidence: 1,
+        // A mandatory advisory ranking without synthetic evidence stays uncertain.
+        confidence: neutral ? 0 : 1,
         probabilities: Object.fromEntries(
-          Object.keys(criteria).map((entry) => [entry, entry === key ? 1 : 0]),
+          Object.keys(criteria).map((entry) => [
+            entry,
+            neutral ? 1 / choices.length : entry === key ? 1 : 0,
+          ]),
         ),
       },
     };
@@ -291,6 +303,10 @@ export default {
       url.pathname === "/anthropic/v1/messages"
         ? respondWithMessages(output)
         : respondWithToolCall(output);
+    if (feature === "image-description" && fixture.imageDescription) {
+      calls.push({ feature, matched: "image-description" });
+      return respond(imageDescriptionResult.parse(fixture.imageDescription));
+    }
     if (feature === "purchase-import-audit") {
       calls.push({ feature, matched: "audit" });
       return respond(fixture.audit);

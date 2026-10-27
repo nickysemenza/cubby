@@ -1,30 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 import type { WorkerdProfile } from "./tooling/workerd-harness";
+import { prepareE2EProcessEnvironment } from "./tooling/e2e-process-env";
 
-// The spec files import server modules (`~/server/db`, repositories) whose
-// `~/env` schema validates at import and whose module scope reads values like
-// `new URL(env.R2_PUBLIC_URL)`, so the Playwright process itself needs a
-// complete server env even though every Worker gets its own isolated bindings.
-// Do not load credential files for acceptance tests; use synthetic placeholders. Values already in the
-// environment win. DATABASE_URL matches the CI postgres service so the eager
-// module pool in `~/server/db` points somewhere real; the fixtures themselves
-// connect through E2E_DATABASE_URL.
-const e2eProcessEnvDefaults = {
-  E2E_TEST_USER_EMAIL: "e2e@example.test",
-  E2E_TEST_USER_PASSWORD: "cubby-e2e-local-only",
-  DATABASE_URL: "postgresql://postgres:password@localhost:5432/cubby",
-  R2_ACCESS_KEY_ID: "e2e",
-  R2_SECRET_ACCESS_KEY: "e2e",
-  R2_ENDPOINT: "http://localhost:9000",
-  R2_BUCKET_NAME: "e2e",
-  R2_PUBLIC_URL: "http://localhost:9000",
-  UPC_UPSTREAM_DISABLED: "true",
-  BETTER_AUTH_SECRET: "e2e-test-secret",
-};
-for (const [key, value] of Object.entries(e2eProcessEnvDefaults)) {
-  process.env[key] ??= value;
-}
+prepareE2EProcessEnvironment();
 
 /**
  * See https://playwright.dev/docs/test-configuration.

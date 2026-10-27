@@ -158,3 +158,5 @@ permissions:
     skills: true
   "@tanstack/react-table":
     skills: true
+patchedDependencies:
+  "@e2e-dev/decision@0.3.0": patches/@e2e-dev__decision@0.3.0.patch
