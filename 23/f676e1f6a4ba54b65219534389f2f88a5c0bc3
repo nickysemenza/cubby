@@ -1,0 +1,29 @@
+apps/web/src/server/entity-kernel/entity-operations.ts
+  s_9fb58b1f0c0012::t_fc1b39fcbb32c9 54-57,446-451
+apps/web/src/server/generic/list/repo/list-read-adapters.ts
+  s_9fb58b1f0c0012::t_5fa66f0012eb48 2
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_ce47f7f02be8ca 2285-2286,2314
+docs/adr/0006-durable-entity-identity-and-attachments.md
+  s_9fb58b1f0c0012::t_63e56ae1318342 3,118-129
+docs/adr/0023-repository-read-declaration.md
+  s_9fb58b1f0c0012::t_25db8cc8cf8ae5 1-97
+docs/adr/README.md
+  s_9fb58b1f0c0012::t_b989e58ad66473 33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "23f676e1f6a4ba54b65219534389f2f88a5c0bc3",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
