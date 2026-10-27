@@ -862,12 +862,10 @@ export const dueJobPositionsQuery = (
     SELECT visible.id, earlier.ahead FROM visible CROSS JOIN LATERAL (
       SELECT count(*)::int AS ahead FROM "Job"
       WHERE "Job".kind = visible.kind AND ${due(now)}
-        AND (
-          -"Job".priority < -visible.priority
-          OR (-"Job".priority = -visible.priority AND "Job"."updatedAt" < visible."updatedAt")
-          OR (-"Job".priority = -visible.priority AND "Job"."updatedAt" = visible."updatedAt" AND "Job"."availableAt" < visible."availableAt")
-          OR (-"Job".priority = -visible.priority AND "Job"."updatedAt" = visible."updatedAt" AND "Job"."availableAt" = visible."availableAt" AND "Job".id < visible.id)
-        )
+        -- One row comparison in Job_kind_position_idx order is an index range
+        -- bound; the equivalent OR chain let the planner walk every same-kind Job.
+        AND (-"Job".priority, "Job"."updatedAt", "Job"."availableAt", "Job".id)
+          < (-visible.priority, visible."updatedAt", visible."availableAt", visible.id)
         AND ${jobRunOwned()} = visible.run_owned
     ) earlier`;
 
