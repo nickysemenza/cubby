@@ -47,9 +47,9 @@ import {
   useTableState,
   type TableStateReturn,
 } from "~/entity/table/use-table-state";
-import { AttentionInputStatus } from "~/features/project/attention-input-status";
 import { WorkActions } from "~/entity/work-queue/work-actions";
 import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
+import { AttentionInputStatus } from "~/features/project/attention-input-status";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
@@ -105,7 +105,10 @@ type QueueTableRow = Omit<WorkQueueRow, "id"> & {
 type QueueTablePage = Omit<WorkQueueOut, "items" | "meta"> & {
   items: QueueTableRow[];
   meta: ListQueryResponse<QueueTableRow>["meta"] &
-    Pick<WorkQueueOut["meta"], "viewCounts" | "reasons" | "incompleteProjectIds"> & {
+    Pick<
+      WorkQueueOut["meta"],
+      "viewCounts" | "reasons" | "incompleteProjectIds"
+    > & {
       /** Each section's declared group actions, by its raw key. */
       groupActions: Readonly<Record<string, readonly WorkAction[]>>;
     };
