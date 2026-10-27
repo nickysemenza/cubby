@@ -256,24 +256,19 @@ struct FieldsSectionView: View {
                 }
                 .navigationLinkIndicatorVisibility(.hidden)
             } else {
-                ForEach(fieldGroups(rows)) { group in
-                    if group.compact {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(group.fields, id: \.key) { field in
-                                if field.key != group.id { Divider() }
-                                dossierField(field)
-                            }
-                        }
-                        .font(.subheadline)
-                        .navigationLinkIndicatorVisibility(.hidden)
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: 0, leading: FieldGuideTokens.Space.md,
-                                bottom: 0, trailing: FieldGuideTokens.Space.md))
+                ForEach(rows, id: \.key) { field in
+                    if isCompact(field) {
+                        // Each field needs its own Form cell: a shared cell routes adjacent
+                        // context menus through the first field's menu host.
+                        dossierField(field)
+                            .font(.subheadline)
+                            .navigationLinkIndicatorVisibility(.hidden)
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: 0, leading: FieldGuideTokens.Space.md,
+                                    bottom: 0, trailing: FieldGuideTokens.Space.md))
                     } else {
-                        ForEach(group.fields, id: \.key) { field in
-                            fieldRowWithResolutionActions(field)
-                        }
+                        fieldRowWithResolutionActions(field)
                     }
                 }
             }
@@ -292,29 +287,11 @@ struct FieldsSectionView: View {
         }
     }
 
-    private struct FieldGroup: Identifiable {
-        var fields: [FieldDescriptor]
-        let compact: Bool
-        var id: String { fields[0].key }
-    }
-
-    /// Ordinary facts and their evidence share a Form child. Specialist/prose layouts keep
-    /// their own row, and grouping preserves manifest order.
-    private func fieldGroups(_ rows: [FieldDescriptor]) -> [FieldGroup] {
-        var groups: [FieldGroup] = []
-        for field in rows {
-            let compact =
-                field.itemsPath == nil && field.controlKind != .textarea
-                && field.detailRenderer != .expenseSpendingCategory
-                && field.detailRenderer != .spendingCategorySummary
-                && field.detailRenderer != .recipeSource
-            if compact, groups.last?.compact == true {
-                groups[groups.count - 1].fields.append(field)
-            } else {
-                groups.append(FieldGroup(fields: [field], compact: compact))
-            }
-        }
-        return groups
+    private func isCompact(_ field: FieldDescriptor) -> Bool {
+        field.itemsPath == nil && field.controlKind != .textarea
+            && field.detailRenderer != .expenseSpendingCategory
+            && field.detailRenderer != .spendingCategorySummary
+            && field.detailRenderer != .recipeSource
     }
 
     @ViewBuilder

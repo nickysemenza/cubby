@@ -48,6 +48,24 @@ appId: com.nickysemenza.cubby
 - assertVisible: "\\$25\\.00"
 - scrollUntilVisible:
     element:
+      id: "field.explanation.action.set"
+    direction: UP
+    timeout: 30000
+- tapOn:
+    id: "field.explanation.action.set"
+- extendedWaitUntil:
+    visible:
+      id: "editor.product"
+    timeout: 30000
+- assertVisible:
+    id: "editor.product.save"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: "field.explanation.popover"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
       id: "field.explanation.close"
     direction: UP
     timeout: 30000
