@@ -21,10 +21,10 @@ ownership checks, retained-Email checksums, replay, money conservation and
 safe writes. Source-backed orders pass through `purchase_import` rather than
 generic entity mutation.
 
-Start backlog triage with `activity_read.for_member`: it offers the connected
-member's current source/account work plus shared research. Its household UI is
-the Work queue page linked from Problems and Research, with a Waiting for
-filter. Unknown private ownership requires review; queue membership does not
+Start backlog triage with `activity_read.queue`: it offers the connected
+member's current source/account work plus shared research, filterable by
+`family`, `executor`, `reason` and `owner`. Its household UI is the Work queue
+page, with an Owner filter. Unknown private ownership requires review; queue membership does not
 authorize imports, paid execution or access to another member's originals.
 Route paperwork and itemization research by source ownership. Paying for an
 order does not establish access to its originals; settlement reconciliation
