@@ -15,6 +15,7 @@ import {
   type ImageShortcode,
   type LedgerPartyId,
   type ProductId,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
@@ -25,6 +26,7 @@ import {
   type CommitPhotoGroupOutput,
 } from "@cubby/schemas/photo-import-run";
 import { productCreateInput } from "@cubby/schemas/product";
+import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -41,6 +43,8 @@ import {
   inventoryEntry,
   photoGroupProposal,
   product,
+  vendor,
+  assessmentState,
 } from "~/server/db/schema";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import {
@@ -48,11 +52,14 @@ import {
   updateInventoryEntry,
 } from "~/server/domains/inventory/repo/crud";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
+import { photoProductSuggestions } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { createProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { loadRunScopeByShortcode } from "~/server/domains/purchase-import/repo/run-service";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
+import { createVendor } from "~/server/domains/vendor/repo/vendor";
+import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
@@ -306,6 +313,45 @@ function buildReplayOutput(
   });
 }
 
+/** Brand creation shares the Product approval transaction and exact-name lock. */
+async function resolvePhotoBrand(
+  db: Database,
+  selection: {
+    brandId?: VendorShortcode | null;
+    brandCreate?: { name: string };
+  },
+  actor: ActorContext,
+) {
+  if (!selection.brandCreate) return selection.brandId;
+  if (selection.brandId)
+    throw new Error("Choose an existing Brand or create one, not both");
+  const name = selection.brandCreate.name.trim();
+  const key = name.toLowerCase();
+  await getDb(db).execute(
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${"photo-brand:" + key}, 0))`,
+  );
+  const existing = await getDb(db)
+    .select({ id: vendor.shortcode })
+    .from(vendor)
+    .where(
+      and(
+        notDeleted(vendor),
+        sql`(lower(trim(${vendor.name})) = ${key} OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) AS alias(value) WHERE lower(trim(alias.value)) = ${key}))`,
+      ),
+    )
+    .limit(2);
+  if (existing.length > 1)
+    throw new Error("Several Brands match this name; select one explicitly");
+  const match = existing[0];
+  if (match) return parseShortcodeFor("vendor", match.id);
+  const created = await createVendor(
+    db,
+    vendorCreateInput.parse({ name }),
+    actor,
+  );
+  return created.output.id;
+}
+
 /** Resolve the group's target Product — an existing one by id, or a brand-new one. */
 async function resolveProduct(
   txDb: Database,
@@ -318,14 +364,54 @@ async function resolveProduct(
       input.review?.productChanges &&
       Object.keys(input.review.productChanges).length
     ) {
-      // This bounded patch excludes image/object fields: updateProduct cannot
-      // delete stored objects while this transaction remains open.
       const crud = buildCrudServices(txDb);
-      await createProductWriteActions(txDb, crud.usdaClient).updateProduct(
-        id,
+      const brandId = await resolvePhotoBrand(
+        txDb,
         input.review.productChanges,
         actor,
       );
+      const { brandCreate: _brandCreate, ...changes } =
+        input.review.productChanges;
+      if (brandId !== undefined) changes.brandId = brandId;
+      const review = { ...input.review, productChanges: changes };
+      const suggestions = await photoProductSuggestions(txDb, {
+        runId: input.runId,
+        groupKey: input.groupKey,
+        productId: input.product.existingId,
+        review,
+        imageIds: input.images.map((image) => image.id),
+      });
+      for (const suggestion of suggestions) {
+        const [state] = await getDb(txDb)
+          .select({ status: assessmentState.status })
+          .from(assessmentState)
+          .where(eq(assessmentState.id, suggestion.id));
+        if (state?.status !== "pending")
+          throw new Error(
+            "A selected Product correction was already reviewed; revise the photo draft before approval",
+          );
+      }
+      await createProductWriteActions(txDb, crud.usdaClient).updateProduct(
+        id,
+        changes,
+        actor,
+      );
+      for (const suggestion of suggestions) {
+        await reviewAssessment(
+          txDb,
+          { ...crud, actorContext: actor },
+          {
+            assessmentId: suggestion.id,
+            operationId: `photo-approval:${input.runId}:${input.groupKey}:${suggestion.field}`,
+            verdict: "correct",
+            intent: "apply",
+            application: {
+              kind: "saved_field",
+              recordId: input.product.existingId,
+            },
+          },
+        );
+      }
     }
     return input.product.existingId;
   }
@@ -340,7 +426,7 @@ async function resolveProduct(
     productCreateInput.parse({
       name: input.product.create.name,
       categoryId: input.product.create.categoryId ?? null,
-      brandId: input.product.create.brandId,
+      brandId: await resolvePhotoBrand(txDb, input.product.create, actor),
       model: input.product.create.model ?? null,
       notes: input.product.create.notes ?? null,
       tags: input.product.create.tags ?? [],

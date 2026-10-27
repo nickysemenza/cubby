@@ -3,6 +3,7 @@ import {
   imageShortcode,
   productShortcode,
   shortcode,
+  vendorShortcode,
 } from "@cubby/schemas/identifiers";
 import {
   photoProductCandidate,
@@ -359,7 +360,7 @@ describe("PhotoImportRunView", () => {
     });
 
     expect(
-      await screen.findByRole("button", { name: "Create product" }),
+      await screen.findByRole("button", { name: /Create product and/ }),
     ).toBeEnabled();
     expect(
       screen.queryByText(/photos that can no longer be reviewed/),
@@ -660,7 +661,7 @@ describe("PhotoImportRunView", () => {
     );
 
     const approveItem = await screen.findByRole("button", {
-      name: "Create product",
+      name: /Create product and/,
     });
     expect(approveItem).toBeDisabled();
     expect(
@@ -736,12 +737,16 @@ it("retries a failed candidate read without disabling approval", async () => {
   expect(
     screen.getByText("Synthetic candidate check unavailable"),
   ).toBeVisible();
-  expect(screen.getByRole("button", { name: "Create product" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: /Create product and/ }),
+  ).toBeEnabled();
   await userEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(
     await screen.findByText("No matching existing Products."),
   ).toBeVisible();
-  expect(screen.getByRole("button", { name: "Create product" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: /Create product and/ }),
+  ).toBeEnabled();
   expect(calls).toBe(2);
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(402);
 });
@@ -781,7 +786,9 @@ it("keeps a weak candidate behind Compare instead of presenting a duplicate warn
   ).toBeVisible();
   expect(screen.queryByText(candidate.name)).not.toBeInTheDocument();
   expect(screen.queryByText(/Possible duplicate:/)).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Create product" })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: /Create product and/ }),
+  ).toBeEnabled();
 });
 
 it.each(["description", "cutout"] as const)(
@@ -820,7 +827,7 @@ it.each(["description", "cutout"] as const)(
     expect(
       within(notice).getByRole("link", { name: "Open photo to retry" }),
     ).toHaveAttribute("href", "/images/IMG-4K7M");
-    const approve = screen.getByRole("button", { name: "Create product" });
+    const approve = screen.getByRole("button", { name: /Create product and/ });
     expect(approve).toHaveProperty("disabled", failure === "description");
   },
 );
@@ -959,7 +966,7 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
     product: { kind: "create", create: { name: "Refreshed saved name" } },
   });
   await waitFor(() => expect(name).toHaveValue("Unsaved sweater name"));
-  const approve = screen.getByRole("button", { name: "Create product" });
+  const approve = screen.getByRole("button", { name: /Create product and/ });
   await userEvent.click(approve);
   await screen.findByText(
     /Changes were not saved:.*Synthetic name save rejected/,
@@ -1102,4 +1109,124 @@ it("retains per-image retry errors and refreshes successful siblings", async () 
     ),
   ).toBeVisible();
   expect(retried).toEqual(failedIds);
+});
+
+it("reviews evidence-matched brands in the workbench without replacing explicit or rejected choices", async () => {
+  await page.viewport(1440, 900);
+  const brandId = vendorShortcode.parse("VEN-4K7M");
+  const evidence = [
+    {
+      name: "Fixture Apparel",
+      imageIds: [imageShortcode.parse("IMG-4K7M")],
+      matches: [{ id: brandId, name: "Fixture Apparel" }],
+    },
+  ];
+  let rows: PhotoGroupProposal[] = [
+    {
+      ...proposedSweater,
+      groupKey: "first-shirt",
+      product: { kind: "create", create: { name: "First fixture shirt" } },
+      brandEvidence: evidence,
+    },
+    {
+      ...proposedSweater,
+      groupKey: "second-shirt",
+      product: { kind: "create", create: { name: "Second fixture shirt" } },
+      brandEvidence: evidence,
+    },
+    {
+      ...proposedSweater,
+      groupKey: "chosen-shirt",
+      product: {
+        kind: "create",
+        create: {
+          name: "Explicit fixture shirt",
+          brandId: vendorShortcode.parse("VEN-7M4K"),
+        },
+      },
+      brandEvidence: evidence,
+    },
+    {
+      ...proposedSweater,
+      groupKey: "rejected-shirt",
+      product: { kind: "create", create: { name: "Rejected fixture shirt" } },
+      brandEvidence: evidence,
+      review: {
+        observedName: "Rejected fixture shirt",
+        stockIntent: "evidence",
+        unresolvedReason: null,
+        rejectedBrandNames: ["Fixture Apparel"],
+      },
+    },
+  ];
+  const publish = () =>
+    harness.queryClient.setQueryData(
+      photoImport.review.queryKey({ runId: RUN_ID }),
+      {
+        ...review,
+        review: { ...review.review, proposals: rows },
+        images: review.images.map((image) => ({
+          ...image,
+          targetState: "pending",
+          describe: "ready",
+        })),
+      } satisfies PhotoRunReview,
+    );
+  publish();
+  let savedKeys: string[] = [];
+  restoreDispatch = overrideStartDispatch(async (operation, input) => {
+    if (operation === "photoImport.candidatesBatch")
+      return { ok: true, data: { groups: [] } };
+    if (operation !== "photoImport.saveGroups")
+      throw new Error(`Unexpected operation ${operation}`);
+    const body = photoImportContract.ops.saveGroups.input.parse(input);
+    savedKeys = body.groups.map((group) => group.groupKey);
+    rows = rows.map((row) => {
+      const group = body.groups.find((item) => item.groupKey === row.groupKey);
+      return group?.product.kind === "create"
+        ? { ...row, product: group.product }
+        : row;
+    });
+    return {
+      ok: true,
+      data: reviewPhotoGroupsOutput.parse({
+        ...review.review,
+        proposals: rows,
+        results: [],
+        frozenGroupKeys: [],
+      }),
+    };
+  });
+  render(<PhotoImportRunView run={run} />, { wrapper: harness.wrapper });
+  const list = await screen.findByRole("navigation", {
+    name: "Items to review",
+  });
+  expect(screen.getByRole("textbox", { name: "New product name" })).toHaveValue(
+    "First fixture shirt",
+  );
+  expect(screen.getByRole("combobox", { name: "Brand" })).toBeVisible();
+  await userEvent.click(
+    screen.getByText("Use Fixture Apparel for 2 matching items", {
+      exact: true,
+    }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "Update 2 proposals" }),
+  );
+  await waitFor(() =>
+    expect(savedKeys).toEqual(["first-shirt", "second-shirt"]),
+  );
+  const first = within(list).getByRole("button", {
+    name: /First fixture shirt/,
+  });
+  first.focus();
+  await userEvent.keyboard("{ArrowDown}");
+  expect(screen.getByRole("textbox", { name: "New product name" })).toHaveValue(
+    "Second fixture shirt",
+  );
+  expect(
+    within(list).getByRole("button", { name: /Second fixture shirt/ }),
+  ).toHaveFocus();
+  await page.viewport(402, 874);
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(402);
 });

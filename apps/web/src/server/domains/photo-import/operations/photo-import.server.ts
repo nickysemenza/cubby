@@ -228,7 +228,13 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const saved = await proposePhotoGroups(context.db, input, "member");
+      const saved = await proposePhotoGroups(
+        context.db,
+        input,
+        "member",
+        undefined,
+        context.actorContext,
+      );
       return { ...saved, results: [] };
     },
     stage: (context, input) => stagePhotoImport(context.db, input),
@@ -365,6 +371,7 @@ export const photoImportHandlers = implementOperationDomain(
             ? "external_agent"
             : "member",
         input._runExecution?.generation,
+        context.actorContext,
       ),
     commitGroup: (context, input) =>
       commitPhotoGroup(context.db, input, context.actorContext),

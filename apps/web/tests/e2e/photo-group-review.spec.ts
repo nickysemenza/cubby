@@ -116,12 +116,11 @@ test("applies selected notes to a resolved historical Product without changing i
   );
   const group = page.locator("#photo-group-g1");
   await expect(
-    group.getByRole("button", { name: "Attach 1 photo", exact: true }),
+    group.getByRole("button", {
+      name: /^(Update product and |Apply and attach )/,
+    }),
   ).toBeDisabled();
   await group.getByRole("button", { name: "Resolved", exact: true }).click();
-  await group
-    .getByRole("button", { name: "Change Inventory", exact: true })
-    .click();
   await group.getByRole("combobox", { name: "stock decision" }).click();
   await page
     .getByRole("option", {
@@ -130,11 +129,7 @@ test("applies selected notes to a resolved historical Product without changing i
     })
     .click();
   await group
-    .getByRole("button", { name: "Change Right one?", exact: true })
-    .click();
-  await group.getByText(/Product changes ·/).click();
-  await group
-    .getByRole("button", { name: "Show unchanged fields", exact: true })
+    .getByRole("button", { name: "Choose a different Product", exact: true })
     .click();
   const changeNotes = group.getByRole("checkbox", {
     name: "Change notes",
@@ -147,8 +142,9 @@ test("applies selected notes to a resolved historical Product without changing i
     .fill("Label confirmed: medium");
   await group.getByRole("textbox", { name: "New notes", exact: true }).blur();
   await group
-    .getByRole("button", { name: "Attach 1 photo", exact: true })
+    .getByRole("button", { name: "Apply and attach 1 photo", exact: true })
     .click();
+  await page.locator("#photo-item-g1").click();
   await group
     .getByRole("heading", { name: `Approved · ${name} shirt`, exact: true })
     .click();
@@ -218,7 +214,7 @@ test("fills the owned-items destination once and applies ready items without sel
   );
   const group = page.locator("#photo-group-g1");
   await expect(
-    group.getByRole("button", { name: "Create product", exact: true }),
+    group.getByRole("button", { name: /^Create product and / }),
   ).toBeDisabled();
   await page
     .getByRole("combobox", { name: "Default storage location", exact: true })
@@ -227,14 +223,14 @@ test("fills the owned-items destination once and applies ready items without sel
     .getByRole("option", { name: new RegExp(`${batchName} location`) })
     .click();
   await expect(
-    page.getByRole("button", { name: "Apply 2 ready items", exact: true }),
+    page.getByRole("button", { name: "Approve 2 ready items", exact: true }),
   ).toBeEnabled();
   await expect(
     group.getByRole("textbox", { name: "New product name" }),
-  ).toBeHidden();
+  ).toBeVisible();
   await expect(
     group.getByRole("combobox", { name: "stock decision" }),
-  ).toBeHidden();
+  ).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("owned-ready-desktop.png"),
   });
@@ -256,7 +252,7 @@ test("fills the owned-items destination once and applies ready items without sel
     ),
   );
   await page
-    .getByRole("button", { name: "Apply 2 ready items", exact: true })
+    .getByRole("button", { name: "Approve 2 ready items", exact: true })
     .click();
   const outcome = await operationResult(
     await approval,
@@ -299,13 +295,13 @@ test("approves two selected photo groups with one reviewed batch action", async 
     page.getByRole("heading", { name: "Photo review" }),
   );
 
-  // Reviewing a batch must not require switching a single mounted editor;
-  // selecting all still goes through the explicit, revision-checked approval.
+  // Batch selection stays available in the item list while one editor is open;
+  // approval still checks every selected revision.
   await expect(
     page.getByRole("heading", { name: /Gray crew t-shirt/ }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: /solo find/ })).toBeAttached();
-  await page.getByRole("button", { name: "Select all resolved items" }).click();
+  await expect(page.locator("#photo-item-g2")).toBeVisible();
+  await page.getByRole("button", { name: "Select all ready items" }).click();
   await expect(
     page.getByRole("checkbox", { name: /Select Gray crew t-shirt/ }),
   ).toBeChecked();
@@ -317,7 +313,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
       (operation) => operation.operation === "photoImport.approveGroups",
     ),
   );
-  await page.getByRole("button", { name: "Apply 2 selected items" }).click();
+  await page.getByRole("button", { name: "Approve 2 selected items" }).click();
   const outcome = await operationResult(
     await approval,
     "photoImport.approveGroups",
@@ -335,8 +331,8 @@ test("approves two selected photo groups with one reviewed batch action", async 
   ).toBeVisible();
   await expect(
     page
-      .getByRole("navigation", { name: "Section index" })
-      .locator('[aria-label="Applied"]'),
+      .getByRole("navigation", { name: "Items to review" })
+      .getByRole("button", { name: /Applied/ }),
   ).toHaveCount(2);
   await page.getByRole("button", { name: "Results · 2", exact: true }).click();
   await expect(
@@ -379,7 +375,7 @@ test("approves only the selected ready group and leaves the other proposed", asy
     ),
   );
   await page
-    .getByRole("button", { name: "Apply 1 selected item", exact: true })
+    .getByRole("button", { name: "Approve 1 selected item", exact: true })
     .click();
   const outcome = await operationResult(
     await approval,
@@ -433,7 +429,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByRole("heading", { name: "Photo review", exact: true }),
   );
 
-  // Both proposed groups render, and every seeded photo is assigned to one.
+  // Both proposed groups appear in the item list, with one editor visible.
   await expect(
     page.getByText("2 to review · 0 settled · 0 photos not in a group", {
       exact: true,
@@ -468,8 +464,8 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   await expect(
     page
-      .getByRole("navigation", { name: "Section index" })
-      .getByRole("link", { name: new RegExp(g2Name) }),
+      .getByRole("navigation", { name: "Items to review" })
+      .getByRole("button", { name: new RegExp(g2Name) }),
   ).toBeVisible();
   if (recordingVideo) await page.waitForTimeout(1_500);
 
@@ -483,16 +479,14 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   // save the correction before creating the Product.
   const correctedName = `${name} Gray crew t-shirt — size M`;
   await g1Card
-    .getByRole("button", { name: "Change Details", exact: true })
-    .click();
-  await g1Card
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
   await g1Card
     .getByRole("button", {
-      name: /^(Create product|Attach \d+ photos?)/,
+      name: /^(Create product and |Update product and |Apply and attach )/,
     })
     .click();
+  await page.locator("#photo-item-g1").click();
   const applied = page.getByRole("heading", {
     name: `Approved · ${correctedName}`,
   });
@@ -505,15 +499,15 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   ).toBeVisible();
   await expect(
     page
-      .getByRole("navigation", { name: "Section index" })
-      .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
-  ).toBeVisible();
+      .getByRole("navigation", { name: "Items to review" })
+      .locator("#photo-item-g1"),
+  ).toContainText("Applied");
   if (recordingVideo) await page.waitForTimeout(1_500);
 
   // Discard G2: nothing is left pending and the run completes.
   await page
-    .getByRole("navigation", { name: "Section index" })
-    .getByRole("link", { name: new RegExp(g2Name) })
+    .getByRole("navigation", { name: "Items to review" })
+    .getByRole("button", { name: new RegExp(g2Name) })
     .click();
   const g2Card = page
     .locator("[data-photo-group]")
@@ -521,9 +515,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await g2Card.getByRole("button", { name: "Discard", exact: true }).click();
   await expect(
     page
-      .getByRole("navigation", { name: "Section index" })
-      .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
-  ).toBeVisible();
+      .getByRole("navigation", { name: "Items to review" })
+      .locator("#photo-item-g1"),
+  ).toContainText("Applied");
   await expect(
     page.getByText("Every proposed group has been approved or discarded.", {
       exact: true,
@@ -611,9 +605,10 @@ test("suggests an existing variant and previews every merge decision for a creat
   ).toBeVisible();
   await group
     .getByRole("button", {
-      name: /^(Create product|Attach \d+ photos?)/,
+      name: /^(Create product and |Update product and |Apply and attach )/,
     })
     .click();
+  await page.locator("#photo-item-g1").click();
   // The run's connections panel links the created Product too.
   await expect(
     page.getByRole("heading", { name: `Approved · ${createdName}` }),
@@ -776,10 +771,6 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
     `/runs/${seed.runId}#work`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  await page
-    .locator("#photo-group-g1")
-    .getByRole("button", { name: "Change Inventory", exact: true })
-    .click();
   const entryPicker = page
     .locator("#photo-group-g1")
     .getByRole("combobox", { name: "existing stock entry" });
@@ -793,14 +784,14 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
   await page
     .locator("#photo-group-g1")
     .getByRole("button", {
-      name: /^(Create product|Attach \d+ photos?)/,
+      name: /^(Create product and |Update product and |Apply and attach )/,
     })
     .click();
   await expect(
     page
-      .getByRole("navigation", { name: "Section index" })
-      .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
-  ).toBeVisible();
+      .getByRole("navigation", { name: "Items to review" })
+      .locator("#photo-item-g1"),
+  ).toContainText("Applied");
   const updated = await stockRows();
   expect(updated).toHaveLength(1);
   expect(updated[0]).toMatchObject({
@@ -849,10 +840,10 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     group.getByRole("button", { name: "Confirm identity", exact: true }),
   ).toHaveCount(0);
   await expect(
-    group.getByRole("checkbox", { name: /for batch approval/ }),
+    page.locator("#photo-item-g1").locator("..").getByRole("checkbox"),
   ).toBeDisabled();
   await expect(
-    group.getByRole("button", { name: "Create product", exact: true }),
+    group.getByRole("button", { name: /^Create product and / }),
   ).toBeDisabled();
   await expect(
     group.getByText("Agent's concern: Check the sleeve label", { exact: true }),
@@ -872,29 +863,30 @@ test("uses decision steps and preserves agent concerns until explicitly resolved
     group.getByText("Agent's concern: Check the sleeve label", { exact: true }),
   ).toBeVisible();
   await page
-    .getByRole("button", { name: "Select all resolved items", exact: true })
+    .getByRole("button", { name: "Select all ready items", exact: true })
     .click();
   await expect(
-    group.getByRole("checkbox", { name: /for batch approval/ }),
+    page.locator("#photo-item-g1").locator("..").getByRole("checkbox"),
   ).not.toBeChecked();
   await page
-    .getByRole("button", { name: "Apply 1 selected item", exact: true })
+    .getByRole("button", { name: "Approve 1 selected item", exact: true })
     .click();
+  await page.locator("#photo-item-g2").click();
   await expect(
     page
       .locator("#photo-group-g2")
       .getByRole("heading", { name: /Approved ·/ }),
   ).toBeVisible();
+  await page.locator("#photo-item-g1").click();
   await expect(
-    group.getByRole("button", { name: "Create product", exact: true }),
+    group.getByRole("button", { name: /^Create product and / }),
   ).toBeDisabled();
   await group.getByRole("button", { name: "Resolved", exact: true }).click();
   await expect(
-    group.getByRole("checkbox", { name: /for batch approval/ }),
+    page.locator("#photo-item-g1").locator("..").getByRole("checkbox"),
   ).toBeEnabled();
-  await group
-    .getByRole("button", { name: "Create product", exact: true })
-    .click();
+  await group.getByRole("button", { name: /^Create product and / }).click();
+  await page.locator("#photo-item-g1").click();
   await expect(
     group.getByRole("heading", { name: /Approved · Synthetic jacket blue XL/ }),
   ).toBeVisible();
@@ -1012,7 +1004,10 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   const attach = page.locator("#photo-group-g1");
   const create = page.locator("#photo-group-g2");
   await attach
-    .getByRole("button", { name: "Change Right one?", exact: true })
+    .getByRole("button", { name: "Choose a different Product", exact: true })
+    .click();
+  await attach
+    .getByRole("button", { name: "Photo evidence and label text", exact: true })
     .click();
   // Missing evidence is a photo-slot state, not a repeated field warning.
   await expect(attach.getByLabel("Label photo missing")).toHaveCount(0);
@@ -1023,9 +1018,7 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
     attach.getByText("No product details changed", { exact: true }),
   ).toBeVisible();
   await expect(
-    attach
-      .locator('[data-slot="section-heading"]')
-      .getByText("↪ Attach", { exact: true }),
+    attach.getByRole("heading").getByText("↪ Attach", { exact: true }),
   ).toBeVisible();
   await expect(attach.getByText("On hand", { exact: true })).toBeVisible();
   await expect(
@@ -1052,7 +1045,10 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
     0,
   );
   await expect(
-    attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
+    attach.getByRole("button", {
+      name: "Apply and attach 1 photo",
+      exact: true,
+    }),
   ).toBeEnabled();
   // The cover is lazy-loaded below the record summary.
   await attach
@@ -1071,11 +1067,9 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
     )
     .toBe(true);
 
+  await page.locator("#photo-item-g2").click();
   await create.scrollIntoViewIfNeeded();
   await expect(create.getByLabel("Label photo missing")).toHaveCount(0);
-  await create
-    .getByRole("button", { name: "Change Details", exact: true })
-    .click();
   await expect(
     create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
       exact: true,
@@ -1170,7 +1164,7 @@ test("keeps proposed edits separate while saved product evidence loads, fails, a
   );
   const modelRow = attach.locator('[data-cross-check="model"]');
   await attach
-    .getByRole("button", { name: "Change Right one?", exact: true })
+    .getByRole("button", { name: "Choose a different Product", exact: true })
     .click();
   try {
     await expect(modelRow).toContainText("Loading current product");
@@ -1221,7 +1215,7 @@ test("rejects a photo candidate and persists the reviewed rejection", async ({
   );
   const attach = page.locator("#photo-group-g1");
   await attach
-    .getByRole("button", { name: "Change Right one?", exact: true })
+    .getByRole("button", { name: "Choose a different Product", exact: true })
     .click();
   await performOperation(page, "photoImport.rejectCandidate", () =>
     attach.getByRole("button", { name: "Not this one…", exact: true }).click(),
@@ -1230,7 +1224,10 @@ test("rejects a photo candidate and persists the reviewed rejection", async ({
     attach.getByText(`${productName} · Rejected`, { exact: true }).first(),
   ).toBeVisible();
   await expect(
-    attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
+    attach.getByRole("button", {
+      name: "Apply and attach 1 photo",
+      exact: true,
+    }),
   ).toHaveCount(0);
   const { db } = await createEvidenceHarnessContext(page);
   const saved = await listPhotoGroupProposals(db, seed.runId);
@@ -1311,7 +1308,10 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
   );
   const card = page.locator("#photo-group-g1");
   await card
-    .getByRole("button", { name: "Change Right one?", exact: true })
+    .getByRole("button", { name: "Photo evidence and label text", exact: true })
+    .click();
+  await card
+    .getByRole("button", { name: "Choose a different Product", exact: true })
     .click();
   const label = card
     .getByRole("region", { name: "Photo evidence", exact: true })
@@ -1363,7 +1363,7 @@ test("photo approval follows filtered ready scope and explicit selection overrid
   await search.fill("Gray crew t-shirt");
   await expect(page.locator("#photo-group-g2")).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Apply 1 ready item", exact: true }),
+    page.getByRole("button", { name: "Approve 1 ready item", exact: true }),
   ).toBeEnabled();
   const firstReceipt = page.waitForResponse((response) =>
     dispatchOperations(response.request()).some(
@@ -1371,7 +1371,7 @@ test("photo approval follows filtered ready scope and explicit selection overrid
     ),
   );
   await page
-    .getByRole("button", { name: "Apply 1 ready item", exact: true })
+    .getByRole("button", { name: "Approve 1 ready item", exact: true })
     .click();
   const first = await operationResult(
     await firstReceipt,
@@ -1386,11 +1386,14 @@ test("photo approval follows filtered ready scope and explicit selection overrid
   // A resolved item stays in the review position until the member changes views.
   await expect(page.locator("#photo-group-g1")).toBeAttached();
   await search.clear();
-  await page.locator("#photo-group-g2").getByRole("checkbox").check();
+  await page
+    .getByRole("navigation", { name: "Items to review" })
+    .getByRole("checkbox", { name: /solo find/ })
+    .check();
   await search.fill("Gray crew t-shirt");
   await expect(page.locator("#photo-group-g2")).toBeHidden();
   await expect(
-    page.getByRole("button", { name: "Apply 1 selected item", exact: true }),
+    page.getByRole("button", { name: "Approve 1 selected item", exact: true }),
   ).toBeEnabled();
   const secondReceipt = page.waitForResponse((response) =>
     dispatchOperations(response.request()).some(
@@ -1398,7 +1401,7 @@ test("photo approval follows filtered ready scope and explicit selection overrid
     ),
   );
   await page
-    .getByRole("button", { name: "Apply 1 selected item", exact: true })
+    .getByRole("button", { name: "Approve 1 selected item", exact: true })
     .click();
   const second = await operationResult(
     await secondReceipt,

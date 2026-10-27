@@ -473,6 +473,26 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 
 `DecisionSteps` is the interactive RecordList timeline, using RecordRow expanded detail and actions. Done uses a filled positive dot, blocked a faint point, not needed a hollow ring, and needs input a citron attention mark, never warning. Answered rows keep their summary inline and a quiet change disclosure: 28px on desktop, 44px phone targets. Only the open body is visible; hidden bodies stay mounted to preserve drafts and suggestion receipts. Opening a body moves focus into it. Optional 112px evidence media spans the rows on desktop and precedes them on phone. Callers supply steps and bodies; the component owns only disclosure.
 
+### Photo inventory review
+
+Photo review is an Operate workbench: a compact item list beside one selected
+editor on desktop, stacked on narrow screens. Selection checkboxes belong to
+batch approval; opening an item is independent. Arrow keys or J/K move between
+item buttons, and visited editors remain mounted to preserve drafts.
+The editor exposes Product details and the inventory decision directly, without
+completed-step disclosures. Whole-item photos lead a compact gallery; label
+photos stay adjacent and open the shared full-scene viewer. Raw label text,
+descriptions and Claims live in the evidence disclosure beside those photos.
+Brand evidence names the source-photo count, distinguishes existing-brand
+selection from proposed brand creation, and records rejection in the proposal.
+Evidence-matched bulk brand edits preview their exact new, unbranded Products;
+explicit choices and rejections remain untouched. Existing Product changes retain
+Current/Proposed comparison and only selected fields apply.
+Proposal saves never imply applied records. Individual and ready-item batch
+approval show the Product and stock outcome; unresolved identity/grouping or
+required destination decisions remain visible. Optional missing metadata carries
+no false completion mark and does not block approval.
+
 ### Derived values
 
 `ui/derived` owns the ADR 0021 envelope presentation. Own values carry no mark.

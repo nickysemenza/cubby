@@ -13,7 +13,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { runStatus } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -469,6 +469,10 @@ export async function admitPhotoRunBatch(
             and(
               eq(photoGroupProposal.runId, run.id),
               eq(photoGroupProposal.state, "proposed"),
+              or(
+                isNull(photoGroupProposal.origin),
+                ne(photoGroupProposal.origin, "member"),
+              ),
             ),
           );
       },

@@ -14,6 +14,9 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
+  assessmentState,
+  aiAnalysis,
+  feedback,
   photoGroupSourceEvidence,
   image,
   imageProcessingJob,
@@ -914,12 +917,164 @@ describe("photo group proposals", () => {
       name: "Synthetic blue shirt",
       notes: "Label: medium",
     });
+    const states = await getDb(ctx.db)
+      .select({
+        status: assessmentState.status,
+        active: assessmentState.active,
+      })
+      .from(assessmentState)
+      .where(eq(assessmentState.recordId, original.entityId));
+    expect(states).toContainEqual({ status: "applied", active: false });
     const replay = await approvePhotoGroupProposals(
       ctx.db,
       { runId: run.shortcode, groupKeys: [draft.groupKey] },
       ctx.actor,
     );
     expect(replay.results[0]?.outcome).toBe("replayed");
+  });
+
+  it("creates an explicit Brand only at approval and reuses it for the next group", async () => {
+    const { run, codes } = await seedRun(2);
+    const groups = codes.map((code, index) => ({
+      ...createGroup(`new-brand-${index}`, [code]),
+      product: {
+        kind: "create" as const,
+        create: {
+          name: `Synthetic branded item ${index}`,
+          brandId: null,
+          brandCreate: { name: "Synthetic Fresh Label" },
+        },
+      },
+    }));
+    const saved = await proposePhotoGroups(
+      ctx.db,
+      { runId: run.shortcode, groups },
+      "member",
+    );
+    expect(saved.proposals[0]?.product).toMatchObject({
+      create: { brandCreate: { name: "Synthetic Fresh Label" } },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(eq(vendor.name, "Synthetic Fresh Label")),
+    ).toHaveLength(0);
+    const applied = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode },
+      ctx.actor,
+    );
+    expect(applied.results.map((result) => result.outcome)).toEqual([
+      "committed",
+      "committed",
+    ]);
+    const brands = await getDb(ctx.db)
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(eq(vendor.name, "Synthetic Fresh Label"));
+    expect(brands).toHaveLength(1);
+    const products = await getDb(ctx.db)
+      .select({ brandId: product.brandId })
+      .from(product)
+      .where(ilike(product.name, "Synthetic branded item %"));
+    expect(products).toHaveLength(2);
+    expect(products.every((item) => item.brandId === brands[0]?.id)).toBe(true);
+  });
+
+  it("retains a shared rejection and protects member corrections from coordinator reassessment", async () => {
+    const { run, codes } = await seedRun(1);
+    const original = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic correction item" }),
+      ctx.actor,
+    );
+    const createdBrand = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic Reviewed Label",
+    });
+    const brand = createdBrand.output;
+    await getDb(ctx.db)
+      .insert(aiAnalysis)
+      .values({
+        entityKind: "image",
+        entityId: (
+          await getDb(ctx.db)
+            .select({ id: image.id })
+            .from(image)
+            .where(eq(image.shortcode, codes[0]!))
+        )[0]!.id,
+        feature: "photo-local-analysis",
+        model: "synthetic-local",
+        promptVersion: "1",
+        inputFingerprint: "synthetic-photo-brand",
+        result: { recognizedText: [{ text: brand.name, confidence: 0.95 }] },
+      });
+    const draft = {
+      ...createGroup("shared-correction", codes),
+      product: {
+        kind: "existing" as const,
+        existingId: parseShortcodeFor("product", original.id),
+      },
+      review: {
+        observedName: "Synthetic correction item",
+        unresolvedReason: null,
+        stockIntent: "evidence" as const,
+      },
+    };
+    const saved = await proposePhotoGroups(
+      ctx.db,
+      { runId: run.shortcode, groups: [draft] },
+      "external_agent",
+    );
+    const suggestion = saved.proposals[0]?.review?.fieldSuggestions?.[0];
+    expect(suggestion?.field).toBe("brandId");
+    const [pending] = await getDb(ctx.db)
+      .select({
+        active: assessmentState.active,
+        status: assessmentState.status,
+      })
+      .from(assessmentState)
+      .where(eq(assessmentState.id, suggestion!.id));
+    expect(pending).toEqual({ active: false, status: "pending" });
+    await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [
+          {
+            ...draft,
+            review: {
+              ...draft.review,
+              productChanges: {},
+              rejectedBrandNames: [brand.name],
+            },
+          },
+        ],
+      },
+      "member",
+      undefined,
+      ctx.actor,
+    );
+    const [rejected] = await getDb(ctx.db)
+      .select({ verdict: feedback.verdict })
+      .from(feedback)
+      .where(eq(feedback.assessmentId, suggestion!.id));
+    expect(rejected?.verdict).toBe("wrong");
+    const refreshed = await proposePhotoGroups(
+      ctx.db,
+      { runId: run.shortcode, groups: [draft] },
+      "external_agent",
+      run.dispatchEventId!,
+    );
+    expect(refreshed.proposals[0]?.review?.productChanges).toBeUndefined();
+    expect(refreshed.proposals[0]?.review?.rejectedBrandNames).toEqual([
+      brand.name,
+    ]);
+    const [unchanged] = await getDb(ctx.db)
+      .select({ brandId: product.brandId })
+      .from(product)
+      .where(eq(product.id, original.entityId));
+    expect(unchanged?.brandId).toBeNull();
   });
 
   // A failed receive must roll back selected fields and attachments with stock.

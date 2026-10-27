@@ -28,10 +28,28 @@ explicit reference, already-counted or historical choice. Additional photos and
 labels never increase quantity. A Product match alone does not prove another
 physical copy.
 
-Ready item details stay folded until changed; genuine concerns open for review.
+Ready item details remain available in the compact review workbench; genuine concerns open for review.
 The web can apply all ready groups directly or a selected subset, with Product
 and stock effects visible before approval. Autosave barriers, revision checks
 and independent batch failures remain in force.
+
+Photo Brand evidence names its supporting images and exact live Vendor name/alias
+matches. A single unambiguous match prefills a new Product draft; it never changes
+an existing Product. Unknown names require an explicit Brand claim or member
+entry. Choosing a new Brand stores `brandCreate` in the proposal and creates or
+reuses the exact Vendor only inside the approved Product transaction. Multiple
+exact matches require the member to choose one. Rejections follow photo lineage;
+an agent cannot replace a member-edited group or regroup its images.
+
+Selected changes to an existing Product publish inactive shared field Assessments:
+they retain evidence and review identity without entering automatic application.
+Approval writes the selected fields and records the generic `saved_field`
+acceptance receipt in the same transaction. Rejecting a linked Brand proposal
+records shared Assessment Feedback as well as the photo evidence rejection.
+Unchanged evidence and value reuse the original Assessment, so refreshing cannot
+revive a rejected correction. Brand creation, Product changes, photo attachments
+and optional stock remain one approval transaction; per-group failures preserve
+successful siblings and the existing operation replay receipts.
 
 ## The whole journey
 
@@ -164,8 +182,9 @@ separate record; existing-name counts help reuse the catalogue's spelling.
 Category and destination pickers show the selected record's representative
 image before another search is needed.
 
-Adding a new batch to a Cubby Run replaces all unapproved proposals and member
-edits when regrouping. Approved and discarded groups remain fixed. State this
+Adding a new batch to a Cubby Run replaces unapproved agent proposals when
+regrouping. Member-edited groups and their images stay intact, as do approved
+and discarded groups. State this
 next to the add-photos action. Claude/Codex Runs wait for that session to regroup.
 Completed Runs can accept new batches. If a Cubby grouping session has been
 archived, start a new import instead; its approved Products remain available

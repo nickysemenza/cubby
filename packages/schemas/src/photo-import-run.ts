@@ -1,5 +1,6 @@
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
+import { assessmentChildHandle } from "./assessment-reference";
 import { productSummaryWithCover } from "./product-fields";
 
 import {
@@ -69,7 +70,19 @@ const commitPhotoGroupSkip = z.object({
 const commitPhotoGroupProductCreate = z.object({
   name: z.string().trim().min(1).max(500),
   categoryId: productCategoryShortcode.nullable().optional(),
-  brandId: vendorShortcode.nullable().optional(),
+  brandId: vendorShortcode
+    .nullable()
+    .optional()
+    .describe(
+      "Resolve the marketed Brand visible on labels to an existing Vendor; do not leave Brand only in name or notes.",
+    ),
+  /** Created only with explicit group approval; exact existing names are reused. */
+  brandCreate: z
+    .object({ name: z.string().trim().min(1).max(500) })
+    .optional()
+    .describe(
+      "Propose the marketed Brand visible on labels when no Vendor matches. Cite supporting photos in group evidence; do not leave Brand only in name or notes. Created only at member approval. Omit a non-null brandId.",
+    ),
   model: z.string().trim().max(200).nullable().optional(),
   notes: z.string().trim().max(4_000).nullable().optional(),
   tags: z.array(z.string().trim().min(1)).max(50).optional(),
@@ -86,6 +99,18 @@ export const photoGroupReview = z.object({
   unresolvedReason: z.string().trim().min(1).nullable(),
   stockIntent: z.enum(["evidence", "counted", "historical", "receive"]),
   productChanges: commitPhotoGroupProductCreate.partial().optional(),
+  /** Exact evidence names the member declined; retained across regrouping. */
+  rejectedBrandNames: z.array(z.string().trim().min(1)).optional(),
+  /** Shared field Assessments, published without applying Product changes. */
+  fieldSuggestions: z
+    .array(
+      z.object({
+        id: assessmentChildHandle,
+        field: z.string(),
+        value: z.json(),
+      }),
+    )
+    .optional(),
   /** Written by the server only after the Product transaction succeeds. */
   confirmation: z
     .object({ by: userId, at: z.iso.datetime() })
@@ -361,6 +386,15 @@ export const photoGroupProposal = z.object({
   groupKey: z.string(),
   steps: z.array(decisionStep),
   crossCheck: z.array(photoFieldCrossCheck).optional(),
+  brandEvidence: z
+    .array(
+      z.object({
+        name: z.string(),
+        imageIds: z.array(imageShortcode),
+        matches: z.array(z.object({ id: vendorShortcode, name: z.string() })),
+      }),
+    )
+    .optional(),
   blockedReason: z.string().nullable(),
   review: photoGroupReview.optional(),
   state: photoGroupProposalState,

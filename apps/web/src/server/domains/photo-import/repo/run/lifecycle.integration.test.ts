@@ -471,6 +471,16 @@ describe("photo run lifecycle", () => {
         ),
       );
     expect(late?.origin).toBe("member");
+    await admitPhotoRunBatch(ctx.db, {
+      runId: run.shortcode,
+      clientBatchId: crypto.randomUUID(),
+      imageCount: 1,
+    });
+    const preserved = (await listPhotoGroupProposals(ctx.db, run.shortcode))
+      .proposals;
+    expect(
+      preserved.map((group) => [group.groupKey, group.origin]),
+    ).toContainEqual(["late", "member"]);
   });
 
   it("never dispatches Pi for an external Run", async () => {
