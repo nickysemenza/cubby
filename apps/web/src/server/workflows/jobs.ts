@@ -15,6 +15,7 @@ import type { Database } from "~/server/db";
 import { deviceWakeHandler } from "~/server/domains/image-processing/service/device-wake";
 import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
+import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import {
@@ -30,10 +31,7 @@ import {
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { embeddingJobHandler } from "~/server/workflows/background-tasks/embedding";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
-import {
-  runJobHandler,
-  aiEvaluationJobHandler,
-} from "~/server/workflows/runs/job-execution";
+import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { aiRefreshActivationHandler } from "./ai-refresh-startup";
 import { derivedComputes } from "./derived-computes";
@@ -75,7 +73,7 @@ export const productionJobHandlers: JobHandlers = {
   // `image.device` has no server handler: Apple devices claim it by pull.
   "image.cloud": imageProcessingJobHandler,
   "run.execute": runJobHandler,
-  "ai.evaluation": aiEvaluationJobHandler,
+  "ai.evaluation": aiEvaluationJobHandler(),
   "ai-refresh.activate": aiRefreshActivationHandler,
   "queue.watchdog": queueWatchdogHandler,
   "image.device.wake": deviceWakeHandler,

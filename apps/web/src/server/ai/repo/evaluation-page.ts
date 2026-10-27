@@ -4,11 +4,11 @@ import type { z } from "zod";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import type { aiEvaluation } from "~/server/db/retained-tables";
-import type { JobClaim } from "~/server/generic/jobs/repo/external-claim";
+import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 
-/** Pages are transient; each slot keeps its own Job claim and frozen evidence. */
+/** Pages are transient; each slot keeps its drain item and frozen evidence. */
 export type EvaluationPageTarget = {
-  claim: JobClaim;
+  item: WorkItem;
   evaluation: typeof aiEvaluation.$inferSelect;
   target: AiEvaluationTarget;
 };
@@ -38,8 +38,8 @@ export type EvaluationPagePublication = {
 /**
  * prepare loads a finite set outside write transactions. evaluate runs in the
  * target's captured execution context and a shared decision-work wave. publish
- * receives only currently authorized targets (at most 25), under the page's
- * explicit claim-set guard, without an arbitrary target's AsyncLocal context.
+ * receives only currently authorized targets (at most 25 weight) in one
+ * fenced drain chunk, without an arbitrary target's AsyncLocal context.
  * It must check each evidenceDigest before business writes and return one
  * validity/receipt per outcome. An obsolete target must make no business writes.
  * Large source-to-pair rosters must enroll bounded, idempotent edge chunks

@@ -28,13 +28,13 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
+import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation";
 import { evaluationSlotKey } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
   withTransactionDatabase,
-  runBeforeCommitDatabase,
 } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -48,13 +48,11 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import { enqueueJobs } from "~/server/generic/jobs/repo/producer";
 
 import {
   hasAiRefreshRunCapacity,
   tryLockAiRefreshScheduling,
 } from "./ai-refresh-admission";
-import { recordAiEvaluationAttemptFailure } from "./ai-work-state";
 import { ensureRun } from "./ensure-run";
 
 export type AssessmentStateRow = typeof suggestion.$inferSelect;
@@ -136,9 +134,7 @@ async function slotAdmissions(
             aiProvenance.omit({ model: true }).parse(input.provenance),
           ),
       }));
-    const open = rows.find(
-      ({ item }) => item.state === "queued" || item.state === "retry_wait",
-    );
+    const open = rows.find(({ item }) => item.state === "queued");
     const common = { input, slotKey, history: rows.map((row) => row.item) };
     if (open)
       return {
@@ -159,9 +155,7 @@ async function slotAdmissions(
         row.failureCode === SUPERSEDED_RUN_FAILURE);
     const unchanged =
       same[0]?.failureCode === "user_cancelled" ||
-      same.some(
-        ({ item }) => item.state === "running" || item.state === "result_ready",
-      ) ||
+      same.some(({ item }) => item.state === "result_ready") ||
       same.filter(declined).length >= MAX_REOPENS ||
       (rows[0]?.sameInput && (input.blockedReason || !declined(rows[0])));
     return {
@@ -262,10 +256,15 @@ export async function insertEvaluationTargets(
         .where(
           and(
             sql`${aiEvaluation.id}=page.id`,
-            inArray(aiEvaluation.state, ["queued", "retry_wait"]),
+            eq(aiEvaluation.state, "queued"),
           ),
         )
         .returning({ id: aiEvaluation.id });
+      // Re-input supersedes an attempt on the previous input.
+      await markAiEvaluationWork(
+        tx,
+        written.map((entry) => entry.id),
+      );
       if (written.length)
         await getDb(tx)
           .insert(aiEvaluationRequest)
@@ -311,15 +310,9 @@ export async function insertEvaluationTargets(
             })),
           )
           .onConflictDoNothing();
-      await enqueueJobs(
+      await markAiEvaluationWork(
         tx,
-        inserted
-          .filter((entry) => entry.state !== "blocked")
-          .map((entry) => ({
-            key: `ai-evaluation:${entry.id}`,
-            kind: "ai.evaluation",
-            input: { evaluationId: entry.id },
-          })),
+        inserted.map((entry) => entry.id),
       );
       changed += inserted.length;
     }
@@ -608,34 +601,4 @@ export async function assessmentStatesById(
     .select()
     .from(suggestion)
     .where(inArray(suggestion.id, [...ids]));
-}
-
-/** Automatic and requested evaluations share the same slot-safe failure transition. */
-export async function recordAiRefreshAttemptFailure(
-  db: Database,
-  id: string,
-  attemptToken: string,
-  set: { state: (typeof aiEvaluation.$inferSelect)["state"]; error: string },
-) {
-  await recordAiEvaluationAttemptFailure(db, { id, attemptToken }, set);
-}
-
-/**
- * Fence a publication on the source fingerprint its evaluation was claimed
- * with, read once at commit inside the serializable transaction. Each unit's
- * own basis is rechecked under its locks; this read is the source-wide fence.
- */
-export async function checkConnectionSourceBeforeCommit(
-  db: Database,
-  fingerprint: () => Promise<string>,
-  expected: string,
-) {
-  await runBeforeCommitDatabase(
-    db,
-    async () => {
-      if ((await fingerprint()) !== expected)
-        throw new Error("Connection source changed before commit");
-    },
-    "fence",
-  );
 }

@@ -1,6 +1,5 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import { runStepState } from "@cubby/schemas/run-step";
 import {
   and,
@@ -126,7 +125,7 @@ export async function launchWorkflowRun(
     if (execution.state === "completed") {
       if (input.automatic) return null;
       const pending = await getDb(tx).execute<{ pending: boolean }>(sql`SELECT (
-        EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.running},${aiEvaluationState.enum.retry_wait},${aiEvaluationState.enum.result_ready})
+        EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
           AND e.receipt->>'retryEvaluationId' IS NULL
           AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL)))
         OR EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId"=${input.runId}::uuid AND s.state=${runStepState.enum.queued})
@@ -150,13 +149,6 @@ export async function launchWorkflowRun(
         .returning();
       if (raised) execution = raised;
     }
-    if (!input.automatic) {
-      const pending = await getDb(tx).execute<{
-        id: string;
-      }>(sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text
-        WHERE j.state=${jobState.enum.paused} AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
-      for (const row of pending.rows) await retryJob(tx, row.id);
-    }
     await getDb(tx)
       .update(runTable)
       .set({
@@ -167,6 +159,21 @@ export async function launchWorkflowRun(
         progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${execution.generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
+    if (!input.automatic) {
+      // Items parked while this Run was stopped return at its priority.
+      const pending = await getDb(tx).execute<{
+        id: string;
+      }>(sql`SELECT e.id FROM "AiEvaluation" e
+        WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
+          AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
+      const { markAiEvaluationWork } =
+        await import("~/server/ai/repo/ai-evaluation");
+      await markAiEvaluationWork(
+        tx,
+        pending.rows.map((row) => row.id),
+        { revive: true },
+      );
+    }
     await runAfterCommit(tx, async () => {
       await (
         await import("../background-tasks/publish")

@@ -153,8 +153,6 @@ export const aiRefreshProgress = z.object({
   blocked: z.number().int().nonnegative().default(0),
   failed: z.number().int().nonnegative().default(0),
   queued: z.number().int().nonnegative().optional(),
-  running: z.number().int().nonnegative().optional(),
-  retryWait: z.number().int().nonnegative().optional(),
   resultReady: z.number().int().nonnegative().optional(),
   obsolete: z.number().int().nonnegative().optional(),
   cancelled: z.number().int().nonnegative().optional(),

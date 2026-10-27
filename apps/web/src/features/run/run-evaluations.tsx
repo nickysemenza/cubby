@@ -41,15 +41,6 @@ const kindLabel = (entity: string | null) => {
   return parsed.success ? entitySummary[parsed.data].singular : "Other";
 };
 
-const seconds = (value: number | null) =>
-  value === null
-    ? "—"
-    : value < 10
-      ? `${Math.round(value * 10) / 10} s`
-      : value < 90
-        ? `${Math.round(value)} s`
-        : `${Math.round(value / 60)} min`;
-
 type Outcome = RunEvaluationsOut["recent"][number];
 
 function outcomeText(outcome: Outcome) {
@@ -113,7 +104,7 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
   const totals = (data?.byKind ?? []).reduce(
     (sum, kind) => ({
       settled: sum.settled + kind.completed + kind.failed + kind.obsolete,
-      waiting: sum.waiting + kind.waiting + kind.running,
+      waiting: sum.waiting + kind.waiting,
       failed: sum.failed + kind.failed,
       cancelled: sum.cancelled + kind.cancelled,
     }),
@@ -207,7 +198,6 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
               [
                 ["completed", "Done"],
                 ["waiting", "Waiting"],
-                ["running", "Running"],
                 ["failed", "Failed"],
                 ["obsolete", "Skipped"],
                 ["cancelled", "Cancelled"],
@@ -220,13 +210,6 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
               cell: (row: RunEvaluationsOut["byKind"][number]) =>
                 row[key] ? formatCount(row[key]) : "·",
             })),
-            {
-              id: "average",
-              header: "Avg time",
-              headClassName: "text-right",
-              cellClassName: "text-right font-mono tabular-nums",
-              cell: (row) => seconds(row.averageSeconds),
-            },
           ]}
         />
       ) : null}
@@ -277,7 +260,7 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
                     {outcomeText(outcome)}
                   </span>
                 }
-                trailing={`${seconds(outcome.seconds)} · ${formatRelative(outcome.settledAt, now)}`}
+                trailing={formatRelative(outcome.settledAt, now)}
               />
             );
           })}

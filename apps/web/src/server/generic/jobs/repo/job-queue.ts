@@ -70,9 +70,9 @@ function laneWhere(lanes: readonly JobLane[]): SQL {
 
 /**
  * Each listed Run's demand as (run_id, job_id) pairs: Jobs it owns by
- * `runId`, and AI evaluation Jobs, which carry no `runId` because one
- * evaluation can serve several Runs, for evaluations the Run owns or still
- * requests. A withdrawn (cancelled) request no longer counts, for its owner
+ * `runId`, and the AI evaluation drains, which carry no `runId` because one
+ * evaluation can serve several Runs, holding items for evaluations the Run
+ * owns or still requests. A withdrawn (cancelled) request no longer counts, for its owner
  * either. UNION keeps one pair however many routes reach a Job.
  */
 function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
@@ -87,13 +87,15 @@ function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
       WHERE "Job"."runId" IN (${runs})
     UNION
     SELECT e."runId", j.id FROM "AiEvaluation" e
-      JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
+      JOIN "WorkItem" item ON item.target = 'ai.evaluation' AND item.ref = e.id
+      JOIN "Job" j ON j.key = item.drain
       WHERE e."runId" IN (${runs}) AND NOT EXISTS (
         SELECT 1 FROM "AiEvaluationRequest" w WHERE w."evaluationId" = e.id
           AND w."runId" = e."runId" AND w."cancelledAt" IS NOT NULL)
     UNION
     SELECT r."runId", j.id FROM "AiEvaluationRequest" r
-      JOIN "Job" j ON j.key = 'ai-evaluation:' || r."evaluationId"::text
+      JOIN "WorkItem" item ON item.target = 'ai.evaluation' AND item.ref = r."evaluationId"
+      JOIN "Job" j ON j.key = item.drain
       WHERE r."runId" IN (${runs}) AND r."cancelledAt" IS NULL
   )`;
 }
