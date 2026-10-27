@@ -208,7 +208,10 @@ export const entityEmbedding = pgTable(
         table.model,
         table.dimensions,
       )
-      .where(sql`${table.deletedAt} IS NULL`),
+      // One selected vector per source and config; an upload in flight sits beside it.
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.artifactState} = ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
+      ),
     index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
     index("EntityEmbedding_model_idx").on(
       table.provider,
