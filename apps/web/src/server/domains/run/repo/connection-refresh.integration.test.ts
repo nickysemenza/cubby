@@ -4,10 +4,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  claimAiEvaluation,
-  publishAiEvaluation,
-} from "~/server/ai/repo/ai-evaluation";
+import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -28,12 +25,10 @@ import {
 } from "~/server/domains/connection/repo/entity-connections";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
+import { withClaimedAiEvaluation } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { systemPrincipal } from "~/server/http/authenticate";
-import {
-  reconcileDerivedRefreshInputs,
-  withJobFixtureExecution,
-} from "~/server/testing/background-queue";
+import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createInventoryFixture,
@@ -376,24 +371,11 @@ describe("connection discovery source freshness", () => {
       .from(aiEvaluation)
       .where(eq(aiEvaluation.runId, firstRun));
     if (!first) throw new Error("Synthetic connection evaluation is missing");
-    await withJobFixtureExecution(
-      ctx.db,
-      {
-        key: `ai-evaluation:${first.id}`,
-        kind: "ai.evaluation",
-        input: { evaluationId: first.id },
-      },
-      async () => {
-        const claimed = await claimAiEvaluation(ctx.db, first.id);
-        if (!claimed?.attemptToken)
-          throw new Error("Synthetic evaluation was not claimed");
-        await publishAiEvaluation(
-          ctx.db,
-          first.id,
-          claimed.attemptToken,
-          async () => ({ source: ref, discovered: true }),
-        );
-      },
+    await withClaimedAiEvaluation(ctx.db, first.id, (claimed) =>
+      publishAiEvaluation(ctx.db, first.id, claimed.attemptToken, async () => ({
+        source: ref,
+        discovered: true,
+      })),
     );
     const before = await reconciledSourceFingerprint(ctx.db, ref);
     expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBeNull();

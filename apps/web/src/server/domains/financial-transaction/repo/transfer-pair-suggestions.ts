@@ -95,9 +95,9 @@ import {
 
 const PREVIEW_CHUNK = 500;
 // Amortize Job dispatch between pages; the byte bound still limits publications.
-export const TRANSFER_PAIR_GENERATION_PAGE = 128;
-export const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
-export const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
+const TRANSFER_PAIR_GENERATION_PAGE = 128;
+const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
+const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
 /** Label pages publish this many pairs at once; database work only, model calls never occupy this lane. */
 export const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 

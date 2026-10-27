@@ -12,7 +12,8 @@ import {
   DERIVED_DRAIN_JOB_KEY,
   markAllStoredDerived,
 } from "~/server/generic/derived/repo/drain";
-import { enqueueJob, retryJob } from "~/server/generic/jobs/repo/jobs";
+import { retryJob } from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
 /** Mark every search document for rebuild; the derived drain does the work (ADR 0021). */

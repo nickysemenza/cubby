@@ -2793,8 +2793,8 @@ price stays unchanged. Subtask date inputs follow their old and new parent Task
 endpoints to the parents' projects.
 
 Generated row triggers (`server/db/derived-trigger-ddl.ts`) mark work in the
-writer's transaction. A trigger upserts `DerivedDirty` for the saved row and its
-own old and new matched values, with a fresh `DerivedTicket` sequence value; it
+writer's transaction. A trigger upserts a `derived:drain` work item (`WorkItem`) for the saved row
+and its own old and new matched values, with a fresh `WorkTicket` value; it
 never queries dependents. A save that changes no watched column marks nothing.
 A mark whose dependents are other rows is a fanout mark (`<target>@<input>`)
 the drain expands all fanout groups in a page in one set-based statement;

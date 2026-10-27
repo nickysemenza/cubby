@@ -20,7 +20,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { readDeviceBacklog } from "~/server/generic/jobs/repo/device-backlog";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,

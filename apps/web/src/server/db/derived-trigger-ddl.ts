@@ -123,13 +123,13 @@ const derivedMarkFunctionSql =
   () => `CREATE OR REPLACE FUNCTION derived_mark(p_target text, p_refs uuid[]) RETURNS void
 LANGUAGE plpgsql AS $$
 BEGIN
-  INSERT INTO "DerivedDirty" (target, ref, priority)
+  INSERT INTO "WorkItem" (target, ref, priority)
     SELECT DISTINCT p_target, r,
       CASE current_setting('cubby.derived_priority', true) WHEN '1' THEN 1 ELSE 0 END
     FROM unnest(p_refs) AS r WHERE r IS NOT NULL
   ON CONFLICT (target, ref) DO UPDATE SET
-    ticket = nextval('"DerivedTicket"'),
-    priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
+    ticket = nextval('"WorkTicket"'),
+    priority = LEAST("WorkItem".priority, EXCLUDED.priority),
     "readyAt" = now(),
     attempts = 0,
     "lastError" = NULL;

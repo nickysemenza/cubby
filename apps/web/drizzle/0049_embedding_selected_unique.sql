@@ -1,0 +1,2 @@
+DROP INDEX "EntityEmbedding_entity_model_key";--> statement-breakpoint
+CREATE UNIQUE INDEX "EntityEmbedding_entity_model_key" ON "EntityEmbedding" USING btree ("entityKind","entityId","provider","model","dimensions") WHERE "EntityEmbedding"."deletedAt" IS NULL AND "EntityEmbedding"."artifactState" = 'selected';

@@ -1,19 +1,9 @@
 import {
-  aiEvaluationState,
   aiRefreshProgress,
   aiProvenance,
   aiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import {
-  and,
-  eq,
-  getTableColumns,
-  inArray,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
@@ -22,62 +12,106 @@ import {
   liveAiRequestRun,
   PENDING_AI_STATES,
 } from "~/server/ai/repo/ai-evaluation-requests";
+import {
+  AI_EVALUATION_TARGET,
+  aiEvaluationDrain,
+  aiEvaluationAttemptToken,
+  aiEvaluationAttemptLive,
+} from "~/server/ai/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import {
   getDb,
   withTransactionDatabase,
-  withSnapshotWriteDatabase,
   runAfterCommit,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
-import {
-  aiEvaluation,
-  aiEvaluationRequest,
-  run,
-  job,
-} from "~/server/db/schema";
-import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
-import { aiEvaluationJobInput } from "~/server/generic/jobs/inputs";
+import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import {
   assertCurrentJob,
   currentJobExecution,
 } from "~/server/generic/jobs/repo/execution";
 import {
-  claimJobPage,
-  completeJobPage,
-  guardJobPage,
-  jobRunOwned,
-  releaseJobPage,
-} from "~/server/generic/jobs/repo/jobs";
+  postponeWork,
+  type WorkItem,
+} from "~/server/generic/jobs/repo/work-items";
 
 import { readAiRefreshActivation } from "./ai-refresh";
 import type {
   EvaluationPageTarget,
-  EvaluationPageOutcome,
   EvaluationPagePublication,
 } from "./evaluation-page";
 
-/** The universal Job is the only inference/apply owner. Domain rows retain evidence. */
+/** A newer attempt or a settled state owns the evaluation; this attempt writes nothing. */
+export class AiEvaluationAttemptObsoleteError extends Error {
+  constructor() {
+    super("AI evaluation attempt is obsolete");
+  }
+}
+
+/** No live Run authorizes the evaluation; its item parks until a requester resumes. */
+export class AiEvaluationUnauthorizedError extends Error {
+  constructor() {
+    super("No live requester authorizes AI evaluation");
+  }
+}
+
+/** Hold not-yet-claimed items until `until`; an attempt already holding one keeps it. */
+export async function postponeAiEvaluationWork(
+  db: Database,
+  ids: readonly string[],
+  until: Date,
+) {
+  if (!ids.length) return;
+  const result = await getDb(db).execute(sql`
+    SELECT target, ref::text AS ref, ticket, priority, attempts FROM "WorkItem"
+     WHERE target = ${AI_EVALUATION_TARGET} AND ref = ANY(${uuidArrayParam(ids)})`);
+  const items = z
+    .array(
+      z.object({
+        target: z.string(),
+        ref: z.string(),
+        ticket: z.coerce.number(),
+        priority: z.coerce.number(),
+        attempts: z.coerce.number(),
+      }),
+    )
+    .parse(result.rows);
+  await postponeWork(db, items, until);
+}
+
+export async function readAiEvaluations(db: Database, ids: readonly string[]) {
+  if (!ids.length) return [];
+  return getDb(db)
+    .select()
+    .from(aiEvaluation)
+    .where(inArray(aiEvaluation.id, [...ids]));
+}
+
+export type ClaimedAiEvaluation = typeof aiEvaluation.$inferSelect & {
+  attemptToken: string;
+  attempts: number;
+};
+
+/** Bind one drain item to its live owner; the drain's lease fences every later write. */
 export async function claimAiEvaluation(
   db: Database,
-  id: string,
+  item: WorkItem,
   requestingRunId?: string,
-) {
+): Promise<ClaimedAiEvaluation | null> {
   const execution = currentJobExecution();
-  if (
-    !execution ||
-    execution.claim.kind !== "ai.evaluation" ||
-    aiEvaluationJobInput.parse(execution.claim.input).evaluationId !== id
-  )
-    throw new Error("AI evaluation execution requires its universal Job claim");
+  if (!execution || execution.claim.kind !== "ai.evaluation")
+    throw new Error("AI evaluation execution requires its drain Job claim");
   return withTransactionDatabase(db, async (tx) => {
-    // Hold Job ownership through the evaluation write and its commit.
     await assertCurrentJob(tx);
     const [existing] = await getDb(tx)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, id));
+      .where(eq(aiEvaluation.id, item.ref));
     if (!existing || !PENDING_AI_STATES.includes(existing.state)) return null;
+    if (execution.claim.key !== aiEvaluationDrain(existing.feature).key)
+      throw new Error("AI evaluation item belongs to another drain");
     if (
       existing.executionKind === "ai_refresh" &&
       !(await readAiRefreshActivation(tx))?.enabled
@@ -88,18 +122,18 @@ export async function claimAiEvaluation(
         "provider_capacity",
       );
     const owner = await aiExecutionOwner(tx, existing, requestingRunId);
-    if (!owner)
-      throw new JobPausedError("No live requester authorizes AI evaluation");
+    if (
+      !owner ||
+      (existing.executionKind === "ai_refresh" &&
+        (owner.status !== "running" || owner.deletedAt || owner.retiredAt))
+    )
+      throw new AiEvaluationUnauthorizedError();
     const [row] = await getDb(tx)
       .update(aiEvaluation)
-      .set({
-        state: existing.result ? "result_ready" : "running",
-        runId: owner.id,
-        updatedAt: new Date(),
-      })
+      .set({ runId: owner.id, updatedAt: new Date() })
       .where(
         and(
-          eq(aiEvaluation.id, id),
+          eq(aiEvaluation.id, item.ref),
           inArray(aiEvaluation.state, PENDING_AI_STATES),
         ),
       )
@@ -107,8 +141,11 @@ export async function claimAiEvaluation(
     return row
       ? {
           ...row,
-          attemptToken: execution.claim.leaseToken,
-          attempts: execution.claim.attempts,
+          attemptToken: aiEvaluationAttemptToken(
+            execution.claim.leaseToken,
+            item.ticket,
+          ),
+          attempts: item.attempts,
         }
       : null;
   });
@@ -124,17 +161,13 @@ export async function guardAiEvaluation(
     await import("~/server/workflows/runs/execution")
   ).assertWorkflowEffect(tx);
   const execution = currentJobExecution();
-  if (
-    !execution ||
-    execution.claim.leaseToken !== token ||
-    aiEvaluationJobInput.parse(execution.claim.input).evaluationId !== id
-  )
-    throw new Error("AI evaluation attempt is obsolete");
+  if (!execution || !token.startsWith(`${execution.claim.leaseToken}/`))
+    throw new AiEvaluationAttemptObsoleteError();
   const [read] = await getDb(tx)
     .select()
     .from(aiEvaluation)
     .where(eq(aiEvaluation.id, id));
-  if (!read) throw new Error("AI evaluation attempt is obsolete");
+  if (!read) throw new AiEvaluationAttemptObsoleteError();
   const activation =
     read.executionKind === "ai_refresh"
       ? await readAiRefreshActivation(tx)
@@ -162,44 +195,66 @@ export async function guardAiEvaluation(
     .where(
       and(
         eq(aiEvaluation.id, id),
-        inArray(aiEvaluation.state, ["running", "result_ready"]),
+        inArray(aiEvaluation.state, PENDING_AI_STATES),
+        aiEvaluationAttemptLive(aiEvaluation.id, token),
       ),
     )
     .for("update");
-  if (!row) throw new Error("AI evaluation attempt is obsolete");
+  if (!row) throw new AiEvaluationAttemptObsoleteError();
   const owner = owners.find((entry) => entry.id === row.runId);
   if (
     !owner ||
     !owners.some(
       (entry) =>
         entry.status === "running" && !entry.deletedAt && !entry.retiredAt,
-    ) ||
-    (row.executionKind === "ai_refresh" &&
-      (!activation?.enabled ||
-        !dependenciesCurrent(
-          aiProvenance.parse(row.provenance),
-          activation.manifest,
-        )))
+    )
   )
-    throw new Error("AI evaluation generation or Run is obsolete");
+    throw new AiEvaluationUnauthorizedError();
+  if (row.executionKind === "ai_refresh") {
+    if (!activation?.enabled)
+      throw new JobDeferredError(
+        "Automatic AI refresh is disabled",
+        new Date(Date.now() + 120_000),
+        "provider_capacity",
+      );
+    if (
+      !dependenciesCurrent(
+        aiProvenance.parse(row.provenance),
+        activation.manifest,
+      )
+    )
+      throw new Error("AI evaluation generation is obsolete");
+  }
   return { row, target: aiEvaluationTarget.parse(row.target) };
 }
 
 /** Held only for final writes/commit, never snapshot preparation or requester wakeup. */
 async function fenceAiEvaluationActivation(
   tx: Database,
-  row: Pick<typeof aiEvaluation.$inferSelect, "executionKind" | "provenance">,
+  rows: readonly Pick<
+    typeof aiEvaluation.$inferSelect,
+    "executionKind" | "provenance"
+  >[],
 ) {
-  if (row.executionKind !== "ai_refresh") return;
+  const refresh = rows.filter((row) => row.executionKind === "ai_refresh");
+  if (!refresh.length) return;
   const activation = await readAiRefreshActivation(tx, "share");
+  if (!activation?.enabled)
+    throw new JobDeferredError(
+      "Automatic AI refresh is disabled",
+      new Date(Date.now() + 120_000),
+      "provider_capacity",
+    );
   if (
-    !activation?.enabled ||
-    !dependenciesCurrent(
-      aiProvenance.parse(row.provenance),
-      activation.manifest,
+    refresh.some(
+      (row) =>
+        !dependenciesCurrent(
+          aiProvenance.parse(row.provenance),
+          activation.manifest,
+        ),
     )
   )
-    throw new Error("AI evaluation generation or Run is obsolete");
+    throw new Error("AI evaluation generation is obsolete");
 }
 
 export async function completeAiEvaluation(
@@ -209,49 +264,59 @@ export async function completeAiEvaluation(
   receipt: unknown,
   state: "completed" | "blocked" | "obsolete" = "completed",
 ) {
-  await guardAiEvaluation(tx, id, token);
-  await settleAiEvaluation(tx, id, z.json().parse(receipt), state);
+  const { row } = await guardAiEvaluation(tx, id, token);
+  await settleAiEvaluations(tx, [
+    { evaluationId: id, state, receipt: z.json().parse(receipt) },
+  ]);
+  await fenceAiEvaluationActivation(tx, [row]);
 }
 
-type EvaluationReceipt = z.output<ReturnType<typeof z.json>>;
-
-/** Completion for a transaction that already holds `guardAiEvaluation`'s locks. */
-async function settleAiEvaluation(
+/**
+ * Domain outcomes for evaluations whose locks the caller already holds:
+ * receipts reach live requests and each requester wakes once after commit.
+ */
+export async function settleAiEvaluations(
   tx: Database,
-  id: string,
-  receipt: EvaluationReceipt,
-  state: "completed" | "blocked" | "obsolete",
+  publications: readonly EvaluationPagePublication[],
 ) {
-  const [row] = await getDb(tx)
+  if (!publications.length) return;
+  const values = sql.join(
+    publications.map(
+      (entry) =>
+        sql`(${entry.evaluationId}::uuid, ${entry.state}::text, ${JSON.stringify(z.json().parse(entry.receipt))}::jsonb)`,
+    ),
+    sql`, `,
+  );
+  await getDb(tx)
     .update(aiEvaluation)
     .set({
-      state,
-      receipt,
+      state: sql`page.state`,
+      receipt: sql`page.receipt`,
       error: null,
       updatedAt: new Date(),
     })
-    .where(eq(aiEvaluation.id, id))
-    .returning({
-      executionKind: aiEvaluation.executionKind,
-      provenance: aiEvaluation.provenance,
-    });
-  if (!row) throw new Error("AI evaluation attempt is obsolete");
+    .from(sql`(VALUES ${values}) page(id, state, receipt)`)
+    .where(sql`${aiEvaluation.id}=page.id`);
   await getDb(tx)
     .update(aiEvaluationRequest)
-    .set({ receipt })
+    .set({ receipt: sql`page.receipt` })
+    .from(sql`(VALUES ${values}) page(id, state, receipt)`)
     .where(
       and(
-        eq(aiEvaluationRequest.evaluationId, id),
+        sql`${aiEvaluationRequest.evaluationId}=page.id`,
         isNull(aiEvaluationRequest.cancelledAt),
         sql`${aiEvaluationRequest.receipt}->>'retryEvaluationId' IS NULL`,
       ),
     );
   await (
     await import("~/server/workflows/runs/wake")
-  ).wakeAiEvaluationRequesters(tx, id);
-  await fenceAiEvaluationActivation(tx, row);
+  ).wakeAiEvaluationRequesters(
+    tx,
+    publications.map((entry) => entry.evaluationId),
+  );
 }
 
+/** A single evaluation's guarded write; `continue` keeps it pending for more units. */
 export async function publishAiEvaluation<T>(
   db: Database,
   id: string,
@@ -267,14 +332,41 @@ export async function publishAiEvaluation<T>(
       // Acquire the global fence only after business work. SERIALIZABLE rejects
       // activation changed since this transaction's snapshot; the share lock
       // prevents deactivation between this check and commit.
-      // The guard above already locked this attempt's Run and row.
       if (settlement === "complete")
-        await settleAiEvaluation(tx, id, z.json().parse(result), "completed");
-      else await fenceAiEvaluationActivation(tx, row);
+        await settleAiEvaluations(tx, [
+          {
+            evaluationId: id,
+            state: "completed",
+            receipt: z.json().parse(result),
+          },
+        ]);
+      await fenceAiEvaluationActivation(tx, [row]);
       return result;
     },
     { isolationLevel: "serializable" },
   );
+}
+
+/** Stores a paid result before publication so a later failure reuses it; false when obsolete. */
+export async function storeAiEvaluationResult(
+  db: Database,
+  item: Pick<ClaimedAiEvaluation, "id" | "attemptToken">,
+  result: (typeof aiEvaluation.$inferSelect)["result"],
+) {
+  return withTransactionDatabase(db, async (tx) => {
+    await guardAiEvaluation(tx, item.id, item.attemptToken);
+    const [stored] = await getDb(tx)
+      .update(aiEvaluation)
+      .set({ state: "result_ready", result })
+      .where(
+        and(
+          eq(aiEvaluation.id, item.id),
+          inArray(aiEvaluation.state, PENDING_AI_STATES),
+        ),
+      )
+      .returning({ id: aiEvaluation.id });
+    return Boolean(stored);
+  });
 }
 
 export function aiEvaluationProgress(
@@ -291,8 +383,6 @@ export function aiEvaluationProgress(
     attempt,
     selected: current.length,
     queued: count("queued"),
-    running: count("running"),
-    retryWait: count("retry_wait"),
     resultReady: count("result_ready"),
     completed: count("completed"),
     blocked: count("blocked"),
@@ -305,13 +395,17 @@ export function aiEvaluationProgress(
   });
 }
 
-/** Live authorization shared by claim and publication, including shared demand. */
-async function pageAuthorizations(
+/** The authorizing Run per evaluation, including shared demand. */
+export async function aiEvaluationAuthorizations(
   db: Database,
-  targets: readonly EvaluationPageTarget[],
+  evaluations: readonly Pick<
+    typeof aiEvaluation.$inferSelect,
+    "id" | "runId" | "executionKind"
+  >[],
   lock: "share" | false = "share",
 ) {
-  const ids = targets.map((entry) => entry.evaluation.id);
+  if (!evaluations.length) return new Map<string, typeof run.$inferSelect>();
+  const ids = evaluations.map((item) => item.id);
   const query = getDb(db)
     .select()
     .from(run)
@@ -319,12 +413,9 @@ async function pageAuthorizations(
       or(
         inArray(
           run.id,
-          targets.map((entry) => entry.evaluation.runId),
+          evaluations.map((item) => item.runId),
         ),
-        sql`EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."runId"=${run.id} AND r."evaluationId" IN (${sql.join(
-          ids.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )}) AND r."cancelledAt" IS NULL)`,
+        sql`EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."runId"=${run.id} AND r."evaluationId" = ANY(${uuidArrayParam(ids)}) AND r."cancelledAt" IS NULL)`,
       ),
     )
     .orderBy(run.id);
@@ -347,8 +438,7 @@ async function pageAuthorizations(
       .map((owner) => [owner.id, owner]),
   );
   return new Map(
-    targets.flatMap((entry) => {
-      const item = entry.evaluation;
+    evaluations.flatMap((item) => {
       const ownRequest = requests.find(
         (request) =>
           request.evaluationId === item.id && request.runId === item.runId,
@@ -366,185 +456,19 @@ async function pageAuthorizations(
   );
 }
 
-/** Atomic set claim over existing single-slot Job inputs, without per-target claims. */
-export async function claimAiEvaluationPage(
-  db: Database,
-  anchorJobId: string,
-  limit = 100,
-): Promise<EvaluationPageTarget[]> {
-  return withTransactionDatabase(db, async (tx) => {
-    const [anchor] = await getDb(tx)
-      .select({ item: aiEvaluation, owned: jobRunOwned() })
-      .from(job)
-      .innerJoin(
-        aiEvaluation,
-        sql`${job.key} = 'ai-evaluation:' || ${aiEvaluation.id}::text`,
-      )
-      .where(eq(job.id, parseEntityId("job", anchorJobId)));
-    if (!anchor) return [];
-    const activation =
-      anchor.item.executionKind === "ai_refresh"
-        ? await readAiRefreshActivation(tx)
-        : null;
-    if (anchor.item.executionKind === "ai_refresh" && !activation?.enabled)
-      return [];
-    const claims = await claimJobPage(tx, {
-      limit,
-      where:
-        and(
-          eq(job.kind, "ai.evaluation"),
-          sql`${jobRunOwned()} = ${anchor.owned}`,
-          sql`${job.key} = 'ai-evaluation:' || (${job.input}->>'evaluationId')`,
-          // OFFSET keeps the eligible set hashed instead of comparing every Job
-          // with a materialized evaluation catalog in a nested loop.
-          sql`${job.key} IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e
-        WHERE e.feature=${anchor.item.feature} AND e."executionKind"=${anchor.item.executionKind}
-        AND e.target->>${"kind"}=${anchor.item.target.kind}
-        AND e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.retry_wait},${aiEvaluationState.enum.running},${aiEvaluationState.enum.result_ready}) OFFSET 0)`,
-        ) ?? sql`false`,
-    });
-    if (!claims.length) return [];
-    const byId = new Map(
-      claims.map((claim) => [
-        aiEvaluationJobInput.parse(claim.input).evaluationId,
-        claim,
-      ]),
-    );
-    const rows = await getDb(tx)
-      .select()
-      .from(aiEvaluation)
-      .where(inArray(aiEvaluation.id, [...byId.keys()]));
-    const targets = rows.flatMap((evaluation) => {
-      const claim = byId.get(evaluation.id);
-      return claim
-        ? [
-            {
-              claim,
-              evaluation,
-              target: aiEvaluationTarget.parse(evaluation.target),
-            },
-          ]
-        : [];
-    });
-    // Claim reads authority without a Run lock: coordinator progress must not
-    // defer an entire page. Cancellation's item locks are skipped below; final
-    // publication locks and rechecks every authorizing Run before effects.
-    const authorization = await pageAuthorizations(tx, targets, false);
-    const locked = await getDb(tx)
-      .select()
-      .from(aiEvaluation)
-      .where(
-        inArray(
-          aiEvaluation.id,
-          targets.map((entry) => entry.evaluation.id),
-        ),
-      )
-      .orderBy(aiEvaluation.id)
-      .for("update", { skipLocked: true });
-    const eligible = locked.filter(
-      (item) =>
-        authorization.has(item.id) &&
-        PENDING_AI_STATES.includes(item.state) &&
-        (item.executionKind !== "ai_refresh" ||
-          (activation?.enabled &&
-            dependenciesCurrent(item.provenance, activation.manifest))),
-    );
-    const eligibleIds = new Set(eligible.map((item) => item.id));
-    const stale = locked.filter(
-      (item) =>
-        item.executionKind === "ai_refresh" &&
-        activation?.enabled &&
-        !dependenciesCurrent(item.provenance, activation.manifest),
-    );
-    const staleIds = new Set(stale.map((item) => item.id));
-    if (stale.length) {
-      const receipt = { reason: "AI evaluation generation is obsolete" };
-      await getDb(tx)
-        .update(aiEvaluation)
-        .set({ state: "obsolete", receipt, error: null, updatedAt: new Date() })
-        .where(inArray(aiEvaluation.id, [...staleIds]));
-      await getDb(tx)
-        .update(aiEvaluationRequest)
-        .set({ receipt })
-        .where(
-          and(
-            inArray(aiEvaluationRequest.evaluationId, [...staleIds]),
-            isNull(aiEvaluationRequest.cancelledAt),
-            sql`${aiEvaluationRequest.receipt}->>'retryEvaluationId' IS NULL`,
-          ),
-        );
-      await completeJobPage(
-        tx,
-        stale.map((item) => byId.get(item.id)!),
-      );
-      // Claim owns Jobs before items; wake coordinator Jobs only after those locks release.
-      await runAfterCommit(tx, async (committed) => {
-        await (
-          await import("~/server/workflows/runs/wake")
-        ).wakeAiEvaluationRequesters(committed, [...staleIds]);
-      });
-    }
-    const rejected = targets.filter(
-      (entry) =>
-        !eligibleIds.has(entry.evaluation.id) &&
-        !staleIds.has(entry.evaluation.id),
-    );
-    await releaseJobPage(
-      tx,
-      rejected
-        .filter((entry) => authorization.has(entry.evaluation.id))
-        .map((entry) => entry.claim),
-    );
-    await releaseJobPage(
-      tx,
-      rejected
-        .filter((entry) => !authorization.has(entry.evaluation.id))
-        .map((entry) => entry.claim),
-      "paused",
-    );
-    if (!eligible.length) return [];
-    const values = sql.join(
-      eligible.map(
-        (item) =>
-          sql`(${item.id}::uuid, ${authorization.get(item.id)!.id}::uuid)`,
-      ),
-      sql`, `,
-    );
-    const claimed = await getDb(tx)
-      .update(aiEvaluation)
-      .set({
-        state: sql`CASE WHEN ${aiEvaluation.result} IS NULL THEN ${aiEvaluationState.enum.running} ELSE ${aiEvaluationState.enum.result_ready} END`,
-        runId: sql`page.run_id`,
-        updatedAt: new Date(),
-      })
-      .from(sql`(VALUES ${values}) page(id, run_id)`)
-      .where(sql`${aiEvaluation.id}=page.id`)
-      .returning(getTableColumns(aiEvaluation));
-    return claimed.map((evaluation) => ({
-      evaluation,
-      claim: byId.get(evaluation.id)!,
-      target: aiEvaluationTarget.parse(evaluation.target),
-    }));
-  });
-}
-
-/** Run -> slot -> item -> Job matches scheduling and cancellation; failures take no Run lock. */
-export async function guardAiEvaluationPage(
+/**
+ * Run -> slot -> evaluation, matching scheduling and cancellation; the drain
+ * locks the items next and the Job row last.
+ */
+export async function lockAiEvaluationPage(
   tx: Database,
   targets: readonly EvaluationPageTarget[],
-): Promise<EvaluationPageTarget[]> {
-  if (!targets.length) return [];
-  if (
-    targets.some(
-      (entry) =>
-        entry.claim.kind !== "ai.evaluation" ||
-        entry.claim.key !== `ai-evaluation:${entry.evaluation.id}` ||
-        aiEvaluationJobInput.parse(entry.claim.input).evaluationId !==
-          entry.evaluation.id,
-    )
-  )
-    throw new Error("AI page target requires its exact universal Job claim");
-  const authorization = await pageAuthorizations(tx, targets);
+) {
+  if (!targets.length) return;
+  await aiEvaluationAuthorizations(
+    tx,
+    targets.map((entry) => entry.evaluation),
+  );
   const keys = [
     ...new Set(targets.map((entry) => entry.evaluation.slotKey)),
   ].sort();
@@ -554,8 +478,8 @@ export async function guardAiEvaluationPage(
       sql`, `,
     )}]::text[]) key ORDER BY key`,
   );
-  const rows = await getDb(tx)
-    .select()
+  await getDb(tx)
+    .select({ id: aiEvaluation.id })
     .from(aiEvaluation)
     .where(
       inArray(
@@ -565,315 +489,165 @@ export async function guardAiEvaluationPage(
     )
     .orderBy(aiEvaluation.id)
     .for("update");
-  const claims = await guardJobPage(
+}
+
+/**
+ * Under `lockAiEvaluationPage`'s locks: targets still pending, authorized and
+ * on their prepared input, the ones whose refresh generation retired, and the
+ * ones no live Run authorizes.
+ */
+export async function guardAiEvaluationPage(
+  tx: Database,
+  targets: readonly EvaluationPageTarget[],
+) {
+  const none: EvaluationPageTarget[] = [];
+  if (!targets.length) return { valid: none, stale: [], unauthorized: [] };
+  const authorization = await aiEvaluationAuthorizations(
     tx,
-    targets.map((entry) => entry.claim),
+    targets.map((entry) => entry.evaluation),
+    false,
   );
-  const tokens = new Set(claims.map((claim) => claim.id));
+  const rows = new Map(
+    (
+      await getDb(tx)
+        .select()
+        .from(aiEvaluation)
+        .where(
+          inArray(
+            aiEvaluation.id,
+            targets.map((entry) => entry.evaluation.id),
+          ),
+        )
+    ).map((row) => [row.id, row]),
+  );
   const activation = targets.some(
     (entry) => entry.evaluation.executionKind === "ai_refresh",
   )
     ? await readAiRefreshActivation(tx)
     : null;
-  const valid = new Set(
-    rows
-      .filter(
-        (item) =>
-          authorization.has(item.id) &&
-          ["running", "result_ready"].includes(item.state) &&
-          (item.executionKind !== "ai_refresh" ||
-            (activation?.enabled &&
-              dependenciesCurrent(item.provenance, activation.manifest))),
-      )
-      .map((item) => item.id),
-  );
-  return targets.filter(
-    (entry) =>
-      valid.has(entry.evaluation.id) &&
-      tokens.has(entry.claim.id) &&
-      rows.some(
-        (row) =>
-          row.id === entry.evaluation.id &&
-          row.provenance.inputFingerprint ===
-            entry.evaluation.provenance.inputFingerprint &&
-          row.workKey === entry.evaluation.workKey,
-      ),
-  );
-}
-
-/** One bounded serializable business/receipt/Job commit, with target-local validity. */
-export async function publishAiEvaluationPage<O>(
-  db: Database,
-  outcomes: readonly EvaluationPageOutcome<O>[],
-  publish: (
-    tx: Database,
-    valid: readonly EvaluationPageOutcome<O>[],
-  ) => Promise<EvaluationPagePublication[]>,
-): Promise<EvaluationPagePublication[]> {
-  if (currentJobExecution())
-    throw new Error(
-      "AI page publication requires an explicit claim set without a target context",
+  const pending = targets.filter((entry) => {
+    const row = rows.get(entry.evaluation.id);
+    return (
+      row &&
+      PENDING_AI_STATES.includes(row.state) &&
+      row.workKey === entry.evaluation.workKey &&
+      row.provenance.inputFingerprint ===
+        entry.evaluation.provenance.inputFingerprint
     );
-  if (outcomes.length > 25)
-    throw new Error("AI publication chunks contain at most 25 targets");
-  if (!outcomes.length) return [];
-  return withSnapshotWriteDatabase(
-    db,
-    async (tx) => {
-      const valid = await guardAiEvaluationPage(
-        tx,
-        outcomes.map((entry) => entry.target),
-      );
-      const ids = new Set(valid.map((entry) => entry.evaluation.id));
-      const authorized = outcomes.filter((entry) =>
-        ids.has(entry.target.evaluation.id),
-      );
-      if (!authorized.length) return [];
-      const publications = await publish(tx, authorized);
-      if (
-        publications.length !== authorized.length ||
-        new Set(publications.map((entry) => entry.evaluationId)).size !==
-          publications.length ||
-        publications.some((entry) => !ids.has(entry.evaluationId))
-      )
-        throw new Error(
-          "AI page adapter returned an unexpected publication set",
-        );
-      const values = sql.join(
-        publications.map(
-          (entry) =>
-            sql`(${entry.evaluationId}::uuid, ${entry.state}::text, ${JSON.stringify(z.json().parse(entry.receipt))}::jsonb)`,
-        ),
-        sql`, `,
-      );
-      await getDb(tx)
-        .update(aiEvaluation)
-        .set({
-          state: sql`page.state`,
-          receipt: sql`page.receipt`,
-          error: null,
-          updatedAt: new Date(),
-        })
-        .from(sql`(VALUES ${values}) page(id, state, receipt)`)
-        .where(sql`${aiEvaluation.id}=page.id`);
-      await getDb(tx)
-        .update(aiEvaluationRequest)
-        .set({ receipt: sql`page.receipt` })
-        .from(sql`(VALUES ${values}) page(id, state, receipt)`)
-        .where(
-          and(
-            sql`${aiEvaluationRequest.evaluationId}=page.id`,
-            isNull(aiEvaluationRequest.cancelledAt),
-            sql`${aiEvaluationRequest.receipt}->>'retryEvaluationId' IS NULL`,
-          ),
-        );
-      await (
-        await import("~/server/workflows/runs/wake")
-      ).wakeAiEvaluationRequesters(
-        tx,
-        publications.map((entry) => entry.evaluationId),
-      );
-      // The activation fence is registered after business hooks and before Job settlement.
-      await repositoryBeforeCommit(
-        tx,
-        async () => {
-          const refresh = valid.filter(
-            (entry) => entry.evaluation.executionKind === "ai_refresh",
-          );
-          if (!refresh.length) return;
-          const activation = await readAiRefreshActivation(tx, "share");
-          if (
-            !activation?.enabled ||
-            refresh.some(
-              (entry) =>
-                !dependenciesCurrent(
-                  entry.evaluation.provenance,
-                  activation.manifest,
-                ),
-            )
-          )
-            throw new Error("AI evaluation generation or Run is obsolete");
-        },
-        { phase: "fence" },
-      );
-      await completeJobPage(
-        tx,
-        valid.map((entry) => entry.claim),
-      );
-      return publications;
-    },
-    { isolationLevel: "serializable" },
-  );
+  });
+  const current = (entry: EvaluationPageTarget) =>
+    entry.evaluation.executionKind !== "ai_refresh" ||
+    (activation?.enabled &&
+      dependenciesCurrent(entry.evaluation.provenance, activation.manifest));
+  return {
+    valid: pending.filter(
+      (entry) => authorization.has(entry.evaluation.id) && current(entry),
+    ),
+    stale: pending
+      .filter((entry) => activation?.enabled && !current(entry))
+      .map((entry) => entry.evaluation.id),
+    unauthorized: pending
+      .filter((entry) => !authorization.has(entry.evaluation.id))
+      .map((entry) => entry.evaluation.id),
+  };
 }
 
-export type EvaluationPageFailure = {
-  target: EvaluationPageTarget;
-  state: "obsolete" | "failed" | "retry_wait";
-  error: string;
-  wait?: { until: Date; reason: import("@cubby/schemas/job").JobWaitReason };
-};
-
-/** Diagnostic settlement also serializes with slot admission and queued successors. */
-export async function failAiEvaluationPage(
-  db: Database,
-  failures: readonly EvaluationPageFailure[],
+/** Completed refresh outcomes hold the activation fence at commit, before the Job fence. */
+export async function fenceAiEvaluationPage(
+  tx: Database,
+  targets: readonly EvaluationPageTarget[],
 ) {
-  if (!failures.length) return;
-  await withTransactionDatabase(db, async (tx) => {
-    const keys = [
-      ...new Set(failures.map((entry) => entry.target.evaluation.slotKey)),
-    ].sort();
-    await getDb(tx).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(key, 0)) FROM unnest(ARRAY[${sql.join(
-        keys.map((key) => sql`${key}`),
-        sql`, `,
-      )}]::text[]) key ORDER BY key`,
-    );
-    const rows = await getDb(tx)
-      .select()
-      .from(aiEvaluation)
-      .where(
-        inArray(
-          aiEvaluation.id,
-          failures.map((entry) => entry.target.evaluation.id),
-        ),
-      )
-      .orderBy(aiEvaluation.id)
-      .for("update");
-    const claims = await guardJobPage(
-      tx,
-      failures.map((entry) => entry.target.claim),
-    );
-    const tokens = new Set(claims.map((claim) => claim.id));
-    const pending = new Set(
-      rows
-        .filter((row) => ["running", "result_ready"].includes(row.state))
-        .map((row) => row.id),
-    );
-    const valid = failures.filter(
-      (entry) =>
-        pending.has(entry.target.evaluation.id) &&
-        tokens.has(entry.target.claim.id),
-    );
-    if (!valid.length) return;
-    const values = sql.join(
-      valid.map((entry) => {
-        const claim = entry.target.claim;
-        return sql`(${entry.target.evaluation.id}::uuid, ${claim.id}::uuid, ${entry.state}::text, ${entry.error}::text, ${entry.wait?.until.toISOString() ?? new Date(Date.now() + Math.min(60_000, 1000 * 2 ** claim.attempts)).toISOString()}::timestamp, ${entry.wait?.reason ?? null}::text, ${Boolean(entry.wait)}::boolean)`;
-      }),
-      sql`, `,
-    );
-    await getDb(tx)
-      .update(aiEvaluation)
-      .set({
-        state: sql`CASE WHEN page.state=${aiEvaluationState.enum.retry_wait} AND EXISTS (SELECT 1 FROM "AiEvaluation" successor WHERE successor."slotKey"=${aiEvaluation.slotKey} AND successor.id<>${aiEvaluation.id} AND successor.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.retry_wait})) THEN ${aiEvaluationState.enum.obsolete} ELSE page.state END`,
-        error: sql`page.error`,
-        updatedAt: new Date(),
-      })
-      .from(
-        sql`(VALUES ${values}) page(id, job_id, state, error, available, reason, waiting)`,
-      )
-      .where(sql`${aiEvaluation.id}=page.id`);
+  const refresh = targets
+    .filter((entry) => entry.evaluation.executionKind === "ai_refresh")
+    .map((entry) => entry.evaluation);
+  if (refresh.length)
     await repositoryBeforeCommit(
       tx,
-      async (commit) => {
-        const current = await guardJobPage(
-          commit,
-          valid.map((entry) => entry.target.claim),
-        );
-        if (current.length !== valid.length)
-          throw new Error("AI evaluation attempt is obsolete");
-        await commit
-          .update(job)
-          .set({
-            state: sql`CASE WHEN e.state=${aiEvaluationState.enum.obsolete} THEN ${aiEvaluationState.enum.completed} WHEN e.state=${aiEvaluationState.enum.failed} THEN ${aiEvaluationState.enum.failed} WHEN page.waiting THEN ${aiEvaluationState.enum.queued} ELSE ${aiEvaluationState.enum.retry_wait} END`,
-            attempts: sql`CASE WHEN page.waiting THEN greatest(0, ${job.attempts}-1) ELSE ${job.attempts} END`,
-            error: sql`page.error`,
-            availableAt: sql`page.available`,
-            waitReason: sql`page.reason`,
-            waitUntil: sql`CASE WHEN page.waiting THEN page.available ELSE NULL END`,
-            leaseToken: null,
-            leaseExpiresAt: null,
-            updatedAt: new Date(),
-          })
-          .from(
-            sql`(VALUES ${values}) page(id, job_id, state, error, available, reason, waiting) JOIN "AiEvaluation" e ON e.id=page.id`,
-          )
-          .where(sql`${job.id}=page.job_id`);
-      },
-      { phase: "publication" },
+      () => fenceAiEvaluationActivation(tx, refresh),
+      { phase: "fence" },
     );
-    // Failure takes no Run lock; release item/Job locks before touching coordinators.
-    await runAfterCommit(tx, async (committed) => {
-      await (
-        await import("~/server/workflows/runs/wake")
-      ).wakeAiEvaluationRequesters(
-        committed,
-        valid.map((entry) => entry.target.evaluation.id),
-      );
-    });
+}
+
+/** Retire a set whose generation, manifest or evidence is gone; a domain outcome, never a retry. */
+export async function obsoleteAiEvaluations(
+  tx: Database,
+  ids: readonly string[],
+  reason: string,
+) {
+  if (!ids.length) return;
+  await settleAiEvaluations(
+    tx,
+    ids.map((evaluationId) => ({
+      evaluationId,
+      state: "obsolete" as const,
+      receipt: { reason },
+    })),
+  );
+}
+
+/** Page publication in a savepoint, so a rejected publication rolls back alone. */
+export const withAiEvaluationSavepoint = <T>(
+  tx: Database,
+  work: (savepoint: Database) => Promise<T>,
+) => withTransactionDatabase(tx, work);
+
+/** An item out of attempts keeps its raw error on the evaluation its requesters read. */
+export async function failAiEvaluations(
+  tx: Database,
+  ids: readonly string[],
+  error: string,
+) {
+  if (!ids.length) return;
+  const failed = await getDb(tx)
+    .update(aiEvaluation)
+    .set({ state: "failed", error, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(aiEvaluation.id, [...ids]),
+        inArray(aiEvaluation.state, PENDING_AI_STATES),
+      ),
+    )
+    .returning({ id: aiEvaluation.id });
+  // Item locks precede the requester's Job; wake coordinators after commit.
+  await runAfterCommit(tx, async (committed) => {
+    await (
+      await import("~/server/workflows/runs/wake")
+    ).wakeAiEvaluationRequesters(
+      committed,
+      failed.map((row) => row.id),
+    );
   });
 }
 
-/** Bounded edge progress leaves each source's evaluation/Job running until its final receipt. */
-export async function publishAiEvaluationContinuation<T>(
-  db: Database,
+/**
+ * Bounded edge progress inside a fenced drain transaction: every source stays
+ * pending, authorized and on its prepared input until its final receipt.
+ */
+export async function continueAiEvaluationPage<T>(
+  tx: Database,
   targets: readonly EvaluationPageTarget[],
   work: (tx: Database) => Promise<T>,
 ): Promise<T> {
   if (!targets.length || targets.length > 25)
     throw new Error("AI continuation requires 1–25 source claims");
-  const context = currentJobExecution();
-  if (
-    context &&
-    (targets.length !== 1 || targets[0]!.claim.id !== context.claim.id)
-  )
-    throw new Error(
-      "AI continuation cannot borrow a sibling's execution context",
-    );
-  return withSnapshotWriteDatabase(
-    db,
-    async (tx) => {
-      const valid = await guardAiEvaluationPage(tx, targets);
-      if (valid.length !== targets.length)
-        throw new Error("AI evaluation generation or Run is obsolete");
-      const output = await work(tx);
-      await repositoryBeforeCommit(
-        tx,
-        async () => {
-          const activation = await readAiRefreshActivation(tx, "share");
-          if (
-            valid.some(
-              (entry) =>
-                entry.evaluation.executionKind === "ai_refresh" &&
-                (!activation?.enabled ||
-                  !dependenciesCurrent(
-                    entry.evaluation.provenance,
-                    activation.manifest,
-                  )),
-            )
-          )
-            throw new Error("AI evaluation generation or Run is obsolete");
-        },
-        { phase: "fence" },
-      );
-      await repositoryBeforeCommit(
-        tx,
-        async (commit) => {
-          if (
-            (
-              await guardJobPage(
-                commit,
-                targets.map((entry) => entry.claim),
-              )
-            ).length !== targets.length
-          )
-            throw new Error("AI evaluation attempt is obsolete");
-        },
-        { phase: "publication" },
-      );
-      return output;
-    },
-    { isolationLevel: "serializable" },
+  await lockAiEvaluationPage(tx, targets);
+  const { valid, stale, unauthorized } = await guardAiEvaluationPage(
+    tx,
+    targets,
   );
+  if (stale.length) throw new Error("AI evaluation generation is obsolete");
+  if (unauthorized.length) throw new AiEvaluationUnauthorizedError();
+  if (valid.length !== targets.length)
+    throw new AiEvaluationAttemptObsoleteError();
+  const output = await work(tx);
+  await repositoryBeforeCommit(
+    tx,
+    () =>
+      fenceAiEvaluationActivation(
+        tx,
+        valid.map((entry) => entry.evaluation),
+      ),
+    { phase: "fence" },
+  );
+  return output;
 }

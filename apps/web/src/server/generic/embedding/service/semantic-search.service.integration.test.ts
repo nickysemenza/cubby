@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { type getAiGateway, setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { entityEmbedding, job } from "~/server/db/schema";
+import { entityEmbedding, job, workItem } from "~/server/db/schema";
 import { countUnembeddedEntities } from "~/server/domains/maintenance/service/maintenance.service";
 import { productPairFingerprint } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -18,12 +18,12 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
+import { EMBEDDING_REFRESH_TARGET } from "~/server/generic/embedding/repo/embedding-drain";
 import { getStoredEmbeddingHashes } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   createInMemoryVectorizeIndex,
-  productionVectorStore,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import { requestEmbeddingRefreshWorkflow } from "~/server/generic/search/operations/search.server";
@@ -48,7 +48,7 @@ import { executeWorkflow } from "~/server/workflows/runtime";
 import {
   advanceEmbeddingFixture,
   embedFixtures,
-} from "../repo/embedding-job.fixtures";
+} from "../repo/embedding-drain.fixtures";
 
 /** Stand in for `env.AI.gateway("cubby")` (see `ai-gateway.unit.test.ts`). */
 type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
@@ -103,20 +103,30 @@ const fakeEmbeddingPort = (
   },
 });
 
-/** Exercise the real claim, upload checkpoint and selection publication. */
+/** Exercise the real refresh drain, upload receipt and selection publication. */
 const refreshOne = async (
   db: Database,
   ref: SearchableEntityRef,
   port: EmbeddingRefreshPort,
 ) => {
-  const [saved] = await enqueueEmbeddingRefs(
-    db,
-    await prepareSearchDocuments(db, [ref]),
-    port.config(),
-  );
-  if (!saved) throw new Error("Missing synthetic embedding Job");
-  await advanceEmbeddingFixture(db, saved.id, port);
-  return advanceEmbeddingFixture(db, saved.id, port);
+  await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, [ref]));
+  await advanceEmbeddingFixture(db, port);
+  await advanceEmbeddingFixture(db, port);
+  const [selected] = await getDb(db)
+    .select({
+      id: entityEmbedding.id,
+      artifactState: entityEmbedding.artifactState,
+    })
+    .from(entityEmbedding)
+    .where(
+      and(
+        eq(entityEmbedding.entityId, ref.entityId),
+        eq(entityEmbedding.artifactState, "selected"),
+        isNull(entityEmbedding.deletedAt),
+      ),
+    );
+  if (!selected) throw new Error("Synthetic embedding was not selected");
+  return selected;
 };
 
 describe("semantic search background tasks", () => {
@@ -183,12 +193,13 @@ describe("semantic search background tasks", () => {
     const jobs = await getDb(ctx.db)
       .select()
       .from(job)
-      .where(eq(job.kind, "embedding.refresh"));
+      .where(eq(job.key, "embedding:refresh"));
     expect(jobs).toHaveLength(1);
-    expect(jobs[0]?.input).toMatchObject({
-      entityKind: "product",
-      entityId: product.entityId,
-    });
+    const pending = await getDb(ctx.db)
+      .select({ ref: workItem.ref })
+      .from(workItem)
+      .where(eq(workItem.target, "embedding.refresh"));
+    expect(pending).toEqual([{ ref: product.entityId }]);
   });
 
   it("dismisses a current duplicate group and suppresses its recommendation", async () => {
@@ -321,14 +332,10 @@ describe("semantic search background tasks", () => {
     const ref = { entityKind: "product" as const, entityId: product.entityId };
 
     const first = await refreshOne(ctx.db, ref, port);
-    expect(first).toMatchObject({
-      state: "completed",
-      result: { outcome: "written" },
-    });
+    expect(first.artifactState).toBe("selected");
     // Duplicate or out-of-order delivery: the stored hash gates the provider.
     const duplicate = await refreshOne(ctx.db, ref, port);
     expect(duplicate.id).toBe(first.id);
-    expect(duplicate.state).toBe("completed");
     expect(calls).toHaveLength(1);
     expect(
       await countUnembeddedSearchDocuments(
@@ -338,7 +345,7 @@ describe("semantic search background tasks", () => {
     ).toBe(0);
   });
 
-  it("never writes a vector computed for text that has since changed", async () => {
+  it("does not upload a provider result after the source ticket changes", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Embedding before concurrent change" }),
@@ -348,29 +355,14 @@ describe("semantic search background tasks", () => {
     const config = getSemanticEmbeddingConfig();
     const vectorFor = (marker: number) =>
       Array.from({ length: config.dimensions }, () => marker);
-
-    // Both writers share the remote index; their physical identities must remain distinct.
-    const index = createInMemoryVectorizeIndex();
-    setCfEnv(fromPartial<Env>({ VECTORIZE: index }));
-    const sharedVectorStore = productionVectorStore;
-
-    // Writer B: a second, independent refresh call that runs to completion
-    // (new text, new vector, new row) while writer A's provider call for the
-    // OLD text is still in flight — see `writerAPort.embed` below.
-    const writerBPort: EmbeddingRefreshPort = {
-      configured: () => true,
-      config: getSemanticEmbeddingConfig,
-      vectorStore: sharedVectorStore,
-      embed: async (texts) => texts.map(() => vectorFor(0.9)),
-    };
-
+    const remote = fakeVectorStore();
     let racedOnce = false;
     const writerAPort: EmbeddingRefreshPort = {
       configured: () => true,
       config: getSemanticEmbeddingConfig,
-      vectorStore: sharedVectorStore,
-      // Writer B publishes the new input while A's provider is still in flight.
+      vectorStore: remote,
       embed: async (texts) => {
+        const staleResult = !racedOnce;
         if (!racedOnce) {
           racedOnce = true;
           await renameFixtureRaw(
@@ -380,17 +372,22 @@ describe("semantic search background tasks", () => {
             "Embedding after concurrent change",
           );
           await refreshSearchDocument(ctx.db, "product", product.entityId);
-          await embedFixtures(ctx.db, [ref], writerBPort);
-          return texts.map(() => vectorFor(0.1));
+          await enqueueEmbeddingRefs(
+            ctx.db,
+            await prepareSearchDocuments(ctx.db, [ref]),
+          );
         }
-        return texts.map(() => vectorFor(0.9));
+        return texts.map(() => vectorFor(staleResult ? 0.1 : 0.9));
       },
     };
 
-    expect(await refreshOne(ctx.db, ref, writerAPort)).toMatchObject({
-      state: "cancelled",
-      error: "Embedding source superseded",
-    });
+    await enqueueEmbeddingRefs(
+      ctx.db,
+      await prepareSearchDocuments(ctx.db, [ref]),
+    );
+    await advanceEmbeddingFixture(ctx.db, writerAPort);
+    expect(remote.vectors.size).toBe(0);
+    await embedFixtures(ctx.db, [ref], writerAPort);
 
     const currentText = await getSearchDocumentEmbeddingText(
       ctx.db,
@@ -412,12 +409,12 @@ describe("semantic search background tasks", () => {
         ),
       );
     expect(selected).toBeDefined();
-    expect(selected ? index.vectors.get(selected.id)?.values : null).toEqual(
+    expect(selected ? remote.vectors.get(selected.id) : null).toEqual(
       vectorFor(0.9),
     );
   });
 
-  it("vector upsert throws: no EntityEmbedding hash row is written, and the error propagates", async () => {
+  it("backs off a failed vector upload without selecting its prepared artifact", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Vector store outage" }),
@@ -443,9 +440,22 @@ describe("semantic search background tasks", () => {
         texts.map(() => Array(config.dimensions).fill(0.5)),
     };
 
-    const result = await refreshOne(ctx.db, ref, port);
-    expect(result.state).toBe("retry_wait");
-    expect(result.error).toContain("vectorize outage");
+    await enqueueEmbeddingRefs(
+      ctx.db,
+      await prepareSearchDocuments(ctx.db, [ref]),
+    );
+    await advanceEmbeddingFixture(ctx.db, port);
+    const [work] = await getDb(ctx.db)
+      .select()
+      .from(workItem)
+      .where(
+        and(
+          eq(workItem.target, EMBEDDING_REFRESH_TARGET),
+          eq(workItem.ref, ref.entityId),
+        ),
+      );
+    expect(work?.attempts).toBe(1);
+    expect(work?.lastError).toContain("vectorize outage");
 
     const stored = await getStoredEmbeddingHashes(ctx.db, [ref], config);
     expect(
@@ -453,8 +463,7 @@ describe("semantic search background tasks", () => {
     ).toBeUndefined();
   });
 
-  // Repeated admission cannot create a second paid execution for a content key.
-  it("coalesces duplicate refs into immutable Job execution", async () => {
+  it("coalesces duplicate source admissions into one refresh item each", async () => {
     const products = await Promise.all(
       Array.from({ length: 10 }, (_, index) =>
         createProduct(
@@ -473,11 +482,11 @@ describe("semantic search background tasks", () => {
     const calls: string[][] = [];
     const port = fakeEmbeddingPort(calls);
     const saved = await embedFixtures(ctx.db, [...refs, first], port);
-    expect(new Set(saved.map((execution) => execution.id)).size).toBe(10);
-    expect(calls).toHaveLength(10);
+    expect(saved).toHaveLength(10);
+    expect(calls).toHaveLength(1);
     expect(await countUnembeddedSearchDocuments(ctx.db, port.config())).toBe(0);
     await embedFixtures(ctx.db, refs, port);
-    expect(calls).toHaveLength(10);
+    expect(calls).toHaveLength(1);
   });
 
   it("pages the unembedded selection with a keyset cursor", async () => {

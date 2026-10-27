@@ -246,24 +246,24 @@ export default defineEntity({
         },
         validation: readOnly(jobWaitReason.nullable()),
       },
-      ...["waitUntil", "lastUsefulProgressAt", "lastClaimedAt"].map((key) => ({
+      ...["waitUntil", "lastClaimedAt"].map((key) => ({
         key,
         kind: "timestamp" as const,
         nullable: true,
       })),
       { key: "availableAt", kind: "timestamp" },
       { key: "leaseToken", kind: "identifier", nullable: true },
-      { key: "admissionToken", kind: "identifier", nullable: true },
       ...["input", "cursor", "result"].map((key) => ({
         key,
         kind: "json" as const,
         nullable: key !== "input",
       })),
-      ...["generation", "priority", "maxAttempts"].map((key) => ({
+      ...["generation", "priority"].map((key) => ({
         key,
         kind: "number" as const,
       })),
-      { key: "recoveryTimeoutMs", kind: "number", nullable: true },
+      // Null never exhausts: subject-owned work and drains retry with backoff.
+      { key: "maxAttempts", kind: "number", nullable: true },
     ],
     storage: [
       { key: "id", specialized: "primary-key:JobId" },
@@ -287,11 +287,8 @@ export default defineEntity({
       { key: "priority", defaultValue: 0 },
       { key: "attempts", defaultValue: 0 },
       { key: "maxAttempts", defaultValue: 3 },
-      "recoveryTimeoutMs",
-      "lastUsefulProgressAt",
       { key: "availableAt", defaultSql: "now()" },
       "leaseToken",
-      "admissionToken",
       "leaseExpiresAt",
       "lastClaimedAt",
       "error",
@@ -346,20 +343,7 @@ export default defineEntity({
       { name: "Job_run_idx", on: ["runId"] },
       { name: "Job_subject_idx", on: ["subjectKind", "subjectId"] },
       { name: "Job_kind_claimed_idx", on: ["kind", "lastClaimedAt"] },
-      // Recent-claim windows (throughput, queue health) across every kind.
-      { name: "Job_claimed_idx", on: ["lastClaimedAt"] },
       { name: "Job_kind_state_idx", on: ["kind", "state", "availableAt"] },
-      // Visible-list positions count only the earlier prefix of one kind.
-      {
-        name: "Job_kind_position_idx",
-        on: [
-          "kind",
-          { sql: "(-{priority})" },
-          "updatedAt",
-          "availableAt",
-          "id",
-        ],
-      },
     ],
     checks: [
       { name: "Job_state_check", column: "state", bare: true },
@@ -371,15 +355,9 @@ export default defineEntity({
         name: "Job_subject_check",
         sql: "({subjectKind} IS NULL) = ({subjectId} IS NULL)",
       },
-      // Retired kinds have no handler; a pre-cutover Worker's write fails here
-      // instead of landing as work nothing serves (ADR 0021 retired refresh.family).
-      {
-        name: "Job_kind_retired_check",
-        sql: "{kind} NOT IN ('image.processing', 'refresh.family')",
-      },
       {
         name: "Job_attempts_check",
-        sql: "{attempts} >= 0 AND {maxAttempts} > 0",
+        sql: "{attempts} >= 0 AND coalesce({maxAttempts}, 1) > 0",
       },
     ],
   },
@@ -449,19 +427,13 @@ export default defineEntity({
   search: false,
   relations: [
     queryRelationship({
-      key: "requesting-runs",
-      label: "Requested by Runs",
-      target: "run",
-      query: "evaluationRuns",
-    }),
-    queryRelationship({
       key: "image-execution",
       label: "Image processing",
       target: "imageJob",
       query: "imageExecution",
       cardinality: "one",
     }),
-    ...localRelationshipEntities.flatMap((target) => [
+    ...localRelationshipEntities.map((target) =>
       queryRelationship({
         key: `subject-${target}`,
         label: "Subject",
@@ -469,13 +441,7 @@ export default defineEntity({
         query: `jobSubject${target}`,
         cardinality: "one",
       }),
-      queryRelationship({
-        key: `evaluation-${target}`,
-        label: "Evaluation target",
-        target,
-        query: `evaluationTarget${target}`,
-      }),
-    ]),
+    ),
     {
       key: "run",
       label: "Run",

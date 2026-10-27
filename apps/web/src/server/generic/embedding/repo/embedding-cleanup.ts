@@ -1,60 +1,62 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
-import { jobState } from "@cubby/schemas/job";
-import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import {
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { markWork } from "~/server/generic/jobs/repo/work-items";
 
-/** Physical IDs are never selected again after retirement, including explicit retries. */
+export const EMBEDDING_CLEANUP_DRAIN = {
+  key: "embedding:cleanup",
+  kind: "embedding.cleanup",
+} as const;
+export const EMBEDDING_CLEANUP_TARGET = "embedding.cleanup";
+
+/** Mark retired physical vectors for the cleanup drain, leaving retry timing on each item. */
 async function prepareEmbeddingCleanupPage(
   db: Database,
   after?: string,
   limit = 25,
 ) {
-  const rows = await getDb(db).execute<{
-    id: string;
-    subjectKind: string | null;
-    subjectId: string | null;
-  }>(sql`
-    SELECT physical.id, coalesce(e."entityKind", j."subjectKind") AS "subjectKind", coalesce(e."entityId"::text, j."subjectId") AS "subjectId" FROM (
-      SELECT e.id FROM "EntityEmbedding" e
-      WHERE (e."deletedAt" IS NOT NULL OR e."artifactState" IN (${embeddingArtifactState.enum.retired},${embeddingArtifactState.enum.failed})) AND e."deletionId" IS NULL
-      UNION
-      SELECT j.id FROM "Job" j WHERE j.kind='embedding.refresh' AND j.state IN (${jobState.enum.completed},${jobState.enum.failed},${jobState.enum.cancelled})
-    ) physical
-    LEFT JOIN "EntityEmbedding" e ON e.id=physical.id
-    LEFT JOIN "Job" j ON j.id=physical.id
-    WHERE ${after ? sql`physical.id > ${after}::uuid` : sql`true`}
-      AND NOT EXISTS (SELECT 1 FROM "EntityEmbedding" e WHERE e.id=physical.id AND e."artifactState"=${embeddingArtifactState.enum.selected} AND e."deletedAt" IS NULL)
-      AND NOT EXISTS (SELECT 1 FROM "Job" active WHERE active.id=physical.id AND active.state IN (${jobState.enum.queued},${jobState.enum.running},${jobState.enum.retry_wait},${jobState.enum.paused}))
-      AND NOT EXISTS (SELECT 1 FROM "Job" cleanup WHERE cleanup.key='embedding-cleanup:' || physical.id::text)
-    ORDER BY physical.id LIMIT ${limit}`);
+  const rows = await getDb(db).execute<{ id: string }>(sql`
+    SELECT e.id FROM "EntityEmbedding" e
+    WHERE (e."deletedAt" IS NOT NULL OR e."artifactState" IN (
+        ${embeddingArtifactState.enum.retired},
+        ${embeddingArtifactState.enum.failed}
+      ))
+      AND e."deletionId" IS NULL
+      AND e."artifactState" <> ${embeddingArtifactState.enum.selected}
+      AND NOT (e."artifactState" = ${embeddingArtifactState.enum.selected} AND e."deletedAt" IS NULL)
+      AND ${after ? sql`e.id > ${after}::uuid` : sql`true`}
+      AND NOT EXISTS (
+        SELECT 1 FROM "WorkItem" w
+        WHERE w.target = ${EMBEDDING_CLEANUP_TARGET} AND w.ref = e.id
+      )
+    ORDER BY e.id LIMIT ${limit}`);
+  const ids = rows.rows.map(({ id }) => id);
   return {
     nextCursor: rows.rows.length === limit ? rows.rows.at(-1)?.id : undefined,
-    pending: rows.rows.length,
-    publish: async (tx: Database) => {
-      for (const row of rows.rows)
-        await enqueueJob(tx, {
-          key: `embedding-cleanup:${row.id}`,
-          kind: "embedding.cleanup",
-          subjectKind: row.subjectKind,
-          subjectId: row.subjectId,
-          input: { artifactId: row.id },
-        });
-    },
+    pending: ids.length,
+    publish: (tx: Database) =>
+      markWork(
+        tx,
+        EMBEDDING_CLEANUP_DRAIN,
+        ids.map((id) => ({ target: EMBEDDING_CLEANUP_TARGET, ref: id })),
+      ),
   };
 }
 
-/** Queue one page of retired artifacts for physical deletion, in its own transaction. */
+/** Queue one bounded page of artifacts that have no outstanding deletion receipt. */
 export async function queueEmbeddingCleanupPage(
   db: Database,
   after?: string,
   limit = 25,
 ) {
   const prepared = await prepareEmbeddingCleanupPage(db, after, limit);
-  await withTransactionDatabase(db, (tx) => prepared.publish(tx));
+  await repositoryTransactionDatabase(db, prepared.publish);
   return { queued: prepared.pending, nextCursor: prepared.nextCursor };
 }
 
@@ -62,18 +64,61 @@ export async function assertEmbeddingArtifactCanBeDeleted(
   db: Database,
   artifactId: string,
 ) {
-  const [selected] = await getDb(db)
-    .select({ id: entityEmbedding.id })
+  const [artifact] = await getDb(db)
+    .select({
+      id: entityEmbedding.id,
+      artifactState: entityEmbedding.artifactState,
+      deletedAt: entityEmbedding.deletedAt,
+      deletionId: entityEmbedding.deletionId,
+    })
+    .from(entityEmbedding)
+    .where(eq(entityEmbedding.id, artifactId))
+    .limit(1);
+  if (!artifact || artifact.deletionId) return false;
+  if (
+    artifact.artifactState === embeddingArtifactState.enum.selected &&
+    !artifact.deletedAt
+  )
+    throw new Error("Cannot delete a selected embedding artifact");
+  if (
+    artifact.artifactState !== embeddingArtifactState.enum.retired &&
+    artifact.artifactState !== embeddingArtifactState.enum.failed &&
+    !artifact.deletedAt
+  )
+    return false;
+  return true;
+}
+
+export async function findDeletableEmbeddingArtifactIds(
+  db: Database,
+  ids: readonly string[],
+) {
+  if (!ids.length) return new Set<string>();
+  const rows = await getDb(db)
+    .select({
+      id: entityEmbedding.id,
+      artifactState: entityEmbedding.artifactState,
+      deletedAt: entityEmbedding.deletedAt,
+      deletionId: entityEmbedding.deletionId,
+    })
     .from(entityEmbedding)
     .where(
       and(
-        eq(entityEmbedding.id, artifactId),
-        eq(entityEmbedding.artifactState, "selected"),
-        isNull(entityEmbedding.deletedAt),
+        inArray(entityEmbedding.id, [...ids]),
+        isNull(entityEmbedding.deletionId),
       ),
-    )
-    .limit(1);
-  if (selected) throw new Error("Cannot delete a selected embedding artifact");
+    );
+  return new Set(
+    rows
+      .filter(
+        (row) =>
+          row.artifactState !== embeddingArtifactState.enum.selected &&
+          (row.deletedAt !== null ||
+            row.artifactState === embeddingArtifactState.enum.retired ||
+            row.artifactState === embeddingArtifactState.enum.failed),
+      )
+      .map((row) => row.id),
+  );
 }
 
 export async function recordEmbeddingDeletion(
@@ -87,13 +132,14 @@ export async function recordEmbeddingDeletion(
     .where(
       and(
         eq(entityEmbedding.id, artifactId),
-        // Both retirement cases belong to this artifact, never all deleted rows.
+        isNull(entityEmbedding.deletionId),
+        ne(entityEmbedding.artifactState, embeddingArtifactState.enum.selected),
         or(
-          ne(
-            entityEmbedding.artifactState,
-            embeddingArtifactState.enum.selected,
-          ),
           isNotNull(entityEmbedding.deletedAt),
+          inArray(entityEmbedding.artifactState, [
+            embeddingArtifactState.enum.retired,
+            embeddingArtifactState.enum.failed,
+          ]),
         ),
       ),
     );

@@ -2,8 +2,9 @@ import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 
 import {
   publishAiEvaluation,
-  type claimAiEvaluation,
+  type ClaimedAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
+import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { withRunEvaluation } from "~/server/domains/run/repo/execution-context";
@@ -29,11 +30,10 @@ export type ReclassificationPorts = Pick<
 
 export async function executeReclassificationTarget(
   db: Database,
-  evaluation: NonNullable<Awaited<ReturnType<typeof claimAiEvaluation>>>,
+  evaluation: ClaimedAiEvaluation,
   ports: ReclassificationPorts = {},
 ) {
   const token = evaluation.attemptToken;
-  if (!token) throw new Error("Reclassification has no attempt token");
   const { owner, current } = await loadReclassificationTarget(db, evaluation);
   if (!owner) throw new Error("Reclassification Run no longer exists");
   const input = mailReclassifyRunInput.parse(owner.input);
@@ -112,7 +112,13 @@ export async function executeReclassificationTarget(
     });
   });
   const published = await readEvaluationState(db, evaluation.id);
-  if (published && !["running", "result_ready"].includes(published)) return;
+  // A restart re-marked the item with its latest evidence.
+  if (
+    published &&
+    (!PENDING_AI_STATES.includes(published.state) ||
+      published.restarts > evaluation.restarts)
+  )
+    return;
   const after = await readReclassifiedEmail(db, current.id);
   if (
     after &&

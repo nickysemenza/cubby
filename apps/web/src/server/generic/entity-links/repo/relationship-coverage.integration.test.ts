@@ -4,18 +4,12 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import { getDb } from "~/server/db/helpers";
-import {
-  aiEvaluationRequest,
-  photoRunImage,
-  product,
-  run,
-} from "~/server/db/schema";
+import { photoRunImage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getEntityGraphExplore } from "~/server/generic/entity-graph/repo/entity-graph-explore";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   createImageFixture,
   createProductIdentityFixture,
@@ -36,100 +30,6 @@ describe("relationship evidence coverage", () => {
     if (!row) throw new Error("Synthetic Run missing");
     return row;
   };
-
-  it("retains all shared request Runs, both Product-pair targets and deleted target evidence", async () => {
-    const first = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic first target" }),
-      ctx.actor,
-    );
-    const second = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic second target" }),
-      ctx.actor,
-    );
-    const requester = await makeRun();
-    const other = await makeRun();
-    const input = {
-      runId: requester.id,
-      executionKind: "suggestion_sweep" as const,
-      shareKey: "synthetic-shared-pair",
-      feature: "synthetic-pair",
-      target: {
-        kind: "product_pair" as const,
-        entity: "product" as const,
-        recordId: first.entityId,
-        otherId: second.entityId,
-        field: null,
-        assessmentIds: [],
-      },
-      provenance: {
-        dependencies: [],
-        inputFingerprint: "synthetic",
-        optionFingerprint: "synthetic",
-        model: null,
-      },
-      snapshot: {},
-    };
-    const evaluation = await enqueueAiEvaluation(ctx.db, input);
-    expect(
-      (await enqueueAiEvaluation(ctx.db, { ...input, runId: other.id })).id,
-    ).toBe(evaluation.id);
-    const execution = await enqueueJob(ctx.db, {
-      key: `ai-evaluation:${evaluation.id}`,
-      kind: "ai.evaluation",
-      input: { evaluationId: evaluation.id },
-    });
-    expect(execution.runId).toBeNull();
-    const source = {
-      entityKind: "job" as const,
-      entityId: execution.shortcode,
-    };
-    const requests = await getConnectedRecords(ctx.db, {
-      source,
-      viewKey: "entity:run",
-    });
-    expect(requests.items.map((item) => item.target.entityId).sort()).toEqual(
-      [requester.shortcode, other.shortcode].sort(),
-    );
-    const targets = await getConnectedRecords(ctx.db, {
-      source,
-      viewKey: "entity:product",
-    });
-    expect(targets.items.map((item) => item.target.entityId).sort()).toEqual(
-      [first.id, second.id].sort(),
-    );
-    const inverse = await getConnectedRecords(ctx.db, {
-      source: { entityKind: "product", entityId: second.id },
-      viewKey: "entity:job",
-    });
-    expect(inverse.items.map((item) => item.target.entityId)).toContain(
-      execution.shortcode,
-    );
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, second.entityId));
-    const retained = await getConnectedRecords(ctx.db, {
-      source,
-      viewKey: "entity:product",
-    });
-    expect(
-      retained.items.find((item) => item.target.entityId === second.id)?.target
-        .label,
-    ).toContain("(deleted)");
-    // Older retained evaluations can predate per-request membership.
-    await getDb(ctx.db)
-      .delete(aiEvaluationRequest)
-      .where(eq(aiEvaluationRequest.evaluationId, evaluation.id));
-    const legacy = await getConnectedRecords(ctx.db, {
-      source,
-      viewKey: "entity:run",
-    });
-    expect(legacy.items.map((item) => item.target.entityId)).toEqual([
-      requester.shortcode,
-    ]);
-  });
 
   it("connects polymorphic subjects in both directions and through a third-level route", async () => {
     const vendor = await createRepoEntity(ctx, "vendor", {

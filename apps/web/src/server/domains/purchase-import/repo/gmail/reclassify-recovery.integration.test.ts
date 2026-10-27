@@ -132,23 +132,15 @@ describe("durable member reclassification recovery", () => {
         recorded!.shortcode,
         f.owner,
       );
+      // The drain reads up to two Emails concurrently, so another may already
+      // have published its partial receipt.
       expect(recovered?.receipts?.complete).toBe(false);
-      expect(recovered?.receipts?.results).toHaveLength(
-        id === first.messageId ? 0 : 1,
-      );
+      expect(recovered?.receipts?.results.length).toBeLessThan(2);
       const status = await f.readStatus(recorded!.shortcode);
       expect(status.isError).not.toBe(true);
       expect(status.structuredContent).toMatchObject({
         status: "running",
-        mailReclassification: {
-          receipts: {
-            complete: false,
-            results:
-              id === first.messageId
-                ? []
-                : [{ id: first.shortcode, outcome: "replaced" }],
-          },
-        },
+        mailReclassification: { receipts: { complete: false } },
       });
       return original(id);
     });

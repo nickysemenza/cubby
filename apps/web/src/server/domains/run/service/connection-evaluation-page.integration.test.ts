@@ -14,7 +14,7 @@ import {
   email,
   financialTransaction,
   purchase as purchaseTable,
-  job,
+  workItem,
   orderMailEvent,
   run,
 } from "~/server/db/schema";
@@ -22,6 +22,7 @@ import * as connectionRepo from "~/server/domains/connection/repo/entity-connect
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
+import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -40,7 +41,6 @@ import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
 
 // Failure modes: each connection evaluation pays its own claim, guard and
 // settlement (a sweep of ~55k sources took days); a page publishes a source
@@ -126,18 +126,13 @@ describe("connection evaluation pages", () => {
   }
 
   async function runPage(evaluationIds: readonly string[]) {
-    const [anchor] = await getDb(ctx.db)
-      .select({ id: job.id })
-      .from(job)
-      .where(
-        inArray(
-          job.key,
-          evaluationIds.map((id) => `ai-evaluation:${id}`),
-        ),
-      )
-      .limit(1);
-    if (!anchor) throw new Error("Synthetic page anchor missing");
-    return aiEvaluationJobHandler.advancePage(ctx.db, anchor.id);
+    const result = await drainAiEvaluations(
+      ctx.db,
+      evaluationIds,
+      {},
+      { pages: 1 },
+    );
+    return { result: result[0] };
   }
 
   const states = async (ids: readonly string[]) =>
@@ -316,14 +311,9 @@ describe("connection evaluation pages", () => {
     });
     const ids = await schedule([message.message]);
     await getDb(ctx.db)
-      .update(job)
-      .set({ attempts: 2, maxAttempts: 3 })
-      .where(
-        inArray(
-          job.key,
-          ids.map((id) => `ai-evaluation:${id}`),
-        ),
-      );
+      .update(workItem)
+      .set({ attempts: 2 })
+      .where(inArray(workItem.ref, ids));
     const publish = connectionRepo.publishPreparedEntityConnections;
     vi.spyOn(
       connectionRepo,

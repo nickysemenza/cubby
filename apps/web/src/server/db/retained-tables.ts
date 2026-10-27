@@ -1,15 +1,12 @@
-export {
-  derivedDirty,
-  derivedTicket,
-  derivedValue,
-} from "./derived-value-schema";
+export { derivedValue } from "./derived-value-schema";
 export { assessmentEmailLink } from "./assessment-email-link-schema";
 export { assessmentCorrectionLock } from "./assessment-correction-lock-schema";
 export {
   job,
-  jobInvalidation,
   jobInvalidationCapture,
   jobLaneAdmission,
+  workItem,
+  workTicket,
 } from "./job-schema";
 import {
   aiAnalysisEntityKind,
@@ -188,7 +185,7 @@ export const entityEmbedding = pgTable(
     dimensions: integer("dimensions").notNull(),
     artifactState: text("artifactState")
       .notNull()
-      .default("legacy")
+      .default("prepared")
       .$type<z.infer<typeof embeddingArtifactState>>(),
     /** Old Worker bookkeeping never changes this artifact's captured input hash. */
     artifactHash: text("artifactHash"),
@@ -211,7 +208,10 @@ export const entityEmbedding = pgTable(
         table.model,
         table.dimensions,
       )
-      .where(sql`${table.deletedAt} IS NULL`),
+      // One selected vector per source and config; an upload in flight sits beside it.
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.artifactState} = ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
+      ),
     index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
     index("EntityEmbedding_model_idx").on(
       table.provider,

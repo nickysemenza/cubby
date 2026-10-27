@@ -10,7 +10,7 @@ import {
 } from "~/server/db/helpers";
 import { job, product } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,

@@ -6,10 +6,8 @@ import { getExecutionCtx, getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import {
-  recordJobInvalidation,
-  repeatJob,
-} from "~/server/generic/jobs/repo/jobs";
+import { repeatJob } from "~/server/generic/jobs/repo/producer";
+import { wakeJob } from "~/server/generic/jobs/repo/producer";
 
 import type { ImageProcessingCompanionRpc } from "../operations/rpc";
 
@@ -77,17 +75,12 @@ const DEVICE_WAKE_KEY = "image.device.wake";
 
 /**
  * Arm the wake in the caller's transaction whenever parked device work gets
- * a later availability or a lease. A durable invalidation (restarting) of
- * the wake's own Job, so an arm that lands while a wake page runs supersedes
- * it and is never lost; the woken page recomputes its schedule from Job rows.
+ * a later availability or a lease. An arm that lands while a wake page runs
+ * stays unobserved, so the wake runs again after that page and recomputes its
+ * schedule from Job rows.
  */
 export async function armDeviceWake(db: Database) {
-  await recordJobInvalidation(db, {
-    key: DEVICE_WAKE_KEY,
-    kind: DEVICE_WAKE_KEY,
-    input: {},
-    restartsPass: true,
-  });
+  await wakeJob(db, { key: DEVICE_WAKE_KEY, kind: DEVICE_WAKE_KEY, input: {} });
 }
 
 /**

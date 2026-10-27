@@ -57,11 +57,7 @@ const searchSink = (entity: SearchableEntity) =>
       };
       await publishPreparedSearchDocuments(tx, current);
       if (productionEmbeddingRefreshPort.configured())
-        await enqueueEmbeddingRefs(
-          tx,
-          current,
-          productionEmbeddingRefreshPort.config(),
-        );
+        await enqueueEmbeddingRefs(tx, current);
       return ids;
     },
   });

@@ -296,7 +296,7 @@ describe("category-based service Products", () => {
       // An unsuccessful refresh retains one complete published tuple for display and sorting.
       await getDb(ctx.db).execute(sql`UPDATE "Expense" SET cost = 190
         WHERE "productId" = ${service.entityId} AND cost = 90`);
-      await getDb(ctx.db).execute(sql`UPDATE "DerivedDirty"
+      await getDb(ctx.db).execute(sql`UPDATE "WorkItem"
         SET "lastError" = 'Synthetic Cost refresh failure', "readyAt" = now() + interval '1 hour'
         WHERE target = 'product.cost' AND ref = ${service.entityId}`);
       const readCanonical = async () =>
@@ -346,8 +346,7 @@ describe("category-based service Products", () => {
         service.id,
         physical.id,
       ]);
-      await getDb(ctx.db)
-        .execute(sql`UPDATE "DerivedDirty" SET "readyAt" = now()
+      await getDb(ctx.db).execute(sql`UPDATE "WorkItem" SET "readyAt" = now()
         WHERE target = 'product.cost' AND ref = ${service.entityId}`);
       await drainStoredDerived(ctx.db);
       const refreshed = await readCanonical();

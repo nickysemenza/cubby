@@ -18,11 +18,7 @@ import {
 } from "@cubby/schemas/run-work-progress";
 import { z } from "zod";
 
-import type {
-  JobFacts,
-  JobListOut,
-  LimitBinding,
-} from "~/contracts/job.contract";
+import type { JobFacts, JobListOut } from "~/contracts/job.contract";
 import type {
   RunDecisionStatus,
   RunDetailStep,
@@ -76,7 +72,7 @@ const PHASE_OF = {
 
 /** Why a step or Job is not moving, with the raw detail it was stored with. */
 export type StepWait = {
-  reason: JobWaitReason | "behind" | "retry" | "paused";
+  reason: JobWaitReason | "retry" | "paused";
   label: string;
   /** "until 11:42", "attempt 2 of 3": the quiet line beside the pill. */
   until: string | null;
@@ -147,9 +143,6 @@ export const humanizeKey = (key: string) => {
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
-/** `image.process` Jobs read as "image Jobs" in wait copy. */
-const jobKindNoun = (kind: string) => kind.split(".")[0] ?? kind;
-
 const WAIT_LABEL = {
   provider_capacity: "AI capacity",
   ai_funding_window: "Funding window",
@@ -173,15 +166,8 @@ export function jobWait(job: JobFacts | null): StepWait | null {
     return {
       reason: "retry",
       label: "Retrying",
-      until: `attempt ${job.attempts + 1} of ${job.maxAttempts} at ${clock(job.availableAt)}`,
+      until: `attempt ${job.attempts + 1} of ${job.maxAttempts ?? "unbounded"} at ${clock(job.availableAt)}`,
       raw: job.error,
-    };
-  if (job.state === "queued" && job.ahead)
-    return {
-      reason: "behind",
-      label: `Waiting behind ${job.ahead.toLocaleString("en-US")} ${jobKindNoun(job.kind)} Jobs`,
-      until: `${job.ahead.toLocaleString("en-US")} same-kind Jobs ahead`,
-      raw: null,
     };
   return null;
 }
@@ -346,8 +332,6 @@ export type RunOverview = {
   current: RunStepView | null;
   currentIndex: number;
   segments: StepSegment[];
-  /** What sets the Run's speed now (the limits catalog's evaluation). */
-  binding: LimitBinding | null;
 };
 
 export function runOverview(
@@ -407,26 +391,7 @@ export function runOverview(
         step.mode !== "count" &&
         (step.phase === "running" || step.phase === "waiting"),
     })),
-    binding: jobs?.binding ?? null,
   };
-}
-
-const lowerFirst = (text: string) =>
-  /^[A-Z][a-z]/.test(text)
-    ? text.charAt(0).toLowerCase() + text.slice(1)
-    : text;
-
-/**
- * The one line a RunStep card shows beside rate and ETA ("Speed set by page
- * work: preparation 61% of page time · 106 queries/page").
- */
-export function speedSetBy(binding: LimitBinding | null): string | null {
-  if (!binding) return null;
-  if (binding.status === "binding")
-    return `Speed set by ${lowerFirst(binding.label)}: ${binding.evidence}`;
-  if (binding.status === "unknown")
-    return "Speed set by: unknown — no recent samples";
-  return `No limit is binding: ${lowerFirst(binding.reason)}`;
 }
 
 /* ——— Decisions ——— */

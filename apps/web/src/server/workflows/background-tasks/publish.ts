@@ -15,7 +15,7 @@ import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
 import { imageProcessingJob } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
@@ -58,8 +58,6 @@ function taskKey(task: BackgroundTaskInput) {
       return task.kind;
     case "image-processing.wakeup":
       return `image-processing:${task.jobId}`;
-    case "entity-embedding.refresh":
-      return `embedding:${task.entityKind}:${task.entityId}`;
     case "image-metadata.extract":
       return `image-metadata:${task.imageId}`;
     case "location-ai.description.refresh":
@@ -106,14 +104,12 @@ export async function publishBackgroundTasks(
         continue;
       }
       if (task.kind === "entity-embedding.refresh") {
-        const { enqueueEmbeddingRefs, productionEmbeddingRefreshPort } =
-          await import("./embedding");
+        const { enqueueEmbeddingRefs } = await import("./embedding");
         const { prepareSearchDocuments } =
           await import("~/server/generic/search/repo/search-document");
         await enqueueEmbeddingRefs(
           tx,
           await prepareSearchDocuments(tx, [task]),
-          productionEmbeddingRefreshPort.config(),
         );
         continue;
       }

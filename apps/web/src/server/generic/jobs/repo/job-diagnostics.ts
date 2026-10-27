@@ -4,19 +4,7 @@ import {
   type JobId,
 } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
-import { runStepMeta } from "@cubby/schemas/run-step";
-import {
-  and,
-  asc,
-  count,
-  desc,
-  eq,
-  gt,
-  inArray,
-  ne,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, count, desc, eq, ne, type SQL } from "drizzle-orm";
 
 import type {
   JobGroup,
@@ -26,11 +14,6 @@ import type {
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
-import { run, runStep } from "~/server/db/schema";
-import {
-  evaluateBinding,
-  limitEntries,
-} from "~/server/generic/jobs/limits-catalog";
 import {
   jobFactsOf,
   readRunRollups,
@@ -92,57 +75,12 @@ async function groupsOf(
   );
 }
 
-async function runningJobs(db: Database, now: Date) {
-  const [row] = await getDb(db)
-    .select({ count: count() })
-    .from(job)
-    .where(and(eq(job.state, "running"), gt(job.leaseExpiresAt, now)));
-  return row?.count ?? 0;
-}
-
-async function activeAiRefreshRuns(db: Database) {
-  const [row] = await getDb(db)
-    .select({ count: count() })
-    .from(run)
-    .where(
-      and(
-        eq(run.purpose, "ai_refresh"),
-        inArray(run.status, ["running", "paused", "paused_auth"]),
-        sql`${run.deletedAt} IS NULL`,
-      ),
-    );
-  return row?.count ?? 0;
-}
-
-/** The step a running Run is on, its last page's wall time and work sample. */
-async function currentStep(db: Database, runId: RunId) {
-  const [step] = await getDb(db)
-    .select({ key: runStep.key, meta: runStep.meta })
-    .from(runStep)
-    .where(
-      and(
-        eq(runStep.runId, runId),
-        inArray(runStep.state, ["running", "waiting", "paused"]),
-      ),
-    )
-    .orderBy(asc(runStep.position))
-    .limit(1);
-  if (!step) return null;
-  const meta = runStepMeta.partial().safeParse(step.meta ?? {}).data;
-  return {
-    key: step.key,
-    lastPageMs: meta?.timing?.lastPageMs ?? null,
-    page: meta?.page ?? null,
-  };
-}
-
 async function readJobs(
   db: Database,
   owner: SQL,
   primaryKind: string | null,
   run: { id: RunId; shortcode: string } | null,
 ): Promise<JobListOut> {
-  const runId = run?.id ?? null;
   const now = new Date();
   const [primaryRow] = await getDb(db)
     .select()
@@ -150,39 +88,22 @@ async function readJobs(
     .where(primaryKind ? and(owner, eq(job.kind, primaryKind)) : owner)
     .orderBy(desc(job.updatedAt))
     .limit(1);
-  const [primaryFacts, groups, running, refreshRuns, step, rollups] =
-    await Promise.all([
-      primaryRow ? jobFactsOf(db, [primaryRow], now) : Promise.resolve([]),
-      groupsOf(db, owner, primaryRow?.id ?? null, now),
-      runningJobs(db, now),
-      activeAiRefreshRuns(db),
-      runId ? currentStep(db, runId) : Promise.resolve(null),
-      run ? readRunRollups(db, [run], now) : Promise.resolve([]),
-    ]);
+  const [primaryFacts, groups, rollups] = await Promise.all([
+    primaryRow ? jobFactsOf(db, [primaryRow], now) : Promise.resolve([]),
+    groupsOf(db, owner, primaryRow?.id ?? null, now),
+    run ? readRunRollups(db, [run], now) : Promise.resolve([]),
+  ]);
   const primary = primaryFacts[0] ?? null;
   return {
     primary,
     groups,
-    limits: limitEntries({
-      runningJobs: running,
-      activeAiRefreshRuns: refreshRuns,
-      job: primaryRow ?? null,
-      step,
-    }),
-    binding: evaluateBinding({
-      job: primaryRow ? { ...primaryRow, ahead: primary?.ahead ?? null } : null,
-      runningJobs: running,
-      step,
-      now,
-    }),
     rollup: rollups[0] ?? null,
   };
 }
 
-/** A Run's executing Job, its fan-out by kind, the limits and what binds now. */
+/** A Run's executing Job and its Job fan-out by kind. */
 export async function listRunJobs(db: Database, code: string) {
   const runId = await resolveOrThrow(db, "run", code);
-  // A Run's demand includes the AI evaluation Jobs it requests (no runId).
   return readJobs(db, runDemandWhere(runId), RUN_EXECUTE, {
     id: runId,
     shortcode: code,

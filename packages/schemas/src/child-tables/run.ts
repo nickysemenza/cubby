@@ -875,7 +875,7 @@ export const runChildren = [
         name: "AiEvaluation_open_slot_key",
         unique: true,
         on: ["slotKey"],
-        where: "{state} IN ('queued','retry_wait')",
+        where: "{state} = 'queued'",
       },
       {
         name: "AiEvaluation_slot_history_idx",
@@ -886,7 +886,7 @@ export const runChildren = [
         name: "AiEvaluation_pending_share_key",
         on: ["shareKey"],
         where:
-          "{shareKey} IS NOT NULL AND {state} IN ('queued','running','result_ready','retry_wait')",
+          "{shareKey} IS NOT NULL AND {state} IN ('queued','result_ready')",
       },
       {
         name: "AiEvaluation_admission_idx",
@@ -905,7 +905,7 @@ export const runChildren = [
       },
       {
         name: "AiEvaluation_state_check",
-        sql: "{state} IN ('queued','running','result_ready','retry_wait','completed','blocked','failed','obsolete','cancelled')",
+        sql: "{state} IN ('queued','result_ready','completed','blocked','failed','obsolete','cancelled')",
       },
     ],
   }),

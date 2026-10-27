@@ -1,10 +1,10 @@
 import { buildActorContext } from "@cubby/schemas/context";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
+import { postponeAiEvaluationWork } from "~/server/ai/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
+import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
@@ -72,6 +72,8 @@ export async function continueChangedReclassification(
       [current],
       snapshot.decisionModelOverride,
     );
+    // A continuation's own queued work waits for its source to settle. Work
+    // another requester already holds, or a page already claimed, keeps its owner.
     const targets = await getDb(db)
       .select({ id: aiEvaluation.id })
       .from(aiEvaluationRequest)
@@ -79,38 +81,18 @@ export async function continueChangedReclassification(
         aiEvaluation,
         eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
       )
-      .where(eq(aiEvaluationRequest.runId, id));
-    for (const target of targets) {
-      await withTransactionDatabase(db, async (tx) => {
-        const [execution] = await getDb(tx)
-          .select()
-          .from(job)
-          .where(eq(job.key, `ai-evaluation:${target.id}`))
-          .for("update");
-        // Existing work may have another requester or already be stopped.
-        // This continuation never revives it or replaces its attempt owner.
-        if (execution?.state !== "queued") return;
-        const [deferred] = await getDb(tx)
-          .update(aiEvaluation)
-          .set({ state: "retry_wait" })
-          .where(
-            and(
-              eq(aiEvaluation.id, target.id),
-              eq(aiEvaluation.state, "queued"),
-              eq(aiEvaluation.runId, id),
-            ),
-          )
-          .returning({ id: aiEvaluation.id });
-        if (deferred)
-          await getDb(tx)
-            .update(job)
-            .set({
-              availableAt: new Date(Date.now() + 5 * 60_000),
-              updatedAt: new Date(),
-            })
-            .where(eq(job.id, execution.id));
-      });
-    }
+      .where(
+        and(
+          eq(aiEvaluationRequest.runId, id),
+          eq(aiEvaluation.state, "queued"),
+          eq(aiEvaluation.runId, id),
+        ),
+      );
+    await postponeAiEvaluationWork(
+      db,
+      targets.map((target) => target.id),
+      new Date(Date.now() + 5 * 60_000),
+    );
     ids.push(id);
   }
   // Pausing one requester cannot discard its later demand or give another requester cancellation authority over it.

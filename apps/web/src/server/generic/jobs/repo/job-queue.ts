@@ -32,7 +32,8 @@ import {
 } from "~/server/generic/jobs/kind-policy";
 import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
 import { imageLeasesByExecutor } from "~/server/generic/jobs/repo/image-leases";
-import { retryJobsNow, type JobRow } from "~/server/generic/jobs/repo/jobs";
+import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
+import { type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
   jobWaitingOnReasonSql,
   loadJobWaitingOn,
@@ -67,13 +68,7 @@ function laneWhere(lanes: readonly JobLane[]): SQL {
   return or(...parts) ?? sql`false`;
 }
 
-/**
- * Each listed Run's demand as (run_id, job_id) pairs: Jobs it owns by
- * `runId`, and AI evaluation Jobs, which carry no `runId` because one
- * evaluation can serve several Runs, for evaluations the Run owns or still
- * requests. A withdrawn (cancelled) request no longer counts, for its owner
- * either. UNION keeps one pair however many routes reach a Job.
- */
+/** Each listed Run's demand as (run_id, job_id) pairs from its owned Jobs. */
 function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
   const runs = Array.isArray(runIds)
     ? sql.join(
@@ -84,16 +79,6 @@ function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
   return sql`(
     SELECT "Job"."runId" AS run_id, "Job".id AS job_id FROM "Job"
       WHERE "Job"."runId" IN (${runs})
-    UNION
-    SELECT e."runId", j.id FROM "AiEvaluation" e
-      JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
-      WHERE e."runId" IN (${runs}) AND NOT EXISTS (
-        SELECT 1 FROM "AiEvaluationRequest" w WHERE w."evaluationId" = e.id
-          AND w."runId" = e."runId" AND w."cancelledAt" IS NOT NULL)
-    UNION
-    SELECT r."runId", j.id FROM "AiEvaluationRequest" r
-      JOIN "Job" j ON j.key = 'ai-evaluation:' || r."evaluationId"::text
-      WHERE r."runId" IN (${runs}) AND r."cancelledAt" IS NULL
   )`;
 }
 
@@ -200,10 +185,6 @@ export async function jobFactsOf(
           : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
-      ahead:
-        waitingOn?.reason === "due" || waitingOn?.reason === "waiting_device"
-          ? waitingOn.aheadCount
-          : null,
       lane: jobKindPolicy(row.kind).lane,
       waitingOn,
       runId: runCode ? runShortcode.parse(runCode) : null,
@@ -232,7 +213,6 @@ export async function readJobQueue(
       })
       .from(job)
       .where(where)
-      // By position: a parameterized expression never matches its own GROUP BY copy.
       .groupBy(sql`1`, sql`2`),
     getDb(db)
       .select()

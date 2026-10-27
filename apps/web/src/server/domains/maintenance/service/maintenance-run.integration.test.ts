@@ -196,7 +196,7 @@ describe("maintenance Run", () => {
     await getDb(ctx.db).execute(sql`
       UPDATE "Entity" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
     // As if the removal predated the triggers: nothing is marked.
-    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedDirty"`);
+    await getDb(ctx.db).execute(sql`DELETE FROM "WorkItem"`);
     const id = await startPass();
     await drive(id, only("derived-refresh", {}));
     const [document] = (

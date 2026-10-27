@@ -18,9 +18,7 @@ import {
 } from "~/server/generic/jobs/repo/execution";
 
 export type RunRow = typeof run.$inferSelect;
-export type AiEvaluationRow = typeof aiEvaluation.$inferSelect & {
-  attemptToken?: string | null;
-};
+export type AiEvaluationRow = typeof aiEvaluation.$inferSelect;
 type RunUpdate = PgUpdateSetSource<typeof run>;
 
 export async function readRun(
@@ -140,66 +138,6 @@ export async function guardAiEvaluationAttempt(
   );
 }
 
-/** Settles a failed attempt only while that attempt still owns the evaluation. */
-export async function recordAiEvaluationAttemptFailure(
-  db: Database,
-  item: Pick<AiEvaluationRow, "id" | "attemptToken">,
-  set: {
-    state: AiEvaluationRow["state"];
-    error: string;
-  },
-) {
-  const execution = currentJobExecution();
-  if (
-    !execution ||
-    execution.claim.kind !== "ai.evaluation" ||
-    execution.claim.key !== `ai-evaluation:${item.id}` ||
-    execution.claim.leaseToken !== item.attemptToken
-  )
-    throw new Error(
-      "AI evaluation failure requires its current universal Job claim",
-    );
-  await withTransactionDatabase(db, async (tx) => {
-    // A funding/auth stop may have paused the requester after inference.
-    // Only execution ownership fences this diagnostic; publication still
-    // checks the requester's current domain authority separately.
-    const [current] = await getDb(tx)
-      .select({ slotKey: aiEvaluation.slotKey })
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, item.id));
-    if (!current) return;
-    // Admission and failure serialize before Job/evaluation locks. A running
-    // snapshot cannot return to retry_wait beside its queued successor.
-    await getDb(tx).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${current.slotKey}, 0))`,
-    );
-    await assertCurrentJob(tx);
-    const [successor] =
-      set.state === "retry_wait"
-        ? await getDb(tx)
-            .select({ id: aiEvaluation.id })
-            .from(aiEvaluation)
-            .where(
-              and(
-                eq(aiEvaluation.slotKey, current.slotKey),
-                inArray(aiEvaluation.state, ["queued", "retry_wait"]),
-                sql`${aiEvaluation.id} <> ${item.id}::uuid`,
-              ),
-            )
-            .limit(1)
-        : [];
-    await getDb(tx)
-      .update(aiEvaluation)
-      .set({ state: successor ? "obsolete" : set.state, error: set.error })
-      .where(
-        and(
-          eq(aiEvaluation.id, item.id),
-          inArray(aiEvaluation.state, ["running", "result_ready"]),
-        ),
-      );
-  });
-}
-
 /** Mail discovery a funding stop paused before `pausedBefore`. */
 export async function fundingPausedDiscoveryRuns(
   db: Database,
@@ -248,33 +186,30 @@ export async function pauseRunForAiWork(
     );
 }
 
+/** A funding stop ends when its evaluations' drain runs again after the wait. */
+export async function resumeFundingStoppedRuns(
+  db: Database,
+  runIds: readonly RunRow["id"][],
+) {
+  if (!runIds.length) return;
+  await getDb(db)
+    .update(run)
+    .set({ status: "running" })
+    .where(
+      and(
+        inArray(run.id, [...runIds]),
+        eq(run.status, "paused_auth"),
+        eq(run.failureCode, "execution_limit"),
+      ),
+    );
+}
+
 export async function readAiEvaluationReceipt(db: Database, id: string) {
   const [row] = await getDb(db)
     .select({ receipt: aiEvaluation.receipt })
     .from(aiEvaluation)
     .where(eq(aiEvaluation.id, id));
   return row?.receipt;
-}
-
-/** Stores an inference result while the attempt still owns the running evaluation; false when obsolete. */
-export async function storeAiEvaluationResult(
-  db: Database,
-  item: Pick<AiEvaluationRow, "id" | "attemptToken">,
-  result: AiEvaluationRow["result"],
-) {
-  if (!item.attemptToken)
-    throw new Error("AI result has no universal Job token");
-  return withTransactionDatabase(db, async (tx) => {
-    await guardAiEvaluationAttempt(tx, item.id, item.attemptToken!);
-    const [stored] = await getDb(tx)
-      .update(aiEvaluation)
-      .set({ state: "result_ready", result })
-      .where(
-        and(eq(aiEvaluation.id, item.id), eq(aiEvaluation.state, "running")),
-      )
-      .returning({ id: aiEvaluation.id });
-    return Boolean(stored);
-  });
 }
 
 /** Refresh coordinators need counts and pending identities, never inference snapshots. */
@@ -320,8 +255,6 @@ export async function readAiRefreshWorkSummary(
       attempt,
       selected: counts.reduce((total, row) => total + row.count, 0),
       queued: tally.get("queued") ?? 0,
-      running: tally.get("running") ?? 0,
-      retryWait: tally.get("retry_wait") ?? 0,
       resultReady: tally.get("result_ready") ?? 0,
       completed: tally.get("completed") ?? 0,
       blocked: tally.get("blocked") ?? 0,

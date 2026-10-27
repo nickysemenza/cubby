@@ -1,14 +1,14 @@
-import { jobState } from "@cubby/schemas/job";
 import {
   type SupportedDecisionModel,
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
+import { aiEvaluationAttemptLive } from "~/server/ai/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { aiEvaluation, email, run } from "~/server/db/schema";
@@ -103,7 +103,7 @@ export async function saveReclassificationSnapshot(
     .where(
       and(
         eq(aiEvaluation.id, evaluationId),
-        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='ai-evaluation:' || ${aiEvaluation.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${token}::uuid AND j."leaseExpiresAt">now())`,
+        aiEvaluationAttemptLive(aiEvaluation.id, token),
       ),
     );
 }
@@ -113,10 +113,10 @@ export async function readEvaluationState(
   evaluationId: ReclassificationEvaluation["id"],
 ) {
   const [published] = await getDb(db)
-    .select({ state: aiEvaluation.state })
+    .select({ state: aiEvaluation.state, restarts: aiEvaluation.restarts })
     .from(aiEvaluation)
     .where(eq(aiEvaluation.id, evaluationId));
-  return published?.state;
+  return published;
 }
 
 export async function readReclassifiedEmail(db: Database, emailId: string) {

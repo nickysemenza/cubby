@@ -201,7 +201,6 @@ const jobs: JobListOut = {
     subject: null,
     createdAt: ago(20),
     updatedAt: ago(0),
-    ahead: null,
     lane: "server",
     waitingOn: {
       reason: "leased",
@@ -215,13 +214,6 @@ const jobs: JobListOut = {
     runId: null,
   },
   groups: [],
-  limits: [],
-  binding: {
-    status: "binding",
-    key: null,
-    label: "Page work",
-    evidence: "preparation 61% of page time · 106 queries/page",
-  },
   rollup: null,
 };
 
@@ -245,13 +237,11 @@ const answers = new Map<string, UnparsedStartOperationData>([
         {
           entity: "product",
           feature: "entity-connections",
-          waiting: 20,
-          running: 2,
+          waiting: 22,
           completed: 60,
           failed: 2,
           obsolete: 1,
           cancelled: 0,
-          averageSeconds: 1.2,
         },
       ],
       recent: [],
@@ -292,7 +282,7 @@ afterEach(() => {
   harness.dispose();
 });
 
-it("shows each step's own count, what sets its speed, and steps not yet counted", async () => {
+it("shows each step's own count and steps not yet counted", async () => {
   renderRun();
   const strip = await screen.findByTestId("run-step-strip");
   expect(strip).toHaveTextContent("Step 1 of 6");
@@ -306,9 +296,6 @@ it("shows each step's own count, what sets its speed, and steps not yet counted"
   expect(within(current).getByRole("progressbar")).toHaveAttribute(
     "aria-valuenow",
     "372",
-  );
-  expect(within(current).getByTestId("speed-set-by")).toHaveTextContent(
-    "Speed set by page work: preparation 61% of page time · 106 queries/page",
   );
   expect(within(current).getByTestId("page-work")).toHaveTextContent(
     "106 queries/page",
@@ -460,7 +447,6 @@ it("retains cancelled evaluations in the stopped Run population", async () => {
         ...kind,
         completed: 20,
         waiting: 0,
-        running: 0,
         failed: 0,
         obsolete: 0,
         cancelled: 80,

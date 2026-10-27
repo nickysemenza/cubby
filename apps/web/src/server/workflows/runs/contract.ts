@@ -1,4 +1,3 @@
-import type { RunPurpose } from "@cubby/schemas/run-fields";
 // Pure domain checkpoint types shared by the Job runner and its callers.
 import { z } from "zod";
 
@@ -16,7 +15,3 @@ const workflowRunParams = z.object({
   attempt: z.number().int().nonnegative(),
 });
 export type WorkflowRunParams = Readonly<z.infer<typeof workflowRunParams>>;
-
-/** Finite Sweeps retain one useful-progress budget across all recovered claims. */
-export const runJobRecovery = (purpose: RunPurpose) =>
-  purpose === "sweep" ? { recoveryTimeoutMs: 30 * 60_000 } : {};

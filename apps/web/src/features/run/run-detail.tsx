@@ -29,12 +29,7 @@ import {
   ReasonBreakdown,
   RunStepTimeline,
 } from "./run-step-timeline";
-import {
-  humanizeKey,
-  runOverview,
-  type RunStepView,
-  speedSetBy,
-} from "./run-view-model";
+import { humanizeKey, runOverview, type RunStepView } from "./run-view-model";
 
 const LIVE_POLL_MS = 3_000;
 // The declared Run slot ids, which the detail page uses as section ids.
@@ -197,8 +192,6 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
     active: facet === def.key,
     onSelect: () => drill(def.key),
   }));
-  const speed = speedSetBy(overview.binding);
-
   const breakdownOf = (step: RunStepView) => {
     const groups: BreakdownGroup[] = [
       {
@@ -297,7 +290,6 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       />
       <RunStepTimeline
         steps={overview.steps}
-        speed={speed}
         breakdownOf={breakdownOf}
         linksOf={linksOf}
       />
@@ -360,13 +352,13 @@ export function RunDecisions({ record }: { record: RunOut }) {
   );
 }
 
-/** The Job executing the Run, its limits and raw logs. */
+/** The Job executing the Run, its pages and raw logs. */
 export function RunDiagnostics({ record }: { record: RunOut }) {
   const { jobs } = useRunDetail(record);
   return (
     <div className="grid gap-2">
       <p className="text-xs/4.5 text-muted-foreground">
-        The Job executing this Run, its limits and raw logs.
+        The Job executing this Run, its pages and raw logs.
       </p>
       <JobDiagnostics
         jobs={jobs.data}
