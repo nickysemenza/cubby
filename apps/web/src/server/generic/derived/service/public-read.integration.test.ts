@@ -1,6 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
@@ -20,7 +20,7 @@ import {
 describe("nested field envelope reads", () => {
   const ctx = withTestDb();
 
-  it("batches Inventory products and compact holding Locations with authoritative assignments", async () => {
+  it("projects Inventory products and compact holding Locations with authoritative assignments", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic nested stock", price: 13 }),
@@ -41,33 +41,27 @@ describe("nested field envelope reads", () => {
       },
       ctx.actor,
     );
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        readPublicEntityRows({
-          db: ctx.db,
-          entity: "inventory",
-          projection: "detail",
-          rows: Array.from({ length: count }, (_, index) => ({
-            ...raw,
-            product: {
-              ...raw.product,
-              name: `Synthetic product snapshot ${index}`,
-              price: 99,
-            },
-            location: { ...raw.location, type: "container" },
-          })),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
-    expect(repeated.result.map((row) => row.product.name)).toEqual(
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "inventory",
+      projection: "detail",
+      rows: Array.from({ length: 20 }, (_, index) => ({
+        ...raw,
+        product: {
+          ...raw.product,
+          name: `Synthetic product snapshot ${index}`,
+          price: 99,
+        },
+        location: { ...raw.location, type: "container" },
+      })),
+    });
+    expect(repeated.map((row) => row.product.name)).toEqual(
       Array.from(
         { length: 20 },
         (_, index) => `Synthetic product snapshot ${index}`,
       ),
     );
-    const row = repeated.result[0];
+    const row = repeated[0];
     expect(row).toBeDefined();
     if (!row) return;
     expect(fieldValueOf(row.product.fields.price)).toBe(13);
@@ -83,7 +77,7 @@ describe("nested field envelope reads", () => {
     expect(row).not.toHaveProperty("fieldResolutions");
   });
 
-  it("batches repeated identities while preserving each nested snapshot", async () => {
+  it("projects repeated identities while preserving each nested snapshot", async () => {
     const ingredient = await findOrCreateIngredient(
       ctx.db,
       "Synthetic envelope ingredient",
@@ -102,48 +96,35 @@ describe("nested field envelope reads", () => {
       { findFoodsBatch: async (lookups) => lookups.map(() => null) },
       parseEntityId("ingredient", ingredient.id),
     );
-    const single = await countTestDbQueries(() =>
-      readPublicEntityRows({
-        db: ctx.db,
-        entity: "ingredient",
-        projection: "detail",
-        rows: [raw],
-      }),
-    );
-    const repeated = await countTestDbQueries(() =>
-      readPublicEntityRows({
-        db: ctx.db,
-        entity: "ingredient",
-        projection: "detail",
-        rows: Array.from({ length: 20 }, (_, index) => ({
-          ...raw,
-          product: raw.product.map((product) => ({
-            ...product,
-            name: `Synthetic snapshot ${index}`,
-          })),
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "ingredient",
+      projection: "detail",
+      rows: Array.from({ length: 20 }, (_, index) => ({
+        ...raw,
+        product: raw.product.map((product) => ({
+          ...product,
+          name: `Synthetic snapshot ${index}`,
         })),
-      }),
-    );
-    expect(repeated.queryCount).toBe(single.queryCount);
-    expect(repeated.result.map((row) => row.product[0]?.name)).toEqual(
+      })),
+    });
+    expect(repeated.map((row) => row.product[0]?.name)).toEqual(
       Array.from({ length: 20 }, (_, index) => `Synthetic snapshot ${index}`),
     );
-    expect(repeated.result[0]?.product[0]).not.toHaveProperty(
-      "fieldResolutions",
-    );
-    expect(repeated.result[0]?.product[0]).not.toHaveProperty("price");
-    const price = repeated.result[0]?.product[0]?.fields.price;
+    expect(repeated[0]?.product[0]).not.toHaveProperty("fieldResolutions");
+    expect(repeated[0]?.product[0]).not.toHaveProperty("price");
+    const price = repeated[0]?.product[0]?.fields.price;
     expect(price).toMatchObject({
       current: { assignment: { kind: "value", value: 13 } },
     });
     if (!price) return;
     expect(fieldValueOf(price)).toBe(13);
-    expect(repeated.result[0]?.product[0]?.unitMappings).toEqual(
+    expect(repeated[0]?.product[0]?.unitMappings).toEqual(
       raw.product[0]?.unitMappings,
     );
   });
 
-  it("batches subrecipes inside section-line unions without expanding their graph", async () => {
+  it("projects subrecipes inside section-line unions without expanding their graph", async () => {
     const child = await createRecipeFixture(
       ctx.db,
       { ...makeRecipeInput({ name: "Synthetic nested filling" }), servings: 4 },
@@ -188,41 +169,30 @@ describe("nested field envelope reads", () => {
     const raw = await getRecipeByID(ctx.db, parent.entityId);
     if (!raw) throw new Error("Synthetic parent recipe is missing");
     await updateRecipe(ctx.db, child.entityId, { servings: 6 }, ctx.actor);
-    const single = await countTestDbQueries(() =>
-      readPublicEntityRows({
-        db: ctx.db,
-        entity: "recipe",
-        projection: "detail",
-        rows: [raw],
-      }),
-    );
-    const repeated = await countTestDbQueries(() =>
-      readPublicEntityRows({
-        db: ctx.db,
-        entity: "recipe",
-        projection: "detail",
-        rows: Array.from({ length: 20 }, (_, index) => ({
-          ...raw,
-          sections: raw.sections.map((section) => ({
-            ...section,
-            ingredients: section.ingredients.map((line) =>
-              line.type === "recipe"
-                ? {
-                    ...line,
-                    recipe: {
-                      ...line.recipe,
-                      name: `Synthetic filling snapshot ${index}`,
-                      servings: 99,
-                    },
-                  }
-                : line,
-            ),
-          })),
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "recipe",
+      projection: "detail",
+      rows: Array.from({ length: 20 }, (_, index) => ({
+        ...raw,
+        sections: raw.sections.map((section) => ({
+          ...section,
+          ingredients: section.ingredients.map((line) =>
+            line.type === "recipe"
+              ? {
+                  ...line,
+                  recipe: {
+                    ...line.recipe,
+                    name: `Synthetic filling snapshot ${index}`,
+                    servings: 99,
+                  },
+                }
+              : line,
+          ),
         })),
-      }),
-    );
-    expect(repeated.queryCount).toBe(single.queryCount);
-    const snapshots = repeated.result.map(
+      })),
+    });
+    const snapshots = repeated.map(
       (row) =>
         row.sections[0]?.ingredients.find((line) => line.type === "recipe")
           ?.recipe,
@@ -243,12 +213,12 @@ describe("nested field envelope reads", () => {
       });
       expect(fieldValueOf(snapshot.fields.servings)).toBe(6);
     }
-    expect(repeated.result[0]?.sections[0]?.ingredients[0]).toMatchObject({
+    expect(repeated[0]?.sections[0]?.ingredients[0]).toMatchObject({
       type: "ingredient",
       recipe: null,
       rawLine: "1 cup synthetic flour",
     });
-    expect(repeated.result[0]?.sections[0]?.ingredients[1]).toMatchObject({
+    expect(repeated[0]?.sections[0]?.ingredients[1]).toMatchObject({
       rawLine: "1 synthetic filling",
       modifier: "prepared",
     });

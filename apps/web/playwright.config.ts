@@ -48,8 +48,8 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* One CI retry turns a flake into a seconds-long "flaky" report instead of a
-     whole-job rerun. A test reported flaky twice is quarantined with
-     `test.fixme` and a GitHub issue; local runs keep failing fast. */
+     whole-job rerun. A test reported flaky twice is fixed or deleted in the next
+     PR, never quarantined; local runs keep failing fast. */
   retries: isCI ? 1 : 0,
   /* Each worker owns an isolated database and harness. Three local macOS
      workers made iPhone WebKit flake across four unrelated specs under host

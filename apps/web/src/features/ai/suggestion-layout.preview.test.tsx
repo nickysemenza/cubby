@@ -17,10 +17,6 @@ import { mock } from "~/lib/test/mock-schema";
 
 import { SuggestionOutcomeMark } from "../../entity/suggestions/suggestion-outcome-mark";
 import { SuggestionReview } from "../../entity/suggestions/suggestion-review";
-import {
-  SuggestionStatus,
-  type SuggestionStatusField,
-} from "../../entity/suggestions/suggestion-status";
 
 const PHONE = { width: 402, height: 874 } as const;
 const DESKTOP = { width: 1440, height: 900 } as const;
@@ -56,18 +52,6 @@ function declinedOutcomeFixture(): FieldSuggestionOutcome {
       alternatives: [],
     },
   });
-}
-
-function skippedFieldFixture(): SuggestionStatusField {
-  return {
-    label: "Category",
-    outcome: mock(fieldSuggestionOutcomeSchema, {
-      seed: 3,
-      overrides: { kind: "skipped", reason: "no_signal" },
-    }),
-    suggestion: null,
-    currentValue: null,
-  };
 }
 
 describe.each(["inline", "cell"] as const)(
@@ -184,39 +168,5 @@ describe("SuggestionReview inline surface — desktop one line", () => {
       .getByText("Confidence: 97% · high")
       .getBoundingClientRect().top;
     expect(Math.abs(valueTop - confidenceTop)).toBeLessThan(10);
-  });
-});
-
-describe("SuggestionStatus headline", () => {
-  it("renders the settled long headline at the same height as the checking headline at phone width", async () => {
-    await page.viewport(PHONE.width, PHONE.height);
-
-    const { container, rerender } = render(
-      <SuggestionStatus checking failures={0} count={0} fields={[]} />,
-    );
-    expect(screen.getByText("Checking suggestions…")).toBeInTheDocument();
-    const checkingHeight = container.getBoundingClientRect().height;
-    expect(checkingHeight).toBeGreaterThan(0);
-
-    rerender(
-      <SuggestionStatus
-        checking={false}
-        failures={1}
-        count={0}
-        fields={[skippedFieldFixture()]}
-      />,
-    );
-    // Pins the exact copy this test measures, so a wording change is a
-    // visible diff here rather than a silent height assertion.
-    expect(
-      screen.getByText(
-        "No suggestions · 0 fields checked · 1 not checked · Some suggestions unavailable",
-      ),
-    ).toBeInTheDocument();
-    const settledHeight = container.getBoundingClientRect().height;
-
-    // The regression this guards: a long per-field summary wrapping to a
-    // second line and growing the row it sits in on a phone-width page.
-    expect(settledHeight).toBeCloseTo(checkingHeight, 0);
   });
 });

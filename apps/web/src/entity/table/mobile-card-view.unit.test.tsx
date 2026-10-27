@@ -111,37 +111,6 @@ describe("MobileCardView", () => {
     });
   });
 
-  it("activates the non-link fallback row from the keyboard", () => {
-    // Regression: a clickable `<div>` row needs its own keydown handling to
-    // stay operable without a mouse — see jsx-a11y/click-events-have-key-events.
-    const helper = createCubbyColumnHelper<ToolRow>();
-    const columns = createCubbyColumnCollection<ToolRow>((add) => {
-      add(
-        helper.accessor("toolName", {
-          header: "Tool",
-          meta: { mobile: { slot: "title" } },
-        }),
-      );
-    });
-    const { result } = renderHook(() =>
-      useCubbyTable({
-        data: [{ id: "tool-1", toolName: "list_products" }],
-        columns: materializeCubbyColumns(columns),
-        getRowId: (row) => row.id,
-        enableRowSelection: false,
-      }),
-    );
-    const onRowClick = vi.fn();
-
-    render(<MobileCardView table={result.current} onRowClick={onRowClick} />);
-    const rowButton = screen.getByRole("button");
-    expect(rowButton).toHaveAttribute("tabIndex", "0");
-
-    fireEvent.keyDown(rowButton, { key: "Enter" });
-
-    expect(onRowClick).toHaveBeenCalledOnce();
-  });
-
   it("joins the subtitle- and meta-slot values into one ` · `-separated line", () => {
     const table = buildProductTable([
       {

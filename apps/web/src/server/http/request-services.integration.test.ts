@@ -1,7 +1,7 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { foodSummary, type FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -39,7 +39,7 @@ const food = (fdc_id: number, barcode?: string): FoodSummary => {
 describe("request USDA linked Product reads", () => {
   const ctx = withTestDb();
 
-  it("batches authoritative Product envelopes while retaining duplicate and empty food groups", async () => {
+  it("projects authoritative Product envelopes while retaining duplicate and empty food groups", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
@@ -67,29 +67,23 @@ describe("request USDA linked Product reads", () => {
         }),
       );
       const { usdaService } = buildRequestServices(ctx.db, client);
-      return countTestDbQueries(() =>
-        usdaService.listFoods(
-          undefined,
-          undefined,
-          { orderBy: "relevance", direction: "asc" },
-          { pageIndex: 0, pageSize: rows.length },
-        ),
+      return usdaService.listFoods(
+        undefined,
+        undefined,
+        { orderBy: "relevance", direction: "asc" },
+        { pageIndex: 0, pageSize: rows.length },
       );
     };
-    const single = await read(1);
     const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
     expect(
-      repeated.result.data.map((row) =>
-        row.linkedProducts.map((item) => item.id),
-      ),
+      repeated.data.map((row) => row.linkedProducts.map((item) => item.id)),
     ).toEqual(
       Array.from({ length: 20 }, () => [[product.id], [product.id], []]).flat(),
     );
-    expect(repeated.result.data.map((row) => row.fdc_id)).toEqual(
+    expect(repeated.data.map((row) => row.fdc_id)).toEqual(
       Array.from({ length: 20 }, () => foods.map((row) => row.fdc_id)).flat(),
     );
-    const linked = repeated.result.data[0]?.linkedProducts[0];
+    const linked = repeated.data[0]?.linkedProducts[0];
     expect(linked).toBeDefined();
     if (!linked) return;
     expect(fieldValueOf(linked.fields.price)).toBe(13);

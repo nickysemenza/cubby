@@ -2,7 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { locationHandlers } from "~/server/domains/location/operations.server";
@@ -35,7 +35,7 @@ describe("canonical selected search and picker fields", () => {
     signal: new AbortController().signal,
   });
 
-  it("keeps selected Product current price and metadata through search, resolve and purchase candidates without row reads", async () => {
+  it("keeps selected Product current price and metadata through search, resolve and purchase candidates", async () => {
     const brand = await findOrCreateVendor(ctx.db, "Synthetic picker maker");
     const product = await createProductFixture(
       ctx.db,
@@ -68,24 +68,16 @@ describe("canonical selected search and picker fields", () => {
     for (const key of ["brandId", "brandName", "price"])
       expect(item).not.toHaveProperty(key);
 
-    const resolve = (count: number) =>
-      countTestDbQueries(() =>
-        productHandlers.operations.resolveNames({
-          data: {
-            lines: Array.from({ length: count }, () => ({
-              name: product.name,
-            })),
-          },
-          request: request(),
-        }),
-      );
-    const one = await resolve(1);
-    const repeated = await resolve(20);
-    expect(repeated.queryCount).toBe(one.queryCount);
-    expect(repeated.result.ok).toBe(true);
-    if (!repeated.result.ok) throw new Error(repeated.result.error.message);
-    expect(repeated.result.data).toHaveLength(20);
-    for (const result of repeated.result.data) {
+    const repeated = await productHandlers.operations.resolveNames({
+      data: {
+        lines: Array.from({ length: 20 }, () => ({ name: product.name })),
+      },
+      request: request(),
+    });
+    expect(repeated.ok).toBe(true);
+    if (!repeated.ok) throw new Error(repeated.error.message);
+    expect(repeated.data).toHaveLength(20);
+    for (const result of repeated.data) {
       expect(result.exact).toBe(true);
       expect(result.candidates.map((candidate) => candidate.id)).toEqual([
         product.id,

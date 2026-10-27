@@ -187,7 +187,6 @@ const mcpContractTests = [
 // an ordinary integration step can inherit a browser-built bundle when paired,
 // so CI's refusal to rebuild a missing/stale bundle does not enforce membership.
 const workerdIntegrationTests = [
-  "tooling/database-socket-lifecycle.integration.test.ts",
   "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
 ];
 const integrationTests = [
@@ -195,7 +194,7 @@ const integrationTests = [
   "tooling/**/*.integration.test.ts",
 ];
 // Same flake policy as Playwright for suites that own databases, browsers or
-// workerd: one CI retry, reported as flaky, quarantined on repeat. Node unit,
+// workerd: one CI retry, reported as flaky, fixed or deleted on repeat. Node unit,
 // tooling and package suites never retry, so their flakes fail.
 const serviceRetry = process.env.CI ? 1 : 0;
 const integrationProject = {

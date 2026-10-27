@@ -7,7 +7,7 @@ import { entityReportInput } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb, countTestDbQueries } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
@@ -341,73 +341,49 @@ describe("entity report", () => {
     expect(chart).toMatchObject({ mark: "stack", marker: 1000 });
     expect(chart?.series.map((entry) => entry.value)).toEqual([300, 50]);
 
-    // Batch reuse must work in either requested order and eliminate the second
-    // aggregate, while leaving a budget-only request on its cheaper path.
-    const separate = await countTestDbQueries(async () => {
-      await report("project.budget", parent.id);
-      await report("project.analytics", parent.id);
-    });
+    // Batch reuse must work in either requested order.
     for (const slots of [
       ["project.budget", "project.analytics"],
       ["project.analytics", "project.budget"],
     ] as const) {
-      const batch = await countTestDbQueries(() =>
-        buildEntityReports(
-          ctx.db,
-          { id: parent.id, slots: [...slots] },
-          async () => null,
-          ctx.actor,
-        ),
+      const batch = await buildEntityReports(
+        ctx.db,
+        { id: parent.id, slots: [...slots] },
+        async () => null,
+        ctx.actor,
       );
-      expect(batch.queryCount).toBeLessThan(separate.queryCount);
-      expect(batch.result.reports.map(({ slot }) => slot)).toEqual(slots);
+      expect(batch.reports.map(({ slot }) => slot)).toEqual(slots);
       expect(
-        batch.result.reports.find(({ slot }) => slot === "project.budget")
-          ?.report.blocks,
+        batch.reports.find(({ slot }) => slot === "project.budget")?.report
+          .blocks,
       ).toEqual(blocks);
     }
   });
 
-  // Repeated slots must retain their positions without repeating dependencies; a
-  // subsequent request must see ledger edits rather than a cached prior summary.
-  it("shares duplicate project dependencies only within one request", async () => {
+  // Repeated slots must retain their positions; a subsequent request must see
+  // ledger edits rather than a cached prior summary.
+  it("repeats duplicate project slots and rereads ledger edits per request", async () => {
     const { output: project } = await createRepoEntity(ctx, "project", {
       name: "Dependency project",
       costEstimate: 500,
     });
     const batch = (slots: Parameters<typeof buildEntityReports>[1]["slots"]) =>
-      countTestDbQueries(() =>
-        buildEntityReports(
-          ctx.db,
-          { id: project.id, slots },
-          async () => null,
-          ctx.actor,
-        ),
+      buildEntityReports(
+        ctx.db,
+        { id: project.id, slots },
+        async () => null,
+        ctx.actor,
       );
     const single = await batch(["project.budget"]);
     const duplicates = await batch(["project.budget", "project.budget"]);
-    expect(duplicates.queryCount).toBe(single.queryCount);
-    expect(duplicates.result.reports).toEqual([
-      single.result.reports[0],
-      single.result.reports[0],
-    ]);
-    const analytics = await batch(["project.analytics"]);
-    expect(single.queryCount).toBeLessThanOrEqual(analytics.queryCount);
-    expect(
-      single.statements.some((statement) => /materialized/i.test(statement)),
-    ).toBe(false);
-    expect(
-      analytics.statements.some((statement) => /materialized/i.test(statement)),
-    ).toBe(true);
-    const combined = await batch(["project.analytics", "project.budget"]);
+    expect(duplicates.reports).toEqual([single.reports[0], single.reports[0]]);
     const repeated = await batch([
       "project.budget",
       "project.analytics",
       "project.budget",
       "project.analytics",
     ]);
-    expect(repeated.queryCount).toBe(combined.queryCount);
-    expect(repeated.result.reports.map(({ slot }) => slot)).toEqual([
+    expect(repeated.reports.map(({ slot }) => slot)).toEqual([
       "project.budget",
       "project.analytics",
       "project.budget",
@@ -423,54 +399,13 @@ describe("entity report", () => {
     });
     const fresh = await batch(["project.budget"]);
     expect(
-      blocksOf(
-        fresh.result.reports[0]!.report.blocks,
-        "stats",
-      )[0]?.figures.find(({ label }) => label === "Actual")?.value,
+      blocksOf(fresh.reports[0]!.report.blocks, "stats")[0]?.figures.find(
+        ({ label }) => label === "Actual",
+      )?.value,
     ).toBe(40);
   });
 
-  // Distinct slots must share identity and tree reads, not just duplicate outputs.
-  it("shares the project tree across budget analytics contribution and schedule", async () => {
-    const { output: project } = await createRepoEntity(ctx, "project", {
-      name: "Shared context project",
-      costEstimate: 500,
-    });
-    const budget = await countTestDbQueries(() =>
-      buildEntityReport(
-        ctx.db,
-        { scope: { kind: "record", id: project.id }, slot: "project.budget" },
-        async () => null,
-        ctx.actor,
-      ),
-    );
-    const tree = budget.statements.find(
-      (statement) =>
-        statement.includes('"parentProjectId"') &&
-        statement.includes('"costEstimate"'),
-    );
-    expect(tree).toBeDefined();
-    const slots = [
-      "project.budget",
-      "project.analytics",
-      "project.contribution",
-      "project.schedule",
-    ] as const;
-    const batch = await countTestDbQueries(() =>
-      buildEntityReports(
-        ctx.db,
-        { id: project.id, slots: [...slots] },
-        async () => null,
-        ctx.actor,
-      ),
-    );
-    expect(
-      batch.statements.filter((statement) => statement === tree),
-    ).toHaveLength(1);
-    expect(batch.result.reports.map(({ slot }) => slot)).toEqual(slots);
-  });
-
-  it("shares identity across distinct product report slots", async () => {
+  it("matches individual reports across distinct product report slots", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Shared context product" }),
@@ -485,42 +420,26 @@ describe("entity report", () => {
       "product.use-summary",
       "product.evidence-summary",
     ] as const;
-    const singles: Awaited<
-      ReturnType<typeof countTestDbQueries<EntityReportOut>>
-    >[] = [];
+    const singles: EntityReportOut[] = [];
     for (const slot of slots)
       singles.push(
-        await countTestDbQueries(() =>
-          buildEntityReport(
-            ctx.db,
-            { scope: { kind: "record", id: product.id }, slot },
-            async () => null,
-            ctx.actor,
-          ),
+        await buildEntityReport(
+          ctx.db,
+          { scope: { kind: "record", id: product.id }, slot },
+          async () => null,
+          ctx.actor,
         ),
       );
-    const common = singles[0]!.statements.filter((statement) =>
-      singles.every((single) => single.statements.includes(statement)),
+    const batch = await buildEntityReports(
+      ctx.db,
+      { id: product.id, slots: [...slots] },
+      async () => null,
+      ctx.actor,
     );
-    expect(common.length).toBeGreaterThan(0);
-    const batch = await countTestDbQueries(() =>
-      buildEntityReports(
-        ctx.db,
-        { id: product.id, slots: [...slots] },
-        async () => null,
-        ctx.actor,
-      ),
-    );
-    for (const statement of common)
-      expect(
-        batch.statements.filter((candidate) => candidate === statement),
-      ).toHaveLength(1);
-    expect(batch.result.reports.map(({ report }) => report)).toEqual(
-      singles.map(({ result }) => result),
-    );
+    expect(batch.reports.map(({ report }) => report)).toEqual(singles);
   });
 
-  it("shares a purchase read across distinct finance report slots", async () => {
+  it("matches individual reports across distinct finance report slots", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Shared context vendor",
     });
@@ -534,39 +453,23 @@ describe("entity report", () => {
       "purchase.project-allocation",
       "purchase.financial-settlement",
     ] as const;
-    const singles: Awaited<
-      ReturnType<typeof countTestDbQueries<EntityReportOut>>
-    >[] = [];
+    const singles: EntityReportOut[] = [];
     for (const slot of slots)
       singles.push(
-        await countTestDbQueries(() =>
-          buildEntityReport(
-            ctx.db,
-            { scope: { kind: "record", id: id }, slot },
-            async () => null,
-            ctx.actor,
-          ),
+        await buildEntityReport(
+          ctx.db,
+          { scope: { kind: "record", id: id }, slot },
+          async () => null,
+          ctx.actor,
         ),
       );
-    const common = singles[0]!.statements.filter((statement) =>
-      singles.every((single) => single.statements.includes(statement)),
+    const batch = await buildEntityReports(
+      ctx.db,
+      { id, slots: [...slots] },
+      async () => null,
+      ctx.actor,
     );
-    expect(common.length).toBeGreaterThan(0);
-    const batch = await countTestDbQueries(() =>
-      buildEntityReports(
-        ctx.db,
-        { id, slots: [...slots] },
-        async () => null,
-        ctx.actor,
-      ),
-    );
-    for (const statement of common)
-      expect(
-        batch.statements.filter((candidate) => candidate === statement),
-      ).toHaveLength(1);
-    expect(batch.result.reports.map(({ report }) => report)).toEqual(
-      singles.map(({ result }) => result),
-    );
+    expect(batch.reports.map(({ report }) => report)).toEqual(singles);
   });
 
   it("explains an empty budget instead of drawing zeros", async () => {

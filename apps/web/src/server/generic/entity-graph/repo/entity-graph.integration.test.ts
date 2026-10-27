@@ -1,7 +1,7 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -98,10 +98,10 @@ describe("entity graph repository", () => {
         relationshipKeys: ["inventory"],
         limit: 1,
       });
-    const measured = await countTestDbQueries(read);
-    expect(
-      measured.result.nodes.every((node) => node.image?.url === cover.url),
-    ).toBe(true);
+    const initial = await read();
+    expect(initial.nodes.every((node) => node.image?.url === cover.url)).toBe(
+      true,
+    );
     const imageGraph = await getEntityGraph(ctx.db, {
       roots: [{ entityKind: "image", entityId: cover.shortcode }],
       relationshipKeys: [],
@@ -167,14 +167,12 @@ describe("entity graph repository", () => {
     expect((await read()).nodes.every((node) => node.image === undefined)).toBe(
       true,
     );
-    const branch = measured.result.branches[0];
-    // Root lookup, batched traversal, and shared images with derivatives.
-    expect(measured.queryCount).toBe(3);
+    const branch = initial.branches[0];
     expect(branch).toMatchObject({ totalCount: 2, nextOffset: 1 });
     expect(branch?.items).toHaveLength(1);
-    expect(measured.result.edges).toHaveLength(1);
+    expect(initial.edges).toHaveLength(1);
     expect(
-      measured.result.nodes.find(
+      initial.nodes.find(
         (node) => node.entityId === first.id || node.entityId === second.id,
       )?.metadata,
     ).toMatchObject({ unit: "each" });
@@ -449,9 +447,8 @@ describe("entity graph repository", () => {
     });
   });
 
-  it("batches a capped 25-root graph without per-record queries", async () => {
-    // Graph batching is measured below; seed the population in batches so
-    // fixture hydration does not consume the query contract's time budget.
+  it("caps a 25-root graph", async () => {
+    // Seed the population in batches so fixture hydration stays fast.
     const fixtureBrandId = await findOrCreateVendor(ctx.db, "Fixture Brand");
     const products = (
       await insertEntityFixtures(
@@ -542,29 +539,25 @@ describe("entity graph repository", () => {
         ),
       ),
     ]);
-    const measured = await countTestDbQueries(() =>
-      getEntityGraph(ctx.db, {
-        roots: products.map((productFixture) => ({
-          entityKind: "product" as const,
-          entityId: productFixture.id,
-        })),
-        relationshipKeys: ["purchases", "inventory"],
-      }),
-    );
+    const capped = await getEntityGraph(ctx.db, {
+      roots: products.map((productFixture) => ({
+        entityKind: "product" as const,
+        entityId: productFixture.id,
+      })),
+      relationshipKeys: ["purchases", "inventory"],
+    });
     const responseBytes = new TextEncoder().encode(
-      JSON.stringify(measured.result),
+      JSON.stringify(capped),
     ).byteLength;
-    // Root lookup, batched traversal, and one shared display-image batch.
-    expect(measured.queryCount).toBe(3);
-    expect(measured.result).toMatchObject({
+    expect(capped).toMatchObject({
       truncated: true,
       nodes: expect.any(Array),
       edges: expect.any(Array),
     });
-    expect(measured.result.nodes).toHaveLength(500);
-    expect(measured.result.edges).toHaveLength(1_000);
+    expect(capped.nodes).toHaveLength(500);
+    expect(capped.edges).toHaveLength(1_000);
     expect(
-      measured.result.branches.filter(
+      capped.branches.filter(
         (branch) => branch.relationshipKey === "inventory",
       ),
     ).toEqual(

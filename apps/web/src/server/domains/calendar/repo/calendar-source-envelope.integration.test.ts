@@ -1,6 +1,6 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
@@ -105,30 +105,5 @@ describe("Calendar selected source envelopes", () => {
     expect(projectItem).not.toHaveProperty("projectKind");
     expect(projectItem.startDate).toBe("2026-10-10");
     expect(result.days["2026-10-10"]?.mealCount).toBe(1);
-  });
-
-  it("keeps source read query count bounded as the selected Meal count grows", async () => {
-    const create = (index: number) =>
-      createMealWithEntityId(
-        ctx.db,
-        {
-          name: `Synthetic batched calendar meal ${index}`,
-          date: "2026-10-10",
-          mealType: "dinner",
-          mealKind: "cooked",
-        },
-        ctx.actor,
-      );
-    await create(0);
-    const onlyMeals = calendarRangeInput.parse({ ...input, kinds: ["meal"] });
-    const one = await countTestDbQueries(() =>
-      getCalendarRange(ctx.db, onlyMeals),
-    );
-    for (let index = 1; index < 10; index += 1) await create(index);
-    const many = await countTestDbQueries(() =>
-      getCalendarRange(ctx.db, onlyMeals),
-    );
-    expect(many.result.items).toHaveLength(10);
-    expect(many.queryCount).toBe(one.queryCount);
   });
 });

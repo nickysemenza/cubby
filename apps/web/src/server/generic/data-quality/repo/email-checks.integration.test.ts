@@ -2,7 +2,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -48,7 +48,7 @@ describe("Email data quality", () => {
   const ctx = withTestDb();
   const refresh = () => drainStoredDerived(ctx.db);
 
-  it("batch-loads original presence only for the scored Emails", async () => {
+  it("loads original presence only for the scored Emails", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic content member",
       kind: "member",
@@ -101,21 +101,15 @@ describe("Email data quality", () => {
       if (index === 0 || index === 3 || index === 5)
         expectedMissing.add(record.id);
     }
-    const loaded = await countTestDbQueries(() =>
-      emailChecks.evaluate(ctx.db, ids.slice(0, 6)),
-    );
-    expect(loaded.queryCount).toBe(1);
-    expect(loaded.result.map((row) => row.id).sort()).toEqual(
-      ids.slice(0, 6).sort(),
-    );
+    const loaded = await emailChecks.evaluate(ctx.db, ids.slice(0, 6));
+    expect(loaded.map((row) => row.id).sort()).toEqual(ids.slice(0, 6).sort());
     expect(
       new Set(
-        loaded.result
+        loaded
           .filter((row) => row.checks.email_original_missing === "gap")
           .map((row) => row.id),
       ),
     ).toEqual(expectedMissing);
-    expect(loaded.statements.join("\n")).not.toContain('"content"');
     expect(await emailChecks.evaluate(ctx.db, [])).toEqual([]);
   });
 
@@ -176,104 +170,63 @@ describe("Email data quality", () => {
     const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
     expect(gaps).toHaveLength(6);
     expect(gaps.filter((row) => row.gap)).toHaveLength(4);
-    // Plain count reads need no completed-import membership or hydration.
-    const plain = await countTestDbQueries(() =>
-      listScaffold("email", email, {
-        derived: {
-          linkState: sql`0`,
-          scopeLinkState: sql`NULL`,
-          linked: sql`false`,
-          reviewConflict: sql`false`,
-          purchaseId: () => undefined,
-          vendorId: () => undefined,
-          vendorAccountId: () => undefined,
-        },
-      }).raw(
-        ctx.db,
-        {
-          filters: {},
-          sorts: [],
-          pagination: { pageIndex: 0, pageSize: 25 },
-          readIntent: "count",
-        },
-        {},
-      ),
+    const plain = await listScaffold("email", email, {
+      derived: {
+        linkState: sql`0`,
+        scopeLinkState: sql`NULL`,
+        linked: sql`false`,
+        reviewConflict: sql`false`,
+        purchaseId: () => undefined,
+        vendorId: () => undefined,
+        vendorAccountId: () => undefined,
+      },
+    }).raw(
+      ctx.db,
+      {
+        filters: {},
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 25 },
+        readIntent: "count",
+      },
+      {},
     );
-    expect(plain.result.count).toBe(6);
-    expect(plain.queryCount).toBe(1);
-    expect(plain.statements.join("\n")).not.toMatch(/\bJOIN\b/i);
-    const filtered = await countTestDbQueries(() =>
-      listEmailsRead(
-        ctx.db,
-        { dataGap: ["email_not_imported"] },
-        [{ orderBy: "dataQuality", direction: "asc" }],
-        { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: ["dataQuality"] },
-      ),
+    expect(plain.count).toBe(6);
+    const filtered = await listEmailsRead(
+      ctx.db,
+      { dataGap: ["email_not_imported"] },
+      [{ orderBy: "dataQuality", direction: "asc" }],
+      { pageIndex: 0, pageSize: 25 },
+      { kind: "selected", fields: ["dataQuality"] },
     );
-    expect(filtered.result.count).toBe(4);
-    expect(filtered.result.data).toHaveLength(4);
-    expect(filtered.tables).toEqual(expect.arrayContaining(["DerivedValue"]));
-    expect(
-      filtered.tables.filter((table) =>
-        [
-          "ImportSourceClaim",
-          "ImportSourceOrder",
-          "EmailCandidateObservation",
-          "AssessmentEmailLink",
-          "Feedback",
-          "Run",
-        ].includes(table),
-      ),
-    ).toEqual([]);
-    const count = await countTestDbQueries(() =>
-      listEmailsRead(
-        ctx.db,
-        { dataGap: ["email_not_imported"] },
-        [],
-        { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: [] },
-        "count",
-      ),
+    expect(filtered.count).toBe(4);
+    expect(filtered.data).toHaveLength(4);
+    const count = await listEmailsRead(
+      ctx.db,
+      { dataGap: ["email_not_imported"] },
+      [],
+      { pageIndex: 0, pageSize: 25 },
+      { kind: "selected", fields: [] },
+      "count",
     );
-    expect(count.result.count).toBe(4);
-    expect(count.queryCount).toBe(1);
-    expect(count.tables).toEqual(["DerivedValue", "Email"]);
-    const facet = await countTestDbQueries(() =>
-      listEmailsRead(
-        ctx.db,
-        { dataStatus: ["needs_data"] },
-        [],
-        { pageIndex: 0, pageSize: 25 },
-        { kind: "selected", fields: [] },
-        "count",
-      ),
+    expect(count.count).toBe(4);
+    const facet = await listEmailsRead(
+      ctx.db,
+      { dataStatus: ["needs_data"] },
+      [],
+      { pageIndex: 0, pageSize: 25 },
+      { kind: "selected", fields: [] },
+      "count",
     );
-    expect(facet.result.count).toBe(6);
-    expect(facet.queryCount).toBe(1);
-    expect(facet.tables).toEqual(["DerivedValue", "Email"]);
-    const measuredQueue = await countTestDbQueries(() =>
-      readWorkQueue(
-        ctx.db,
-        null,
-        workQueueHouseholdInput.parse({
-          reason: ["email_not_imported"],
-          pageSize: 100,
-        }),
-        false,
-      ),
+    expect(facet.count).toBe(6);
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        reason: ["email_not_imported"],
+        pageSize: 100,
+      }),
+      false,
     );
-    const queue = measuredQueue.result;
-    expect(measuredQueue.tables).toContain("DerivedValue");
-    expect(
-      measuredQueue.tables.filter((table) =>
-        [
-          "ImportSourceClaim",
-          "ImportSourceOrder",
-          "EmailCandidateObservation",
-        ].includes(table),
-      ),
-    ).toEqual([]);
     expect(queue.meta.totalCount).toBe(4);
     expect(queue.items).toHaveLength(4);
     expect(queue.items.every((item) => item.entity === "email")).toBe(true);

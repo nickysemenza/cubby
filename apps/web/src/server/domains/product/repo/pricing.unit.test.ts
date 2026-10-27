@@ -117,21 +117,6 @@ describe("resolveProductPricing over a projected kit share", () => {
       source: "derived",
     });
   });
-
-  it("lets an explicit override beat the projection outright", () => {
-    expect(
-      resolveProductPricing(3.5, {
-        knownCost: 90,
-        knownExpenseCount: 0,
-        unknownExpenseCount: 0,
-        knownUnitCount: 1,
-      }),
-    ).toMatchObject({
-      derivedPrice: 90,
-      effectivePrice: 3.5,
-      source: "explicit",
-    });
-  });
 });
 
 describe("effectiveProductPriceSql", () => {

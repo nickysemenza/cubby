@@ -58,19 +58,6 @@ function Probe({
 }
 
 describe("useRowEnumSuggestion", () => {
-  it("never builds query options for a row that is not askable yet", async () => {
-    // Regression: a freshly added external-ID row (blank source, empty
-    // identifier) threw a ZodError out of `queryOptions` during render and
-    // took the whole product dialog down with it, `enabled: false`
-    // notwithstanding.
-    const built: Basis[] = [];
-    render(<Probe basis={{ identifier: "" }} enabled={false} built={built} />, {
-      wrapper: harness.wrapper,
-    });
-    expect(screen.getByTestId("value").textContent).toBe("none");
-    expect(built).toEqual([]);
-  });
-
   it("asks once the row is askable and surfaces the answer", async () => {
     const built: Basis[] = [];
     render(

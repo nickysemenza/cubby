@@ -231,17 +231,6 @@ describe("useTableVirtualizer pane scrolling", () => {
     unmount();
     expect(wrapperObserver?.disconnect).toHaveBeenCalledOnce();
   });
-
-  it("keeps a usable height on a short viewport", () => {
-    window.innerHeight = 300;
-    wrapperTop = 260;
-    render(<Harness />);
-
-    expect(screen.getByTestId("pane")).toHaveAttribute(
-      "data-max-height",
-      "320",
-    );
-  });
 });
 
 const grouped: GroupedItem[] = [

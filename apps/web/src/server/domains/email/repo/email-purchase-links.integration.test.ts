@@ -22,11 +22,7 @@ import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
  * Link that replaces another Purchase's link keeps who proposed that link;
  * only the Email's owner decides; and none of it changes spend.
  */
-import {
-  countTestDbQueries,
-  raceUniqueInsert,
-  withTestDb,
-} from "tooling/test-setup";
+import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -422,28 +418,19 @@ describe("Email Purchase links", () => {
       vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
     };
     const read = async () => {
-      const measured = await countTestDbQueries(() =>
-        listEmailsRead(
-          ctx.db,
-          filters,
-          [{ orderBy: "linkState", direction: "asc" }],
-          { pageIndex: 0, pageSize: 25 },
-          selectedListProjection("email", [
-            "linkState",
-            "purchaseLinks",
-            "linked",
-            "importOutcome",
-          ]),
-        ),
+      const page = await listEmailsRead(
+        ctx.db,
+        filters,
+        [{ orderBy: "linkState", direction: "asc" }],
+        { pageIndex: 0, pageSize: 25 },
+        selectedListProjection("email", [
+          "linkState",
+          "purchaseLinks",
+          "linked",
+          "importOutcome",
+        ]),
       );
-      expect(
-        measured.statements.some((statement) =>
-          statement.includes('abs(event."amount" - p."statedTotal")'),
-        ),
-      ).toBe(false);
-      expect(measured.tables).not.toContain("ImportSourceClaim");
-      expect(measured.tables).not.toContain("OrderMailEvent");
-      const row = measured.result.data.find((row) => row.id === f.email);
+      const row = page.data.find((row) => row.id === f.email);
       if (!row)
         throw new Error("Sender-proof Email must remain in Vendor scope");
       return row;

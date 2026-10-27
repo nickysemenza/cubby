@@ -72,7 +72,7 @@ function Heading({ title, count }: { title: string; count?: number }) {
   );
 }
 
-export function SavedViewChips({ entity }: { entity: Entity }) {
+function SavedViewChips({ entity }: { entity: Entity }) {
   const views = viewsForEntity(entity);
   if (views.length === 0) return dash;
   return (

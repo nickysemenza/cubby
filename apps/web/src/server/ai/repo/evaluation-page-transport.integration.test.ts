@@ -1,6 +1,3 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
 import {
   aiEvaluationTarget,
   aiProvenance,
@@ -8,7 +5,7 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -103,7 +100,7 @@ afterEach(() => {
 describe("Product page transport packing", () => {
   const ctx = withTestDb();
   it.each([1, 100])(
-    "packs %i real pair slots through cache/transport and measures the Product adapter",
+    "packs %i real pair slots through cache/transport",
     async (slotCount) => {
       const activation = await activateAiRefresh(
         ctx.db,
@@ -181,15 +178,11 @@ describe("Product page transport packing", () => {
         active--;
         return answer(input);
       });
-      const claim = await countTestDbQueries(() =>
-        claimAiEvaluationPage(ctx.db, anchor!.id),
-      );
-      expect(claim.result).toHaveLength(slotCount);
-      const execution = await countTestDbQueries(() =>
-        executeProductAiRefreshPage(ctx.db, claim.result, {
-          productIdentityPorts: { model: "typesafe/jev" },
-        }),
-      );
+      const claim = await claimAiEvaluationPage(ctx.db, anchor!.id);
+      expect(claim).toHaveLength(slotCount);
+      await executeProductAiRefreshPage(ctx.db, claim, {
+        productIdentityPorts: { model: "typesafe/jev" },
+      });
       expect(requests.length).toBeGreaterThan(slotCount === 1 ? 0 : 1);
       expect(requests.length).toBeLessThanOrEqual(slotCount);
       const sizes = requests.map(
@@ -240,7 +233,7 @@ describe("Product page transport packing", () => {
         operation: "product-identity",
       };
       const coldRequests = requests.length;
-      const capturedPairs = claim.result.map((entry) =>
+      const capturedPairs = claim.map((entry) =>
         preparedProductIdentityPair.parse(entry.evaluation.snapshot),
       );
       const warm = await settleDecisionChoices(capturedPairs, (pair) => ({
@@ -257,24 +250,6 @@ describe("Product page transport packing", () => {
         .where(eq(aiUsage.runId, runId));
       expect(allUsage.filter((row) => row.transport === "cache")).toHaveLength(
         slotCount,
-      );
-      const output = resolve(process.cwd(), "../../artifacts/page-execution");
-      await mkdir(output, { recursive: true });
-      await writeFile(
-        resolve(output, `integrated-product-page-${slotCount}.json`),
-        JSON.stringify(
-          {
-            slots: slotCount,
-            claimStatements: claim.queryCount,
-            executionStatements: execution.queryCount,
-            packedQuestions: sizes,
-            requests: requests.length,
-            peak,
-            statements: execution.statements,
-          },
-          null,
-          2,
-        ),
       );
     },
     120_000,

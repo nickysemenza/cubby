@@ -20,10 +20,6 @@ const nameOnlyForm = {
 };
 
 describe("formSchema", () => {
-  it("accepts a name-only recipe with materialized-empty meta and yield", () => {
-    expect(formSchema.safeParse(nameOnlyForm).success).toBe(true);
-  });
-
   it("requires a unit once a yield value is entered", () => {
     const result = formSchema.safeParse({
       ...nameOnlyForm,

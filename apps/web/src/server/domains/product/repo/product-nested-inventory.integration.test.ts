@@ -1,6 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { productInventoryEntriesByIdOut } from "@cubby/schemas/product";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -20,7 +20,7 @@ import { getProductWithFood } from "./write/product-writes";
 describe("Product nested live Inventory reads", () => {
   const ctx = withTestDb();
 
-  it("batches authoritative amounts and terminates compact holding Locations while preserving stock and installed evidence", async () => {
+  it("projects authoritative amounts and terminates compact holding Locations while preserving stock and installed evidence", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
@@ -71,30 +71,24 @@ describe("Product nested live Inventory reads", () => {
       { findFood: async () => null },
       product.entityId,
     );
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        readPublicEntityRows({
-          db: ctx.db,
-          entity: "product",
-          projection: "detail",
-          rows: Array.from({ length: count }, (_, index) => ({
-            ...raw,
-            inventoryEntry: raw.inventoryEntry.map((entry) => ({
-              ...entry,
-              amount: { value: 99, unit: "each" },
-              valuation: 999,
-              location: {
-                ...entry.location,
-                name: `Synthetic holding snapshot ${index}`,
-              },
-            })),
-          })),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
-    for (const [index, row] of repeated.result.entries()) {
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "product",
+      projection: "detail",
+      rows: Array.from({ length: 20 }, (_, index) => ({
+        ...raw,
+        inventoryEntry: raw.inventoryEntry.map((entry) => ({
+          ...entry,
+          amount: { value: 99, unit: "each" },
+          valuation: 999,
+          location: {
+            ...entry.location,
+            name: `Synthetic holding snapshot ${index}`,
+          },
+        })),
+      })),
+    });
+    for (const [index, row] of repeated.entries()) {
       expect(row.inventoryEntry.map((entry) => entry.id)).toEqual(
         raw.inventoryEntry.map((entry) => entry.id),
       );

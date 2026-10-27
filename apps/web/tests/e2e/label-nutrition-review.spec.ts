@@ -13,7 +13,7 @@ import { expect, test } from "./support/e2e-test";
 
 async function seedLabelReview(page: Page, objectStorageUrl: string) {
   const name = `E2E label panel ${Date.now()}`;
-  // Product/photo creation is covered by product-photo-first.spec.ts.
+  // Product/photo creation is covered by photo-group-review.spec.ts.
   const product = await createEntityFixture(page, "product", {
     name,
     labelNutrition: {

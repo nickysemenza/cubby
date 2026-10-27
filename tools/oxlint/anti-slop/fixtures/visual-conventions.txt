@@ -1,3 +1,0 @@
-const classes = clsx("uppercase");
-const density = { cellClass: "text-[13px]" };
-const MENU_CLASS = "rounded-t-xl";

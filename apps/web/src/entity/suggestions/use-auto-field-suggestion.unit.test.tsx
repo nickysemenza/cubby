@@ -687,34 +687,6 @@ describe("useAutoFieldSuggestion", () => {
     await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
   });
 
-  it("auto-fills a silently-suggested value in create mode without dirtying the field", async () => {
-    let form!: UseFormReturn<FieldValues>;
-    const operations = operationsReturning(() => ({
-      suggestions: { trade: tradeSuggestion },
-    }));
-    render(
-      <Harness
-        entity="task"
-        mode="create"
-        fieldKeys={["trade"]}
-        textFields={["name"]}
-        operations={operations}
-        onReady={(f) => {
-          form = f;
-        }}
-      />,
-      { wrapper: harness.wrapper },
-    );
-
-    fireEvent.change(screen.getByLabelText("name"), {
-      target: { value: "hang upper cabinets" },
-    });
-    await waitFor(() => expect(form.getValues("trade")).toBe("cabinetry"));
-
-    expect(calls).toHaveLength(1);
-    expect(isDirtyText("trade")).toBe("false");
-  });
-
   // Regression: an auto-fill is the answer to the basis it was asked about.
   // When the next settled basis yields no suggestion (the model declined),
   // the untouched field must not keep the stale value — with no hint, it
@@ -1262,20 +1234,6 @@ describe("useAutoFieldSuggestion", () => {
         }),
       ]);
     });
-  });
-
-  it("reports in dev when a suggestField control has no provider mounted above it", () => {
-    // Regression: this used to be a silent no-op, which is exactly why the
-    // Discard dialogs' missing provider went unnoticed for as long as it did.
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    function Unwrapped() {
-      const form = useForm<FieldValues>({ defaultValues: { trade: "" } });
-      return <Probe form={form} target="trade" />;
-    }
-    render(<Unwrapped />, { wrapper: harness.wrapper });
-
-    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("trade"));
-    errorSpy.mockRestore();
   });
 
   it("stays silent when the caller explicitly passes disabled", () => {

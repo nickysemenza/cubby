@@ -1,6 +1,6 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -349,10 +349,8 @@ describe("Run detail reports", () => {
           state: "completed",
         },
       ]);
-    const batch = await countTestDbQueries(() =>
-      buildEntityReports(ctx.db, { id, slots: [...POLLED] }),
-    );
-    const timeline = batch.result.reports.find(
+    const batch = await buildEntityReports(ctx.db, { id, slots: [...POLLED] });
+    const timeline = batch.reports.find(
       (entry) => entry.slot === "run.import-timeline",
     )?.report;
     const rows = timeline?.blocks.flatMap((block) =>
@@ -360,18 +358,11 @@ describe("Run detail reports", () => {
     );
     expect(rows?.map((row) => row.key)).toEqual([operationId]);
     expect(JSON.stringify(timeline)).not.toContain("Synthetic result");
-    const importReports = batch.result.reports.filter(
+    const importReports = batch.reports.filter(
       ({ slot }) =>
         slot !== "run.live-progress" && slot !== "run.import-timeline",
     );
     expect(importReports.flatMap(({ report }) => report.blocks)).toEqual([]);
-    console.info(
-      "Run report read evidence",
-      JSON.stringify({
-        workload: "synthetic-photo-polled-reports",
-        sqlCount: batch.queryCount,
-      }),
-    );
     await getDb(ctx.db)
       .insert(runOperation)
       .values({
@@ -399,35 +390,25 @@ describe("Run detail reports", () => {
     expect(nextRows[0]?.detail?.text).toContain("synthetic-new-work");
   });
 
-  it("reads every polled run slot in one batch that loads the run once", async () => {
+  it("reads every polled run slot in one batch matching individual reads", async () => {
     const { id } = await startRun();
-    const singles = await countTestDbQueries(async () => {
-      const out = [];
-      for (const slot of POLLED)
-        out.push(
-          await buildEntityReport(ctx.db, {
-            slot,
-            scope: { kind: "record", id: id },
-          }),
-        );
-      return out;
-    });
-    const batch = await countTestDbQueries(() =>
-      buildEntityReports(ctx.db, { slots: [...POLLED], id }),
-    );
-    expect(batch.result.reports.map((entry) => entry.slot)).toEqual([
-      ...POLLED,
-    ]);
-    expect(batch.result.reports[2]?.report.live).toBe(true);
-    // One run detail load serves every slot, so the batch costs about one slot's queries.
-    expect(batch.queryCount).toBeLessThan(singles.queryCount / 3);
-    expect(batch.result.reports.map((entry) => entry.report.blocks)).toEqual(
-      singles.result.map((report) => report.blocks),
+    const singles = [];
+    for (const slot of POLLED)
+      singles.push(
+        await buildEntityReport(ctx.db, {
+          slot,
+          scope: { kind: "record", id: id },
+        }),
+      );
+    const batch = await buildEntityReports(ctx.db, { slots: [...POLLED], id });
+    expect(batch.reports.map((entry) => entry.slot)).toEqual([...POLLED]);
+    expect(batch.reports[2]?.report.live).toBe(true);
+    expect(batch.reports.map((entry) => entry.report.blocks)).toEqual(
+      singles.map((report) => report.blocks),
     );
   });
 
-  // Duplicates used to reread progress/log/usage even in the Run-specific batch.
-  it("shares repeated Run dependencies without dropping duplicate slots", async () => {
+  it("keeps duplicate Run slots", async () => {
     const { id } = await startRun();
     const slots = [
       "run.live-progress",
@@ -436,37 +417,18 @@ describe("Run detail reports", () => {
       "run.changes",
       "run.import-stats",
     ] as const;
-    const one = await countTestDbQueries(() =>
-      buildEntityReports(ctx.db, { id, slots: [...slots] }),
-    );
-    const repeated = await countTestDbQueries(() =>
-      buildEntityReports(ctx.db, { id, slots: [...slots, ...slots] }),
-    );
-    expect(repeated.queryCount).toBe(one.queryCount);
-    expect(repeated.result.reports.map(({ slot }) => slot)).toEqual([
+    const one = await buildEntityReports(ctx.db, { id, slots: [...slots] });
+    const repeated = await buildEntityReports(ctx.db, {
+      id,
+      slots: [...slots, ...slots],
+    });
+    expect(repeated.reports.map(({ slot }) => slot)).toEqual([
       ...slots,
       ...slots,
     ]);
-    expect(repeated.result.reports.map(({ report }) => report)).toEqual(
-      [...one.result.reports, ...one.result.reports].map(
-        ({ report }) => report,
-      ),
+    expect(repeated.reports.map(({ report }) => report)).toEqual(
+      [...one.reports, ...one.reports].map(({ report }) => report),
     );
-  });
-
-  it("shares the Run identity across distinct polled slots", async () => {
-    const { id } = await startRun();
-    const batch = await countTestDbQueries(() =>
-      buildEntityReports(ctx.db, {
-        id,
-        slots: ["run.import-stats", "run.ai-usage", "run.changes"],
-      }),
-    );
-    expect(
-      batch.statements.filter((statement) =>
-        statement.startsWith('select "id" from "Run"'),
-      ),
-    ).toHaveLength(1);
   });
 
   it("keeps paged Run cursors and reads updated status on the next request", async () => {

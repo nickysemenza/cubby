@@ -2951,8 +2951,8 @@ assert `derivedMarkTickets(db, "<entity>.<key>", ref)` before draining (omit
 `reconcileDerivedRefreshInputs(db)` only for explicit cache repair coverage;
 reconciliation would conceal a missing declared input in a mutation test.
 
-Lists that need a value live instead (a one-hop lookup or an indexed rollup the
-round-trip report shows cheap) compile it inline; the Location list's direct
+Lists that need a value live instead (a one-hop lookup or an indexed rollup that stays
+cheap) compile it inline; the Location list's direct
 value is a live sum of stored inventory valuations.
 Inventory detail reads, mutation read-backs and Product stock embeds all use the
 published inventory valuation, including unknown before its first computation.

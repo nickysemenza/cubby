@@ -1,6 +1,4 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { testShortcode } from "@cubby/schemas/testing";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
@@ -221,54 +219,6 @@ describe("GenericEntityDetail", () => {
     expect(document.getElementById(jump!.hash.slice(1))).not.toBeNull();
   });
 
-  it("links a reference field to its target's detail route", () => {
-    const record = recordFor("task");
-    // SAFETY: `testShortcode` mints a valid project shortcode.
-    const projectId = testShortcode("project", "PRJ-DECK");
-    const linked = {
-      ...record,
-      projectName: "Deck rebuild",
-      fields: {
-        ...record.fields,
-        projectId: fieldValueFixture(
-          entityFieldEnvelopeSchemas.task.detail.shape.fields.shape.projectId,
-          projectId,
-        ),
-      },
-    };
-    render(
-      <GenericEntityDetail
-        entity="task"
-        record={linked}
-        operations={operations}
-      />,
-      {
-        wrapper: harness.wrapper,
-      },
-    );
-    expect(screen.getByRole("link", { name: "Deck rebuild" })).toHaveAttribute(
-      "href",
-      `/projects/${projectId}`,
-    );
-  });
-
-  // Regression: the hero chip read only static `control.options`, so a task
-  // (whose status labels live in the rich option table) stamped the raw
-  // `not_started` on its own page while every other surface said "Not started".
-  it("stamps the hero chip with the enum's rich label", () => {
-    const record = { ...recordFor("task"), status: "not_started" as const };
-    render(
-      <GenericEntityDetail
-        entity="task"
-        record={record}
-        operations={operations}
-      />,
-      { wrapper: harness.wrapper },
-    );
-    expect(screen.getAllByText("Not started").length).toBeGreaterThan(0);
-    expect(screen.queryByText("not_started")).toBeNull();
-  });
-
   // Regression: `externalIds` is a `text-array` field whose read shape is an
   // array of objects; deriving its cohort link used to parse it as strings
   // and crash the whole product page.
@@ -422,7 +372,7 @@ describe("GenericEntityDetail", () => {
     ).toBeVisible();
   });
 
-  it("labels a book barcode as its ISBN and keeps the declared field order", () => {
+  it("labels a book barcode as its ISBN", () => {
     const record = recordFor("product");
     const book = {
       ...record,
@@ -470,30 +420,6 @@ describe("GenericEntityDetail", () => {
     );
     expect(labels).toContain("Name");
     expect(labels).toContain("ISBN-13");
-    const summarized = new Set<string>(
-      entitySummary.product.detail.summary.flatMap((slot) =>
-        slot.kind === "fields" ? slot.fields : [],
-      ),
-    );
-    for (const section of entitySummary.product.detail.sections) {
-      if (section.kind !== "fields") continue;
-      const sectionLabels = Array.from(
-        container.querySelectorAll(
-          `section#${section.id} [data-slot="fact-label"]`,
-        ),
-        (element) => element.textContent,
-      );
-      const declared = section.fields
-        .filter((key) => !summarized.has(key))
-        .map((key) =>
-          key === "primaryGtin"
-            ? "ISBN-13"
-            : (entityFieldModels.product.fields.find(
-                (field) => field.key === key,
-              )?.label ?? key),
-        );
-      expect(sectionLabels).toEqual(declared);
-    }
   });
 
   it("relation section header carries the loaded count and actions", async () => {

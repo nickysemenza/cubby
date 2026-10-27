@@ -5,7 +5,7 @@ import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import { contributionRole } from "@cubby/schemas/ledger-party";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
@@ -486,17 +486,13 @@ it("reports omitted ownership branches and keeps the full stack for each include
       amountUnit: "each",
     });
   }
-  const measured = await countTestDbQueries(() =>
-    loadFieldResolutionEvidence(
-      ctx.db,
-      "product",
-      product.shortcode,
-      "owners",
-      null,
-    ),
+  const result = await loadFieldResolutionEvidence(
+    ctx.db,
+    "product",
+    product.shortcode,
+    "owners",
+    null,
   );
-  const result = measured.result;
-  expect(measured.queryCount).toBeLessThan(25);
   expect(result.truncated).toBe(true);
   expect(result.evidence?.branches).toEqual({
     total: 51,

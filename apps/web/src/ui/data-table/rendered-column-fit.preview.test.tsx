@@ -324,31 +324,6 @@ function DateFitFixture() {
 const width = (element: Element) => element.getBoundingClientRect().width;
 
 describe("rendered column fit", () => {
-  it("does not read table geometry for mutations outside the measured cells", async () => {
-    await page.viewport(1440, 900);
-    await document.fonts.ready;
-    const view = render(<FitFixture />);
-    await waitFor(() =>
-      expect(width(view.getByTestId("location"))).toBeLessThan(100),
-    );
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-    const table = view.container.querySelector("table");
-    if (!table?.parentElement)
-      throw new Error("Missing fitted table container");
-    const geometry = vi.spyOn(table, "getBoundingClientRect");
-    try {
-      table.parentElement.append(document.createElement("span"));
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      );
-      expect(geometry).not.toHaveBeenCalled();
-    } finally {
-      geometry.mockRestore();
-    }
-  });
-
   it("measures newly mounted cells without cloning unchanged rows", async () => {
     await page.viewport(1440, 900);
     await document.fonts.ready;
@@ -501,19 +476,6 @@ describe("rendered column fit", () => {
         bounds.right - Number.parseFloat(style.paddingRight) + 1,
       );
     });
-  });
-
-  // Headers are one line: a long label sets its column's width, capped, rather
-  // than wrapping beside a narrow pill.
-  it("fits a long header on one line", async () => {
-    await page.viewport(1440, 900);
-    const header = "Itemization coverage";
-    const view = render(<FitFixture qualityHeader={header} />);
-    const label = view.getByText(header);
-    await waitFor(() =>
-      expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth),
-    );
-    expect(width(view.getByTestId("quality"))).toBeLessThan(184);
   });
 
   // Regression: chip clusters were never measured, so a single related

@@ -95,7 +95,7 @@ hash/dimensions before attaching the label. Inject the external description agai
 that verified source; do not repeat `verifyImages` or visit an auth page just to
 obtain its mutation Origin. Keep the source-panel image, Cancel preserving current
 nutrition, native serving edit/Save, exact saved nutrients, image-code provenance
-and inference evidence. `product-photo-first.spec.ts` owns real saved-label gallery
+and inference evidence. `photo-group-review.spec.ts` (own photos, no import run) owns real saved-label gallery
 rendering; a dedicated label-thumbnail reload after nutrition Save is removed.
 `image-verification.service.unit.test.ts` retains missing-object, legacy backfill
 and changed-byte mismatch checks; this nutrition case no longer samples the
@@ -455,7 +455,6 @@ still asserts zero stock writes.
 
 Inheritance browser coverage owns the real reset from a matching explicit Project
 into live Purchase inheritance, with stored-mode readback and visible provenance.
-Allocation contributor interactions belong in `resolution-evidence.spec.ts`;
 `purchase-inheritance.integration.test.ts` owns exact Project shares on detail
 and list explanations and absence of a stored override. Do not add tax fixtures,
 extra detail visits or Purchase-cell overflow checks to the reset journey.
@@ -537,7 +536,7 @@ selections are not validation evidence. Never raise the retry count.
 Scope artificial CPU throttling to the interaction whose race it guards;
 restore normal speed for unrelated setup and read-back. A shared detail
 renderer's section matrix renders once per entity and checks all declared
-sections together; the continuous-detail browser journey owns hash navigation.
+sections together.
 
 Table record-identity links open an inspector. For full-record assertions,
 follow its Open full details action or navigate directly; clicking the row's
@@ -682,22 +681,14 @@ bare pg Pool.end can resolve before those sockets close. Keep the same connectio
 limit and query instrumentation when switching a test to this existing owner.
 Purchase-agent scenarios capture source/build provenance at suite boundaries and
 write one checksummed bundle with separate per-case reports. Their Workers still
-close after each case; Mail-only scenarios omit object storage. Socket-lifecycle
-coverage shortens the configured pool idle timeout and observes three times that
-interval per quiet window, preserving real expiry without production-length waits.
-It uses a synthetic persisted session and Better Auth's signer, as the real Worker
-provider-discovery owner does, to authenticate its HTTP calls. Password signup is
-owned by browser runtime authentication; do not repeat it inside socket lifecycle.
-Keep all three quiet windows, concurrent reads, freshness writes and socket-count
-assertions; removing password setup must not shorten the expiry observation.
+close after each case; Mail-only scenarios omit object storage.
 
 Native relation journeys scroll the navigation row back into view after inspecting
 its badges, then wait for the destination detail marker before inspecting
 inverse evidence. A successful tap alone does not establish navigation.
 
 The Plant connection browser owner keeps its multi-hop task/project paths, both purchases,
-Open all plantings and Project/Task composition. Product inverse navigation stays
-in `product-clarity.spec.ts`; the existing connected-record SQL owner checks
+Open all plantings and Project/Task composition. The existing connected-record SQL owner checks
 Vendor purchased-Product traversal and duplicate Expense paths. Dedicated Vendor
 Product-section rendering and its path-copy check are a presentation tradeoff;
 do not repeat those visits inside the Plant journey.
@@ -768,8 +759,7 @@ orders for the same item reuse the Product reference returned by resolution.
 
 Garden journeys batch their Plant, Location and existing Planting prerequisites.
 The populated Location journey owns its native section create action and both
-Planting rows; shared empty-section/count behavior stays in the two viewport
-`continuous-detail.spec.ts` cases. Dedicated empty-Location section sampling is
+Planting rows; shared empty-section/count behavior has no dedicated browser case. Dedicated empty-Location section sampling is
 removed. Journal creation retains immediate display and a fresh Location document
 read-back of the same saved entry; an extra intervening Planting reload adds no
 write coverage. Dedicated Planting-journal reload composition is the deliberate

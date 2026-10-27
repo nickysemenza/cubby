@@ -165,8 +165,7 @@ derived inputs at priority 1, while member transactions use 0. Savepoints
 inherit the outer transaction's priority. This uses the existing dirty-mark
 priority and does not add another queue or change Job selection weights.
 Each root Job transaction adds one setup statement; savepoints and ordinary
-member transactions add none. Publication query budgets include that fixed
-cost while retaining their separate transaction-size bounds.
+member transactions add none.
 
 `JOB_KIND_POLICY.maxInFlight` optionally caps background claims across all
 drains. Selection admits only the remaining capacity; claim-time admission

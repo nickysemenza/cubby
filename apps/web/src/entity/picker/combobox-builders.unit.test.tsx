@@ -116,22 +116,6 @@ describe("entity picker value adapters", () => {
       buildVendorComboboxItem({ id: vendor, name: "Acme" }, { itemId: "name" }),
     ).toMatchObject({ id: "Acme", shortcode: vendor, name: "Acme" });
   });
-
-  it("agrees on everything except the id between the two vendor item-id modes", () => {
-    const vendor = testShortcode("vendor", "VEN-9ABC");
-    const input = { id: vendor, name: "Acme", count: 3 };
-    const byName = buildVendorComboboxItem(input, { itemId: "name" });
-    const byShortcode = buildVendorComboboxItem(input, {
-      itemId: "shortcode",
-    });
-
-    expect({ ...byName, id: undefined }).toEqual({
-      ...byShortcode,
-      id: undefined,
-    });
-    expect(byName.id).toBe("Acme");
-    expect(byShortcode.id).toBe(vendor);
-  });
 });
 
 // Regression: generic record rows always used the glyph, even for a record

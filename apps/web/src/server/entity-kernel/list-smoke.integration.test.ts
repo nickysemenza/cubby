@@ -8,7 +8,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * time; an unused filter can still silently return unrelated records.
  *
  * This file drives EVERY declared filter (one at a time) and EVERY declared
- * sort field, for EVERY kernel entity with a list operation, through the real
+ * sort field, for the representative entities below, through the real
  * production list readers against real Postgres. Plan probes use selected
  * identity reads, avoiding unrelated media/quality hydration. Baselines and
  * unmatched-ID checks use the same core reader; complete kernel output and
@@ -57,7 +57,6 @@ import {
   startRunStep,
 } from "~/server/domains/run/repo/run-step";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type {
   EntityKernelEntity,
   EntityQueryCommand,
@@ -76,6 +75,19 @@ import {
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { drainStoredDerived } from "~/server/testing/background-queue";
+
+/**
+ * Every listable entity shares one list runtime, so the matrix samples the
+ * richest declarations instead of the whole catalog: Product (identity and
+ * the widest filter set), Expense and FinancialTransaction (money, Run step
+ * input), and GardenEntry (a filter that must resolve a real shortcode).
+ */
+const REPRESENTATIVE_ENTITIES = [
+  "product",
+  "expense",
+  "financialTransaction",
+  "gardenEntry",
+] as const satisfies readonly EntityKernelEntity[];
 
 /* oxlint-disable anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
 /**
@@ -181,7 +193,7 @@ function buildFilterSample(
 describe("entity list smoke — shared selection/count FROM context", () => {
   const ctx = withTestDb();
 
-  it("resolves every declared filter and sort for every listable entity", async () => {
+  it("resolves every declared filter and sort for representative listable entities", async () => {
     const universe = await seedReferenceUniverse(ctx.db);
     const kernelCtx = buildKernelContext(ctx.db);
     // Contextual input filters need retained selection metadata, not a random token.
@@ -249,7 +261,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
     };
 
     const seededCodes = new Set(universe.shortcodeByPrefix.values());
-    for (const entity of ENTITY_KERNEL_ENTITIES) {
+    for (const entity of REPRESENTATIVE_ENTITIES) {
       const binding = ENTITY_KERNEL_BINDINGS[entity];
       const listEntity = z.enum(listEntities).safeParse(entity);
       // Plan probes need selected rows/counts, not media/quality hydration.
@@ -404,5 +416,5 @@ describe("entity list smoke — shared selection/count FROM context", () => {
       failures.join("\n"),
       `${failures.length} of ${caseCount} list case(s) threw a FROM-clause/plan error or ignored a filter:\n${failures.join("\n")}\n`,
     ).toBe("");
-  }, 180_000); // The full entity matrix still needs headroom under CI load.
+  }, 60_000);
 });

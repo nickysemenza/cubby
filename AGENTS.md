@@ -4,6 +4,10 @@
 
 - Make the requested change; preserve unrelated edits. Update the behavior's
   [owning doc](docs/README.md#ownership-and-pruning) in the same change.
+- Tests protect member journeys and dangerous data rules (money, identity,
+  evidence, permissions, concurrency), not implementation; a bug fix adds no
+  test by default. [Signal and speed](docs/agents/validation.md#signal-and-speed)
+  owns the philosophy and deletion rules.
 - Reuse existing coverage. For test choice, checks, or delivery, load only the
   relevant [validation section](docs/agents/validation.md#entry-points).
   Before any TypeScript typecheck, load the

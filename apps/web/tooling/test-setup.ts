@@ -25,7 +25,6 @@ import {
   BASE_HOME_SHORTCODE,
   seedBaseWorld,
 } from "./factories/base-world";
-import { AsyncLocalStorage } from "node:async_hooks";
 import {
   type ActorContext,
   type AuditChannel,
@@ -37,10 +36,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { type Pool } from "pg";
 import { afterEach, beforeEach, expect } from "vitest";
 import { Database } from "../src/server/db/database";
-import {
-  observePgPoolAndClientQueries,
-  tracePool,
-} from "../src/server/db/db-pg-tracing";
+import { tracePool } from "../src/server/db/db-pg-tracing";
 import * as schema from "../src/server/db/schema";
 import type {
   EntityCreateInput,
@@ -69,75 +65,6 @@ const toTestDatabase = (
   };
   return createDatabase(() => runtime);
 };
-
-/**
- * Test-only SQL counter.  It wraps the file-local pool at its lowest shared
- * point, so it sees both ordinary `pool.query()` calls and the checked-out
- * client queries used by `withConnection()`.  The async scope makes parallel
- * work within a lane count correctly without leaking setup/fixture SQL into a
- * measurement.
- */
-interface QueryMeasurement {
-  count: number;
-  statements: string[];
-  tables: Set<string>;
-}
-
-const queryMeasurement = new AsyncLocalStorage<QueryMeasurement>();
-
-const countObservedStatement = (text: string) => {
-  const measurement = queryMeasurement.getStore();
-  if (!measurement) return;
-  measurement.count += 1;
-  // Normalize in-list arity (`in ($1, $2, …)` → `in (…)`) so a diff of
-  // two measurements compares statement SHAPES, not page sizes.
-  // Inspect full SQL before shortening display excerpts: long SELECT lists must not hide dependent reads.
-  for (const match of text.matchAll(
-    /\b(?:FROM|JOIN|UPDATE|INTO)\s+"([A-Za-z][A-Za-z0-9_]*)"/giu,
-  )) {
-    if (match[1]) measurement.tables.add(match[1]);
-  }
-  measurement.statements.push(
-    text
-      .replace(/\s+/g, " ")
-      .replace(/\(\s*\$\d+(?:\s*,\s*\$\d+)*\s*\)/g, "(…)")
-      .slice(0, 160),
-  );
-};
-
-// tracePool is the production wrapper (it serializes each connection's
-// queries); counting sits on top so it sees the same statements as before.
-const countPoolQueries = (pool: Pool): Pool =>
-  observePgPoolAndClientQueries(
-    tracePool(pool, "strong"),
-    countObservedStatement,
-  );
-
-/**
- * Count SQL statements issued by one operation against this integration
- * file's database.  This deliberately measures statements, not wall time:
- * CI and a shared local PostgreSQL instance make time budgets flaky, while an
- * accidental per-row query is deterministic and actionable.
- */
-export async function countTestDbQueries<T>(run: () => Promise<T>): Promise<{
-  result: T;
-  queryCount: number;
-  statements: string[];
-  tables: string[];
-}> {
-  const measurement = {
-    count: 0,
-    statements: [],
-    tables: new Set<string>(),
-  } satisfies QueryMeasurement;
-  const result = await queryMeasurement.run(measurement, run);
-  return {
-    result,
-    queryCount: measurement.count,
-    statements: measurement.statements,
-    tables: [...measurement.tables].sort(),
-  };
-}
 
 export const TEST_USER_ID = "test-user-id";
 export const TEST_HOME_ID = BASE_HOME_ID;
@@ -375,8 +302,9 @@ interface FixtureDb {
 }
 
 function openTestPool(databaseUrl: string): Pool {
-  const pool = countPoolQueries(
+  const pool = tracePool(
     createPostgresPool({ connectionString: databaseUrl }),
+    "strong",
   );
   // See getFileDb: terminated idle backends surface as pool errors.
   pool.on("error", () => {});

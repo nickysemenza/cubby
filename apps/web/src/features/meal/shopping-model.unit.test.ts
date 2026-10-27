@@ -14,7 +14,6 @@ import { z } from "zod";
 import {
   buildShoppingColumns,
   buildShoppingRows,
-  SHOPPING_CHECKED_STORAGE_KEY,
   shoppingRowsToText,
   toggleInSet,
 } from "./shopping-model";
@@ -326,14 +325,5 @@ describe("shoppingRowsToText", () => {
     expect(text).toContain("Quantity unresolved");
     expect(text).toContain("Dough: missingYield");
     expect(text).not.toContain("[ ] salt");
-  });
-});
-
-describe("check-off storage key", () => {
-  it("does not vary with the date range", () => {
-    // The regression this pins: the key used to interpolate from/to, so
-    // nudging either end mid-shop swapped in an empty bucket and lost every
-    // tick. Row keys never depended on the range, only the storage key did.
-    expect(SHOPPING_CHECKED_STORAGE_KEY).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 });

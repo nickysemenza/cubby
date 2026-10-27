@@ -76,7 +76,7 @@ export const productIdentityPrompt = (subject: string) => ({
 });
 /** What catalog retrieval could not see, recorded on the evaluation result
  * rather than silently narrowing the candidate set. */
-export type ProductIdentityRetrievalCoverage = {
+type ProductIdentityRetrievalCoverage = {
   droppedClaims: DroppedProductIdentifierClaim[];
   semanticNeighbours:
     | { status: "queried"; count: number }
@@ -95,7 +95,7 @@ const ownIdentifier = alias(entityExternalId, "own"),
   otherIdentifier = alias(entityExternalId, "other");
 
 /** One catalog claim load and one source-to-candidate relation per page. */
-export async function retrieveProductIdentityCandidatePage(
+async function retrieveProductIdentityCandidatePage(
   db: Database,
   sourceIds: readonly ProductId[],
 ) {

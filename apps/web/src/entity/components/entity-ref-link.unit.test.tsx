@@ -235,21 +235,6 @@ describe("EntityRefLink record identity", () => {
     ).toHaveAttribute("src", "https://images.example/seeded.jpg");
   });
 
-  it("falls back to the provider's canonical image when none is passed", () => {
-    renderLink(
-      <EntityDisplayImagesProvider
-        refs={[]}
-        seeded={seededProductImage("PRD-CHIP")}
-      >
-        <EntityRefLink entity="product" id="PRD-CHIP" name="Chip product" />
-      </EntityDisplayImagesProvider>,
-    );
-
-    expect(
-      screen.getByRole("link", { name: /Chip product/ }).querySelector("img"),
-    ).toHaveAttribute("src", "https://images.example/seeded.jpg");
-  });
-
   // A missing projection name must resolve without losing the record route,
   // including kinds whose legacy audit references used UUIDs.
   it.each([

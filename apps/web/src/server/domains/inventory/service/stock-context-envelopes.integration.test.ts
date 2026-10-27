@@ -2,7 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { inventoryReceivingStockOut } from "@cubby/schemas/inventory";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryHandlers } from "~/server/domains/inventory/operations.server";
@@ -105,25 +105,17 @@ describe("live receiving and scan fields", () => {
         (row) => row.value,
       ),
     ).toEqual([3]);
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        publicFieldEnvelopeRows({
-          db: ctx.db,
-          entity: "inventory",
-          schema: inventoryReceivingStockOut,
-          rows: Array.from({ length: count }, () => ({
-            ...raw.stock[0],
-            amount: { value: 99, unit: "each" },
-          })),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
+    const repeated = await publicFieldEnvelopeRows({
+      db: ctx.db,
+      entity: "inventory",
+      schema: inventoryReceivingStockOut,
+      rows: Array.from({ length: 20 }, () => ({
+        ...raw.stock[0],
+        amount: { value: 99, unit: "each" },
+      })),
+    });
     expect(
-      repeated.result.every(
-        (row) => fieldValueOf(row.fields.amount)?.value === 3,
-      ),
+      repeated.every((row) => fieldValueOf(row.fields.amount)?.value === 3),
     ).toBe(true);
   });
 });

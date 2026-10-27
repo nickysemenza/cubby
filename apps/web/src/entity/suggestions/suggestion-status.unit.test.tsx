@@ -37,13 +37,6 @@ function suggestion(value: string, probability: number): FieldSuggestion {
 }
 
 describe("SuggestionStatus copy", () => {
-  it("renders nothing when there is nothing to report", () => {
-    const { container } = render(
-      <SuggestionStatus checking={false} failures={0} count={0} fields={[]} />,
-    );
-    expect(container).toBeEmptyDOMElement();
-  });
-
   // Regression: a failed check left nothing to report, so the focused
   // "Checking suggestions…" trigger unmounted and the bulk-edit dialog
   // refocused its own shell mid-interaction.
@@ -163,40 +156,6 @@ describe("SuggestionStatus copy", () => {
       screen.getByText(
         "No suggestions · 1 field checked · 1 not checked · Some suggestions unavailable",
       ),
-    ).toBeInTheDocument();
-  });
-
-  it("lists each field's outcome in the popover at or below the listing cap", () => {
-    const materials = suggestion("materials", 0.91);
-    const fields: SuggestionStatusField[] = [
-      {
-        label: "Category",
-        outcome: pick(0.91),
-        suggestion: materials,
-        currentValue: "materials",
-        currentLabel: "Materials",
-      },
-      {
-        label: "Location",
-        outcome: skipped("no_candidates"),
-        suggestion: null,
-        currentValue: null,
-      },
-    ];
-    render(
-      <SuggestionStatus
-        checking={false}
-        failures={0}
-        count={0}
-        fields={fields}
-      />,
-    );
-    openPopover();
-    expect(
-      screen.getByText("Category — Agrees with Materials · 91% · high"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Location — Not checked — no candidates"),
     ).toBeInTheDocument();
   });
 

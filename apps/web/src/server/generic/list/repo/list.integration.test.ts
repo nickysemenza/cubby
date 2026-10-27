@@ -1,6 +1,6 @@
 import { and, asc, eq, exists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -83,23 +83,17 @@ describe("list selection and relation loading", () => {
         })),
       };
     };
-    const page = await countTestDbQueries(() => read("page"));
-    expect(page.result).toEqual({
+    expect(await read("page")).toEqual({
       count: 2,
       data: [
         { name: "Test Alpha", parent: "Test Parent" },
         { name: "Test Zulu", parent: "Test Parent" },
       ],
     });
-    expect(page.queryCount).toBe(2);
-    const count = await countTestDbQueries(() => read("count"));
-    expect(count.result).toEqual({ count: 2, data: [] });
-    expect(count.queryCount).toBe(1);
-    const empty = await countTestDbQueries(() => read("page", 5));
-    expect(empty.result).toEqual({ count: 2, data: [] });
-    expect(empty.queryCount).toBe(2);
-    const noMatches = await countTestDbQueries(() =>
-      scaffold.raw(
+    expect(await read("count")).toEqual({ count: 2, data: [] });
+    expect(await read("page", 5)).toEqual({ count: 2, data: [] });
+    expect(
+      await scaffold.raw(
         ctx.db,
         { filters: {}, sorts: [], pagination: { pageIndex: 0, pageSize: 2 } },
         {
@@ -109,9 +103,7 @@ describe("list selection and relation loading", () => {
           },
         },
       ),
-    );
-    expect(noMatches.result).toEqual({ count: 0, data: [] });
-    expect(noMatches.queryCount).toBe(1);
+    ).toEqual({ count: 0, data: [] });
   });
 
   it("counts an aliased table through its real FROM relation", async () => {

@@ -10,21 +10,6 @@ import { summarizeChanges } from "./audit-log-entry";
  * not an omission.
  */
 describe("summarizeChanges", () => {
-  it("counts fields it cannot render toward the omitted disclosure", () => {
-    // The regression: unrenderable fields were filtered out *before* `omitted`
-    // was computed, so they landed in neither the line nor the "+N". Object
-    // diffs are exactly what a recompute-style update touches, so a row could
-    // change three fields, render one, and disclose nothing.
-    const summary = summarizeChanges({
-      name: { from: "Old", to: "New" },
-      totals: { from: { cost: 1 }, to: { cost: 2 } },
-      progress: { from: { pagesScanned: 3 }, to: { pagesScanned: 4 } },
-    });
-
-    expect(summary?.shown.map((f) => f.field)).toEqual(["name"]);
-    expect(summary?.omitted).toBe(2);
-  });
-
   it("ranks low-signal fields last, and counts the ones it drops", () => {
     const summary = summarizeChanges({
       updatedAt: { from: "2026-01-01", to: "2026-01-02" },

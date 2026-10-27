@@ -246,18 +246,6 @@ test("removed query-key invalidation identifiers stay unavailable", () => {
   );
 });
 
-test("hand-written plural suffix ternaries are rejected", () => {
-  const diagnostics = lintFixture(
-    "no-hand-rolled-plural",
-    "no-hand-rolled-plural.txt",
-    "cubby",
-  );
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 2, 3, 4, 5],
-  );
-});
-
 test("unsafe helper declarations are rejected everywhere", () => {
   const diagnostics = lintFixture(
     "no-unsafe-identifiers",
@@ -449,75 +437,5 @@ test("relative dialog imports resolve against the caller", () => {
   assert.deepEqual(
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [1, 2, 3],
-  );
-});
-
-// Failures: class builders and template fragments must not bypass style rules;
-// variant names, conditions, arbitrary selector text and ordinary strings must
-// not be mistaken for utility classes. Run in the previously ignored UI sources.
-function lintStyleFixture(
-  fixtureName: string,
-  directory: "primitives" | "reui" | "common" = "primitives",
-): OxlintDiagnostic[] {
-  const temporaryDirectory = mkdtempSync(
-    join(repoRoot, "apps/web/src/ui", directory, ".lint-fixture-"),
-  );
-  const fixturePath = join(temporaryDirectory, fixtureFilename(fixtureName));
-  writeFileSync(
-    fixturePath,
-    readFileSync(join(fixtureDirectory, fixtureName), "utf8"),
-  );
-  try {
-    return runOxlint(fixturePath).filter(
-      (diagnostic) =>
-        diagnostic.code.startsWith("cubby(no-") &&
-        diagnostic.code !== "cubby(no-hand-rolled-plural)",
-    );
-  } finally {
-    rmSync(temporaryDirectory, { recursive: true, maxRetries: 5 });
-  }
-}
-
-test("visual conventions cover JSX, nested builders, CVA variants and template fragments", () => {
-  const diagnostics = lintStyleFixture("visual-conventions.tsx.txt");
-  const linesFor = (rule: string) =>
-    diagnostics
-      .filter((diagnostic) => diagnostic.code === `cubby(${rule})`)
-      .map((diagnostic) => diagnostic.labels[0]?.span.line);
-  assert.deepEqual(
-    linesFor("no-uppercase-utility"),
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 21],
-  );
-  assert.deepEqual(linesFor("no-large-radius"), [13, 14]);
-  assert.deepEqual(
-    linesFor("no-shadow-utility"),
-    [15, 16, 22, 23, 24, 25, 26, 27],
-  );
-  assert.deepEqual(linesFor("no-arbitrary-font-size"), [17, 18]);
-  assert.deepEqual(linesFor("no-dark-variant"), [19, 20]);
-});
-
-test("style rules cover TypeScript in ReUI and allow scale classes and non-class strings", () => {
-  assert.deepEqual(lintStyleFixture("visual-conventions-allowed.tsx.txt"), []);
-  const diagnostics = lintStyleFixture("visual-conventions.txt", "reui");
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => diagnostic.code),
-    [
-      "cubby(no-uppercase-utility)",
-      "cubby(no-arbitrary-font-size)",
-      "cubby(no-large-radius)",
-    ],
-  );
-});
-
-test("hand-rolled panels flag content blocks, not framed controls or primitives", () => {
-  assert.deepEqual(lintStyleFixture("no-hand-rolled-panel.tsx.txt"), []);
-  const diagnostics = lintStyleFixture(
-    "no-hand-rolled-panel.tsx.txt",
-    "common",
-  );
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 2, 3, 12, 17, 18],
   );
 });

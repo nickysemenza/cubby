@@ -5,11 +5,12 @@ import {
 } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
-import { countTestDbQueries, seedEntity, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { seedEntity, withTestDb } from "tooling/test-setup";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { USDAClient } from "~/server/clients/usda";
@@ -242,21 +243,36 @@ describe("stored derived read sets", () => {
         unsampled.push(declaration.target);
         continue;
       }
-      const traced = await countTestDbQueries(async () => {
-        try {
-          await (isDerivedSink(adapter)
-            ? adapter.prepare(ctx.db, ids)
-            : adapter(ctx.db, ids));
-          return null;
-        } catch (error) {
-          return String(error);
-        }
-      });
-      if (traced.result) {
-        failed.push(`${declaration.target}: ${traced.result}`);
+      // Compiled SQL names every table the adapter reads.
+      const compiled = vi.spyOn(PgDialect.prototype, "sqlToQuery");
+      let error: string | null = null;
+      try {
+        await (isDerivedSink(adapter)
+          ? adapter.prepare(ctx.db, ids)
+          : adapter(ctx.db, ids));
+      } catch (caught) {
+        error = String(caught);
+      }
+      const tables = new Set(
+        compiled.mock.results.flatMap((result) =>
+          result.type === "return"
+            ? [
+                ...result.value.sql.matchAll(
+                  /\b(?:FROM|JOIN|UPDATE|INTO)\s+"([A-Za-z][A-Za-z0-9_]*)"/giu,
+                ),
+              ].flatMap((match) => (match[1] ? [match[1]] : []))
+            : [],
+        ),
+      );
+      compiled.mockRestore();
+      if (error) {
+        failed.push(`${declaration.target}: ${error}`);
         continue;
       }
-      const { tables } = traced;
+      if (tables.size === 0) {
+        failed.push(`${declaration.target}: no compiled SQL observed`);
+        continue;
+      }
       const declared = new Set([
         declaration.table,
         ...declaration.inputs.flatMap((input) => [

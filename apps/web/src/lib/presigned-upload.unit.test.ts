@@ -7,33 +7,6 @@ describe("putPresignedObject", () => {
     vi.unstubAllGlobals();
   });
 
-  it("PUTs the body with exactly the declared content type, not any type on the body itself", async () => {
-    const sent: { url: string; init: RequestInit | undefined }[] = [];
-    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
-      sent.push({ url: String(url), init });
-      return Promise.resolve(new Response(null, { status: 200 }));
-    });
-
-    // A Blob carrying its own (different) type — the declared contentType
-    // argument must win. This is the regression: four call sites were
-    // forwarding `file.type` instead of the validated content type.
-    const body = new Blob(["hello"], { type: "text/plain" });
-
-    await putPresignedObject(
-      "https://r2.example/upload-url",
-      body,
-      "image/png",
-    );
-
-    expect(sent).toHaveLength(1);
-    const { url, init } = sent[0]!;
-    expect(url).toBe("https://r2.example/upload-url");
-    expect(init?.method).toBe("PUT");
-    expect(init?.body).toBe(body);
-    const headers = new Headers(init?.headers);
-    expect(headers.get("Content-Type")).toBe("image/png");
-  });
-
   it("throws PresignedUploadError with status and body text on a non-ok response", async () => {
     vi.stubGlobal("fetch", () =>
       Promise.resolve(

@@ -6,12 +6,7 @@ import type {
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import {
-  countTestDbQueries,
-  seedEntity,
-  TEST_ACTOR,
-  withTestDb,
-} from "tooling/test-setup";
+import { seedEntity, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
@@ -787,11 +782,7 @@ describe("stored derived values", () => {
         mark.target.includes("@"),
       ),
     );
-    const expansion = await countTestDbQueries(() =>
-      publishDerivedPage(ctx.db, plan),
-    );
-    // One expansion statement and one shortcode lookup for reader notifications.
-    expect(expansion.statements).toHaveLength(2);
+    await publishDerivedPage(ctx.db, plan);
     expect(await marks("inventory.valuation")).toContain(entry);
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);

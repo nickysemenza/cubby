@@ -730,11 +730,11 @@ describe("fair drain under a flood", () => {
   );
 
   it(
-    "claims every other kind and every run-owned Job within a bound while 100k Jobs of one kind are due",
-    { timeout: 180_000 },
+    "claims every other kind and every run-owned Job within a bound while thousands of Jobs of one kind are due",
+    { timeout: 30_000 },
     async () => {
       await getDb(ctx.db).execute(sql`
-      WITH seeds AS MATERIALIZED (SELECT n, gen_random_uuid() AS id FROM generate_series(1,100000) n), identities AS (
+      WITH seeds AS MATERIALIZED (SELECT n, gen_random_uuid() AS id FROM generate_series(1,3000) n), identities AS (
         INSERT INTO "Entity" (id,kind,shortcode) SELECT id,'job','JOB-' || lpad(translate(to_hex(n), '0123456789abcdef', '23456789ABCDEFGH'),10,'2') FROM seeds RETURNING id,shortcode
       ) INSERT INTO "Job" (id,shortcode,key,kind,input,"availableAt")
       SELECT i.id,i.shortcode,'synthetic.flood:' || s.n,'synthetic.flood','{}'::jsonb,

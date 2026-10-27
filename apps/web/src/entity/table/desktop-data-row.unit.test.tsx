@@ -1,21 +1,11 @@
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import {
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { StackedValue } from "../../ui/common/stacked-value";
 import { CellEditTrigger } from "../../ui/data-table/cell-edit-trigger";
-import {
-  createRowActivityStore,
-  RowActivityStoreContext,
-  useRowActive,
-} from "../../ui/data-table/row-activity";
+import { useRowActive } from "../../ui/data-table/row-activity";
 import { buildSelectColumn } from "../../ui/data-table/row-selection";
 import type { CubbyRow as Row } from "../../ui/data-table/table-features";
 import {
@@ -26,7 +16,6 @@ import {
 } from "../../ui/data-table/table-features";
 import type { CubbyColumnMeta } from "../../ui/data-table/table-meta";
 import { DesktopDataRow, type DesktopDataRowProps } from "./desktop-data-row";
-import TableHeaderLayout from "./table-header-layout";
 
 interface TestRow {
   id: string;
@@ -119,55 +108,6 @@ describe("DesktopDataRow", () => {
       },
     ],
   } satisfies EntityFieldProvenance;
-
-  it("renders provenance-backed image previews directly while keeping header provenance", () => {
-    const { result } = renderHook(() =>
-      useTestTable(
-        () => (
-          <button type="button" aria-label="Preview image">
-            Thumbnail
-          </button>
-        ),
-        {
-          id: "image",
-          header: "Image",
-          meta: {
-            mobile: { slot: "image" },
-            provenance: inspectableProvenance,
-          },
-        },
-      ),
-    );
-    const row = result.current.getRow("PRD-TEST");
-
-    render(
-      <table>
-        <thead>
-          <TableHeaderLayout
-            table={result.current}
-            styles={{ header: "", sortIcon: "" }}
-            isDebugEnabled={false}
-          />
-        </thead>
-        <tbody>
-          <DesktopDataRow {...desktopRowProps(row)} />
-        </tbody>
-      </table>,
-    );
-
-    expect(
-      screen.getByRole("button", { name: "Preview image" }),
-    ).toHaveTextContent("Thumbnail");
-    expect(
-      screen.queryByRole("button", { name: "Inspect related records" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("note", { name: "From Transactions" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("button", { name: "Sort by Image" }),
-    ).toHaveTextContent("Image");
-  });
 
   it("keeps provenance-backed non-image cells in the relation workbench", () => {
     const { result } = renderHook(() =>
@@ -387,99 +327,6 @@ describe("DesktopDataRow", () => {
     expect(renderedRow).toHaveAttribute("data-current", "true");
     expect(renderedRow).toHaveAttribute("aria-current", "true");
     expect(renderedRow).not.toHaveAttribute("data-state", "selected");
-  });
-
-  // Failures: every idle row mounting hover-only controls (the DOM weight that
-  // made long tables lag), hover/keyboard focus never revealing them, the
-  // inspector's current row losing them, or leaving a row (into a popover one
-  // of its controls opened) unmounting that control.
-  it("mounts hover-only cell affordances on the table's one active row", () => {
-    function Affordance() {
-      return useRowActive() ? <button type="button">Edit</button> : null;
-    }
-    const { result } = renderHook(() =>
-      useCubbyTable({
-        data: [{ id: "PRD-AAAA" }, { id: "PRD-BBBB" }],
-        columns: materializeCubbyColumns(
-          createCubbyColumnCollection<TestRow>((add) => {
-            add(
-              columnHelper.accessor("id", {
-                id: "name",
-                header: "Name",
-                cell: () => <Affordance />,
-              }),
-            );
-          }),
-        ),
-        getRowId: (row) => row.id,
-      }),
-    );
-    const view = (current?: string) => (
-      <RowActivityStoreContext value={store}>
-        <table>
-          <tbody>
-            {["PRD-AAAA", "PRD-BBBB"].map((id, index) => (
-              <DesktopDataRow
-                key={id}
-                {...desktopRowProps(result.current.getRow(id), {
-                  rowIndex: index,
-                  isCurrent: current === id,
-                })}
-              />
-            ))}
-          </tbody>
-        </table>
-      </RowActivityStoreContext>
-    );
-    const store = createRowActivityStore();
-    const { rerender } = render(view());
-    const [first, second] = screen.getAllByRole("row");
-    const edits = () => screen.queryAllByRole("button", { name: "Edit" });
-    expect(edits()).toHaveLength(0);
-
-    fireEvent.pointerEnter(first!, { pointerType: "mouse" });
-    expect(edits()).toHaveLength(1);
-    fireEvent.pointerLeave(first!, { pointerType: "mouse" });
-    expect(edits()).toHaveLength(1);
-    fireEvent.pointerEnter(second!, { pointerType: "mouse" });
-    expect(within(second!).getByRole("button", { name: "Edit" })).toBeVisible();
-    expect(edits()).toHaveLength(1);
-
-    fireEvent.focus(first!);
-    expect(within(first!).getByRole("button", { name: "Edit" })).toBeVisible();
-    expect(edits()).toHaveLength(1);
-
-    rerender(view("PRD-BBBB"));
-    expect(edits()).toHaveLength(2);
-  });
-
-  // Regression: flipping row activity while the selection checkbox held focus
-  // remounted it between mousedown and mouseup, so the click never toggled.
-  it("does not activate the row when focus lands on a control inside it", () => {
-    function Cell() {
-      const active = useRowActive();
-      return (
-        <>
-          <input type="checkbox" aria-label="Select row" />
-          {active ? <button type="button">Edit</button> : null}
-        </>
-      );
-    }
-    const { result } = renderHook(() => useTestTable(() => <Cell />));
-    const row = result.current.getRow("PRD-TEST");
-    render(
-      <RowActivityStoreContext value={createRowActivityStore()}>
-        <table>
-          <tbody>
-            <DesktopDataRow {...desktopRowProps(row)} />
-          </tbody>
-        </table>
-      </RowActivityStoreContext>,
-    );
-    const checkbox = screen.getByRole("checkbox");
-    fireEvent.focus(checkbox);
-    expect(screen.getByRole("checkbox")).toBe(checkbox);
-    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
   // Regression class: a cell whose tree shape depended on row activity

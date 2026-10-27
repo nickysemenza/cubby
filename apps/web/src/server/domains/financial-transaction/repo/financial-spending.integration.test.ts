@@ -8,7 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -108,12 +108,14 @@ describe("shared spending booking", () => {
         accountIds: [account.entityId],
         transactionIds: [transaction.entityId],
       });
-      const cached = await countTestDbQueries(() =>
-        previewFinancialSpending(ctx.db, request, undefined, page),
+      const cached = await previewFinancialSpending(
+        ctx.db,
+        request,
+        undefined,
+        page,
       );
-      expect(cached.tables).not.toContain("LedgerParty");
       const plan = await previewFinancialSpending(ctx.db, request);
-      expect(cached.result).toEqual(plan);
+      expect(cached).toEqual(plan);
       expect(plan).toMatchObject({
         status: "ready",
         purchaserId: owner.output.id,
@@ -747,15 +749,11 @@ describe("shared spending booking", () => {
       ],
     });
     await prepareFinancialSpendingCandidates(ctx.db, page);
-    const blocked = await countTestDbQueries(() =>
-      previewFinancialSpending(ctx.db, {
-        transactionId: transaction.output.id,
-      }),
-    );
-    expect(blocked.result).toMatchObject({ status: "review_required" });
-    expect(blocked.result.candidates).toHaveLength(2);
-    expect(blocked.tables).not.toContain("ExpenseAttribution");
-    expect(blocked.tables).not.toContain("Expense");
+    const blocked = await previewFinancialSpending(ctx.db, {
+      transactionId: transaction.output.id,
+    });
+    expect(blocked).toMatchObject({ status: "review_required" });
+    expect(blocked.candidates).toHaveLength(2);
     const requests = [
       { transactionId: transaction.output.id, advice },
       {

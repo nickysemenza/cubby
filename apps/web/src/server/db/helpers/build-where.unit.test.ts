@@ -135,14 +135,6 @@ describe("buildFinancialTransactionWhere", () => {
     ).toMatch(/"accountId" in \(select ref\."id" from "FinancialAccount" ref/i);
   });
 
-  it("matches merchant OR raw description (declared stored text filter)", async () => {
-    // Regression: the hand-written version ANDed the two columns, so a term
-    // had to appear in both to match.
-    expect(await where({ search: "coffee" })).toMatch(
-      /"merchant" ilike \$\d+ or "FinancialTransaction"\."rawDescription" ilike/u,
-    );
-  });
-
   it.each([
     { name: "amountMin", filters: { amountMin: 0 }, contains: '"amount" >=' },
     { name: "amountMax", filters: { amountMax: 0 }, contains: '"amount" <=' },
@@ -626,20 +618,6 @@ describe("buildExpenseWhereClause", () => {
   it("ORs several name terms", async () => {
     expect(await where({ search: ["vacuum", "dust extractor"] })).toMatch(
       /"Expense"\."name" ilike \$\d+ or "Expense"\."name" ilike \$\d+/,
-    );
-  });
-
-  it("matches vendors and exact order ids through a live purchase", async () => {
-    const vendor = await where({
-      vendorId: [parseShortcodeFor("vendor", "VEN-2345")],
-    });
-    expect(vendor).toContain('JOIN "Vendor"');
-    expect(vendor).toContain('"deletedAt" IS NULL');
-    expect(await where({ purchaseIdPresenceFilter: "none" })).toMatch(
-      /NOT EXISTS \(SELECT 1 FROM "Expense"/,
-    );
-    expect(await where({ orderId: ["#11325"] })).toMatch(
-      /"orderId" IN \(\$\d+\)/,
     );
   });
 

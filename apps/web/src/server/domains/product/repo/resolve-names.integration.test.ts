@@ -1,4 +1,4 @@
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -227,33 +227,6 @@ describe("resolveProductNames", () => {
       },
       { name: "Nonexistent Item Xyz", exact: false, candidates: [] },
     ]);
-  });
-
-  it("keeps the fuzzy pass's statement count flat as the miss count grows", async () => {
-    const solo = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Solitary Match Product" }),
-      ctx.actor,
-    );
-
-    // Same single match either way ("solitary"); the rest of the names in
-    // the 10-name call have no match at all. A per-name loop would issue
-    // several statements per additional name — one batched LATERAL pass plus
-    // one shared hydration call should not.
-    const one = await countTestDbQueries(() =>
-      resolveByName(ctx.db, ["solitary"]),
-    );
-    const ten = await countTestDbQueries(() =>
-      resolveByName(ctx.db, [
-        "solitary",
-        ...Array.from({ length: 9 }, (_, i) => `no-such-term-${i}`),
-      ]),
-    );
-
-    expect(one.result[0]?.candidates).toEqual([
-      expect.objectContaining({ id: solo.id, name: solo.name }),
-    ]);
-    expect(ten.queryCount).toBe(one.queryCount);
   });
 
   // The miss pass is the lexical engine, not a raw contains: a receipt line

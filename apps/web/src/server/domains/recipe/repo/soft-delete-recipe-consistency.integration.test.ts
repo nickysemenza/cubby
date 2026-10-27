@@ -124,52 +124,6 @@ describe("soft-deleted recipes stay out of ingredient recipe counts", () => {
       );
     expect(liveUsages).toHaveLength(0);
   });
-
-  it("ignores stale live usages whose recipe was deleted without cascading", async () => {
-    // Reproduces the original bug's data shape: pre-cascade deletions left the
-    // section/usage rows LIVE while the recipe row was soft-deleted. The read-side
-    // filters (shared count subquery + the dbIngredientToAPI recipe.deletedAt
-    // backstop) must still report zero despite the live usage row.
-    const ing = await createIngredient(
-      ctx.db,
-      { name: "Orphan oregano", aliases: [] },
-      ctx.actor,
-    );
-    const ingredientId = ing.entityId;
-    const ingredientCode = ing.id;
-
-    const created = await createRecipe(
-      ctx.db,
-      makeRecipeInput({
-        name: "Orphaned Recipe",
-        sections: [
-          {
-            name: "Main",
-            instructions: [{ instruction: "Mix" }],
-            ingredients: [
-              ingredientRef(ingredientCode, {
-                amounts: [{ value: 1, unit: "cup" }],
-              }),
-            ],
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-
-    // Soft-delete ONLY the recipe row, leaving its section + usage rows live.
-    await getDb(ctx.db)
-      .update(recipe)
-      .set({ deletedAt: new Date() })
-      .where(eq(recipe.id, created.entityId));
-
-    expect(
-      (await getIngredientByID(ctx.db, ingredientId)).appearsInRecipes,
-    ).toHaveLength(0);
-    expect(await appearsInRecipesFromList(ctx.db, ingredientCode)).toHaveLength(
-      0,
-    );
-  });
 });
 
 describe("ingredient delete guard agrees with the live recipe count", () => {

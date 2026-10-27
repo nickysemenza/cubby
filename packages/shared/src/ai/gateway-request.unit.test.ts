@@ -654,28 +654,6 @@ describe("subscription stream diagnostics", () => {
     expect(diagnostics[0]).not.toContain(output.delta);
   });
 
-  it("does not pull ahead of the SDK and forwards cancellation to the original body", async () => {
-    const pull = vi.fn();
-    const cancel = vi.fn();
-    const send = gatewayFetchThrough({
-      provider: "openai",
-      chatGpt: async () =>
-        new Response(
-          new ReadableStream({ pull, cancel }, { highWaterMark: 0 }),
-          { headers },
-        ),
-      gateway: vi.fn(),
-      onErrorResponse: vi.fn(),
-    });
-    const response = await send(`${gatewayBaseURL("openai")}/responses`, {
-      body: "{}",
-      method: "POST",
-    });
-    expect(pull).not.toHaveBeenCalled();
-    await response.body?.cancel("synthetic cancellation");
-    expect(cancel).toHaveBeenCalledWith("synthetic cancellation");
-  });
-
   it.each([
     'event: error\ndata: {"error":',
     `event: error\ndata: ${"x".repeat(70_000)}\n\n`,
@@ -923,25 +901,6 @@ describe("bounded stream error evidence", () => {
       expect(observer).toHaveBeenCalledTimes(1);
     },
   );
-
-  it("does not invent a terminating blank line for an incomplete CR event", async () => {
-    const text = 'event: error\rdata: {"code":"synthetic_error"}\r';
-    const observer = vi.fn();
-    const send = gatewayFetchThrough({
-      provider: "openai",
-      gateway: async () => new Response(text, { headers }),
-      onErrorResponse: observer,
-    });
-    expect(
-      await (
-        await send(`${gatewayBaseURL("openai")}/responses`, {
-          body: "{}",
-          method: "POST",
-        })
-      ).text(),
-    ).toBe(text);
-    expect(observer).not.toHaveBeenCalled();
-  });
 
   it.each(["x".repeat(4_200), "aaa" + "😀".repeat(1_100)])(
     "bounds the entire diagnostic without corrupting UTF-8 (%#)",

@@ -93,7 +93,9 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Synthetic queue drill");
   const { item, charge } = await createFixtureGraph(page, async (create) => {
-    const brand = await create("vendor", { name: "Example Tools" });
+    const brand = await create("vendor", {
+      name: uniqueName(testInfo, "Example Tools"),
+    });
     const item = await create("product", { name, brandId: brand.id });
     const charge = await create("expense", {
       name: `${name} receipt`,
@@ -340,7 +342,7 @@ test("new proposal families require explicit review and preserve merge confirmat
     page,
     async (create) => {
       const brand = await create("vendor", {
-        name: "Example Tools",
+        name: uniqueName(testInfo, "Example Tools"),
       });
       const first = await create("product", {
         name: uniqueName(testInfo, "Synthetic matching drill"),

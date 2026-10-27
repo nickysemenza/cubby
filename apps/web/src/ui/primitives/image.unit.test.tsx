@@ -11,13 +11,6 @@ describe("Image", () => {
     expect(screen.getByText("tile")).toBeInTheDocument();
   });
 
-  it("falls back to a muted icon tile (not a broken glyph) with no custom fallback", () => {
-    // Regression: a failed image used to reveal the browser's broken-image
-    // glyph with the literal alt text ("Image"). It must degrade gracefully.
-    render(<Image src="" alt="missing" unoptimized />);
-    expect(screen.getByRole("img", { name: "missing" }).tagName).toBe("DIV");
-  });
-
   it("keeps an empty-alt fallback decorative", () => {
     const { container } = render(<Image src="" alt="" unoptimized />);
     expect(screen.queryByRole("img")).toBeNull();

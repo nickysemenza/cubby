@@ -38,48 +38,6 @@ describe("lookupUPCitemdb status mapping", () => {
     expect(result.data.brand).toBe("Acme");
   });
 
-  it("parses offers whose list_price is a number (real upstream shape)", async () => {
-    // Regression: upcitemdb sends `list_price` as a number (e.g. 149). The
-    // schema previously required a string, so every offer-bearing response
-    // failed parse → transient `error` → the UPC was cached as neither a
-    // product nor a miss. See types.ts upcitemdbOfferSchema.
-    const runtime = runtimeFor(() =>
-      jsonResponse({
-        code: "OK",
-        total: 1,
-        offset: 0,
-        items: [
-          {
-            ean: "0049206116313",
-            title: "Jackson Steel Wheelbarrow",
-            brand: "Jackson",
-            offers: [
-              {
-                merchant: "Home Depot",
-                title: "Steel Wheelbarrow",
-                list_price: 149,
-                price: 139,
-              },
-              {
-                merchant: "Walmart",
-                title: "Jackson Steel Wheelbarrow",
-                list_price: 254.05,
-                price: 199.99,
-              },
-            ],
-          },
-        ],
-      }),
-    );
-
-    const result = await lookupUPCitemdb("049206116313", runtime);
-
-    expect(result.status).toBe("found");
-    if (result.status !== "found") return;
-    expect(result.data.name).toBe("Jackson Steel Wheelbarrow");
-    expect(result.data.priceDollars).toBeGreaterThan(0);
-  });
-
   it("keeps identity but omits price when no offer is comparable, ignoring recorded low", async () => {
     const runtime = runtimeFor(
       () =>
