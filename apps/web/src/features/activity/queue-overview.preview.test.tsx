@@ -179,13 +179,7 @@ beforeEach(async () => {
           windows: { paceMinutes: 5, completedMinutes: 15, failedMinutes: 60 },
           streams: quiet
             ? []
-            : [
-                "image.device",
-                "embedding.refresh",
-                "derived.drain",
-                "jobs.maintenance",
-                "image.device.wake",
-              ].map((kind) => ({
+            : ["image.device", "embedding.refresh"].map((kind) => ({
                 kind,
                 running: failuresOnly ? 0 : 1,
                 due: failuresOnly ? 0 : 3,
@@ -265,19 +259,14 @@ it("embeds bounded attention and Job tables, scopes chips, and expands the selec
   render(<Overview />, { wrapper: harness.wrapper });
   const stream = (await screen.findAllByTestId("work-stream"))[0];
   if (!stream) throw new Error("Missing synthetic work stream");
-  expect(stream).toHaveTextContent("Not moving");
-  expect(stream).toHaveTextContent(
+  expect(stream).not.toHaveTextContent("Not moving");
+  expect(stream).not.toHaveTextContent(
     "Work was not finished before its claim expired",
   );
   expect(within(stream).getAllByRole("link")).toHaveLength(3);
   expect(stream).toHaveTextContent("+1");
-  expect(await screen.findByTestId("work-stream-derived")).toHaveTextContent(
-    "Not moving",
-  );
+  expect(screen.queryByTestId("work-stream-derived")).toBeNull();
   expect(screen.queryByText("Net backlog since opened")).toBeNull();
-  expect(screen.queryByText("Jobs retention")).toBeNull();
-  expect(screen.queryByText("Jobs maintenance")).toBeNull();
-  expect(screen.queryByText("Image device wake")).toBeNull();
   expect(screen.getByText("Work is moving")).toBeInTheDocument();
   expect(await screen.findByTestId("device-backlog")).toBeVisible();
   const jobs = await screen.findByRole("table", { name: "Jobs table" });

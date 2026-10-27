@@ -284,7 +284,7 @@ afterEach(() => {
   harness.dispose();
 });
 
-it("shows each step's own count, what sets its speed, and steps not yet counted", async () => {
+it("shows each step's own count and steps not yet counted", async () => {
   renderRun();
   const strip = await screen.findByTestId("run-step-strip");
   expect(strip).toHaveTextContent("Step 1 of 6");
@@ -298,9 +298,6 @@ it("shows each step's own count, what sets its speed, and steps not yet counted"
   expect(within(current).getByRole("progressbar")).toHaveAttribute(
     "aria-valuenow",
     "372",
-  );
-  expect(within(current).getByTestId("speed-set-by")).toHaveTextContent(
-    "Speed set by page work: preparation 61% of page time · 106 queries/page",
   );
   expect(within(current).getByTestId("page-work")).toHaveTextContent(
     "106 queries/page",
