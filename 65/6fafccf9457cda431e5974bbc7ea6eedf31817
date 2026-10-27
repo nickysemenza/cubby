@@ -1,0 +1,61 @@
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_b736bc0637e61b::t_6735e95d59a866 25,632,634-636
+apps/web/src/server/domains/expense/operations.server.ts
+  s_b736bc0637e61b::t_7bd41503e456ac 39-40,131,140-143
+apps/web/src/server/domains/expense/repo/analytics.ts
+  s_b736bc0637e61b::t_fe95ce6fc6e502 8-9,70
+apps/web/src/server/domains/expense/repo/analyze.ts
+  s_b736bc0637e61b::t_dfeebbcd62bddd 6,67-68,1241-1244
+apps/web/src/server/domains/expense/repo/expense-derived-read.ts
+  s_b736bc0637e61b::t_f5b5c63ee959a2 196-200,204-207
+apps/web/src/server/domains/expense/repo/expense-project-allocation.integration.test.ts
+  s_b736bc0637e61b::t_9b0e68d66b0f78 36,280
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_b736bc0637e61b::t_e5dbc2138871cc 825,867
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_b736bc0637e61b::t_0d43fc77918f45 359
+apps/web/src/server/domains/ingredient/operations.server.ts
+  s_b736bc0637e61b::t_c776abba10f303 28
+apps/web/src/server/domains/ingredient/repo/ingredient-with-food.ts
+  s_b736bc0637e61b::t_5c6ac01aa7f288 43-44
+apps/web/src/server/domains/ingredient/repo/ingredient.integration.test.ts
+  s_b736bc0637e61b::t_704eb8d98eb816 80-90,116-124
+apps/web/src/server/domains/ingredient/repo/internal-types.ts
+  s_b736bc0637e61b::t_b3858c2b2190ee 3-4
+apps/web/src/server/domains/ingredient/repo/recipe-usages.ts
+  s_b736bc0637e61b::t_96a6aaf2d95261 1-26
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_b736bc0637e61b::t_a8c4c778b06e81 10,12,162,167-172,184,199,210-213,217,219,221-232,353,358-374,376-391,395-398
+apps/web/src/server/domains/product/repo/crud.ts
+  s_b736bc0637e61b::t_c7ce7fd0814572 123
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_b736bc0637e61b::t_b48e8c8e42eeae 20,40,174-177
+apps/web/src/server/domains/product/repo/mappers.unit.test.ts
+  s_b736bc0637e61b::t_1104391fd28ccb 1,7
+apps/web/src/server/generic/entity-report/repo/records.ts
+  s_b736bc0637e61b::t_de66fa2e9b64ab 40
+apps/web/src/server/generic/list/repo/list-scopes.integration.test.ts
+  s_b736bc0637e61b::t_916c4eb369e4d2 26,435
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_b736bc0637e61b::t_a0227e1c897e47 80,467,677
+docs/agents/generic-paths.md
+  s_b736bc0637e61b::t_490a81329ec64c 119-121
+docs/entities.md
+  s_b736bc0637e61b::t_2ccc44105a12f2 2096-2101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "656fafccf9457cda431e5974bbc7ea6eedf31817",
+  "prompts": {},
+  "sessions": {
+    "s_b736bc0637e61b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17f49-2a40-7831-a060-82445399b517",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
