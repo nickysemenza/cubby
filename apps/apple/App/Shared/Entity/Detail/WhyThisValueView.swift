@@ -119,12 +119,15 @@ struct FieldExplanationPresenter: ViewModifier {
             }
             .onChange(of: subject) { _, _ in showingExplanation = false }
             .popover(isPresented: $showingExplanation) {
-                WhyThisValueView(
-                    field: field, subject: subject, surface: surface, allowsActions: allowsActions
-                ) {
-                    showingExplanation = false
+                NavigationStack {
+                    WhyThisValueView(
+                        field: field, subject: subject, surface: surface, allowsActions: allowsActions
+                    ) {
+                        showingExplanation = false
+                    }
+                    .id(subject.stableKey + field.key)
+                    .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
                 }
-                .id(subject.stableKey + field.key)
             }
     }
 

@@ -70,10 +70,13 @@ struct EntityHeroView<Actions: View>: View {
         }
         .onChange(of: imageSubject) { _, _ in showingImageChain = false }
         .popover(isPresented: $showingImageChain) {
-            DisplayImageChainView(subject: imageSubject) {
-                showingImageChain = false
+            NavigationStack {
+                DisplayImageChainView(subject: imageSubject) {
+                    showingImageChain = false
+                }
+                .id(imageSubject.stableKey)
+                .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
             }
-            .id(imageSubject.stableKey)
         }
     }
 
