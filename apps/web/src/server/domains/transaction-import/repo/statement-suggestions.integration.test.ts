@@ -2307,15 +2307,8 @@ describe("statement Transaction suggestions", () => {
         key: "synthetic.cache-progress",
         kind: "run.execute",
         input: {},
-        recoveryTimeoutMs: 30 * 60_000,
       },
       async () => {
-        const owner = currentJobExecution()!;
-        const before = new Date(Date.now() - 60_000);
-        await getDb(ctx.db)
-          .update(job)
-          .set({ lastUsefulProgressAt: before })
-          .where(eq(job.id, owner.claim.id));
         const result = await runStatementLabels(ctx.db, {
           runId,
           cooperative: true,
@@ -2335,15 +2328,6 @@ describe("statement Transaction suggestions", () => {
           1,
         );
         const checkpoint = saved!.checkpoint!;
-        const readProgress = async () =>
-          (
-            await getDb(ctx.db)
-              .select()
-              .from(job)
-              .where(eq(job.id, owner.claim.id))
-          )[0]!.lastUsefulProgressAt;
-        const committed = await readProgress();
-        expect(committed!.getTime()).toBeGreaterThan(before.getTime());
         const subject = assessmentSubjects.statement_transaction.parse(
           saved!.subject,
         );
@@ -2355,7 +2339,6 @@ describe("statement Transaction suggestions", () => {
           evidenceFingerprint: saved!.evidenceFingerprint,
           checkpoint: stale,
         });
-        expect(await readProgress()).toEqual(committed);
         expect(
           (
             await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1)
@@ -2366,7 +2349,6 @@ describe("statement Transaction suggestions", () => {
           evidenceFingerprint: saved!.evidenceFingerprint,
           checkpoint,
         });
-        expect(await readProgress()).toEqual(committed);
         return result;
       },
     );

@@ -1248,17 +1248,8 @@ const strandedImageWork =
   AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || "ImageProcessingJob".id::text
     AND dj.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}))`;
 
-/** Open image rows without a live execution: the watchdog's disagreement count. */
-export async function countStrandedImageProcessing(db: Database) {
-  const [row] = await getDb(db)
-    .select({ count: sql<number>`count(*)::int` })
-    .from(imageProcessingJob)
-    .where(strandedImageWork());
-  return row?.count ?? 0;
-}
-
 /**
- * Self-healing for image execution, run by the queue watchdog in bounded
+ * Self-healing for image execution, run by recurring maintenance in bounded
  * batches: retire moot work, reopen legacy terminal or leased rows, and give
  * every open row a live Job in its lane. Image work is never abandoned, so a
  * stopped execution of open work is always a bug to repair, not a decision.

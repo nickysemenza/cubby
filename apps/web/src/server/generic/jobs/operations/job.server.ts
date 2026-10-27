@@ -41,10 +41,5 @@ export const jobHandlers = implementOperationDomain(jobContract, {
   }),
   deviceBacklog: (context) => readDeviceBacklog(context.db),
   activity: (context) => readWorkActivity(context.db),
-  health: async (context) => ({
-    snapshot: await (
-      await import("~/server/workflows/queue-watchdog")
-    ).readQueueHealth(context.db),
-  }),
   logs: (context, input) => readJobLogs(context.db, input.jobId),
 });

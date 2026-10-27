@@ -308,10 +308,6 @@ export function QueueOverview({
   search: QueueSearch;
   onSearchChange: (next: Partial<QueueSearch>) => void;
 }) {
-  const health = useQuery({
-    ...job.health.queryOptions({}),
-    refetchInterval: 15_000,
-  });
   const filters = useMemo(
     () => ({
       ...(search.lane ? { lane: [search.lane] } : {}),
@@ -334,10 +330,6 @@ export function QueueOverview({
     <Stack gap="lg">
       <DeviceBacklogNotice />
       <WorkFeed
-        health={health.data?.snapshot}
-        healthUnknown={
-          health.isPending || health.isError || !health.data?.snapshot
-        }
         onShowJobs={(kind) =>
           onSearchChange({
             kind,

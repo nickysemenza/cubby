@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { searchableEntities } from "./entity-manifest";
 import { imageId, locationId, parseEntityRef } from "./identifiers";
-import { imageProcessingResult } from "./image-processing";
 
 /** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
 export const backgroundTaskKinds = [
@@ -9,7 +8,6 @@ export const backgroundTaskKinds = [
   "location-ai.description.refresh",
   "location-ai.inventory.refresh",
   "image-processing.wakeup",
-  "image-processing.result",
   "image-metadata.extract",
   "maintenance.purchase-discovery",
   "calendar-feed.mark-dirty",
@@ -62,13 +60,6 @@ export const imageProcessingWakeupTaskSchema = z.object({
   jobId: z.uuid(),
 });
 
-/** A companion result retains its original Job token for receipt adoption. */
-export const imageProcessingResultTaskSchema = z.object({
-  kind: z.literal("image-processing.result"),
-  ...taskEnvelopeFields,
-  result: imageProcessingResult,
-});
-
 /**
  * A wakeup to (re-)extract an uploaded image's embedded EXIF/GPS metadata.
  * The handler re-reads `Image.metadataRevision` against
@@ -103,7 +94,6 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   imageProcessingWakeupTaskSchema,
-  imageProcessingResultTaskSchema,
   imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,

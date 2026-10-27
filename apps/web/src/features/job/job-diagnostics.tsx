@@ -11,11 +11,9 @@ import {
   type JobGroup,
   type JobListOut,
   type JobLogsOut,
-  type LimitEntry,
 } from "~/contracts/job.contract";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatInstant } from "~/lib/date-format";
-import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
@@ -31,12 +29,7 @@ import { Input } from "~/ui/primitives/input";
 import { StaticTable } from "~/ui/primitives/static-table";
 
 import { jobWait } from "../run/run-view-model";
-import {
-  BindingBadge,
-  JOB_STATE_LABEL,
-  JobStatePill,
-  WaitNotice,
-} from "./job-status";
+import { JOB_STATE_LABEL, JobStatePill, WaitNotice } from "./job-status";
 
 const time = (iso: string | null) =>
   iso ? formatInstant(iso, "dateShortTime") : "—";
@@ -62,7 +55,7 @@ function JobFactsList({ facts }: { facts: JobFacts }) {
     {
       id: "attempt",
       label: "Attempt",
-      value: `${formatCount(facts.attempts)} of ${formatCount(facts.maxAttempts)}`,
+      value: `${formatCount(facts.attempts)} of ${facts.maxAttempts === null ? "unbounded" : formatCount(facts.maxAttempts)}`,
     },
     {
       id: "wait",
@@ -88,15 +81,6 @@ function JobFactsList({ facts }: { facts: JobFacts }) {
             id: "lease",
             label: "Lease expires",
             value: time(facts.leaseExpiresAt),
-          },
-        ]
-      : []),
-    ...(facts.ahead !== null
-      ? [
-          {
-            id: "ahead",
-            label: "Ahead",
-            value: `${formatCount(facts.ahead)} same-kind Jobs ahead`,
           },
         ]
       : []),
@@ -169,78 +153,6 @@ function JobsTable({ groups }: { groups: readonly JobGroup[] }) {
         },
       ]}
     />
-  );
-}
-
-const formatLimit = (limit: LimitEntry) =>
-  limit.unit === "ms"
-    ? formatDuration(limit.value)
-    : `${formatCount(limit.value)} ${limit.unit}`;
-
-/** Every limit Cubby imposes on the work, and which one sets its speed now. */
-function LimitsTable({ jobs }: { jobs: JobListOut }) {
-  const { binding } = jobs;
-  const bound = binding.status === "binding" ? binding.key : null;
-  return (
-    <div className="grid gap-2" data-testid="limits">
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <BindingBadge binding={binding} />
-        <span className="text-foreground">
-          {binding.status === "binding"
-            ? `${binding.label}: ${binding.evidence}`
-            : binding.reason}
-        </span>
-      </div>
-      <StaticTable
-        rows={jobs.limits}
-        rowKey={(limit) => limit.key}
-        className="min-w-[45rem]"
-        columns={[
-          {
-            id: "limit",
-            header: "Limit",
-            cell: (limit) => (
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate">{limit.label}</span>
-                {limit.key === bound ? (
-                  <BindingBadge binding={binding} />
-                ) : null}
-              </span>
-            ),
-          },
-          {
-            id: "scope",
-            header: "Scope",
-            cell: (limit) => limit.scope,
-            cellClassName: "text-muted-foreground",
-          },
-          {
-            id: "value",
-            header: "Value",
-            cell: formatLimit,
-            cellClassName: "font-mono tabular-nums",
-          },
-          {
-            id: "use",
-            header: "Now",
-            cell: (limit) => limit.utilization ?? "—",
-            cellClassName: "text-muted-foreground",
-          },
-          {
-            id: "source",
-            header: "Source",
-            cell: (limit) => (
-              <span
-                className="truncate font-mono text-2xs"
-                title={limit.source}
-              >
-                {limit.source}
-              </span>
-            ),
-          },
-        ]}
-      />
-    </div>
   );
 }
 
@@ -459,7 +371,7 @@ export function JobLogPanel({ jobId }: { jobId: string }) {
   );
 }
 
-/** Diagnostics for a Run: its executing Job, fan-out Jobs, limits and raw logs. */
+/** Diagnostics for a Run: its executing Job, fan-out Jobs and raw logs. */
 export function JobDiagnostics({
   jobs,
   state,
@@ -484,14 +396,6 @@ export function JobDiagnostics({
       )}
       <Section headingAs="h3" compact title="Jobs" count={jobs.groups.length}>
         <JobsTable groups={jobs.groups} />
-      </Section>
-      <Section
-        headingAs="h3"
-        compact
-        title="Limits"
-        caption="Every limit the work runs under, read from the value that enforces it."
-      >
-        <LimitsTable jobs={jobs} />
       </Section>
       {jobs.primary ? (
         <Section

@@ -201,7 +201,6 @@ const jobs: JobListOut = {
     subject: null,
     createdAt: ago(20),
     updatedAt: ago(0),
-    ahead: null,
     lane: "server",
     waitingOn: {
       reason: "leased",
@@ -215,13 +214,6 @@ const jobs: JobListOut = {
     runId: null,
   },
   groups: [],
-  limits: [],
-  binding: {
-    status: "binding",
-    key: null,
-    label: "Page work",
-    evidence: "preparation 61% of page time · 106 queries/page",
-  },
   rollup: null,
 };
 

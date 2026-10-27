@@ -17,11 +17,10 @@ const RECENT_MINUTES = { pace: 5, completed: 15, failed: 60 } as const;
 const STREAM_RUNS = 3;
 
 /**
- * Live and recent work per Job kind, with AI evaluations split by feature:
- * what runs now, what waits and why, and how fast recent work finished.
- * Internal maintenance kinds are omitted. Only Jobs that are live or were
- * claimed within the failure window are read (`Job_due_idx`,
- * `Job_claimed_idx`), so cost follows current work, not retained history.
+ * Live and recent work per Job kind: what runs now, what waits and why, and
+ * how fast recent work finished. Internal maintenance kinds are omitted.
+ * Only Jobs that are live or were claimed within the failure window are read,
+ * so cost follows current work, not retained history.
  */
 export async function readWorkActivity(
   db: Database,
@@ -38,7 +37,6 @@ export async function readWorkActivity(
   const requester = alias(run, "r");
   const rows = await getDb(db).execute<{
     kind: string;
-    feature: string | null;
     running: number;
     due: number;
     backingOff: number;
@@ -52,9 +50,7 @@ export async function readWorkActivity(
     runs: string[] | null;
   }>(sql`
     WITH activity_jobs AS MATERIALIZED (
-      SELECT "Job".*,
-        CASE WHEN "Job".kind = 'ai.evaluation' THEN substr("Job".key, length('ai-evaluation:') + 1) END AS feature
-      FROM "Job"
+      SELECT "Job".* FROM "Job"
       WHERE (${live} OR "Job"."lastClaimedAt" > ${since(RECENT_MINUTES.failed)})
         AND "Job".kind NOT IN (${sql.join(
           INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
@@ -62,7 +58,6 @@ export async function readWorkActivity(
         )})
     )
     SELECT "Job".kind,
-      "Job".feature,
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" > ${at})::int AS "running",
       count(*) FILTER (WHERE ${waiting})::int AS "due",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.retry_wait} AND "Job"."availableAt" > ${at})::int AS "backingOff",
@@ -76,29 +71,17 @@ export async function readWorkActivity(
         FILTER (WHERE ${waiting}) AS "oldestDueAt",
       ARRAY(
         SELECT r.shortcode FROM activity_jobs stream
-        CROSS JOIN LATERAL (
-          SELECT stream."runId" AS id WHERE stream."runId" IS NOT NULL
-          UNION
-          SELECT e."runId" FROM "WorkItem" item
-          JOIN "AiEvaluation" e ON e.id = item.ref
-          WHERE item.drain = stream.key AND item.target = 'ai.evaluation'
-          UNION
-          SELECT request."runId" FROM "WorkItem" item
-          JOIN "AiEvaluationRequest" request ON request."evaluationId" = item.ref
-          WHERE item.drain = stream.key AND item.target = 'ai.evaluation'
-            AND request."cancelledAt" IS NULL
-        ) demand
-        JOIN "Run" r ON r.id = demand.id
-        WHERE stream.kind = "Job".kind AND stream.feature IS NOT DISTINCT FROM "Job".feature
-          AND ${notDeleted(requester)} AND r.status IN (${sql.join(
+        JOIN "Run" r ON r.id = stream."runId"
+        WHERE stream.kind = "Job".kind AND ${notDeleted(requester)}
+          AND r.status IN (${sql.join(
             ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
             sql`, `,
           )})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM activity_jobs "Job"
-    GROUP BY "Job".kind, "Job".feature
-    ORDER BY "Job".kind, "Job".feature
+    GROUP BY "Job".kind
+    ORDER BY "Job".kind
   `);
   const iso = (value: string | null) =>
     value === null ? null : new Date(`${value}Z`).toISOString();
@@ -112,7 +95,6 @@ export async function readWorkActivity(
     streams: rows.rows
       .map((row) => ({
         kind: row.kind,
-        feature: row.feature,
         running: row.running,
         due: row.due,
         backingOff: row.backingOff,

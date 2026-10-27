@@ -810,9 +810,7 @@ describe("background companion leases", () => {
     expect(order).toEqual([owned, owned, owned, owned, backfill]);
   });
 
-  // Review finding: device queue positions ranked by availability while
-  // device claims put active Run work first and reserve backfill a turn.
-  it("reports device queue positions in device claim order", async () => {
+  it("claims Run-owned device work before backfill", async () => {
     const backfill = await job(IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION);
     const active = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
@@ -823,19 +821,6 @@ describe("background companion leases", () => {
       "image/jpeg",
       active,
     );
-    const queue = await readJobQueue(ctx.db, {
-      filter: { kinds: ["image.device"] },
-      runId: null,
-      pageIndex: 0,
-      pageSize: 10,
-    });
-    const ahead = Object.fromEntries(
-      queue.jobs.map((row) => [row.key, row.ahead]),
-    );
-    expect(ahead).toEqual({
-      [`image-processing:${owned}`]: 0,
-      [`image-processing:${backfill}`]: 1,
-    });
     expect((await claim())?.id).toBe(owned);
     expect((await claim())?.id).toBe(backfill);
   });

@@ -102,15 +102,6 @@ export async function handleBackgroundTask(
       }
       return "succeeded";
     }
-    case "image-processing.result": {
-      const { completeCompanionImageProcessingResult } =
-        await import("~/server/domains/image-processing/service/image-processing.service");
-      const completion = await completeCompanionImageProcessingResult(
-        db,
-        task.result,
-      );
-      return completion.adopted ? "succeeded" : "skipped";
-    }
     case "image-metadata.extract":
       return ports.extractImageMetadata(db, task.imageId);
     case "maintenance.purchase-discovery": {
