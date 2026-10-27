@@ -195,7 +195,7 @@ drain to zero and record its duration.
 
 After deployment, verify and report:
 
-- Backlog: `DerivedDirty` ready marks reach zero; list failing targets
+- Backlog: `WorkItem` ready rows for `derived:drain` reach zero; list failing targets
   (`attempts > 0`, `lastError`) and their age; no target stays deferred.
 - Slots: one open (`queued`/`retry_wait`) evaluation per `slotKey`; running and
   result-ready evaluations retained; every uncancelled request on a cancelled

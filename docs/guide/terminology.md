@@ -525,9 +525,32 @@ _Avoid_: phase (a progress sample), child Run
 
 **Job**:
 The durable unit of execution: one keyed Postgres row with a lease, cursor,
-attempts and generation. A `run.execute` Job pages a Run; an `ai.evaluation`
-Job executes one AI evaluation that a Run owns or requested.
+attempts and generation. A `run.execute` Job pages a Run; a drain Job works
+through many work items. Jobs are coarse: a Job is not one household record.
 _Avoid_: task, workflow instance
+
+**Drain Job**:
+A long-lived Job, one per kind and feature (`ai-evaluation:<feature>`,
+`embedding:refresh`, `derived:drain`), that claims pages of work items and
+publishes their results. It completes when nothing is ready and wakes when
+more is marked.
+_Avoid_: batch Job, page claim, per-item Job
+
+**Work item**:
+One record a drain Job still owes, a `WorkItem` row keyed by target and ref,
+carrying only scheduling state: ticket, priority, readiness, attempts and last
+error. The drain Job's lease fences it; it has no lease of its own.
+_Avoid_: dirty mark (its derived-value origin), Job, task
+
+**Wake**:
+An append-only capture that makes a Job due again without restarting a pass
+in progress; the pass finishes and publishes, then the Job runs again.
+_Avoid_: invalidation, restart
+
+**External claim**:
+A Job lease held by an executor outside the server drain, such as an Apple
+device pull, settling through the same fences as the server.
+_Avoid_: device lease, side channel
 
 **Queue**:
 Transport that wakes the Job drain. A delivered or lost message never

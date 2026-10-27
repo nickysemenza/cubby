@@ -78,7 +78,8 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   expose current eligibility; exact fallback previews and explanation evidence
   load on demand. Writes revalidate policy through the existing commands.
 - **Triggers mark, never expand.** Generated row triggers, guarded by changed
-  declared input columns, upsert one `DerivedDirty` row for the written record
+  declared input columns, upsert one work item (`WorkItem`, drain `derived:drain`; ADR 0015's 2026-10
+  amendment generalised the former `DerivedDirty` table) for the written record
   and its own old and new relationship endpoints, with a sequence ticket. They
   never query dependents. No-op saves mark nothing.
 - **One drain.** A single `derived.drain` Job kind claims dirty rows in
