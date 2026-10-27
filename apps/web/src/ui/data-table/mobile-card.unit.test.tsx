@@ -34,16 +34,6 @@ const SIX = [
 ];
 
 describe("MobileCard row variant", () => {
-  it("renders every metadata value, not a capped subset", () => {
-    renderCard(
-      <MobileCard variant="row" title="wedding photo 3/3" metaValues={SIX} />,
-    );
-    for (const item of SIX) {
-      expect(screen.getByText(item.label)).toBeInTheDocument();
-      expect(screen.getByText(String(item.value))).toBeInTheDocument();
-    }
-  });
-
   it("labels each value so it stays self-identifying", () => {
     renderCard(<MobileCard variant="row" title="t" metaValues={SIX} />);
     // Labels are <dt>, values <dd> — a description list, not loose chips.

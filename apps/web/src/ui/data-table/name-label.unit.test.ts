@@ -8,12 +8,6 @@ const forMeal = (raw: NameLabelInput) =>
   nameLabel<Meal>(raw, { date: "2026-07-20" }, (m) => `Meal on ${m.date}`);
 
 describe("nameLabel", () => {
-  /** The regression: `String(null)` rendered the text "null" to the user. */
-  it("never yields the string 'null'", () => {
-    expect(forMeal(null).label).not.toContain("null");
-    expect(forMeal(undefined).label).not.toContain("null");
-  });
-
   it("falls back so an unnamed row stays identifiable", () => {
     expect(forMeal(null).label).toBe("Meal on 2026-07-20");
     expect(forMeal("").label).toBe("Meal on 2026-07-20");

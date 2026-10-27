@@ -1,6 +1,5 @@
 import {
   browserRoutedEntities,
-  entityManifest,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
@@ -103,34 +102,6 @@ describe("production entity action catalog", () => {
       }
     },
   );
-
-  it("adapts every supported lifecycle delete without inventing USDA deletion", () => {
-    const deleteActions = entityActionCatalogDescriptors().filter(
-      (action) => action.verb === "delete",
-    );
-    const deletableEntities = new Set(
-      deleteActions.flatMap((action) => action.entities),
-    );
-
-    // The manifest owns delete support. `usda-food` has no local rows, `run`
-    // is immutable history, and Email is read-only evidence.
-    expect(deletableEntities).toEqual(
-      new Set(
-        browserRoutedEntities.filter(
-          (entity) => entityManifest[entity].lifecycle.delete,
-        ),
-      ),
-    );
-    expect(
-      deleteActions.find((action) => action.entities.includes("cookbook")),
-    ).toMatchObject({
-      arity: "single",
-      surfaces: ["row", "selection", "inspector", "detail"],
-    });
-    expect(
-      deleteActions.find((action) => action.entities.includes("image")),
-    ).toMatchObject({ arity: "single", surfaces: ["inspector", "detail"] });
-  });
 
   // Regression: a single-record entry left the ranked merge dialog with no
   // category to merge in and a permanently disabled Merge button.

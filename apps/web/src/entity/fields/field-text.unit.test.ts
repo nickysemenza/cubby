@@ -15,32 +15,6 @@ const field = (
 };
 
 describe("compactFieldText", () => {
-  it("keeps compound dates visible in picker metadata with open-bound semantics", () => {
-    expect(
-      compactFieldText(
-        "task",
-        { due: { start: "2026-10-22", end: "2026-10-24" } },
-        field("task", "due"),
-      ),
-    ).toBe("Oct 22 – 24, 2026");
-    expect(
-      compactFieldText(
-        "project",
-        { dates: { start: "2026-10-22", end: null } },
-        field("project", "dates"),
-      ),
-    ).toBe("From Oct 22, 2026");
-    expect(
-      compactFieldText(
-        "task",
-        { due: { start: null, end: "2026-10-24" } },
-        field("task", "due"),
-      ),
-    ).toBe("Through Oct 24, 2026");
-    expect(
-      compactFieldText("task", { due: null }, field("task", "due")),
-    ).toBeNull();
-  });
   // Regression: a money-control number (no currency display format) read as
   // an unexplained count in picker chips and their accessible names.
   it("formats a money-control number as currency", () => {

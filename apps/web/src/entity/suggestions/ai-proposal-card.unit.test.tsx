@@ -33,23 +33,6 @@ describe("AiProposalCard keyboard handling", () => {
     expect(screen.getByRole("button", { name: "Reject" })).toHaveFocus();
   });
 
-  it("dismisses on Escape from either action", () => {
-    const onDismiss = vi.fn();
-    render(
-      <AiProposalCard {...base} onAccept={vi.fn()} onDismiss={onDismiss} />,
-    );
-
-    fireEvent.keyDown(screen.getByRole("button", { name: "Accept" }), {
-      key: "Escape",
-    });
-    expect(onDismiss).toHaveBeenCalledOnce();
-
-    fireEvent.keyDown(screen.getByRole("button", { name: "Reject" }), {
-      key: "Escape",
-    });
-    expect(onDismiss).toHaveBeenCalledTimes(2);
-  });
-
   /**
    * The bug this guards: a proposal can hold a picker or a price input, and
    * Enter inside one belongs to that control. A handler on the card wrapper

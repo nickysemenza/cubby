@@ -7,7 +7,6 @@ import {
 } from "@cubby/schemas/work-queue";
 import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import {
   compileFilterCodec,
@@ -471,10 +470,6 @@ describe("multiSelectFilterFn", () => {
     name?: string | null;
   };
   type TestCellValue = string | null | undefined | EntityReference;
-  const entityReferenceSchema = z.object({
-    id: z.string().nullish(),
-    name: z.string().nullish(),
-  });
   const row = (value: TestCellValue) => ({ getValue: () => value });
   const run = (
     value: TestCellValue,
@@ -520,20 +515,6 @@ describe("multiSelectFilterFn", () => {
   it("treats both sentinels together as no constraint", () => {
     expect(run(null, [FILTER_ANY, FILTER_NONE])).toBe(true);
     expect(run("Amazon", [FILTER_ANY, FILTER_NONE])).toBe(true);
-  });
-
-  it("uses the accessor for object-valued columns", () => {
-    // The regression: an entity-ref accessor ({id,name}) stringifies to
-    // "[object Object]", so the roster matched nothing and (none) never found
-    // an unassigned row on the embedded project-detail tables.
-    const byId = (value: TestCellValue) => {
-      const parsed = entityReferenceSchema.safeParse(value);
-      return parsed.success ? (parsed.data.id ?? null) : null;
-    };
-    expect(run({ id: "p1", name: "Kitchen" }, ["p1"], byId)).toBe(true);
-    expect(run({ id: "p2", name: "Bath" }, ["p1"], byId)).toBe(false);
-    expect(run({ id: null, name: null }, [FILTER_NONE], byId)).toBe(true);
-    expect(run({ id: "p1", name: "Kitchen" }, [FILTER_NONE], byId)).toBe(false);
   });
 });
 

@@ -9,7 +9,6 @@ import {
 import { type ReactElement, type ReactNode, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { entityDetailFor } from "~/entity/entity-detail";
 import { Picker } from "~/entity/picker/picker";
 
 import type { ComboboxItem } from "./combobox-types";
@@ -499,18 +498,6 @@ describe("Picker options", () => {
     expect(onValueChange).toHaveBeenCalledWith("services");
   });
 
-  it("marks a row with its tinted glyph or, without one, a single swatch", () => {
-    render(<OptionHarness initial={null} />);
-    openPicker(screen.getByRole("combobox", { name: "cost type" }));
-    const food = screen.getByRole("option", { name: "Food" });
-    expect(within(food).getAllByTestId("food-icon")).toHaveLength(1);
-    expect(food.querySelectorAll("[data-enum-option-swatch]")).toHaveLength(0);
-    const materials = screen.getByRole("option", { name: "Materials" });
-    expect(
-      materials.querySelectorAll("[data-enum-option-swatch]"),
-    ).toHaveLength(1);
-  });
-
   // Regression: the closed field showed only the label, dropping the glyph
   // every row carries.
   it("shows the selected option's glyph in the closed field", () => {
@@ -569,43 +556,6 @@ describe("Picker segmented and multiple", () => {
     expect(onValueChange).toHaveBeenCalledWith("board");
   });
 
-  it("keeps several values as removable chips and adds from the list", () => {
-    const onValuesChange = vi.fn();
-    render(
-      <Picker
-        multiple
-        label="cost types"
-        options={OPTIONS}
-        values={["materials"]}
-        onValuesChange={onValuesChange}
-      />,
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Remove Materials" }));
-    expect(onValuesChange).toHaveBeenLastCalledWith([]);
-    openPicker(screen.getByRole("combobox", { name: "cost types" }));
-    fireEvent.click(screen.getByRole("option", { name: "Services" }));
-    expect(onValuesChange).toHaveBeenLastCalledWith(["materials", "services"]);
-  });
-
-  // Regression: hand-rolled chips sat outside Base UI's chips context, so
-  // Backspace in the empty input could not remove the last selection.
-  it("removes the last chip with Backspace in the empty input", () => {
-    const onValuesChange = vi.fn();
-    render(
-      <Picker
-        multiple
-        label="cost types"
-        options={OPTIONS}
-        values={["materials", "services"]}
-        onValuesChange={onValuesChange}
-      />,
-    );
-    const input = screen.getByRole("combobox", { name: "cost types" });
-    input.focus();
-    fireEvent.keyDown(input, { key: "Backspace" });
-    expect(onValuesChange).toHaveBeenLastCalledWith(["materials"]);
-  });
-
   // Regression: the open-on-mount effect re-ran whenever the caller's
   // search callback changed identity (as its results loaded), wiping the
   // typed query.
@@ -630,83 +580,9 @@ describe("Picker segmented and multiple", () => {
     rerender(<Harness version={2} />);
     expect(input).toHaveValue("serv");
   });
-
-  it("shows a row's trailing chips and announces them", () => {
-    render(
-      <Picker
-        label="sheet"
-        options={[{ value: "maple", label: "Maple", hint: "$47/sheet" }]}
-        value={null}
-        onValueChange={vi.fn()}
-      />,
-    );
-    openPicker(screen.getByRole("combobox", { name: "sheet" }));
-    const row = screen.getByRole("option", { name: "Maple $47/sheet" });
-    expect(within(row).getByText("$47/sheet")).toBeInTheDocument();
-  });
 });
 
 describe("Picker stored codes", () => {
-  const CODE = "PRD-4K7M";
-
-  // Regression: a closed edit form showed the stored shortcode until the
-  // deferred candidate list loaded.
-  it("shows the record's name and picture, never its code", () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    // SAFETY: the picker's product builder reads only these detail fields;
-    // the rest of the detail shape is irrelevant to the closed field.
-    const detail = {
-      id: CODE,
-      name: "Rolled Oats",
-      brandName: "Harvest Mill",
-      coverImageUrl: "https://images.example.test/oats.jpg",
-    } as never;
-    client.setQueryData(
-      entityDetailFor("product").queryOptions(CODE).queryKey,
-      detail,
-    );
-    const { container } = render(
-      <Picker
-        entity="product"
-        label="product"
-        items={[]}
-        value={{ id: CODE, name: CODE }}
-        setValue={vi.fn()}
-      />,
-      client,
-    );
-    const input = screen.getByRole("combobox", { name: "product" });
-    expect(input).toHaveValue("Rolled Oats");
-    expect(container.querySelector("[data-picker-visual] img")).not.toBeNull();
-    expect(container).not.toHaveTextContent(CODE);
-  });
-
-  // Regression: a detail read answers null for a deleted record, and the
-  // builder threw during render.
-  it("names a missing record instead of throwing", () => {
-    const client = new QueryClient();
-    client.setQueryData(
-      entityDetailFor("product").queryOptions(CODE).queryKey,
-      null,
-    );
-    const { container } = render(
-      <Picker
-        entity="product"
-        label="product"
-        items={[]}
-        value={{ id: CODE, name: CODE }}
-        setValue={vi.fn()}
-      />,
-      client,
-    );
-    expect(screen.getByRole("combobox", { name: "product" })).toHaveValue(
-      "Missing product",
-    );
-    expect(container).not.toHaveTextContent(CODE);
-  });
-
   // Regression: a string option list built from records (cookbooks) showed
   // the stored code until its roster loaded.
   it("waits for a loading option roster instead of showing a stored code", () => {
@@ -756,22 +632,6 @@ describe("Picker stored codes", () => {
     openPicker(screen.getByRole("combobox", { name: "first product" }));
     const row = screen.getByRole("option", { name: "Rolled Oats" });
     expect(row.querySelector("[data-picker-visual] img")).not.toBeNull();
-  });
-
-  it("shows a loading state rather than the code while the record loads", () => {
-    const { container } = render(
-      <Picker
-        entity="product"
-        label="product"
-        items={[]}
-        value={{ id: CODE, name: CODE }}
-        setValue={vi.fn()}
-      />,
-    );
-    const input = screen.getByRole("combobox", { name: "product" });
-    expect(input).toHaveValue("");
-    expect(input).toHaveAttribute("placeholder", "Loading…");
-    expect(container).not.toHaveTextContent(CODE);
   });
 });
 

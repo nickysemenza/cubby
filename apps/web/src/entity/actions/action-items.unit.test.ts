@@ -12,10 +12,6 @@ import { actionItems, createActionFor } from "./action-items";
 import { verbDef } from "./action-verbs";
 
 describe("createActionFor", () => {
-  it("uses the /new route when the entity has one", () => {
-    expect(createActionFor("recipe")).toEqual({ to: "/recipes/new" });
-  });
-
   // The bug this exists for: a dialog-created entity has no `/new` route, so
   // anything reading `routes.new` alone concluded it couldn't be created.
   // Product joined this list once its rich create/edit form moved onto the

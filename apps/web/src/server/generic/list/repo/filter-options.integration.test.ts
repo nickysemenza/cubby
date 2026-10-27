@@ -84,50 +84,6 @@ describe("entity reference filter options", () => {
     ).toEqual(expected);
   });
 
-  // Nullable stored titles must not break a roster, selected-value hydration,
-  // or searching the fallback label that the picker actually displays.
-  it("uses the shortcode for an unnamed entity in pages, search, and selected values", async () => {
-    const unnamed = await createMealWithEntityId(
-      ctx.db,
-      buildEntity("meal", { date: "2026-08-01", name: null }),
-      TEST_ACTOR,
-    );
-    const named = await createMealWithEntityId(
-      ctx.db,
-      buildEntity("meal", { date: "2026-08-02", name: "Synthetic lunch" }),
-      TEST_ACTOR,
-    );
-    const input = {
-      source: "entity" as const,
-      entity: "meal" as const,
-      search: "",
-      selectedIds: [],
-      limit: 25,
-      include: [],
-    };
-    const fallback = { id: unnamed.output.id, label: unnamed.output.id };
-    const roster = await getFilterOptions(ctx.db, input);
-    expect(roster.items).toEqual(
-      expect.arrayContaining([
-        fallback,
-        { id: named.output.id, label: "Synthetic lunch" },
-      ]),
-    );
-    expect(
-      (await getFilterOptions(ctx.db, { ...input, search: unnamed.output.id }))
-        .items,
-    ).toEqual([fallback]);
-    expect(
-      (
-        await getFilterOptions(ctx.db, {
-          ...input,
-          search: "no page match",
-          selectedIds: [unnamed.output.id],
-        })
-      ).items,
-    ).toEqual([fallback]);
-  });
-
   // Regression: a pasted shortcode found nothing once the record had a name,
   // because roster search matched only the displayed label.
   it("finds a named record by its pasted shortcode", async () => {

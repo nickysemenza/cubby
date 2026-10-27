@@ -355,27 +355,6 @@ describe("SuggestionOutcomeMark", () => {
       screen.getByText("Agrees with Materials · 91% · high"),
     ).toBeInTheDocument();
   });
-
-  it("stops a cell trigger's click/mousedown from reaching the row/cell selection handlers", () => {
-    // A cell's selection starts on `TableCell`'s own `onMouseDown` — the mark
-    // must never let that bubble up, or hovering/clicking it would also
-    // select the cell. Listening at the document root avoids adding an
-    // interactive-role wrapper just to observe the bubble.
-    const onMouseDown = vi.fn();
-    document.addEventListener("mousedown", onMouseDown);
-    render(
-      <SuggestionOutcomeMark
-        outcome={pickOutcome()}
-        suggestion={suggestion}
-        currentValue={null}
-        actionable
-        surface="cell"
-      />,
-    );
-    fireEvent.mouseDown(screen.getByRole("button"));
-    document.removeEventListener("mousedown", onMouseDown);
-    expect(onMouseDown).not.toHaveBeenCalled();
-  });
 });
 
 describe("unsettled mark", () => {

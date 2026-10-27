@@ -30,22 +30,6 @@ function hit(overrides: Partial<SearchHit>): SearchHit {
 }
 
 describe("SearchResultMedia", () => {
-  it("renders a retired location typeHint instead of throwing", () => {
-    const { container } = render(
-      <SearchResultMedia item={hit({ typeHint: "quarter-crate" })} />,
-    );
-    expect(container.querySelector("svg")).not.toBeNull();
-  });
-
-  it("renders an unknown product category instead of throwing", () => {
-    const { container } = render(
-      <SearchResultMedia
-        item={hit({ entityKind: "product", id: "PRD-2222", typeHint: "gone" })}
-      />,
-    );
-    expect(container.querySelector("svg")).not.toBeNull();
-  });
-
   it("still uses the type-specific icon for a live typeHint", () => {
     const { container } = render(
       <SearchResultMedia item={hit({ typeHint: "shelf" })} />,

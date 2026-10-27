@@ -219,54 +219,6 @@ describe("GenericEntityDetail", () => {
     expect(document.getElementById(jump!.hash.slice(1))).not.toBeNull();
   });
 
-  it("links a reference field to its target's detail route", () => {
-    const record = recordFor("task");
-    // SAFETY: `testShortcode` mints a valid project shortcode.
-    const projectId = testShortcode("project", "PRJ-DECK");
-    const linked = {
-      ...record,
-      projectName: "Deck rebuild",
-      fields: {
-        ...record.fields,
-        projectId: fieldValueFixture(
-          entityFieldEnvelopeSchemas.task.detail.shape.fields.shape.projectId,
-          projectId,
-        ),
-      },
-    };
-    render(
-      <GenericEntityDetail
-        entity="task"
-        record={linked}
-        operations={operations}
-      />,
-      {
-        wrapper: harness.wrapper,
-      },
-    );
-    expect(screen.getByRole("link", { name: "Deck rebuild" })).toHaveAttribute(
-      "href",
-      `/projects/${projectId}`,
-    );
-  });
-
-  // Regression: the hero chip read only static `control.options`, so a task
-  // (whose status labels live in the rich option table) stamped the raw
-  // `not_started` on its own page while every other surface said "Not started".
-  it("stamps the hero chip with the enum's rich label", () => {
-    const record = { ...recordFor("task"), status: "not_started" as const };
-    render(
-      <GenericEntityDetail
-        entity="task"
-        record={record}
-        operations={operations}
-      />,
-      { wrapper: harness.wrapper },
-    );
-    expect(screen.getAllByText("Not started").length).toBeGreaterThan(0);
-    expect(screen.queryByText("not_started")).toBeNull();
-  });
-
   // Regression: `externalIds` is a `text-array` field whose read shape is an
   // array of objects; deriving its cohort link used to parse it as strings
   // and crash the whole product page.

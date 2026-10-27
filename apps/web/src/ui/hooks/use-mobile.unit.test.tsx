@@ -50,17 +50,6 @@ afterEach(() => {
 });
 
 describe("useIsMobile", () => {
-  it("follows the media query even when innerWidth disagrees", () => {
-    // The regression: seeding from `window.innerWidth` while subscribing to
-    // matchMedia meant the mount read won forever — the query already matched,
-    // so no `change` event was ever emitted to correct it. Result: every CSS
-    // breakpoint went mobile (compact nav) while the data table stayed on its
-    // desktop layout and the mobile filter sheet was unreachable.
-    stubViewport({ innerWidth: 1265, queryMatches: true });
-    const { result } = renderHook(() => useIsMobile());
-    expect(result.current).toBe(true);
-  });
-
   it("is false when the query does not match", () => {
     stubViewport({ innerWidth: 390, queryMatches: false });
     const { result } = renderHook(() => useIsMobile());

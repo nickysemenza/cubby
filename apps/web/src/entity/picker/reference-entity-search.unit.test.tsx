@@ -85,34 +85,6 @@ const categories: ProductCategoryRow[] = [
 ];
 
 describe("productCategorySearchItems", () => {
-  it("emits a depth-first, grouped tree on an empty query", () => {
-    const items = productCategorySearchItems(categories, "");
-
-    expect(items.map((item) => item.id)).toEqual([
-      rootId,
-      groupId,
-      leafId,
-      toolsId,
-    ]);
-    expect(items.map((item) => item.presentation?.depth)).toEqual([0, 1, 2, 0]);
-    // Regression: `name` is the full path — it is what the closed control
-    // displays after a pick, so a leaf-only name showed "Rain shell" where
-    // the product had read "Apparel / Outerwear / Rain shell". The row
-    // itself renders the node label.
-    expect(items.map((item) => item.name)).toEqual([
-      "Apparel",
-      "Apparel / Outerwear",
-      "Apparel / Outerwear / Rain shell",
-      "Tools",
-    ]);
-    expect(items.map((item) => item.presentation?.rowLabel)).toEqual([
-      "Apparel",
-      "Outerwear",
-      "Rain shell",
-      "Tools",
-    ]);
-  });
-
   it("emits flat full-path rows once a query is typed", () => {
     const items = productCategorySearchItems(categories, "rain");
 

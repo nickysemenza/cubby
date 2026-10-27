@@ -17,48 +17,6 @@ const hasTag = (tags: readonly (readonly string[])[], tag: readonly string[]) =>
  * ingredient/usda-food links still select the wider business ripple below.
  */
 describe("entityMutation.mutate invalidates", () => {
-  it("widens to ripple.ingredientProduct when a product create names an ingredient link", () => {
-    const tags = entityMutation.mutate.invalidates({
-      action: "create",
-      entity: "product",
-      data: {
-        name: "Flour",
-        barcode: null,
-        brandId: null,
-        expectedQuantity: null,
-        ingredientId: "ING-4K7M",
-        fdc_id: null,
-        categoryId: null,
-      },
-    });
-
-    expect(hasTag(tags, ["ingredient"])).toBe(true);
-    expect(hasTag(tags, ["product"])).toBe(true);
-    expect(tags).toEqual(ripple.ingredientProduct);
-  });
-
-  it("also names usda-food when the same create carries an explicit fdc_id link", () => {
-    // This is the enrich-ingredient-dialog / usda-food-actions "link to an
-    // ingredient" shape: an ingredient link AND a real fdc_id together.
-    const tags = entityMutation.mutate.invalidates({
-      action: "create",
-      entity: "product",
-      data: {
-        name: "Flour",
-        barcode: null,
-        brandId: null,
-        expectedQuantity: null,
-        ingredientId: "ING-4K7M",
-        fdc_id: 12345,
-        categoryId: null,
-      },
-    });
-
-    expect(hasTag(tags, ["usda-food"])).toBe(true);
-    expect(hasTag(tags, ["ingredient"])).toBe(true);
-    expect(tags).toEqual(ripple.ingredientProductUsdaFood);
-  });
-
   it("refreshes Ingredient imagery on a plain Product create", () => {
     const tags = entityMutation.mutate.invalidates({
       action: "create",

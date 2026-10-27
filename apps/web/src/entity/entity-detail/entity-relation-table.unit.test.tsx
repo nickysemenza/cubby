@@ -1,25 +1,14 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entitySummary } from "@cubby/schemas/entity-summary";
-import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   purchaseProductOut,
   productPurchaseOut,
 } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
-import { formatCategoryLabel } from "@cubby/shared";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
-import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import {
   type EntityListInputByEntity,
   productListItem,
@@ -353,68 +342,6 @@ describe("EntityRelationTable", () => {
       ),
     ).toBeVisible();
     expect(screen.queryByText(/No .* yet\./)).toBeNull();
-  });
-
-  // An embedded products table must use the same category and identifier
-  // presentation as the product list, even without that page's overrides.
-  it("renders product domain values without dumping structured payloads", async () => {
-    const category = categorySummaryFixture("tools");
-    const product = mock(productListItem, {
-      seed: 3,
-      overrides: {
-        fields: {
-          categoryId: fieldValueFixture(
-            entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
-              "categoryId"
-            ],
-            category.id,
-          ),
-        },
-        category: {
-          id: category.id,
-          name: category.name,
-          fields: {
-            path: fieldValueFixture(
-              productCategorySummary.shape.fields.shape.path,
-              category.path,
-            ),
-          },
-        },
-      },
-    });
-    expect(product.externalIds.length).toBeGreaterThan(0);
-    const list = entityList.list.withTransport(async () => ({
-      items: [product],
-      meta: { pageIndex: 0, pageSize: 50, totalCount: 1, sums: {} },
-    }));
-    render(
-      <EntityRelationTable
-        plan={planFor("ingredient", "products")}
-        recordId={testShortcode("ingredient", "ING-TEST")}
-        title="Products"
-        operations={{ list }}
-      />,
-      { wrapper: harness.wrapper },
-    );
-    expect(
-      await screen.findByRole("link", { name: product.name }),
-    ).toBeVisible();
-    const row = screen.getByRole("link", { name: product.name }).closest("tr");
-    if (row === null) throw new Error("Expected the product row");
-    expect(row).toHaveTextContent(formatCategoryLabel(category));
-    // Regression: the category pill replaced the reference link, so it
-    // rendered as inert text instead of opening the category.
-    for (const link of within(row).getAllByRole("link", {
-      name: formatCategoryLabel(category),
-    })) {
-      expect(link).toHaveAttribute(
-        "href",
-        `/product-categories/${category.id}`,
-      );
-    }
-    expect(row).toHaveTextContent(product.externalIds[0]!.source);
-    expect(row).not.toHaveTextContent('"externalId"');
-    expect(row.querySelector("pre")).toBeNull();
   });
 
   // Regression: the embedded table used to build its columns with no

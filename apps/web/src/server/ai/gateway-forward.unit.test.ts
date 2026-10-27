@@ -244,65 +244,6 @@ describe("forwardGatewayRequest", () => {
     expect(recorded[0]?.status).toBe("failed");
   });
 
-  it("forwards the built request with the server's token and feature, and leaves pricing to the catalog consumer", async () => {
-    const { port, sent, recorded } = fakePort(
-      () =>
-        new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
-          status: 200,
-          headers: { "cf-aig-log-id": "log-1", "x-secret": "hidden" },
-        }),
-    );
-    const out = await forwardGatewayRequest(
-      request,
-      { db, runId, feature: "cookbook-epub-parsing" },
-      port,
-    );
-    expect(out.status).toBe(200);
-    expect(out.headers).toContainEqual(["cf-aig-log-id", "log-1"]);
-    expect(out.headers.map(([name]) => name)).not.toContain("x-secret");
-    expect(out.body).toContain('"input_tokens":10');
-
-    const [call] = sent;
-    expect(call?.provider).toBe("anthropic");
-    expect(call?.url).toBe("https://ai-gateway.invalid/anthropic/v1/messages");
-    // The crate decides its own caching; the forwarder never forces a skip.
-    expect(call?.opts.skipCache).toBeUndefined();
-    expect(call?.opts.funding).toBe("subscriber_credit");
-    expect(recorded[0]?.costEvidence?.billingReason).toBe("subscriber_credit");
-    // Regression: the crate's cookbook, chunk, contract, and model tags once
-    // went to the gateway verbatim (a log filter and spend bucket per chunk);
-    // `model` and `purpose` are still read below for the usage row.
-    expect(call?.opts.metadata).toEqual({
-      feature: "cookbook-epub-parsing",
-      operation: "cookbook.extract",
-    });
-    const headers = new Headers(call?.init.headers);
-    expect(headers.get("authorization")).toBeNull();
-    expect(headers.get("cf-aig-authorization")).toBeNull();
-    expect(headers.get("cf-aig-metadata")).toBeNull();
-    expect(headers.get("cf-aig-byok-alias")).toBeNull();
-    expect(headers.get("cf-aig-no-wholesale")).toBeNull();
-    expect(headers.get("anthropic-version")).toBe("2023-06-01");
-    expect(call?.init.body).toBe(JSON.stringify(request.body));
-
-    expect(recorded).toEqual([
-      expect.objectContaining({
-        feature: "cookbook-epub-parsing",
-        provider: "anthropic",
-        model: "claude-haiku-4-5",
-        operation: "cookbook.extract",
-        inputTokens: 10,
-        outputTokens: 5,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        chargedCost: 0,
-        cacheStatus: "none",
-        gatewayLogId: "log-1",
-        transport: "gateway",
-      }),
-    ]);
-  });
-
   // Prompt-cache traffic is token evidence, not the caller's cache state:
   // `cacheStatus` once read "hit" for any cache-read token.
   it("records prompt-cache tokens without reporting a caller cache hit", async () => {

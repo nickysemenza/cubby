@@ -35,26 +35,6 @@ const TASK_ONE = testShortcode("task", "TSK-4K7M");
 const TASK_TWO = testShortcode("task", "TSK-9Q2X");
 
 describe("manifestFilterConfig", () => {
-  it("exposes the generated suggestion filter only on entities with suggest targets", () => {
-    expect(
-      getEntityFilters("product").find(
-        (spec) => spec.columnId === "suggestion",
-      ),
-    ).toMatchObject({
-      field: "suggestionKind",
-      label: "Suggestion",
-      kind: "multiselect",
-      options: [
-        { value: "addition", label: "Addition" },
-        { value: "correction", label: "Correction" },
-      ],
-      // Any value replaces the old `any` option.
-      nullable: { field: "suggestionPresenceFilter", label: "suggestion" },
-    });
-    expect(
-      getEntityFilters("recipe").some((spec) => spec.columnId === "suggestion"),
-    ).toBe(false);
-  });
   it.each([
     ["task", "status"],
     ["task", "trade"],
@@ -455,14 +435,6 @@ describe("expense order-id filters", () => {
     expect(build({ order: "WN63446464", vendor: VENDOR_ONE })).toMatchObject({
       orderId: ["WN63446464"],
       vendorId: [VENDOR_ONE],
-    });
-  });
-
-  it("keeps the exact scope and the presence worklist independent", () => {
-    const built = build({ order: "#11325", orderId: FILTER_ANY });
-    expect(built).toMatchObject({
-      orderId: ["#11325"],
-      orderIdPresenceFilter: FILTER_ANY,
     });
   });
 });

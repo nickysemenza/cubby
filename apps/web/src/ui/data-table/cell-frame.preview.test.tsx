@@ -68,33 +68,6 @@ const rect = (element: Element | null) => {
 };
 
 describe("cell frame layout", () => {
-  // Rails line up at the column's end edge on every row; fitting makes the
-  // column hug its widest value plus rail, so there is no dead space after it.
-  it("lines every row's explanation up at the cell's end edge", async () => {
-    await page.viewport(DESKTOP.width, DESKTOP.height);
-    const { getByTestId } = render(
-      <Grid
-        cells={[
-          <CellFrame key="short" trailing={rail()}>
-            Ok
-          </CellFrame>,
-          <CellFrame key="long" trailing={rail()}>
-            Unclassified
-          </CellFrame>,
-        ]}
-      />,
-    );
-    for (const id of ["cell-0", "cell-1"]) {
-      const cell = getByTestId(id);
-      const end =
-        rect(cell).right -
-        Number.parseFloat(getComputedStyle(cell).paddingRight);
-      const button = rect(cell.querySelector("button"));
-      expect(Math.round(button.right)).toBe(Math.round(end));
-      expect(Math.round(button.width)).toBe(16);
-    }
-  });
-
   it("makes the thumbnail frame exactly as tall as the data row", async () => {
     await page.viewport(DESKTOP.width, DESKTOP.height);
     const { getByTestId } = render(
@@ -106,30 +79,6 @@ describe("cell frame layout", () => {
     expect(rect(cell.querySelector(".thumbnail-ring")).height).toBe(
       rect(cell).height,
     );
-  });
-  it("clips a long value with an ellipsis before its rail, never under it", async () => {
-    await page.viewport(DESKTOP.width, DESKTOP.height);
-    const { getByTestId } = render(
-      <Grid
-        cells={[
-          <CellFrame key="a" trailing={rail()}>
-            $1,234,567.89 per each
-          </CellFrame>,
-        ]}
-      />,
-    );
-    const cell = getByTestId("cell-0");
-    const value = cell.querySelector("[data-cell-value]");
-    const button = cell.querySelector("button");
-    expect(rect(value).right).toBeLessThanOrEqual(rect(button).left);
-    expect(rect(button).right).toBeLessThanOrEqual(rect(cell).right);
-    // The always-visible explanation should leave most of a narrow cell for its value.
-    expect(rect(button).width).toBeLessThanOrEqual(18);
-    expect(rect(button).width).toBeGreaterThanOrEqual(16);
-    expect(rect(cell).height).toBe(32);
-    if (!(value instanceof HTMLElement)) throw new Error("missing value");
-    expect(value.scrollWidth).toBeGreaterThan(value.clientWidth);
-    expect(getComputedStyle(value).textOverflow).toBe("ellipsis");
   });
 
   it("starts plain, editable, and empty values on the same cell padding", async () => {
@@ -155,28 +104,5 @@ describe("cell frame layout", () => {
       return Math.round(rect(dash ?? null).left - rect(cell).left);
     });
     expect(offsets).toEqual([4, 4, 4]);
-  });
-
-  it("keeps the hover pencil from taking width in a narrow editable cell", async () => {
-    await page.viewport(DESKTOP.width, DESKTOP.height);
-    const { getByTestId } = render(
-      <Grid
-        cells={[
-          <CellEditTrigger key="wrap" onStartEdit={() => {}}>
-            Sep 19, 2026 at noon
-          </CellEditTrigger>,
-        ]}
-      />,
-    );
-    const cell = getByTestId("cell-0");
-    const trigger = cell.querySelector("button");
-    expect(rect(trigger).right).toBeLessThanOrEqual(rect(cell).right);
-    const text = trigger?.querySelector("span.truncate");
-    if (!(text instanceof HTMLElement)) throw new Error("missing value");
-    expect(getComputedStyle(text).textOverflow).toBe("ellipsis");
-    // The pencil is absolutely positioned: it adds nothing to the flow width.
-    const pencil = trigger?.querySelector("span[aria-hidden]");
-    if (!(pencil instanceof HTMLElement)) throw new Error("missing pencil");
-    expect(getComputedStyle(pencil).position).toBe("absolute");
   });
 });

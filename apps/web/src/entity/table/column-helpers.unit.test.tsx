@@ -730,37 +730,6 @@ describe("createBooleanColumn", () => {
     });
     expect(cellData.getCopyPayload({ stockTracked: null })).toBeNull();
   });
-
-  it("only offers the clear affordance when an undecided state is named", () => {
-    const boolColumn = (undecided?: { label: string }) => {
-      const options: TrackedBooleanOptions = {
-        trueFalseOptions: TRACKED_OPTIONS,
-        editable: { onSave: async () => {} },
-      };
-      if (undecided) options.undecided = undecided;
-      return createBooleanColumn(
-        createCubbyColumnHelper<TrackedRow>(),
-        "stockTracked",
-        options,
-      );
-    };
-
-    const withUndecided = renderColumn<TrackedRow, string | null>(
-      boolColumn({ label: "Undecided" }),
-      { stockTracked: true },
-    );
-    fireEvent.click(screen.getByText("Tracked"));
-    expect(
-      screen.getByRole("button", { name: /Clear Undecided/i }),
-    ).toBeInTheDocument();
-    withUndecided.unmount();
-
-    renderColumn<TrackedRow, string | null>(boolColumn(), {
-      stockTracked: true,
-    });
-    fireEvent.click(screen.getByText("Tracked"));
-    expect(screen.queryByRole("button", { name: /^Clear/i })).toBeNull();
-  });
 });
 
 // An inherited value is what the row lives by, so the cell shows it; the

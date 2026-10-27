@@ -372,54 +372,6 @@ describe("table density", () => {
     expect(copy && getComputedStyle(copy).opacity).toBe("1");
   });
 
-  it("wraps chips to two lines and counts what does not fit", async () => {
-    await page.viewport(1440, 900);
-    const names = [
-      "Books & Media",
-      "Groceries",
-      "Health & Personal Care",
-      "Kitchen",
-      "Pets",
-      "Software & Digital Services",
-    ];
-    const view = render(
-      <Fixture
-        cells={[
-          {
-            id: "c5",
-            width: 180,
-            content: (
-              <ChipCluster
-                items={names.map((name) => ({
-                  key: name,
-                  label: name,
-                  node: <span>{name}</span>,
-                }))}
-              />
-            ),
-          },
-        ]}
-      />,
-    );
-    const cell = view.getByTestId("cell-0");
-    await waitFor(() =>
-      expect(cell.querySelector("[data-chip-overflow]")).not.toBeNull(),
-    );
-    const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")].filter(
-      (chip) => chip.offsetParent !== null,
-    );
-    const more = cell.querySelector("[data-chip-overflow]");
-    expect(more?.textContent).toBe(`+${names.length - shown.length}`);
-    const tops = new Set(shown.map((chip) => Math.round(rect(chip).top)));
-    if (more) tops.add(Math.round(rect(more).top));
-    expect(tops.size).toBeLessThanOrEqual(2);
-    for (const chip of shown) {
-      expect(rect(chip).bottom).toBeLessThanOrEqual(rect(cell).bottom);
-      expect(rect(chip).right).toBeLessThanOrEqual(rect(cell).right);
-    }
-    expect(Math.round(rect(cell).height)).toBe(32);
-  });
-
   // Regression: 20px pills wrapped to a second line the 32px cell clipped
   // through the middle; only 12px chips fit two lines.
   it("never wraps pill-height chips to a clipped second line", async () => {

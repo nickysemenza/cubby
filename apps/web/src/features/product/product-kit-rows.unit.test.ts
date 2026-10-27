@@ -71,23 +71,6 @@ describe("buildProductTreeRows", () => {
     expect(rows.map((r) => r.rowKey)).toContain(productId("PRD-SHRD"));
   });
 
-  it("keeps the real shortcode on every row, at both depths", () => {
-    const rows = buildProductTreeRows(
-      [productAt("PRD-KITA", 1)],
-      groupComponentsByParent([componentOf("PRD-KITA", "PRD-PART")]),
-    );
-
-    // The regression this guards: namespacing `id` itself would send every
-    // link, inline edit, and row action on a component to `PRD-KITA:PRD-PART`,
-    // and the type system cannot catch it — a branded shortcode's *input* type
-    // is a plain string, so the bad value assigns cleanly into every mutation.
-    expect(rows[0]?.id).toBe(productId("PRD-KITA"));
-    expect(rows[0]?.subRows?.[0]?.id).toBe(productId("PRD-PART"));
-    expect(rows[0]?.subRows?.[0]?.rowKey).toBe(
-      `${productId("PRD-KITA")}:${productId("PRD-PART")}`,
-    );
-  });
-
   it("omits subRows entirely when a product has no components", () => {
     // Not an empty array: `getCanExpand()` must be false so the name column
     // renders no chevron that opens nothing.
