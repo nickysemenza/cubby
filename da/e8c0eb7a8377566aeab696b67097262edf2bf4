@@ -1,0 +1,27 @@
+apps/web/generator/entities/list-fields.ts
+  s_77bdb89dbc0fc6::t_5f19ca565ff283 8-11,919,926
+apps/web/src/server/generic/list/repo/declared-filters.ts
+  s_77bdb89dbc0fc6::t_2fced09ca7a786 318-321
+packages/schemas/package.json
+  s_77bdb89dbc0fc6::t_480535c554a181 185
+packages/schemas/src/filter-sentinel-fields.ts
+  s_77bdb89dbc0fc6::t_701d905adf6a31 97-105
+packages/schemas/src/relation-list.ts
+  s_77bdb89dbc0fc6::t_d871765d7d077b 1-342
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dae8c0eb7a8377566aeab696b67097262edf2bf4",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
