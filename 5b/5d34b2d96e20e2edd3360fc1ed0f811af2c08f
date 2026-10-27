@@ -1,0 +1,31 @@
+apps/web/src/server/domains/financial-account/repo.ts
+  s_9fb58b1f0c0012::t_d17b6c2873d528 11-14,55-58,195-208
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_9fb58b1f0c0012::t_121cea8e838260 70-73,76-77,79,251-255,260,272,294-297,304-307
+apps/web/src/server/domains/image-job/repo.ts
+  s_9fb58b1f0c0012::t_80dfa851c52d4f 197-201
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_9fb58b1f0c0012::t_760607db0292fa 610-611
+apps/web/src/server/entity-kernel/bindings.unit.test.ts
+  s_9fb58b1f0c0012::t_57a2c507fa06e1 40-53
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_9fb58b1f0c0012::t_736599d57f7e41 476-496,499
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_4c7dd1fa5cd0c9 1694-1710
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5b5d34b2d96e20e2edd3360fc1ed0f811af2c08f",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
