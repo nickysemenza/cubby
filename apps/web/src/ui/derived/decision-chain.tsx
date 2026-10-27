@@ -52,7 +52,7 @@ export function DecisionChain({
       : null;
   return (
     <div className="grid gap-3">
-      <section className="grid gap-1">
+      <section aria-label="Effective result" className="grid gap-1">
         <h3 className="text-xs font-medium">Effective result</h3>
         {decision?.outcome.kind === "empty" ? (
           <span className="text-xs text-muted-foreground">
@@ -76,36 +76,62 @@ export function DecisionChain({
           <span className="text-xs text-muted-foreground">Updating…</span>
         )}
       </section>
-      <section className="grid gap-1">
-        <h3 className="text-xs font-medium">Your choice</h3>
-        <div className="flex flex-wrap gap-2">
-          {onSet && data.envelope.current.controls.kind === "editable" ? (
-            <Button variant="link" size="xs" onClick={onSet}>
-              Set value…
-            </Button>
-          ) : null}
-          <FieldResolutionEntityActions
-            entity={data.subject.entityKind}
-            id={data.subject.entityId}
-            field={data.field}
-            resolution={data.envelope}
-          />
-        </div>
-        {data.envelope.current.controls.kind === "editable" &&
-        data.envelope.current.controls.reset.kind === "available" &&
-        data.envelope.current.controls.reset.preview.kind === "ready" ? (
-          <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
-            <span>With inherited values:</span>
-            <DecisionValue
+      {data.envelope.current.assignment !== null ||
+      data.envelope.current.controls.kind === "editable" ? (
+        <section aria-label="Your choice" className="grid gap-1">
+          <h3 className="text-xs font-medium">Your choice</h3>
+          <div className="text-xs">
+            {data.envelope.current.assignment?.kind === "value" ? (
+              <div className="grid gap-1">
+                <span className="text-muted-foreground">
+                  {data.envelope.current.assignment.ownership.kind ===
+                  "automatic"
+                    ? "Automatic assignment"
+                    : "Set here"}
+                </span>
+                <DecisionValue
+                  entity={data.subject.entityKind}
+                  field={data.field}
+                  value={data.envelope.current.assignment.value}
+                />
+              </div>
+            ) : (
+              <span className="text-muted-foreground">
+                {data.envelope.current.assignment?.kind === "none"
+                  ? "None"
+                  : "Following inherited values"}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {onSet && data.envelope.current.controls.kind === "editable" ? (
+              <Button variant="link" size="xs" onClick={onSet}>
+                Set value…
+              </Button>
+            ) : null}
+            <FieldResolutionEntityActions
               entity={data.subject.entityKind}
+              id={data.subject.entityId}
               field={data.field}
-              value={fieldValueOf({
-                result: data.envelope.current.controls.reset.preview.result,
-              })}
+              resolution={data.envelope}
             />
           </div>
-        ) : null}
-      </section>
+          {data.envelope.current.controls.kind === "editable" &&
+          data.envelope.current.controls.reset.kind === "available" &&
+          data.envelope.current.controls.reset.preview.kind === "ready" ? (
+            <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
+              <span>With inherited values:</span>
+              <DecisionValue
+                entity={data.subject.entityKind}
+                field={data.field}
+                value={fieldValueOf({
+                  result: data.envelope.current.controls.reset.preview.result,
+                })}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       {data.envelope.result.kind === "cached" ? (
         <p className="text-xs text-muted-foreground">
           Sources below describe current inputs. The cached result retains its

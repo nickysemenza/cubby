@@ -367,7 +367,7 @@ test("feature explanation ladders ancestry and identifies the deciding root bind
   await expect(
     popover
       .getByRole("list", { name: "Resolution order", exact: true })
-      .getByRole("listitem")
+      .locator(":scope > li")
       .filter({
         has: page.locator(
           `a[href="/product-categories/${taxonomyShortcode("household")}"]`,
@@ -386,7 +386,7 @@ test("feature explanation ladders ancestry and identifies the deciding root bind
   popover = await inlineExplanation(page, explanation);
   const ownSource = popover
     .getByRole("list", { name: "Resolution order", exact: true })
-    .getByRole("listitem")
+    .locator(":scope > li")
     .filter({ hasText: "This product category" });
   await expect(ownSource).toContainText("Used");
   await expect(ownSource).toContainText("deciding");

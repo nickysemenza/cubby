@@ -1,6 +1,6 @@
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -66,7 +66,16 @@ const base: ReadableFieldEnvelope = {
 };
 it("uses the declared enum label for the deciding value", () => {
   render(<DecisionChain data={explain(base)} />);
-  expect(screen.getByText("Other")).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "Effective result" })).getByText(
+      "Other",
+    ),
+  ).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "Your choice" })).getByText(
+      "Other",
+    ),
+  ).toBeVisible();
   expect(screen.queryByText("other")).not.toBeInTheDocument();
 });
 it("links the inherited source in the deciding level", () => {

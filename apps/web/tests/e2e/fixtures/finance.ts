@@ -189,6 +189,8 @@ export async function seedInheritancePrerequisite(page: Page, name: string) {
       date: "2026-09-20",
       purchaseId: purchase.id,
       projectId: project.id,
+      lineKind: "principal",
+      lineBasis: "item_line",
       cost: 10,
       costType: "materials",
     });

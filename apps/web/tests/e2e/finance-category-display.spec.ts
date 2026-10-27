@@ -1,7 +1,7 @@
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
-import { fieldEnvelope } from "@cubby/schemas/field-envelope";
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   openCellExplanation,
   gotoAuthenticatedPage,
@@ -180,7 +180,7 @@ test("linked Expense categories display their readable label and transaction exp
   await openCellExplanation(row, "How itemization is determined");
   await expect(popover).toContainText("Technical details");
   await expect(
-    popover.getByText("Confirmed allocations 1", { exact: true }),
+    popover.getByRole("link", { name: "Confirmed allocations 1", exact: true }),
   ).toBeVisible();
   await expect(
     popover.getByText("Confirmed allocations", { exact: true }),
@@ -430,14 +430,22 @@ test("expense category pills agree with quality for direct, allocated, and missi
   const read = async (id: string) => {
     const response = await entityApi(page.request).get("expense", id, {});
     expect(response.ok(), await response.text()).toBeTruthy();
-    return z
+    const envelope = z
       .object({
-        dataQuality: z.object({
-          score: z.number().nullable(),
-          gaps: z.array(z.object({ check: z.string() })),
+        fields: z.object({
+          dataQuality: fieldEnvelope(
+            z.json(),
+            z.object({
+              score: z.number().nullable(),
+              gaps: z.array(z.object({ check: z.string() })),
+            }),
+          ),
         }),
       })
-      .parse(await response.json()).dataQuality;
+      .parse(await response.json()).fields.dataQuality;
+    const value = fieldValueOf(envelope);
+    if (!value) throw new Error("Synthetic Expense quality was not computed");
+    return value;
   };
   expect((await read(missing)).score).toBeLessThan(100);
   expect((await read(missing)).gaps.map((gap) => gap.check)).toContain(
