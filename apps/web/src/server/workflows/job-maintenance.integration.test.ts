@@ -4,7 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   entityIdentity,
   image,
@@ -13,8 +13,11 @@ import {
 } from "~/server/db/schema";
 import { createTransparentDerivativeAndJob } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { JOB_RETENTION_MS } from "~/server/generic/jobs/repo/job-retention";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import {
+  JOB_RETENTION_MS,
+  pruneFinishedJobs,
+} from "~/server/generic/jobs/repo/job-retention";
+import { enqueueJob, wakeJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 import { enrollQueueMaintenance } from "./job-maintenance";
@@ -91,6 +94,43 @@ describe("Job maintenance", () => {
       .where(eq(job.key, `image-processing:${jobId}`));
     expect(processing?.state).toBe("pending");
     expect(execution).toMatchObject({ state: "queued", attempts: 0 });
+  });
+
+  it("keeps a drain while a producer commits a fresh wake", async () => {
+    const input = {
+      key: "synthetic.retention.wake",
+      kind: "synthetic.retention",
+      input: {},
+    };
+    const saved = await enqueueJob(ctx.db, input);
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        updatedAt: new Date(Date.now() - JOB_RETENTION_MS - 60_000),
+      })
+      .where(eq(job.id, saved.id));
+    const woken = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const producer = withTransactionDatabase(ctx.db, async (tx) => {
+      await wakeJob(tx, input);
+      woken.resolve();
+      await release.promise;
+    });
+    try {
+      await woken.promise;
+      expect(await pruneFinishedJobs(ctx.db, { limit: 100 })).toBe(0);
+    } finally {
+      release.resolve();
+      await producer;
+    }
+    expect(await pruneFinishedJobs(ctx.db, { limit: 100 })).toBe(0);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: job.id })
+        .from(job)
+        .where(eq(job.id, saved.id)),
+    ).toEqual([{ id: saved.id }]);
   });
 
   it("prunes old finished Jobs and their entity identities, retaining failures", async () => {

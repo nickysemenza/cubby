@@ -24,3 +24,9 @@ BEGIN
 END $$;--> statement-breakpoint
 DROP TRIGGER IF EXISTS "Job_never_exhausted_failure" ON "Job";--> statement-breakpoint
 DROP FUNCTION IF EXISTS job_never_exhausted_failure();
+
+--> statement-breakpoint
+-- The retired trigger enforced unlimited retries even when old producers stored three.
+-- Carry that policy without changing attempts, readiness, errors or member controls.
+UPDATE "Job" SET "maxAttempts" = NULL
+ WHERE kind IN ('image.cloud', 'image.device', 'image.device.wake', 'derived.drain', 'derived.reconcile');

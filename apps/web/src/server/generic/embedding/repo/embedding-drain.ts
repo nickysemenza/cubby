@@ -465,6 +465,21 @@ async function lockPublicationSources(
   return new Set(live.rows.map(({ id, kind }) => entityRefKey(kind, id)));
 }
 
+/** Source writers lock identities before marking their WorkItems. */
+export async function lockEmbeddingDrainSources(
+  tx: Database,
+  items: readonly WorkItem[],
+  page: EmbeddingDrainPage,
+) {
+  return lockPublicationSources(
+    tx,
+    items.flatMap((item) => {
+      const entry = page.byItem.get(item);
+      return entry?.status === "ready" && entry.ref ? [entry] : [];
+    }),
+  );
+}
+
 export async function publishEmbeddingDrainSelections(
   tx: Database,
   items: readonly WorkItem[],

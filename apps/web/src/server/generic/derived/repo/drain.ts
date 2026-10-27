@@ -120,7 +120,7 @@ export async function prepareDerivedPage(
           .parse(
             (
               await unwrapDb(db).execute(sql`
-      SELECT ticket FROM "DerivedDirty"
+      SELECT ticket FROM "WorkItem"
        WHERE strpos(target, '@') > 0
          AND split_part(target, '@', 1) = ANY(ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(directTargets)}::jsonb)))`)
             ).rows,
@@ -233,7 +233,7 @@ const lockPublishableMarks = async (
         ON d.ref = m.ref AND d.ticket = m.ticket
      WHERE d.target = ${declaration.target}
        AND NOT EXISTS (
-         SELECT 1 FROM "DerivedDirty" pending
+         SELECT 1 FROM "WorkItem" pending
           WHERE starts_with(pending.target, ${`${declaration.target}@`})
             AND NOT EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(fanoutTickets)}::jsonb) observed(ticket)
@@ -378,7 +378,7 @@ const publishValues = async (
        WHERE NOT EXISTS (
          -- A source edit can precede dependent ticket expansion. Keep the
          -- previous result and direct work until that fanout has expanded.
-         SELECT 1 FROM "DerivedDirty" pending
+         SELECT 1 FROM "WorkItem" pending
           WHERE starts_with(pending.target, i.target || '@')
             AND NOT EXISTS (
               SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(groups[0]?.fanoutTickets ?? [])}::jsonb) observed(ticket)
@@ -751,7 +751,7 @@ export async function markExpiredClockDerived(
   if (targets.length === 0) return 0;
   const result = await unwrapDb(db).execute(sql`
     WITH marked AS (
-      INSERT INTO "DerivedDirty" (target, ref, priority)
+      INSERT INTO "WorkItem" (target, ref, priority)
       SELECT k.target, v."entityId", 2
         FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
         JOIN "DerivedValue" v ON v.key = k.key

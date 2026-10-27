@@ -213,3 +213,51 @@ it("retires every uploaded vector id without an artifact and re-admits open refr
     ).toEqual([]);
   });
 });
+
+it("preserves unlimited retries for existing subject-owned and derived Jobs", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0046_coarse_jobs_work_items" });
+    const kinds = [
+      "image.cloud",
+      "image.device",
+      "image.device.wake",
+      "derived.drain",
+      "derived.reconcile",
+      "run.execute",
+    ];
+    for (const [index, kind] of kinds.entries()) {
+      const id = `00000000-0000-4000-8000-${String(700 + index).padStart(12, "0")}`;
+      const shortcode = `JOB-SYNTH7${index}123`;
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'job',$2)`,
+        [id, shortcode],
+      );
+      await client.query(
+        `INSERT INTO "Job" (id,shortcode,key,kind,input,state,attempts,"maxAttempts",error,"availableAt")
+        VALUES ($1,$2,$3,$3,'{}','retry_wait',2,3,'Synthetic retained failure','2026-01-02')`,
+        [id, shortcode, kind],
+      );
+    }
+    await migrateDatabase(db, { through: "0047_coarse_jobs_work_items" });
+    const result = await client.query(
+      `SELECT kind,attempts,"maxAttempts",error,"availableAt"::date::text AS ready,state FROM "Job" WHERE id = ANY($1::uuid[]) ORDER BY kind`,
+      [
+        kinds.map(
+          (_, index) =>
+            `00000000-0000-4000-8000-${String(700 + index).padStart(12, "0")}`,
+        ),
+      ],
+    );
+    expect(result.rows).toEqual(
+      [...kinds].sort().map((kind) => ({
+        kind,
+        attempts: 2,
+        maxAttempts: kind === "run.execute" ? 3 : null,
+        error: "Synthetic retained failure",
+        ready: "2026-01-02",
+        state: "retry_wait",
+      })),
+    );
+  });
+});

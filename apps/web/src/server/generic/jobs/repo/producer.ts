@@ -188,7 +188,10 @@ export async function wakeJob(
     const [existing] = await repositoryQueries(tx)
       .select({ id: job.id })
       .from(job)
-      .where(eq(job.key, input.key));
+      // Retention must either skip this identity or finish deleting it before
+      // this read, in which case enqueue recreates it in the source transaction.
+      .where(eq(job.key, input.key))
+      .for("key share");
     if (!existing) await enqueueJob(tx, input);
   });
 }

@@ -17,6 +17,7 @@ import {
   enqueueAiEvaluation,
   enqueueAiEvaluations,
 } from "~/server/ai/repo/ai-evaluation-requests";
+import { markAiEvaluationWork } from "~/server/ai/repo/ai-evaluation-work";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
@@ -27,12 +28,14 @@ import {
 } from "~/server/db/schema";
 import { readAiRefreshWorkSummary } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
 import {
   aiEvaluationItem,
   drainAiEvaluations,
   withClaimedAiEvaluation,
 } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 // Real pooled transactions exercise drain items, slot uniqueness and publication authority.
 describe("AI evaluation drain publication", () => {
@@ -212,6 +215,50 @@ describe("AI evaluation drain publication", () => {
     });
     expect(summary.pending).toEqual([{ id: seeded.rows[3]!.id }]);
     expect(summary.failureText).toBe("Synthetic evaluation failure");
+  });
+
+  it("keeps parked evaluation work when its Run resumes before publication", async () => {
+    const feature = "synthetic-resume-feature";
+    const seeded = await seed(1, feature);
+    const evaluation = seeded.rows[0]!;
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "paused", trigger: "manual" })
+      .where(eq(run.id, seeded.runId));
+    await getDb(ctx.db).execute(
+      sql`UPDATE "WorkItem" SET priority = 0, "readyAt" = now() WHERE ref = ${evaluation.id}::uuid`,
+    );
+    const execution = await enqueueJob(ctx.db, {
+      key: `ai-evaluation:${feature}`,
+      kind: "ai.evaluation",
+      input: {},
+    });
+    const handler = aiEvaluationJobHandler();
+    let resumed = false;
+    const outcome = await advanceJob(ctx.db, execution.id, {
+      "ai.evaluation": {
+        prepare: (db, claim, context) =>
+          handler.prepare(db, claim, {
+            ...context,
+            async fenced(work, options) {
+              await withTransactionDatabase(db, async (tx) => {
+                await getDb(tx)
+                  .update(run)
+                  .set({ status: "running" })
+                  .where(eq(run.id, seeded.runId));
+                await markAiEvaluationWork(tx, [evaluation.id], {
+                  revive: true,
+                });
+              });
+              resumed = true;
+              return context.fenced(work, options);
+            },
+          }),
+      },
+    });
+    expect(outcome).toBe("succeeded");
+    expect(resumed).toBe(true);
+    expect(await aiEvaluationItem(ctx.db, evaluation.id)).toBeDefined();
   });
 
   it("retires queued obsolete generations without inference and parks paused authority", async () => {

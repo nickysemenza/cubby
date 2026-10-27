@@ -1,6 +1,7 @@
 import type { Database } from "~/server/db/database";
 import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
 import {
+  lockEmbeddingDrainSources,
   markEmbeddingArtifactsSubmitting,
   prepareEmbeddingDrainPage,
   publishEmbeddingDrainSelections,
@@ -216,6 +217,9 @@ export function embeddingRefreshHandler(
     limit: PAGE_LIMIT,
     prepare: (db, items, context) =>
       prepareRefreshPage(port, db, items, context),
+    lock: async (tx, items, prepared) => {
+      await lockEmbeddingDrainSources(tx, items, prepared);
+    },
     publish: async (tx, items, prepared) => {
       const postponed = items.filter(
         (item) => prepared.byItem.get(item)?.status === "poll",

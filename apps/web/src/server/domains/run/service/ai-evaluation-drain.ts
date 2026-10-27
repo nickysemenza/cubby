@@ -324,10 +324,7 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
         items.flatMap((item) => {
           const kind = prepared.entries.get(item.ref)?.kind;
           const target = prepared.targets.get(item.ref);
-          return target &&
-            kind !== "skip" &&
-            kind !== "park" &&
-            kind !== "settled"
+          return target && kind !== "skip" && kind !== "settled"
             ? [target]
             : [];
         }),
@@ -339,13 +336,24 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
         const entry = prepared.entries.get(item.ref);
         return target && entry ? [{ target, entry }] : [];
       });
+      // Resume takes the same Run locks before re-admitting demand. Keep a
+      // parked ticket if that demand resumed after page preparation.
+      const parked = held.filter(({ entry }) => entry.kind === "park");
+      const authorization = await aiEvaluationAuthorizations(
+        tx,
+        parked.map(({ target }) => target.evaluation),
+        false,
+      );
+      const retain = parked
+        .filter(({ target }) => authorization.has(target.evaluation.id))
+        .map(({ target }) => target.item);
       const written = held.filter(
         ({ entry }) =>
           entry.kind === "outcome" ||
           entry.kind === "obsolete" ||
           entry.kind === "fail",
       );
-      if (!written.length) return;
+      if (!written.length) return { retain };
       const { valid, stale } = await guardAiEvaluationPage(
         tx,
         written.map(({ target }) => target),
@@ -411,6 +419,7 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
         tx,
         ready.map(({ target }) => target),
       );
+      return { retain };
     },
     async exhaust(tx, items, error) {
       await failAiEvaluations(

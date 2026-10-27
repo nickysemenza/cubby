@@ -1,5 +1,5 @@
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
@@ -29,6 +29,10 @@ export async function pruneFinishedJobs(
             jobState.enum.cancelled,
           ]),
           lt(job.updatedAt, before),
+          // Producers hold a key-share lock through their wake transaction;
+          // a committed wake or pending item keeps its execution identity.
+          sql`NOT EXISTS (SELECT 1 FROM "JobInvalidationCapture" c WHERE c.key = ${job.key} AND NOT c.observed)`,
+          sql`NOT EXISTS (SELECT 1 FROM "WorkItem" w WHERE w.drain = ${job.key})`,
         ),
       )
       .limit(limit)

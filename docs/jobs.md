@@ -147,6 +147,13 @@ Declared entity fields carry the same facts to web, Apple and MCP:
   `job.queue` (`leases`), keeping the device list's core read to its page
   queries.
 
+Retention skips Jobs with pending WorkItems or unobserved wakes. A producer
+holds the existing Job's key-share lock through the wake transaction, so
+retention either skips it or deletes it before the producer reads and recreates
+its identity. A resumed Run's evaluation item is rechecked under Run locks
+before a prepared parked item can be cleared. Embedding publication takes
+source locks before WorkItem locks, matching source producers.
+
 ## Selection and admission
 
 `dueJobs` (private to `generic/jobs`) selects up to `JOB_DRAIN.batch` due

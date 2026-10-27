@@ -206,7 +206,7 @@ export async function loadStoredDerived(
   const result = await unwrapDb(db).execute(sql`
     WITH keys AS MATERIALIZED (
       SELECT declared.*, EXISTS (
-        SELECT 1 FROM "DerivedDirty" fanout
+        SELECT 1 FROM "WorkItem" fanout
          WHERE starts_with(fanout.target, declared.target || '@')
       ) AS "fanoutPending"
       FROM jsonb_to_recordset(${JSON.stringify(
