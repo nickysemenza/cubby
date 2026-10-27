@@ -38,6 +38,7 @@ import {
   implemented,
   type PresentationCoverage,
 } from "~/entity/presentation-coverage";
+import type { WorkActionTable } from "~/entity/work-queue/work-actions";
 import { expenseDetailFields } from "~/features/expense/detail-field-renderers";
 import { financialTransactionDetailFields } from "~/features/finance/detail-field-renderers";
 import {
@@ -441,6 +442,18 @@ const listSlots = {
   task: { calendar: taskList("calendar"), agenda: taskList("agenda") },
 } satisfies ListSlotTable;
 
+const workActions: WorkActionTable = {
+  "pair-transfer": {
+    kind: "dialog",
+    Dialog: lazy(() =>
+      named(
+        import("~/features/finance/transfer-pair-accept"),
+        "TransferPairDialog",
+      ),
+    ),
+  },
+};
+
 const headerAction = <E extends GenericDetailEntity>(
   load: () => Promise<{ default: DetailSlotComponent<E> }>,
 ) => lazy(load);
@@ -577,6 +590,7 @@ export function installFeatures(): void {
     sectionActions,
     collectionActions,
     detailEditOverrides,
+    workActions,
     detailFieldRenderers: {
       expense: expenseDetailFields,
       financialTransaction: financialTransactionDetailFields,

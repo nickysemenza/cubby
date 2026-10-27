@@ -1,4 +1,4 @@
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -22,25 +22,25 @@ import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
 import { ProblemsRow } from "./problems-row";
 
 /**
- * Work a member must decide (the queue's Review view) routed to me or to
- * either member. The strip's count and the list share this one read.
+ * Work a member must decide (the queue's Review view) that I own, shared
+ * work included. The strip's count and the list share this one read.
  */
-const NEEDS_YOU_INPUT = workQueueHouseholdInput.parse({
-  view: "review",
-  waitingFor: CURRENT_MEMBER_FILTER,
+const NEEDS_YOU_INPUT = workQueueInput.parse({
+  view: "human",
+  owner: CURRENT_MEMBER_FILTER,
   pageSize: 3,
 });
 
 const NEEDS_YOU_SEARCH = {
-  view: "review",
-  waitingFor: CURRENT_MEMBER_FILTER,
+  view: "human",
+  owner: CURRENT_MEMBER_FILTER,
 } as const;
 
 /** The queue read is client-only so Home's first paint never waits on it. */
 export function useNeedsYou() {
   const hydrated = useHydrated();
   return useQuery({
-    ...workQueue.list.queryOptions(NEEDS_YOU_INPUT),
+    ...workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
     enabled: hydrated,
   });
 }

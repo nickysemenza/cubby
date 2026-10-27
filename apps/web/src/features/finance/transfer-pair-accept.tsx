@@ -3,23 +3,17 @@ import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { WorkActionTarget } from "~/entity/work-queue/work-actions";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 
 type Candidate =
   FinancialTransferPairSuggestionsOut["suggestions"][number]["candidates"][number];
-
-/** The Work queue key of an account transfer still missing transfer evidence. */
-export const isTransferEvidenceRow = (row: {
-  entity: string | null;
-  key: string;
-}) =>
-  row.entity === "financialTransaction" &&
-  row.key.startsWith("reconciliation:transfer");
 
 /**
  * Suggested counterpart legs for one account transfer, each with Accept. A
@@ -47,6 +41,30 @@ export function TransferPairAccept({
         <CandidateRow key={candidate.transactionId} candidate={candidate} />
       ))}
     </RecordList>
+  );
+}
+
+/** The transfer reconciliation row's guided flow: pick the other leg. */
+export function TransferPairDialog({
+  target,
+  onClose,
+}: {
+  target: WorkActionTarget;
+  onClose: () => void;
+}) {
+  const transactionId = target.scope === "item" ? target.row.id : null;
+  if (!transactionId) return null;
+  return (
+    <Overlay
+      open
+      onOpenChange={(open) => !open && onClose()}
+      title="Pair transfer"
+      description="Accept the counterpart leg of this account transfer."
+      size="lg"
+      cancelLabel="Done"
+    >
+      <TransferPairAccept transactionId={transactionId} />
+    </Overlay>
   );
 }
 

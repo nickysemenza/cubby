@@ -357,7 +357,7 @@ function SavedViewsMenuItems({
             {view.id === "research-queue" && (
               <DropdownMenuItem
                 render={
-                  <Link to="/work-queue" search={{ source: "research" }} />
+                  <Link to="/work-queue" search={{ family: "research" }} />
                 }
               >
                 <ListChecksIcon className="size-3.5" />

@@ -1,3 +1,4 @@
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { z } from "zod";
 
 import type { FilterKind } from "./entity-definitions/definition";
@@ -7,12 +8,14 @@ import {
 } from "./filter-sentinel-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 import type { GeneratedGroupChoice } from "./generated/entity-list-fields.gen";
-import { nonEmptyTuple } from "./identifier-fields";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
 import {
+  entityFilter,
   normalizeSorts,
   oneOrMany,
   presenceFilter,
   sortDirection,
+  tokenFilter,
 } from "./pagination";
 
 /**
@@ -180,9 +183,7 @@ const descriptorOf = (filter: RelationFilter): RelationFilterDescriptor => ({
     array: filter.array ?? false,
   },
   anyOf: null,
-  nullable: filter.nullable
-    ? { field: presenceField(filter.columnId) }
-    : null,
+  nullable: filter.nullable ? { field: presenceField(filter.columnId) } : null,
   match: null,
   exclude: excludableFilterKind(filter.kind)
     ? { field: filterExcludeField(filter.columnId) }
@@ -197,17 +198,23 @@ const descriptorOf = (filter: RelationFilter): RelationFilterDescriptor => ({
 
 const textList = z.string().min(1).max(200);
 
+/** A reference filter's shortcodes; `@me` is resolved by the entity kernel
+ * before the read (ADR 0018). */
+const referenceValue = (entity: ShortcodeEntity, currentMember = false) => {
+  const shortcode = anyShortcodeSchema(nonEmptyTuple([entity]));
+  return currentMember
+    ? tokenFilter(shortcode, [CURRENT_MEMBER_FILTER])
+    : entityFilter(shortcode);
+};
+
 /** The input keys one filter accepts, by its kind. */
-const inputFieldsOf = (filter: RelationFilter): Record<string, z.ZodType> => {
+const inputFieldsOf = (filter: RelationFilter) => {
   const describe = (schema: z.ZodType, text: string) =>
     schema.describe(`${filter.label}: ${text}`);
   switch (filter.kind) {
     case "text":
       return {
-        [filter.columnId]: describe(
-          z.string().max(500).optional(),
-          "contains",
-        ),
+        [filter.columnId]: describe(z.string().max(500).optional(), "contains"),
       };
     case "boolean":
       return {
@@ -215,8 +222,7 @@ const inputFieldsOf = (filter: RelationFilter): Record<string, z.ZodType> => {
       };
     case "range": {
       const { from, to } = rangeKeys(filter.columnId);
-      const bound =
-        filter.range === "date" ? z.string().max(40) : z.number();
+      const bound = filter.range === "date" ? z.string().max(40) : z.number();
       return {
         [from]: describe(bound.optional(), "at least"),
         [to]: describe(bound.optional(), "at most"),
@@ -224,10 +230,10 @@ const inputFieldsOf = (filter: RelationFilter): Record<string, z.ZodType> => {
     }
     default: {
       const values = filter.options?.length
-        ? z.enum(
-            nonEmptyTuple(filter.options.map((option) => option.value)),
-          )
-        : textList;
+        ? z.enum(nonEmptyTuple(filter.options.map((option) => option.value)))
+        : filter.reference
+          ? referenceValue(filter.reference, filter.currentMember)
+          : textList;
       return {
         [filter.columnId]: describe(
           oneOrMany(values).optional(),
@@ -282,9 +288,25 @@ type FilterInputFields<F extends RelationFilter> = F["kind"] extends "text"
           ? { [K in `${F["columnId"]}Presence`]: typeof presenceFilter }
           : unknown);
 type FiltersInputFields<Fs extends readonly RelationFilter[]> =
-  UnionToIntersection<
-    { [I in keyof Fs]: FilterInputFields<Fs[I]> }[number]
-  >;
+  UnionToIntersection<{ [I in keyof Fs]: FilterInputFields<Fs[I]> }[number]>;
+
+/** The URL keys one filter writes, by its kind. */
+type FilterUrlKeys<F extends RelationFilter> = F extends unknown
+  ? F["kind"] extends "range"
+    ? `${F["columnId"]}From` | `${F["columnId"]}To`
+    : F["kind"] extends "text" | "boolean"
+      ? F["columnId"]
+      :
+          | F["columnId"]
+          | `${F["columnId"]}Exclude`
+          | (F extends { readonly nullable: object }
+              ? `${F["columnId"]}Presence`
+              : never)
+  : never;
+/** Every URL key a declared list's filters write. */
+export type RelationListUrlKey<
+  L extends { readonly filters: readonly RelationFilter[] },
+> = FilterUrlKeys<L["filters"][number]>;
 
 export interface RelationListDeclaration<
   C extends GeneratedGroupChoice = GeneratedGroupChoice,
@@ -336,26 +358,30 @@ export function defineRelationList<
   const input = z.strictObject(
     Object.assign(
       {
-    pageIndex: z.number().int().min(0).default(0),
-    pageSize: z
-      .number()
-      .int()
-      .min(1)
-      .max(list.pageSize.max)
-      .default(list.pageSize.default),
-    query: z.string().max(500).optional().describe("Search text"),
-    sort: z
-      .array(
-        z.object({
-          orderBy: z.enum(sortKeys),
-          direction: sortDirection.default("asc"),
-        }),
-      )
-      .min(1)
-      .max(3)
-      .optional(),
-    group: z.enum(nonEmptyTuple(groupKeys.length ? groupKeys : ["none"])).optional(),
-    view: z.enum(nonEmptyTuple(viewKeys.length ? viewKeys : ["none"])).optional(),
+        pageIndex: z.number().int().min(0).default(0),
+        pageSize: z
+          .number()
+          .int()
+          .min(1)
+          .max(list.pageSize.max)
+          .default(list.pageSize.default),
+        query: z.string().max(500).optional().describe("Search text"),
+        sort: z
+          .array(
+            z.object({
+              orderBy: z.enum(sortKeys),
+              direction: sortDirection.default("asc"),
+            }),
+          )
+          .min(1)
+          .max(3)
+          .optional(),
+        group: z
+          .enum(nonEmptyTuple(groupKeys.length ? groupKeys : ["none"]))
+          .optional(),
+        view: z
+          .enum(nonEmptyTuple(viewKeys.length ? viewKeys : ["none"]))
+          .optional(),
       },
       filterFields,
     ),

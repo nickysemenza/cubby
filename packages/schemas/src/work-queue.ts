@@ -7,6 +7,7 @@ import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
 import { anyShortcodeSchema } from "./identifier-fields";
 import { nonEmptyTuple } from "./identifiers";
+import { suggestionListFamily } from "./suggestion-list";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
 import {
   defineRelationList,
@@ -81,7 +82,7 @@ export const workLink = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("record") }),
   z.object({
     kind: z.literal("suggestions"),
-    family: z.string().min(1),
+    family: suggestionListFamily,
   }),
   /** Filters the queue to the row's reason group (a diagnostic count). */
   z.object({ kind: z.literal("reason") }),
@@ -258,7 +259,11 @@ export const workQueueList = defineRelationList({
     }),
   ],
   views: [
-    { key: "automatic", label: "Automatic", filters: { executor: "automatic" } },
+    {
+      key: "automatic",
+      label: "Automatic",
+      filters: { executor: "automatic" },
+    },
     { key: "agent", label: "Agent", filters: { executor: "agent" } },
     { key: "human", label: "Review", filters: { executor: "human" } },
     { key: "external", label: "Waiting", filters: { executor: "external" } },
@@ -269,7 +274,9 @@ export const workQueueList = defineRelationList({
 
 export const workQueueInput = workQueueList.input;
 export type WorkQueueInput = z.input<typeof workQueueInput>;
-export type WorkQueueView = NonNullable<z.output<typeof workQueueInput>["view"]>;
+export type WorkQueueView = NonNullable<
+  z.output<typeof workQueueInput>["view"]
+>;
 
 /** Queue sections count actionable work, independently of entity lists. */
 export const workQueueGroupSummarySchema = z

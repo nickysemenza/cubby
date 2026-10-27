@@ -1,40 +1,25 @@
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
-import { sourceListFilterChoices } from "@cubby/schemas/source-list";
 import {
-  workQueueGroupChoices,
-  workQueueHouseholdInput,
-  workQueueKindOptions,
+  type WorkAction,
+  workExecutorOptions,
+  workFamilyOptions,
+  workQueueInput,
   workQueueList,
-  workQueueRecordTypeOptions,
-  workQueueSourceOptions,
-  workQueueSortSchema,
-  type workQueueOutSchema,
-  type WorkQueueKind,
-  type WorkQueueMember,
+  type WorkQueueOut,
   type WorkQueueRow,
+  type WorkQueueView,
+  workRecordTypeOptions,
 } from "@cubby/schemas/work-queue";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
-import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
-import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
-import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { TrayIcon } from "@phosphor-icons/react/dist/csr/Tray";
-import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import type { z } from "zod";
 
 import { verbBulkAction } from "~/entity/actions/action-verb-ui";
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { createDataQualityColumn } from "~/entity/display/list-field-renderers";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import {
@@ -49,7 +34,6 @@ import {
 import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
 import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import { Page, usePageWorkbenchTarget } from "~/entity/page/page";
-import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   createCurrencyColumn,
   createImageColumn,
@@ -63,17 +47,12 @@ import {
   useTableState,
   type TableStateReturn,
 } from "~/entity/table/use-table-state";
-import {
-  memberOptionsOf,
-  WaitingForPill,
-  waitingForLabel,
-  WorkActionDetails,
-} from "~/entity/work-queue/work-queue-display";
 import { AttentionInputStatus } from "~/features/project/attention-input-status";
+import { WorkActions } from "~/entity/work-queue/work-actions";
+import { ownerLabel, OwnerPill } from "~/entity/work-queue/work-queue-display";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
-import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { tableMoneyTotals } from "~/ui/data-table/bulk/table-money";
@@ -114,51 +93,32 @@ import {
 } from "./work-row-link";
 
 const route = getRouteApi("/_authenticated/work-queue");
-const EMPTY_MEMBERS: WorkQueueMember[] = [];
 const NO_GROUPS: NonNullable<QueueTablePage["meta"]["groups"]> = [];
-type QueueInput = z.infer<typeof workQueueHouseholdInput>;
-type QueueView = NonNullable<QueueInput["view"]>;
-type QueuePage = z.infer<typeof workQueueOutSchema>;
-type QueueFilters = Pick<
-  QueueInput,
-  | "query"
-  | "view"
-  | "entity"
-  | "waitingFor"
-  | "waitingForPresence"
-  | "source"
-  | "kind"
-  | "reason"
-  | "reasonExclude"
-  | "entityExclude"
-  | "entityPresence"
-  | "waitingForExclude"
-  | "sourceExclude"
-  | "kindExclude"
-  | "vendorExclude"
-  | "vendor"
-  | "group"
->;
-// A work row is identified by its reason, independently of its source record.
+const NO_REASONS: WorkQueueOut["meta"]["reasons"] = [];
+type QueueInput = z.output<typeof workQueueInput>;
+type QueueFilters = Omit<QueueInput, "pageIndex" | "pageSize" | "sort">;
+// A work row is identified by its key, independently of its record.
 type QueueTableRow = Omit<WorkQueueRow, "id"> & {
   id: string;
   recordId: WorkQueueRow["id"];
 };
-type QueueTablePage = Omit<QueuePage, "items" | "meta"> & {
+type QueueTablePage = Omit<WorkQueueOut, "items" | "meta"> & {
   items: QueueTableRow[];
   meta: ListQueryResponse<QueueTableRow>["meta"] &
-    Pick<QueuePage["meta"], "viewCounts" | "incompleteProjectIds">;
+    Pick<WorkQueueOut["meta"], "viewCounts" | "reasons" | "incompleteProjectIds"> & {
+      /** Each section's declared group actions, by its raw key. */
+      groupActions: Readonly<Record<string, readonly WorkAction[]>>;
+    };
 };
 const helper = createCubbyColumnHelper<QueueTableRow>();
 const PREVIEW_OPTIONS = { responsiveInspector: true };
-const FILTER_SPECS: readonly FilterSpecCore[] = workQueueList.filters;
-/** Next action, date, source and kind stay one Columns-menu toggle away. */
-const HIDDEN_COLUMNS = {
-  kind: false,
-  nextAction: false,
-  date: false,
-  source: false,
-};
+/** Search and the saved view ride beside the list's declared filters. */
+const FILTER_SPECS: readonly FilterSpecCore[] = [
+  { columnId: "name", field: "query", urlKey: "query", kind: "text" },
+  { columnId: "view", kind: "text" },
+  ...workQueueList.specs,
+];
+const HIDDEN_COLUMNS = { family: false, date: false };
 const COPY_ACTIONS: BulkActionsConfig<QueueTableRow> = {
   actions: [
     verbBulkAction<QueueTableRow>("copyCodes", {
@@ -177,16 +137,14 @@ const COPY_ACTIONS: BulkActionsConfig<QueueTableRow> = {
   ],
 };
 const buildQueueFilters = (state: TableStateReturn): QueueFilters => {
-  const parsed = workQueueHouseholdInput.parse({
-    ...buildFiltersFromManifest(FILTER_SPECS, state.getColumnFilterValues),
-    query: state.getColumnFilter("name"),
-  });
   const {
     pageIndex: _pageIndex,
     pageSize: _pageSize,
     sort: _sort,
     ...filters
-  } = parsed;
+  } = workQueueInput.parse(
+    buildFiltersFromManifest(FILTER_SPECS, state.getColumnFilterValues),
+  );
   return filters;
 };
 const queueQueryPlan: ListQueryOptionsFn<
@@ -194,17 +152,17 @@ const queueQueryPlan: ListQueryOptionsFn<
   QueueTableRow,
   QueueTablePage
 > = ({ filters, pagination, sort }) => {
-  const input = workQueueHouseholdInput.parse({
+  const input = workQueueInput.parse({
     ...filters,
     ...pagination,
-    sort: workQueueSortSchema.safeParse(sort).data,
+    sort: workQueueInput.shape.sort.safeParse(sort).data,
   });
-  const options = workQueue.list.queryOptions(input);
+  const options = workQueue.queue.queryOptions(input);
   return {
     queryKey: options.queryKey,
     meta: options.meta,
     execute: async (signal) => {
-      const result = await workQueue.list.call(input, { signal });
+      const result = await workQueue.queue.call(input, { signal });
       const grouping = result.meta.groups
         ? countedGroupPage({
             groups: result.meta.groups,
@@ -215,7 +173,17 @@ const queueQueryPlan: ListQueryOptionsFn<
         : {};
       return {
         ...result,
-        meta: { ...result.meta, groups: undefined, ...grouping },
+        meta: {
+          ...result.meta,
+          groups: undefined,
+          ...grouping,
+          groupActions: Object.fromEntries(
+            (result.meta.groups ?? []).map((group) => [
+              group.key,
+              group.actions,
+            ]),
+          ),
+        },
         items: result.items.map((row) => ({
           ...row,
           recordId: row.id,
@@ -237,72 +205,42 @@ const canPreview = (row: CubbyRow<QueueTableRow>) =>
   row.original.entity !== null &&
   row.original.entity !== "run" &&
   isBrowserRoutedEntity(row.original.entity);
-const rowSource = (row: QueueTableRow) => ({ ...row, id: row.recordId });
-
-const KIND_ICONS = {
-  research: <MagnifyingGlassIcon />,
-  review: <EyeIcon />,
-  repair: <WrenchIcon />,
-  awaiting_posting: <ClockIcon />,
-} satisfies Record<WorkQueueKind, ReactNode>;
-const KIND_OPTIONS = workQueueKindOptions.map((option) => ({
-  ...option,
-  icon: KIND_ICONS[option.value],
-}));
-
-const CHOICE_SOURCES = {
-  problems: problemQueryDeclarations().map(({ key, title }) => ({
-    value: key,
-    label: title,
-  })),
-};
-const queueChoiceFilter = (columnId: string) => ({
-  filterType: "multiselect" as const,
-  options: sourceListFilterChoices(workQueueList, columnId, CHOICE_SOURCES),
-  exclude: FILTER_SPECS.some(
-    (spec) => spec.columnId === columnId && spec.exclude !== undefined,
-  ),
+const rowSource = (row: QueueTableRow): WorkQueueRow => ({
+  ...row,
+  id: row.recordId,
 });
+
 const TYPE_OPTIONS = [
   ...nullableSentinelOptions().map((option) => ({
     ...option,
     label: option.value === FILTER_NONE ? "Problem" : option.label,
   })),
-  ...workQueueRecordTypeOptions,
+  ...workRecordTypeOptions,
 ];
-const VENDOR_ROSTER: readonly DeferredEntityRoster[] = [
-  { key: "vendor", target: "vendor" },
+const OWNER_ROSTER: readonly DeferredEntityRoster[] = [
+  { key: "owner", target: "ledgerParty" },
 ];
+const multiselect = { filterType: "multiselect" as const, exclude: true };
 
-/** The queue's views, in triage order; the tabs preset the View filter. */
-const VIEWS: readonly { view: QueueView; label: string }[] = [
-  { view: "review", label: "Review" },
-  { view: "research", label: "Research" },
-  { view: "waiting", label: "Waiting" },
-  { view: "automatic", label: "Automatic" },
-];
 const FILTER_FIELDS: readonly FilterBarField[] = [
   {
     key: "view",
     label: "View",
     type: "select",
-    options: VIEWS.map(({ view, label }) => ({ value: view, label })),
+    options: workQueueList.views.map(({ key, label }) => ({
+      value: key,
+      label,
+    })),
   },
 ];
 
-/** The declared choices the read sections by; a choice's header is its
- * filter's column, else the column named like the choice (Next action). */
 const GROUP_MENU = workQueueList.grouping.map((choice) => ({
   key: choice.key,
   columnId: choice.filter?.columnId ?? choice.key,
   label: choice.label,
   reason: choice.reason,
 }));
-/**
- * A section's key is its filter's value. A member's section holds work routed
- * only to them, but the member filter also matches work they share with
- * another member, so only Either and Unresolved filter to exactly a section.
- */
+/** A section's key is its filter's value; Owner sections have no filter. */
 const sectionFilter = (
   choice: GroupConfig["choice"],
   group: ListGroupSummary,
@@ -310,19 +248,20 @@ const sectionFilter = (
   const key = group.path[0];
   if (!choice.filter || key === undefined) return undefined;
   if (key === FILTER_NONE && !choice.filter.noValue) return undefined;
-  if (choice.key === "waitingFor" && key !== "either" && key !== FILTER_NONE)
-    return undefined;
   return { id: choice.filter.columnId, value: [key] };
 };
 
-/** The row's own Open or Review, beside the rule's details. */
+/** The row's declared actions, then its own Open or Review. */
 function WorkRowActions({ work }: { work: QueueTableRow }) {
   const source = rowSource(work);
   const suggestions = suggestionsSearch(source);
   const href = workRowHref(source);
   return (
     <span className="flex items-center justify-end gap-1">
-      <WorkActionDetails explanations={work.explanations} />
+      <WorkActions
+        actions={work.actions}
+        target={{ scope: "item", row: source }}
+      />
       {suggestions ? (
         <Button
           variant="ghost"
@@ -347,10 +286,10 @@ function WorkRowActions({ work }: { work: QueueTableRow }) {
 }
 
 function queueColumns(
-  memberOptions: PickerOption[],
-  vendorRoster: RuntimeFilterOptionSource | undefined,
+  reasons: WorkQueueOut["meta"]["reasons"],
+  ownerRoster: RuntimeFilterOptionSource | undefined,
 ) {
-  const vendorOptions = deferredFilterOptionSource(vendorRoster);
+  const ownerOptions = deferredFilterOptionSource(ownerRoster);
   return createCubbyColumnCollection<QueueTableRow>((add) => {
     add(buildSelectColumn<QueueTableRow>());
     add(
@@ -372,7 +311,7 @@ function queueColumns(
           ),
           filterConfig: {
             placeholder: "Filter type",
-            ...queueChoiceFilter("entity"),
+            ...multiselect,
             options: TYPE_OPTIONS,
           },
         }),
@@ -389,38 +328,6 @@ function queueColumns(
           mobile: { slot: "title", renderTitle: true, interactive: true },
           cellData: textCellData<QueueTableRow>("text", (row) => row.name),
           filterConfig: { placeholder: "Search work", filterType: "text" },
-        }),
-      }),
-    );
-    add(
-      helper.accessor((row) => row.vendor?.name ?? null, {
-        id: "vendor",
-        header: "Vendor",
-        size: 160,
-        cell: (info) => {
-          const vendor = info.row.original.vendor;
-          return vendor ? (
-            <EntityRefLink entity="vendor" id={vendor.id} name={vendor.name} />
-          ) : null;
-        },
-        meta: attachCubbyColumnMeta<QueueTableRow>({
-          linksTo: "vendor",
-          entityRefs: (row) =>
-            row.vendor
-              ? [{ entityKind: "vendor", entityId: row.vendor.id }]
-              : [],
-          mobile: { slot: "subtitle", priority: 1 },
-          cellData: textCellData<QueueTableRow>(
-            "text",
-            (row) => row.vendor?.name ?? "",
-          ),
-          filterConfig: {
-            placeholder: "Filter vendor",
-            referenceEntity: "vendor",
-            ...queueChoiceFilter("vendor"),
-            options: vendorOptions?.options ?? [],
-            ...deferredRosterControls(vendorOptions),
-          },
         }),
       }),
     );
@@ -445,81 +352,62 @@ function queueColumns(
           cellData: textCellData<QueueTableRow>("text", (row) => row.reason),
           filterConfig: {
             placeholder: "Filter reason",
-            ...queueChoiceFilter("reason"),
+            ...multiselect,
+            options: [...reasons],
           },
         }),
       }),
     );
     add(
-      helper.accessor(
-        (row) =>
-          row.waitingFor.kind === "members"
-            ? row.waitingFor.members.map((member) => member.id)
-            : row.waitingFor.kind === "either"
-              ? "either"
-              : FILTER_NONE,
-        {
-          id: "waitingFor",
-          header: "Waiting for",
-          size: 190,
-          cell: (info) => (
-            <WaitingForPill waitingFor={info.row.original.waitingFor} />
-          ),
-          meta: attachCubbyColumnMeta<QueueTableRow>({
-            mobile: { slot: "trailing", priority: 1, interactive: true },
-            cellData: textCellData<QueueTableRow>("text", (row) =>
-              waitingForLabel(row.waitingFor),
-            ),
-            filterConfig: {
-              placeholder: "Filter waiting for",
-              ...queueChoiceFilter("waitingFor"),
-              // Me also matches Either work; No value is Unresolved.
-              options: [
-                ...nullableSentinelOptions(),
-                { value: CURRENT_MEMBER_FILTER, label: "Me" },
-                { value: "either", label: "Either" },
-                ...memberOptions,
-              ],
-            },
-          }),
-        },
-      ),
-    );
-    add(
-      helper.accessor((row) => row.nextAction, {
-        id: "nextAction",
-        header: "Next action",
-        size: 320,
+      helper.accessor((row) => row.owners.map((owner) => owner.id), {
+        id: "owner",
+        header: "Owner",
+        size: 190,
+        cell: (info) => <OwnerPill {...info.row.original} />,
         meta: attachCubbyColumnMeta<QueueTableRow>({
-          cellData: textCellData<QueueTableRow>(
-            "text",
-            (row) => row.nextAction,
-          ),
+          mobile: { slot: "trailing", priority: 1, interactive: true },
+          cellData: textCellData<QueueTableRow>("text", ownerLabel),
+          filterConfig: {
+            placeholder: "Filter owner",
+            referenceEntity: "ledgerParty",
+            ...multiselect,
+            // Shared work lists every member, so Me matches it too; No
+            // value is Unresolved.
+            options: [
+              ...nullableSentinelOptions(),
+              { value: CURRENT_MEMBER_FILTER, label: "Me" },
+              ...(ownerOptions?.options ?? []),
+            ],
+            ...deferredRosterControls(ownerOptions),
+          },
         }),
       }),
     );
     add(
-      createSelectColumn(helper, "kind", {
-        header: "Kind",
-        options: KIND_OPTIONS,
+      createSelectColumn(helper, "executor", {
+        header: "Executor",
+        size: 120,
+        options: workExecutorOptions,
         filterConfig: {
-          placeholder: "Filter kind",
-          ...queueChoiceFilter("kind"),
-          options: KIND_OPTIONS,
+          placeholder: "Filter executor",
+          ...multiselect,
+          options: workExecutorOptions,
+        },
+      }),
+    );
+    add(
+      createSelectColumn(helper, "family", {
+        header: "Family",
+        size: 130,
+        options: workFamilyOptions,
+        filterConfig: {
+          placeholder: "Filter family",
+          ...multiselect,
+          options: workFamilyOptions,
         },
       }),
     );
     add(createPlainDateColumn(helper, "date", { header: "Date" }));
-    add(
-      createSelectColumn(helper, "source", {
-        header: "Source",
-        options: workQueueSourceOptions,
-        filterConfig: {
-          placeholder: "Filter source",
-          ...queueChoiceFilter("source"),
-        },
-      }),
-    );
     add(
       helper.display({
         id: "actions",
@@ -527,7 +415,7 @@ function queueColumns(
         enableSorting: false,
         enableHiding: false,
         enableCellSelection: false,
-        size: 132,
+        size: 160,
         cell: (info) => <WorkRowActions work={info.row.original} />,
         meta: {
           entityColumnRole: "action",
@@ -553,15 +441,21 @@ function WorkQueue() {
   const group = search.group;
   const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);
   const tableState = useTableState({
-    initialSort: "kind",
-    initialSortDesc: false,
+    initialSort: workQueueList.defaultSort.orderBy,
+    initialSortDesc: workQueueList.defaultSort.direction === "desc",
     filterSpecs: FILTER_SPECS,
     urlSync: true,
     syncPaginationToUrl: false,
   });
+  const activeGroup = workQueueList.grouping.find(
+    (choice) => choice.key === group && !choice.reason,
+  );
   const queueFilters = useCallback(
-    (state: TableStateReturn) => ({ ...buildQueueFilters(state), group }),
-    [group],
+    (state: TableStateReturn) => ({
+      ...buildQueueFilters(state),
+      group: workQueueInput.shape.group.safeParse(activeGroup?.key).data,
+    }),
+    [activeGroup],
   );
   const list = useInfiniteTableList({
     queryOptions: queueQueryPlan,
@@ -569,12 +463,11 @@ function WorkQueue() {
     tableState,
   });
   const firstPage = list.pages?.[0];
-  const members = firstPage?.members ?? EMPTY_MEMBERS;
-  const memberOptions = useMemo(() => memberOptionsOf(members), [members]);
-  const vendorRoster = useDeferredEntityRosters(VENDOR_ROSTER).vendor;
+  const reasons = firstPage?.meta.reasons ?? NO_REASONS;
+  const ownerRoster = useDeferredEntityRosters(OWNER_ROSTER).owner;
   const columns = useMemo(
-    () => queueColumns(memberOptions, vendorRoster),
-    [memberOptions, vendorRoster],
+    () => queueColumns(reasons, ownerRoster),
+    [reasons, ownerRoster],
   );
   const selection = useBulkActions({ config: COPY_ACTIONS });
   const { clearSelection, onRowSelectionChange } = selection;
@@ -609,11 +502,7 @@ function WorkQueue() {
     (next: string | null) =>
       void navigate({
         to: ".",
-        search: (prev) => ({
-          ...prev,
-          group: workQueueGroupChoices.find((choice) => choice.key === next)
-            ?.key,
-        }),
+        search: (prev) => ({ ...prev, group: next ?? undefined }),
         replace: true,
       }),
     [navigate],
@@ -632,14 +521,12 @@ function WorkQueue() {
     scrollRestorationId: "work-queue",
     grouping: {
       choices: GROUP_MENU,
-      active: group ?? null,
+      active: activeGroup?.key ?? null,
       onChange: setGroup,
     },
   });
   const groups = firstPage?.meta.groups ?? NO_GROUPS;
-  const activeGroup = workQueueGroupChoices.find(
-    (choice) => choice.key === group,
-  );
+  const groupActions = firstPage?.meta.groupActions;
   const { setColumnFilters } = tableState;
   const groupConfig = useMemo<GroupConfig | undefined>(
     () =>
@@ -658,9 +545,27 @@ function WorkQueue() {
                   filter,
                 ]);
             },
+            header: (section) => {
+              const key = section.path[0];
+              const actions = key ? groupActions?.[key] : undefined;
+              return actions?.length && key
+                ? {
+                    actions: (
+                      <WorkActions
+                        actions={actions}
+                        target={{
+                          scope: "group",
+                          reason: key,
+                          count: section.count,
+                        }}
+                      />
+                    ),
+                  }
+                : {};
+            },
           }
         : undefined,
-    [activeGroup, groups, list.memberships, setColumnFilters],
+    [activeGroup, groups, groupActions, list.memberships, setColumnFilters],
   );
   const rows = table.getRowModel().rows;
   const selectedRows = table.getFilteredSelectedRowModel().rows;
@@ -750,7 +655,7 @@ function WorkQueue() {
   const hasFilters = tableState.columnFilters.length > 0;
   const viewCounts = firstPage?.meta.viewCounts;
   const view = buildQueueFilters(tableState).view;
-  const setView = (next: QueueView | undefined) =>
+  const setView = (next: WorkQueueView | undefined) =>
     tableState.setColumnFilters((previous) => [
       ...previous.filter((filter) => filter.id !== "view"),
       ...(next ? [{ id: "view", value: next }] : []),
@@ -774,12 +679,12 @@ function WorkQueue() {
                 active: view === undefined,
                 onSelect: () => setView(undefined),
               },
-              ...VIEWS.map((tab) => ({
-                key: tab.view,
+              ...workQueueList.views.map((tab) => ({
+                key: tab.key,
                 label: tab.label,
-                count: viewCounts?.[tab.view],
-                active: view === tab.view,
-                onSelect: () => setView(tab.view),
+                count: viewCounts?.[tab.key],
+                active: view === tab.key,
+                onSelect: () => setView(tab.key),
               })),
             ]}
           />,
