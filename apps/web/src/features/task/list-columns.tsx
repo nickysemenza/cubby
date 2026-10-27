@@ -3,8 +3,6 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
-import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { Badge } from "~/ui/primitives/badge";
 
 import { defineListOverride } from "../../entity/list-columns/types";
@@ -19,21 +17,12 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
 
 export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
   use() {
-    const projectOptions = useDeferredFilterOptions("project");
-    const productOptions = useDeferredFilterOptions("product");
-    const parentOptions = useDeferredFilterOptions("task");
-    const filterOptions = useFilterOptions({
-      project: projectOptions,
-      taskProducts: productOptions,
-      parentTask: parentOptions,
-    });
     const list = useMemo(
       () => ({
         deletable: true as const,
-        filterOptions,
         nameSuffix: subtaskCountSuffix,
       }),
-      [filterOptions],
+      [],
     );
     return { list };
   },

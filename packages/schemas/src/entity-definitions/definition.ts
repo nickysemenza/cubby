@@ -2652,7 +2652,16 @@ const buildMetadataSchemas = () => {
       deriveSchema: z.boolean({ error: "must be a boolean" }).optional(),
       schemaFromRead: z.boolean({ error: "must be a boolean" }).optional(),
       brandRef: z
-        .object({ entity: nonEmptyString() })
+        .object({
+          entity: nonEmptyString(),
+          optionsKind: z
+            .enum([
+              "locationWithInventory",
+              "ingredientWithProduct",
+              "locationIdentityProduct",
+            ])
+            .optional(),
+        })
         .strict()
         .nullable()
         .optional(),

@@ -897,12 +897,32 @@ The derived, unstored list of household records whose quality further research c
 _Avoid_: worklist, enrichment queue, backlog
 
 **Work queue**:
-The derived, unstored list of everything waiting on a member — research, review and repair — across records, Emails, findings, suggestions and Runs. It shows the same rows wherever a record appears; it assigns nothing.
+The derived, unstored list of everything waiting to be done — research, review, repair, Problems and waiting work — across records, Emails, findings, Suggestions and Runs, composed from Work sources. It shows the same rows wherever a record appears; it assigns nothing. Problems is its saved view of the `problem` Work family.
 _Avoid_: inbox, task list, assignments
 
-**Waiting for**:
-Whose evidence or account authority a Work queue row needs: named members, Either for shared work, or Unresolved when no current member holds that authority. It follows the source, never inventory ownership.
-_Avoid_: owner, assignee
+**Work source**:
+One domain's contribution to the Work queue: the reasons it can raise, its Work family and Executor, where its rows link, the actions they offer, and a query for its candidate rows. Domains declare Work sources; the queue composes them and owns filtering, search, sorting, Group by, saved views, counts and paging.
+_Avoid_: work kind, routing rule, lane
+
+**Work family**:
+The kind of work a Work source contributes: research, email, reconciliation, execution, account, finding, problem or suggestion.
+_Avoid_: source (for the family), kind
+
+**Executor**:
+Who acts on a Work queue row: Cubby automatically, an agent session, a household member, or something outside the household (a posting window, a paused Run). The queue's Automatic, Agent, Review and Waiting views are its values.
+_Avoid_: lane, assignee
+
+**Work owner**:
+The members who can act on a Work queue row, from the authority its Work source needs. Shared work lists every member, so filtering by a member (including Me) includes it; Unresolved means no current member holds that authority. It follows the source, never inventory ownership.
+_Avoid_: waiting for, assignee, Either
+
+**Declared list**:
+A list surface whose filters, sorts, Group by choices and saved views are declared once, with its URL codec, filter options, server predicates and input schema derived from that declaration. Entity lists, the Work queue and each Suggestion family are declared lists.
+_Avoid_: hand-wired filters, view filters
+
+**Relation list**:
+A Declared list over a SQL relation rather than one entity table, such as the Work queue's union of Work sources or a Suggestion family's rows. It shares the entity lists' filter codec and predicate compiler.
+_Avoid_: source list, virtual list
 
 **Burn-down**:
 A member's Claude or Codex session working through the Research queue with ordinary writes that retain research in notes.

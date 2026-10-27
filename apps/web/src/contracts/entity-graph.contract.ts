@@ -107,7 +107,7 @@ export const connectionContract = defineContract(
   "connection",
   {
     read: query({
-      note: "Native legacy read; agents use the scoped suggestion_queue",
+      note: "Native view read; agents use scoped suggestions_read.list",
       input: entityGraphRootSchema,
       output: connectionDiscoveryOut,
       cache: {

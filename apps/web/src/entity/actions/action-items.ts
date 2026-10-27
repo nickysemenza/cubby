@@ -6,7 +6,6 @@ import {
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
@@ -150,14 +149,6 @@ export const actionItems: ActionItem[] = [
     surfaces: ["palette-quick", "home-quick"],
   },
   ...genericEntityCreateActions,
-  {
-    id: "problems",
-    name: "Problems",
-    path: "/problems",
-    icon: WarningIcon,
-    keywords: ["issues", "errors", "warnings", "audit"],
-    surfaces: ["palette-quick"],
-  },
   verbAction(
     "printLabels",
     "print-labels",

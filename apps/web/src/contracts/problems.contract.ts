@@ -5,22 +5,14 @@ import {
 import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import {
   allProblemsMcpSchema,
-  coverageTotalsSchema,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
   dryRunPruneAliasesOut,
   dryRunReparseOut,
   maintenanceCountsSchema,
   problemsCountSchema,
-  problemsCoverageSchema,
-  problemsFastSchema,
   problemsPruneAliasesEventSchema,
   problemsReparseEventSchema,
-  problemsTrackerSchema,
-  problemsUpcSchema,
-  problemsViewsSchema,
-  recipeUsageByProductInput,
-  recipeUsageByProductOut,
   resolveArrivedFindingsInput,
   resolveArrivedFindingsOut,
   resolveRunFindingInput,
@@ -40,36 +32,6 @@ const noInput = z.undefined();
 export const problemsContract = defineContract(
   "problems",
   {
-    getFast: query({
-      input: noInput,
-      output: problemsFastSchema,
-    }),
-    getCounts: query({
-      readPolicy: "strong",
-      input: noInput,
-      output: problemsCountSchema,
-      cache: { profile: "stable" },
-    }),
-    getViews: query({
-      input: noInput,
-      output: problemsViewsSchema,
-    }),
-    getCoverage: query({
-      input: noInput,
-      output: problemsCoverageSchema,
-    }),
-    getUpc: query({
-      input: noInput,
-      output: problemsUpcSchema,
-    }),
-    getTracker: query({
-      input: noInput,
-      output: problemsTrackerSchema,
-    }),
-    getCoverageTotals: query({
-      input: noInput,
-      output: coverageTotalsSchema,
-    }),
     getMaintenanceCounts: query({
       readPolicy: "strong",
       input: noInput,
@@ -92,10 +54,6 @@ export const problemsContract = defineContract(
       readPolicy: "strong",
       input: noInput,
       output: dryRunPruneAliasesOut,
-    }),
-    recipeUsageByProduct: query({
-      input: recipeUsageByProductInput,
-      output: recipeUsageByProductOut,
     }),
     deleteUnused: mutation({
       exposure: "capability",

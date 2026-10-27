@@ -45,7 +45,13 @@ type FilterWire =
   | Readonly<{ kind: "param"; name: string }>
   | Readonly<{ kind: "range"; from: string; to: string; presence?: string }>;
 /** Public entity filter values are always shortcodes. */
-type IdentifierRef = Readonly<{ entity: string }>;
+type IdentifierRef = Readonly<{
+  entity: string;
+  optionsKind?:
+    | "locationWithInventory"
+    | "ingredientWithProduct"
+    | "locationIdentityProduct";
+}>;
 export type FilterDescriptor = Readonly<{
   columnId: string;
   field: string | null;

@@ -139,12 +139,6 @@ enum PreviewFixtures {
          "timings": {"analyzeMs": 102, "semanticMs": 340}}
         """)
 
-    /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. `byType`'s
-    /// keys are read straight off the `ProblemsCount` zod schema at generation time (see
-    /// `apps/web/tooling/checks/apple-preview-fixtures.ts`), so a new check can never leave
-    /// this preview silently rendering a stale shape — a missing key fails generation instead.
-    static let sampleTodayProblems: ProblemsCount = fixture("sampleTodayProblems")
-
     static let sampleMealNutrition: MealNutritionOut = fixture("sampleMealNutrition")
 }
 

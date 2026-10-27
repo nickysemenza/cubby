@@ -13,9 +13,9 @@ import {
 } from "~/server/db/schema";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { readRecordWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -248,18 +248,15 @@ describe("connection application through generic Feedback", () => {
       },
     });
     const work = () =>
-      readRecordWorkQueueWith(
-        async () => ({ selections: [], incompleteProjectIds: [] }),
-        ctx.db,
-        null,
-        item.id,
-        false,
-        ctx.actor,
-      );
+      readRecordWorkQueue(ctx.db, {
+        id: item.id,
+        memberPartyId: null,
+        memberOnly: false,
+      });
     expect((await work()).items).toContainEqual(
       expect.objectContaining({
-        key: `connection:${item.id}`,
-        source: "suggestion",
+        key: `pending-suggestions:${item.id}`,
+        family: "suggestion",
       }),
     );
     const input = {
@@ -284,7 +281,7 @@ describe("connection application through generic Feedback", () => {
     ).toBe(productId);
     expect(await readEntityConnections(ctx.db, target)).toEqual([]);
     expect((await work()).items).not.toContainEqual(
-      expect.objectContaining({ key: `connection:${item.id}` }),
+      expect.objectContaining({ key: `pending-suggestions:${item.id}` }),
     );
     const events = await getDb(ctx.db)
       .select()

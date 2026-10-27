@@ -325,7 +325,7 @@ export const MCP_ACTION_OVERRIDES = {
       }),
     },
   ),
-  "workQueue.forMember": mcpActionOverride(workQueueContract.ops.forMember, {
+  "workQueue.queue": mcpActionOverride(workQueueContract.ops.queue, {
     strict: true,
   }),
 } satisfies Readonly<Record<string, McpActionOverride>>;

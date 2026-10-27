@@ -29,7 +29,15 @@ export function useDeferredReferenceFilterOptions(
       getEntityFilters(entity).flatMap((spec) => {
         if (!spec.referenceEntity) return [];
         const key = referenceFilterOptionsKey(spec);
-        return key ? [{ key, target: spec.referenceEntity }] : [];
+        return key
+          ? [
+              {
+                key,
+                target: spec.referenceEntity,
+                optionsKind: spec.referenceOptionsKind,
+              },
+            ]
+          : [];
       }),
     [entity],
   );
@@ -46,6 +54,10 @@ const rosterResults = (
 export type DeferredEntityRoster = {
   key: string;
   target: BrowserRoutedEntity;
+  optionsKind?:
+    | "locationWithInventory"
+    | "ingredientWithProduct"
+    | "locationIdentityProduct";
 };
 
 /** Live, searchable shortcode rosters fetched only once their filter opens.
@@ -60,14 +72,18 @@ export function useDeferredEntityRosters(
     {},
   );
   const queries = useQueries({
-    queries: references.map(({ key, target }) => ({
+    queries: references.map(({ key, target, optionsKind }) => ({
       ...entityFilterOptions.filterOptions.queryOptions({
-        source: "entity" as const,
-        entity: target,
+        ...(optionsKind
+          ? { source: "kind" as const, kind: optionsKind }
+          : {
+              source: "entity" as const,
+              entity: target,
+              include: ["emoji" as const],
+            }),
         search: debouncedSearch[key] ?? "",
         selectedIds: [...(selected[key] ?? [])],
         limit: 25,
-        include: ["emoji"],
       }),
       enabled: active[key] === true,
     })),

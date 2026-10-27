@@ -5,7 +5,12 @@ import {
   type SuggestionListOut,
   type SuggestionListRow,
   suggestionListInput,
+  suggestionCountsInput,
 } from "@cubby/schemas/suggestion-list";
+import {
+  suggestionAccountMonthGroup,
+  suggestionFilterDeclaration,
+} from "@cubby/schemas/suggestion-list-declarations";
 import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
@@ -70,7 +75,7 @@ import { FAMILY_CHIPS, RecordLink } from "./suggestion-values";
 import {
   REFERENCE_ROSTERS,
   VIEW_HIDDEN_COLUMNS,
-  buildWhere,
+  buildSuggestionFilters,
   viewColumns,
   viewFilterSpecs,
   viewSetting,
@@ -82,16 +87,13 @@ import { SweepStatusLine, useRunningSweep } from "./sweep-status";
 type Row = SuggestionListRow;
 const NO_GROUPS: SuggestionGroup[] = [];
 
-type ScopeFilters = Omit<
-  z.input<typeof suggestionListInput>,
-  "order" | "cursor" | "offset" | "limit" | "groups"
->;
+type ScopeFilters = z.input<typeof suggestionCountsInput>;
 
 /** Record scoping expands each family's declared affected records. */
 function scopeFilters(search: SuggestionsSearch): ScopeFilters {
   const record = parseRecordParam(search.record);
   const recordScope: ScopeFilters = record
-    ? { entity: record.entity, recordIds: [record.code] }
+    ? { recordEntity: record.entity, recordIds: [record.code] }
     : {};
   return {
     ...recordScope,
@@ -142,16 +144,16 @@ type QueryFilters = {
   scope: ScopeFilters;
   view: SuggestionView;
   grouped: boolean;
-  where: SuggestionListFilters["where"];
+  values: Partial<SuggestionListFilters>;
 };
 
-const ORDER_OPTIONS: PickerOption[] = [
-  { value: "ready", label: "Clean first · strongest · newest" },
-  { value: "impact", label: "Most impact" },
-];
+const ORDER_OPTIONS: PickerOption[] = suggestionFilterDeclaration.sorts
+  .slice(0, 2)
+  .map((sort) => ({ value: sort.key, label: sort.label }));
 
 type SuggestionTablePage = Omit<SuggestionListOut, "meta"> & {
-  meta: ListQueryResponse<Row>["meta"];
+  meta: ListQueryResponse<Row>["meta"] &
+    Pick<SuggestionListOut["meta"], "cleanCount">;
   statementGroups?: SuggestionGroup[];
 };
 const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
@@ -161,13 +163,11 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
 }) => {
   const input = suggestionListInput.parse({
     ...filters.scope,
-    where: { ...filters.scope.where, ...filters.where },
-    order: sort?.length
-      ? sort.map((term) => ({ by: term.orderBy, direction: term.direction }))
-      : undefined,
+    ...filters.values,
+    sort,
     offset: pagination.pageIndex * pagination.pageSize,
     limit: pagination.pageSize,
-    ...(filters.grouped ? { groups: "account_month" } : {}),
+    ...(filters.grouped ? { group: "account_month" } : {}),
   });
   const options = suggestions.list.queryOptions(input);
   return {
@@ -203,19 +203,7 @@ const monthLabel = (month: string) => {
   });
 };
 
-const ACCOUNT_MONTH_CHOICE: GroupConfig["choice"] = {
-  key: "account_month",
-  multiple: false,
-  dateKind: null,
-  buckets: [],
-  label: "Account × month",
-  noValueLabel: "No account",
-  reason: null,
-  value: { kind: "derived", options: null },
-  filter: null,
-  levels: 0,
-  levelReason: "Account × month is a statement section, not a hierarchy.",
-};
+const ACCOUNT_MONTH_CHOICE: GroupConfig["choice"] = suggestionAccountMonthGroup;
 
 /**
  * Focus that owns the arrow keys: text entry, a picker, a menu, a dialog,
@@ -336,7 +324,7 @@ function FamilyChips({
     family: undefined,
   });
   const counts = useQuery({
-    ...suggestions.counts.queryOptions({ ...scope, where: scope.where ?? {} }),
+    ...suggestions.counts.queryOptions(scope),
   });
   const count = (family?: SuggestionListFamily) => {
     if (!counts.data) return undefined;
@@ -426,12 +414,10 @@ function QuickFilters({
   table,
   view,
   tableState,
-  hints,
 }: {
   table: CubbyTable<Row>;
   view: SuggestionView;
   tableState: TableStateReturn;
-  hints: Record<string, Record<string, string>>;
 }) {
   return (
     <>
@@ -446,10 +432,7 @@ function QuickFilters({
             (typeof column?.columnDef.header === "string"
               ? column.columnDef.header
               : humanize(columnId));
-          const options = config.options.map((option) => ({
-            ...option,
-            hint: hints[columnId]?.[option.value],
-          }));
+          const options = config.options;
           return (
             <Picker
               key={columnId}
@@ -516,7 +499,7 @@ function SuggestionsTable({
       scope,
       view,
       grouped,
-      where: buildWhere(view, state),
+      values: buildSuggestionFilters(view, state),
     }),
     [scope, view, grouped],
   );
@@ -539,7 +522,7 @@ function SuggestionsTable({
         tableState={tableState}
         cleanFilters={{
           ...filters.scope,
-          where: { ...filters.scope.where, ...filters.where },
+          ...filters.values,
         }}
       />
     </SuggestionReviewProvider>
@@ -627,16 +610,7 @@ function SuggestionsTableBody({
   );
   const accept = useAcceptClean((id) => rowsById.get(id));
   const firstPage = list.pages?.[0];
-  const hints = useMemo(() => {
-    const out: Record<string, Record<string, string>> = {};
-    for (const [column, counts] of Object.entries(firstPage?.facets ?? {}))
-      out[column] = Object.fromEntries(
-        counts.map(({ value, count }) => [String(value), formatCount(count)]),
-      );
-    return out;
-  }, [firstPage?.facets]);
-  const cleanCount =
-    firstPage?.facets.clean?.find((facet) => facet.value === true)?.count ?? 0;
+  const cleanCount = firstPage?.meta.cleanCount ?? 0;
 
   const groups = firstPage?.statementGroups ?? NO_GROUPS;
   const groupConfig = useMemo<GroupConfig | undefined>(
@@ -690,11 +664,8 @@ function SuggestionsTableBody({
                         filters: {
                           ...cleanFilters,
                           family: "statement_transaction",
-                          where: {
-                            ...cleanFilters.where,
-                            account: { in: [group.accountId] },
-                            month: { in: [group.month] },
-                          },
+                          account: [group.accountId],
+                          month: [group.month],
                         },
                       })
                     }
@@ -800,12 +771,7 @@ function SuggestionsTableBody({
     <div className="flex min-w-0 flex-col" onKeyDownCapture={onKeyDownCapture}>
       <div className="flex flex-col gap-2 px-2 py-2 md:px-4">
         <div className="flex flex-wrap items-center gap-2">
-          <QuickFilters
-            table={table}
-            view={view}
-            tableState={tableState}
-            hints={hints}
-          />
+          <QuickFilters table={table} view={view} tableState={tableState} />
           <Picker
             mode="choose"
             compact
@@ -919,7 +885,6 @@ function SuggestionsTableBody({
         model={{ ...list.model, groupConfig }}
         ariaLabel="Suggestions"
         rowDetail={{ openIds: review.openIds, render: renderDetail }}
-        filterOptionHints={hints}
         currentRowId={current}
         onRowClick={(row) => setCurrent(row.id)}
         renderMobileRowFooter={(row) => (

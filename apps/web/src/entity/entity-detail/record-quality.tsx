@@ -167,9 +167,9 @@ function SuggestionsImpactLink({
   const checks = new Set(failing.map((check) => check.check));
   const list = useQuery({
     ...suggestions.list.queryOptions({
-      entity: kind,
+      recordEntity: kind,
       recordIds: [id],
-      order: [{ by: "impact", direction: "desc" }],
+      sort: [{ orderBy: "impact", direction: "desc" }],
       limit: IMPACT_READ_LIMIT,
     }),
     enabled: kind !== undefined && checks.size > 0,

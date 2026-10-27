@@ -121,9 +121,9 @@ const fieldListInput = (
 ) =>
   suggestionListInput.parse({
     family: "field",
-    entity: input.entity,
+    recordEntity: input.entity,
     recordIds: input.recordIds,
-    where: { field: { in: input.fields } },
+    field: input.fields,
     ...(input.limit ? { limit: input.limit } : {}),
     ...(input.cursor ? { cursor: input.cursor } : {}),
   });

@@ -1,18 +1,18 @@
 import { relatedPreviewInput } from "@cubby/schemas/related-view";
 import { vendorAccountFilters } from "@cubby/schemas/vendor-account";
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
+import {
+  readRecordWorkQueue as readCurrentRecordWorkQueue,
+  readWorkQueue as readCurrentWorkQueue,
+} from "~/server/domains/work/service/work-queue-read";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  readRecordWorkQueue as readCurrentRecordWorkQueue,
-  readWorkQueue as readCurrentWorkQueue,
-} from "~/server/generic/work-queue/service/work-queue-read";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
@@ -52,27 +52,27 @@ describe("vendor identity and purchase account coverage", () => {
     ).get(vendor.id);
     expect(quality?.gaps.map((gap) => gap.check)).toContain("vendor_logo");
 
-    const work = await readRecordWorkQueue(
-      ctx.db,
-      null,
-      vendor.shortcode,
-      false,
+    const work = await readRecordWorkQueue(ctx.db, {
+      id: vendor.shortcode,
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(work.items.filter((row) => row.family === "research")).toHaveLength(
+      1,
     );
-    expect(work.items).toHaveLength(1);
-    expect(work.items[0]).toMatchObject({
+    expect(work.items.find((row) => row.family === "research")).toMatchObject({
       entity: "vendor",
-      source: "research",
-      waitingFor: { kind: "either" },
+      family: "research",
+      shared: true,
       gaps: [{ check: "vendor_logo" }],
     });
-    const filtered = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({
+    const filtered = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({
         reason: ["vendor_logo"],
       }),
-      false,
-    );
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(filtered.items.map((item) => item.id)).toContain(vendor.shortcode);
 
     const logo = await createImageFixture(ctx.db, "synthetic-new-vendor-logo");
@@ -81,12 +81,11 @@ describe("vendor identity and purchase account coverage", () => {
       role: "logo",
       imageId: logo.id,
     });
-    const fixed = await readRecordWorkQueue(
-      ctx.db,
-      null,
-      vendor.shortcode,
-      false,
-    );
+    const fixed = await readRecordWorkQueue(ctx.db, {
+      id: vendor.shortcode,
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(fixed.items).toEqual([]);
   });
 
@@ -114,10 +113,14 @@ describe("vendor identity and purchase account coverage", () => {
     expect(before?.gaps.map((gap) => gap.check)).toContain(
       "purchase_vendor_account",
     );
-    const input = workQueueHouseholdInput.parse({
+    const input = workQueueInput.parse({
       reason: ["purchase_vendor_account"],
     });
-    const work = await readWorkQueue(ctx.db, null, input, false);
+    const work = await readWorkQueue(ctx.db, {
+      input: input,
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(work.items.map((item) => item.id)).toContain(purchase.shortcode);
 
     await updatePurchase(
@@ -133,7 +136,11 @@ describe("vendor identity and purchase account coverage", () => {
       "purchase_vendor_account",
     );
     expect(after?.score).toBeGreaterThan(before?.score ?? 0);
-    const fixed = await readWorkQueue(ctx.db, null, input, false);
+    const fixed = await readWorkQueue(ctx.db, {
+      input: input,
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(fixed.items.map((item) => item.id)).not.toContain(
       purchase.shortcode,
     );

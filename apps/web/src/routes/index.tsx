@@ -19,7 +19,6 @@ import { entityReport } from "~/integrations/tanstack-query/generated/catalog/en
 import { expense } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
-import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { Section } from "~/ui/layout";
 import { PageHeader } from "~/ui/layout/page-header";
@@ -54,7 +53,6 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(
         meal.getNutrition.queryOptions({ date: asOf.meals.from }),
       ),
-      context.queryClient.ensureQueryData(problems.getCounts.queryOptions()),
       context.queryClient.ensureInfiniteQueryData(
         cursorQueryOptions(entityReport.get, {
           slot: "task.briefing",

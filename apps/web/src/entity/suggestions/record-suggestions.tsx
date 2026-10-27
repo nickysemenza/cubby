@@ -328,9 +328,9 @@ const productionStoredSuggestionOperations: StoredSuggestionOperations = {
     async ({ entity, recordIds, fields, cursor, limit }) => {
       const page = await suggestions.list.call({
         family: "field",
-        entity,
+        recordEntity: entity,
         recordIds,
-        where: { field: { in: fields } },
+        field: fields,
         limit,
         ...(cursor ? { cursor } : {}),
       });

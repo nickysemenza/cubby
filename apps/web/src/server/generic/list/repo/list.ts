@@ -44,7 +44,6 @@ import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
   and,
-  arrayContains,
   asc,
   desc,
   getTableColumns,
@@ -73,23 +72,15 @@ import {
 } from "~/server/db/computed/effective-field";
 import { storedDerived } from "~/server/db/derived-declarations";
 import {
-  arrayOverlapOrPresence,
   auditDateWhereConditions,
   buildOrderBy,
   buildSearchConditions,
   countWhere,
-  eqAny,
-  eqAnyOrPresence,
   executeListQueryWithCount,
   flagCondition,
   formatSearchTerm,
-  householdDayRangeConditions,
   type ListReadIntent,
-  matchesStringValues,
-  presenceCondition,
-  rangeConditions,
   shortcodeSetCondition,
-  textArrayMatches,
   unwrapDb,
 } from "~/server/db/helpers";
 import { createAppError } from "~/server/errors/app-error";
@@ -107,10 +98,6 @@ import {
 } from "~/server/generic/derived/repo/read";
 import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
-import {
-  type HierarchyEntity,
-  hierarchyDescendantsSql,
-} from "~/server/generic/list/repo/hierarchy";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { withPageFields } from "~/server/generic/list/repo/page-fields";
 import { listTermExpanders } from "~/server/generic/list/repo/terms";
@@ -123,6 +110,25 @@ import {
   withListReadTracing,
 } from "~/server/observability/list-read-tracing";
 
+import {
+  compileDeclaredFilters,
+  type DeclaredFilterDescriptor,
+  descriptorValueKeys,
+  entitySubtreeToggle,
+  type FilterColumn,
+  isHierarchyEntity,
+  matchAll,
+  nonEmpty,
+  optionalBoolean,
+  optionalDate,
+  optionalNumber,
+  optionalText,
+  optionalTextList,
+  rangeBound,
+  rangeOrPresence,
+  requestedIdsSql,
+  textPredicate,
+} from "./declared-filters";
 import {
   type DerivedSqlArg,
   derivedFieldsOf,
@@ -165,60 +171,8 @@ const suggestionKinds = z
   ])
   .optional()
   .transform((value) => (value === undefined ? [] : [value].flat()));
-const matchAll = z
-  .enum(["any", "all"])
-  .optional()
-  .transform((value) => value === "all");
-const optionalText = z.string().optional();
-const optionalNumber = z.number().optional();
-const optionalDate = z.string().optional();
-const optionalBoolean = z.boolean().optional();
-const rangeBound = z.union([z.string(), z.number()]).optional();
-const optionalTextList = z
-  .union([z.string(), z.array(z.string())])
-  .optional()
-  .transform((value) => (value === undefined ? undefined : [value].flat()));
 
-/** The descriptor facets this helper reads, independent of the literal roster. */
-interface StoredDescriptorView {
-  readonly columnId: string;
-  readonly field: string | null;
-  readonly kind: string;
-  readonly stored: Readonly<{
-    columns: readonly string[];
-    array: boolean;
-  }> | null;
-  readonly anyOf:
-    | readonly Readonly<{
-        key: string;
-        source: "field" | "derived";
-      }>[]
-    | null;
-  readonly nullable: Readonly<{ field: string }> | null;
-  readonly match: Readonly<{ field: string }> | null;
-  readonly exclude: Readonly<{ field: string }> | null;
-  readonly range: Readonly<{ kind: "number" | "date" }> | null;
-  readonly derived: string | null;
-  readonly wire:
-    | Readonly<{ kind: "param"; name: string }>
-    | Readonly<{ kind: "range"; from: string; to: string; presence?: string }>;
-}
-
-/**
- * A stored column resolved to its table column and declared storage facts.
- * `value` is what filters read: the column, or the effective value of a
- * field that declares `resolution.inherit`.
- */
-interface StoredColumn {
-  readonly column: AnyColumn;
-  readonly value: AnyColumn | SQL;
-  readonly kind: string;
-  readonly nullable: boolean;
-  /** The entity a foreign-key column points at, for `id`/`idMulti` filters. */
-  readonly reference: string | null;
-}
-
-const descriptorsFor = (entity: Entity): readonly StoredDescriptorView[] =>
+const descriptorsFor = (entity: Entity): readonly DeclaredFilterDescriptor[] =>
   Object.entries(entityInspectorMetadata).find(([key]) => key === entity)?.[1]
     .filterDescriptors ?? [];
 const fieldModelFor = (entity: Entity) =>
@@ -227,9 +181,9 @@ const fieldModelFor = (entity: Entity) =>
 const storedColumn = (
   entity: Entity,
   table: PgTable,
-  descriptor: StoredDescriptorView,
+  descriptor: DeclaredFilterDescriptor,
   key: string,
-): StoredColumn => {
+): FilterColumn => {
   const storage = fieldModelFor(entity)?.storage ?? [];
   const columns: Record<string, AnyColumn> = getTableColumns(table);
   const stored = storage.find(({ key: k }) => k === key);
@@ -256,7 +210,7 @@ const storedColumn = (
 /** All declared stored scalar forms share the same membership readiness gate. */
 const descriptorResultKey = (
   entity: Entity,
-  descriptor: StoredDescriptorView,
+  descriptor: DeclaredFilterDescriptor,
 ): string | undefined => {
   const field = descriptor.derived
     ? derivedFieldsOf(entity)[descriptor.derived]
@@ -276,7 +230,7 @@ const descriptorResultKey = (
 const descriptorAvailabilitySql = (
   entity: Entity,
   table: PgTable & { id: AnyColumn },
-  descriptor: StoredDescriptorView,
+  descriptor: DeclaredFilterDescriptor,
   input?: DerivedFilterInput,
 ): SQL | null => {
   const key = descriptorResultKey(entity, descriptor);
@@ -317,120 +271,6 @@ const descriptorAvailabilitySql = (
   return current ? sql`(${current} IS NOT NULL OR ${available})` : available;
 };
 
-/** `formatSearchTerm` over a stored column, a `text[]` column by element. */
-const textPredicate = (
-  { value, kind }: StoredColumn,
-  term: string,
-): SQL | undefined =>
-  kind === "text-array"
-    ? textArrayMatches(value, term)
-    : formatSearchTerm(value, term);
-
-/**
- * A boolean filter over a boolean column is equality; over any other
- * (nullable) column it is presence: `true` is NOT NULL, `false` is NULL.
- */
-const booleanPredicate = (
-  { column, value, kind }: StoredColumn,
-  flag: boolean | undefined,
-): SQL | undefined =>
-  kind === "boolean"
-    ? value instanceof SQL
-      ? flag === undefined
-        ? undefined
-        : sql`${value} = ${flag}`
-      : eqAny(column, flag)
-    : presenceCondition(
-        value,
-        flag === undefined ? undefined : flag ? "has" : "none",
-      );
-
-const hierarchyEntities = new Set<string>(
-  Object.entries(generatedEntityListFields).flatMap(([key, fields]) =>
-    fields.hierarchy === null ? [] : [key],
-  ),
-);
-const isHierarchyEntity = (entity: string): entity is HierarchyEntity =>
-  hierarchyEntities.has(entity);
-
-/**
- * The ids of the requested public shortcodes of `target`, widened to their
- * descendants when `target` declares `model.hierarchy` and the filter's
- * generated "Include sub-…" toggle is not switched off.
- */
-const requestedIdsSql = (
-  target: ShortcodeEntity,
-  codes: readonly string[],
-  includeDescendants: boolean,
-): SQL => {
-  const selected = shortcodeIdsSql(target, (shortcode) =>
-    shortcodeSetCondition(shortcode, codes),
-  );
-  return includeDescendants && isHierarchyEntity(target)
-    ? hierarchyDescendantsSql(target, selected)
-    : selected;
-};
-
-/**
- * An id filter over a foreign-key column: the column is in the set of ids
- * whose public shortcode was requested, including descendants of a
- * hierarchical reference. The referenced table is aliased so a
- * self-reference (a location's parent) never collides with the outer row,
- * preserving the outer root-table column for both selection and count.
- */
-const referencePredicate = (
-  entity: Entity,
-  { column: { name }, value: column, reference }: StoredColumn,
-  codes: readonly string[] | undefined,
-  includeDescendants: boolean,
-  presence: PresenceFilter,
-): SQL | undefined => {
-  const target = Object.keys(SHORTCODE_TABLE).find(
-    (key): key is ShortcodeEntity => key === reference,
-  );
-  if (!target)
-    throw new Error(
-      `${entity} id filter over ${name} references ${String(reference)}, which has no shortcode table`,
-    );
-  // A reference to a soft-deleted record is no value, as the group key and
-  // the related-path filters read it.
-  const live = entityManifest[target].softDelete
-    ? sql`${column} IN ${shortcodeIdsSql(target, () => sql`ref."deletedAt" IS NULL`)}`
-    : sql`${column} IS NOT NULL`;
-  return or(
-    codes === undefined || codes.length === 0
-      ? undefined
-      : sql`${column} IN ${requestedIdsSql(target, codes, includeDescendants)}`,
-    presence === undefined
-      ? undefined
-      : presence === "has"
-        ? live
-        : sql`(${column} IS NULL OR NOT ${live})`,
-  );
-};
-
-/**
- * A text-array multiselect: overlap (any picked value) or containment (Match
- * all), ORed with the generated Any value / No value.
- */
-const arrayPredicate = (
-  { value: column, nullable }: StoredColumn,
-  values: readonly string[] | undefined,
-  presence: PresenceFilter,
-  all: boolean,
-): SQL | undefined =>
-  all && values !== undefined && values.length > 0
-    ? or(
-        column instanceof SQL
-          ? sql`${column} @> ARRAY[${sql.join(
-              values.map((value) => sql`${value}`),
-              sql`, `,
-            )}]::text[]`
-          : arrayContains(column, [...values]),
-        arrayOverlapOrPresence(column, undefined, presence, nullable),
-      )
-    : arrayOverlapOrPresence(column, values, presence, nullable);
-
 /** A generated subtree toggle reads absent as on. */
 const subtreeToggle = (
   entity: Entity,
@@ -444,64 +284,6 @@ const subtreeToggle = (
     ? false
     : optionalBoolean.parse(values[toggle]) !== false;
 };
-
-/**
- * The request keys a descriptor's predicate reads: its value (a range its
- * bounds and presence) and its Any value / No value, Match all and Exclude
- * keys.
- */
-const descriptorValueKeys = (descriptor: StoredDescriptorView): string[] => [
-  ...(descriptor.wire.kind === "range"
-    ? [
-        descriptor.wire.from,
-        descriptor.wire.to,
-        ...(descriptor.wire.presence ? [descriptor.wire.presence] : []),
-      ]
-    : [descriptor.wire.name]),
-  ...(descriptor.nullable ? [descriptor.nullable.field] : []),
-  ...(descriptor.match ? [descriptor.match.field] : []),
-  ...(descriptor.exclude ? [descriptor.exclude.field] : []),
-];
-
-/**
- * One filter request per excluded value list: the descriptor's value key set
- * to the excluded values, beside its "Include sub-…" toggle, so the include
- * predicate it builds is the one to negate. Excluding a hierarchy node
- * therefore excludes its descendants unless the toggle is off.
- */
-const excludedFilterRequests = (
-  entity: Entity,
-  values: ListFilterValues,
-): ListFilterValues[] =>
-  descriptorsFor(entity).flatMap((descriptor) => {
-    if (descriptor.exclude === null) return [];
-    const excluded = nonEmpty(
-      optionalTextList.parse(values[descriptor.exclude.field]),
-    );
-    if (excluded === undefined) return [];
-    const key = descriptor.field ?? descriptor.columnId;
-    const toggle = Object.entries(
-      generatedEntityListFields[entity].subtree,
-    ).find(([filter]) => filter === key)?.[1];
-    return [
-      {
-        [key]: excluded,
-        ...(descriptor.wire.kind === "param"
-          ? { [descriptor.wire.name]: excluded }
-          : {}),
-        ...(toggle === undefined ? {} : { [toggle]: values[toggle] }),
-      },
-    ];
-  });
-
-/**
- * "Is not": the rows the include predicate does not match. NULL counts as
- * not matching, so a row with no value stays (`IS NULL OR NOT IN`); pair it
- * with the presence filter to drop empty rows.
- */
-const excludedPredicate = (
-  include: ReadonlyArray<SQL | undefined>,
-): SQL | undefined => flagCondition(false, () => and(...include));
 
 /** A condition over a derived value, given the value's SQL. */
 type ValueTest = (
@@ -531,7 +313,7 @@ const valuePresence = (
  * or undefined when the request does not set it.
  */
 const predicateValue = (
-  descriptor: StoredDescriptorView,
+  descriptor: DeclaredFilterDescriptor,
   values: ListFilterValues,
   value: unknown,
   presence: PresenceFilter,
@@ -644,8 +426,8 @@ const derivedTextMatch = (
 const anyOfPredicate = (
   entity: Entity,
   table: PgTable & { id: AnyColumn },
-  descriptor: StoredDescriptorView,
-  members: NonNullable<StoredDescriptorView["anyOf"]>,
+  descriptor: DeclaredFilterDescriptor,
+  members: NonNullable<DeclaredFilterDescriptor["anyOf"]>,
   values: ListFilterValues,
   input: DerivedFilterInput | undefined,
 ): SQL | undefined =>
@@ -678,7 +460,7 @@ const anyOfPredicate = (
 const derivedFilterPredicates = (
   entity: Entity,
   table: PgTable & { id: AnyColumn },
-  descriptor: StoredDescriptorView & { derived: string },
+  descriptor: DeclaredFilterDescriptor & { derived: string },
   values: ListFilterValues,
   input: DerivedFilterInput | undefined,
 ): Array<SQL | undefined> => {
@@ -927,7 +709,7 @@ const rowSetPredicates = (
   entity: Entity,
   table: PgTable & { id: AnyColumn },
   rows: string,
-  descriptors: readonly (StoredDescriptorView & { derived: string })[],
+  descriptors: readonly (DeclaredFilterDescriptor & { derived: string })[],
   values: ListFilterValues,
   input: DerivedFilterInput | undefined,
 ): SQL | undefined => {
@@ -1146,36 +928,6 @@ export const rowSetFilterKeys = (
   ),
 ];
 
-const nonEmpty = <T>(list: readonly T[] | undefined) =>
-  list === undefined || list.length === 0 ? undefined : list;
-
-const dateRange = (
-  column: AnyColumn | SQL,
-  from: string | undefined,
-  to: string | undefined,
-): Array<SQL | undefined> => [
-  from === undefined ? undefined : sql`${column} >= ${from}`,
-  to === undefined ? undefined : sql`${column} <= ${to}`,
-];
-
-/**
- * A range's bounds with its Any value / No value. No value ORs with the
- * bounds, as it does with any-of values ("older than 30 days, or never");
- * Any value beside bounds is the bounds alone, which already imply a value.
- */
-const rangeOrPresence = (
-  bounds: SQL | undefined,
-  presence: PresenceFilter,
-  presenceSql: (presence: "has" | "none") => SQL | undefined,
-): SQL | undefined =>
-  presence === undefined
-    ? bounds
-    : bounds === undefined
-      ? presenceSql(presence)
-      : presence === "has"
-        ? bounds
-        : or(bounds, presenceSql("none"));
-
 /**
  * A range filter over a `dateInterval` value. Range bounds match overlap,
  * so a span that runs into the window from either side counts; a one-date
@@ -1187,7 +939,7 @@ const intervalPredicate = (
   derived: AnyDerivedSql,
   key: string,
   context: ListContext,
-  descriptor: StoredDescriptorView,
+  descriptor: DeclaredFilterDescriptor,
   values: ListFilterValues,
 ): SQL | undefined => {
   const [low, high] =
@@ -1271,7 +1023,9 @@ export function declaredFilterPredicates<Filters extends object>(
   );
   const values = listFilterValues.parse(filters);
   const derivedDescriptors = descriptorsFor(entity).filter(
-    (descriptor): descriptor is StoredDescriptorView & { derived: string } =>
+    (
+      descriptor,
+    ): descriptor is DeclaredFilterDescriptor & { derived: string } =>
       descriptor.derived !== null,
   );
   /** The row set a derived descriptor's `via` starts at, if any. */
@@ -1279,190 +1033,98 @@ export function declaredFilterPredicates<Filters extends object>(
     const field = derivedFieldsOf(entity)[derived];
     return field?.shape === "rows" ? field.rows : null;
   };
-  const include = (
-    values: ListFilterValues,
-    input = derivedInput,
-    mode = membership,
-  ): Array<SQL | undefined> => [
-    hasSuggestTargets
-      ? suggestionPredicate(
-          entity,
-          table,
-          suggestionKinds.parse(values.suggestionKind),
-          presenceFilter.parse(values.suggestionPresenceFilter),
-        )
-      : undefined,
-    ...derivedDescriptors
-      .filter((descriptor) => rowSetOf(descriptor) === null)
-      .flatMap((descriptor) => {
-        const field = derivedFieldsOf(entity)[descriptor.derived];
-        return derivedFilterPredicates(
-          entity,
-          table,
-          descriptor,
-          values,
-          input,
-        ).map((predicate) => {
-          if (!predicate || !descriptorResultKey(entity, descriptor) || !field)
-            return predicate;
-          const available = descriptorAvailabilitySql(
-            entity,
-            table,
-            descriptor,
-            input,
-          );
-          const outcome = available
-            ? sql`CASE WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`
-            : predicate;
-          return mode === "certain"
-            ? sql`(${outcome}) IS TRUE`
-            : sql`(${outcome}) IS NOT FALSE`;
-        });
-      }),
-    ...descriptorsFor(entity).map((descriptor) =>
-      descriptor.anyOf === null
-        ? undefined
-        : anyOfPredicate(
-            entity,
-            table,
-            descriptor,
-            descriptor.anyOf,
-            values,
-            input,
-          ),
-    ),
-    ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
-      rows === null
-        ? []
-        : (() => {
-            const predicate = rowSetPredicates(
-              entity,
-              table,
-              rows,
-              derivedDescriptors.filter(
-                (descriptor) => rowSetOf(descriptor) === rows,
-              ),
-              values,
-              input,
-            );
-            return [
-              predicate === undefined
-                ? undefined
-                : mode === "certain"
-                  ? sql`(${predicate}) IS TRUE`
-                  : sql`(${predicate}) IS NOT FALSE`,
-            ];
-          })(),
-    ),
-    ...descriptorsFor(entity)
-      .filter((descriptor) => descriptor.stored !== null)
-      .flatMap((descriptor): Array<SQL | undefined> => {
-        const key = descriptor.field ?? descriptor.columnId;
-        const [column] = descriptor.stored?.columns ?? [];
-        if (column === undefined) return [];
-        const first = storedColumn(entity, table, descriptor, column);
-        const value = values[key];
-        const presence = descriptor.nullable
-          ? presenceFilter.parse(values[descriptor.nullable.field])
-          : undefined;
-        switch (descriptor.kind) {
-          case "boolean":
-            return [booleanPredicate(first, optionalBoolean.parse(value))];
-          case "multiselect":
-            return [
-              descriptor.stored?.array
-                ? arrayPredicate(
-                    first,
-                    optionalTextList.parse(value),
-                    presence,
-                    descriptor.match !== null &&
-                      matchAll.parse(values[descriptor.match.field]),
-                  )
-                : first.value instanceof SQL
-                  ? or(
-                      nonEmpty(optionalTextList.parse(value)) === undefined
-                        ? undefined
-                        : matchesStringValues(
-                            first.value,
-                            optionalTextList.parse(value),
-                          ),
-                      presenceCondition(first.value, presence),
-                    )
-                  : eqAnyOrPresence(first.column, value, presence),
-            ];
-          case "presence":
-            return [
-              presenceCondition(first.value, presenceFilter.parse(value)),
-            ];
-          case "idMulti":
-            return [
-              referencePredicate(
+  return compileDeclaredFilters(
+    {
+      label: entity,
+      descriptors: descriptorsFor(entity),
+      column: (descriptor, key) => storedColumn(entity, table, descriptor, key),
+      subtree: entitySubtreeToggle(entity),
+      extra: (values, excluding, mode) => {
+        const input =
+          excluding && derivedInput
+            ? { ...derivedInput, context: derivedInput.context.excluding() }
+            : derivedInput;
+        return [
+          hasSuggestTargets
+            ? suggestionPredicate(
                 entity,
-                first,
-                optionalTextList.parse(value),
-                subtreeToggle(entity, key, values),
-                presence,
-              ),
-            ];
-          case "range": {
-            if (descriptor.wire.kind !== "range")
-              throw new Error(
-                `${entity}.${descriptor.columnId} is a stored range without range wire keys`,
-              );
-            const { from, to, presence: presenceKey } = descriptor.wire;
-            const presence =
-              presenceKey === undefined
-                ? undefined
-                : presenceFilter.parse(values[presenceKey]);
-            const dateBounds = () => {
-              const [low, high] = [
-                optionalDate.parse(values[from]),
-                optionalDate.parse(values[to]),
-              ];
-              // A timestamp bounds whole household days; a date compares as is.
-              return first.kind === "timestamp"
-                ? householdDayRangeConditions(first.value, low, high)
-                : dateRange(first.value, low, high);
-            };
-            const bounds =
-              descriptor.range?.kind !== "date"
-                ? rangeConditions(
-                    first.value,
-                    {
-                      [`${key}Min`]: optionalNumber.parse(values[from]),
-                      [`${key}Max`]: optionalNumber.parse(values[to]),
-                    },
-                    key,
-                  )
-                : dateBounds();
-            return [
-              rangeOrPresence(and(...bounds), presence, (wanted) =>
-                presenceCondition(first.value, wanted),
-              ),
-            ];
-          }
-          default:
-            throw new Error(
-              `${entity}.${descriptor.columnId} cannot derive a ${descriptor.kind} predicate`,
-            );
-        }
-      }),
-  ];
-  return [
-    ...include(values),
-    ...excludedFilterRequests(entity, values).map((excluded) =>
-      excludedPredicate(
-        include(
-          excluded,
-          derivedInput && {
-            ...derivedInput,
-            context: derivedInput.context.excluding(),
-          },
-          membership === "certain" ? "possible" : "certain",
-        ),
-      ),
-    ),
-  ];
+                table,
+                suggestionKinds.parse(values.suggestionKind),
+                presenceFilter.parse(values.suggestionPresenceFilter),
+              )
+            : undefined,
+          ...derivedDescriptors
+            .filter((descriptor) => rowSetOf(descriptor) === null)
+            .flatMap((descriptor) => {
+              const field = derivedFieldsOf(entity)[descriptor.derived];
+              return derivedFilterPredicates(
+                entity,
+                table,
+                descriptor,
+                values,
+                input,
+              ).map((predicate) => {
+                if (
+                  !predicate ||
+                  !descriptorResultKey(entity, descriptor) ||
+                  !field
+                )
+                  return predicate;
+                const available = descriptorAvailabilitySql(
+                  entity,
+                  table,
+                  descriptor,
+                  input,
+                );
+                const outcome = available
+                  ? sql`CASE WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`
+                  : predicate;
+                return mode === "certain"
+                  ? sql`(${outcome}) IS TRUE`
+                  : sql`(${outcome}) IS NOT FALSE`;
+              });
+            }),
+          ...descriptorsFor(entity).map((descriptor) =>
+            descriptor.anyOf === null
+              ? undefined
+              : anyOfPredicate(
+                  entity,
+                  table,
+                  descriptor,
+                  descriptor.anyOf,
+                  values,
+                  input,
+                ),
+          ),
+          ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
+            rows === null
+              ? []
+              : (() => {
+                  const predicate = rowSetPredicates(
+                    entity,
+                    table,
+                    rows,
+                    derivedDescriptors.filter(
+                      (descriptor) => rowSetOf(descriptor) === rows,
+                    ),
+                    values,
+                    input,
+                  );
+                  return [
+                    predicate === undefined
+                      ? undefined
+                      : mode === "certain"
+                        ? sql`(${predicate}) IS TRUE`
+                        : sql`(${predicate}) IS NOT FALSE`,
+                  ];
+                })(),
+          ),
+        ];
+      },
+    },
+    values,
+    membership,
+  );
 }
 
 /**
@@ -2866,12 +2528,12 @@ const PRESENCE = presenceFilter.unwrap().enum;
 
 const facetValueSql = (
   entity: Entity,
-  descriptor: StoredDescriptorView,
+  descriptor: DeclaredFilterDescriptor,
   {
     value,
     kind,
     reference,
-  }: Pick<StoredColumn, "value" | "kind" | "reference">,
+  }: Pick<FilterColumn, "value" | "kind" | "reference">,
 ): SQL | null => {
   switch (descriptor.kind) {
     case "boolean":

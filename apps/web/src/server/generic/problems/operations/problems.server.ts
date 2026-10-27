@@ -1,11 +1,6 @@
 import { problemsTypeSliceOut } from "@cubby/schemas/mcp";
 import {
   allProblemsMcpSchema,
-  problemsFastSchema,
-  problemsCoverageSchema,
-  problemsUpcSchema,
-  problemsViewsSchema,
-  problemsTrackerSchema,
   referentialLivenessViolationsMcpOut,
 } from "@cubby/schemas/problems";
 import { assembleAllProblems } from "@cubby/schemas/problems-raw-read";
@@ -34,55 +29,12 @@ const problemExecution = () =>
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
 export const problemsHandlers = implementOperationDomain(problemsContract, {
-  getFast: async (context) =>
-    publicProblemGroups(
-      context.db,
-      await (await problemDetectors()).findFastProblems(context.db),
-      problemsFastSchema,
-    ),
-  getCounts: (context) => readProblemCounts(context),
-  getViews: async (context) =>
-    publicProblemGroups(
-      context.db,
-      await (
-        await import("~/server/generic/problems/service/problem-views.service")
-      ).findViewProblems(context.db),
-      problemsViewsSchema,
-    ),
-  getCoverage: async (context) =>
-    publicProblemGroups(
-      context.db,
-      await (
-        await problemDetectors()
-      ).findCoverageProblems(context.db, context.usdaClient),
-      problemsCoverageSchema,
-    ),
-  getUpc: async (context) =>
-    publicProblemGroups(
-      context.db,
-      await (
-        await problemDetectors()
-      ).findUpcProblems(context.db, context.upcLookupClient),
-      problemsUpcSchema,
-    ),
-  getTracker: async (context) =>
-    publicProblemGroups(
-      context.db,
-      await (await problemDetectors()).findTrackerProblems(context.db),
-      problemsTrackerSchema,
-    ),
-  getCoverageTotals: async (context) =>
-    (await problemDetectors()).findCoverageTotals(context.db),
   getMaintenanceCounts: async (context) =>
     (await problemDetectors()).findMaintenanceCounts(context.db),
   dryRunReparse: async (context) =>
     (await problemDetectors()).dryRunReparse(context.db),
   dryRunPruneAliases: async (context) =>
     (await problemDetectors()).dryRunPruneAliases(context.db),
-  recipeUsageByProduct: async (context, input) =>
-    (
-      await import("~/server/generic/problems/repo/detectors-product")
-    ).recipeUsageCountsByProduct(context.db, input.productShortcodes),
   deleteUnused: async (context, input) =>
     (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
   resolveRunFinding: async (context, input) =>

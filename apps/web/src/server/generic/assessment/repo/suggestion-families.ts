@@ -80,7 +80,7 @@ type Columns = Record<string, SuggestionColumnValue | SuggestionColumnValue[]>;
 
 /**
  * One Suggestion's list facts, read for every row in scope before any row is
- * hydrated: Strength, clean, Impact and its family's `suggestionColumns`.
+ * hydrated: Strength, clean, Impact and its family's declared relation columns.
  */
 export type SuggestionKey = {
   family: SuggestionListFamily;
@@ -240,7 +240,7 @@ const field: SuggestionFamilyPresentation<"field"> = {
     // apply to every family's keys in the generic list.
     const rows = await fieldSuggestionKeys(db, {
       status: filters.status,
-      entities: filters.entity ? [filters.entity] : undefined,
+      entities: filters.recordEntity ? [filters.recordEntity] : undefined,
       recordUuids: records?.map((record) => record.id),
       runId: runCode(query),
       assessmentIds: query.assessmentIds,
@@ -338,7 +338,7 @@ const field: SuggestionFamilyPresentation<"field"> = {
   outcomes: async (db, filters) => {
     const fields = await suggestionCounts(db, {
       runId: filters.runId,
-      entity: filters.entity,
+      entity: filters.recordEntity,
     });
     const sum = (key: "applied" | "rejected" | "superseded" | "resolved") =>
       fields.reduce((total, row) => total + row[key], 0);
@@ -439,7 +439,10 @@ function statementScope(
   const { filters } = query;
   const status = filters.status;
   if (status !== "pending" && status !== "applied") return null;
-  if (filters.entity && !STATEMENT_ENTITIES.includes(filters.entity))
+  if (
+    filters.recordEntity &&
+    !STATEMENT_ENTITIES.includes(filters.recordEntity)
+  )
     return null;
   const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
   if (recordUuids?.length === 0) return null;
@@ -674,7 +677,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         AND ${pendingRecommendationEligibility()}
         ${roster ? sql`AND (${endpoint("source")} IN (${roster}) OR ${endpoint("target")} IN (${roster}))` : sql``}
-        ${filters.entity ? sql`AND (${side("source", "entityKind")} = ${filters.entity} OR ${side("target", "entityKind")} = ${filters.entity})` : sql``}
+        ${filters.recordEntity ? sql`AND (${side("source", "entityKind")} = ${filters.recordEntity} OR ${side("target", "entityKind")} = ${filters.recordEntity})` : sql``}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
     `);
     const connectionKeys = rows.flatMap((row) => {
@@ -801,7 +804,10 @@ async function transferPairRows(
     "financialTransaction",
     "ledgerParty",
   ];
-  if (query.filters.entity && !entities.includes(query.filters.entity))
+  if (
+    query.filters.recordEntity &&
+    !entities.includes(query.filters.recordEntity)
+  )
     return [];
   if (
     query.records &&
@@ -880,8 +886,8 @@ async function transferPairRows(
         : []),
     ];
     if (
-      query.filters.entity &&
-      !records.some((record) => record.entity === query.filters.entity)
+      query.filters.recordEntity &&
+      !records.some((record) => record.entity === query.filters.recordEntity)
     )
       return [];
     if (
@@ -949,7 +955,7 @@ const transferPair: SuggestionFamilyPresentation<"transfer_pair"> = {
     const rows = await transferPairRows(
       db,
       {
-        filters: { status: keys[0]?.status ?? "pending", where: {} },
+        filters: { status: keys[0]?.status ?? "pending" },
       },
       keys.map((key) => key.assessmentId),
     );

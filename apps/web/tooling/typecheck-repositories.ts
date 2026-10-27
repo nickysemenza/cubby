@@ -241,9 +241,6 @@ export const repositoryOwners = [
   "src/server/generic/problems/repo/detectors-label-variants.ts",
   "src/server/generic/problems/repo/unused-aliases.ts",
   "src/server/generic/search/repo/search-lexical.ts",
-  "src/server/generic/work-queue/repo/work-attention.ts",
-  "src/server/generic/work-queue/repo/work-queue-projection.ts",
-  "src/server/generic/work-queue/repo/work-queue-routing.ts",
 ] as const;
 
 export function createRepositoryPrograms(

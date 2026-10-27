@@ -55,7 +55,7 @@ const purchaseReconciliationStatus = (
   });
 
 /** The signed delta between the Expense total and the stated paperwork total. */
-export const reconciliationDelta = (purchase: {
+const reconciliationDelta = (purchase: {
   statedTotal: number | null;
   expenseTotal: number;
 }): number | null =>

@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { unwrapDb } from "~/server/db/helpers";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { purchaseList } from "~/server/domains/purchase/repo/purchase";
-import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import {
   derivedMarkTickets,
   drainStoredDerived,
@@ -129,12 +129,11 @@ describe("stored Purchase quality", () => {
         pageSize: 20,
       });
     const queue = async () => {
-      const result = await readRecordWorkQueue(
-        ctx.db,
-        null,
-        order.output.id,
-        false,
-      );
+      const result = await readRecordWorkQueue(ctx.db, {
+        id: order.output.id,
+        memberPartyId: null,
+        memberOnly: false,
+      });
       return result.items.filter(
         (item) => item.key === `purchasesNotReconciling:${order.output.id}`,
       );

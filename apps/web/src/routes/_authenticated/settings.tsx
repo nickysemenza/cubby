@@ -3,6 +3,7 @@ import { purchaseAgentConnectionStatus } from "@cubby/schemas/purchase-import-de
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { CoinsIcon } from "@phosphor-icons/react/dist/csr/Coins";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { EnvelopeIcon } from "@phosphor-icons/react/dist/csr/Envelope";
@@ -27,6 +28,8 @@ import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/activity/purchase-import-agent-connection";
 import { CalendarConnectDialog } from "~/features/calendar/calendar-connect-dialog";
 import { MailImportSettings } from "~/features/email/mail-import-card";
+import { MaintenanceRunCard } from "~/features/maintenance/maintenance-run-card";
+import { MaintenanceTools } from "~/features/maintenance/maintenance-tools";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { ledgerParty } from "~/integrations/tanstack-query/generated/catalog/ledgerParty.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
@@ -148,6 +151,22 @@ function SettingsPage() {
             id: "detail-group-maintenance",
             title: "Maintenance",
             sections: [
+              {
+                id: "maintenance",
+                title: "Nightly maintenance",
+                description:
+                  "The nightly pass drains every backlog as one Run; Run now starts one.",
+                icon: ClockIcon,
+                content: <MaintenanceRunCard />,
+              },
+              {
+                id: "repair-tools",
+                title: "Repair tools",
+                description:
+                  "Rebuilds derived data on demand. Routine upkeep happens at write time; these are one-off tools.",
+                icon: WrenchIcon,
+                content: <MaintenanceTools />,
+              },
               {
                 id: "diagnostics",
                 title: "Developer diagnostics",

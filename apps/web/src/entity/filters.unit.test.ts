@@ -1,11 +1,9 @@
 import { splitTypedList } from "@cubby/schemas/filter-sentinel-fields";
-import { sourceListFilterChoices } from "@cubby/schemas/source-list";
+import { workQueueInput, workQueueList } from "@cubby/schemas/work-queue";
 import {
-  workQueueHouseholdInput,
-  workQueueList,
-  workQueuePageInput,
-} from "@cubby/schemas/work-queue";
-import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+  CURRENT_MEMBER_FILTER,
+  UNRESOLVABLE_ENTITY_FILTER,
+} from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -38,45 +36,30 @@ const getter =
     state[columnId];
 
 describe("buildFiltersFromManifest", () => {
-  it("uses declared Work queue reasons, exclusions and the Problem no-value choice", () => {
-    const specs = workQueueList.filters;
+  it("parses a relation list's reasons, exclusions, Me and the Problem no-value choice", () => {
+    const specs = workQueueList.specs;
     const filters = buildFiltersFromManifest(
       specs,
       getter({
-        name: "Synthetic queue",
         reason: [
           "product_category",
           "__not__:reconciliation:purchase-unsettled",
         ],
         entity: [FILTER_NONE],
+        owner: [CURRENT_MEMBER_FILTER],
       }),
     );
-    expect(workQueueHouseholdInput.parse(filters)).toMatchObject({
-      query: "Synthetic queue",
+    expect(workQueueInput.parse(filters)).toMatchObject({
       reason: ["product_category"],
       reasonExclude: ["reconciliation:purchase-unsettled"],
       entityPresence: "none",
+      owner: [CURRENT_MEMBER_FILTER],
     });
     expect(
       encodeFilters(specs, getter({ reason: ["__not__:product_category"] })),
     ).toMatchObject({ reason: undefined, reasonExclude: "product_category" });
-    expect(sourceListFilterChoices(workQueueList, "reason")).toContainEqual({
-      value: "reconciliation:purchase-unsettled",
-      label: "No settlement evidence",
-    });
-    expect(
-      workQueueList.grouping.find((choice) => choice.key === "recordType")
-        ?.filter,
-    ).toMatchObject({ columnId: "entity", noValue: true });
-    expect(
-      workQueuePageInput.safeParse({ check: "product_category" }).success,
-    ).toBe(false);
-    expect(
-      workQueuePageInput.parse({
-        reason: "finding",
-        reasonExclude: "product_category",
-      }),
-    ).toMatchObject({ reason: "finding", reasonExclude: "product_category" });
+    // Owner takes member shortcodes or Me, never free text.
+    expect(workQueueInput.safeParse({ owner: ["anyone"] }).success).toBe(false);
     for (const spec of specs.filter((spec) => spec.kind === "multiselect"))
       expect(spec.exclude).toEqual({
         field: `${spec.columnId}Exclude`,

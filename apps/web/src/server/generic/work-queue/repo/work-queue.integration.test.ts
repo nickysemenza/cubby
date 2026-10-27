@@ -1,971 +1,342 @@
-import { assessmentPublication } from "@cubby/schemas/assessment";
-import { dataCheckMessage } from "@cubby/schemas/data-quality";
-import { entitySummary } from "@cubby/schemas/entity-summary";
 import { testUserId } from "@cubby/schemas/testing";
 import {
-  workQueueHouseholdInput,
-  type WorkQueueRow,
+  workQueueInput,
+  type WorkQueueInput,
+  type WorkFamily,
+  type WorkExecutor,
 } from "@cubby/schemas/work-queue";
-import { eq } from "drizzle-orm";
-import { createRepoEntity } from "tooling/factories/repo";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
-import type { z } from "zod";
 
-import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { assessment, expense, run, image } from "~/server/db/schema";
-import * as connections from "~/server/domains/connection/repo/entity-connections";
-import { deleteExpenses } from "~/server/domains/expense/repo/crud";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  publishAssessment,
-  publishFieldAssessment,
-} from "~/server/generic/assessment/repo/assessment";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import * as diagnostics from "~/server/generic/problems/service/problem-diagnostics.service";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { readWorkQueue as readComposedQueue } from "~/server/domains/work/service/work-queue-read";
+import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  readRecordWorkQueue,
-  readWorkQueue,
-} from "~/server/generic/work-queue/service/work-queue-read";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
-  createImageFixture,
-  insertEntityAttachments,
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
-// Failure modes: a check filter applied after paging leaves counts and pages
-// that disagree with the rows; a branch that cannot carry the check leaks into
-// a check-filtered page; gap rows lose their check ids to joined prose; typed
-// sorts order nulls or negatives inconsistently across directions; a record
-// strip shows another record's work, a field-wide suggestion group, or work a
-// member-only read would fence; future purchases leak through reconciliation
-// or findings, inflate counts, or hide incurred work in a mixed purchase.
-// Overlapping diagnostic reads must retain complete diagnostic rows, source
-// filters and member routing; one failed diagnostic must fail the whole read.
-// Stored price checks preserve explicit/zero prices and inherited kit prices;
-// Product research reads must not recompute price evidence.
-// Entity predicates and diagnostics may overlap, but must preserve scoped
-// results, declaration order and the one shared Project-attention snapshot.
-// A grouped read whose sections disagree with its page order misfiles rows.
-describe("Work queue gaps, typed columns, and record rows", () => {
+import { readRecordWorkQueueWith, readWorkQueueWith } from "./work-queue";
+import { selectWorkCandidates, type WorkSource } from "./work-source";
+
+type Row = {
+  key: string;
+  name?: string;
+  reasons: string[];
+  owners?: (string | null)[];
+  shared?: boolean;
+  executor?: WorkExecutor;
+  amount?: number | null;
+  date?: string | null;
+};
+
+// These synthetic sources exercise the real SQL engine without coupling every
+// filter and page assertion to a domain's changing eligibility policy.
+const fakeSource = (
+  id: string,
+  rows: Row[],
+  options: {
+    family?: WorkFamily;
+    executor?: WorkExecutor | "dynamic";
+    entity?: WorkSource["entity"];
+  } = {},
+): WorkSource => {
+  const source: WorkSource = {
+    id,
+    family: options.family ?? "problem",
+    executor: options.executor ?? "human",
+    entity: options.entity ?? null,
+    reasons: ["a", "b", "c"].map((key) => ({ key, label: `Reason ${key}` })),
+    link: { kind: "reason" },
+    actions: [
+      {
+        id: `${id}:repair`,
+        label: "Repair group",
+        scope: "group",
+        target: "canonical-query",
+      },
+    ],
+    candidates: vi.fn(async (db) => ({
+      query: selectWorkCandidates(db, source, {
+        entity: null,
+        id: null,
+        key: sql`fixture.key`,
+        name: sql`fixture.name`,
+        reason: "Synthetic reason",
+        reasonKeys: sql`fixture.reasons`,
+        executor:
+          source.executor === "dynamic" ? sql`fixture.executor` : undefined,
+        owners: sql`fixture.owners`,
+        shared: sql`fixture.shared`,
+        amount: sql`fixture.amount`,
+        date: sql`fixture.date`,
+      }).from(
+        sql`jsonb_to_recordset(${JSON.stringify(rows.map((row) => ({ name: row.key, owners: [], shared: false, amount: null, date: null, ...row })))}::jsonb) AS fixture(key text, name text, reasons text[], owners uuid[], shared boolean, executor text, amount double precision, date date)`,
+      ),
+    })),
+  };
+  return source;
+};
+
+describe("composed Work queue engine", () => {
   const ctx = withTestDb();
-  const publishedWorkQueue: typeof readWorkQueue = async (...args) => {
-    await publishAllQualityFixtures(ctx.db);
-    return readWorkQueue(...args);
-  };
-  const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
-    ...args
-  ) => {
-    await publishAllQualityFixtures(ctx.db);
-    return readRecordWorkQueue(...args);
-  };
-
-  it("keeps record logo warnings current without repairing the published queue", async () => {
-    const subject = await createRepoEntity(ctx, "vendor", {
-      name: "Synthetic logo freshness",
-      website: "https://vendor.example",
-    });
-    await publishAllQualityFixtures(ctx.db);
-    const before = await readRecordWorkQueue(
+  const read = (
+    sources: WorkSource[],
+    input: WorkQueueInput = {},
+    deferrals: ReturnType<typeof sql>[] = [],
+  ) =>
+    readWorkQueueWith(
       ctx.db,
-      null,
-      subject.output.id,
-      false,
-    );
-    expect(
-      before.items.flatMap((row) => row.gaps).map((gap) => gap.check),
-    ).toContain("vendor_logo");
-    const logo = await createImageFixture(ctx.db, "queue-logo-freshness");
-    await insertEntityAttachments(ctx.db, {
-      entityId: subject.entityId,
-      imageId: logo.id,
-      role: "logo",
-    });
-    const current = await readRecordWorkQueue(
-      ctx.db,
-      null,
-      subject.output.id,
-      false,
-    );
-    expect(current.items.filter((row) => row.source === "research")).toEqual(
-      [],
-    );
-    expect(current.meta.totalCount).toBe(before.meta.totalCount - 1);
-    const published = (
-      await loadDataQualities(ctx.db, "vendor", [subject.entityId], "stored")
-    ).get(subject.entityId);
-    expect(published?.gaps.map((gap) => gap.check)).toContain("vendor_logo");
-
-    await publishAllQualityFixtures(ctx.db);
-    await getDb(ctx.db)
-      .update(image)
-      .set({ deletedAt: new Date() })
-      .where(eq(image.id, logo.id));
-    const reopened = await readRecordWorkQueue(
-      ctx.db,
-      null,
-      subject.output.id,
-      false,
-    );
-    expect(
-      reopened.items.flatMap((row) => row.gaps).map((gap) => gap.check),
-    ).toContain("vendor_logo");
-    expect(reopened.meta.totalCount).toBe(before.meta.totalCount);
-    const stillPublished = (
-      await loadDataQualities(ctx.db, "vendor", [subject.entityId], "stored")
-    ).get(subject.entityId);
-    expect(stillPublished?.gaps.map((gap) => gap.check)).not.toContain(
-      "vendor_logo",
-    );
-  });
-
-  // Listing must not reconstruct every pending connection's evidence before
-  // pagination. Background retirement owns display freshness; apply still fences it.
-  it("lists stored pending connections without synchronous freshness reconstruction", async () => {
-    const item = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic queue connection" }),
-      ctx.actor,
-    );
-    const line = await createRepoEntity(ctx, "expense", {
-      name: "Synthetic connection charge",
-      trade: "electrical",
-      costType: "tools",
-      cost: 20,
-    });
-    const proposal = await connections.publishEntityConnection(ctx.db, {
-      relation: "product-expense",
-      source: { entityKind: "product", entityId: item.id },
-      target: { entityKind: "expense", entityId: line.output.id },
-      label: "Synthetic acquisition",
-      evidence: { reasons: [], contradictions: [], unknowns: [] },
-    });
-    const [original] = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.id, proposal.review.assessmentId));
-    if (!original) throw new Error("Synthetic connection assessment missing");
-    // Removing read-time reconstruction must retain the served-only gate:
-    // an unserved trial is not household work, even with identical evidence.
-    await publishAssessment(
-      ctx.db,
-      assessmentPublication.parse({
-        ...original,
-        publicationKey: "synthetic-unserved-queue-trial",
-        served: false,
-      }),
-    );
-    await publishAssessment(
-      ctx.db,
+      { sources, deferrals },
       {
-        publicationKey: "synthetic-inactive-guarded-field",
-        family: "field",
-        subject: {
-          kind: "field",
-          entity: "expense",
-          recordId: line.entityId,
-          field: "productId",
-        },
-        judgment: { value: item.id },
-        fingerprint: "synthetic-inactive-field",
-        producer: null,
-        evidence: {},
-      },
-      {
-        active: false,
-        suggestedValue: item.id,
-        data: { connectionEvidence: original.evidence },
+        input: { pageSize: 100, ...input },
+        memberPartyId: null,
+        memberOnly: false,
       },
     );
-    const expensive = vi
-      .spyOn(connections, "readEntityConnectionsBatch")
-      .mockRejectedValue(
-        new Error("Synthetic full-population evidence rebuild"),
-      );
-    try {
-      const page = await publishedWorkQueue(
-        ctx.db,
-        null,
-        workQueueHouseholdInput.parse({ source: "suggestion", pageSize: 1 }),
-        false,
-      );
-      expect(page.items).toContainEqual(
-        expect.objectContaining({
-          key: "suggestions:recommendation",
-          reason: "1 pending connection suggestion",
-        }),
-      );
-      expect(expensive).not.toHaveBeenCalled();
-      expect(page.meta.totalCount).toBe(1);
-      for (const query of [
-        "pending connection",
-        "1 pending connection",
-        "Suggestions page",
-      ])
-        expect(
-          (
-            await readWorkQueue(
-              ctx.db,
-              null,
-              workQueueHouseholdInput.parse({
-                source: "suggestion",
-                query,
-              }),
-              false,
-            )
-          ).items,
-        ).toEqual(page.items);
-      await deleteExpenses(ctx.db, [line.output.id], ctx.actor);
-      const retiredTarget = await readWorkQueue(
-        ctx.db,
-        null,
-        workQueueHouseholdInput.parse({ source: "suggestion" }),
-        false,
-      );
-      expect(retiredTarget.items).toEqual([]);
-      expect(retiredTarget.meta.totalCount).toBe(0);
-    } finally {
-      expensive.mockRestore();
-    }
-  });
 
-  const merchandiseOrder = async (prefix: string) => {
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `${prefix} vendor`,
-    });
-    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
-      name: `${prefix} merchandise`,
-      productExpectation: "required",
-    });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      displayLabel: `${prefix} order`,
-      spendingCategoryId: category.id,
-      date: "2026-09-20",
-    });
-    const lines = [];
-    for (const [name, cost, date] of [
-      ["Refund", -5, "2026-09-18"],
-      ["Line", 20, "2026-09-21"],
-      ["Unpriced", null, null],
-    ] as const)
-      lines.push(
-        await insertWithShortcode(ctx.db, "expense", {
-          name: `${prefix} ${name}`,
-          purchaseId: purchase.id,
-          cost,
-          date,
-          costType: "materials",
-          trade: "other",
-          lineKind: "principal",
-          lineBasis: "item_line",
-          economicRole: "vendor",
-        }),
-      );
-    return { vendor, purchase, lines };
-  };
-
-  const read = (input: z.input<typeof workQueueHouseholdInput>) =>
-    publishedWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100, ...input }),
-      false,
+  it("prunes impossible sources before preparing evidence and unions admitted rows", async () => {
+    const admitted = fakeSource(
+      "admitted",
+      [
+        { key: "one", reasons: ["a"] },
+        { key: "two", reasons: ["a", "b"] },
+      ],
+      { family: "research", executor: "agent", entity: "product" },
     );
-  const names = (rows: WorkQueueRow[]) => rows.map((row) => row.name);
-
-  // A running interactive handoff has no scheduled executor. Its status alone
-  // must not advertise automatic work or inflate that view's count.
-  it("requires scheduled execution before projecting a running Run as automatic", async () => {
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic scheduled execution member",
-      kind: "member",
-      userId: ctx.actor.userId,
+    const family = fakeSource("family", [], { family: "account" });
+    const executor = fakeSource("executor", [], {
+      family: "research",
+      executor: "external",
     });
-    const manual = await ensureRun(
-      ctx.db,
-      { ...ctx.actor, runId: null },
-      {
-        purpose: "photo_inventory",
-        trigger: "manual",
-        status: "running",
-      },
-    );
-    const scheduled = await ensureRun(
-      ctx.db,
-      { ...ctx.actor, runId: null },
-      {
-        purpose: "ai_refresh",
-        trigger: "manual",
-        status: "running",
-      },
-    );
-    const page = await read({ view: "automatic" });
-    const [manualRecord] = await getDb(ctx.db)
-      .select({ shortcode: run.shortcode })
-      .from(run)
-      .where(eq(run.id, manual));
-    const [scheduledRecord] = await getDb(ctx.db)
-      .select({ shortcode: run.shortcode })
-      .from(run)
-      .where(eq(run.id, scheduled));
-    if (!manualRecord || !scheduledRecord)
-      throw new Error("Synthetic execution Runs missing");
-    expect(page.items.some((row) => row.id === manualRecord.shortcode)).toBe(
-      false,
-    );
-    expect(
-      page.items.some(
-        (row) =>
-          row.id === scheduledRecord.shortcode && row.source === "execution",
-      ),
-    ).toBe(true);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ dispatchEventId: "synthetic-photo-dispatch" })
-      .where(eq(run.id, manual));
-    const dispatched = await read({ view: "automatic" });
-    expect(
-      dispatched.items.some(
-        (row) =>
-          row.id === manualRecord.shortcode && row.source === "execution",
-      ),
-    ).toBe(true);
-  });
-
-  // A view applied after LIMIT would return an empty research page/count
-  // when independent reconciliation or diagnostic rows sort before it.
-  it("selects shared work views before counts and pagination", async () => {
-    const prefix = "Synthetic shared view";
-    await merchandiseOrder(prefix);
-    const page = await read({ query: prefix, view: "research", pageSize: 1 });
-    expect(page.items).toHaveLength(1);
-
-    expect(page.meta.totalCount).toBeGreaterThan(1);
-    expect(page.items[0]?.kind).toBe("research");
-    expect(page.items[0]?.explanations.length).toBeGreaterThan(0);
-    const record = page.items[0]?.id;
-    if (!record) throw new Error("Research row has no record");
-    const strip = await publishedRecordWorkQueue(ctx.db, null, record, false);
-    expect(
-      strip.items.find((row) => row.key === page.items[0]?.key)?.explanations,
-    ).toEqual(page.items[0]?.explanations);
-    const automatic = await read({ query: prefix, view: "automatic" });
-    expect(automatic.items).toEqual([]);
-    expect(automatic.meta.totalCount).toBe(0);
-    const review = await read({ query: prefix, view: "review" });
-    const all = await read({ query: prefix });
-    const waiting = await read({ query: prefix, view: "waiting" });
-    expect(page.meta).toMatchObject({
-      viewCounts: {
-        all: all.meta.totalCount,
-        research: page.meta.totalCount,
-        automatic: automatic.meta.totalCount,
-        review: review.meta.totalCount,
-        waiting: waiting.meta.totalCount,
-      },
+    const entity = fakeSource("entity", [], {
+      family: "research",
+      executor: "agent",
+      entity: "vendor",
     });
-    // Sections sort ahead of the requested order, so loaded rows are a prefix
-    // of the summary and its counts cover the whole filtered set.
-    const grouped = await read({
-      query: prefix,
-      group: "recordType",
-      sort: [{ orderBy: "amount", direction: "desc" }],
-    });
-    const sections = grouped.meta.groups ?? [];
-    expect(sections.length).toBeGreaterThan(1);
-    expect(
-      grouped.items.map((row) =>
-        row.entity ? entitySummary[row.entity].singular : "Problem",
-      ),
-    ).toEqual(
-      sections.flatMap((section) => Array(section.count).fill(section.label)),
-    );
-    const recordType = grouped.items[0]?.entity;
-    if (!recordType) throw new Error("Grouped page has no record row");
-    const typed = await read({ query: prefix, entity: recordType });
-    expect(typed.meta.totalCount).toBe(sections[0]?.count);
-    expect(typed.items.every((row) => row.entity === recordType)).toBe(true);
-    const bySource = await read({ query: prefix, group: "source" });
-    const sourceSection = bySource.meta.groups?.[0];
-    const source = workQueueHouseholdInput.shape.source.parse(
-      sourceSection?.key,
-    );
-    const sourceRows = await read({ query: prefix, source });
-    expect(sourceRows.meta.totalCount).toBe(sourceSection?.count);
-    expect(sourceRows.items.every((row) => row.source === source)).toBe(true);
-    expect(review.items.some((row) => row.source === "reconciliation")).toBe(
-      true,
-    );
-    expect(
-      review.items.every((row) =>
-        row.explanations.some((action) => action.executor === "human"),
-      ),
-    ).toBe(true);
-  });
-
-  it("excludes future purchases across sources before counts and paging", async () => {
-    const prefix = "Synthetic future queue";
-    const today = householdLocalDate(new Date());
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: prefix,
-    });
-    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: `${prefix} member`,
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const runId = await ensureRun(
-      ctx.db,
-      { ...ctx.actor, runId: null },
-      { purpose: "ai_suggest" },
-    );
-    type PurchaseCode = Awaited<
-      ReturnType<typeof merchandiseOrder>
-    >["purchase"]["shortcode"];
-    const hidden: PurchaseCode[] = [];
-    const visible: PurchaseCode[] = [];
-    for (const scenario of [
-      {
-        name: "Tomorrow",
-        date: shiftPlainDate(today, 1),
-        lines: [false],
-        hidden: true,
-      },
-      { name: "Planned", date: today, lines: [true], hidden: true },
-      { name: "Deleted incurred", date: null, lines: [true], hidden: true },
-      { name: "Today", date: today, lines: [false], hidden: false },
-      { name: "Mixed", date: today, lines: [true, false], hidden: false },
-      { name: "Unknown", date: null, lines: [], hidden: false },
-    ]) {
-      const order = await insertWithShortcode(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        displayLabel: `${prefix} ${scenario.name}`,
-        date: scenario.date,
-      });
-      for (const future of scenario.lines)
-        await insertWithShortcode(ctx.db, "expense", {
-          name: `${prefix} line`,
-          purchaseId: order.id,
-          cost: 20,
-          date: today,
-          future,
-          costType: "materials",
-          lineKind: "principal",
-          lineBasis: "item_line",
-          economicRole: "vendor",
-        });
-      if (scenario.name === "Deleted incurred")
-        await insertWithShortcode(ctx.db, "expense", {
-          name: `${prefix} deleted line`,
-          purchaseId: order.id,
-          cost: 20,
-          date: today,
-          future: false,
-          deletedAt: new Date(),
-          costType: "materials",
-          lineKind: "principal",
-          lineBasis: "item_line",
-          economicRole: "vendor",
-        });
-      await seedRunFinding(ctx.db, {
-        runId,
-        ledgerPartyId: member.id,
-        entityId: order.id,
-        entityKind: "purchase",
-        kind: "other",
-        summary: `${prefix} ${scenario.name}`,
-        evidenceFingerprint: `synthetic-future-${scenario.name}`,
-      });
-      (scenario.hidden ? hidden : visible).push(order.shortcode);
-    }
-    const findings = await read({
-      query: prefix,
-      source: "finding",
-      pageSize: 1,
-    });
-    expect(findings.meta.totalCount).toBe(visible.length);
-    expect(findings.items).toHaveLength(1);
-    expect(visible).toContain(findings.items[0]?.id);
-    const all = await read({ query: prefix });
-    expect(
-      all.items.filter(
-        (row) =>
-          row.entity === "purchase" && hidden.some((code) => code === row.id),
-      ),
-    ).toEqual([]);
-    expect(
-      (await read({ query: prefix, source: "finding" })).items
-        .map((row) => row.id)
-        .sort(),
-    ).toEqual(visible.sort());
-    for (const code of hidden) {
-      const strip = await publishedRecordWorkQueue(ctx.db, null, code, false);
-      expect(strip.items).toEqual([]);
-      expect(strip.meta.totalCount).toBe(0);
-    }
-  });
-
-  it("filters Reason memberships across gaps and settlement before counting and paging", async () => {
-    const prefix = "Synthetic check filter";
-    await merchandiseOrder(prefix);
-    await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: `${prefix} widget`, categoryId: null }),
-      ctx.actor,
-    );
-    const all = await read({ query: prefix });
-    expect(all.meta.totalCount).toBeGreaterThanOrEqual(4);
-
-    const lines = await read({
-      query: prefix,
-      reason: "expense_product_resolution",
-    });
-    expect(lines.meta.totalCount).toBe(3);
-    for (const row of lines.items) {
-      expect(row).toMatchObject({ entity: "expense", source: "research" });
-      expect(row.gaps.map((gap) => gap.check)).toEqual([
-        "expense_product_resolution",
-      ]);
-      expect(row.reason).toBe(row.gaps[0]?.message);
-    }
-    const page = await read({
-      query: prefix,
-      reason: ["expense_product_resolution"],
-      pageSize: 1,
-    });
-    expect(page.meta.totalCount).toBe(3);
-    expect(page.items).toHaveLength(1);
-
-    // A mixed reason selection must prune unrelated preparation just as a
-    // gap-only read does, while counting the complete matching population.
-    const diagnosticReads = vi.spyOn(diagnostics, "runDiagnostic");
-    try {
-      const mixedPage = await read({
-        query: prefix,
-        reason: ["expense_product_resolution", "finding"],
-        pageSize: 1,
-        pageIndex: 1,
-      });
-      expect(mixedPage.meta.totalCount).toBe(3);
-      expect(mixedPage.items).toHaveLength(1);
-      expect(mixedPage.items[0]?.key).not.toBe(page.items[0]?.key);
-      expect(diagnosticReads).not.toHaveBeenCalled();
-    } finally {
-      diagnosticReads.mockRestore();
-    }
-
-    const product = await read({ query: prefix, reason: ["product_category"] });
-    expect(product.meta.totalCount).toBe(1);
-    expect(product.items[0]).toMatchObject({
+    const reason = {
+      ...fakeSource("reason", [], { family: "research", executor: "agent" }),
+      reasons: [{ key: "c", label: "Reason c" }],
+    };
+    const other = fakeSource("other", [{ key: "three", reasons: ["a"] }], {
+      family: "research",
+      executor: "agent",
       entity: "product",
-      source: "research",
     });
-    const checks = product.items[0]?.gaps.map((gap) => gap.check) ?? [];
-    expect(checks).toContain("product_category");
-    expect(product.items[0]?.reasonKeys).toEqual(checks);
-    const mixed = await read({
-      query: prefix,
-      reason: ["product_category", "reconciliation:purchase-unsettled"],
-    });
-    expect(mixed.meta.totalCount).toBe(2);
-    expect(mixed.items).toContainEqual(
+    const page = await read(
+      [admitted, family, executor, entity, reason, other],
+      { family: "research", executor: "agent", entity: "product", reason: "a" },
+    );
+    expect(page.meta.totalCount).toBe(0); // Declared Type also filters the resulting relation.
+    for (const source of [family, executor, entity, reason])
+      expect(source.candidates).not.toHaveBeenCalled();
+    expect(admitted.candidates).toHaveBeenCalledOnce();
+    const union = await read([admitted, other], { reason: "a" });
+    expect(union.items.map((row) => row.key)).toEqual(["one", "three", "two"]);
+    expect(union.meta.totalCount).toBe(3);
+    const recordSource = fakeSource("record", [], { entity: "product" });
+    const unrelated = fakeSource("unrelated-record", [], { entity: "vendor" });
+    await readRecordWorkQueueWith(
+      ctx.db,
+      { sources: [recordSource, unrelated], deferrals: [] },
+      { id: "PRD-AAAAA", memberPartyId: null, memberOnly: false },
+    );
+    expect(recordSource.candidates).toHaveBeenCalledWith(
+      ctx.db,
       expect.objectContaining({
-        source: "reconciliation",
-        gaps: [],
-        reasonKeys: ["reconciliation:purchase-unsettled"],
-        reason: "No settlement evidence",
+        record: { entity: "product", id: "PRD-AAAAA" },
       }),
     );
-    const excluded = await read({
-      query: prefix,
-      reasonExclude: "product_category",
-    });
-    expect(excluded.items.map((row) => row.key)).toEqual(
-      all.items
-        .filter((row) => !row.reasonKeys.includes("product_category"))
-        .map((row) => row.key),
+    expect(unrelated.candidates).not.toHaveBeenCalled();
+  });
+
+  it("filters overlapping reasons, counts views and reason actions before offset paging", async () => {
+    const source = fakeSource(
+      "dynamic",
+      [
+        {
+          key: "Alpha",
+          reasons: ["a", "b"],
+          executor: "agent",
+          amount: -5,
+          date: "2026-09-01",
+        },
+        {
+          key: "Beta",
+          reasons: ["b"],
+          executor: "human",
+          amount: 12,
+          date: "2026-09-02",
+        },
+        { key: "Gamma", reasons: ["c"], executor: "external" },
+        { key: "Deferred", reasons: ["a"], executor: "automatic" },
+      ],
+      { executor: "dynamic" },
     );
-    const onlyGap = await read({
-      query: prefix,
-      reason: ["product_category", "reconciliation:purchase-unsettled"],
-      reasonExclude: "reconciliation:purchase-unsettled",
+    const deferrals = [sql`key = ${"Deferred"}`];
+    const page = await read(
+      [source],
+      { reason: ["a", "b"], group: "reason", pageSize: 1, pageIndex: 1 },
+      deferrals,
+    );
+    expect(page.items.map((row) => row.key)).toEqual(["Beta"]);
+    expect(page.meta).toMatchObject({
+      totalCount: 2,
+      viewCounts: { all: 2, agent: 1, human: 1, external: 0, automatic: 0 },
+      groups: [
+        {
+          key: "a",
+          count: 1,
+          actions: [{ id: "dynamic:repair", scope: "group" }],
+        },
+        {
+          key: "b",
+          count: 1,
+          actions: [{ id: "dynamic:repair", scope: "group" }],
+        },
+      ],
     });
-    expect(onlyGap.items).toEqual(product.items);
-    const otherCheck = checks.find((check) => check !== "product_category");
-    if (!otherCheck)
-      throw new Error("Synthetic product must fail a second check");
+    const excluded = await read(
+      [source],
+      { reason: "b", reasonExclude: "a" },
+      deferrals,
+    );
+    expect(excluded.items.map((row) => row.key)).toEqual(["Beta"]);
+    const view = await read([source], { view: "agent" }, deferrals);
+    expect(view.items.map((row) => row.key)).toEqual(["Alpha"]);
+    expect(view.meta.viewCounts).toMatchObject({
+      all: 3,
+      agent: 1,
+      human: 1,
+      external: 1,
+    });
+    const sorted = await read(
+      [source],
+      { sort: [{ orderBy: "amount", direction: "asc" }] },
+      deferrals,
+    );
+    expect(sorted.items.map((row) => row.amount)).toEqual([-5, 12, null]);
     expect(
       (
-        await read({
-          query: prefix,
-          reason: otherCheck,
-          reasonExclude: "product_category",
-        })
-      ).items,
-    ).toEqual([]);
-    // Several gaps read as sentences, never the old "; " join.
-    expect(product.items[0]?.reason).not.toContain(".;");
-    expect(product.items[0]?.reason).toBe(
-      product.items[0]?.gaps.map((gap) => gap.message).join(" "),
-    );
-    // Regression: search matched the projection's generic "Research queue"
-    // reason, not the gap text the row displays.
-    const byGapText = await read({
-      query: dataCheckMessage.product_category.slice(0, 24),
-    });
-    expect(byGapText.items.map((row) => row.name)).toContain(
-      `${prefix} widget`,
-    );
-    const byGenericReason = await read({
-      query: "Research queue",
-      reason: ["product_category"],
-    });
-    expect(byGenericReason.meta.totalCount).toBe(0);
-    // A scored source record's own score rides on its row, so the table can
-    // show it; a row without a scored record carries none.
-    expect(product.items[0]?.dataQuality).toMatchObject({
-      score: expect.any(Number),
-    });
-    expect(
-      all.items.filter((row) => row.entity === null && row.dataQuality),
-    ).toEqual([]);
-    // Non-gap rows carry no checks.
-    expect(
-      all.items
-        .filter((row) => row.source !== "research" && row.source !== "email")
-        .flatMap((row) => row.gaps),
-    ).toEqual([]);
+        await read(
+          [source],
+          { executorExclude: "agent", query: "Beta" },
+          deferrals,
+        )
+      ).items.map((row) => row.key),
+    ).toEqual(["Beta"]);
   });
 
-  it("sorts amount and date server-side with nulls last and keeps negatives", async () => {
-    const prefix = "Synthetic typed sort";
-    const { vendor, purchase } = await merchandiseOrder(prefix);
-    const other = await merchandiseOrder("Synthetic other vendor sort");
-    const base = {
-      query: "Synthetic",
-      reason: "expense_product_resolution" as const,
-    };
-    const sorted = (orderBy: "amount" | "date", direction: "asc" | "desc") =>
-      read({
-        ...base,
-        vendor: vendor.shortcode,
-        sort: [{ orderBy, direction }],
-      });
-
-    expect(names((await sorted("amount", "asc")).items)).toEqual([
-      `${prefix} Refund`,
-      `${prefix} Line`,
-      `${prefix} Unpriced`,
-    ]);
-    expect(names((await sorted("amount", "desc")).items)).toEqual([
-      `${prefix} Line`,
-      `${prefix} Refund`,
-      `${prefix} Unpriced`,
-    ]);
-    expect(names((await sorted("date", "asc")).items)).toEqual([
-      `${prefix} Refund`,
-      `${prefix} Line`,
-      `${prefix} Unpriced`,
-    ]);
-    expect(names((await sorted("date", "desc")).items)).toEqual([
-      `${prefix} Line`,
-      `${prefix} Refund`,
-      `${prefix} Unpriced`,
-    ]);
-    const rows = (await sorted("amount", "asc")).items;
-    expect(rows.map((row) => [row.amount, row.date])).toEqual([
-      [-5, "2026-09-18"],
-      [20, "2026-09-21"],
-      [null, null],
-    ]);
-    for (const row of rows)
-      expect(row.vendor).toEqual({ id: vendor.shortcode, name: vendor.name });
-    // The vendor filter applies before counting.
-    const both = await read(base);
-    expect(both.meta.totalCount).toBeGreaterThanOrEqual(6);
-    expect(
-      both.items.some((row) => row.vendor?.id === other.vendor.shortcode),
-    ).toBe(true);
-    // A Purchase's amount is SUM(Expense.cost); its date is its own. A finding
-    // naming the Purchase carries the same facts.
-    const member = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic typed sort member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-    const runId = await ensureRun(
-      ctx.db,
-      { ...ctx.actor, runId: null },
-      { purpose: "ai_suggest" },
-    );
-    await seedRunFinding(ctx.db, {
-      runId,
-      ledgerPartyId: member.id,
-      entityId: purchase.id,
-      entityKind: "purchase",
-      kind: "other",
-      summary: "Synthetic typed sort finding.",
-      evidenceFingerprint: "synthetic-typed-sort-finding",
-    });
-    const strip = await publishedRecordWorkQueue(
-      ctx.db,
-      null,
-      purchase.shortcode,
-      false,
-    );
-    expect(strip.items.length).toBeGreaterThan(0);
-    for (const row of strip.items)
-      expect(row).toMatchObject({
-        amount: 15,
-        date: "2026-09-20",
-        vendor: { id: vendor.shortcode, name: vendor.name },
-      });
-  });
-
-  // Failure modes: page-first hydration changes full-population totals or
-  // signed/null facts; equal sort values cross page boundaries nondeterministically;
-  // a materialized relation accidentally survives the next request's writes.
-  it("keeps tied page boundaries and live facts fresh across requests", async () => {
-    const prefix = "Synthetic fresh queue pages";
-    const { lines, purchase } = await merchandiseOrder(prefix);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ name: prefix })
-      .where(eq(expense.purchaseId, purchase.id));
-    const filters = {
-      query: prefix,
-      reason: "expense_product_resolution" as const,
-      sort: [{ orderBy: "name" as const, direction: "asc" as const }],
-    };
-    const whole = await read(filters);
-    expect(whole.meta.totalCount).toBe(3);
-    expect(whole.items.map((row) => row.key)).toEqual(
-      whole.items.map((row) => row.key).sort(),
-    );
-    const pages = [];
-    for (let pageIndex = 0; pageIndex < 3; pageIndex++) {
-      const page = await read({ ...filters, pageSize: 1, pageIndex });
-      expect(page.meta.totalCount).toBe(3);
-      pages.push(...page.items);
-    }
-    expect(pages).toEqual(whole.items);
-    expect(pages.map((row) => row.amount).sort()).toEqual([-5, 20, null]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: -12 })
-      .where(eq(expense.id, lines[1]!.id));
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(eq(expense.id, lines[2]!.id));
-    const refreshed = await read({
-      ...filters,
-      pageSize: 1,
-      sort: [{ orderBy: "amount", direction: "asc" }],
-    });
-    expect(refreshed.meta.totalCount).toBe(2);
-    expect(refreshed.items).toHaveLength(1);
-    expect(refreshed.items[0]).toMatchObject({
-      id: lines[1]!.shortcode,
-      amount: -12,
-    });
-  });
-
-  // A Project record read scopes the attention rules to that project rather
-  // than computing them household-wide, and still finds its attention rows.
-  it("reads a Project's attention rows scoped to that project", async () => {
-    const name = "Synthetic attention project";
-    const project = await insertWithShortcode(ctx.db, "project", {
-      name,
-      status: "in_progress",
-    });
-    await insertWithShortcode(ctx.db, "expense", {
-      name: `${name} spend`,
-      projectId: project.id,
-      cost: 40,
-      date: "2026-09-20",
-      costType: "materials",
-      trade: "other",
-      lineKind: "principal",
-      lineBasis: "allocation",
-      economicRole: "vendor",
-    });
-    const queue = await read({ query: name, pageSize: 100 });
-    const projectKeys = queue.items
-      .filter((row) => row.entity === "project")
-      .map((row) => row.key);
-    expect(projectKeys.length).toBeGreaterThan(0);
-    const strip = await publishedRecordWorkQueue(
-      ctx.db,
-      null,
-      project.shortcode,
-      false,
-    );
-    expect(strip.items.map((row) => row.key).sort()).toEqual(
-      [...projectKeys].sort(),
-    );
-  });
-
-  it("reads one record's rows without suggestion groups or fenced work", async () => {
-    const prefix = "Synthetic record strip";
-    const { lines } = await merchandiseOrder(prefix);
-    const [refund, line] = lines;
-    if (!refund || !line) throw new Error("fixture lines missing");
-    const strip = await publishedRecordWorkQueue(
-      ctx.db,
-      null,
-      refund.shortcode,
-      false,
-    );
-    expect(strip.items.length).toBeGreaterThan(0);
-    expect(strip.meta.totalCount).toBe(strip.items.length);
-    for (const row of strip.items) {
-      expect(row).toMatchObject({ entity: "expense", id: refund.shortcode });
-      expect(row.displayImages).toEqual([]);
-    }
-    expect(strip.items.map((row) => row.id)).not.toContain(line.shortcode);
-
-    const product = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: `${prefix} widget`, categoryId: null }),
-      ctx.actor,
-    );
-    const runId = await ensureRun(
-      ctx.db,
-      { ...ctx.actor, runId: null },
-      { purpose: "ai_suggest" },
-    );
-    await publishFieldAssessment(
-      ctx.db,
-      {
-        runId,
-        entity: "product",
-        recordId: await resolveOrThrow(ctx.db, "product", product.id),
-        field: "categoryId",
-        currentValue: null,
-        suggestedValue: "CAT-2222",
-        confidence: 0.9,
-        model: "typesafe/jev",
-        kind: "addition",
-        status: "pending",
-      },
-      true,
-    );
-    // The household's Work has one row for the family; the record's own Work
-    // counts the record's own Suggestions, never the family aggregate.
-    const queue = await read({});
-    expect(queue.items).toContainEqual(
-      expect.objectContaining({ suggestionFamily: "field", entity: null }),
-    );
-    const problems = await read({
-      entityPresence: "none",
-      reason: "suggestions:field",
-    });
-    expect(problems.items).toEqual([
-      expect.objectContaining({
-        entity: null,
-        suggestionFamily: "field",
-        reasonKeys: ["suggestions:field"],
-      }),
-    ]);
-    expect(
-      (await read({ entityPresence: "has", reason: "suggestions:field" }))
-        .items,
-    ).toEqual([]);
-    const productStrip = await publishedRecordWorkQueue(
-      ctx.db,
-      null,
-      product.id,
-      false,
-    );
-    expect(productStrip.items.length).toBeGreaterThan(0);
-    for (const row of productStrip.items) {
-      expect(row.suggestionFamily).toBeUndefined();
-      expect(row).toMatchObject({ entity: "product", id: product.id });
-    }
-    expect(productStrip.items).toContainEqual(
-      expect.objectContaining({
-        source: "suggestion",
-        reason: "1 pending field suggestion",
-      }),
-    );
-
-    // Member-only reads fence another member's source work identically.
-    const otherUserId = testUserId("synthetic-record-strip-other-user");
+  it("routes shared and unresolved owners, resolves @me, and fences member reads", async () => {
+    const otherUser = testUserId("synthetic-work-engine-other");
     await getDb(ctx.db).insert(user).values({
-      id: otherUserId,
-      name: "Synthetic strip other member",
-      email: "synthetic-strip-other@example.test",
+      id: otherUser,
+      name: "Synthetic second member",
+      email: "work-engine-other@example.test",
       emailVerified: true,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     const first = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic strip first member",
+      name: "Synthetic first member",
       kind: "member",
       userId: ctx.actor.userId,
     });
     const second = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic strip second member",
+      name: "Synthetic second member",
       kind: "member",
-      userId: otherUserId,
+      userId: otherUser,
     });
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: `${prefix} private vendor`,
-    });
-    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
-      vendorId: vendor.id,
-      ledgerPartyId: second.id,
-    });
-    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
-      name: `${prefix} private merchandise`,
-      productExpectation: "required",
-    });
-    const privateOrder = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      vendorAccountId: account.id,
-      spendingCategoryId: category.id,
-      displayLabel: `${prefix} private order`,
-      date: "2026-09-20",
-    });
-    const privateLine = await insertWithShortcode(ctx.db, "expense", {
-      name: `${prefix} private line`,
-      purchaseId: privateOrder.id,
-      cost: 12,
-      date: "2026-09-20",
-      costType: "materials",
-      trade: "other",
-      lineKind: "principal",
-      lineBasis: "item_line",
-      economicRole: "vendor",
-    });
-    const household = await publishedRecordWorkQueue(
-      ctx.db,
-      first.id,
-      privateLine.shortcode,
-      false,
+    const source = fakeSource("owners", [
+      { key: "mine", reasons: ["a"], owners: [first.id] },
+      { key: "theirs", reasons: ["a"], owners: [second.id] },
+      { key: "both", reasons: ["a"], owners: [first.id, second.id] },
+      { key: "shared", reasons: ["a"], shared: true },
+      { key: "unresolved", reasons: ["a"], owners: [null] },
+      { key: "missing", reasons: ["a"] },
+    ]);
+    const composition = { sources: [source], deferrals: [] };
+    const household = await read([source]);
+    expect(
+      household.items
+        .find((row) => row.key === "shared")
+        ?.owners.map((owner) => owner.id)
+        .sort(),
+    ).toEqual([first.shortcode, second.shortcode].sort());
+    expect(
+      household.items.find((row) => row.key === "unresolved")?.owners,
+    ).toEqual([]);
+    const input = await resolveFilterTokens(
+      { db: ctx.db, actorContext: ctx.actor },
+      workQueueInput,
+      workQueueInput.parse({ owner: CURRENT_MEMBER_FILTER }),
     );
-    expect(household.items.length).toBeGreaterThan(0);
-    for (const row of household.items)
-      expect(row.waitingFor).toEqual({
-        kind: "members",
-        members: [{ id: second.shortcode, name: second.name }],
-      });
-    const fenced = await publishedRecordWorkQueue(
+    expect(input.owner).toBe(first.shortcode);
+    const own = await readWorkQueueWith(ctx.db, composition, {
+      input,
+      memberPartyId: first.id,
+      memberOnly: false,
+    });
+    expect(own.items.map((row) => row.key)).toEqual(["both", "mine", "shared"]);
+    const fenced = await readWorkQueueWith(ctx.db, composition, {
+      input: { pageSize: 100 },
+      memberPartyId: first.id,
+      memberOnly: true,
+    });
+    expect(fenced.items.map((row) => row.key)).toEqual(["mine", "shared"]);
+    const unlinked = await readWorkQueueWith(ctx.db, composition, {
+      input: {},
+      memberPartyId: null,
+      memberOnly: true,
+    });
+    expect(unlinked.items.map((row) => row.key)).toEqual(["shared"]);
+    const withoutMe = await read([source], { ownerExclude: first.shortcode });
+    expect(withoutMe.items.map((row) => row.key)).toEqual([
+      "missing",
+      "theirs",
+      "unresolved",
+    ]);
+  });
+
+  it("composes real gap sources with their declared labels and fresh record facts", async () => {
+    const product = await createProductIdentityFixture(
       ctx.db,
-      first.id,
-      privateLine.shortcode,
-      true,
+      makeProductInput({
+        name: "Synthetic source gap widget",
+        categoryId: null,
+      }),
+      ctx.actor,
     );
-    expect(fenced.items).toEqual([]);
-    expect(fenced.meta.totalCount).toBe(0);
+    await publishAllQualityFixtures(ctx.db);
+    const queue = await readComposedQueue(ctx.db, {
+      input: {
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(queue.items).toEqual([
+      expect.objectContaining({
+        id: product.id,
+        family: "research",
+        executor: "agent",
+        reasonKeys: expect.arrayContaining(["product_category"]),
+      }),
+    ]);
+    expect(queue.items[0]?.gaps.map((gap) => gap.check)).toContain(
+      "product_category",
+    );
+    const excluded = await readComposedQueue(ctx.db, {
+      input: { reason: "product_category", reasonExclude: "product_category" },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(excluded.meta.totalCount).toBe(0);
   });
 });

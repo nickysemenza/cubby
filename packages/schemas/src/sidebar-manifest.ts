@@ -41,11 +41,6 @@ export const SIDEBAR_SECTIONS = [
         route: "/work-queue",
         sfSymbol: "checklist",
       },
-      {
-        label: "Problems",
-        route: "/problems",
-        sfSymbol: "exclamationmark.triangle",
-      },
     ],
   },
   {

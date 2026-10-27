@@ -193,7 +193,7 @@ describe("transfer pairs in the global queue", () => {
         (
           await listSuggestionPage(ctx.db, {
             family: "transfer_pair",
-            entity: ref.entity,
+            recordEntity: ref.entity,
             recordIds: [ref.id],
           })
         ).items.map((item) => item.assessmentId),
@@ -201,7 +201,7 @@ describe("transfer pairs in the global queue", () => {
     }
     const merchantMatches = await listSuggestionPage(ctx.db, {
       family: "transfer_pair",
-      where: { merchant: { search: "Synthetic clearing" } },
+      merchant: "Synthetic clearing",
     });
     expect(merchantMatches.items).toHaveLength(1);
     expect(page.items[0]).toMatchObject({

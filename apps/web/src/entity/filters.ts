@@ -70,6 +70,11 @@ export interface FilterSpecCore {
   brand?: (value: string) => string;
   /** Declared target for the shortcode-native reference, when applicable. */
   referenceEntity?: ShortcodeEntity;
+  /** A declaration-scoped roster served by the existing option read. */
+  referenceOptionsKind?:
+    | "locationWithInventory"
+    | "ingredientWithProduct"
+    | "locationIdentityProduct";
   expand?: (value: string) => FilterPatch;
   /**
    * A range's bound keys. Beside its presets, the filter's value can be the

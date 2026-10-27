@@ -104,7 +104,7 @@ line lands in a `not_allowed` category. The plain `entity.merge` path applies
 only merges that move no Expense history, such as folding an unused category.
 Both merge paths first lock the keeper and merged categories and refuse one
 that is no longer live. A write racing a merge may still leave a reference to
-the merged-away category, which the Problems page's dangling-reference check
+the merged-away category, which the Work queue's Problems dangling-reference check
 reports for a person to fix; a concurrent Expense edit and merge may deadlock,
 in which case PostgreSQL aborts one and the person retries.
 

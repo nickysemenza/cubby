@@ -9,36 +9,37 @@ import { cn } from "~/lib/utils";
 
 type WorkRowSource = Pick<
   WorkQueueRow,
-  "entity" | "id" | "name" | "source" | "suggestionFamily"
+  "entity" | "id" | "name" | "link" | "reasonKeys"
 >;
 
-/**
- * A Suggestion row opens the Suggestions page: a family row on that family,
- * a record's row on that record's Suggestions.
- */
+/** A Suggestion row's Suggestions search: every family, scoped to its record. */
 export function suggestionsSearch(row: WorkRowSource) {
-  if (row.suggestionFamily) return { family: row.suggestionFamily };
-  if (row.source !== "suggestion" || row.entity === null || row.id === null)
-    return null;
-  return { record: `${row.entity}:${row.id}` };
+  if (row.link.kind !== "suggestions") return null;
+  return row.entity && row.id ? { record: `${row.entity}:${row.id}` } : {};
 }
 
-/** Where a row's Open goes: Suggestions, its record, or Problems. */
+/** A diagnostic row's queue search: its own reason group. */
+function reasonSearch(row: WorkRowSource) {
+  const reason = row.reasonKeys[0];
+  return row.link.kind === "reason" && reason ? { reason } : null;
+}
+
+/** Where a row's Open goes: Suggestions, its reason group, or its record. */
 export function workRowHref(row: WorkRowSource) {
   const suggestions = suggestionsSearch(row);
   if (suggestions)
-    return `/suggestions?${new URLSearchParams(
-      "family" in suggestions && suggestions.family
-        ? { family: suggestions.family }
-        : { record: suggestions.record ?? "" },
-    ).toString()}`;
-  if (row.entity === null || row.id === null) return "/problems";
+    return suggestions.record
+      ? `/suggestions?${new URLSearchParams({ record: suggestions.record }).toString()}`
+      : "/suggestions";
+  const reason = reasonSearch(row);
+  if (reason) return `/work-queue?${new URLSearchParams(reason).toString()}`;
+  if (row.entity === null || row.id === null) return undefined;
   return isBrowserRoutedEntity(row.entity)
     ? `/${entities[row.entity].basePath}/${row.id}`
     : undefined;
 }
 
-/** The record's singular label; Problems and Suggestion families have none. */
+/** The record's singular label; a diagnostic count has none. */
 export function workRowType(row: Pick<WorkQueueRow, "entity">) {
   return row.entity ? entitySummary[row.entity].singular : null;
 }
@@ -75,17 +76,19 @@ export function WorkRowLink({
         )}
       </Link>
     );
-  if (row.entity === null || row.id === null)
+  const reason = reasonSearch(row);
+  if (reason)
     return (
       <Link
-        to="/problems"
+        to="/work-queue"
+        search={reason}
         title={row.name}
         className={cn(LINK_CLASS, className)}
       >
         {row.name}
       </Link>
     );
-  return isBrowserRoutedEntity(row.entity) ? (
+  return row.entity && row.id && isBrowserRoutedEntity(row.entity) ? (
     <EntityRefLink
       entity={row.entity}
       id={row.id}

@@ -1,4 +1,4 @@
-import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
+import { workQueueInput } from "@cubby/schemas/work-queue";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -7,12 +7,12 @@ import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import { entityLink } from "~/server/db/schema";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { executeEntity } from "~/server/entity-kernel";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -320,15 +320,14 @@ describe("Project attention input availability", () => {
       expect(slice.incompleteProjectIds).toContain(project.shortcode);
       expect(slice.total).toBe(0);
     }
-    const queue = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({
-        source: "problem",
+    const queue = await readWorkQueue(ctx.db, {
+      input: workQueueInput.parse({
+        family: "problem",
         reason: "projectsMissingBudget",
       }),
-      false,
-    );
+      memberPartyId: null,
+      memberOnly: false,
+    });
     expect(queue.meta.incompleteProjectIds).toContain(project.shortcode);
 
     expect(missing.incompleteProjectIds).toContain(project.shortcode);
