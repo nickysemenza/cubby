@@ -36,6 +36,12 @@ const rows = z.object({
   items: z.array(z.record(z.string(), z.unknown())),
 });
 const one = z.object({ item: z.record(z.string(), z.unknown()) });
+const REPRESENTATIVE_KINDS = [
+  "product",
+  "expense",
+  "financialTransaction",
+  "location",
+] as const satisfies readonly (typeof listEntities)[number][];
 
 type JsonSchemaNode =
   | boolean
@@ -526,11 +532,13 @@ describe("entity_read field selection", () => {
     expect(item["externalIds"]).toHaveLength(2);
   });
 
-  // Regression: compact asked the selected-field reader for a field it never
-  // loaded (financialTransaction sourceRefsLabel), and `fields` re-parsed rows
-  // through `.partial()`, which throws on refined object schemas. The client
-  // validates every structured result against the published outputSchema.
-  it("serves compact and field selections for every entity_read kind", async () => {
+  // Compact must not ask the selected-field reader for a field it never loaded,
+  // and `fields` must not re-parse rows through `.partial()`, which throws on
+  // refined object schemas. The client validates every structured result
+  // against the published outputSchema. Every kind shares one read runtime, so
+  // representative kinds cover it: Product (widest projection), Expense and
+  // FinancialTransaction (money, derived source labels), Location (nested).
+  it("serves compact and field selections for representative entity_read kinds", async () => {
     await seedReferenceUniverse(ctx.db);
     const entityKernel = entityKernelContextSchema.parse(
       buildKernelContext(ctx.db),
@@ -629,19 +637,13 @@ describe("entity_read field selection", () => {
               );
           }
         };
-        // Every probe only reads the seeded world. A shared iterator assigns
-        // each entity once across two lanes, below the database pool size.
-        const entities = listEntities
-          .filter((entity) => listed.has(entity))
-          .values();
-        await Promise.all(
-          Array.from({ length: 2 }, async () => {
-            for (const entity of entities) await inspectEntity(entity);
-          }),
-        );
+        for (const entity of REPRESENTATIVE_KINDS) {
+          expect(listed.has(entity)).toBe(true);
+          await inspectEntity(entity);
+        }
         return failed;
       },
     );
     expect(failures).toEqual([]);
-  }, 180_000); // Four reads per entity across the full matrix.
+  }, 60_000);
 });

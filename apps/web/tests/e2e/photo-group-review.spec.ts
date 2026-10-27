@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { fileURLToPath } from "node:url";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { startOperation } from "./support/start-operation";
@@ -34,7 +35,12 @@ import {
   seedImagePrerequisite,
   attachProductImagePrerequisite,
 } from "./fixtures/photos";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  chooseOption,
+  gotoAuthenticatedPage,
+  uniqueName,
+  waitForFormHydration,
+} from "./support/e2e-helpers";
 import { expect, recordingVideo, test } from "./support/e2e-test";
 
 async function configureVariantDecisions(
@@ -1408,4 +1414,56 @@ test("photo approval follows filtered ready scope and explicit selection overrid
   );
   expect(second.results.map((item) => item.groupKey)).toEqual(["g2"]);
   expect(second.results.map((item) => item.outcome)).toEqual(["committed"]);
+});
+
+// Own photos create a Product without an import run: the item photo becomes
+// product imagery and the label photo stays label evidence. Read the saved
+// Product back and open it directly; palette search is not under test here.
+test("a member creates a Product from own item and label photos without an import run", async ({
+  page,
+}, testInfo) => {
+  const fixture = (file: string) =>
+    fileURLToPath(new URL(`./fixtures/${file}`, import.meta.url));
+  const name = uniqueName(testInfo, "Photo-first crew shirt");
+  await gotoAuthenticatedPage(
+    page,
+    `/products?create=true&searchQuery=${encodeURIComponent(name)}`,
+  );
+  await waitForFormHydration(page);
+  const editor = page.getByRole("dialog");
+  await editor.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+  await editor
+    .getByLabel("Choose image")
+    .setInputFiles(fixture("synthetic-wardrobe-shirt.png"));
+  await expect(
+    editor.getByRole("button", { name: "Remove synthetic-wardrobe-shirt.png" }),
+  ).toBeVisible();
+  await expect(editor.getByText("Uploading images")).toHaveCount(0);
+  await chooseOption(page, editor.getByLabel("Attach as"), "Label photo");
+  await editor
+    .getByLabel("Choose image")
+    .setInputFiles(fixture("synthetic-wardrobe-label.png"));
+  await expect(
+    editor.getByRole("button", { name: "Remove synthetic-wardrobe-label.png" }),
+  ).toBeVisible();
+  await expect(editor.getByText("Uploading images")).toHaveCount(0);
+  await editor.getByRole("button", { name: /^Create$/ }).click();
+  await expect(editor).not.toBeVisible({ timeout: 15_000 });
+
+  const { db } = await createEvidenceHarnessContext(page);
+  const saved = await getDb(db).query.product.findFirst({
+    where: eq(schema.product.name, name),
+  });
+  expect(saved).toBeDefined();
+  await gotoAuthenticatedPage(page, `/products/${saved!.shortcode}`);
+  await expect(
+    page
+      .locator("#images")
+      .getByRole("img", { name: "synthetic-wardrobe-shirt.png" }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page
+      .locator("#labels")
+      .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
+  ).toBeVisible();
 });

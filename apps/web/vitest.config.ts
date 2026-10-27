@@ -195,7 +195,7 @@ const integrationTests = [
   "tooling/**/*.integration.test.ts",
 ];
 // Same flake policy as Playwright for suites that own databases, browsers or
-// workerd: one CI retry, reported as flaky, quarantined on repeat. Node unit,
+// workerd: one CI retry, reported as flaky, fixed or deleted on repeat. Node unit,
 // tooling and package suites never retry, so their flakes fail.
 const serviceRetry = process.env.CI ? 1 : 0;
 const integrationProject = {

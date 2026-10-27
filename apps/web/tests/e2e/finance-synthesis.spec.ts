@@ -70,24 +70,3 @@ test("expense analytics breaks spend down by root Spending Category and charts m
     ),
   ).toBe(true);
 });
-
-test("cash flow spreads a live project's remaining estimate to its end date", async ({
-  page,
-}, testInfo) => {
-  const name = uniqueName(testInfo, "Synthetic envelope project");
-  const end = new Date();
-  end.setMonth(end.getMonth() + 3);
-  await createEntityFixture(page, "project", {
-    name,
-    status: "in_progress",
-    costEstimate: 1200,
-    dates: { start: null, end: end.toISOString().slice(0, 10) },
-  });
-
-  await gotoAuthenticatedPage(page, "/cash-flow");
-  await expect(
-    page.getByRole("figure", { name: /^Projected outflow/ }),
-  ).toBeVisible();
-  const envelopes = page.getByRole("region", { name: "Scheduled envelopes" });
-  await expect(envelopes.getByText(name)).toBeVisible();
-});

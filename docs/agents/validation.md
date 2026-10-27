@@ -34,6 +34,27 @@ does not invalidate evidence.
 
 ## Signal and speed
 
+Tests protect what members can accomplish and what data must remain correct,
+while leaving the implementation free to change. Every retained test serves one
+of two roles:
+
+- **Journeys carry most product confidence.** A broad scenario drives a real
+  workflow (import a wardrobe, receive a purchase, split an expense, change an
+  assignment) and independently reads back the saved result. Let the agent adapt
+  selectors and steps to UI changes; the stored outcome is the assertion.
+- **A small set of fast, precise tests guards dangerous rules:** money
+  arithmetic and settlement, identity and merge, source evidence, permissions
+  and security boundaries, concurrency and queue fairness, and stored-data
+  migrations. Anything else belongs in a journey or nowhere.
+
+Share the plumbing: seeded worlds (`tooling/factories`), isolated IntegreSQL
+leases, the Worker runtime and cleanup serve every lane; do not build a separate
+harness for one lane or spec. Keep local iteration narrow: run the affected
+file or one journey locally, and let CI run the full catalog with cached passes.
+Delete redundant tests as coverage earns trust: once a journey demonstrably
+catches a regression, remove the tests that duplicate it or merely freeze
+internal structure.
+
 Choose the cheapest boundary that can expose the failure. Classify individual
 cases in mixed service-backed suites: SQL elsewhere in a file does not make
 every assertion an integration check. Before moving a case, read its destination
@@ -49,12 +70,15 @@ previews cannot prove server filtering or writes. See the
 
 ## Test retention
 
-A code change, bug fix, or new library API does not automatically require a new
-test. Before adding or extending an automated test, establish all three:
+A code change, bug fix, or new library API does not add a test by default.
+A bug fix extends an existing journey or dangerous-rule test with the missing
+assertion when one owns the behavior; a standalone repro is retained only for a
+dangerous rule and states the failure it guards. Before adding or keeping an
+automated test, establish all three:
 
-- A concrete failure would materially affect an ordinary workflow or a
-  consequential data, security, or cross-client contract.
-- Existing workflow coverage, compiler checks, or generator guards cannot
+- A concrete failure would materially affect an ordinary workflow or one of
+  the dangerous rules above.
+- Existing journey coverage, compiler checks, or generator guards cannot
   reasonably catch it. Name the nearest existing owner and its actual gap.
 - The smallest useful regression is worth its ongoing maintenance, runtime,
   and fixture/harness cost. Reproducing a bug before a fix is evidence, not
@@ -63,6 +87,18 @@ test. Before adding or extending an automated test, establish all three:
 If that case is not established, make no test change. Report the existing
 checks and any deliberate coverage gap. Disposable probes can establish a
 refinement without becoming permanent coverage.
+
+Do not assert SQL statement or query counts, timing budgets, or ratchets in
+tests: they fail on unrelated additive changes and protect cost, not data.
+Find N+1 work with [performance review](#performance-review) measurements.
+A test reported flaky twice is fixed or deleted in the next PR; `test.fixme`,
+`skip` and quarantine count as deletion and are removed.
+
+Delete a test when it duplicates a retained journey, freezes internal
+structure (declarations, mocks, call order, copy, file layout), reproduces an
+old bug outside the dangerous rules, guards performance, or spends material CI
+time on a rare cold-start, legacy-recovery or harness permutation. Catalog-wide
+"every entity" checks keep one representative per distinct runtime path.
 
 When a test earns retention, extend the existing owning workflow first. Prefer
 one E2E scenario at the real user/system boundary when it covers the failure;
