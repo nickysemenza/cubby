@@ -77,8 +77,7 @@ const source: WorkSource = {
   family: "suggestion",
   executor: "human",
   entity: null,
-  // Several proposal families can touch one record; open all its suggestions.
-  link: { kind: "suggestions", family: "all" },
+  link: { kind: "suggestions" },
   reasons: [
     "field",
     "image_description",

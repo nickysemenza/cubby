@@ -12,13 +12,10 @@ type WorkRowSource = Pick<
   "entity" | "id" | "name" | "link" | "reasonKeys"
 >;
 
-/** A Suggestion row's Suggestions search: its family, scoped to its record. */
+/** A Suggestion row's Suggestions search: every family, scoped to its record. */
 export function suggestionsSearch(row: WorkRowSource) {
   if (row.link.kind !== "suggestions") return null;
-  return {
-    family: row.link.family,
-    ...(row.entity && row.id ? { record: `${row.entity}:${row.id}` } : {}),
-  };
+  return row.entity && row.id ? { record: `${row.entity}:${row.id}` } : {};
 }
 
 /** A diagnostic row's queue search: its own reason group. */
@@ -31,7 +28,9 @@ export function reasonSearch(row: WorkRowSource) {
 export function workRowHref(row: WorkRowSource) {
   const suggestions = suggestionsSearch(row);
   if (suggestions)
-    return `/suggestions?${new URLSearchParams(suggestions).toString()}`;
+    return suggestions.record
+      ? `/suggestions?${new URLSearchParams({ record: suggestions.record }).toString()}`
+      : "/suggestions";
   const reason = reasonSearch(row);
   if (reason) return `/work-queue?${new URLSearchParams(reason).toString()}`;
   if (row.entity === null || row.id === null) return undefined;

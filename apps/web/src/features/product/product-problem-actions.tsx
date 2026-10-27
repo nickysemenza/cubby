@@ -1,5 +1,4 @@
 import { ProblemItem } from "@cubby/schemas/problems";
-import { countLabel } from "@cubby/shared/pluralize";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";

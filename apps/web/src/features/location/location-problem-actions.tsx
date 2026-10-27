@@ -1,4 +1,4 @@
-import { locationShortcode } from "@cubby/schemas/identifier-fields";
+import { locationShortcode } from "@cubby/schemas/identifiers";
 
 import {
   WorkActionDialogTrigger,

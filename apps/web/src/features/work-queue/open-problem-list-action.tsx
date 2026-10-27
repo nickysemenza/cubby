@@ -1,6 +1,6 @@
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { entityListHref } from "~/entity/entity-list-href";
-import { problemQuery } from "~/entity/problems/problem-registry";
+import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import {
   WorkActionLink,
   type WorkActionProps,
@@ -13,7 +13,9 @@ import {
  */
 export function OpenProblemListAction({ action, target }: WorkActionProps) {
   if (target.scope !== "group") return null;
-  const query = problemQuery(target.reason);
+  const query = problemQueryDeclarations().find(
+    (declaration) => declaration.key === target.reason,
+  );
   if (
     query?.source.kind !== "entity" ||
     query.continuation.kind !== "entity-list" ||

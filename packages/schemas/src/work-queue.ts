@@ -7,7 +7,6 @@ import { shortcodeEntities } from "./entity-manifest";
 import { entitySummary } from "./generated/entity-summary.gen";
 import { anyShortcodeSchema } from "./identifier-fields";
 import { nonEmptyTuple } from "./identifiers";
-import { suggestionListFamily } from "./suggestion-list";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
 import {
   defineRelationList,
@@ -80,10 +79,8 @@ export type WorkAction = z.infer<typeof workAction>;
 /** Where a row opens; route paths are client knowledge. */
 export const workLink = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("record") }),
-  z.object({
-    kind: z.literal("suggestions"),
-    family: suggestionListFamily,
-  }),
+  /** Opens the record's pending Suggestions across every family. */
+  z.object({ kind: z.literal("suggestions") }),
   /** Filters the queue to the row's reason group (a diagnostic count). */
   z.object({ kind: z.literal("reason") }),
 ]);

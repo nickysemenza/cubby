@@ -19,7 +19,6 @@ import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
-import { ProblemsRow } from "./problems-row";
 
 /**
  * Work a member must decide (the queue's Review view) that I own, shared
@@ -119,12 +118,29 @@ export function NeedsYou() {
                     </HomeRow>
                   );
                 })}
-                <ProblemsRow />
+                <ProblemsRow count={needsYou.data.meta.viewCounts.problems ?? 0} />
               </HomeList>
             </DenseCellContext.Provider>
           </EntityDisplayImagesProvider>
         </>
       )}
     </Section>
+  );
+}
+
+/** The Problems view's count from the same read, shown only when nonzero. */
+function ProblemsRow({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <HomeRow>
+      <Link
+        to="/work-queue"
+        search={{ view: "problems" }}
+        className="min-w-0 truncate font-medium text-foreground underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="font-mono tabular-nums">{formatCount(count)} </span>
+        <span>{count === 1 ? "problem needs" : "problems need"} attention</span>
+      </Link>
+    </HomeRow>
   );
 }

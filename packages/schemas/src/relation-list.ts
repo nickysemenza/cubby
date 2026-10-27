@@ -362,7 +362,15 @@ export function defineRelationList<
     {},
     ...list.filters.map(inputFieldsOf),
   ) as FiltersInputFields<Fs>;
-  const groupInput = groupKeys.length ? z.enum(nonEmptyTuple(groupKeys)).optional() : z.never().optional();
+  // Surfaces that compose declared filters at runtime (Suggestions) extend
+  // this open shape with their own scope and paging.
+  const filterShape: Record<string, z.ZodType> = Object.assign(
+    {},
+    ...list.filters.map(inputFieldsOf),
+  );
+  const groupInput = z
+    .enum(nonEmptyTuple(groupKeys.length ? groupKeys : ["none"]))
+    .optional();
   const input = z.strictObject(
     Object.assign(
       {
@@ -397,7 +405,7 @@ export function defineRelationList<
   return {
     ...list,
     /** Filter-only schema for surfaces with their own scope and paging. */
-    filterInput: z.strictObject(filterFields),
+    filterInput: z.strictObject(filterShape),
     groupInput,
     specs: list.filters.map(specOf),
     descriptors: list.filters.map(descriptorOf),
