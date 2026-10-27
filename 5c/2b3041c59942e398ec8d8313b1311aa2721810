@@ -1,0 +1,41 @@
+apps/web/drizzle/0051_work_item_retired_fields_check.sql
+  s_9607b89cdf7e1e::t_9e00a16771b5fb 1
+apps/web/drizzle/meta/_journal.json
+  s_9607b89cdf7e1e::t_c8c9eb157213db 361-367
+apps/web/src/server/db/job-schema.ts
+  s_9607b89cdf7e1e::t_6a8d033e79d2c9 4,83-87
+apps/web/src/server/domains/run/repo/run-model-migration.integration.test.ts
+  s_9607b89cdf7e1e::t_3200869fdfce43 3,7-8
+apps/web/src/server/domains/transaction-import/operations/source-transaction-record.integration.test.ts
+  s_9607b89cdf7e1e::t_55e4b7f7af52ed 124,166,170
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.integration.test.ts
+  s_9607b89cdf7e1e::t_d1ebcc22148910 3125-3132
+apps/web/src/server/generic/derived/repo/decision-migration.integration.test.ts
+  s_9607b89cdf7e1e::t_f47a732b65df1e 89-93,96-102
+apps/web/src/server/generic/jobs/repo/fairness.integration.test.ts
+  s_9607b89cdf7e1e::t_aa4a603d6d0890 50-52,127-128
+apps/web/src/server/generic/jobs/repo/work-items.ts
+  s_9607b89cdf7e1e::t_ac2d7bee15b26a 48-49,52
+apps/web/tooling/job-dispatch-cutover.integration.test.ts
+  s_9607b89cdf7e1e::t_0dd2ad543ebd27 56-57
+apps/web/tooling/principal-product-gaps-migration.integration.test.ts
+  s_9607b89cdf7e1e::t_ad923d00cdd180 45,52
+apps/web/src/server/generic/jobs/repo/work-items.integration.test.ts
+  s_9607b89cdf7e1e::t_0995ad04c17817 110,126-128,165-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5c2b3041c59942e398ec8d8313b1311aa2721810",
+  "prompts": {},
+  "sessions": {
+    "s_9607b89cdf7e1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f56125d7-a4fa-4fe4-a445-81d11b32c3e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
