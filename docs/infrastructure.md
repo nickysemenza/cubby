@@ -336,8 +336,7 @@ queue consumer settings (`packages/shared/src/background-queue-consumer.json`)
 and each drain's page concurrency (`JOB_DRAIN.concurrency`) bound concurrent
 Job pages; four drains of three pages bound delivery concurrency while pages
 wait on providers. It is not a measured optimum or an
-interactive connection reservation. Tune it against queue backlog and oldest
-due age (`job.health`), origin pool waits, and interactive latency together. Telemetry
+interactive connection reservation. Tune it against Activity's due counts, origin pool waits, and interactive latency together. Telemetry
 concurrency remains 1. Purchase dispatch starts coordinator work outside Job delivery; the background
 queue cap does not bound active coordinator database work. That workload policy
 remains separate.
@@ -897,35 +896,6 @@ Observability telemetry query API, `POST /accounts/{account}/workers/observabili
   "raw logs expired".
 - **Failures.** A failed query shows its raw response, redacted only by
   `scrubErrorMessage`, with Retry and the dashboard link.
-
-`server/generic/jobs/limits-catalog.ts` lists every limit that can set a Run's
-speed, imported from the constant or config that enforces it:
-
-- queue consumers;
-- drain pages, time and batch;
-- lease and heartbeat;
-- attempts and backoff;
-- step page caps and in-page preparation and publication concurrency;
-- AI Gateway in-flight, rate and deadline;
-- AI refresh slots;
-- the funding window;
-- provider retry wait;
-- database connections.
-
-Change a value at its source, never in the catalog.
-
-`evaluateBinding` names the limit binding now:
-
-- **Typed Job waits.** A wait (`provider_capacity`, `ai_funding_window`,
-  `rate_limit`, `device`) and a retry backoff each name their limit.
-- **Due Jobs.** A due Job is held by drain capacity, counted with its same-kind
-  Jobs ahead.
-- **Running pages.** Measured phase timings identify the largest share of page
-  work ("preparation 61% of page time · 106 queries/page"). A concurrency
-  peak reaching its cap does not establish contention. The drain checks its
-  time budget between pages; exceeding it does not explain why an indivisible
-  page was slow. Without phase timings, the diagnostic keeps that cause unknown.
-- **No sample.** Without a sample the verdict is "Unknown — no recent samples".
 
 Step pages record their own sample through `measurePage`
 (`server/generic/jobs/page-work.ts`). Executed steps get it as

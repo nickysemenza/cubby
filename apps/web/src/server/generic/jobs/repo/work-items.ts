@@ -1,5 +1,5 @@
 /**
- * Work items: the per-item half of a drain (docs/jobs.md#drains). Items hold
+ * Work items: the per-item half of a drain (docs/jobs.md#coarse-jobs-and-work-items). Items hold
  * retry state only; the drain Job's lease fences every item it claimed, and
  * a ticket fences each item against re-marking during its page.
  */

@@ -357,69 +357,40 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
   (`leased` counts live leases; lapsed ones are `expiredLeases`, summarized as
   "N expired leases awaiting reclaim"), its own funding wait, and `stalled`
   when nothing was claimed or finished for `RUN_STALL_MS` and no live lease is
-  in flight. `job.list {runId}` groups the Run's demand, including AI
-  evaluation Jobs it requests.
+  in flight. A Run's demand is the Jobs it owns by `runId`; shared drain Jobs
+  belong to no Run.
 - `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
   or a Job id, on MCP (`maintenance`) and `cubby call`.
-- `job.health`: `{snapshot}`, the queue watchdog's latest measurement, null
-  before its first page.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
   that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
   only on hello), device attempt starts per minute (reclaims included) and the
   ETA at that pace.
 
-Web Activity presents the unhealthy-only health notice, device backlog banner,
-compact lane/reason counts, Runs needing attention, then Jobs.
-Navigable counts use the Job entity population, hiding internal work with the
-table; queue health continues to measure internal kinds. Every supplied retry
+Web Activity presents the device backlog banner, compact lane/reason counts,
+Runs needing attention, then Jobs. Navigable counts use the Job entity
+population, hiding internal work with the table. Every supplied retry
 restriction intersects, including mixed entity filters, row IDs and Run scope.
-Count chips scope the Job table; web records that scope in Activity's URL. AI
-stream Run links resolve through uncancelled `AiEvaluationRequest` demand,
-without multiplying Job counts. Run evaluation summaries scope through the
-Run/request unique index and apply `requestedAiEvaluations` cancellation and
-receipt precedence: a withdrawn request is cancelled and never inherits a
-later shared receipt if it has none. Roster enrollment records requests for
-new and updated slots; migration `0044` backfills existing owner demand. A disposable synthetic
-EXPLAIN probe with 3,000 historical Jobs and 3,000 unrelated evaluations/requests
-used `Job_due_idx`/`Job_claimed_idx` for Activity, then
-`AiEvaluationRequest_evaluation_idx` for its request links. Run summaries used
-`AiEvaluationRequest_run_item_key`, `AiEvaluation_pkey` and `Job_key_unique`;
-recent outcomes also used `Entity_pkey`. PostgreSQL reported 0.148 ms for
-Activity and 0.016–0.038 ms per Run query in that local seed. These are query-plan
-evidence, not production latency claims.
+Count chips scope the Job table; web records that scope in Activity's URL.
 Runs use the generic `attention` saved view: member-visible stopped Runs that
 have no successor, plus stalled Runs, ordered stalled first then newest.
 The embed shows ten rows and links to all matching Runs. AI cost is the Run's
 recorded charged usage. Jobs use the generic In progress view, including image
 subject thumbnails, and a chevron expands Explain, that Job's Worker logs and
 Retry now underneath its row. Closed web rows remain 32 px. There is one
-shared table renderer; the separate image-processing roster and hand-written
-queue rows, pickers and pager are removed. Apple Activity hands the household
-queue off to `/work-queue`
-([native Activity](../apps/apple/README.md#activity)).
+shared table renderer. Apple Activity hands the household queue off to
+`/work-queue` ([native Activity](../apps/apple/README.md#activity)).
 The web audit-log changes feed follows the queue.
 
-The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
-first repairs image execution in bounded batches (retires moot work, reopens
-legacy leased rows, gives open rows without a live execution one; failed
-image executions count as live), then measures
-per-kind due count, oldest due age, claims per minute, due growth, expired
-leases and image/Job disagreement against `QUEUE_ALERT_THRESHOLDS`.
-`no_claims` fires when a drained kind with due work had no claims in the
-window, or when a Job stayed due through the whole window although the
-kind's claims could have served every due Job (claims of one family do not
-cover another). New
-alerts log at error level with raw numbers; Activity reads them through
-`job.health`. There is no household push channel for them: push
-registrations exist only per photo Run.
-
-The `jobs.retention` Job prunes completed and cancelled Jobs older than
-`JOB_RETENTION_MS`, and observed capture times, in bounded batches. Failed Jobs, embedding Jobs (their
-cleanup reads finished rows), and all domain evidence (image attempts, AI
-evaluations, Run history, audit) stay.
-
-A kind's `maxQueued` is a watchdog bound, not an admission gate: the watchdog
-raises `over_capacity` past it, and producers pace themselves (see Producers).
+The `jobs.maintenance` Job (`workflows/job-maintenance.ts`) re-arms every five
+minutes from the minute cron. Each pass repairs image execution in bounded
+batches (retires moot work, gives open rows without a live execution one;
+failed image executions count as live) and keeps the device wake armed. Every
+six hours it also prunes completed and cancelled Jobs older than
+`JOB_RETENTION_MS` with their `Entity` identities, and observed captures, in
+bounded batches, continuing at once while a batch fills. Failed Jobs and all
+domain evidence (image attempts, AI evaluations, Run history, audit) stay.
+There is no per-kind queue health or alerting: with a few dozen coarse Jobs,
+Activity's counts and a stalled Run show a stuck queue directly.
 
 ## Producers
 
@@ -458,142 +429,92 @@ record (~55k), which starved every other kind for days.
 Each AI evaluation slot identifies feature, entity, record, field and (for a
 Product pair) the other Product. A generated text key uses UTF-8 length prefixes;
 input and option fingerprints remain execution evidence, outside the slot key.
-A partial unique index permits one `queued` or `retry_wait` row per slot.
-The pending share-key lookup is nonunique: input can revert to a running
-attempt while a queued successor already exists in the slot.
-Changed input updates that row's snapshot, target, provenance and work key in
-place and clears any result, receipt or error captured for its older input.
-A running or result-ready row keeps its captured evidence; one queued
-successor may wait beside it. A failed running attempt becomes obsolete when a
-queued successor already occupies its slot; it cannot re-enter `retry_wait` beside
-that successor. Completed current input is not queued again for `ai_refresh`. Member-initiated
-sweep, reclassification and retry requests get a fresh evaluation; running
-work and pending slots can still be shared.
-Reverting after another input was evaluated creates a new row and reuses the
-AI response cache. Declined input (`blocked`, `obsolete`, or cancelled as
-superseded) receives at most three automatic attempts; member-cancelled Runs
-veto automatic readmission. Attempt suffixes keep work keys unique without
-receipt chains. Explicit member retries retain their `retryEvaluationId` receipt.
+A partial unique index permits one `queued` row per slot; retry and lease state
+live on the evaluation's work item, never in `AiEvaluation.state`. The pending
+share-key lookup is nonunique: a `result_ready` row keeps its paid result while
+a queued successor waits in the same slot. Changed input updates the queued
+row's snapshot, target, provenance and work key in place, clears any result,
+receipt or error captured for its older input, and re-marks its item so an
+attempt in flight cannot publish. Completed current input is not queued again
+for `ai_refresh`. Member-initiated sweep, reclassification and retry requests
+get a fresh evaluation; pending slots can still be shared. Reverting after
+another input was evaluated creates a new row and reuses the AI response cache.
+Declined input (`blocked`, `obsolete`, or cancelled as superseded) receives at
+most three automatic attempts; member-cancelled Runs veto automatic
+readmission. Attempt suffixes keep work keys unique without receipt chains.
+Explicit member retries retain their `retryEvaluationId` receipt.
 
 ### Embedding execution
 
-Search publication admits embedding demand as one cohort: it locks existing
-Jobs in key order, retires superseded hashes together and checks selected
-artifacts in a batch. Unchanged current Jobs retain their identity and state
-without per-record savepoints or enqueue lookups.
-Indexed `subjectKind`/`subjectId` locate a source's Jobs for cohort locking and
-retirement; JSON supplies only the content hash and embedding configuration.
-Admission reads only identity and state, not retained text and result payloads.
-New work still uses canonical Job admission; a completed upload no longer selected gets a fresh
-physical identity when its text returns.
+Embeddings run on two drains. `embedding:refresh` items are keyed by source
+entity id; prepare reads the source's kind from its `Entity` identity, builds
+current search text and hashes it, so a re-mark during a page simply takes a
+new ticket. `embedding:cleanup` items are keyed by `EntityEmbedding` id, which
+is also the physical Vectorize vector id: a Job id is never a vector id.
+Search publication, search-index repair and derived compute mark sources with
+`markWork`; cleanup marks every retired, failed or deleted artifact whose
+vector has no delete receipt.
 
-`embedding.refresh` uses the shared drain's kind-level batch handler. When a
-normal fair selection includes embedding work, the drain reselects up to 100
-Jobs with the same run-first, backfill-reserve and weighted kind ordering.
-Run-owned and backfill embedding Jobs form separate batches. Each batch occupies
-one of the existing three execution lanes; claims and lease renewals stay serial within that lane;
-freshness and visibility use bounded shared lookups, so widening embeddings
-does not multiply database sockets or change other kinds' concurrency.
+An artifact moves `prepared` → `submitting` → `submitted` → `selected` →
+`retired` (or `failed`). Each step that precedes a provider or Vectorize call
+commits first through `ctx.fenced`, so an interrupted page resumes from its
+receipt (`submissionId`, `vectorHash`, `observedAt`) without paying for the
+embedding again. One in-flight submission per source and configuration
+(`EntityEmbedding_one_submission_key`) sits beside at most one selected vector
+(`EntityEmbedding_entity_model_key`).
 
-Each completed provider/upload chunk checkpoints its own Job receipts before
-another provider call starts. The handler checks the shared 20-second drain
-deadline between chunks; an in-flight chunk and its publication may finish past
-that deadline, but no later chunk starts. Unstarted claims are released, refunding
-the up-front claim attempt for exhausting kinds. The next wake reselects fairly,
-so newly arrived Run-owned work can lead instead of waiting for every long input
-in the original batch.
-
-Serial claiming stops once it has used `JOB_BATCH_CLAIM_SHARE` (40%) of the
-page's remaining drain budget; the claimed prefix executes and unclaimed members
-stay due for the next wake. On a saturated database a full-width claim loop
-otherwise spent the whole budget and released every claim unexecuted.
-
-One heartbeat renews only the batch's pending claims, serially on one database
-socket. Each renewal catches its own failure and uses `FOR UPDATE SKIP LOCKED`
-to avoid waiting on another transaction's Job-row lock. A refused or failed
-renewal leaves that Job's existing deadline intact; healthy siblings still renew.
-An expired claim cannot renew or publish after reclamation, and completed
-checkpoints leave the heartbeat set immediately.
-
-Fresh submissions with the same stored provider/model/dimensions share one
-embedding call and Vectorize upload. Requests contain at most 100 texts, below
-OpenAI's 2,048-input limit, and at most 300,000 UTF-8 bytes, a conservative bound
-on its 300,000-token request limit. Inputs over 8,192 bytes run alone, preserving
-provider validation of the 8,192-token input limit without failing neighbors.
+Fresh submissions with the same provider/model/dimensions share one embedding
+call and Vectorize upload. Requests contain at most 2,048 texts and 300,000
+UTF-8 bytes, a conservative bound on OpenAI's 300,000-token request limit;
+inputs over 8,192 bytes run alone, preserving provider validation of the
+8,192-token input limit without failing neighbors.
 [OpenAI owns these provider limits](https://developers.openai.com/api/reference/resources/embeddings/methods/create).
-A configuration mismatch settles as obsolete and re-admits current work during
-that Job's fenced publication. A request pins the validated current configuration,
-keeping content addressing and selected-vector provenance consistent across changes.
+A configuration mismatch settles obsolete and re-admits current work. Visibility
+polling postpones its item every 5 s without spending an attempt; an upload
+still invisible after two minutes fails that item, which backs off and keeps
+its receipt. Vectorize rate limits (including `VECTOR_DELETE_ERROR` 40041 with
+`Too Many Requests`) back off the item.
 
-Every Job retains its own claim, generation, retry budget, physical vector ID,
-upload hash and visibility receipt. Stale sources settle alone; a failed provider
-or upload chunk retries only its member Jobs under the existing policy. Visibility checks share bounded Vectorize lookups. Completed selections publish
-as a page: sorted source locks followed by identity locks, one current search
-preparation, one retirement update, one multi-row selection insert and one
-reader notification. Job locks, invalidation checks and completion updates are
-also set-based, with the same lease and generation fences checked again before
-commit. The healthy path's statement count is independent of page size for a
-fixed set of source kinds. Source removal, changed inputs or a database data
-exception (SQLSTATE classes 22, 23, 54) rolls back the shared transaction and
-retries publication individually; only the rejected targets fail or back off.
-Transaction-level failures retry the page. Retired selections and terminal
-unselected uploads remain eligible for the existing artifact cleanup.
-Vectorize rate limits (including `VECTOR_DELETE_ERROR` 40041 with `Too Many
-Requests`) and upload visibility deadlines use the existing Job exponential
-backoff. These transient errors reserve another attempt even at the normal
-attempt limit; other failures retain their attempt budget. Visibility retries
-retain the physical ID and upload receipt so late visibility can finish without
-another upload. Publication rejects revoked claims. A shared call has no single Job publication owner; cache contention
-defers it as background work instead of polling. `AiUsage` keeps one row per
-provider call (plus existing application-cache-hit rows), attributes a shared
-call to the daily background Run without choosing an arbitrary entity, and records
-the provider's total tokens once. Embeddings remain outside frontier funding caps.
+Visible uploads publish as chunks through the drain: sorted source locks, then
+identity locks, one search preparation, one retirement update, one multi-row
+selection insert and one reader notification. A vanished or changed source
+fails or settles alone. Cleanup deletes only an unselected, stopped artifact
+and records its delete receipt, so a delayed cleanup can never delete a
+replacement upload. A shared provider call has no single owner: `AiUsage`
+keeps one row per provider call, attributes it to the daily background Run and
+records the provider's total tokens once. Embeddings remain outside frontier
+funding caps.
 
-## AI evaluation pages
+## AI evaluation drains
 
-`ai.evaluation` keeps its existing `{evaluationId}` Job input and per-target
-slot, input hash, history, token and generation. Product, canonical
-`product_pair` and connection refresh work run as transient pages of up to 100
-compatible slots: one feature, preparation shape, execution kind and priority
-class.
-`claimJobPage` locks eligible Jobs with `FOR UPDATE SKIP LOCKED`, assigns
-independent tokens, then `claimAiEvaluationPage` rechecks live authorization,
-activation and pending/result-ready state before adopting the claims. Claim
-reads Run authority without a lock and skips cancellation's item locks.
-Queued obsolete generations retire in sets before inference; paused authority
-parks its Jobs without spending attempts. No model work holds a claim
-transaction open. Page and single claims use the same `job-kind:<kind>`
-nonblocking admission lock and fresh live-lease count when `maxInFlight` is
-configured. AI evaluation capacity counts distinct page admission tokens in
-both drain selection and claim admission. Every admitted page shares one
-`Job.admissionToken`; each target retains an independent `leaseToken` and
-generation for publication fencing. A single claim consumes one admission
-unit. Any surviving live target keeps its page occupied, so a connection page
-leaves the second AI unit available to another feature. Pre-cutover running
-Jobs without admission tokens count individually until their leases end. Active Run
-exemptions follow the shared kind policy. Heartbeats renew the exact token/generation set in one
-statement; replaced tokens are reported separately and cannot publish.
+Each feature has one drain Job, `ai-evaluation:<feature>`, over items keyed by
+evaluation id (priority 0 when the owner or an uncancelled requester is a
+running, member-visible Run nobody scheduled; otherwise 1). An attempt is the
+drain lease plus the item's ticket (`aiEvaluationAttemptToken`): a lost lease,
+changed input or new demand makes an in-flight attempt obsolete without any
+per-evaluation Job. Prepare rechecks live Run authority, activation, pending or
+`result_ready` state and generation; queued obsolete generations retire in sets
+before inference, and a stopped requester parks its item. A paid answer is
+written as `result_ready` through `ctx.fenced` before publication, so a later
+publication failure reuses it instead of buying it again.
 
-Feature fairness uses bounded prefixes per feature and exemption class, then
-a bounded prefix per kind before window ranking. It does not rank the entire
-due backlog. Queue diagnostics retain the existing projected-position query;
-the admitted selection carries feature anchors through the same snapshot.
+Failures map at the drain seam: invalidated evidence settles the evaluation
+`obsolete` as a publication outcome; AI budget, provider capacity and AI
+Gateway admission throw `JobDeferredError`, which stops the page without
+spending attempts; anything else is the item's failure, and its third
+consecutive failure settles the evaluation `failed` with the raw error and
+settles its requesters. A Run cancel withdraws its requests and drops the items
+of evaluations no other requester still wants. `maxInFlight: 2` leaves the
+other drain lanes free for other kinds.
 
-The drain admits at most one page per feature/class turn in a fair batch,
-removes duplicate anchors, and then reselects. Other features and Job kinds
-keep their turns and backfill retains its reserve. Queue and Run counts still
-count target Jobs; AI ahead positions are estimates because one page can
-capture many targets before the next selection. Ordinary ahead positions count
-page services; target counts remain unchanged. Visible position reads first probe
-the earliest indexed key of that kind. If no earlier key can exist, they
-return zero without executing the count; this avoids PostgreSQL choosing a
-kind-only scan and filtering thousands of later Jobs. Other positions retain
-the same due-work and Run-class count.
+Product identity and connection features prepare a page of up to 100 items
+together and publish it in fenced chunks; other features run up to 8 items, two
+at a time, each in its own guarded transactions under the drain lease.
 
 `EvaluationPageAdapter` in `ai/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries
-its own evidence digest. Each preparation/provider continuation retains its
-own Job/workflow execution context. The executor interns one usage context
+its own evidence digest. Each preparation/provider continuation runs in the
+drain Job's execution context. The executor interns one usage context
 per compatible Run/feature/operation/force/funding group; each adapter names
 its operation (`product-identity`, `entity-connections`) and uses default
 force/funding policy. The shared context carries
@@ -642,34 +563,23 @@ chunk through the existing pair batch writer, before those owners settle.
 The single-target path shares the candidate publisher in batches of 16 while
 retaining its existing publication authority and incomplete-coverage behavior.
 
-Publication commits at most 25 outcomes per SERIALIZABLE transaction (an
-adapter may weight outcomes, so a connection with many candidates fills its
-chunk sooner), using
-the existing bounded snapshot-write retries. Locks follow Run, slot, item,
-then Job order, compatible with cancellation and admission. The explicit
-claim-set guard authorizes each target without borrowing a sibling's AsyncLocal
-context. The feature adapter revalidates each evidence digest and member
-decision before business writes. Evaluation state, uncancelled requester
-receipts and Jobs settle in sets in the same commit. Explicit
-`retryEvaluationId` receipts survive. One final activation/dependency fence
-and one set-based before-commit Job check cover the chunk; requester/owner
-coordinators wake through one deduplicated update and after-commit signal.
-
-Preparation/decision failures settle individually. A failed publication chunk
-splits only after its transaction rolls back; committed siblings never replay.
-Capacity/funding waits release affected claims without spending a failure
-attempt. Failure and stale-claim coordinator wakes run after commit, so they
-never reverse cancellation's Run/item/Job lock order. A failed old attempt
-cannot re-enter retry-wait beside its queued successor. Cancelled or replaced claims never gain publication authority from
-a fresh sibling. Source-to-pair enrollment finishes before the source receipt;
-Run completion still includes its requested pair work. Refresh coordinators
-read state counts, error summaries and bounded pending identities; they never
-reload frozen inference payloads just to update progress.
+Publication commits at most 25 weighted outcomes per SERIALIZABLE transaction
+(a connection with many candidates fills its chunk sooner). Locks follow Run,
+slot, item, then the Job row at commit, compatible with cancellation. The
+feature adapter revalidates each evidence digest and member decision before
+business writes. Evaluation state and uncancelled requester receipts settle in
+sets in the same commit; explicit `retryEvaluationId` receipts survive.
+Requester coordinators wake through one deduplicated after-commit signal, and
+an `ai_refresh` Run rechecks every 60 s at most. A failed chunk splits only
+after its transaction rolls back; committed siblings never replay.
+Source-to-pair enrollment finishes before the source receipt; Run completion
+still includes its requested pair work. Refresh coordinators read state counts,
+error summaries and bounded pending identities; they never reload frozen
+inference payloads just to update progress.
 
 Product discovery reads snapshots for the scan page and schedules one roster
 transaction, reusing the activation's shared refresh owner. Slot admission,
-evaluation/request insertion and fresh Job/Entity identity insertion use set
-writes. The Product adapter uses `prepareProductIdentityPage` and
+evaluation/request insertion and work-item marks use set writes. The Product adapter uses `prepareProductIdentityPage` and
 `publishProductIdentityChunk` for shared preparation and publication. Source
 edges enroll in guarded chunks of at most 25 sources, 25 business
 publications and 100 enrollment edges before enumeration receipts, and

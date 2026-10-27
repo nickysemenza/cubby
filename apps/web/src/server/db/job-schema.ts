@@ -55,7 +55,7 @@ export const jobLaneAdmission = pgTable("JobLaneAdmission", {
 export const workTicket = pgSequence("WorkTicket");
 
 /**
- * Pending work a drain Job claims in pages (docs/jobs.md#drains). `drain` is
+ * Pending work a drain Job claims in pages (docs/jobs.md#coarse-jobs-and-work-items). `drain` is
  * the owning Job key; `target` names the work family (derived targets are
  * `<entity>.<key>` or `<entity>.<key>@<column>` fanout marks) and is unique
  * across drains, so `(target, ref)` identifies an item. Items carry retry

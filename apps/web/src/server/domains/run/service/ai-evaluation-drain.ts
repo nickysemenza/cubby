@@ -1,5 +1,5 @@
 /**
- * The `ai.evaluation` drain (docs/jobs.md#drains): one Job per feature pages
+ * The `ai.evaluation` drain (docs/jobs.md#ai-evaluation-drains): one Job per feature pages
  * through evaluation items. Product and connection refresh evaluate a whole
  * page and publish it in fenced chunks; other features run each item's own
  * guarded transactions under the drain lease. Domain authority (live Run,

@@ -1,5 +1,5 @@
 /**
- * A drain Job pages through its work items (docs/jobs.md#drains): claim
+ * A drain Job pages through its work items (docs/jobs.md#coarse-jobs-and-work-items): claim
  * ready items, prepare them outside any transaction, then publish fenced
  * chunks. Each item fails, backs off or exhausts alone; pause, defer and lease
  * loss stop the whole page. A domain supplies only prepare and publish.
