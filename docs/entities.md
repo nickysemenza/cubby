@@ -1256,7 +1256,10 @@ label** for composed presentation text. A reference normally projects
 `<stem>Name` or a nested record's `name`. A custom display label must declare
 `display.labelPath`; both web and native reference renderers read that path
 before the conventional name and preserve the target's identity. Never put an
-identifier in a label projection. `defineEntity` checks simple declarations' label and detail-label paths at
+identifier in a label projection. Moving a projected result into a governed
+envelope retains its declared label path: path readers resolve the canonical
+result, and reference renderers use a projected name only for its matching id.
+`defineEntity` checks simple declarations' label and detail-label paths at
 TypeScript compile time. Shared compilation validates every displayed path
 against its actual decorated list/detail schema, including
 nested properties and array projections. Compile-only schema contracts use
@@ -2211,7 +2214,9 @@ comparisons show gains without regressions or recurring cost.
 using a plain `{ operation, input }` or `{ batch: [...] }` request. Only
 registered queries are admitted; the harness serializes and decodes the existing
 SuperJSON and operation contracts. Use a single request for one query, or an
-explicit batch of 2–20 queries. Each sample is one transport attempt, without
+explicit batch of 2–20 queries. The request codec header must match the
+SuperJSON body; without it, dispatch rejects the wrapper before running the query.
+Each sample is one transport attempt, without
 browser retries or fallback. The schema-5 artifact separates HTTP, transport,
 dispatch rejection, protocol and RPC failures, and reports successful per-operation settlement times
 as results arrive, separately from complete-response timing. Both batch
@@ -2223,6 +2228,11 @@ not published; its fingerprint identifies equal inputs rather than anonymizing
 them. Database medians describe successful requests only; failed-attempt metrics
 remain available in the private samples. Unsettled results include operations
 unanswered because their request failed as well as missing stream lines.
+Successful `entity.list` results also record returned-row and total counts,
+plus unresolved membership and incomplete-total counts when supplied. Empty
+pages retain zero rows; unsupported or absent evidence stays null. These
+numeric witnesses retain no row contents or total labels and do not prove
+that every field computation has settled.
 Request IDs and operation error codes appear only in private raw
 output; inputs, result bodies and diagnostic text are never written. An observed
 failure, including the optional warm-up, produces an artifact and nonzero exit

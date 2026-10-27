@@ -409,6 +409,7 @@ export default defineEntity(
             listOrderOverride: 2,
             columnLabel: "Owner",
             width: "md",
+            labelPath: "effectiveOwnership.effectiveOwner.name",
             renderer: { detail: "ownerLedgerPartyId" },
           },
           resolution: {

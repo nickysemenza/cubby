@@ -1,4 +1,5 @@
 import { batchResultSchema } from "@cubby/schemas/batch";
+import { createPaginatedResponseSchema } from "@cubby/schemas/pagination";
 import superjson from "superjson";
 import { z } from "zod";
 
@@ -33,6 +34,20 @@ const lineSchema = z.object({
   r: superJsonResultSchema,
 });
 const settlementSchema = batchResultSchema(unparsedStartOperationResultSchema);
+const listPageSchema = createPaginatedResponseSchema(z.unknown());
+
+function listPageEvidence(operation: string, data: unknown) {
+  if (operation !== "entity.list") return null;
+  const page = listPageSchema.safeParse(data);
+  return page.success
+    ? {
+        rows: page.data.items.length,
+        totalCount: page.data.meta.totalCount,
+        unresolvedCount: page.data.meta.unresolvedCount ?? null,
+        incompleteTotals: page.data.meta.incompleteSums?.length ?? null,
+      }
+    : null;
+}
 
 class InvalidOperationResponse extends Error {}
 
@@ -52,6 +67,7 @@ export async function measureOperationRead(
     errorKind: "missing" | "batch" | "operation" | null;
     errorCode: string | null;
     requestId: string | null;
+    listPage: ReturnType<typeof listPageEvidence>;
   }[] = items.map((item) => ({
     operation: item.operation,
     ok: false,
@@ -59,6 +75,7 @@ export async function measureOperationRead(
     errorKind: "missing",
     errorCode: null,
     requestId: null,
+    listPage: null,
   }));
   const started = performance.now();
   let response: Response | undefined;
@@ -94,6 +111,9 @@ export async function measureOperationRead(
       errorKind: result === null ? "batch" : result.ok ? null : "operation",
       errorCode: result && !result.ok ? result.error.code : null,
       requestId: result && !result.ok ? (result.error.requestId ?? null) : null,
+      listPage: result?.ok
+        ? listPageEvidence(item.operation, result.data)
+        : null,
     };
   };
   const decode = (text: string) => {
@@ -113,6 +133,7 @@ export async function measureOperationRead(
   try {
     const requestHeaders = new Headers(headers);
     requestHeaders.set("content-type", "application/json");
+    requestHeaders.set("x-cubby-value-codec", "superjson");
     response = await fetch(
       new URL(
         browserOperationPath(
@@ -295,6 +316,9 @@ export function summarizeOperationReads(
           ).length,
           successfulSettledMedianMs: percentile(times, 0.5),
           successfulSettledP95Ms: percentile(times, 0.95),
+          observedListPages: successful.flatMap((result) =>
+            result.listPage ? [result.listPage] : [],
+          ),
         };
       }),
   };
