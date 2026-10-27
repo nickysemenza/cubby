@@ -1212,13 +1212,9 @@ export function suggestionBlocks(counts: SuggestionCountsOut): ReportBlock[] {
   ];
 }
 
-/**
- * The Job executing a Run, as native reads it: what sets its speed now, the
- * Job's raw facts and its fan-out by kind. Web draws the same read with the
- * limits catalog and inline logs.
- */
+/** The Job executing a Run: its raw facts and fan-out by kind. */
 export function runDiagnosticsBlocks(jobs: JobListOut): ReportBlock[] {
-  const { primary, binding } = jobs;
+  const { primary } = jobs;
   if (!primary)
     return [{ kind: "note", text: "No Job is recorded for this Run." }];
   const at = (iso: string) => formatInstant(iso, "dateShortTime");
@@ -1227,29 +1223,15 @@ export function runDiagnosticsBlocks(jobs: JobListOut): ReportBlock[] {
     ["State", primary.state],
     [
       "Attempt",
-      `${formatCount(primary.attempts)} of ${formatCount(primary.maxAttempts)}`,
+      `${formatCount(primary.attempts)} of ${primary.maxAttempts === null ? "unbounded" : formatCount(primary.maxAttempts)}`,
     ],
     ["Wait", primary.waitReason],
     ["Wait until", primary.waitUntil && at(primary.waitUntil)],
-    [
-      "Queue position",
-      primary.ahead === null
-        ? null
-        : `${formatCount(primary.ahead)} same-kind Jobs ahead`,
-    ],
     ["Available", at(primary.availableAt)],
     ["Lease expires", primary.leaseExpiresAt && at(primary.leaseExpiresAt)],
     ["Error", primary.error],
   ];
   return [
-    {
-      kind: "note",
-      strong: true,
-      text:
-        binding.status === "binding"
-          ? `Speed set by ${binding.label}: ${binding.evidence}`
-          : binding.reason,
-    },
     {
       kind: "table",
       title: "Job",

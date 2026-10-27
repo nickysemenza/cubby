@@ -35,7 +35,7 @@ const jobFacts = z.object({
   state: jobState,
   generation: z.number().int(),
   attempts: z.number().int().nonnegative(),
-  maxAttempts: z.number().int().positive(),
+  maxAttempts: z.number().int().positive().nullable(),
   priority: z.number().int(),
   waitReason: jobWaitReason.nullable(),
   waitUntil: z.iso.datetime().nullable(),
@@ -47,8 +47,6 @@ const jobFacts = z.object({
   subject: z.object({ kind: z.string(), id: z.string() }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  /** Earlier due Jobs of the same kind and Run class; null when not due. */
-  ahead: z.number().int().nonnegative().nullable(),
   lane: jobLane,
   /** What the Job waits on now (`generic/jobs/repo/waiting-on.ts`); null when terminal. */
   waitingOn: jobWaitingOn.nullable(),
@@ -113,41 +111,6 @@ const jobQueueOut = z.object({
   jobs: z.array(jobFacts),
 });
 
-/** One kind's queue health as the watchdog measured it. */
-const kindHealth = z.object({
-  kind: z.string(),
-  lane: jobLane,
-  due: z.number().int().nonnegative(),
-  oldestDueSeconds: z.number().int().nonnegative().nullable(),
-  /** Due Jobs no claim served for the whole claim window. */
-  unclaimedDue: z.number().int().nonnegative(),
-  claimsPerMinute: z.number().nonnegative(),
-  dueGrowth: z.number().int().nullable(),
-  expiredLeases: z.number().int().nonnegative(),
-  queued: z.number().int().nonnegative(),
-});
-const queueAlert = z.object({
-  kind: z.string().nullable(),
-  code: z.enum([
-    "oldest_due",
-    "no_claims",
-    "due_growth",
-    "expired_leases",
-    "image_disagreement",
-    "over_capacity",
-  ]),
-  /** The raw numbers that tripped it, verbatim. */
-  evidence: z.string(),
-});
-export const queueHealthSnapshot = z.object({
-  measuredAt: z.iso.datetime(),
-  kinds: z.array(kindHealth),
-  /** Open image rows whose Job is missing, stopped or finished. */
-  imageDisagreement: z.number().int().nonnegative(),
-  alerts: z.array(queueAlert),
-});
-export type QueueHealthSnapshot = z.infer<typeof queueHealthSnapshot>;
-
 /** One link of an explain chain: a record, its state and what it waits on. */
 const explainStep = z.object({
   ref: z.string(),
@@ -172,50 +135,6 @@ const jobGroup = z.object({
 });
 export type JobGroup = z.infer<typeof jobGroup>;
 
-const limitScope = z.enum([
-  "queue",
-  "drain",
-  "job lease",
-  "step page",
-  "AI gateway",
-  "funding",
-  "database",
-  "provider",
-]);
-
-/** One limit Cubby imposes, read from the constant or config that enforces it. */
-const limitEntry = z.object({
-  key: z.string(),
-  label: z.string(),
-  scope: limitScope,
-  value: z.number(),
-  unit: z.string(),
-  /** Where the enforcing value is defined (file and constant or config key). */
-  source: z.string(),
-  /** Live use against the limit, when state shows it ("1 of 2 running"). */
-  utilization: z.string().nullable(),
-  /** In-page concurrency caps: the page phase the cap bounds. */
-  phase: z.string().nullable(),
-});
-export type LimitEntry = z.infer<typeof limitEntry>;
-
-/**
- * Which limit sets the Run's speed now, derived from Job and step state.
- * `unknown` means the evidence is missing, never a guess.
- */
-const limitBinding = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("binding"),
-    /** A catalog key, or null for a wait no catalog value governs (a device). */
-    key: z.string().nullable(),
-    label: z.string(),
-    evidence: z.string(),
-  }),
-  z.object({ status: z.literal("none"), reason: z.string() }),
-  z.object({ status: z.literal("unknown"), reason: z.string() }),
-]);
-export type LimitBinding = z.infer<typeof limitBinding>;
-
 /**
  * Parked Apple-device work at a glance, for the "waiting for a device"
  * banner. `workingDevices` counts devices that claimed work in the last
@@ -231,14 +150,13 @@ const deviceBacklog = z.object({
 export type DeviceBacklog = z.infer<typeof deviceBacklog>;
 
 /**
- * One kind of work (a Job kind; AI evaluations per feature): what runs and
+ * One kind of work (a Job kind): what runs and
  * waits now, recent completions and failures, and the active Runs it serves.
  * `completedPerMinute` averages the pace window; it is a measurement, not a
  * forecast, so a stream without recent completions reports 0.
  */
 const workStream = z.object({
   kind: z.string(),
-  feature: z.string().nullable(),
   running: z.number().int().nonnegative(),
   due: z.number().int().nonnegative(),
   backingOff: z.number().int().nonnegative(),
@@ -279,8 +197,6 @@ const jobListOut = z.object({
   primary: jobFacts.nullable(),
   /** Every other Job kind for the owner, as counts. */
   groups: z.array(jobGroup),
-  limits: z.array(limitEntry),
-  binding: limitBinding,
   /** A Run owner's waiting-on rollup; null for a subject. */
   rollup: runRollup.nullable(),
 });
@@ -376,17 +292,9 @@ export const jobContract = defineContract(
     }),
     activity: query({
       description:
-        "Live work by kind (AI evaluations by feature): running, due, backing off, scheduled and paused counts, completions per minute over the last 5 minutes, completions in 15 minutes, failures in 60 minutes, the last completion, the oldest due Job and the active Runs it serves. Internal maintenance kinds are omitted.",
+        "Live work by Job kind: running, due, backing off, scheduled and paused counts, completions per minute over the last 5 minutes, completions in 15 minutes, failures in 60 minutes, the last completion, the oldest due Job and the active Runs it serves. Internal maintenance kinds are omitted.",
       input: z.strictObject({}),
       output: workActivity,
-      cache: { tags: [["run"]], profile: "live-status" },
-    }),
-    health: query({
-      description:
-        "The queue watchdog's latest per-kind health (oldest due age, claims per minute, due growth, expired leases, image/Job disagreement) and the alerts it raised, with raw numbers.",
-      input: z.strictObject({}),
-      // An object even before the first measurement: MCP structured results must be objects.
-      output: z.object({ snapshot: queueHealthSnapshot.nullable() }),
       cache: { tags: [["run"]], profile: "live-status" },
     }),
     logs: query({

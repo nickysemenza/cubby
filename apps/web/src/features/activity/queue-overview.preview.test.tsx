@@ -183,11 +183,10 @@ beforeEach(async () => {
                 "image.device",
                 "embedding.refresh",
                 "derived.drain",
-                "jobs.retention",
+                "jobs.maintenance",
                 "image.device.wake",
               ].map((kind) => ({
                 kind,
-                feature: null,
                 running: failuresOnly ? 0 : 1,
                 due: failuresOnly ? 0 : 3,
                 backingOff: 0,
@@ -200,33 +199,6 @@ beforeEach(async () => {
                 oldestDueAt: null,
                 runIds: ["RUN-4K7MN", "RUN-5K7MN", "RUN-6K7MN", "RUN-7K7MN"],
               })),
-        },
-      };
-    if (operation === "job.health")
-      return {
-        ok: true,
-        data: {
-          snapshot: {
-            // The watchdog measures every five minutes, independently of reads.
-            measuredAt: new Date(Date.now() - 120_000).toISOString(),
-            kinds: [],
-            imageDisagreement: 0,
-            alerts:
-              quiet || failuresOnly
-                ? []
-                : [
-                    {
-                      kind: "image.device",
-                      code: "expired_leases",
-                      evidence: "Synthetic expired leases",
-                    },
-                    {
-                      kind: "derived.drain",
-                      code: "no_claims",
-                      evidence: "Synthetic derived watchdog",
-                    },
-                  ],
-          },
         },
       };
     if (operation === "job.deviceBacklog")
@@ -291,10 +263,6 @@ function Overview() {
 
 it("embeds bounded attention and Job tables, scopes chips, and expands the selected Job's diagnostics", async () => {
   render(<Overview />, { wrapper: harness.wrapper });
-  const watchdog = await screen.findByTestId("queue-health");
-  expect(
-    within(watchdog).getByText(/Synthetic expired leases/),
-  ).not.toBeVisible();
   const stream = (await screen.findAllByTestId("work-stream"))[0];
   if (!stream) throw new Error("Missing synthetic work stream");
   expect(stream).toHaveTextContent("Not moving");
@@ -308,10 +276,9 @@ it("embeds bounded attention and Job tables, scopes chips, and expands the selec
   );
   expect(screen.queryByText("Net backlog since opened")).toBeNull();
   expect(screen.queryByText("Jobs retention")).toBeNull();
+  expect(screen.queryByText("Jobs maintenance")).toBeNull();
   expect(screen.queryByText("Image device wake")).toBeNull();
   expect(screen.getByText("Work is moving")).toBeInTheDocument();
-  await userEvent.click(within(watchdog).getByText("Watchdog details"));
-  expect(within(watchdog).getByText(/Synthetic expired leases/)).toBeVisible();
   expect(await screen.findByTestId("device-backlog")).toBeVisible();
   const jobs = await screen.findByRole("table", { name: "Jobs table" });
   expect(await within(jobs).findByText("image.device")).toBeVisible();

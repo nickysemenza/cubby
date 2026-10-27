@@ -275,12 +275,10 @@ function PageWork({ page }: { page: RunStepView["page"] }) {
 /** The current step's facts beneath its title: action, input, tallies, wait, failures. */
 function StepBody({
   step,
-  speed,
   breakdown,
   links,
 }: {
   step: RunStepView;
-  speed: string | null;
   breakdown?: ReactNode;
   links?: ReactNode;
 }) {
@@ -298,11 +296,6 @@ function StepBody({
         </p>
       ) : null}
       <InputBlock step={step} />
-      {speed && (step.phase === "running" || step.phase === "waiting") ? (
-        <p className="text-xs text-foreground" data-testid="speed-set-by">
-          {speed}
-        </p>
-      ) : null}
       {step.phase !== "not_started" ? <PageWork page={step.page} /> : null}
       {step.wait ? <WaitNotice wait={step.wait} /> : null}
       {step.errors.length ? (
@@ -369,13 +362,10 @@ function StepSummary({ step }: { step: RunStepView }) {
  */
 export function RunStepTimeline({
   steps,
-  speed,
   breakdownOf,
   linksOf,
 }: {
   steps: readonly RunStepView[];
-  /** "Speed set by" for the moving step. */
-  speed: string | null;
   breakdownOf?: (step: RunStepView) => ReactNode;
   linksOf?: (step: RunStepView) => ReactNode;
 }) {
@@ -475,7 +465,6 @@ export function RunStepTimeline({
               expanded ? (
                 <StepBody
                   step={step}
-                  speed={speed}
                   breakdown={breakdownOf?.(step)}
                   links={linksOf?.(step)}
                 />

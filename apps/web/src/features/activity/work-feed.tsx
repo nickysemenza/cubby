@@ -9,7 +9,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
-import type { QueueHealthSnapshot } from "~/contracts/job.contract";
 import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
@@ -25,8 +24,6 @@ import {
   formatMinutesLeft,
   formatPace,
   orderWorkStreams,
-  isVisibleWorkStream,
-  watchdogReason,
   type WorkStreamStatus,
   type WorkStreamView,
   workStreamView,
@@ -107,14 +104,11 @@ const duration = (seconds: number) =>
 function streamFacts(view: WorkStreamView, failedMinutes: number) {
   const { stream } = view;
   const parts: string[] = [];
-  if (view.alertReason) parts.push(view.alertReason);
   if (stream.running) parts.push(`${formatCount(stream.running)} running`);
   if (stream.due)
     parts.push(
       `${formatCount(stream.due)} waiting${
-        !view.alertReason &&
-        view.oldestWaitSeconds !== null &&
-        view.oldestWaitSeconds >= 60
+        view.oldestWaitSeconds !== null && view.oldestWaitSeconds >= 60
           ? ` (oldest ${duration(view.oldestWaitSeconds)})`
           : ""
       }`,
@@ -160,12 +154,8 @@ function streamPace(
 // eslint-disable-next-line complexity -- Feed freshness, caption and row states must use the same query snapshots.
 export function WorkFeed({
   onShowJobs,
-  health,
-  healthUnknown = false,
 }: {
   onShowJobs: (kind: string) => void;
-  health?: QueueHealthSnapshot | null;
-  healthUnknown?: boolean;
 }) {
   const activity = useQuery({
     ...job.activity.queryOptions({}),
@@ -189,12 +179,11 @@ export function WorkFeed({
     activityStale ||
     !backlog.data ||
     backlog.isError ||
-    backlogStale ||
-    healthUnknown;
+    backlogStale;
   const views = activity.data
     ? orderWorkStreams(
-        activity.data.streams.filter(isVisibleWorkStream).map((stream) => {
-          const view = workStreamView(stream, now, health);
+        activity.data.streams.map((stream) => {
+          const view = workStreamView(stream, now);
           return activityStale
             ? { ...view, status: "stale" as const, minutesLeft: null }
             : view;
@@ -213,24 +202,21 @@ export function WorkFeed({
     (sum, view) => sum + view.stream.completed,
     0,
   );
-  const derivedAlert = watchdogReason("derived.drain", health);
   const derivedStatus: WorkStreamStatus = backlogStale
     ? "stale"
-    : derivedAlert
-      ? "stuck"
-      : derivedWaiting === 0
-        ? "done"
-        : derivedPace > 0
-          ? "working"
-          : (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
-            ? "stuck"
-            : "waiting";
+    : derivedWaiting === 0
+      ? "done"
+      : derivedPace > 0
+        ? "working"
+        : (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
+          ? "stuck"
+          : "waiting";
   const working =
     (!activity.isError && views.some((view) => view.status === "working")) ||
     (!backlog.isError && derivedStatus === "working");
   const activeCount =
     live.filter((view) => view.status !== "paused").length +
-    (derivedWaiting > 0 || derivedAlert ? 1 : 0);
+    (derivedWaiting > 0 ? 1 : 0);
   const caption = unknown
     ? "Current work status unavailable"
     : activeCount
@@ -298,7 +284,6 @@ export function WorkFeed({
             }
           />
         ) : (backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
-          derivedAlert ||
           backlogStale ? (
           <FeedRow
             testId="work-stream-derived"
@@ -311,10 +296,9 @@ export function WorkFeed({
             facts={
               backlogStale
                 ? `Data read ${formatRelative(backlog.dataUpdatedAt, now)}`
-                : (derivedAlert ??
-                  (derivedWaiting
-                    ? `${formatCount(derivedWaiting)} waiting${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
-                    : "Up to date"))
+                : derivedWaiting
+                  ? `${formatCount(derivedWaiting)} waiting${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
+                  : "Up to date"
             }
             pace={
               backlog.data && !backlogStale
@@ -369,24 +353,6 @@ export function WorkFeed({
           );
         })}
       </RecordList>
-      {health?.alerts.length ? (
-        <details
-          className="text-xs text-muted-foreground"
-          data-testid="queue-health"
-        >
-          <summary className="min-h-11 cursor-pointer py-2 sm:min-h-7 sm:py-1">
-            Watchdog details
-          </summary>
-          <p>Measured {formatRelative(health.measuredAt)}</p>
-          <ul className="grid gap-1 py-1 font-mono break-words">
-            {health.alerts.map((alert) => (
-              <li key={`${alert.kind}:${alert.code}`}>
-                {alert.kind ?? "all kinds"} · {alert.code}: {alert.evidence}
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
     </Section>
   );
 }

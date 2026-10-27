@@ -12,8 +12,8 @@ import {
 import { job as durableJob } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { dueJobs } from "~/server/generic/jobs/repo/queue";
 import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
+import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 import {
@@ -80,10 +80,23 @@ describe("device work waits parked and records no attempt", () => {
       attempts: 0,
       subjectKind: "image",
     });
-    for (let cycle = 0; cycle < 4; cycle++)
-      expect((await dueJobs(ctx.db, 25)).map((row) => row.id)).not.toContain(
-        execution.id,
-      );
+    const outcomes = await drainDueJobs(
+      ctx.db,
+      {
+        "image.device": {
+          prepare: async () => ({ page: { done: true } }),
+        },
+      },
+      25,
+      10_000,
+      1,
+    );
+    expect(outcomes).toEqual([]);
+    const [afterDrain] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.id, execution.id));
+    expect(afterDrain).toMatchObject({ state: "queued", attempts: 0 });
     expect(await attemptsOf(jobId)).toHaveLength(0);
     expect((await jobOf(jobId)).attempts).toBe(0);
     const waiting = await countTestDbQueries(() =>

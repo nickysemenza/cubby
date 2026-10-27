@@ -13,17 +13,8 @@ import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   JOB_KIND_POLICY,
   jobKindPolicy,
-  UNDRAINED_JOB_KINDS,
 } from "~/server/generic/jobs/kind-policy";
-import {
-  deviceOwnedStreak,
-  deviceSelectionIndex,
-} from "~/server/generic/jobs/repo/device-admission";
-import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
-import { dueJobPositions, type JobRow } from "~/server/generic/jobs/repo/queue";
-
-/** Lane throughput is measured over this window. */
-const LANE_THROUGHPUT_WINDOW_MS = 30 * 60_000;
+import { type JobRow } from "~/server/generic/jobs/repo/queue";
 
 type WaitingFacts = Pick<
   JobRow,
@@ -41,16 +32,13 @@ type WaitingFacts = Pick<
 
 /**
  * What one Job waits on — the single derivation every surface (web, Apple,
- * CLI, MCP, Run rollups) reads. Pure: queue position, throughput and the
- * executor are loaded by `loadJobWaitingOn`. Terminal Jobs wait on nothing.
+ * CLI, MCP, Run rollups) reads. Pure classification; executor details come
+ * from `loadJobWaitingOn`. Terminal Jobs wait on nothing.
  */
 export function deriveJobWaitingOn(
   job: WaitingFacts,
   context: {
     now: Date;
-    aheadCount?: number;
-    /** Claims per second the Job's queue (drain or device pulls) served recently. */
-    claimsPerSecond?: number;
     executor?: string | null;
     executorDeviceId?: string | null;
   },
@@ -86,7 +74,7 @@ export function deriveJobWaitingOn(
   const later = job.availableAt.getTime() > context.now.getTime();
   if (job.waitReason === jobWaitReason.enum.device && later)
     return lane === "apple_device"
-      ? waitingForDevice(context)
+      ? waitingForDevice()
       : { reason: "blocked", lane, by: "An Apple device preparing its input" };
   if (later)
     return {
@@ -101,30 +89,13 @@ export function deriveJobWaitingOn(
           ? job.waitReason
           : null,
     };
-  if (lane === "apple_device") return waitingForDevice(context);
-  return {
-    reason: "due",
-    lane,
-    aheadCount: context.aheadCount ?? 0,
-    aheadIsEstimate: true,
-    etaSeconds: eta(context),
-  };
+  if (lane === "apple_device") return waitingForDevice();
+  return { reason: "due", lane };
 }
 
-const eta = (context: { aheadCount?: number; claimsPerSecond?: number }) =>
-  context.claimsPerSecond && context.claimsPerSecond > 0
-    ? Math.round(((context.aheadCount ?? 0) + 1) / context.claimsPerSecond)
-    : null;
-
-const waitingForDevice = (context: {
-  aheadCount?: number;
-  claimsPerSecond?: number;
-}): JobWaitingOn => ({
+const waitingForDevice = (): JobWaitingOn => ({
   reason: "waiting_device",
   lane: "apple_device",
-  aheadCount: context.aheadCount ?? 0,
-  aheadIsEstimate: false,
-  etaSeconds: eta(context),
 });
 
 const kindsOfLane = (lane: JobLane) =>
@@ -171,28 +142,9 @@ export const jobWaitingOnReasonSql = (
     ELSE ${R.due} END)::text`;
 };
 
-/** Claims per second each queue served over the throughput window. */
-async function queueThroughput(db: Database, now: Date) {
-  const since = new Date(now.getTime() - LANE_THROUGHPUT_WINDOW_MS);
-  const result = await repositoryQueries(db).execute<{
-    kind: string;
-    claims: number;
-  }>(sql`SELECT kind, count(*)::int AS claims FROM "Job"
-    WHERE "lastClaimedAt" > ${since.toISOString()}::timestamp GROUP BY kind`);
-  let drained = 0;
-  let device = 0;
-  for (const row of result.rows) {
-    if (UNDRAINED_JOB_KINDS.includes(row.kind)) device += row.claims;
-    else drained += row.claims;
-  }
-  const seconds = LANE_THROUGHPUT_WINDOW_MS / 1000;
-  return { drained: drained / seconds, device: device / seconds };
-}
-
 /**
- * Batched waiting-on for listed Jobs: one visible-kind read for drain
- * positions, one for device-pull positions, one throughput read and one
- * executor read for leased image work.
+ * Batched waiting-on for listed Jobs. Leased image work includes the executor
+ * assigned to its active attempt; Job ETA is intentionally not derived.
  */
 export async function loadJobWaitingOn(
   db: Database,
@@ -207,34 +159,15 @@ export async function loadJobWaitingOn(
       row.state === jobState.enum.retry_wait ||
       row.state === jobState.enum.running,
   );
-  // Only queue-position statuses consume ranking and throughput. In particular,
-  // a device-only page must not scan and rank the server drain's backlog.
-  const drainIds: string[] = [];
-  const deviceIds: string[] = [];
-  for (const row of live) {
-    const reason = deriveJobWaitingOn(row, { now })?.reason;
-    if (reason === "due") drainIds.push(row.id);
-    else if (reason === "waiting_device") deviceIds.push(row.id);
-  }
-  const [throughput, drainAhead, deviceAhead, executors] = await Promise.all([
-    drainIds.length || deviceIds.length
-      ? queueThroughput(db, now)
-      : { drained: 0, device: 0 },
-    positions(db, drainIds, "drain"),
-    positions(db, deviceIds, "device"),
-    leasedExecutors(
-      db,
-      live.filter((row) => row.state === jobState.enum.running),
-    ),
-  ]);
+  const executors = await leasedExecutors(
+    db,
+    live.filter((row) => row.state === jobState.enum.running),
+  );
   for (const row of jobs) {
-    const device = UNDRAINED_JOB_KINDS.includes(row.kind);
     out.set(
       row.id,
       deriveJobWaitingOn(row, {
         now,
-        aheadCount: (device ? deviceAhead : drainAhead).get(row.id) ?? 0,
-        claimsPerSecond: device ? throughput.device : throughput.drained,
         executor: executors.get(row.id)?.name ?? defaultExecutor(row.kind),
         executorDeviceId: executors.get(row.id)?.deviceId ?? null,
       }),
@@ -245,54 +178,6 @@ export async function loadJobWaitingOn(
 
 const defaultExecutor = (kind: string) =>
   jobKindPolicy(kind).drained ? "Cubby server" : null;
-
-async function positions(
-  db: Database,
-  ids: readonly string[],
-  queue: "drain" | "device",
-): Promise<Map<string, number>> {
-  if (!ids.length) return new Map();
-  if (queue === "drain") return dueJobPositions(db, ids);
-  const at = sql`${new Date().toISOString()}::timestamp`;
-  const wanted = sql.join(
-    ids.map((id) => sql`${id}::uuid`),
-    sql`, `,
-  );
-  // Device claim order (`claimImageProcessingJob`): an active Run's work
-  // first, oldest available, with backfill's reserved turn.
-  const [result, streak] = await Promise.all([
-    repositoryQueries(db).execute<{
-      id: string;
-      run_owned: boolean;
-      class_position: number;
-      owned_total: number;
-      backfill_total: number;
-    }>(sql`WITH due AS (
-      SELECT "Job".id, ${jobRunOwned()} AS run_owned, "Job"."availableAt", "Job".key
-      FROM "Job"
-      WHERE ${inKinds(sql`"Job".kind`, UNDRAINED_JOB_KINDS)}
-        AND (("Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND "Job"."availableAt" <= ${at})
-          OR ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" <= ${at}))
-    ), ranked AS (
-      SELECT id, run_owned,
-        row_number() OVER (PARTITION BY run_owned ORDER BY "availableAt", key)::int AS class_position,
-        (count(*) FILTER (WHERE run_owned) OVER ())::int AS owned_total,
-        (count(*) FILTER (WHERE NOT run_owned) OVER ())::int AS backfill_total
-      FROM due
-    ) SELECT * FROM ranked WHERE id IN (${wanted})`),
-    deviceOwnedStreak(db),
-  ]);
-  return new Map(
-    result.rows.map((row) => [
-      row.id,
-      deviceSelectionIndex(
-        { runOwned: row.run_owned, classPosition: row.class_position },
-        { owned: row.owned_total, backfill: row.backfill_total },
-        streak,
-      ),
-    ]),
-  );
-}
 
 /** The executor assigned to a leased image attempt (the lease token is its id). */
 async function leasedExecutors(

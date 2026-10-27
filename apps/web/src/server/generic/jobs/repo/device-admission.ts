@@ -19,7 +19,7 @@ export type DeviceAdmission = { ownedStreak: number };
 
 /**
  * How many device services in a row were run-owned, up to
- * `DEVICE_OWNED_STREAK`, for queue positions. A service is a hand-off that
+ * `DEVICE_OWNED_STREAK`, for service admission. A service is a hand-off that
  * committed: an assigned attempt of `image.device` work, reclaims included.
  */
 export async function deviceOwnedStreak(db: Database): Promise<number> {

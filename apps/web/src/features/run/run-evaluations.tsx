@@ -2,6 +2,7 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
+import { humanize } from "@cubby/shared/text-case";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
@@ -14,7 +15,6 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   formatMinutesLeft,
   formatPace,
-  workStreamLabel,
 } from "~/features/activity/work-streams";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { formatRelative } from "~/lib/date-format";
@@ -200,7 +200,7 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
               rowHeader: true,
               cell: (row) =>
                 data.byKind.some((other) => other.feature !== row.feature)
-                  ? `${kindLabel(row.entity)} · ${workStreamLabel({ kind: "ai.evaluation", feature: row.feature })}`
+                  ? `${kindLabel(row.entity)} · ${humanize(row.feature.replace(/[._:-]+/g, " "))}`
                   : kindLabel(row.entity),
             },
             ...(

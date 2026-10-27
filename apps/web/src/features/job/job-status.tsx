@@ -1,7 +1,6 @@
 import type { JobState } from "@cubby/schemas/job";
 import { HourglassIcon } from "@phosphor-icons/react/dist/csr/Hourglass";
 
-import type { LimitBinding } from "~/contracts/job.contract";
 import type { StepWait } from "~/features/run/run-view-model";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
@@ -84,13 +83,4 @@ export function WaitNotice({ wait }: { wait: StepWait }) {
       ) : null}
     </div>
   );
-}
-
-/** The limits catalog's verdict: Binding with its evidence, Not limiting, or Unknown. */
-export function BindingBadge({ binding }: { binding: LimitBinding }) {
-  if (binding.status === "binding")
-    return <StatusPill tone="warning">Binding</StatusPill>;
-  if (binding.status === "unknown")
-    return <StatusPill tone="neutral">Unknown</StatusPill>;
-  return <StatusPill tone="neutral">Not limiting</StatusPill>;
 }

@@ -60,19 +60,16 @@ describe("describeJobWaitingOn", () => {
     ).toBe("In progress on Fixture Mac");
   });
 
-  it("states queue position, ETA, funding windows and backoff", () => {
+  it("states queue, funding windows and backoff", () => {
     expect(
       describeJobWaitingOn(
         {
           reason: "waiting_device",
           lane: "apple_device",
-          aheadCount: 12,
-          aheadIsEstimate: false,
-          etaSeconds: 600,
         },
         now,
       ),
-    ).toBe("Waiting for any Apple device, behind 12, about 10 min");
+    ).toBe("Waiting for any Apple device");
     expect(
       describeJobWaitingOn(
         {

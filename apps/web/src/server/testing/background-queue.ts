@@ -4,7 +4,7 @@ import {
   type BackgroundTaskMessage,
 } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
@@ -22,7 +22,6 @@ import {
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
-import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { derivedComputes } from "~/server/workflows/derived-computes";
@@ -158,10 +157,7 @@ export function captureBackgroundQueue() {
           .where(
             and(
               inArray(job.kind, Object.keys(handlers)),
-              or(
-                inArray(job.state, ["queued", "retry_wait"]),
-                and(eq(job.state, "completed"), unobservedJobInvalidation()),
-              ),
+              inArray(job.state, ["queued", "retry_wait"]),
             ),
           )
           .orderBy(job.availableAt, job.id)

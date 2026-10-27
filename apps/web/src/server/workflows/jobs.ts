@@ -1,7 +1,6 @@
 import {
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
-  imageProcessingResultTaskSchema,
   imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
@@ -37,13 +36,12 @@ import {
 
 import { aiRefreshActivationHandler } from "./ai-refresh-startup";
 import { derivedComputes } from "./derived-computes";
-import { jobRetentionHandler, queueWatchdogHandler } from "./queue-watchdog";
+import { jobMaintenanceHandler } from "./job-maintenance";
 
 const background = defineJobHandler(
   z.discriminatedUnion("kind", [
     locationAiDescriptionRefreshTaskSchema,
     locationAiInventoryRefreshTaskSchema,
-    imageProcessingResultTaskSchema,
     imageMetadataExtractTaskSchema,
     maintenancePurchaseDiscoveryTaskSchema,
     calendarFeedMarkDirtyTaskSchema,
@@ -58,7 +56,6 @@ const background = defineJobHandler(
 const backgroundHandlers = {
   "location-ai.description.refresh": background,
   "location-ai.inventory.refresh": background,
-  "image-processing.result": background,
   "image-metadata.extract": background,
   "maintenance.purchase-discovery": background,
   "calendar-feed.mark-dirty": background,
@@ -77,9 +74,8 @@ export const productionJobHandlers: JobHandlers = {
   "run.execute": runJobHandler,
   "ai.evaluation": aiEvaluationJobHandler,
   "ai-refresh.activate": aiRefreshActivationHandler,
-  "queue.watchdog": queueWatchdogHandler,
   "image.device.wake": deviceWakeHandler,
-  "jobs.retention": jobRetentionHandler,
+  "jobs.maintenance": jobMaintenanceHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,
     async (_db, _claim, event) => {

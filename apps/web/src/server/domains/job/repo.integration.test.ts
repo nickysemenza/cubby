@@ -11,7 +11,6 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 import { retryJobSet } from "~/server/generic/jobs/repo/job-queue";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { measureQueueHealth } from "~/server/generic/jobs/repo/queue-health";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 import { jobRepository } from "./repo";
@@ -215,7 +214,7 @@ describe("Job entity reads and scoped retry", () => {
     ).toEqual(future);
   });
 
-  it("keeps internal-only work out of navigable counts while retaining queue health", async () => {
+  it("keeps internal-only work out of navigable counts", async () => {
     await enqueueJob(ctx.db, {
       key: "synthetic:internal-only",
       kind: "ai-refresh.activate",
@@ -233,12 +232,5 @@ describe("Job entity reads and scoped retry", () => {
     });
     expect(queue).toMatchObject({ total: 0, counts: [], jobs: [] });
     expect(rows.data).toEqual([]);
-    const health = await measureQueueHealth(ctx.db, {
-      previous: null,
-      imageDisagreement: 0,
-    });
-    expect(health.kinds).toContainEqual(
-      expect.objectContaining({ kind: "ai-refresh.activate", due: 1 }),
-    );
   });
 });

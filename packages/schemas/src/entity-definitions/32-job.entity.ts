@@ -343,8 +343,6 @@ export default defineEntity({
       { name: "Job_run_idx", on: ["runId"] },
       { name: "Job_subject_idx", on: ["subjectKind", "subjectId"] },
       { name: "Job_kind_claimed_idx", on: ["kind", "lastClaimedAt"] },
-      // Recent-claim windows (throughput, queue health) across every kind.
-      { name: "Job_claimed_idx", on: ["lastClaimedAt"] },
       { name: "Job_kind_state_idx", on: ["kind", "state", "availableAt"] },
     ],
     checks: [
