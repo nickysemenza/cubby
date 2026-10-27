@@ -310,7 +310,7 @@ struct FieldEnvelopeTests {
                         freshness: "fresh")),
                 "ownerLedgerPartyId": F.envelope(
                     assignment: F.inherit, controls: F.editable(),
-                    result: F.live(F.decision("LPY-4K7M", provenance: F.inherited("product", "PRD-4K7M"))))
+                    result: F.live(F.decision("LPY-4K7M", provenance: F.inherited("product", "PRD-4K7M")))),
             ])
         #expect(
             FieldEnvelopePresentation.referenceName(in: projected, field: field, effectiveID: "LPY-4K7M")
