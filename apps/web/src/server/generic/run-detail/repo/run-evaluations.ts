@@ -21,7 +21,7 @@ const OPEN = [S.queued, S.result_ready, S.blocked];
  * latest settled outcomes (candidate counts, obsolete reasons, errors).
  * Reads stay within the Run’s request index (`AiEvaluationRequest_run_item_key`).
  */
-export async function readRunEvaluations(
+async function readRunEvaluations(
   db: Database,
   input: { runId: string; purpose: string; failedOnly?: boolean },
   now = new Date(),

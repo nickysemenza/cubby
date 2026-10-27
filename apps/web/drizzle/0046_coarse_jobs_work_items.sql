@@ -1,3 +1,6 @@
+-- Fence old writers before reading or retiring queue work; hold through the carry commit.
+LOCK TABLE "AiEvaluation", "AiEvaluationRequest", "DerivedDirty", "Entity", "EntityEmbedding", "Job", "JobInvalidationCapture", "Run" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
 ALTER SEQUENCE "public"."DerivedTicket" RENAME TO "WorkTicket";--> statement-breakpoint
 ALTER TABLE "JobInvalidation" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
 DROP TABLE "JobInvalidation" CASCADE;--> statement-breakpoint

@@ -4,6 +4,7 @@ import {
   aiProvenance,
   suggestionAcceptanceReceipt,
 } from "@cubby/schemas/ai-evaluation";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -13,6 +14,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -71,6 +73,7 @@ import {
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { settleAppliedFieldRefresh } from "../repo/ai-refresh-state";
+import { scheduleConnectionRefresh } from "../repo/connection-refresh";
 import type { AiEvaluationPorts } from "./ai-evaluation-drain";
 import { discoverAiRefresh } from "./ai-refresh";
 import {

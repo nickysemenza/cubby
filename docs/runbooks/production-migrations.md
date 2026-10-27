@@ -75,6 +75,21 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Coarse Job drains cutover
+
+The coarse Job migrations follow `0046_remaining_derived_results` in the
+journal; their filename prefixes are retained from the unmerged branch.
+The rename and carry migrations fence evaluation, embedding, Job identity,
+wake and WorkItem sources and destinations before copying or retiring work.
+Their table locks remain held through the transaction. Old Worker requests
+may fail until the matching deployment completes.
+
+Before merge, run `coarse-jobs-migration.integration.test.ts` against populated
+predecessor data. After deployment, verify the journal prefix, retained paid
+evaluation results, pending work on the feature drains, and embedding cleanup
+work before declaring the cutover complete. Do not reset the migration ledger
+or overlap Actions with a manual migration.
+
 ## Job entity identity backfill
 
 `0036_job_entity_identity` uses the migration runner's explicit

@@ -164,7 +164,7 @@ export type ImageProcessingLane = "image.cloud" | "image.device";
  * description needs; the server runs every other cloud call. Mirrored by the
  * lane split in `drizzle/0029_image_job_lanes.sql`.
  */
-export function imageProcessingLane(job: {
+function imageProcessingLane(job: {
   kind: ImageProcessingJobKind;
   processorRevision: number;
   contentType: string | null;

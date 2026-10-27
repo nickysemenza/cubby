@@ -4,7 +4,7 @@ import {
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
 import { eq, sql } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 

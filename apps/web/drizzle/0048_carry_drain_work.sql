@@ -1,3 +1,6 @@
+-- Fence old writers before reading or retiring queue work; hold through the carry commit.
+LOCK TABLE "AiEvaluation", "AiEvaluationRequest", "Entity", "EntityEmbedding", "Job", "JobInvalidationCapture", "Run", "WorkItem" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
 -- Carry AiEvaluation execution states into the drain model: retry and lease
 -- state now live on the drain's WorkItem, so retry_wait and running become
 -- queued. Only running rows can collide with the open-slot index (it already

@@ -126,10 +126,13 @@ describe("connection evaluation pages", () => {
   }
 
   async function runPage(evaluationIds: readonly string[]) {
-    const measured = await countTestDbQueries(() =>
-      drainAiEvaluations(ctx.db, evaluationIds, {}, { pages: 1 }),
+    const result = await drainAiEvaluations(
+      ctx.db,
+      evaluationIds,
+      {},
+      { pages: 1 },
     );
-    return { ...measured, result: measured.result[0] };
+    return { result: result[0] };
   }
 
   const states = async (ids: readonly string[]) =>

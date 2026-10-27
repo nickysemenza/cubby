@@ -522,10 +522,7 @@ export function publishProductIdentityChunk(
   return publishProductPairPublications(tx, outcomes);
 }
 
-export async function prepareProductIdentityCatalog(
-  db: Database,
-  id: ProductId,
-) {
+async function prepareProductIdentityCatalog(db: Database, id: ProductId) {
   const { eligible, candidates, coverage } =
     await retrieveProductIdentityCandidates(db, id);
   // Candidate retrieval already read the source name and deletion state.
@@ -659,7 +656,7 @@ export async function evaluateProductIdentity(
 }
 
 /** Recheck all pair inputs once immediately before the decision wave. */
-export async function evaluatePreparedProductIdentityPairs(
+async function evaluatePreparedProductIdentityPairs(
   db: Database,
   pairs: readonly z.infer<typeof preparedProductIdentityPair>[],
   runId: RunId,

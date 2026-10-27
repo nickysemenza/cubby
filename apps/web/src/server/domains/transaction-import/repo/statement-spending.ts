@@ -89,7 +89,7 @@ const spendingTarget = (judgment: StatementTransactionJudgment) =>
  * Spending previews prepared at once per statement page. It leaves pooled
  * connections for publication and other background work.
  */
-export const STATEMENT_SPENDING_PREPARATION_CONCURRENCY = 4;
+const STATEMENT_SPENDING_PREPARATION_CONCURRENCY = 4;
 
 /** Account/transaction metadata is shared only while this read-only page is built. */
 export async function prepareStatementSpendingFacts(

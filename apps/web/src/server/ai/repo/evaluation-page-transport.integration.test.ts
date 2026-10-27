@@ -174,15 +174,13 @@ describe("Product page transport packing", () => {
         active--;
         return answer(input);
       });
-      const execution = await countTestDbQueries(() =>
-        drainAiEvaluations(
-          ctx.db,
-          enrolled.map((row) => row.id),
-          { productIdentityPorts: { model: "typesafe/jev" } },
-          { pages: 1 },
-        ),
+      const execution = await drainAiEvaluations(
+        ctx.db,
+        enrolled.map((row) => row.id),
+        { productIdentityPorts: { model: "typesafe/jev" } },
+        { pages: 1 },
       );
-      expect(execution.result).toEqual(["succeeded"]);
+      expect(execution).toEqual(["succeeded"]);
       expect(requests.length).toBeGreaterThan(slotCount === 1 ? 0 : 1);
       expect(requests.length).toBeLessThanOrEqual(slotCount);
       const sizes = requests.map(
@@ -250,23 +248,6 @@ describe("Product page transport packing", () => {
         .where(eq(aiUsage.runId, runId));
       expect(allUsage.filter((row) => row.transport === "cache")).toHaveLength(
         slotCount,
-      );
-      const output = resolve(process.cwd(), "../../artifacts/page-execution");
-      await mkdir(output, { recursive: true });
-      await writeFile(
-        resolve(output, `integrated-product-page-${slotCount}.json`),
-        JSON.stringify(
-          {
-            slots: slotCount,
-            executionStatements: execution.queryCount,
-            packedQuestions: sizes,
-            requests: requests.length,
-            peak,
-            statements: execution.statements,
-          },
-          null,
-          2,
-        ),
       );
     },
     120_000,

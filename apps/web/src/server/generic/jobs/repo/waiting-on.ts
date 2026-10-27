@@ -35,7 +35,7 @@ type WaitingFacts = Pick<
  * CLI, MCP, Run rollups) reads. Pure classification; executor details come
  * from `loadJobWaitingOn`. Terminal Jobs wait on nothing.
  */
-export function deriveJobWaitingOn(
+function deriveJobWaitingOn(
   job: WaitingFacts,
   context: {
     now: Date;

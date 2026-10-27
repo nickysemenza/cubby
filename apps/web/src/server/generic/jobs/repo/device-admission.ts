@@ -68,36 +68,3 @@ export async function recordDeviceService(
 /** Whether the next device hand-off owes backfill its turn. */
 export const deviceBackfillTurn = (streak: number) =>
   streak >= DEVICE_OWNED_STREAK;
-
-/**
- * Pulls served before the `classPosition`-th (1-based) parked Job of its
- * class, claiming one at a time from the current `streak` the way device
- * claims do. Ignores a device's preference for work another device last
- * ran, which only reorders that device's own pull.
- */
-export function deviceSelectionIndex(
-  job: { runOwned: boolean; classPosition: number },
-  totals: { owned: number; backfill: number },
-  streak: number,
-): number {
-  let owned = 0;
-  let backfill = 0;
-  let run = streak;
-  while (owned < totals.owned || backfill < totals.backfill) {
-    const backfillNext =
-      backfill < totals.backfill &&
-      (owned >= totals.owned || deviceBackfillTurn(run));
-    if (backfillNext) {
-      if (!job.runOwned && job.classPosition === backfill + 1)
-        return owned + backfill;
-      backfill++;
-      run = 0;
-    } else {
-      if (job.runOwned && job.classPosition === owned + 1)
-        return owned + backfill;
-      owned++;
-      run++;
-    }
-  }
-  return owned + backfill;
-}

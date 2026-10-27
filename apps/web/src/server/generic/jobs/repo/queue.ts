@@ -33,7 +33,7 @@ import {
 import { JOB_DRAIN } from "../limits";
 
 /** How long a claim holds a Job before another worker may take it over. */
-export const JOB_LEASE_MS = 5 * 60_000;
+const JOB_LEASE_MS = 5 * 60_000;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
   leaseToken: string;
@@ -568,5 +568,3 @@ export async function externalJobClaim(
   if (row.leaseExpiresAt.getTime() > Date.now()) return claim;
   return lateAdoption ? { ...claim, lateAdoption: true as const } : null;
 }
-
-export { JobSupersededError } from "../errors";

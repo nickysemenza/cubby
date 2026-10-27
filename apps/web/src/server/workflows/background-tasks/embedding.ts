@@ -32,8 +32,6 @@ export const productionEmbeddingRefreshPort: EmbeddingRefreshPort = {
   vectorStore: productionVectorStore,
 };
 
-export type EmbeddingRefreshResult = { outcome: "pending" | "unconfigured" };
-
 /** Admit one refresh item per source identity; the drain reads current text and configuration. */
 export async function enqueueEmbeddingRefs(
   db: Database,
@@ -50,26 +48,4 @@ export async function enqueueEmbeddingRefs(
       ref: ref.entityId,
     })),
   );
-}
-
-/** Explicit background refresh enters the same source-keyed drain as broad passes. */
-export async function refreshEntityEmbeddings(
-  db: Database,
-  refs: readonly SearchableEntityRef[],
-  port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
-): Promise<Map<string, EmbeddingRefreshResult>> {
-  const results = new Map<string, EmbeddingRefreshResult>();
-  if (!port.configured()) {
-    for (const ref of refs)
-      results.set(entityRefKey(ref.entityKind, ref.entityId), {
-        outcome: "unconfigured",
-      });
-    return results;
-  }
-  await enqueueEmbeddingRefs(db, await prepareSearchDocuments(db, refs));
-  for (const ref of refs)
-    results.set(entityRefKey(ref.entityKind, ref.entityId), {
-      outcome: "pending",
-    });
-  return results;
 }

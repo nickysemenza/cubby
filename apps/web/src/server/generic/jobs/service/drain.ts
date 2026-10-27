@@ -23,13 +23,13 @@ import type { JobContext, JobHandler } from "../types";
 /** Items per publication transaction; an adapter may weight heavy items. */
 const DRAIN_PUBLISH_CHUNK = 25;
 
-export type DrainPreparation<P> = {
+type DrainPreparation<P> = {
   prepared: P;
   /** Items whose preparation failed, with their errors; the rest publish. */
   failed?: ReadonlyMap<WorkItem, unknown>;
 };
 
-export type DrainPublication = {
+type DrainPublication = {
   /** Items whose `readyAt` was moved forward with `postponeWork`. */
   retain?: readonly WorkItem[];
 };
