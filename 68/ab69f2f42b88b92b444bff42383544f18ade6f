@@ -1,0 +1,19 @@
+.github/actions/setup-apple/action.yml
+  s_672398f43d55a3::t_9ec3744c508bf9 165-167,172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "68ab69f2f42b88b92b444bff42383544f18ade6f",
+  "prompts": {},
+  "sessions": {
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
