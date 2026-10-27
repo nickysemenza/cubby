@@ -17,6 +17,8 @@ booted and the relevant build artifacts warm while working on one feature.
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
 
+When T3 supplies `CUBBY_E2E_AGENT_DEVICE`, simulator installation, launch and replay use that exact launcher and host/session binding. The shared panel owns device boot and session lifetime.
+
 Run `pnpm test:e2e:sim -- --headless` for native JSON client writes
 against the disposable Worker. Use
 `pnpm test:e2e:sim -- --headless --photo --purchase` or

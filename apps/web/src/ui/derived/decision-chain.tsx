@@ -26,7 +26,7 @@ export function DecisionValue({
     entity && field && typeof value === "string"
       ? enumFieldLabel(entity, field, value)
       : null;
-  return label ? (
+  return label && label !== value ? (
     <span className="break-words">{label}</span>
   ) : (
     <ReadableExplanationValue value={z.json().parse(value)} />
