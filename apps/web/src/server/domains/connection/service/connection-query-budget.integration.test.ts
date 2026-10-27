@@ -11,7 +11,7 @@ import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation } from "~/server/db/schema";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import { executeAiRefreshTarget } from "~/server/domains/run/service/ai-refresh";
+import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -19,7 +19,6 @@ import { refreshSearchDocument } from "~/server/generic/search/repo/search-docum
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
-  withJobFixtureExecution,
 } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -85,21 +84,13 @@ describe("connection evaluation query budget", () => {
       .where(eq(aiEvaluation.runId, runId));
     if (!evaluation) throw new Error("Synthetic budget target missing");
     const { queryCount, statements } = await countTestDbQueries(() =>
-      withJobFixtureExecution(
+      // The in-memory semantic index cannot confirm coverage, so the page
+      // retains retryable work; preparation still runs in full.
+      drainAiEvaluations(
         ctx.db,
-        {
-          key: `ai-evaluation:${evaluation.id}`,
-          kind: "ai.evaluation",
-          input: { evaluationId: evaluation.id },
-        },
-        // The in-memory semantic index cannot confirm coverage, so the final
-        // commit retains retryable work; preparation and publication still run.
-        () =>
-          executeAiRefreshTarget(ctx.db, evaluation.id, {
-            context: kernelCtx(ctx),
-          }).catch((error: unknown) => {
-            if (!/coverage is unconfirmed/.test(String(error))) throw error;
-          }),
+        [evaluation.id],
+        { context: kernelCtx(ctx) },
+        { pages: 1 },
       ),
     );
     if (process.env.CUBBY_QUERY_BUDGET_REPORT)

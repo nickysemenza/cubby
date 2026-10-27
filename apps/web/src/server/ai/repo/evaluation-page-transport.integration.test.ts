@@ -21,19 +21,18 @@ import { gatewayEgressInput } from "~/server/ai/gateway-egress-contract";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { productIdentityPrompt } from "~/server/ai/product-identity";
-import { claimAiEvaluationPage } from "~/server/ai/repo/ai-evaluation";
 import { enqueueAiEvaluations } from "~/server/ai/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, aiUsage, job } from "~/server/db/schema";
+import { aiEvaluation, aiUsage } from "~/server/db/schema";
 import {
   preparedProductIdentityPair,
   prepareProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { executeProductAiRefreshPage } from "~/server/domains/run/service/ai-refresh";
+import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import { claimJob } from "~/server/generic/jobs/repo/external-claim";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
@@ -167,10 +166,6 @@ describe("Product page transport packing", () => {
           sequence,
         })),
       );
-      const [anchor] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, `ai-evaluation:${enrolled[0]!.id}`));
       const requests: { input: SentInput; model: string }[] = [];
       let active = 0,
         peak = 0;
@@ -182,15 +177,15 @@ describe("Product page transport packing", () => {
         active--;
         return answer(input);
       });
-      const claim = await countTestDbQueries(() =>
-        claimAiEvaluationPage(ctx.db, anchor!.id),
-      );
-      expect(claim.result).toHaveLength(slotCount);
       const execution = await countTestDbQueries(() =>
-        executeProductAiRefreshPage(ctx.db, claim.result, {
-          productIdentityPorts: { model: "typesafe/jev" },
-        }),
+        drainAiEvaluations(
+          ctx.db,
+          enrolled.map((row) => row.id),
+          { productIdentityPorts: { model: "typesafe/jev" } },
+          { pages: 1 },
+        ),
       );
+      expect(execution.result).toEqual(["succeeded"]);
       expect(requests.length).toBeGreaterThan(slotCount === 1 ? 0 : 1);
       expect(requests.length).toBeLessThanOrEqual(slotCount);
       const sizes = requests.map(
@@ -241,8 +236,8 @@ describe("Product page transport packing", () => {
         operation: "product-identity",
       };
       const coldRequests = requests.length;
-      const capturedPairs = claim.result.map((entry) =>
-        preparedProductIdentityPair.parse(entry.evaluation.snapshot),
+      const capturedPairs = enrolled.map((row) =>
+        preparedProductIdentityPair.parse(row.snapshot),
       );
       const warm = await settleDecisionChoices(capturedPairs, (pair) => ({
         ...productIdentityPrompt(JSON.stringify([pair.first, pair.second])),
@@ -266,7 +261,6 @@ describe("Product page transport packing", () => {
         JSON.stringify(
           {
             slots: slotCount,
-            claimStatements: claim.queryCount,
             executionStatements: execution.queryCount,
             packedQuestions: sizes,
             requests: requests.length,

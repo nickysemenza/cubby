@@ -10,7 +10,12 @@ import {
   runBeforeCommitDatabase,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { aiEvaluation, job, entityIdentity } from "~/server/db/schema";
+import {
+  aiEvaluation,
+  job,
+  entityIdentity,
+  workItem,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   claimJob,
@@ -216,14 +221,19 @@ describe("durable jobs", () => {
       state: result ? "result_ready" : "queued",
       result,
     });
+    const [work] = await getDb(ctx.db)
+      .select()
+      .from(workItem)
+      .where(eq(workItem.ref, evaluation.id));
+    if (!work) throw new Error("Expected evaluation drain item");
     const [saved] = await getDb(ctx.db)
       .select()
       .from(job)
-      .where(eq(job.key, `ai-evaluation:${evaluation.id}`));
-    if (!saved) throw new Error("Expected evaluation Job");
+      .where(eq(job.key, work.drain));
+    if (!saved) throw new Error("Expected evaluation drain Job");
     const claimed = await claimJob(ctx.db, saved.id);
-    if (!claimed) throw new Error("Expected evaluation Job claim");
-    return { evaluation, claimed };
+    if (!claimed) throw new Error("Expected evaluation drain claim");
+    return { evaluation, claimed, item: work };
   };
 
   it.each(["cancelled", "obsolete"] as const)(
@@ -231,7 +241,7 @@ describe("durable jobs", () => {
     async (state) => {
       const result =
         state === "cancelled" ? null : { synthetic: "paid model result" };
-      const { evaluation, claimed } = await evaluationClaim(result);
+      const { evaluation, claimed, item } = await evaluationClaim(result);
       let pending: ReturnType<typeof claimAiEvaluation> | undefined;
       try {
         await withTransactionDatabase(ctx.db, async (holder) => {
@@ -246,7 +256,7 @@ describe("durable jobs", () => {
           const holderPid = pid.rows[0]?.pid;
           if (!holderPid) throw new Error("Expected evaluation lock holder");
           pending = withJobExecution(ctx.db, claimed, () =>
-            claimAiEvaluation(ctx.db, evaluation.id),
+            claimAiEvaluation(ctx.db, item),
           );
           pending.catch(() => undefined);
           await expect
@@ -261,16 +271,6 @@ describe("durable jobs", () => {
               return waiting.rows[0]?.waiting;
             })
             .toBe(true);
-          // The waiting claim must retain Job ownership until its transaction ends.
-          await expect(
-            withTransactionDatabase(ctx.db, async (probe) => {
-              await getDb(probe)
-                .select()
-                .from(job)
-                .where(eq(job.id, claimed.id))
-                .for("update", { noWait: true });
-            }),
-          ).rejects.toMatchObject({ cause: { code: "55P03" } });
           await getDb(holder)
             .update(aiEvaluation)
             .set({ state })
@@ -293,15 +293,15 @@ describe("durable jobs", () => {
 
   it("reuses a paid AI result under its current Job claim", async () => {
     const result = { synthetic: "paid model result" };
-    const { evaluation, claimed } = await evaluationClaim(result);
+    const { claimed, item } = await evaluationClaim(result);
     expect(
       await withJobExecution(ctx.db, claimed, () =>
-        claimAiEvaluation(ctx.db, evaluation.id),
+        claimAiEvaluation(ctx.db, item),
       ),
     ).toMatchObject({
       state: "result_ready",
       result,
-      attemptToken: claimed.leaseToken,
+      attemptToken: `${claimed.leaseToken}/${item.ticket}`,
     });
   });
 

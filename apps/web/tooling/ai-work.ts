@@ -89,12 +89,26 @@ export async function driveAiWork(
     await advanceJob(db, execution.id, handlers);
     const [owner] = await getDb(db).select().from(run).where(eq(run.id, id));
     if (!owner) return;
-    const pending = (await aiWorkItems(db, owner)).filter((item) =>
+    const items = await aiWorkItems(db, owner);
+    const pending = items.filter((item) =>
       ["queued", "result_ready"].includes(item.state),
     );
-    // Short waits only: due items and their drains run now.
+    // Short waits only: due items and their drains run now. A pause point
+    // releases only the items before it, since one page claims several.
+    const released =
+      ports.sweep?.pauseAfter === undefined
+        ? pending
+        : pending.slice(
+            0,
+            Math.max(
+              0,
+              ports.sweep.pauseAfter - (items.length - pending.length),
+            ),
+          );
     const drains = await getDb(db).execute<{ drain: string }>(sql`
-      UPDATE "WorkItem" SET "readyAt" = now()
+      UPDATE "WorkItem"
+         SET "readyAt" = CASE WHEN ref = ANY(${uuidArrayParam(released.map((item) => item.id))})
+           THEN now() ELSE now() + interval '1 hour' END
        WHERE target = 'ai.evaluation' AND ref = ANY(${uuidArrayParam(pending.map((item) => item.id))})
       RETURNING drain`);
     for (const key of new Set(drains.rows.map((row) => row.drain))) {

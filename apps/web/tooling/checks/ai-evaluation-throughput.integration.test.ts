@@ -2,12 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { assessmentFamily } from "@cubby/schemas/assessment";
-import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
+import { jobState } from "@cubby/schemas/job";
 import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import * as models from "@cubby/shared/ai/models";
-import { desc, and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +20,6 @@ import {
   assessment,
   assessmentState,
   job,
-  jobInvalidation,
   run,
   product,
   importSourceClaim,
@@ -41,11 +40,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
-import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
-import {
-  jobDue,
-  unobservedJobInvalidation,
-} from "~/server/generic/jobs/repo/queue";
 import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import {
   createProductIdentityFixture,
@@ -53,10 +47,8 @@ import {
   createImageFixture,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
-import {
-  aiEvaluationJobHandler,
-  runJobHandler,
-} from "~/server/workflows/runs/job-execution";
+import { aiEvaluationJobHandler } from "~/server/domains/run/service/ai-evaluation-drain";
+import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 const count = Number(process.env.CUBBY_PAGE_CATALOG_SIZE ?? 5000);
 const scenarios = [
@@ -409,50 +401,6 @@ describe.skipIf(process.env.CUBBY_PAGE_THROUGHPUT !== "1")(
               connectionDone: true,
             });
             const firstCall = calls.length;
-            let planMs = 0;
-            const planPair = async () => {
-              const eligibility = sql`e.feature=${"product-identity"} AND e."executionKind"=${"ai_refresh"} AND e.target->>${"kind"}=${"product"} AND e.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.retry_wait}, ${aiEvaluationState.enum.running}, ${aiEvaluationState.enum.result_ready})`;
-              const predicates = {
-                correlated: sql`EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE ${job.key}='ai-evaluation:' || e.id::text AND ${job.input}->>'evaluationId'=e.id::text AND ${eligibility})`,
-                membership: sql`${job.key}='ai-evaluation:' || (${job.input}->>'evaluationId') AND ${job.key} IN (SELECT 'ai-evaluation:' || e.id::text FROM "AiEvaluation" e WHERE ${eligibility} OFFSET 0)`,
-              };
-              const [anchor] = await getDb(ctx.db)
-                .select({ owned: jobRunOwned() })
-                .from(job)
-                .where(eq(job.kind, "ai.evaluation"))
-                .limit(1);
-              const plans = [];
-              for (const [name, predicate] of Object.entries(predicates)) {
-                const query = getDb(ctx.db)
-                  .select({
-                    row: job,
-                    pendingCapture: unobservedJobInvalidation(),
-                    markerRestartsPass: jobInvalidation.restartsPass,
-                  })
-                  .from(job)
-                  .leftJoin(jobInvalidation, eq(jobInvalidation.key, job.key))
-                  .where(
-                    and(
-                      eq(job.kind, "ai.evaluation"),
-                      jobDue(new Date()),
-                      sql`${jobRunOwned()}=${anchor?.owned ?? false}`,
-                      predicate,
-                    ),
-                  )
-                  .orderBy(desc(job.priority), job.updatedAt, job.id)
-                  .limit(100)
-                  .for("update", { of: job, skipLocked: true });
-                const result = await getDb(ctx.db).execute(
-                  sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.getSQL()}`,
-                );
-                plans.push({ name, rows: result.rows });
-              }
-              await writeFile(
-                resolve(output, `claim-plans-${count}.json`),
-                JSON.stringify(plans, null, 2),
-              );
-            };
-
             const started = performance.now();
             let peakOtherActiveClients = 0;
             const sampleActivity = async () => {
@@ -469,24 +417,20 @@ describe.skipIf(process.env.CUBBY_PAGE_THROUGHPUT !== "1")(
             const cpu = process.cpuUsage();
             let peakJobErrors = 0,
               expiredAtPageBoundary = 0;
-            const evaluationHandler = {
-              ...aiEvaluationJobHandler,
-              advancePage: async (db: Database, id: string) => {
-                const result = await aiEvaluationJobHandler.advancePage(db, id);
-                const [sample] = await getDb(db)
-                  .select({
-                    errors: sql<number>`count(*) FILTER (WHERE ${job.error} IS NOT NULL)::int`,
-                    expired: sql<number>`count(*) FILTER (WHERE ${job.state}=${aiEvaluationState.enum.running} AND ${job.leaseExpiresAt}<=now())::int`,
-                  })
-                  .from(job)
-                  .where(eq(job.kind, "ai.evaluation"));
-                peakJobErrors = Math.max(peakJobErrors, sample?.errors ?? 0);
-                expiredAtPageBoundary = Math.max(
-                  expiredAtPageBoundary,
-                  sample?.expired ?? 0,
-                );
-                return result;
-              },
+            const evaluationHandler = aiEvaluationJobHandler();
+            const sampleJobs = async () => {
+              const [sample] = await getDb(ctx.db)
+                .select({
+                  errors: sql<number>`count(*) FILTER (WHERE ${job.error} IS NOT NULL)::int`,
+                  expired: sql<number>`count(*) FILTER (WHERE ${job.state}=${jobState.enum.running} AND ${job.leaseExpiresAt}<=now())::int`,
+                })
+                .from(job)
+                .where(eq(job.kind, "ai.evaluation"));
+              peakJobErrors = Math.max(peakJobErrors, sample?.errors ?? 0);
+              expiredAtPageBoundary = Math.max(
+                expiredAtPageBoundary,
+                sample?.expired ?? 0,
+              );
             };
 
             const discoveredRuns = new Set<string>();
@@ -520,15 +464,7 @@ describe.skipIf(process.env.CUBBY_PAGE_THROUGHPUT !== "1")(
                 discoveryStatements,
               }),
             );
-            if (
-              process.env.CUBBY_PAGE_CLAIM_PLANS === "1" &&
-              cacheState === "cold"
-            ) {
-              const began = performance.now();
-              await planPair();
-              planMs = performance.now() - began;
-            }
-            const discoveryMs = performance.now() - started - planMs;
+            const discoveryMs = performance.now() - started;
             const runIds = [...discoveredRuns].map((id) =>
               parseEntityId("run", id),
             );
@@ -551,6 +487,7 @@ describe.skipIf(process.env.CUBBY_PAGE_THROUGHPUT !== "1")(
                 ),
               );
               await sampleActivity();
+              await sampleJobs();
               executionStatements += measured.queryCount;
               pageServices += measured.result.length;
               observe(measured.statements);
@@ -595,7 +532,7 @@ describe.skipIf(process.env.CUBBY_PAGE_THROUGHPUT !== "1")(
               if (!measured.result.length)
                 await new Promise<void>((resolve) => setTimeout(resolve, 25));
             }
-            const elapsedMs = performance.now() - started - planMs;
+            const elapsedMs = performance.now() - started;
             const states = await getDb(ctx.db)
               .select({
                 state: aiEvaluation.state,
@@ -640,14 +577,13 @@ describe.skipIf(process.env.CUBBY_PAGE_THROUGHPUT !== "1")(
               retries: number;
               sockets: number;
             }>(sql`SELECT
-          (SELECT count(*)::int FROM "Job" WHERE kind='ai.evaluation' AND state=${aiEvaluationState.enum.running} AND "leaseExpiresAt"<=now()) AS expired,
+          (SELECT count(*)::int FROM "Job" WHERE kind='ai.evaluation' AND state=${jobState.enum.running} AND "leaseExpiresAt"<=now()) AS expired,
           (SELECT count(*)::int FROM "Job" WHERE kind='ai.evaluation' AND error IS NOT NULL) AS retries,
           (SELECT count(*)::int FROM pg_stat_activity WHERE datname=current_database()) AS sockets`);
             const observations = {
               cacheState,
               elapsedMs,
               discoveryMs,
-              planMs,
               discoveryStatements,
               executionStatements,
               pageServices,

@@ -39,10 +39,8 @@ import {
 } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { systemActor, ensureRun } from "~/server/domains/run/repo/ensure-run";
-import {
-  scheduleSavedFieldQuestion,
-  executeAiRefreshTarget,
-} from "~/server/domains/run/service/ai-refresh";
+import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
+import { scheduleSavedFieldQuestion } from "~/server/domains/run/service/ai-refresh";
 import {
   startSuggestionSweep as queueSuggestionSweep,
   publishSweepSuggestions,
@@ -79,7 +77,6 @@ import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import { withJobFixtureExecution } from "~/server/testing/background-queue";
 
 describe("confirmed correction propagation", () => {
   const ctx = withTestDb();
@@ -1326,18 +1323,9 @@ describe("confirmed correction propagation", () => {
           .recordId === target.entityId,
     );
     if (!evaluation) throw new Error("Missing synthetic correction refresh");
-    await withJobFixtureExecution(
-      ctx.db,
-      {
-        key: `ai-evaluation:${evaluation.id}`,
-        kind: "ai.evaluation",
-        input: { evaluationId: evaluation.id },
-      },
-      () =>
-        executeAiRefreshTarget(ctx.db, evaluation.id, {
-          suggestPorts: question.ports,
-        }),
-    );
+    await drainAiEvaluations(ctx.db, [evaluation.id], {
+      suggestPorts: question.ports,
+    });
     await drain();
     expect(await productCategoryId(ctx.db, target.id)).toBe(taxonomyId("food"));
   });

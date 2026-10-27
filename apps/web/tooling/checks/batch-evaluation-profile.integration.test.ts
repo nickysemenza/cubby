@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { and, eq, sql, SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,7 +33,6 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   aiEvaluation,
-  job,
   product,
   importSourceClaim,
   importSourceOrder,
@@ -50,7 +49,7 @@ import { discoverAiRefresh } from "~/server/domains/run/service/ai-refresh";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import * as jobExecution from "~/server/generic/jobs/repo/execution";
 import * as jobRepo from "~/server/generic/jobs/repo/queue";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { drainAiEvaluations } from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -63,7 +62,6 @@ import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-
 import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
 import { rebuildAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { aiEvaluationJobHandler } from "~/server/workflows/runs/job-execution";
 
 // Disposable baseline probe: real repositories, transactions and Job handler;
 // the external model alone is deterministic. Nested counters are exclusive:
@@ -267,33 +265,27 @@ describe("batch evaluation baseline profile", () => {
         );
       expect(target).toBeDefined();
       const results: Awaited<ReturnType<typeof execute>>[] = [];
-      async function execute(id: string, kind: string) {
-        const [execution] = await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.key, `ai-evaluation:${id}`));
-        expect(execution).toBeDefined();
+      // One drain page evaluates every ready item of the feature.
+      async function execute(ids: readonly string[], kind: string) {
         observations.length = 0;
         calls = 0;
         inputBytes.length = 0;
         enabled = true;
         const start = performance.now();
-        const outcome = await measure("job.lifecycle_and_handler", () =>
-          advanceJob(ctx.db, execution!.id, {
-            "ai.evaluation": aiEvaluationJobHandler,
-          }),
+        const [outcome] = await measure("job.lifecycle_and_handler", () =>
+          drainAiEvaluations(ctx.db, ids, {}, { pages: 1 }),
         );
         const elapsedMs = performance.now() - start;
         enabled = false;
-        const [saved] = await getDb(ctx.db)
+        const saved = await getDb(ctx.db)
           .select()
           .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, id));
+          .where(inArray(aiEvaluation.id, [...ids]));
         const profile = {
           kind,
           outcome,
-          state: saved?.state,
-          receipt: saved?.receipt,
+          states: saved.map((row) => row.state),
+          receipts: saved.map((row) => row.receipt),
           elapsedMs,
           modelCalls: calls,
           modelInputBytes: [...inputBytes],
@@ -301,18 +293,23 @@ describe("batch evaluation baseline profile", () => {
           observations: structuredClone(observations),
         };
         expect(outcome).toBe("succeeded");
-        expect(saved?.state).toBe("completed");
+        expect(saved.every((row) => row.state === "completed")).toBe(true);
         return profile;
       }
-      results.push(await execute(target!.id, "product"));
+      results.push(await execute([target!.id], "product"));
       const pairTargets = await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
         .where(
           sql`${aiEvaluation.target}->>${"kind"} = ${aiEvaluationTarget.options[1].shape.kind.value}`,
         );
-      for (const pair of pairTargets)
-        results.push(await execute(pair.id, "product_pair"));
+      if (pairTargets.length)
+        results.push(
+          await execute(
+            pairTargets.map((pair) => pair.id),
+            "product_pair",
+          ),
+        );
       const directory = resolve(
         import.meta.dirname,
         "../../../../artifacts/batch-evaluation-profile",

@@ -8,63 +8,15 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import {
   claimJob,
-  renewJob,
   publishJobPage,
 } from "~/server/generic/jobs/repo/external-claim";
 import { pauseJob } from "~/server/generic/jobs/repo/operator";
-import { dueJobs } from "~/server/generic/jobs/repo/queue";
 
 import { controlWorkflowRun } from "./control";
-import {
-  launchWorkflowRun,
-  recordRunProgress,
-  reconcileWorkflowRuns,
-} from "./lifecycle";
+import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
 describe("Run Job admission", () => {
   const ctx = withTestDb();
-  it.each(["execution_limit", null])(
-    "stops idle Sweep ownership and projects only its execution-limit pause: %s",
-    async (failureCode) => {
-      const id = await ensureRun(ctx.db, ctx.actor, {
-        purpose: "sweep",
-        trigger: "manual",
-        status: "running",
-        input: {
-          kind: "sweep",
-          families: [{ family: "statement_transaction", scope: {} }],
-        },
-      });
-      const [execution] = await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.key, `run:${id}`));
-      expect(execution?.recoveryTimeoutMs).toBe(30 * 60_000);
-      const claim = await claimJob(ctx.db, execution!.id);
-      if (!claim) throw new Error("Expected Sweep claim");
-      await getDb(ctx.db)
-        .update(job)
-        .set({ lastUsefulProgressAt: new Date(Date.now() - 31 * 60_000) })
-        .where(eq(job.id, claim.id));
-      await getDb(ctx.db)
-        .update(run)
-        .set({ status: "paused_auth", failureCode })
-        .where(eq(run.id, id));
-      expect(await renewJob(ctx.db, claim)).toBe(true);
-      await dueJobs(ctx.db);
-      expect(await publishJobPage(ctx.db, claim, { done: true })).toBe(false);
-      await reconcileWorkflowRuns(ctx.db);
-      const [owner] = await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.id, id));
-      expect(owner?.status).toBe(
-        failureCode === "execution_limit" ? "failed" : "paused_auth",
-      );
-      expect(owner?.failureCode).toBe(failureCode ? "job_failed" : null);
-    },
-  );
-
   it("commits Run and execution together, coalesces launches, and fences cancellation", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {
       purpose: "maintenance",

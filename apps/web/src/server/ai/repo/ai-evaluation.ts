@@ -688,6 +688,12 @@ export async function obsoleteAiEvaluations(
   );
 }
 
+/** Page publication in a savepoint, so a rejected publication rolls back alone. */
+export const withAiEvaluationSavepoint = <T>(
+  tx: Database,
+  work: (savepoint: Database) => Promise<T>,
+) => withTransactionDatabase(tx, work);
+
 /** An item out of attempts keeps its raw error on the evaluation its requesters read. */
 export async function failAiEvaluations(
   tx: Database,
