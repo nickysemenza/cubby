@@ -119,3 +119,94 @@ it("carries open AI evaluations into the drain states without losing paid result
     ).toBe(0);
   });
 });
+
+it("retires every uploaded vector id without an artifact and re-admits open refreshes", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle(client);
+    await migrateDatabase(db, { through: "0047_coarse_jobs_work_items" });
+    const id = (n: number) =>
+      `00000000-0000-4000-8000-${String(400 + n).padStart(12, "0")}`;
+    const [served, quiet, legacy] = [1, 2, 3].map(id);
+    const [selectedJob, finishedJob, openJob, cleanupJob] = [4, 5, 6, 7].map(
+      id,
+    );
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES
+       ($1,'product','PRD-SYNTH401'),($2,'product','PRD-SYNTH402'),
+       ($3,'job','JOB-SYNTH40400'),($4,'job','JOB-SYNTH40500'),
+       ($5,'job','JOB-SYNTH40600'),($6,'job','JOB-SYNTH40700')`,
+      [served, quiet, selectedJob, finishedJob, openJob, cleanupJob],
+    );
+    const artifact = `"entityKind","entityId","embeddingText","embeddingHash",provider,model,dimensions`;
+    await client.query(
+      `INSERT INTO "EntityEmbedding" (id,${artifact},"artifactState","artifactHash","vectorHash") VALUES
+       ($1,'product',$2,'Synthetic text','h1','openai','text-embedding-3-small',8,'selected','h1','v1'),
+       ($3,'product',$4,'Synthetic text','h0','openai','text-embedding-3-small',8,'legacy',NULL,NULL)`,
+      [selectedJob, served, legacy, quiet],
+    );
+    const input = (source: string, hash: string) =>
+      JSON.stringify({
+        entityKind: "product",
+        entityId: source,
+        hash,
+        text: "Synthetic text",
+        config: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 8,
+        },
+      });
+    await client.query(
+      `INSERT INTO "Job" (id,shortcode,key,kind,input,state,attempts,cursor) VALUES
+       ($1,'JOB-SYNTH40400','embedding:product:a:h1','embedding.refresh',$5,'completed',0,NULL),
+       ($2,'JOB-SYNTH40500','embedding:product:a:hx:retired','embedding.refresh',$6,'completed',0,NULL),
+       ($3,'JOB-SYNTH40600','embedding:product:b:h2','embedding.refresh',$7,'running',1,'{"hash":"v2","mutationId":"m2","submittedAt":"2026-01-01"}'),
+       ($4,'JOB-SYNTH40700','embedding-cleanup:x','embedding.cleanup','{}','queued',0,NULL)`,
+      [
+        selectedJob,
+        finishedJob,
+        openJob,
+        cleanupJob,
+        input(served, "h1"),
+        input(served, "hx"),
+        input(quiet, "h2"),
+      ],
+    );
+
+    await migrateDatabase(db, { through: "0048_carry_drain_work" });
+
+    const artifacts = await client.query(
+      `SELECT id,"artifactState","deletedAt" IS NOT NULL AS deleted FROM "EntityEmbedding" ORDER BY id`,
+    );
+    expect(artifacts.rows).toEqual([
+      { id: legacy, artifactState: "retired", deleted: true },
+      { id: selectedJob, artifactState: "selected", deleted: false },
+      { id: finishedJob, artifactState: "retired", deleted: true },
+      { id: openJob, artifactState: "retired", deleted: true },
+    ]);
+    const items = await client.query(
+      `SELECT drain,ref FROM "WorkItem" WHERE drain LIKE 'embedding:%' ORDER BY drain,ref`,
+    );
+    expect(items.rows).toEqual([
+      { drain: "embedding:cleanup", ref: legacy },
+      { drain: "embedding:cleanup", ref: finishedJob },
+      { drain: "embedding:cleanup", ref: openJob },
+      { drain: "embedding:refresh", ref: quiet },
+    ]);
+    const jobs = await client.query(
+      `SELECT key FROM "Job" WHERE kind LIKE 'embedding.%' ORDER BY key`,
+    );
+    expect(jobs.rows).toEqual([
+      { key: "embedding:cleanup" },
+      { key: "embedding:refresh" },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT id FROM "Entity" WHERE id = ANY($1::uuid[])`,
+          [[selectedJob, finishedJob, openJob, cleanupJob]],
+        )
+      ).rows,
+    ).toEqual([]);
+  });
+});

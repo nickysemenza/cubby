@@ -45,6 +45,43 @@ SELECT id FROM "Job" WHERE kind = 'ai.evaluation';--> statement-breakpoint
 DELETE FROM "Job" WHERE id IN (SELECT id FROM "retired_job_ids");--> statement-breakpoint
 DELETE FROM "Entity" WHERE kind = 'job' AND id IN (SELECT id FROM "retired_job_ids");--> statement-breakpoint
 DROP TABLE "retired_job_ids";--> statement-breakpoint
+-- Embeddings: a per-source Job id was the physical vector id. Any refresh Job
+-- without an artifact row may own a Vectorize vector (an interrupted, retired
+-- or orphaned upload), so it becomes a retired artifact under that id and
+-- cleanup deletes it; deleting an absent vector is harmless. A source with an
+-- open refresh is re-embedded under a fresh artifact: vectors are rebuildable
+-- projections (ADR 0006), so in-flight receipts are not carried.
+UPDATE "EntityEmbedding" SET "artifactState" = 'retired', "deletedAt" = coalesce("deletedAt", now())
+ WHERE "artifactState" = 'legacy';--> statement-breakpoint
+INSERT INTO "EntityEmbedding" (id, "entityKind", "entityId", "embeddingText", "embeddingHash", provider, model, dimensions, "artifactState", "artifactHash", "deletedAt")
+SELECT j.id, j.input->>'entityKind', (j.input->>'entityId')::uuid, j.input->>'text', j.input->>'hash',
+       j.input->'config'->>'provider', j.input->'config'->>'model', (j.input->'config'->>'dimensions')::int,
+       'retired', j.input->>'hash', now()
+  FROM "Job" j
+  JOIN "Entity" source ON source.id = (j.input->>'entityId')::uuid AND source.kind = j.input->>'entityKind'
+ WHERE j.kind = 'embedding.refresh'
+   AND j.input->'config' ? 'dimensions'
+   AND NOT EXISTS (SELECT 1 FROM "EntityEmbedding" e WHERE e.id = j.id);--> statement-breakpoint
+INSERT INTO "WorkItem" (drain, target, ref, priority, "dirtiedAt", "readyAt", attempts, "lastError")
+SELECT DISTINCT ON ((j.input->>'entityId')::uuid)
+       'embedding:refresh', 'embedding.refresh', (j.input->>'entityId')::uuid, 1, j."createdAt", now(), 0, j.error
+  FROM "Job" j
+  JOIN "Entity" source ON source.id = (j.input->>'entityId')::uuid AND source.kind = j.input->>'entityKind'
+ WHERE j.kind = 'embedding.refresh' AND j.state IN ('queued', 'retry_wait', 'running', 'paused')
+ ORDER BY (j.input->>'entityId')::uuid, j."createdAt" DESC
+ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "WorkItem" (drain, target, ref, priority, "dirtiedAt", "readyAt")
+SELECT 'embedding:cleanup', 'embedding.cleanup', e.id, 1, now(), now()
+  FROM "EntityEmbedding" e
+ WHERE (e."deletedAt" IS NOT NULL OR e."artifactState" IN ('retired', 'failed')) AND e."deletionId" IS NULL
+ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+DELETE FROM "JobInvalidationCapture" c USING "Job" j
+ WHERE c.key = j.key AND j.kind IN ('embedding.refresh', 'embedding.cleanup');--> statement-breakpoint
+CREATE TEMP TABLE "retired_embedding_job_ids" ON COMMIT DROP AS
+SELECT id FROM "Job" WHERE kind IN ('embedding.refresh', 'embedding.cleanup');--> statement-breakpoint
+DELETE FROM "Job" WHERE id IN (SELECT id FROM "retired_embedding_job_ids");--> statement-breakpoint
+DELETE FROM "Entity" WHERE kind = 'job' AND id IN (SELECT id FROM "retired_embedding_job_ids");--> statement-breakpoint
+DROP TABLE "retired_embedding_job_ids";--> statement-breakpoint
 -- One drain Job (with its identity) per drain that owes work, woken once.
 WITH drains AS (
   SELECT DISTINCT w.drain AS key,
