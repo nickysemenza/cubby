@@ -1,0 +1,87 @@
+apps/web/generator/entities/declarations.ts
+  s_42d134a8f67173::t_c2018f6000e6e7 48-54
+apps/web/generator/entities/derive.ts
+  s_42d134a8f67173::t_e395e1ae1f4358 68-80
+apps/web/generator/entities/render/filters.ts
+  s_42d134a8f67173::t_5b8ccb5c8deaeb 132-136
+apps/web/src/contracts/entity-graph.contract.ts
+  s_42d134a8f67173::t_c9b2f66859993d 110
+apps/web/src/contracts/suggestions.contract.ts
+  s_42d134a8f67173::t_2daf86acaa39a8 42,53,64
+apps/web/src/entity/entity-detail/record-quality.tsx
+  s_42d134a8f67173::t_9db92bd37f2877 170,172
+apps/web/src/entity/filters.ts
+  s_42d134a8f67173::t_8cd9e2a9ed7f77 73-77
+apps/web/src/entity/hooks/use-deferred-reference-filter-options.ts
+  s_42d134a8f67173::t_baf53dc237ea83 32-40,57-60,75,77-83
+apps/web/src/entity/suggestions/queue/record-proposals.tsx
+  s_42d134a8f67173::t_aca4b02f5f9fd8 38
+apps/web/src/entity/suggestions/queue/suggestion-views.tsx
+  s_42d134a8f67173::t_4ef75b1dbea3ad 8-11,17-20,70,73-77,87-88,91-96,99-105,107-127,129-131,946-951
+apps/web/src/entity/suggestions/queue/suggestion-views.unit.test.tsx
+  s_42d134a8f67173::t_6ee0256699748b 10,16,19,28,31,34-38,45-49
+apps/web/src/entity/suggestions/queue/suggestions-page.tsx
+  s_42d134a8f67173::t_21e236431c3f3a 8,10-13,78,90,96,147,150-152,155-156,166-167,170,206,327,435,502,525,613,667-668,774
+apps/web/src/entity/suggestions/queue/suggestions-search.ts
+  s_42d134a8f67173::t_9160eeb7f2ba94 4-7,11-12,27,50-62
+apps/web/src/entity/suggestions/record-stored-suggestions.unit.test.tsx
+  s_42d134a8f67173::t_d9a21b9bc99e51 124,126
+apps/web/src/entity/suggestions/record-suggestions.tsx
+  s_42d134a8f67173::t_513d1b41581692 331,333
+apps/web/src/features/expense/list-columns.tsx
+  s_42d134a8f67173::t_a9e41993897f5b 154
+apps/web/src/features/location/list-columns.tsx
+  s_42d134a8f67173::t_06e3b069f08f32 114
+apps/web/src/features/purchase/list-columns.tsx
+  s_42d134a8f67173::t_1077a1a5050583 12,23
+apps/web/src/features/task/list-columns.tsx
+  s_42d134a8f67173::t_c2b55efdf7be0b 25
+apps/web/src/server/generic/assessment/repo/suggestion-families.ts
+  s_42d134a8f67173::t_0a6048cd02a2d7 83,243,341,442-445,680,807-810,889-890,958
+apps/web/src/server/generic/assessment/repo/suggestion-list.integration.test.ts
+  s_42d134a8f67173::t_f44ad5d8ab4bf8 244,317,324,332-333,407,409-410,442,451,485,490,617,681-682,689
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_42d134a8f67173::t_7121aae8db2233 21-36,40,49,58-64,66-70,72,74-126,128-131,133,136-137,139-167,170-171,173-179,181-251,275,277,287-291,316-325,406,412,416-433,435-442,444-452,454-457,459,462,464-470,474,478-479,491,507-509,513,565-566,568,570,572,576-579
+apps/web/src/server/generic/assessment/repo/transfer-pair-queue.integration.test.ts
+  s_42d134a8f67173::t_8308d95f125271 196,204
+apps/web/src/server/generic/list/repo/declared-filters.ts
+  s_42d134a8f67173::t_a8e864d9be15c0 1,11-12,23,82,104,112,153,163,168,209-211,336
+apps/web/tests/e2e/suggestions.spec.ts
+  s_42d134a8f67173::t_fb305941a24ade 1,37,397-407,412-418
+docs/entities.md
+  s_42d134a8f67173::t_a3132b25fb960c 1271-1277,4186-4200
+packages/schemas/package.json
+  s_42d134a8f67173::t_05a6bec40b1117 218
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_42d134a8f67173::t_5ea4040f164a0c 2885-2888,2907-2910
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_42d134a8f67173::t_c8e4ffba921a49 1031-1034
+packages/schemas/src/entity-definitions/definition.ts
+  s_42d134a8f67173::t_e60952b51638fb 2617-2626
+packages/schemas/src/entity-projection-types.ts
+  s_42d134a8f67173::t_d8ed62a4b545a0 441-447
+packages/schemas/src/relation-list.ts
+  s_42d134a8f67173::t_1b85bdbcfd48dd 129-133,175-182,194,209-210,212,218,226,234,297-303,305,324,331-333
+packages/schemas/src/suggestion-list-declarations.ts
+  s_42d134a8f67173::t_b4c6f962776d90 1-257
+packages/schemas/src/suggestion-list.ts
+  s_42d134a8f67173::t_4e9392c56ff3f4 2-5,16,24,134,193,196,206-208,212-214,218,220-222,251,270-273,303
+tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json
+  s_42d134a8f67173::t_f841ffec1a1943 137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5413283683c71b0287e1845ad0ead38caca32eed",
+  "prompts": {},
+  "sessions": {
+    "s_42d134a8f67173": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17e6e-256b-7cc3-9e1e-2a5760661042",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
