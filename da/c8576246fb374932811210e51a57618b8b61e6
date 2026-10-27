@@ -1,0 +1,127 @@
+apps/web/src/server/domains/connection/operations/connection-review.integration.test.ts
+  s_77bdb89dbc0fc6::t_0ad558e2fc68e7 16,251-255,258-259,284
+apps/web/src/server/domains/connection/service/connection-preparation.integration.test.ts
+  s_77bdb89dbc0fc6::t_ea339663d70c22 1,33,612-616,619,627-631,634
+apps/web/src/server/domains/email/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_4aaa660f3b482f 1-43
+apps/web/src/server/domains/expense/repo/work-facts.ts
+  s_77bdb89dbc0fc6::t_fb78615a517a79 1-7
+apps/web/src/server/domains/expense/repo/work-owners.ts
+  s_77bdb89dbc0fc6::t_37207dbe48da9e 1-32
+apps/web/src/server/domains/expense/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_1061a94a5750c2 1-81
+apps/web/src/server/domains/financial-transaction/repo/work-facts.ts
+  s_77bdb89dbc0fc6::t_23eb4390716baa 1-12
+apps/web/src/server/domains/financial-transaction/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_99d82cb6900698 1-50
+apps/web/src/server/domains/financial-transaction/repo/work-transfer.ts
+  s_77bdb89dbc0fc6::t_d88bae39da14bd 1-79
+apps/web/src/server/domains/image/repo/work-owners.ts
+  s_77bdb89dbc0fc6::t_1045e2015f1c55 1-46
+apps/web/src/server/domains/image/repo/work-sources.integration.test.ts
+  s_77bdb89dbc0fc6::t_0f2c65ffcaa987 2,18-21,66-67,106-110,116-119,130-135,138,150-156,187-191,195,199-205,208-214,221-227,230,234-240
+apps/web/src/server/domains/image/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_6d203a9d9912b0 1-44
+apps/web/src/server/domains/ingredient/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_c54b941cdb11ab 1-39
+apps/web/src/server/domains/inventory/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_0e1ddc6ec170d1 1-44
+apps/web/src/server/domains/location/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_d697cb9c001bbd 1-39
+apps/web/src/server/domains/meal/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_ead44bfdd3694b 1-39
+apps/web/src/server/domains/product/repo/product-list-filters.integration.test.ts
+  s_77bdb89dbc0fc6::t_fd232d01ce11fe 3,15,183-187
+apps/web/src/server/domains/product/repo/work-read-context.ts
+  s_77bdb89dbc0fc6::t_b7dc87a1a4500f 1-37
+apps/web/src/server/domains/product/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_3032392ddcdee7 1-81
+apps/web/src/server/domains/project/repo/work-context.ts
+  s_77bdb89dbc0fc6::t_bc83c9084b1422 1-29
+apps/web/src/server/domains/project/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_45a34846df10ec 1-48
+apps/web/src/server/domains/purchase-import/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_3d3bf2695bdf0b 1-79
+apps/web/src/server/domains/purchase/repo/work-facts.ts
+  s_77bdb89dbc0fc6::t_cf9280445e7abb 1-11
+apps/web/src/server/domains/purchase/repo/work-owners.ts
+  s_77bdb89dbc0fc6::t_dbabdf7d94e770 1-51
+apps/web/src/server/domains/purchase/repo/work-settlement.ts
+  s_77bdb89dbc0fc6::t_45af04ef923f2b 1-92
+apps/web/src/server/domains/purchase/repo/work-sources.integration.test.ts
+  s_77bdb89dbc0fc6::t_ec79995990ece2 1-191
+apps/web/src/server/domains/purchase/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_c3c76a72060714 1-106
+apps/web/src/server/domains/recipe/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_a5c2f4e9d8da4d 1-39
+apps/web/src/server/domains/run/repo/work-attention.ts
+  s_77bdb89dbc0fc6::t_fbbfa85e57a3f8 1-8
+apps/web/src/server/domains/run/repo/work-owners.integration.test.ts
+  s_77bdb89dbc0fc6::t_b6d0c5efa21081 12,16,133-137,139,143,149-154
+apps/web/src/server/domains/run/repo/work-owners.ts
+  s_77bdb89dbc0fc6::t_d27643ba911e61 1-46
+apps/web/src/server/domains/run/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_c4a841267f9833 1-102
+apps/web/src/server/domains/task/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_0f9543534b430d 1-39
+apps/web/src/server/domains/transaction-import/repo/statement-suggestions.integration.test.ts
+  s_77bdb89dbc0fc6::t_fff28ff0a861e5 20,69,1473-1478,1480-1481,1485-1486,1526-1527,1530-1532,1534
+apps/web/src/server/domains/transaction-import/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_abb8ddbbe3ba96 1-61
+apps/web/src/server/domains/vendor-account/repo/vendor-account-coverage.integration.test.ts
+  s_77bdb89dbc0fc6::t_44dace297cbe4d 3,8-11,55-61,63,65-66,69-70,73-75,84-88,116,119-123,139-143
+apps/web/src/server/domains/vendor/repo/work-sources.ts
+  s_77bdb89dbc0fc6::t_7ecdba6ed1c1c7 1-68
+apps/web/src/server/domains/work/repo/record-facts.ts
+  s_77bdb89dbc0fc6::t_8dbb13bd9c9df4 1-67
+apps/web/src/server/domains/work/repo/work-diagnostics.ts
+  s_77bdb89dbc0fc6::t_7bb1109a4ee71a 1-86
+apps/web/src/server/domains/work/repo/work-suggestions.ts
+  s_77bdb89dbc0fc6::t_831b76973d1c95 1-170
+apps/web/src/server/domains/work/service/work-diagnostics.ts
+  s_77bdb89dbc0fc6::t_a269b68c906146 1-167
+apps/web/src/server/domains/work/service/work-queue-composition.ts
+  s_77bdb89dbc0fc6::t_15a81f0bab5d6e 1-25,28-57
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_77bdb89dbc0fc6::t_24300a04de5458 31,231-237,772-777
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_77bdb89dbc0fc6::t_176a2d43c23721 2,26,256-257,261-263
+apps/web/src/server/generic/data-quality/repo/expense-checks.integration.test.ts
+  s_77bdb89dbc0fc6::t_abbd9ff3fbe0d7 1,12,97-98,102-104,226-227,231-233
+apps/web/src/server/generic/data-quality/repo/product-checks.integration.test.ts
+  s_77bdb89dbc0fc6::t_b316a14dcc516c 3,25,116-120,218-222,234-235,237,240-248,264
+apps/web/src/server/generic/data-quality/repo/purchase-checks.integration.test.ts
+  s_77bdb89dbc0fc6::t_722246de3cc5b5 9,138-142
+apps/web/src/server/generic/work-queue/repo/work-declarations.ts
+  s_77bdb89dbc0fc6::t_2ca0eec5f6ef8c 1-161
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_77bdb89dbc0fc6::t_5a4f165f508816 3-6,8-9,15-16,24-25,27-36,38-56,58-61,63-81,83-84,86-93,95-100,103-129,131-144,146-147,149,151-153,155,158-187,189-223,225-232,235-243,245-246,250-264,266-268,270,272,274-302,306,309-312,315-319,321-322,324,326-329,332-333,335-338,340
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_77bdb89dbc0fc6::t_841dc0e34a62b8 37-40,69-74,88,97-101,103-104,111-113,132-134,189,210,264,303,360-362,503-505
+apps/web/src/server/generic/work-queue/repo/work-source.ts
+  s_77bdb89dbc0fc6::t_a1d359e8f1d55c 9,47,85,104,109-110,112-114,118-120,183-184
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_77bdb89dbc0fc6::t_dac198f5fcf870 1,3-5,7,11,16,24-26,29-30,32,34,47,52,57-58,60-61,63-78,81-90,93-95,97-98,100-101,104,106-107,109-111,113-114,116-122,124-135
+apps/web/tooling/scenarios/performance.integration.test.ts
+  s_77bdb89dbc0fc6::t_1d6087b43f68b8 4,9,122-126
+docs/guide/work-queue.md
+  s_77bdb89dbc0fc6::t_b5bbee9d7e0842 83-89
+tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json
+  s_77bdb89dbc0fc6::t_1e9b7efc16a219 152
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dac8576246fb374932811210e51a57618b8b61e6",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
