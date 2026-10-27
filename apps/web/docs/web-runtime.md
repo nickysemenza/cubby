@@ -242,15 +242,19 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Location valuation summaries consume the canonical valuation envelope: missing results show their shared pending or failed state, successful empty outcomes show a dash, and a numeric zero remains $0.00. Pricing counts come only from a successful valuation result; stale usable values retain their refresh status and raw failure.
+
+Governed values are read only from `record.fields[readKey ?? key]`; ordinary fields remain plain. Assignment intent and edit controls come from `current`, effective outcomes and provenance from `result`, and refresh failures from `work`. A cached result never supplies current edit permissions. Why this value loads exact reset previews on demand; missing previews are not substituted with the effective result. Reference and image evidence share the ordered SourceStack; allocated values retain all contributors.
+
 First-page list compilation uses the entity's declared opening sort and direction
 when neither the URL nor a caller supplies an override. SSR preloads, secondary
 lists and mounted table state share the same lightweight sort-roster owner.
 Lexical search still omits the ordinary default sort so relevance remains authoritative.
 
 Every entity page reads complete rows, exact counts, full-filter totals and a
-derived-state sidecar in one `entity.list` request. Batch shared row bindings
+canonical `fields` envelopes in one `entity.list` request. Batch shared row bindings
 inside that read and run independent loads concurrently. Stored metadata uses
-internal page IDs while the response keys its sidecar by public ID. Columns,
+internal page IDs. Columns,
 actions, captions and providers consume complete rows; no client field-readiness
 tracking, enrichment patches, generation retries or separate summary requests.
 Loading and errors apply to the whole page. Normal query cancellation, stale

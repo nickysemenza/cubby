@@ -18,6 +18,7 @@ import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { PortionSheet } from "./portion-sheet";
+import type { PreparationTargetOption } from "./types";
 
 const complete = (lower: number) => ({
   status: "complete" as const,
@@ -68,7 +69,6 @@ const view = getMealPreparationsOut.parse({
             id: testShortcode("meal", "MEL-4K7M"),
             date: "2026-08-31",
             name: "Dinner",
-            mealKind: "cooked",
           },
           eater: {
             id: testShortcode("ledgerParty", "LPY-4K7M"),
@@ -99,7 +99,9 @@ const view = getMealPreparationsOut.parse({
 });
 
 const source = view.preparations[0]!;
-const targetMeals = [source.portions[0]!.targetMeal];
+const targetMeals: PreparationTargetOption[] = [
+  { ...source.portions[0]!.targetMeal, mealKind: "cooked" },
+];
 const eaters = [source.portions[0]!.eater];
 
 // The eater and meal pickers are record pickers, which read the query cache.

@@ -164,7 +164,7 @@ struct PhotoVisualEvidenceMatcher: Sendable {
             guard ["attachment", "cover"].contains(attachment["role"]?.stringValue),
                 attachment["purpose"]?.stringValue != "label",
                 attachment["status"]?.stringValue?.uppercased() == "UPLOADED",
-                let rawURL = attachment["url"]?.stringValue,
+                let rawURL = attachment.recordValue("url")?.stringValue,
                 let url = URL(string: rawURL)
             else { return nil }
             return url
@@ -175,7 +175,7 @@ struct PhotoVisualEvidenceMatcher: Sendable {
         (row.raw["attachments"]?.arrayValue ?? []).compactMap { attachment in
             guard attachment["role"]?.stringValue == "attachment",
                 attachment["status"]?.stringValue?.uppercased() == "UPLOADED",
-                let rawURL = attachment["url"]?.stringValue,
+                let rawURL = attachment.recordValue("url")?.stringValue,
                 let url = URL(string: rawURL)
             else { return nil }
             return url

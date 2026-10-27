@@ -34,7 +34,7 @@ enum DetailSlotRegistry {
             return AnyView(
                 CookbookContentsSlot(
                     cookbookID: row.id,
-                    hasReadableExtraction: row.raw["needsReextract"]?.boolValue != true))
+                    extraction: FieldEnvelope.of(row.raw, key: "needsReextract")))
         case .cookbookImportProgress:
             return AnyView(CookbookImportProgressSlot(row: row))
         case .mealComposition:
@@ -198,7 +198,7 @@ enum DetailSlotRegistry {
     static func supplement(for key: EntityKey, row: EntityRow) -> AnyView? {
         switch key {
         case .expense:
-            guard let productID = row.raw["productId"]?.stringValue else { return nil }
+            guard let productID = row.raw.recordValue("productId")?.stringValue else { return nil }
             return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))
         // Booking a charge into the Expense ledger, and correcting a recorded booking, are web's:
         // both sit with the allocations in the transaction's Record section.
@@ -221,8 +221,19 @@ private struct ProductJourneySummaryView: View {
 
     private var ownPhotos: Int { product.attachments.filter { $0.source == .own }.count }
     private var isService: Bool {
-        product.category?.feature == .services || product.category?.feature == .software
+        ["services", "software"].contains(categoryFeature ?? "")
     }
+
+    private var categoryFeature: String? {
+        (try? JSONValue(encoding: product.fields.categoryFeature)).flatMap(FieldEnvelope.init)?
+            .effectiveValue?.stringValue
+    }
+
+    private var quantityEnvelope: FieldEnvelope? {
+        (try? JSONValue(encoding: product.fields.onHandUnits)).flatMap(FieldEnvelope.init)
+    }
+
+    private var onHandUnits: Double? { quantityEnvelope?.effectiveValue?.doubleValue }
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -241,14 +252,23 @@ private struct ProductJourneySummaryView: View {
                     ownPhotos == 0 ? "Add an item photo" : "\(ownPhotos) own photos",
                     systemImage: ownPhotos == 0 ? "circle.dotted" : "checkmark.circle.fill"
                 )
-                Label(
-                    (product.onHandUnits ?? 0) <= 0
-                        ? product.ownershipEvidence.state == .uncertain
-                            ? "Confirm whether you still own it before recording stock"
-                            : "Record where it lives"
-                        : "Inventory recorded",
-                    systemImage: (product.onHandUnits ?? 0) <= 0 ? "circle.dotted" : "checkmark.circle.fill"
-                )
+                if let onHandUnits {
+                    Label(
+                        onHandUnits <= 0
+                            ? product.ownershipEvidence.state == .uncertain
+                                ? "Confirm whether you still own it before recording stock"
+                                : "Record where it lives"
+                            : "Inventory recorded",
+                        systemImage: onHandUnits <= 0 ? "circle.dotted" : "checkmark.circle.fill"
+                    )
+                } else {
+                    Text(
+                        quantityEnvelope?.failure
+                            ?? (quantityEnvelope?.isUpdating == true
+                                ? "Inventory quantity updating…" : "Inventory quantity unavailable")
+                    )
+                    .foregroundStyle(.secondary)
+                }
             }
             if isService || product.ownershipEvidence.state != .exited {
                 OpenOnWebButton(

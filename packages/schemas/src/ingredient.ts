@@ -1,23 +1,17 @@
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  ingredientFieldEnvelopeFields,
+  ingredientPublicReadFields,
+} from "./generated/entity-field-envelope-fields.ingredient.gen";
+import { rawIngredientEnrichment } from "./ingredient-raw-read";
+import { ingredientFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.ingredient.gen";
 import ingredientDefinition from "./entity-definitions/02-ingredient.entity";
 import { z } from "zod";
 import { productRefOut } from "./product-fields";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
-import {
-  productWithMappingsAndFoodMcpEntityOut,
-  productWithMappingsAndFoodOut,
-  productWithMappingsMcpEntityOut,
-  productWithMappingsOut,
-} from "./product";
-import { baseKind } from "./problems";
-import {
-  recipeTopLevel,
-  recipeRefMcpEntityOut,
-  recipeUsageRefMcpEntityOut,
-  recipeUsageOut,
-} from "./recipe";
-import { mutationSideEffectsSchema } from "./mutation-side-effects";
+import { recipeUsageOut } from "./recipe-fields";
 import { ingredientBaseFilterFields } from "./generated/ingredient.gen";
 
 export {
@@ -71,10 +65,9 @@ export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
 export type IngredientSortField = GeneratedEntitySortField<"ingredient">;
 
-export const ingredientOutFields =
-  ingredientDefinition.readSchemas.output.shape;
+const ingredientOutFields = ingredientDefinition.readSchemas.output.shape;
 
-export const ingredientOut = ingredientDefinition.readSchemas.output;
+export const ingredientOut = ingredientFieldEnvelopeSchemas.output;
 export type IngredientOut = z.infer<typeof ingredientOut>;
 
 /**
@@ -128,17 +121,6 @@ export const ingredientResolveOrCreateOut = z.array(
   ingredientResolveOrCreateResultOut,
 );
 
-export const ingredientWithRecipesAndProductOut = z.object({
-  ...ingredientOutFields,
-  recipe: recipeTopLevel.nullable(),
-  recipeUsages: z.array(recipeUsageOut),
-  appearsInRecipes: z.array(recipeTopLevel),
-  product: z.array(productWithMappingsOut),
-});
-export type IngredientWithRecipesAndProductOut = z.infer<
-  typeof ingredientWithRecipesAndProductOut
->;
-
 /**
  * The one linked product that supplies an ingredient's nutrition, chosen once on
  * the server so web and native show the same product: the one carrying both
@@ -149,91 +131,38 @@ export {
   ingredientNutritionProductOut,
   type IngredientNutritionProductOut,
 } from "./ingredient-read-fields";
-export const ingredientWithFoodOut = ingredientDefinition.readSchemas.detail;
+export const ingredientWithFoodOut = ingredientFieldEnvelopeSchemas.detail;
 export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
-export const ingredientWithFoodMcpEntityOut = ingredientWithFoodOut.extend({
-  recipe: recipeRefMcpEntityOut.nullable(),
-  recipeUsages: z.array(recipeUsageRefMcpEntityOut),
-  appearsInRecipes: z.array(recipeRefMcpEntityOut),
-  product: z.array(productWithMappingsAndFoodMcpEntityOut),
-});
+export const ingredientWithFoodMcpEntityOut =
+  ingredientFieldEnvelopeSchemas.mcpDetail;
 
-export const ingredientWithFoodAndSideEffectsOut = z.object({
-  ...ingredientOutFields,
-  recipe: recipeTopLevel.nullable(),
-  recipeUsages: z.array(recipeUsageOut),
-  appearsInRecipes: z.array(recipeTopLevel),
-  product: z.array(productWithMappingsAndFoodOut),
-  sideEffects: mutationSideEffectsSchema,
+export const ingredientWithFoodLeanOut = ingredientOut.extend({
+  product: ingredientWithFoodOut.shape.product,
 });
-export type IngredientWithFoodAndSideEffectsOut = z.infer<
-  typeof ingredientWithFoodAndSideEffectsOut
->;
-
-export const ingredientMergeOut = z.object({
-  ...ingredientOutFields,
-  recipe: recipeTopLevel.nullable(),
-  recipeUsages: z.array(recipeUsageOut),
-  appearsInRecipes: z.array(recipeTopLevel),
-  product: z.array(productWithMappingsAndFoodOut),
-  sideEffects: mutationSideEffectsSchema,
-  mergeSummary,
-});
-export type IngredientMergeOut = z.infer<typeof ingredientMergeOut>;
-
-export const ingredientWithFoodLeanOut = z.object({
-  ...ingredientOutFields,
-  product: z.array(productWithMappingsAndFoodOut),
-});
-export type IngredientWithFoodLeanOut = z.infer<
+export type IngredientWithFoodLeanOut = z.output<
   typeof ingredientWithFoodLeanOut
 >;
 
 // The ingredient list row: lean ingredient + DB-only products, plus {id,name}
 // refs of recipes it appears in. USDA summaries hydrate separately.
-export const ingredientListItemOut = ingredientDefinition.readSchemas.list;
+export const ingredientListItemOut = ingredientFieldEnvelopeSchemas.list;
 export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 
 /** Generic MCP entity list row with storage-only product child ids removed. */
-export const ingredientListItemMcpEntityOut = ingredientListItemOut.extend({
-  product: z.array(productWithMappingsMcpEntityOut),
+export const ingredientListItemMcpEntityOut =
+  ingredientFieldEnvelopeSchemas.mcpList;
+
+export { enrichmentFixKind } from "./ingredient-raw-read";
+export const enrichmentRowOut = withFieldEnvelopes(
+  rawIngredientEnrichment,
+  ingredientFieldEnvelopeFields,
+  ingredientPublicReadFields,
+).extend({
+  product: ingredientWithFoodOut.shape.product,
 });
-
-export const enrichmentFixKind = z.enum([
-  "no-product",
-  "link-usda",
-  "set-per-item-price",
-  "add-purchase-mapping",
-  "add-weight-mapping",
-  "add-volume-mapping",
-  "done",
-]);
-
-export const enrichmentRowOut = z.object({
-  ...ingredientOutFields,
-  product: z.array(productWithMappingsAndFoodOut),
-  recipeCount: z.number().int().nonnegative(),
-  cookbookOnly: z.boolean(),
-  coverage: z.object({
-    covered: z.array(baseKind),
-    applicable: z.array(baseKind),
-    tier: z.enum(["complete", "good", "partial", "none"]),
-  }),
-  recommendedFix: enrichmentFixKind,
-  priceMode: z.enum(["per-each", "package"]),
-  mergeCandidates: z.array(
-    z.object({
-      id: ingredientShortcode,
-      name: z.string(),
-      similarity: z.number(),
-    }),
-  ),
-});
-export type EnrichmentRow = z.infer<typeof enrichmentRowOut>;
-
-export const enrichmentRowsOut = z.array(enrichmentRowOut);
+export type EnrichmentRow = z.output<typeof enrichmentRowOut>;
 
 export const enrichmentWorkbenchInput = z
   .object({
@@ -241,8 +170,6 @@ export const enrichmentWorkbenchInput = z
     focusId: ingredientShortcode.optional(),
   })
   .optional();
-
-export const ingredientWithFoodLeanListOut = z.array(ingredientWithFoodLeanOut);
 
 export const ingredientMergeInput = z.object({
   keepId: ingredientShortcode,

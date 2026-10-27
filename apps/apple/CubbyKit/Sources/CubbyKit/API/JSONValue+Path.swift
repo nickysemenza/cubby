@@ -1,6 +1,24 @@
 import Foundation
 
 extension JSONValue {
+    /// Read the canonical effective result without reviving a removed or unavailable value.
+    /// Callers needing assignment, freshness or work inspect the envelope separately.
+    public func recordValue(_ key: String) -> JSONValue? {
+        guard let envelope = self["fields"]?[key] else { return self[key] }
+        let result = envelope["result"]
+        switch result?["kind"]?.stringValue {
+        case "missing": return .null
+        case "live", "cached":
+            let outcome = result?["decision"]?["outcome"]
+            switch outcome?["kind"]?.stringValue {
+            case "value": return outcome?["value"]
+            case "empty": return .null
+            default: return nil
+            }
+        default: return nil
+        }
+    }
+
     /// Evaluates a manifest `display.labelPath` / `readPath` against this row: dotted keys, `[n]`
     /// indexing, and a `[]` projection that maps the rest of the path over an array. Mirrors
     /// `apps/web/src/entity/read-path.ts`; a missing link anywhere reads as `nil`. Required wire
@@ -63,7 +81,7 @@ extension JSONValue {
         guard let step = steps.popFirst() else { return self }
         switch step {
         case .key(let key):
-            guard let next = self[key], preservingNull || next != .null else { return nil }
+            guard let next = recordValue(key), preservingNull || next != .null else { return nil }
             return next.walk(&steps, preservingNull: preservingNull)
         case .index(let index):
             guard let next = self[index], preservingNull || next != .null else { return nil }

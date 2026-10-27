@@ -2,20 +2,31 @@ import { displayImagesField } from "@cubby/schemas/display-images";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
+  fieldValueOf,
+  fieldEnvelopeFor,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
+import {
   type LocationShortcode,
   parseShortcodeFor,
   type ProductShortcode,
   type ShortcodeFor,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
-import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import type { ImageOut } from "@cubby/schemas/image";
 import {
-  formatCategoryLabel,
-  type ProductCategory,
-  type ShortcodeType,
-} from "@cubby/shared";
+  publicImageUrl,
+  preferredImageUrl,
+} from "@cubby/schemas/image-summary";
+import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location";
+import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
+import {
+  isServiceProductFeature,
+  productCategoryFeature,
+} from "@cubby/schemas/product-category-fields";
+import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { type ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
@@ -23,6 +34,7 @@ import { VendorMark } from "~/entity/components/vendor-cell";
 import { enumDisplayValue } from "~/entity/display/enum-field-display";
 import { EntityIcon, entityLabel } from "~/entity/entities";
 import { compactFieldText } from "~/entity/fields/field-text";
+import { categoryText } from "~/entity/presentation/category-text";
 import { locationToSegments } from "~/entity/presentation/location-breadcrumb";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
@@ -109,9 +121,12 @@ function recordRowProjection<E extends ShortcodeType>(
 /** `displayImages[0]` is the server-resolved cover for every entity that
  * declares images; the record's emoji (or entity glyph) stands in otherwise. */
 function recordThumb(entity: ShortcodeType, record: PickerRecord): PickerThumb {
-  const cover = displayImagesField.safeParse(record.displayImages).data?.[0];
+  const envelope = fieldEnvelopeFor(record, "displayImages");
+  const cover = envelope
+    ? displayImagesField.nullable().parse(fieldValueOf(envelope))?.[0]
+    : undefined;
   return {
-    imageUrl: cover?.url ?? null,
+    imageUrl: cover ? preferredImageUrl(cover) : null,
     fallback: (
       <RecordEmoji
         entity={entity}
@@ -213,13 +228,10 @@ export const buildProductComboboxItem = (
   product: {
     id: ProductShortcode;
     name: string;
-    brandName: string | null;
+    brandName?: string | null;
+    fields?: Record<string, ReadableFieldEnvelope>;
     category?: ProductCategory | null;
     coverImageUrl?: string | null;
-    displayImages?: Array<{
-      url: string;
-      representations?: { preferred: string };
-    }>;
     aliases?: string[] | null;
     quantityLedger?: {
       acquiredUnits: number;
@@ -242,13 +254,24 @@ export const buildProductComboboxItem = (
 ): ComboboxItem<ProductShortcode> => {
   const ledger = product.quantityLedger;
   const onHand = product.onHand ?? deriveProductOnHand(product, ledger);
-  const coverImageUrl =
-    product.coverImageUrl ??
-    product.displayImages?.[0]?.representations?.preferred ??
-    product.displayImages?.[0]?.url ??
-    null;
+  const coverEnvelope = fieldEnvelopeFor(product, "displayImages");
+  const cover = coverEnvelope
+    ? displayImagesField.nullable().parse(fieldValueOf(coverEnvelope))?.[0]
+    : undefined;
+  const coverImageUrl = Object.hasOwn(product.fields ?? {}, "displayImages")
+    ? cover
+      ? preferredImageUrl(cover)
+      : null
+    : (product.coverImageUrl ?? null);
   const base = productPickerBase(product, coverImageUrl);
-  return isServiceProductCategory(product.category) || !ledger || !onHand
+  const feature = fieldEnvelopeFor(product, "categoryFeature");
+  return isServiceProductFeature(
+    feature
+      ? productCategoryFeature.nullable().parse(fieldValueOf(feature))
+      : null,
+  ) ||
+    !ledger ||
+    !onHand
     ? base
     : withProductInventoryPresentation(base, ledger, onHand, intent);
 };
@@ -286,9 +309,12 @@ function productPickerBase(
   product: ProductPickerInput,
   coverImageUrl: string | null,
 ): ComboboxItem<ProductShortcode> {
+  const brand = fieldEnvelopeFor(product, "brandName");
   const secondary = [
-    product.brandName,
-    product.category ? formatCategoryLabel(product.category) : null,
+    brand
+      ? z.string().nullable().parse(fieldValueOf(brand))
+      : product.brandName,
+    product.category ? categoryText(product.category) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -400,11 +426,17 @@ function withProductInventoryPresentation(
 export const buildLocationComboboxItem = (location: {
   id: LocationShortcode;
   name: string;
-  type: LocationType | null;
+  type?: LocationType | null;
+  fields?: Record<string, ReadableFieldEnvelope>;
   aliases?: string[] | null;
   ancestors?: Array<{ id?: string; name: string }> | null;
-  coverImage?: { url: string } | null;
+  coverImage?: Pick<ImageOut, "fields"> | null;
+  coverImageUrl?: string | null;
 }): ComboboxItem<LocationShortcode> => {
+  const type = fieldEnvelopeFor(location, "type");
+  const currentType = type
+    ? locationType.nullable().parse(fieldValueOf(type))
+    : (location.type ?? null);
   const ancestors = location.ancestors;
   const rootAncestor = ancestors?.[0];
   const root = {
@@ -423,12 +455,14 @@ export const buildLocationComboboxItem = (location: {
         ? [ancestors.map((ancestor) => ancestor.name).join(" › ")]
         : []),
     ],
-    secondary: location.type ?? undefined,
+    secondary: currentType ?? undefined,
     thumb: {
-      imageUrl: location.coverImage?.url ?? null,
+      imageUrl: location.coverImage
+        ? (publicImageUrl(location.coverImage) ?? null)
+        : (location.coverImageUrl ?? null),
       fallback: (
         <LocationIcon
-          type={location.type}
+          type={currentType}
           product={null}
           size={14}
           className="text-muted-foreground"
@@ -451,13 +485,16 @@ export const buildLocationComboboxItem = (location: {
  * search endpoint returns.
  */
 export const buildLocationComboboxItemFromDetail = (
-  location: InfLocation,
+  location: LocationTreeNode,
 ): ComboboxItem<LocationShortcode> =>
   buildLocationComboboxItem({
-    ...location,
+    id: location.id,
+    name: location.name,
+    aliases: location.aliases,
+    fields: { type: location.fields.type },
     // `locationToSegments` is root→leaf and includes the location itself.
     ancestors: locationToSegments(location).slice(0, -1),
-    coverImage: resolveLocationPrimaryVisual(location).image,
+    coverImageUrl: resolveLocationPrimaryVisual(location).image?.url ?? null,
   });
 
 type VendorPickerInput = {

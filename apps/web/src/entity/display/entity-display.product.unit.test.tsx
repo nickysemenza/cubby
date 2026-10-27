@@ -1,3 +1,8 @@
+import {
+  productListItemOut,
+  type ProductListItem,
+} from "@cubby/schemas/product";
+import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import type { ProductCategory } from "@cubby/shared";
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
@@ -5,6 +10,7 @@ import type { ReactNode } from "react";
 import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
@@ -28,6 +34,7 @@ installFeatures();
  * `ProductListItem` only where `createEntityDisplayColumns` reads it. */
 interface ProductRow {
   category: ProductCategory | null;
+  categoryFeature?: ProductCategoryFeature | null;
   brandName: string;
   primaryGtin: string | null;
   fdc_id: number | null;
@@ -119,12 +126,19 @@ function renderRowCell<TRecord extends object, TValue extends CellData>(
  * left generic to exercise the declaration's own width/format/mobile/sorting
  * metadata, same as the shared `declared width/format/mobile/sorting` block.
  */
+type ProductCellRow = ProductRow & {
+  fields: Pick<
+    ProductListItem["fields"],
+    "categoryFeature" | "ledgerExpectedQuantityLabel"
+  >;
+};
+
 function buildProductColumns() {
-  const helper = createCubbyColumnHelper<ProductRow>();
+  const helper = createCubbyColumnHelper<ProductCellRow>();
   return createEntityDisplayColumns(
     "product",
     helper,
-    createCubbyColumnCollection<ProductRow>((add) => {
+    createCubbyColumnCollection<ProductCellRow>((add) => {
       add(
         helper.display({
           id: "categoryId",
@@ -222,7 +236,22 @@ function buildProductColumns() {
 function renderProductCell(columnId: string, row: ProductRow) {
   const columns = buildProductColumns();
   const matched = columns.filter((column) => column.id === columnId);
-  const rendered = matched.visit((column) => renderRowCell(column.cell, row));
+  const canonical = {
+    ...row,
+    fields: {
+      categoryFeature: fieldValueFixture(
+        productListItemOut.shape.fields.shape.categoryFeature,
+        row.categoryFeature ?? null,
+      ),
+      ledgerExpectedQuantityLabel: fieldValueFixture(
+        productListItemOut.shape.fields.shape.ledgerExpectedQuantityLabel,
+        row.ledgerExpectedQuantityLabel,
+      ),
+    },
+  };
+  const rendered = matched.visit((column) =>
+    renderRowCell(column.cell, canonical),
+  );
   const [first] = rendered;
   if (rendered.length !== 1 || first === undefined) {
     throw new Error(`Expected exactly one column with id ${columnId}.`);
@@ -237,10 +266,10 @@ describe("product list display columns", () => {
       <>
         {renderProductCell("categoryFeature", {
           ...PRODUCT_ROW,
+          categoryFeature: "hardware",
           category: {
             ...category,
             name: "Synthetic hardware",
-            feature: "hardware",
           },
         })}
       </>,

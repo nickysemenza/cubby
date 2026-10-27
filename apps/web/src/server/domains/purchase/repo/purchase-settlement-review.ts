@@ -1,3 +1,4 @@
+import type { RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import type { PurchaseShortcode } from "@cubby/schemas/identifiers";
 import {
   type purchaseSettlementCandidatesOut,
@@ -7,7 +8,12 @@ import {
 
 import { proposeSettlementAllocations } from "./purchase-settlement-allocation";
 
-type Review = typeof purchaseSettlementCandidatesOut._output;
+type PublicReview = typeof purchaseSettlementCandidatesOut._output;
+type Review = Omit<PublicReview, "candidates"> & {
+  candidates: (Omit<PublicReview["candidates"][number], "transaction"> & {
+    transaction: RawFinancialTransactionOut;
+  })[];
+};
 type RankedCandidate = Omit<
   Review["candidates"][number],
   "title" | "lines" | "proposedAllocations"

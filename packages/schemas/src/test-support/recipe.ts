@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 import { recipeOut, sectionIngredientOut } from "../recipe";
 import { testCompleteDataQuality } from "./identifiers";
@@ -7,6 +7,45 @@ import { testCompleteDataQuality } from "./identifiers";
 
 type LineInput = z.input<typeof sectionIngredientOut>;
 type RecipeInput = z.input<typeof recipeOut>;
+
+/** Read fixtures supply outcomes without inventing stored assignment authority. */
+function readFields(
+  schemas: z.ZodRawShape,
+  values: Readonly<
+    Record<string, z.output<ReturnType<typeof z.json>> | undefined>
+  >,
+) {
+  return Object.fromEntries(
+    Object.entries(schemas).map(([key, schema]) => {
+      if (!(schema instanceof z.ZodType))
+        throw new Error("Fixture field schema missing");
+      const value = values[key];
+      return [
+        key,
+        schema.parse({
+          current: {
+            assignment: null,
+            controls: { kind: "readonly", reason: "computed" },
+          },
+          result:
+            value === undefined
+              ? { kind: "missing" }
+              : {
+                  kind: "live",
+                  decision: {
+                    outcome:
+                      value === null
+                        ? { kind: "empty", reason: "unset" }
+                        : { kind: "value", value },
+                    provenance: { kind: "computed" },
+                  },
+                },
+          work: { kind: "idle" },
+        }),
+      ];
+    }),
+  );
+}
 
 const STAMP = {
   createdAt: new Date("2026-01-01"),
@@ -51,6 +90,10 @@ export const testSubRecipeLine = (line: {
     rawLine: null,
     ingredient: null,
     recipe: {
+      fields: readFields(
+        sectionIngredientOut.options[1].shape.recipe.shape.fields.shape,
+        { source: null, servings: null, tags: [] },
+      ),
       id: line.recipeId,
       name: line.name,
       meta: null,
@@ -67,6 +110,13 @@ export const testEmptyRecipe = (recipe: {
   name: string;
 }) =>
   recipeOut.parse({
+    fields: readFields(recipeOut.shape.fields.shape, {
+      source: null,
+      servings: null,
+      tags: [],
+      images: [],
+      dataQuality: testCompleteDataQuality(),
+    }),
     id: recipe.id,
     name: recipe.name,
     meta: null,

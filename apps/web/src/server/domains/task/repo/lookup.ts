@@ -1,11 +1,8 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import {
-  taskCompletionSchema,
-  taskListItemOut,
-  taskStatusSchema,
-} from "@cubby/schemas/project";
+import { taskCompletionSchema, taskStatusSchema } from "@cubby/schemas/project";
 import type { TaskFilters } from "@cubby/schemas/project";
+import { rawTaskListItemOut } from "@cubby/schemas/work-raw-read";
 import { isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -111,7 +108,7 @@ export const taskListRead = async (
           );
           return [
             inherited.fields(
-              taskListItemOut.pick({
+              rawTaskListItemOut.pick({
                 assigneeId: true,
                 assigneeName: true,
                 projectId: true,
@@ -150,7 +147,7 @@ export const taskListRead = async (
               },
             ),
             inherited.fields(
-              taskListItemOut.pick({ trade: true, fieldResolutions: true }),
+              rawTaskListItemOut.pick({ trade: true, fieldResolutions: true }),
               (row, loaded) => {
                 const value = loaded.get(row.id);
                 if (!value)
@@ -162,14 +159,17 @@ export const taskListRead = async (
               },
             ),
             dependencies.fields(
-              taskListItemOut.pick({ blockedByIds: true, blockingIds: true }),
+              rawTaskListItemOut.pick({
+                blockedByIds: true,
+                blockingIds: true,
+              }),
               (row, loaded) => ({
                 blockedByIds: loaded.blockedBy.get(row.id) ?? [],
                 blockingIds: loaded.blocking.get(row.id) ?? [],
               }),
             ),
             subtasks.fields(
-              taskListItemOut.pick({
+              rawTaskListItemOut.pick({
                 subtaskCount: true,
                 doneSubtaskCount: true,
               }),
@@ -178,7 +178,7 @@ export const taskListRead = async (
                 doneSubtaskCount: loaded.get(row.id)?.doneCount ?? 0,
               }),
             ),
-            bind(taskListItemOut.pick({ images: true }), (row) => ({
+            bind(rawTaskListItemOut.pick({ images: true }), (row) => ({
               images: mapImages(
                 (row.images ?? []).map((entry) => {
                   if (!("image" in entry))
@@ -202,6 +202,6 @@ export const taskList = (
   readIntent: ListReadIntent = "page",
 ) =>
   parseCompleteListRead(
-    taskListItemOut,
+    rawTaskListItemOut,
     taskListRead(db, filters, sorts, pagination, { kind: "full" }, readIntent),
   );

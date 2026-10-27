@@ -41,7 +41,7 @@ export const RecipeWorkflow: DetailSlotComponent<"recipe"> = ({
     }),
     structuralSharing: true,
   });
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/recipes/$shortcode" });
   const recipeView = view ?? "read";
   const setRecipeView = (next: RecipeViewMode) => {
     // Keep the default ("read") out of the URL for clean links.

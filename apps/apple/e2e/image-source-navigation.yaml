@@ -1,0 +1,39 @@
+appId: com.nickysemenza.cubby
+---
+# Uses the connected synthetic corpus in a --qa --hold session. The Inventory
+# image comes from its Product; following that source must work inside the sheet.
+- launchApp:
+    stopApp: false
+- tapOn: "Find"
+- tapOn: "Search Cubby"
+- inputText: "Cedar Cotton Field Shirt"
+- extendedWaitUntil:
+    visible: "Cedar Cotton Field Shirt, Home › Cedar Wardrobe"
+    timeout: 30000
+- tapOn: "Cedar Cotton Field Shirt, Home › Cedar Wardrobe"
+- extendedWaitUntil:
+    visible:
+      id: "detail.inventory.edit"
+    timeout: 30000
+- longPressOn: "Display image"
+- tapOn: "Why this image"
+- extendedWaitUntil:
+    visible:
+      id: "image.chain.popover"
+    timeout: 30000
+- assertVisible: "Cover"
+- tapOn: "From product .*"
+- extendedWaitUntil:
+    visible:
+      id: "detail.product.edit"
+    timeout: 30000
+- tapOn: "Back"
+- extendedWaitUntil:
+    visible:
+      id: "image.chain.popover"
+    timeout: 30000
+- tapOn: "Close image sources"
+- extendedWaitUntil:
+    visible:
+      id: "detail.inventory.edit"
+    timeout: 30000

@@ -3,6 +3,10 @@ import { vendorOut } from "@cubby/schemas/vendor";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { vendor as vendorOperations } from "~/integrations/tanstack-query/generated/catalog/vendor.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -17,7 +21,7 @@ const vendor = {
   website: "https://example.com",
 };
 
-const fetchedVendor = vendorOut.parse({
+const fetchedVendor = entityReadFixture(vendorOut, {
   ...vendor,
   orderUrlTemplate: null,
   orderEvidence: null,
@@ -32,23 +36,16 @@ const fetchedVendor = vendorOut.parse({
   },
   returnWindowDays: null,
   notes: null,
-  role: "unused",
-  brandedProductCount: 0,
-  brandCategoryCount: 0,
-  purchasedBrandProductCount: 0,
-  brandSpend: 0,
-  expenseCount: 0,
-  firstPurchaseDate: null,
-  documentedPurchaseCount: 0,
-  missingItemizationCount: 0,
-  purchaseCount: 0,
-  spend: 0,
-  latestPurchaseDate: null,
-  mailSearch: null,
   logo: null,
   createdAt: new Date("2026-08-27T00:00:00.000Z"),
   updatedAt: new Date("2026-08-27T00:00:00.000Z"),
-  dataQuality: testCompleteDataQuality(),
+  fields: {
+    role: fieldValueFixture(vendorOut.shape.fields.shape.role, "unused"),
+    dataQuality: fieldValueFixture(
+      vendorOut.shape.fields.shape.dataQuality,
+      testCompleteDataQuality(),
+    ),
+  },
 });
 
 function createOperations() {

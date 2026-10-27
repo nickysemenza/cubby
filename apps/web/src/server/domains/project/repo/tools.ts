@@ -8,6 +8,11 @@ import {
   projectResourceFeatureLabels,
   projectResourceFeatures,
 } from "@cubby/schemas/product-category-relations";
+import {
+  projectResourceOut,
+  projectToolSuggestionOut,
+  productProjectUsesOut,
+} from "@cubby/schemas/project";
 import type {
   ProductProjectUsesOut,
   ProjectResourceOut,
@@ -18,6 +23,7 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { isLiveProjectStatus } from "@cubby/schemas/project";
+import type { rawToolProductIdentity } from "@cubby/schemas/project-tool-raw-read";
 import { countLabel } from "@cubby/shared/pluralize";
 import {
   and,
@@ -38,6 +44,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import type { z } from "zod";
 
 import { householdLocalDate } from "~/lib/household-date";
 import {
@@ -85,6 +92,7 @@ import {
 } from "~/server/entity-kernel/repo/relation-preflight";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import {
   assertLiveLinkEndpoints,
   linkValues,
@@ -447,7 +455,7 @@ async function listProjectResources(
     windowContext,
   );
 
-  return reusableRows.map((row) => {
+  const resources = reusableRows.map((row) => {
     const category = row.category;
     return {
       productId: parseShortcodeFor("product", row.productCode),
@@ -470,6 +478,18 @@ async function listProjectResources(
         metrics.get(row.productId) ?? EMPTY_METRICS,
       ),
     };
+  });
+  // Resource category labels the report role, not the Product's nested taxonomy reference.
+  const identities = await publicFieldEnvelopeRows({
+    db,
+    entity: "product",
+    schema: projectResourceOut.omit({ category: true }),
+    rows: resources.map((row) => ({ ...row, id: row.productId })),
+  });
+  return identities.map((identity, index) => {
+    const resource = resources[index];
+    if (!resource) throw new Error("Missing Project resource evidence");
+    return { ...identity, category: resource.category };
   });
 }
 
@@ -1483,7 +1503,10 @@ export async function suggestProjectTools(
         )
       : null;
 
-  const directSuggestions: ProjectToolSuggestionOut[] = directRows
+  const directSuggestions: Array<
+    Omit<ProjectToolSuggestionOut, "fields"> &
+      z.output<typeof rawToolProductIdentity>
+  > = directRows
     .filter(
       (row) =>
         !attached.has(row.productId) &&
@@ -1529,7 +1552,10 @@ export async function suggestProjectTools(
   // not own them during the project. Counted distinctly so the count reads as
   // "how many tools are hidden", not "how many (tool, trade) pairs".
   const timelineSuppressed = new Set<ProductId>();
-  const tradeSuggestions: ProjectToolSuggestionOut[] = [];
+  const tradeSuggestions: Array<
+    Omit<ProjectToolSuggestionOut, "fields"> &
+      z.output<typeof rawToolProductIdentity>
+  > = [];
   for (const signal of trades) {
     const ranked = (tradeRowsByTrade.get(signal.trade) ?? [])
       .filter((row) => {
@@ -1605,7 +1631,15 @@ export async function suggestProjectTools(
     );
 
   return {
-    items: [...directSuggestions, ...tradeSuggestions],
+    items: await publicFieldEnvelopeRows({
+      db,
+      entity: "product",
+      schema: projectToolSuggestionOut,
+      rows: [...directSuggestions, ...tradeSuggestions].map((row) => ({
+        ...row,
+        id: row.productId,
+      })),
+    }),
     purchasedHereCount: directSuggestions.length,
     tradeMatchCount: tradeSuggestions.length,
     timelineConflicts: { count: timelineSuppressed.size },
@@ -1756,7 +1790,7 @@ export async function listProductProjectUses(
       ? await loadSoftwareExpenseRows(dbc, productId, windowContexts)
       : [];
 
-  return {
+  const raw = {
     productId: parseShortcodeFor("product", productRow.shortcode),
     productName: productRow.name,
     brandName: productRow.brandName,
@@ -1782,4 +1816,19 @@ export async function listProductProjectUses(
       attachedAt: row.attachedAt,
     })),
   };
+  const projects = await publicFieldEnvelopeRows({
+    db,
+    entity: "project",
+    schema: productProjectUsesOut.shape.projects.element,
+    rows: raw.projects.map((row) => ({ ...row, id: row.projectId })),
+  });
+  const [result] = await publicFieldEnvelopeRows({
+    db,
+    entity: "product",
+    // This scalar is the report's resource role, not Product.category's reference.
+    schema: productProjectUsesOut.omit({ category: true }),
+    rows: [{ ...raw, id: raw.productId, projects }],
+  });
+  if (!result) throw new Error("Product project uses produced no row");
+  return { ...result, category: raw.category };
 }

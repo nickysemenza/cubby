@@ -23,8 +23,9 @@ appId: com.nickysemenza.cubby
       id: "field.explanation.product.${PRODUCT_ID}.price"
     direction: DOWN
     timeout: 30000
-- tapOn:
+- longPressOn:
     id: "field.explanation.product.${PRODUCT_ID}.price"
+- tapOn: "Explain"
 - extendedWaitUntil:
     visible:
       id: "field.explanation.popover"
@@ -45,6 +46,24 @@ appId: com.nickysemenza.cubby
     direction: DOWN
     timeout: 30000
 - assertVisible: "\\$25\\.00"
+- scrollUntilVisible:
+    element:
+      id: "field.explanation.action.set"
+    direction: UP
+    timeout: 30000
+- tapOn:
+    id: "field.explanation.action.set"
+- extendedWaitUntil:
+    visible:
+      id: "editor.product"
+    timeout: 30000
+- assertVisible:
+    id: "editor.product.save"
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: "field.explanation.popover"
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: "field.explanation.close"

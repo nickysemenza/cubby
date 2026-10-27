@@ -7,17 +7,21 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import { locationListItemOut } from "@cubby/schemas/location";
+import {
+  locationPickerAncestorOut,
+  locationPickerItemOut,
+} from "@cubby/schemas/location";
 import type {
-  InfLocation,
   LocationCreateInput,
   LocationPickerItemOut,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
 import { locationPickerSortableFields } from "@cubby/schemas/location";
 import { locationValuation } from "@cubby/schemas/location-fields";
+import type { RawLocationDetail } from "@cubby/schemas/location-raw-read";
+import { rawLocationList } from "@cubby/schemas/location-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gt, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
@@ -38,7 +42,6 @@ import {
   getDb,
   imageJoinBindings,
   type ListReadIntent,
-  isTransaction,
   mapImages,
   notDeleted,
   relations,
@@ -86,6 +89,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { type ListContext } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -107,7 +111,7 @@ import {
 } from "./helpers";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
-import { computeLocationValuations } from "./valuation";
+import { loadStoredLocationValuations } from "./valuation";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
   "InventoryEntry.locationId": {
@@ -501,7 +505,7 @@ export const updateLocation = defineMutationWriter({
       // Reorder existing images (first = cover) before appending new ones so
       // additions always land after the reordered set. `data.imageOrder` /
       // `data.removeImageIds` are public `IMG-` shortcodes (what
-      // `LocationOut.images[].id` hands back) — resolved to uuids here, right
+      // `RawLocationOutput.images[].id` hands back) — resolved to uuids here, right
       // before the two helpers below that still take uuids. A code that doesn't
       // resolve is dropped rather than thrown on, matching today's silent
       // no-op for a uuid naming no live row.
@@ -782,10 +786,10 @@ export const locationListRead = async (
         media: true,
         bindings: (bind) => {
           return [
-            bind(locationListItemOut.pick({ type: true }), (row) => ({
+            bind(rawLocationList.pick({ type: true }), (row) => ({
               type: parseLocationType(row.type),
             })),
-            bind(locationListItemOut.pick({ product: true }), (row) => ({
+            bind(rawLocationList.pick({ product: true }), (row) => ({
               product: mapLocationIdentityProduct({
                 ...row,
                 product:
@@ -793,21 +797,21 @@ export const locationListRead = async (
               }),
             })),
             bind(
-              locationListItemOut.pick({ parent: true, children: true }),
+              rawLocationList.pick({ parent: true, children: true }),
               (row) =>
                 locationReferenceFields({
                   parent: row.parent ?? null,
                   children: row.children ?? [],
                 }),
             ),
-            bind(locationListItemOut.pick({ images: true }), (row) => ({
+            bind(rawLocationList.pick({ images: true }), (row) => ({
               images: mapImages(
                 (row.images ?? []).flatMap((entry) =>
                   "image" in entry ? [entry] : [],
                 ),
               ),
             })),
-            bind(locationListItemOut.pick({ inventoryEntries: true }), (row) =>
+            bind(rawLocationList.pick({ inventoryEntries: true }), (row) =>
               locationInventoryFields({
                 inventoryEntries: (row.inventoryEntries ?? []).flatMap(
                   (entry) =>
@@ -818,7 +822,7 @@ export const locationListRead = async (
               }),
             ),
             bind(
-              locationListItemOut.pick({
+              rawLocationList.pick({
                 valuation: true,
                 valuationLabel: true,
               }),
@@ -840,7 +844,7 @@ export const locationListRead = async (
 const loadLocationCoverImages = async (
   db: Database,
   ids: LocationId[],
-): Promise<Map<LocationId, ImageOut>> => {
+): Promise<Map<LocationId, RawImageOutput>> => {
   const covers = await resolveEntityDisplayImageLists(
     db,
     ids.map((entityId) => ({ entityKind: "location", entityId })),
@@ -865,9 +869,7 @@ const loadLocationCoverImages = async (
     ids.flatMap((id) => {
       const cover = covers.get(entityRefKey("location", id))?.[0];
       const record = cover ? byCode.get(cover.id) : undefined;
-      return record && cover
-        ? [[id, { ...record, url: preferredImageUrl(cover) }]]
-        : [];
+      return record && cover ? [[id, record]] : [];
     }),
   );
 };
@@ -942,16 +944,57 @@ export const locationSearch = async (
     loadLocationAncestors(db, ids),
     loadLocationCoverImages(db, ids),
   ]);
-  return {
-    ...page,
-    data: rows.map((row) => ({
+  const referenceRows = [
+    ...rows.map((row) => ({
       id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
       type: parseLocationType(row.type),
-      aliases: row.aliases ?? [],
-      ancestors: ancestorsById.get(row.id) ?? [],
-      coverImage: coverById.get(row.id) ?? null,
     })),
+    ...rows.flatMap((row) => ancestorsById.get(row.id) ?? []),
+  ];
+  const coverEntries = [...coverById];
+  const coverSchema = locationPickerItemOut.shape.coverImage.unwrap();
+  type PublicRead = Parameters<
+    typeof publicFieldEnvelopeBatch
+  >[0]["reads"][number];
+  const serialized = await publicFieldEnvelopeBatch({
+    db,
+    reads: [
+      ...referenceRows.map((row): PublicRead => ({
+        entity: "location",
+        schema: locationPickerAncestorOut,
+        row,
+      })),
+      ...coverEntries.map(([, row]): PublicRead => ({
+        entity: "image",
+        schema: coverSchema,
+        row,
+      })),
+    ],
+  });
+  const references = serialized
+    .slice(0, referenceRows.length)
+    .map((row) => locationPickerAncestorOut.parse(row));
+  const covers = serialized
+    .slice(referenceRows.length)
+    .map((row) => coverSchema.parse(row));
+  const publicCoverById = new Map(
+    coverEntries.map(([id], index) => [id, covers[index]]),
+  );
+  let offset = rows.length;
+  return {
+    ...page,
+    data: rows.map((row, index) => {
+      const count = ancestorsById.get(row.id)?.length ?? 0;
+      const ancestors = references.slice(offset, offset + count);
+      offset += count;
+      return locationPickerItemOut.parse({
+        ...references[index],
+        aliases: row.aliases ?? [],
+        ancestors,
+        coverImage: publicCoverById.get(row.id) ?? null,
+      });
+    }),
   };
 };
 
@@ -1038,15 +1081,7 @@ export const findLocationsNeedingAiDescription = async (
 export const getLocationById = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
-): Promise<InfLocation> => {
-  // The whole-tree valuation depends on nothing below, so it starts now rather
-  // than after the record and ancestor reads. A transaction-bound client
-  // cannot run queries concurrently, so it keeps the sequential order.
-  const earlyValuations = isTransaction(db)
-    ? undefined
-    : computeLocationValuations(db);
-  // Awaited below; this only stops a not-found throw from leaving it unhandled.
-  earlyValuations?.catch(() => undefined);
+): Promise<RawLocationDetail> => {
   const res = await unwrapDb(db).query.location.findFirst({
     where: and(eq(location.id, id), notDeleted(location)),
     ...relations.location.full,
@@ -1137,9 +1172,7 @@ export const getLocationById = async (
     // Items and count come from the same rows so the resource detail cannot
     // report `directItemCount: 12` next to `inventoryItems: []` again.
     loadStockItemsByLocation(db, [id, ...childIds]),
-    // A whole-tree compute: this location's own valuation is a rollup over
-    // its entire subtree, which nothing scoped to `id`/`childIds` can produce.
-    earlyValuations ?? computeLocationValuations(db),
+    loadStoredLocationValuations(db, [id, ...childIds, ...parentChainIds]),
     // Root, every direct child and the whole ancestor chain — everywhere
     // `buildLocationWithChildren` recurses into below.
     loadDataQualities(db, "location", [id, ...childIds, ...parentChainIds]),
@@ -1198,7 +1231,7 @@ export const locationList = async (
     { kind: "full" },
     readIntent,
   );
-  return parseCompleteListRead(locationListItemOut, Promise.resolve(page));
+  return parseCompleteListRead(rawLocationList, Promise.resolve(page));
 };
 
 /** Only image presence is required when clearing a description after the last attachment is removed. */

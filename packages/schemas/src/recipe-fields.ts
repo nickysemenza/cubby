@@ -2,7 +2,7 @@ import { z } from "zod";
 import { id, ingredientShortcode, recipeShortcode } from "./identifier-fields";
 import { amount, positiveAmount } from "./codec";
 import { timestampedFields } from "./base-entity";
-import { recipeTopLevel } from "./recipe-shared";
+import { rawRecipeTopLevel, recipeRefOut } from "./recipe-shared";
 
 const ingredientProvenance = {
   rawLine: z.string().nullish(),
@@ -79,7 +79,7 @@ export const ingredientSectionLineOut = z.object({
 export const recipeSectionLineOut = z.object({
   ...sectionLineFields,
   type: z.literal("recipe"),
-  recipe: z.lazy(() => recipeTopLevel),
+  recipe: z.lazy(() => rawRecipeTopLevel),
   ingredient: z.null(),
 });
 export const recipeSectionIngredientOut = z.discriminatedUnion("type", [
@@ -103,8 +103,14 @@ export const recipeSectionsOut = z.array(recipeSectionOut);
  * flattened to `ingredientId`/`recipeId` (`LINE_TARGET`), everything the input does not name
  * (timestamps, the nested records) stripped by the schema.
  */
+export type RecipeSectionLineRead =
+  | z.output<typeof ingredientSectionLineOut>
+  | (Omit<z.output<typeof recipeSectionLineOut>, "recipe"> & {
+      recipe: Pick<z.output<typeof rawRecipeTopLevel>, "id" | "name" | "yield">;
+    });
+
 export const recipeLineAsInput = (
-  line: z.infer<typeof recipeSectionIngredientOut>,
+  line: RecipeSectionLineRead,
 ): z.infer<typeof recipeIngredientInput> =>
   recipeIngredientInput.parse({
     ...line,
@@ -114,7 +120,8 @@ export const recipeLineAsInput = (
 
 export const recipeUsageOut = z.object({
   id: z.uuid(),
-  recipe: recipeTopLevel,
+  // A usage names its recipe; amounts and source-line evidence belong to the usage.
+  recipe: recipeRefOut,
   sectionName: z.string().nullish(),
   amounts: z.array(amount),
   rawLine: z.string().nullish(),
@@ -127,7 +134,7 @@ export const recipeUsageMcpEntityOut = recipeUsageOut.omit({ id: true });
 
 import { listLabel } from "./entity-definitions/label-field";
 import { displayImagesField } from "./display-images";
-import { recipeTopLevelFields, recipeTotals } from "./recipe-shared";
+import { rawRecipeTopLevelFields, recipeTotals } from "./recipe-shared";
 
 export function recipeReadSchemas<
   S extends z.ZodRawShape & {
@@ -142,7 +149,7 @@ export function recipeReadSchemas<
   const output = base.extend({ sections: recipeSectionsOut });
   const field = <K extends keyof S>(key: K): S[K] => base.shape[key];
   const list = z.object({
-    ...recipeTopLevelFields,
+    ...rawRecipeTopLevelFields,
     dataQuality: field("dataQuality"),
     cost: field("cost"),
     calories: field("calories"),

@@ -13,8 +13,10 @@ struct EntityHeroView<Actions: View>: View {
     @ViewBuilder let actions: Actions
 
     @State private var showingPhoto = false
+    @State private var showingImageChain = false
 
     private var presentation: EntityPresentation { descriptor.presentation }
+    private var imageSubject: EntityRef { EntityRef(entity: descriptor.key, id: row.id) }
     let showsTitle: Bool
 
     init(
@@ -37,28 +39,45 @@ struct EntityHeroView<Actions: View>: View {
     }
 
     var body: some View {
-        if let photo = heroPhoto, photoLeads {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                photoButton(photo, fullWidth: true)
-                summary
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            HStack(alignment: .center, spacing: FieldGuideTokens.Space.md) {
-                if let photo = heroPhoto {
-                    photoButton(photo, fullWidth: false)
-                } else {
-                    Thumb(
-                        url: row.imageURL, size: 56, symbol: descriptor.recordSymbol(in: row),
-                        emoji: descriptor.recordEmoji(in: row)
-                    )
-                    .accessibilityHidden(true)
+        Group {
+            if let photo = heroPhoto, photoLeads {
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                    photoButton(photo, fullWidth: true)
+                        .modifier(ImageChainEntry(enabled: explainsImage, isPresented: $showingImageChain))
+                    summary
                 }
-                summary
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(alignment: .center, spacing: FieldGuideTokens.Space.md) {
+                    if let photo = heroPhoto {
+                        photoButton(photo, fullWidth: false)
+                            .modifier(
+                                ImageChainEntry(enabled: explainsImage, isPresented: $showingImageChain))
+                    } else {
+                        Thumb(
+                            url: row.imageURL, size: 56, symbol: descriptor.recordSymbol(in: row),
+                            emoji: descriptor.recordEmoji(in: row)
+                        )
+                        .accessibilityHidden(!explainsImage)
+                        .accessibilityLabel("Display image")
+                        .modifier(ImageChainEntry(enabled: explainsImage, isPresented: $showingImageChain))
+                    }
+                    summary
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            actions
         }
-        actions
+        .onChange(of: imageSubject) { _, _ in showingImageChain = false }
+        .popover(isPresented: $showingImageChain) {
+            NavigationStack {
+                DisplayImageChainView(subject: imageSubject) {
+                    showingImageChain = false
+                }
+                .id(imageSubject.stableKey)
+                .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
+            }
+        }
     }
 
     private func photoButton(_ photo: PhotoAttachment, fullWidth: Bool) -> some View {
@@ -115,6 +134,9 @@ struct EntityHeroView<Actions: View>: View {
         }
     }
 
+    /// A shown display image can explain which source supplied it; an Image record is its own.
+    private var explainsImage: Bool { row.imageURL != nil && descriptor.key != .image }
+
     private var heroPhoto: PhotoAttachment? {
         guard presentation.heroImages, let url = row.imageURL else { return nil }
         return PhotoAttachment(
@@ -143,6 +165,21 @@ enum DetailHeaderLine {
                     EntityFieldValue.text(in: row.raw, field: $0, surface: "detail")
                 }
             }.first
+    }
+}
+
+/// Why this image remains available to pointer and accessibility interaction.
+private struct ImageChainEntry: ViewModifier {
+    let enabled: Bool
+    @Binding var isPresented: Bool
+    func body(content: Content) -> some View {
+        if enabled {
+            content.contextMenu {
+                Button("Why this image", systemImage: "photo.stack") { isPresented = true }
+            }.accessibilityAction(named: Text("Why this image")) { isPresented = true }
+        } else {
+            content
+        }
     }
 }
 
@@ -212,11 +249,9 @@ struct FieldsSectionView: View {
                                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                                     HStack(spacing: FieldGuideTokens.Space.xs) {
                                         macGridValue(field)
-                                        DerivedValueStatus(raw: row.raw, field: field.key)
+                                        FieldValueStatus(raw: row.raw, field: field)
                                     }
-                                    DerivedProvenanceCaption(
-                                        raw: row.raw, field: field.key,
-                                        includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
+                                    FieldProvenanceCaption(raw: row.raw, field: field)
                                 }.frame(minHeight: 20)
                             }
                         }
@@ -224,24 +259,19 @@ struct FieldsSectionView: View {
                 }
                 .navigationLinkIndicatorVisibility(.hidden)
             } else {
-                ForEach(fieldGroups(rows)) { group in
-                    if group.compact {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(group.fields, id: \.key) { field in
-                                if field.key != group.id { Divider() }
-                                dossierField(field)
-                            }
-                        }
-                        .font(.subheadline)
-                        .navigationLinkIndicatorVisibility(.hidden)
-                        .listRowInsets(
-                            EdgeInsets(
-                                top: 0, leading: FieldGuideTokens.Space.md,
-                                bottom: 0, trailing: FieldGuideTokens.Space.md))
+                ForEach(rows, id: \.key) { field in
+                    if isCompact(field) {
+                        // Each field needs its own Form cell: a shared cell routes adjacent
+                        // context menus through the first field's menu host.
+                        dossierField(field)
+                            .font(.subheadline)
+                            .navigationLinkIndicatorVisibility(.hidden)
+                            .listRowInsets(
+                                EdgeInsets(
+                                    top: 0, leading: FieldGuideTokens.Space.md,
+                                    bottom: 0, trailing: FieldGuideTokens.Space.md))
                     } else {
-                        ForEach(group.fields, id: \.key) { field in
-                            fieldRowWithResolutionActions(field)
-                        }
+                        fieldRowWithResolutionActions(field)
                     }
                 }
             }
@@ -260,29 +290,11 @@ struct FieldsSectionView: View {
         }
     }
 
-    private struct FieldGroup: Identifiable {
-        var fields: [FieldDescriptor]
-        let compact: Bool
-        var id: String { fields[0].key }
-    }
-
-    /// Ordinary facts and their evidence share a Form child. Specialist/prose layouts keep
-    /// their own row, and grouping preserves manifest order.
-    private func fieldGroups(_ rows: [FieldDescriptor]) -> [FieldGroup] {
-        var groups: [FieldGroup] = []
-        for field in rows {
-            let compact =
-                field.itemsPath == nil && field.controlKind != .textarea
-                && field.detailRenderer != .expenseSpendingCategory
-                && field.detailRenderer != .spendingCategorySummary
-                && field.detailRenderer != .recipeSource
-            if compact, groups.last?.compact == true {
-                groups[groups.count - 1].fields.append(field)
-            } else {
-                groups.append(FieldGroup(fields: [field], compact: compact))
-            }
-        }
-        return groups
+    private func isCompact(_ field: FieldDescriptor) -> Bool {
+        field.itemsPath == nil && field.controlKind != .textarea
+            && field.detailRenderer != .expenseSpendingCategory
+            && field.detailRenderer != .spendingCategorySummary
+            && field.detailRenderer != .recipeSource
     }
 
     @ViewBuilder
@@ -296,11 +308,9 @@ struct FieldsSectionView: View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             HStack(spacing: FieldGuideTokens.Space.xs) {
                 fieldRow(field)
-                DerivedValueStatus(raw: row.raw, field: field.key)
+                FieldValueStatus(raw: row.raw, field: field)
             }
-            DerivedProvenanceCaption(
-                raw: row.raw, field: field.key,
-                includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
+            FieldProvenanceCaption(raw: row.raw, field: field)
         }
         .frame(minHeight: isInteractive(field) ? FieldGuideTokens.touchTarget : listRowMinimumHeight)
         .modifier(
@@ -320,11 +330,11 @@ struct FieldsSectionView: View {
     @ViewBuilder
     private func resolutionActions(_ field: FieldDescriptor) -> some View {
         if field.applicabilityRefusal(in: row.raw) == nil,
-            let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
+            let envelope = FieldEnvelope.of(row.raw, field: field),
             descriptor.key.nativeActions.contains(.update)
         {
-            ForEach(resolved.actions(field: field)) { action in
-                Button(action.kind == .confirm ? "Set here" : action.label) {
+            ForEach(envelope.actions(field: field)) { action in
+                Button(action.label) {
                     resolutionReview = ResolutionActionRequest(field: field.key, kind: action.kind)
                 }
                 .accessibilityIdentifier(
@@ -338,7 +348,7 @@ struct FieldsSectionView: View {
         guard field.displayApplicabilityRefusal(in: row.raw) == nil else { return false }
         return field.reference != nil || field.detailRenderer == .recipeSource
             || field.format == "external-link"
-            || FieldResolutionPresentation(raw: row.raw, field: field)?.isInherited == true
+            || FieldEnvelope.of(row.raw, field: field)?.isInherited == true
     }
 
     private func isWide(_ field: FieldDescriptor) -> Bool {
@@ -360,17 +370,10 @@ struct FieldsSectionView: View {
                     field: field, subject: EntityRef(entity: descriptor.key, id: row.id)
                 )
                 .font(.caption)
-                DerivedValueStatus(raw: row.raw, field: field.key)
-                DerivedProvenanceCaption(
-                    raw: row.raw, field: field.key,
-                    includeInherited: row.raw["fieldResolutions"]?[field.key] == nil)
+                FieldValueStatus(raw: row.raw, field: field)
                 Text(value).font(.body).textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
-                    resolved.isInherited
-                {
-                    EntityFieldResolutionLabel(resolved: resolved, field: field)
-                }
+                FieldProvenanceCaption(raw: row.raw, field: field)
             }
             .modifier(
                 FieldExplanationPresenter(
@@ -391,11 +394,6 @@ struct FieldsSectionView: View {
                     Text(reference.name ?? reference.id).foregroundStyle(.tint)
                 }
                 .buttonStyle(.plain)
-                if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
-                    resolved.isInherited
-                {
-                    EntityFieldResolutionLabel(resolved: resolved, field: field)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(
@@ -422,11 +420,6 @@ struct FieldsSectionView: View {
                             .textSelection(.enabled)
                     }
                 }
-                if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
-                    resolved.isInherited
-                {
-                    EntityFieldResolutionLabel(resolved: resolved, field: field)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .modifier(
@@ -444,11 +437,13 @@ struct FieldsSectionView: View {
     }
 
     private func displayText(_ field: FieldDescriptor) -> String? {
+        let envelope = FieldEnvelope.of(row.raw, field: field)
         let value =
-            FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field)
+            FieldEnvelopePresentation.allocatedReferenceLabel(in: row.raw, field: field)
             ?? EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+            ?? envelope?.visibleEmptyLabel(field: field)
         if summary, value == nil,
-            FieldResolutionPresentation.readValue(in: row.raw, field: field, surface: "detail") == .null
+            FieldEnvelopePresentation.readValue(in: row.raw, field: field, surface: "detail") == .null
         {
             return "Unknown"
         }
@@ -482,7 +477,7 @@ struct FieldsSectionView: View {
                 return field
             }
             if field.detailRenderer == .recipeSource {
-                return RecipeSourcePresentation.parse(row.raw[field.key]) == nil ? nil : field
+                return RecipeSourcePresentation.parse(row.raw.recordValue(field.key)) == nil ? nil : field
             }
             if field.itemsPath != nil {
                 return field.detailItems(in: row.raw).isEmpty ? nil : field
@@ -522,7 +517,7 @@ struct FieldsSectionView: View {
                 }
             }
         } else if field.detailRenderer == .spendingCategorySummary {
-            if let value = row.raw[field.key],
+            if let value = FieldEnvelope.of(row.raw, field: field)?.effectiveValue,
                 let summary = try? value.decoded(SpendingCategorySummary.self)
             {
                 SpendingCategorySummaryView(
@@ -531,7 +526,7 @@ struct FieldsSectionView: View {
         } else if field.detailRenderer == .expenseSpendingCategory {
             ExpenseSpendingCategoryView(row: row)
         } else if field.detailRenderer == .recipeSource,
-            let source = RecipeSourcePresentation.parse(row.raw[field.key])
+            let source = RecipeSourcePresentation.parse(row.raw.recordValue(field.key))
         {
             recipeSourceRow(field, source: source)
         } else if let items = EntityFieldValue.resolvedItems(in: row.raw, field: field, surface: "detail") {
@@ -549,11 +544,6 @@ struct FieldsSectionView: View {
                         .foregroundStyle(.tint)
                     }
                     .buttonStyle(.plain)
-                    if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
-                        resolved.isInherited
-                    {
-                        EntityFieldResolutionLabel(resolved: resolved, field: field)
-                    }
                 }
             } label: {
                 FieldExplanationLabel(
@@ -592,11 +582,6 @@ struct FieldsSectionView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
-                        resolved.isInherited
-                    {
-                        EntityFieldResolutionLabel(resolved: resolved, field: field)
-                    }
                 }
                 // The marker reads as part of the value, not as a separate VoiceOver stop.
                 .accessibilityElement(children: .combine)
@@ -606,10 +591,6 @@ struct FieldsSectionView: View {
                     subject: EntityRef(entity: descriptor.key, id: row.id))
             }
         }
-    }
-
-    private func isInherited(_ field: FieldDescriptor) -> Bool {
-        FieldResolutionPresentation(raw: row.raw, field: field)?.isInherited ?? false
     }
 
     @ViewBuilder
@@ -659,423 +640,6 @@ struct FieldExplanationLabel: View {
             #if os(macOS)
                 .help(field.explanation?.description ?? field.label)
             #endif
-    }
-}
-
-/// One row menu must own Explain and overrides; a parent override menu masks
-/// a nested label's context menu on iOS.
-private struct FieldExplanationPresenter: ViewModifier {
-    let field: FieldDescriptor
-    let subject: EntityRef
-    var surface = "detail"
-    var menuActions: AnyView? = nil
-    @Environment(AppModel.self) private var appModel
-    @State private var showingExplanation = false
-    @State private var resolved: FieldExplanationOutput?
-    @State private var loadError: String?
-
-    func body(content: Content) -> some View {
-        content
-            .accessibilityAction(named: Text("Explain")) { presentExplanation() }
-            .contextMenu {
-                if field.explanation != nil {
-                    #if os(macOS)
-                        Button("Explain “\(field.label)”") { presentExplanation() }
-                    #else
-                        Button("Explain") { presentExplanation() }
-                    #endif
-                }
-                menuActions
-            }
-            .onChange(of: subject) { _, _ in
-                showingExplanation = false
-                resolved = nil
-                loadError = nil
-            }
-            .popover(isPresented: $showingExplanation) {
-                explanationPopover()
-                    .task(id: showingExplanation) { await loadExplanation() }
-            }
-    }
-
-    private func presentExplanation() {
-        guard field.explanation != nil else { return }
-        resolved = nil
-        loadError = nil
-        showingExplanation = true
-    }
-
-    @ViewBuilder
-    private func explanationPopover() -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                HStack {
-                    Text(resolved?.label ?? field.label).font(.headline)
-                    Spacer()
-                    Button {
-                        showingExplanation = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .frame(
-                                minWidth: FieldGuideTokens.touchTarget,
-                                minHeight: FieldGuideTokens.touchTarget
-                            )
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close field explanation")
-                    .accessibilityIdentifier("field.explanation.close")
-                }
-                if field.key == "dataQuality", field.readKey == nil {
-                    explanationSectionLabel("What this means")
-                    Text("Not assessed").font(.headline)
-                    Text(
-                        "No quality checks are defined for this entity. Review its fields and supporting records directly."
-                    )
-                    if EntityCatalog.descriptor(forShortcode: subject.id)?.key == subject.entity {
-                        NavigationLink(
-                            "Open record", value: Route.entityDetail(subject.entity, id: subject.id))
-                    }
-                    Divider()
-                    explanationSectionLabel("Technical details")
-                    if let rule = field.explanation {
-                        Text("Rule: \(rule.ruleId) · r\(rule.version)").font(.caption.monospaced())
-                    }
-                    Text("Evaluation: not performed; no checks are defined.").font(.caption)
-                    Text(
-                        "There is no score, calculation, or check evaluation for this entity. Not assessed is not a score of zero or a guarantee of completeness."
-                    )
-                    .font(.callout)
-                } else if let resolved {
-                    if let derived = resolved.derived {
-                        DerivedExplanationSummary(explanation: derived, field: field)
-                        Divider()
-                    }
-                    explanationSectionLabel("What this means")
-                    if let interpretation = resolved.interpretation {
-                        if resolved.resolution == nil {
-                            Text(interpretation.result).font(.headline)
-                        }
-                        Text(interpretation.summary).font(.body)
-                        ForEach(interpretation.caveats, id: \.self) { caveat in
-                            Text(caveat).font(.callout).foregroundStyle(.secondary)
-                        }
-                        if !interpretation.nextSteps.isEmpty {
-                            Text("Next steps").font(.headline)
-                            ForEach(interpretation.nextSteps, id: \.self) { step in
-                                Text(step).font(.callout)
-                            }
-                        }
-                    } else if resolved.resolution == nil, let value = try? JSONValue(encoding: resolved.value)
-                    {
-                        if let code = value.stringValue,
-                            let option = field.valueOptions?.first(where: { $0.value == code })
-                        {
-                            Text(option.label).font(.headline)
-                        } else {
-                            ExplanationEvidenceValue(value: value)
-                        }
-                    }
-                    if let resolution = resolved.resolution {
-                        let hasFallback = display(resolution.fallbackValue) != nil
-                        let state = FieldResolutionState(
-                            resolution, hasFallback: hasFallback,
-                            intentional: field.resolution?.redundancy == "intentional")
-                        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                            Text(
-                                resolutionValueLabel(resolved)
-                            )
-                            .font(.fieldGuideData.weight(.semibold))
-                            .accessibilityIdentifier("field.explanation.effective-value")
-                            Spacer(minLength: FieldGuideTokens.Space.sm)
-                            Label(
-                                state.label,
-                                systemImage: state.systemImage
-                            )
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(
-                                state.tone == .redundant
-                                    ? FieldGuideTokens.warning : FieldGuideTokens.graphiteSecondary
-                            )
-                            .accessibilityIdentifier("field.explanation.state")
-                        }
-                        if resolution.mode == .inherit || resolution.mode == .allocated,
-                            let source = resolution.sourceEntity,
-                            let entity = EntityKey(rawValue: source.entityKind.rawValue)
-                        {
-                            explanationFact("From") {
-                                NavigationLink(
-                                    source.name ?? source.entityId,
-                                    value: Route.entityDetail(entity, id: source.entityId))
-                            }
-                        }
-                        if resolution.mode == .explicit || resolution.mode == .none,
-                            let fallbackText = display(resolution.fallbackValue)
-                        {
-                            explanationFact("Fallback") {
-                                Text(fallbackText).font(.fieldGuideData)
-                                    .accessibilityIdentifier("field.explanation.fallback-value")
-                                if let source = resolved.resolutionEvidence.valueIfPresent??.fallbackSource,
-                                    let entity = EntityKey(rawValue: source.entityKind.rawValue)
-                                {
-                                    NavigationLink(
-                                        source.name ?? source.entityId,
-                                        value: Route.entityDetail(entity, id: source.entityId))
-                                }
-                            }
-                        }
-                    }
-                    OpenOnWebButton(
-                        target: .record(key: subject.entity, id: subject.id),
-                        label: "Review data quality on web")
-                    if case .value(.some(let evidence)) = resolved.resolutionEvidence {
-                        Divider()
-                        explanationSectionLabel(evidence.chain.title ?? "Resolution order")
-                        explanationCoverage(evidence.coverage, noun: "evaluation rows")
-                        explanationCoverage(evidence.branches, noun: "inventory entries")
-                        resolutionSteps(evidence.chain)
-                            .accessibilityIdentifier("field.explanation.chain")
-                        if let contributors = evidence.contributors, !contributors.isEmpty {
-                            if !evidence.chain.rows.isEmpty || !evidence.chain.empty.isEmpty {
-                                explanationSectionLabel("Contributing records")
-                            }
-                            ForEach(Array(contributors.prefix(6).enumerated()), id: \.offset) {
-                                _, contributor in
-                                resolutionContributor(
-                                    contributor.chain, steps: contributor.steps,
-                                    coverage: contributor.coverage)
-                            }
-                            if contributors.count > 6 {
-                                DisclosureGroup("Show \(contributors.count - 6) more contributors") {
-                                    ForEach(Array(contributors.dropFirst(6).enumerated()), id: \.offset) {
-                                        _, contributor in
-                                        resolutionContributor(
-                                            contributor.chain, steps: contributor.steps,
-                                            coverage: contributor.coverage)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if let steps = resolved.resolutionEvidence.valueIfPresent??.steps, !steps.isEmpty {
-                        DisclosureGroup("Inputs and source settings") {
-                            ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
-                                ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
-                                    explanationSource(observation)
-                                }
-                                explanationCoverage(step.coverage, noun: "inputs")
-                            }
-                        }
-                    }
-                    if !resolved.sources.isEmpty {
-                        Divider()
-                        explanationSectionLabel("Evidence")
-                        ForEach(Array(resolved.sources.prefix(6).enumerated()), id: \.offset) { _, source in
-                            explanationSource(source)
-                        }
-                        if resolved.sources.count > 6 {
-                            DisclosureGroup("Show \(resolved.sources.count - 6) more evidence entries") {
-                                ForEach(Array(resolved.sources.dropFirst(6).enumerated()), id: \.offset) {
-                                    _, source in
-                                    explanationSource(source)
-                                }
-                            }
-                        }
-                    }
-                    if resolved.truncated {
-                        Text("Evidence is bounded; the displayed sources are not an exhaustive list.")
-                            .font(.caption)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    }
-
-                } else if let loadError {
-                    Text(loadError).font(.caption).foregroundStyle(.secondary)
-                    Button("Retry explanation") { Task { await loadExplanation() } }
-                } else {
-                    ProgressView().controlSize(.small)
-                }
-            }
-            .padding(FieldGuideTokens.Space.md)
-            .frame(idealWidth: 340, alignment: .leading)
-        }
-        #if os(macOS)
-            .frame(
-                minWidth: 360, idealWidth: 480, maxWidth: 560, minHeight: 320, idealHeight: 620,
-                maxHeight: 760
-            )
-            .accessibilityElement(children: .contain)
-        #endif
-        .accessibilityIdentifier("field.explanation.popover")
-        .presentationCompactAdaptation(.sheet)
-    }
-
-    private func loadExplanation() async {
-        guard showingExplanation, resolved == nil,
-            !(field.key == "dataQuality" && field.readKey == nil)
-        else { return }
-        loadError = nil
-        do {
-            let result = try await appModel.client.fieldExplanation(
-                subject: subject, field: field.key, surface: surface)
-            try Task.checkCancellation()
-            resolved = result
-            loadError = nil
-        } catch is CancellationError {
-        } catch {
-            guard !Task.isCancelled else { return }
-            loadError = String(describing: error)
-            appModel.handle(error)
-        }
-    }
-
-    @ViewBuilder
-    private func explanationSectionLabel(_ text: String) -> some View {
-        Text(text.uppercased()).font(.caption2.weight(.semibold)).tracking(0.6)
-            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-    }
-
-    private func explanationFact<Content: View>(
-        _ label: String, @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-            Text(label).font(.caption).foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            content()
-        }
-    }
-
-    @ViewBuilder
-    private func explanationSource(_ source: FieldExplanationSource) -> some View {
-        let value = try? JSONValue(encoding: source.value)
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text(source.label).font(.caption).foregroundStyle(.secondary)
-            if let reference = source.entity, let entity = EntityKey(rawValue: reference.entityKind.rawValue)
-            {
-                NavigationLink(
-                    value?["name"]?.stringValue ?? reference.entityId,
-                    value: Route.entityDetail(entity, id: reference.entityId))
-            }
-            if let reference = source.entity, let entity = EntityKey(rawValue: reference.entityKind.rawValue)
-            {
-                ForEach(source.fields ?? [], id: \.self) { key in
-                    if let sourceField = EntityCatalog[entity].field(key) {
-                        FieldExplanationLabel(
-                            field: sourceField, subject: EntityRef(entity: entity, id: reference.entityId))
-                    }
-                }
-            }
-            if let value {
-                ExplanationEvidenceValue(value: sourceFacts(value, reference: source.entity?.entityId))
-            }
-        }
-    }
-
-    private func sourceFacts(_ value: JSONValue, reference: String?) -> JSONValue {
-        guard let reference, let facts = value.objectValue else { return value }
-        return .object(facts.filter { $0.key != "name" && $0.value.stringValue != reference })
-    }
-
-    private func resolutionOutcomeLabel(_ explanation: FieldExplanationOutput) -> String? {
-        switch explanation.resolutionEvidence.valueIfPresent??.outcome?.rawValue {
-        case "mixed": "Mixed"
-        case "unset": field.resolution?.labels?.unresolved ?? "Not set"
-        case "blocked": "Blocked"
-        default: nil
-        }
-    }
-
-    private func resolutionValueLabel(_ explanation: FieldExplanationOutput) -> String {
-        guard let resolution = explanation.resolution else { return "Not set" }
-        if explanation.resolutionEvidence.valueIfPresent??.outcome?.rawValue == "mixed" { return "Mixed" }
-        if resolution.mode == .allocated, display(resolution.value) == nil,
-            explanation.resolutionEvidence.valueIfPresent??.outcome?.rawValue == "resolved"
-        {
-            return "Allocated"
-        }
-        return display(resolution.value)
-            ?? resolutionOutcomeLabel(explanation)
-            ?? FieldResolutionPresentation.emptyLabel(resolution, field: field)
-    }
-
-    @ViewBuilder
-    private func resolutionSteps(_ block: ReportRecordsBlock) -> some View {
-        if !block.rows.isEmpty || !block.empty.isEmpty {
-            let first = resolutionBlock(block, rows: 0..<min(6, block.rows.count))
-            RecordsBlockView(records: ReportPresentation.records(first), host: nil)
-            if block.rows.count > 6 {
-                DisclosureGroup("Show \(block.rows.count - 6) more resolution steps") {
-                    RecordsBlockView(
-                        records: ReportPresentation.records(
-                            resolutionBlock(block, rows: 6..<block.rows.count)),
-                        host: nil)
-                }
-            }
-        }
-    }
-
-    private func resolutionBlock(_ block: ReportRecordsBlock, rows: Range<Int>) -> ReportRecordsBlock {
-        var result = block
-        result.title = nil
-        if rows.lowerBound > 0 { result.footer = nil }
-        result.rows = Array(block.rows[rows])
-        return result
-    }
-
-    @ViewBuilder
-    private func explanationCoverage(_ coverage: FieldEvidenceCoverage?, noun: String) -> some View {
-        if let coverage, coverage.omitted > 0 {
-            Text("Showing \(coverage.shown) of \(coverage.total) \(noun).")
-                .font(.caption).foregroundStyle(.secondary)
-        }
-    }
-
-    private func resolutionContributor(
-        _ block: ReportRecordsBlock, steps: [FieldDecisionStep]? = nil, coverage: FieldEvidenceCoverage? = nil
-    )
-        -> some View
-    {
-        DisclosureGroup {
-            resolutionSteps(block)
-            explanationCoverage(coverage, noun: "evaluation rows")
-            if let steps, !steps.isEmpty {
-                DisclosureGroup("Inputs and source settings") {
-                    ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
-                        ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
-                            explanationSource(observation)
-                        }
-                        explanationCoverage(step.coverage, noun: "inputs")
-                    }
-                }
-            }
-        } label: {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                Text(block.title ?? block.rows.first?.title ?? "Contributor")
-                    .font(.callout.weight(.medium))
-                if let trailing = block.rows.first?.trailing {
-                    Text(trailing).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    private func display(_ value: JSONValue) -> String? {
-        displayJSON(value)
-    }
-
-    private func displayJSON(_ value: JSONValue) -> String? {
-        if let text = EntityFieldValue.text(value, field: field) { return text }
-        if let mode = value["mode"]?.stringValue {
-            if let category = value["category"]?.stringValue { return "Category · \(category)" }
-            return mode == "none" ? "No category" : mode.capitalized
-        }
-        switch value {
-        case .null: return nil
-        case .bool(let value): return value ? "Yes" : "No"
-        case .number(let value): return value.formatted()
-        case .string(let value): return value
-        case .array, .object:
-            guard let data = try? JSONEncoder().encode(value) else { return nil }
-            return String(data: data, encoding: .utf8)
-        }
     }
 }
 
@@ -1406,7 +970,7 @@ struct EntityJournalEntryRow: View {
     var columns: [String]? = nil
 
     private var images: [URL] {
-        row.raw["displayImages"]?.arrayValue?.compactMap { image in
+        row.raw.recordValue("displayImages")?.arrayValue?.compactMap { image in
             let value =
                 image["representations"]?["preferred"]?.stringValue
                 ?? image["url"]?.stringValue

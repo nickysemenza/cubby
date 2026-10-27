@@ -1,8 +1,11 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type { GardenGuideWindow } from "@cubby/schemas/garden-guide";
-import type { PlantingOut } from "@cubby/schemas/planting";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import { guideWindowSegments, plantingScheduleRows } from "./garden-schedule";
 
@@ -31,16 +34,31 @@ describe("garden schedule", () => {
 
   it("groups by current location and leaves free-text plans undated", () => {
     const planting = fromPartial<PlantingOut>({
+      fields: {
+        expectedHarvest: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape
+            .expectedHarvest,
+          null,
+        ),
+        status: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape["status"],
+          "planned",
+        ),
+        expectedHarvestStart: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape[
+            "expectedHarvestStart"
+          ],
+          null,
+        ),
+      },
       id: testShortcode("planting", "planned"),
       displayName: "Example crop",
-      status: "planned",
+
       locationId: testShortcode("location", "bed"),
       locationName: "Example bed",
       plannedWindow: "after the rain",
       season: null,
       transplantedOn: null,
-      expectedHarvestStart: null,
-      expectedHarvestEnd: null,
     });
     const rows = plantingScheduleRows([planting], 2026);
     expect(rows.map((row) => [row.name, row.depth])).toEqual([
@@ -54,17 +72,32 @@ describe("garden schedule", () => {
   it("keeps cited guidance separate from recorded dates under the current location", () => {
     const plantId = testShortcode("plant", "basil");
     const planting = fromPartial<PlantingOut>({
+      fields: {
+        expectedHarvest: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape
+            .expectedHarvest,
+          null,
+        ),
+        status: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape["status"],
+          "growing",
+        ),
+        expectedHarvestStart: fieldValueFixture(
+          entityFieldEnvelopeSchemas.planting.list.shape.fields.shape[
+            "expectedHarvestStart"
+          ],
+          null,
+        ),
+      },
       id: testShortcode("planting", "basil"),
       plantId,
       displayName: "Example basil",
-      status: "growing",
+
       locationId: testShortcode("location", "planter"),
       locationName: "Example planter",
       plannedWindow: null,
       season: { start: "2026-05-01", end: null },
       transplantedOn: null,
-      expectedHarvestStart: null,
-      expectedHarvestEnd: null,
     });
     const rows = plantingScheduleRows(
       [planting],
@@ -81,3 +114,5 @@ describe("garden schedule", () => {
     expect(rows[3]?.segments[0]?.variant).toBe("reference");
   });
 });
+
+type PlantingOut = DetailRecordOf<"planting">;

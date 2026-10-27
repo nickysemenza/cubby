@@ -1016,12 +1016,27 @@ describe("suggestFields", () => {
       },
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       suggestions: {},
       outcomes: { trade: { kind: "skipped", reason: "resolved" } },
-      fieldResolutions,
+      fields: {
+        trade: {
+          current: { assignment: { kind: "inherit" } },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: "plumbing" },
+              provenance: {
+                kind: "inherited",
+                source: fieldResolutions.trade.sourceEntity,
+              },
+            },
+          },
+        },
+      },
       eligibleTargets: [],
     });
+    expect(result).not.toHaveProperty("fieldResolutions");
     expect(decisionPort).not.toHaveBeenCalled();
   });
 
@@ -1112,7 +1127,44 @@ describe("suggestFields", () => {
       kind: "skipped",
       reason: "resolved",
     });
+    expect(result.fields?.trade).toMatchObject({
+      current: { controls: { kind: "readonly", reason: "allocated" } },
+      result: { kind: "live", decision: { provenance: { kind: "allocated" } } },
+    });
     expect(decisionPort).not.toHaveBeenCalled();
+  });
+
+  it("does not invent an empty allocation outcome before draft shares are evaluated", async () => {
+    const result = await suggestFields(
+      fakeDb,
+      fixtureRunId,
+      {
+        basisMode: "provided",
+        entity: "expense",
+        targets: ["trade"],
+        basis: { name: "sales tax", lineKind: "tax", trade: null },
+      },
+      {
+        resolveInheritance: async () => ({
+          trade: {
+            mode: "allocated",
+            storedValue: null,
+            value: null,
+            fallbackValue: null,
+            source: "Follows items",
+            sourceEntity: null,
+            matchesFallback: true,
+            canReset: false,
+          },
+        }),
+      },
+    );
+    expect(result.fields?.trade).toMatchObject({
+      current: { controls: { kind: "readonly", reason: "allocated" } },
+      result: { kind: "missing" },
+      work: { kind: "idle" },
+    });
+    expect(result.eligibleTargets).toEqual([]);
   });
 
   it("allows provided alternatives for explicit None without using a sibling proposal as evidence", async () => {

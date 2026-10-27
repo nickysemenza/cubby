@@ -30,6 +30,30 @@ const result = z.discriminatedUnion("kind", [
 ]);
 
 describe("operation contract wire collection", () => {
+  it("names shared values reached only through native record envelopes", () => {
+    const summary = z.object({ count: z.number() });
+    const record = z.object({
+      fields: z.object({ summary: z.object({ value: summary }) }),
+    });
+    const native = collectNativeContract(
+      [],
+      new Map([["SyntheticRecord", record]]),
+      new Map([["SyntheticSummary", summary]]),
+    );
+    expect(native.models["output/SyntheticSummary"]).toMatchObject({
+      properties: { count: { type: "number" } },
+    });
+    expect(
+      native.models["output/SyntheticRecord"]?.properties?.fields,
+    ).toMatchObject({
+      properties: {
+        summary: {
+          properties: { value: { $ref: "native://output/SyntheticSummary" } },
+        },
+      },
+    });
+  });
+
   it("retains omitted versus nullable fields before Swift codec generation", () => {
     const native = collectNativeContract(
       contract("example", {

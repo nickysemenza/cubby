@@ -8,9 +8,9 @@ import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 
 import { listEntities } from "~/entity/generated/entity-lists.gen";
-import { listReadSchema } from "~/entity/model/list-read-schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 
 /** Reuse the canonical selected-field readers for money, quantities, enums, and progress. */
 export async function withGraphPreviews<

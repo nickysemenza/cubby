@@ -1,7 +1,11 @@
-import { displayImagesField } from "./display-images";
-import cookbookDefinition from "./entity-definitions/03-cookbook.entity";
-import recipeDefinition from "./entity-definitions/01-recipe.entity";
-import { recipeUsageMcpEntityOut } from "./recipe-fields";
+import { recipeFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.recipe.gen";
+import {
+  recipeFieldEnvelopeFields,
+  recipePublicReadFields,
+} from "./generated/entity-field-envelope-fields.recipe.gen";
+import { rawRecipeGraph } from "./recipe-raw-read";
+import { withFieldEnvelopes } from "./field-envelope";
+import { cookbookFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.cookbook.gen";
 import { z } from "zod";
 import { batchProgressEvent } from "./batch";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -17,27 +21,10 @@ import {
   ingredientShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { imageUrlSummary } from "./image-summary";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
-import {
-  recipeTopLevelFields,
-  recipeTopLevel,
-  recipeTotals,
-  recipeRefOut,
-} from "./recipe-shared";
-import {
-  recipeIngredientInput,
-  recipeSectionOut,
-  ingredientSectionLineOut,
-  recipeSectionLineOut,
-  recipeSectionIngredientOut as sectionIngredientOut,
-} from "./recipe-fields";
-export {
-  sectionLineFields,
-  recipeSectionFields,
-  recipeSectionOut,
-  recipeSectionIngredientOut as sectionIngredientOut,
-} from "./recipe-fields";
+import { presenceFilter } from "./pagination";
+import { rawRecipeTopLevel, recipeRefOut } from "./recipe-shared";
+import { recipeIngredientInput } from "./recipe-fields";
+export { sectionLineFields, recipeSectionFields } from "./recipe-fields";
 import { recipeBaseFilterFields } from "./generated/recipe.gen";
 
 export {
@@ -51,6 +38,7 @@ export {
   recipeIngredientInput,
   recipeInstructionInput,
   recipeLineAsInput,
+  type RecipeSectionLineRead,
   recipeSectionInput,
   recipeSectionsInput,
 } from "./recipe-fields";
@@ -60,6 +48,12 @@ export * from "./recipe-shared";
 export type RecipeSortField = GeneratedEntitySortField<"recipe">;
 
 export type RecipeRef = z.infer<typeof recipeRefOut>;
+export const recipeTopLevel = withFieldEnvelopes(
+  rawRecipeTopLevel,
+  recipeFieldEnvelopeFields,
+  recipePublicReadFields,
+);
+export type RecipeTopLevel = z.output<typeof recipeTopLevel>;
 
 // One row per RecipeSectionIngredient — the same recipe repeats when it uses the
 // ingredient in multiple sections. Carries the per-usage provenance (raw imported
@@ -70,63 +64,28 @@ export {
   recipeUsageMcpEntityOut,
   type RecipeUsage,
 } from "./recipe-fields";
-/**
- * Recipe reference as embedded in MCP ingredient reads: identity plus the
- * planning-relevant scalars, minus `notes`/`meta`/`source`/timestamps. A
- * cookbook headnote repeats once per usage row, and an ingredient in 45 recipes
- * shipped ~100KB of prose an agent never needs — `entity get recipe` still
- * returns the full recipe.
- */
-export const recipeRefMcpEntityOut = recipeTopLevel.pick({
-  id: true,
-  name: true,
-  yield: true,
-  servings: true,
-  tags: true,
-});
-export type RecipeRefMcpEntityOut = z.infer<typeof recipeRefMcpEntityOut>;
-
-export const recipeUsageRefMcpEntityOut = recipeUsageMcpEntityOut.extend({
-  recipe: recipeRefMcpEntityOut,
-});
-
-/** Public entity-tool projection; section-line rows have no public shortcode. */
-export const sectionIngredientMcpEntityOut = z.discriminatedUnion("type", [
-  ingredientSectionLineOut.omit({ id: true }),
-  recipeSectionLineOut.omit({ id: true }),
-]);
+export const recipeSectionOut =
+  recipeFieldEnvelopeSchemas.output.shape.sections.element;
+export const sectionIngredientOut = recipeSectionOut.shape.ingredients.element;
+export const recipeSectionMcpEntityOut =
+  recipeFieldEnvelopeSchemas.mcpOutput.shape.sections.element;
+export const sectionIngredientMcpEntityOut =
+  recipeSectionMcpEntityOut.shape.ingredients.element;
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
-
-/** Public entity-tool projection; section rows have no public shortcode. */
-export const recipeSectionMcpEntityOut = recipeSectionOut
-  .omit({ id: true, ingredients: true })
-  .extend({ ingredients: z.array(sectionIngredientMcpEntityOut) });
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
 
-export const recipeGraphOut = z.object({
-  ...recipeTopLevelFields,
-  sections: z.array(recipeSectionOut),
-  displayImage: imageUrlSummary.nullable(),
-  totals: recipeTotals.nullish(),
-});
-export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
-
-export const recipeOutFields = recipeDefinition.readSchemas.output.shape;
-
-export const recipeOut = recipeDefinition.readSchemas.output.extend({
-  displayImages: displayImagesField.optional(),
-});
-
-/** Full recipe output with storage-only section and line identifiers removed. */
-export const recipeMcpEntityOut = recipeOut.extend({
-  sections: z.array(recipeSectionMcpEntityOut),
-});
-
-export const recipeWithSideEffectsOut = z.object({
-  ...recipeOutFields,
+export const recipeGraphOut = withFieldEnvelopes(
+  rawRecipeGraph,
+  recipeFieldEnvelopeFields,
+  recipePublicReadFields,
+).extend({ sections: recipeFieldEnvelopeSchemas.output.shape.sections });
+export type RecipeGraphOut = z.output<typeof recipeGraphOut>;
+export const recipeOut = recipeFieldEnvelopeSchemas.output;
+export const recipeMcpEntityOut = recipeFieldEnvelopeSchemas.mcpOutput;
+export const recipeWithSideEffectsOut = recipeOut.extend({
   sideEffects: mutationSideEffectsSchema,
 });
 
@@ -134,7 +93,7 @@ export const recipeGraphListOut = z.array(recipeGraphOut);
 
 // Summary shape for `recipe.list`: scalar fields + persisted totals, no section
 // graph (the list/pickers never read `.sections` — that was the ~4.7s over-fetch).
-export const recipeListItemOut = recipeDefinition.readSchemas.list;
+export const recipeListItemOut = recipeFieldEnvelopeSchemas.list;
 export type RecipeListItem = z.infer<typeof recipeListItemOut>;
 
 export type RecipeOut = z.infer<typeof recipeOut>;
@@ -155,7 +114,7 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
   total: z.number().int().nonnegative(),
 });
 
-export const cookbookSummary = cookbookDefinition.readSchemas.output;
+export const cookbookSummary = cookbookFieldEnvelopeSchemas.output;
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 
 export const cookbookFilterFields = {
@@ -233,24 +192,6 @@ export const recipeIdInput = z.object({
   id: recipeShortcode,
 });
 
-/**
- * Slim MCP projection of a recipe list row — built from the same field map as
- * `recipeOut`, so it cannot drift from the plain shape. `recipeMcpFields` is
- * shared with `recipeWithUsagesMcpOut` below, so that shape stays in sync too.
- */
-const recipeMcpFields = {
-  id: recipeOutFields.id,
-  name: recipeOutFields.name,
-  yield: recipeOutFields.yield,
-  servings: recipeOutFields.servings,
-  tags: recipeOutFields.tags,
-};
-
-export const recipeMcpOut = z.object(recipeMcpFields);
-export type RecipeMcpOut = z.infer<typeof recipeMcpOut>;
-
-export const recipeMcpListOut = createPaginatedResponseSchema(recipeMcpOut);
-
 export const recipeUsageMcpOut = z.object({
   // RecipeSectionIngredient row id — declared exception. Recipe section/line
   // ids have no shortcode and stay uuid across the MCP boundary.
@@ -261,8 +202,7 @@ export const recipeUsageMcpOut = z.object({
   modifier: z.string().nullable(),
 });
 
-const recipeWithUsagesMcpOut = z.object({
-  ...recipeMcpFields,
+const recipeWithUsagesMcpOut = recipeRefOut.extend({
   usages: z.array(recipeUsageMcpOut),
 });
 

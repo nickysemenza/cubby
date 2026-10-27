@@ -251,7 +251,6 @@ describe("meal preparation contracts", () => {
                 id: mealId,
                 date: "2026-08-31",
                 name: "Dinner",
-                mealKind: "cooked",
               },
               eater: { id: eaterId, name: "Household member", kind: "member" },
               amount: { value: 200, unit: "g" },

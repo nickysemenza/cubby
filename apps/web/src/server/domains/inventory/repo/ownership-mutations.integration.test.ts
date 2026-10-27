@@ -17,7 +17,6 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { selectListReadRows } from "~/entity/model/list-read-schema";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import {
@@ -60,6 +59,7 @@ import { createProduct } from "~/server/domains/product/repo/crud";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {

@@ -6,11 +6,11 @@ import type {
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   type ExpenseCreateInput,
-  type ExpenseOut,
   expenseCreateInput,
   expenseUpdateData,
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -103,7 +103,7 @@ const createExpenseWorkflowCaller = (db: Database) => ({
   tradeAffinity: () => expenseTradeAffinity(db),
 });
 
-const purchaseIdOf = (expense: ExpenseOut): PurchaseShortcode => {
+const purchaseIdOf = (expense: RawExpenseOut): PurchaseShortcode => {
   if (!expense.purchaseId) {
     throw new Error(`expected a resolved charge on "${expense.name}"`);
   }

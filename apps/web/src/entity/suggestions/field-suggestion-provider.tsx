@@ -9,10 +9,11 @@ import {
   resolveExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
 import {
-  fieldResolutionsSchema,
-  type FieldResolution,
-  type FieldResolutions,
-} from "@cubby/schemas/field-resolution";
+  fieldEnvelope,
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
+type FieldResolutions = Record<string, ReadableFieldEnvelope>;
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
   createContext,
@@ -62,7 +63,7 @@ export interface FieldSuggestionContextValue {
   readonly editorScope?: string;
   readonly suggestions: Record<string, FieldSuggestion | null>;
   readonly isFetching: boolean;
-  readonly resolutionFor: (field: string) => FieldResolution | null;
+  readonly resolutionFor: (field: string) => ReadableFieldEnvelope | null;
   readonly outcomeFor: (field: string) => FieldSuggestionOutcome | null;
   /** The field's own current value, as `useEntitySuggestionsQuery` would see
    * it — what the always-visible mark compares a proposal against. */
@@ -91,7 +92,9 @@ export interface FieldSuggestionContextValue {
 const FieldSuggestionContext =
   createContext<FieldSuggestionContextValue | null>(null);
 const resolutionRecordSchema = z.looseObject({
-  fieldResolutions: fieldResolutionsSchema.optional(),
+  fields: z
+    .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+    .optional(),
 });
 
 function resolutionModeField(entity: ShortcodeEntity, field: string) {
@@ -128,7 +131,7 @@ function isUntouchedUnresolved(args: {
   value: string | null;
   manuallyChanged: boolean;
   autoFilled: boolean;
-  resolution: FieldResolution | undefined;
+  resolution: ReadableFieldEnvelope | undefined;
   basis: FieldSuggestionSource["basis"];
 }) {
   const explicitNone =
@@ -144,7 +147,8 @@ function isUntouchedUnresolved(args: {
     !explicitNone &&
     (args.value === null || args.autoFilled) &&
     (args.resolution === undefined ||
-      (args.resolution.mode === "inherit" && args.resolution.value === null))
+      (args.resolution.current.assignment?.kind === "inherit" &&
+        fieldValueOf(args.resolution) === null))
   );
 }
 
@@ -267,7 +271,7 @@ export function FieldSuggestionProvider({
   const financeApply = useFinanceCategoryApply(operations);
   const recordResolutions = useMemo(() => {
     const parsed = resolutionRecordSchema.safeParse(record);
-    return parsed.success ? (parsed.data.fieldResolutions ?? {}) : {};
+    return parsed.success ? (parsed.data.fields ?? {}) : {};
   }, [record]);
   const targets = useMemo(() => {
     const declared = suggestTargetsFor(entity, fieldKeys);
@@ -540,8 +544,8 @@ export function FieldSuggestionProvider({
     )
       return;
     const returned = {
-      ...suggestedQuery.fieldResolutions,
-      ...alternativeQuery.fieldResolutions,
+      ...suggestedQuery.fields,
+      ...alternativeQuery.fields,
     };
     if (Object.keys(returned).length === 0) return;
     setResolutionSnapshot((previous) => {
@@ -558,8 +562,8 @@ export function FieldSuggestionProvider({
         : next;
     });
   }, [
-    suggestedQuery.fieldResolutions,
-    alternativeQuery.fieldResolutions,
+    suggestedQuery.fields,
+    alternativeQuery.fields,
     rawBasisKey,
     basisSettled,
     suggestedQuery.isFetching,
@@ -591,14 +595,10 @@ export function FieldSuggestionProvider({
   const liveResolutions = useMemo<FieldResolutions>(
     () => ({
       ...authoritativeResolutions,
-      ...suggestedQuery.fieldResolutions,
-      ...alternativeQuery.fieldResolutions,
+      ...suggestedQuery.fields,
+      ...alternativeQuery.fields,
     }),
-    [
-      authoritativeResolutions,
-      suggestedQuery.fieldResolutions,
-      alternativeQuery.fieldResolutions,
-    ],
+    [authoritativeResolutions, suggestedQuery.fields, alternativeQuery.fields],
   );
   const isFetching = suggestedQuery.isFetching || alternativeQuery.isFetching;
   const settled = JSON.stringify(basis) === JSON.stringify(debouncedBasis);

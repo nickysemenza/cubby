@@ -1,11 +1,12 @@
 import { dataQuality } from "@cubby/schemas/data-quality";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListRendererId } from "@cubby/schemas/entity-manifest";
-import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { z } from "zod";
 
+import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import {
@@ -68,29 +69,35 @@ type EntityListRendererCoverage<E extends ListRendererEntity> = Readonly<
 const recipeSourceRenderer: ListRenderer<"recipe"> = (helper) =>
   createCubbyColumnCollection((add) => {
     add(
-      helper.accessor("source", {
-        id: "source",
-        header: "Source",
-        meta: {
-          className: "w-44",
-          mobile: { slot: "meta", priority: 30 },
+      helper.accessor(
+        (row) => {
+          const effectiveRowSource = fieldValueOf(row.fields.source);
+          return effectiveRowSource;
         },
-        cell: (info) => {
-          const source = info.row.original.source;
-          if (!sourceLabel(source)) return <NoneValue />;
-          return (
-            <RecipeSourceLink
-              source={source}
-              text="host"
-              onClick={(event) => event.stopPropagation()}
-            />
-          );
+        {
+          id: "source",
+          header: "Source",
+          meta: {
+            className: "w-44",
+            mobile: { slot: "meta", priority: 30 },
+          },
+          cell: (info) => {
+            const source = fieldValueOf(info.row.original.fields.source);
+            if (!sourceLabel(source)) return <NoneValue />;
+            return (
+              <RecipeSourceLink
+                source={source}
+                text="host"
+                onClick={(event) => event.stopPropagation()}
+              />
+            );
+          },
         },
-      }),
+      ),
     );
   });
 
-type ScoredRow = { dataQuality: DataQuality };
+type ScoredRow = { fields: { dataQuality: { result: unknown } } };
 
 /** List entities whose rows carry a `dataQuality` (manifest `capabilities.dataQuality`). */
 type ScoredListEntity = {
@@ -111,7 +118,8 @@ export const createDataQualityColumn = <TRow extends object>(
   scored = true,
 ): CubbyColumnCollection<TRow> =>
   createCubbyColumnCollection<TRow>((add) => {
-    const qualityOf = (row: TRow) => qualityRow.parse(row).dataQuality;
+    const qualityOf = (row: TRow) =>
+      readRecordField(row, "dataQuality", qualityRow.shape.dataQuality);
     add(
       // A not-assessed (null) score sinks below every scored row in both
       // directions, matching the server's `NULLS LAST`.
@@ -171,32 +179,47 @@ const uploadedImageRenderer: ListRenderer<"image"> = (helper) =>
         id: "images",
         entity: "image",
         provenance: null,
-        getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
+        getImages: (row) => {
+          const url = fieldValueOf(row.fields.url);
+          return row.status === "UPLOADED" && url
+            ? [{ id: row.id, url, filename: row.filename }]
+            : [];
+        },
       }),
     );
   });
 
-const categorySummaryRenderer = <
-  TRow extends { spendingCategorySummary?: SpendingCategorySummary },
->(
+const categorySummaryRenderer = <TRow extends object>(
   helper: CubbyColumnHelper<TRow>,
 ): CubbyColumnCollection<TRow> =>
   createCubbyColumnCollection<TRow>((add) => {
     add(
-      helper.accessor((row) => row.spendingCategorySummary, {
-        id: "spendingCategorySummary",
-        header: "Expense categories",
-        enableSorting: false,
-        meta: { className: "w-40", mobile: { slot: "meta", priority: 35 } },
-        cell: (info) => {
-          const summary = info.row.original.spendingCategorySummary;
-          return summary ? (
-            <SpendingCategorySummaryValue summary={summary} compact />
-          ) : (
-            <NoneValue />
-          );
+      helper.accessor(
+        (row) =>
+          readRecordField(
+            row,
+            "spendingCategorySummary",
+            spendingCategorySummarySchema.nullish(),
+          ),
+        {
+          id: "spendingCategorySummary",
+          header: "Expense categories",
+          enableSorting: false,
+          meta: { className: "w-40", mobile: { slot: "meta", priority: 35 } },
+          cell: (info) => {
+            const summary = readRecordField(
+              info.row.original,
+              "spendingCategorySummary",
+              spendingCategorySummarySchema.nullish(),
+            );
+            return summary ? (
+              <SpendingCategorySummaryValue summary={summary} compact />
+            ) : (
+              <NoneValue />
+            );
+          },
         },
-      }),
+      ),
     );
   });
 

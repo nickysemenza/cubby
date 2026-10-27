@@ -590,7 +590,7 @@ struct RecordsBlockView: View {
     private func verbButton(_ verb: ReportPresentation.Records.Verb) -> some View {
         switch verb.verb {
         case .receiveExpense:
-            let productID = host?.row.raw["productId"]?.stringValue
+            let productID = host?.row.raw.recordValue("productId")?.stringValue
             Button {
                 guard let host, let productID else { return }
                 receiving = ReceivingModel(

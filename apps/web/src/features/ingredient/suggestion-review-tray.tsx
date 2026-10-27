@@ -1,6 +1,6 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import { countLabel } from "@cubby/shared/pluralize";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { AiProvenance } from "~/entity/suggestions/ai-proposal-card";
 import { AiProposalList } from "~/entity/suggestions/ai-proposal-list";
 import { Row, Stack } from "~/ui/layout";
@@ -36,7 +36,7 @@ export function SuggestionReviewTray({
   onReject,
   onPriceChange,
 }: {
-  rows: EnrichmentRow[];
+  rows: IngredientEnrichmentRead[];
   suggestions: Record<string, Suggestion>;
   suggestionPrices: Record<string, SuggestionPrice>;
   creatableCount: number;

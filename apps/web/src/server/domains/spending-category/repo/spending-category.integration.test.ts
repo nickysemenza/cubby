@@ -1,3 +1,4 @@
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
   type SpendingCategoryId,
@@ -409,18 +410,9 @@ describe("spending category stock tracking", () => {
       name: `Synthetic produce ${crypto.randomUUID()}`,
       parentId: parent.id,
     });
-    const resolution = z.object({
-      mode: z.string(),
-      value: z.boolean().nullable(),
-      storedValue: z.boolean().nullable(),
-      canReset: z.boolean(),
-      sourceEntity: z.object({ entityId: z.string() }).nullable(),
-    });
+    const resolution = fieldEnvelope(z.boolean().nullable(), z.boolean());
     const read = z.object({
-      item: z.object({
-        stockTracked: z.boolean().nullable(),
-        fieldResolutions: z.object({ stockTracked: resolution }),
-      }),
+      item: z.object({ fields: z.object({ stockTracked: resolution }) }),
     });
     const get = async () =>
       read.parse(
@@ -433,18 +425,29 @@ describe("spending category stock tracking", () => {
       ).item;
 
     const inherited = await get();
-    expect(inherited.stockTracked).toBe(false);
-    expect(inherited.fieldResolutions.stockTracked).toEqual({
-      mode: "inherit",
-      value: false,
-      storedValue: null,
-      canReset: false,
-      sourceEntity: expect.objectContaining({ entityId: parent.shortcode }),
+    expect(fieldValueOf(inherited.fields.stockTracked)).toBe(false);
+    expect(inherited.fields.stockTracked).toMatchObject({
+      current: {
+        assignment: { kind: "inherit" },
+        controls: { reset: { kind: "unavailable" } },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          provenance: {
+            kind: "inherited",
+            source: { entityId: parent.shortcode },
+          },
+        },
+      },
     });
     const listed = z
       .object({
         items: z.array(
-          z.object({ id: z.string(), stockTracked: z.boolean().nullable() }),
+          z.object({
+            id: z.string(),
+            fields: z.object({ stockTracked: resolution }),
+          }),
         ),
       })
       .parse(
@@ -455,9 +458,11 @@ describe("spending category stock tracking", () => {
           pagination: { pageIndex: 0, pageSize: 200 },
         }),
       );
-    expect(
-      listed.items.find((item) => item.id === child.shortcode)?.stockTracked,
-    ).toBe(false);
+    const listedChild = listed.items.find(
+      (item) => item.id === child.shortcode,
+    );
+    if (!listedChild) throw new Error("Spending category missing from list");
+    expect(fieldValueOf(listedChild.fields.stockTracked)).toBe(false);
 
     const shop = await insertWithShortcode(ctx.db, "vendor", {
       name: `Synthetic market ${crypto.randomUUID()}`,
@@ -492,10 +497,11 @@ describe("spending category stock tracking", () => {
       id: child.shortcode,
       data: { stockTracked: true },
     });
-    expect((await get()).fieldResolutions.stockTracked).toMatchObject({
-      mode: "explicit",
-      value: true,
-      canReset: true,
+    const overridden = (await get()).fields.stockTracked;
+    expect(fieldValueOf(overridden)).toBe(true);
+    expect(overridden.current).toMatchObject({
+      assignment: { kind: "value", value: true },
+      controls: { reset: { kind: "available" } },
     });
     expect(
       await receivableProductIds(ctx.db, [apples.entityId], order.id),
@@ -507,6 +513,6 @@ describe("spending category stock tracking", () => {
       id: child.shortcode,
       data: { stockTracked: null },
     });
-    expect((await get()).stockTracked).toBe(false);
+    expect(fieldValueOf((await get()).fields.stockTracked)).toBe(false);
   });
 });

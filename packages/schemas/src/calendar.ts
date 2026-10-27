@@ -1,3 +1,21 @@
+import { fieldResolutionsSchema } from "./field-resolution";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  mealFieldEnvelopeFields,
+  mealPublicReadFields,
+} from "./generated/entity-field-envelope-fields.meal.gen";
+import {
+  taskFieldEnvelopeFields,
+  taskPublicReadFields,
+} from "./generated/entity-field-envelope-fields.task.gen";
+import {
+  expenseFieldEnvelopeFields,
+  expensePublicReadFields,
+} from "./generated/entity-field-envelope-fields.expense.gen";
+import {
+  projectFieldEnvelopeFields,
+  projectPublicReadFields,
+} from "./generated/entity-field-envelope-fields.project.gen";
 import { displayImagesField } from "./display-images";
 import { storedDateRangeSchema } from "./date-range";
 import { z } from "zod";
@@ -70,10 +88,87 @@ export const calendarSourceEntity = (source: CalendarSourceKind) =>
 export const calendarInteraction = z.enum(["move", "read-only"]);
 
 const calendarItemBase = {
-  displayImages: displayImagesField.default([]),
   startDate: plainDate,
   endDateExclusive: plainDate,
 };
+
+/** Current source facts are distinct from the occurrence's layout coordinates. */
+export const rawCalendarMealSource = z.object({
+  id: mealShortcode,
+  name: z.string().nullable(),
+  date: plainDate,
+  mealType: mealTypeSchema.nullable(),
+  mealKind: mealKindSchema.nullable(),
+  recipeNames: z.array(z.string()),
+  dataQuality: dataQuality.optional(),
+  displayImages: displayImagesField.default([]),
+});
+export const rawCalendarTaskSource = z.object({
+  // Keep resolver provenance through occurrence assembly; public envelopes consume it.
+  fieldResolutions: fieldResolutionsSchema.optional(),
+  id: taskShortcode,
+  trade: tradeSchema,
+  displayImages: displayImagesField.default([]),
+});
+export const rawCalendarExpenseSource = z.object({
+  // Keep resolver provenance through occurrence assembly; public envelopes consume it.
+  fieldResolutions: fieldResolutionsSchema.optional(),
+  id: expenseShortcode,
+  trade: tradeSchema.nullable(),
+  vendor: z.string().nullable(),
+  displayImages: displayImagesField.default([]),
+});
+export const rawCalendarProjectSource = z.object({
+  id: projectShortcode,
+  kind: projectKindSchema.nullable(),
+  displayImages: displayImagesField.default([]),
+});
+export const rawCalendarPurchaseSource = z.object({
+  id: purchaseShortcode,
+  displayImages: displayImagesField.default([]),
+});
+export const rawCalendarPlantingSource = z.object({
+  id: plantingShortcode,
+  displayImages: displayImagesField.default([]),
+});
+export const calendarMealSource = withFieldEnvelopes(
+  rawCalendarMealSource,
+  {
+    mealType: mealFieldEnvelopeFields.mealType,
+    mealKind: mealFieldEnvelopeFields.mealKind,
+    recipeNames: mealFieldEnvelopeFields.recipeNames,
+    dataQuality: mealFieldEnvelopeFields.dataQuality,
+    displayImages: null,
+  },
+  mealPublicReadFields,
+);
+export const calendarTaskSource = withFieldEnvelopes(
+  rawCalendarTaskSource,
+  { trade: taskFieldEnvelopeFields.trade, displayImages: null },
+  taskPublicReadFields,
+);
+export const calendarExpenseSource = withFieldEnvelopes(
+  rawCalendarExpenseSource,
+  {
+    trade: expenseFieldEnvelopeFields.trade,
+    vendor: expenseFieldEnvelopeFields.vendor,
+    displayImages: null,
+  },
+  expensePublicReadFields,
+);
+export const calendarProjectSource = withFieldEnvelopes(
+  rawCalendarProjectSource,
+  { kind: projectFieldEnvelopeFields.kind, displayImages: null },
+  projectPublicReadFields,
+);
+export const calendarPurchaseSource = withFieldEnvelopes(
+  rawCalendarPurchaseSource,
+  { displayImages: null },
+);
+export const calendarPlantingSource = withFieldEnvelopes(
+  rawCalendarPlantingSource,
+  { displayImages: null },
+);
 
 export const calendarMealItem = z.object({
   kind: z.literal("meal"),
@@ -83,13 +178,8 @@ export const calendarMealItem = z.object({
   ...calendarItemBase,
   interaction: z.literal("move"),
   sortOrder: z.number().int().nullable(),
-  // `mealType`/`mealKind`, not `type`/`kind` — `kind` is already this union's
-  // discriminant.
-  mealType: mealTypeSchema.nullable(),
-  mealKind: mealKindSchema,
-  recipeNames: z.array(z.string()),
+  source: calendarMealSource,
   mealTotals: nutritionTotals,
-  dataQuality: dataQuality.optional(),
 });
 
 export const calendarTaskItem = z.object({
@@ -101,7 +191,7 @@ export const calendarTaskItem = z.object({
   /** Raw nullable task boundaries; start/end above are normalized for layout. */
   due: storedDateRangeSchema.nullable(),
   status: taskStatusSchema,
-  trade: tradeSchema,
+  source: calendarTaskSource,
   projectName: z.string().nullable(),
   assignedProjectName: z.string().nullable().optional(),
   subjectProductName: z.string().nullable(),
@@ -126,8 +216,7 @@ export const calendarExpenseItem = z.object({
   interaction: calendarInteraction,
   future: z.boolean(),
   cost: moneyNullable,
-  vendor: z.string().nullable(),
-  trade: tradeSchema.nullable(),
+  source: calendarExpenseSource,
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
   spendingContext: calendarSpendingContext.optional(),
@@ -135,6 +224,7 @@ export const calendarExpenseItem = z.object({
 
 export const calendarPurchaseItem = z.object({
   kind: z.literal("purchase"),
+  source: calendarPurchaseSource,
   id: purchaseShortcode,
   title: z.string(),
   ...calendarItemBase,
@@ -164,7 +254,7 @@ export const calendarProjectItem = z.object({
   ...calendarItemBase,
   interaction: z.literal("read-only"),
   status: projectStatusSchema,
-  projectKind: projectKindSchema.nullable(),
+  source: calendarProjectSource,
 });
 
 /** A planting's lifecycle milestones, in the order they occur. Each populated
@@ -189,6 +279,7 @@ export const CALENDAR_PLANTING_MILESTONE_LABELS = {
 
 export const calendarPlantingItem = z.object({
   kind: z.literal("planting"),
+  source: calendarPlantingSource,
   id: plantingShortcode,
   milestone: calendarPlantingMilestone,
   title: z.string(),

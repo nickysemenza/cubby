@@ -1,4 +1,5 @@
-import type { TaskFilters, TaskTimelineOut } from "@cubby/schemas/project";
+import type { TaskFilters } from "@cubby/schemas/project";
+import type { RawTaskTimelineOut } from "@cubby/schemas/work-raw-read";
 
 import type { Database } from "~/server/db";
 import { listAll } from "~/server/generic/list/repo/list-all";
@@ -9,7 +10,7 @@ import { taskList } from "./lookup";
 export async function getTaskTimeline(
   db: Database,
   filters: TaskFilters,
-): Promise<TaskTimelineOut> {
+): Promise<RawTaskTimelineOut> {
   const explicitlyUndated = filters.duePresenceFilter === "none";
   const dateWindowActive = Boolean(filters.dueFrom || filters.dueTo);
 

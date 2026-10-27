@@ -16,12 +16,12 @@
  * `computeAttentionItems` re-derived the same thing independently).
  */
 import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
-import type { ProjectOut } from "@cubby/schemas/project";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectDateWindow,
   type ProjectStatus,
 } from "@cubby/schemas/project";
+import type { RawProjectOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -73,7 +73,7 @@ export type ProjectParentRow = {
   assigneeName: string | null;
   locations: string[];
   locationsMode: "inherit" | "explicit";
-  defaultTrade: ProjectOut["defaultTrade"];
+  defaultTrade: RawProjectOut["defaultTrade"];
   /**
    * The project whose own decision each inherited setting reads
    * (`resolution.inherit`), and the one it would fall back to without its

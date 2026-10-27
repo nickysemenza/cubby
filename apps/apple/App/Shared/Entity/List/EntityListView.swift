@@ -1271,7 +1271,7 @@ struct EntityListView: View {
                 #else
                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                         tableValue(field, row: row, fact: fact)
-                        DerivedProvenanceCaption(raw: row.raw, field: field.key)
+                        FieldProvenanceCaption(raw: row.raw, field: field)
                     }
                 #endif
             } else {
@@ -1290,14 +1290,14 @@ struct EntityListView: View {
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact
     ) -> some View {
         HStack(spacing: FieldGuideTokens.Space.xs) {
-            DerivedValueStatus(raw: row.raw, field: field.key)
+            FieldValueStatus(raw: row.raw, field: field)
             if field.listRenderer == .dataQuality {
                 if EntityRowPresentation.needsData(in: row) {
                     HStack(spacing: FieldGuideTokens.Space.xs) {
                         Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                         Text("Needs data")
                     }
-                } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
+                } else if let status = row.raw.recordValue("dataQuality")?["status"]?.stringValue {
                     Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
                 }
             } else if let reference = EntityFieldValue.reference(
@@ -1569,7 +1569,7 @@ struct EntityRowView: View {
             previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
         ) {
             HStack(spacing: FieldGuideTokens.Space.xs) {
-                DerivedValueStatus(raw: row.raw, field: nil)
+                FieldValueStatus(raw: row.raw)
                 if layout.needsData {
                     Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                 }
@@ -1593,12 +1593,14 @@ struct EntityRowView: View {
             }
         } supplement: {
             ForEach(presentation.facts) { fact in
-                DerivedProvenanceCaption(raw: row.raw, field: fact.id)
+                if let field = EntityCatalog[key].field(fact.id) {
+                    FieldProvenanceCaption(raw: row.raw, field: field)
+                }
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            accessibilityText(for: layout) + (DerivedValueStatus.isUpdating(in: row.raw) ? ", Updating" : ""))
+            accessibilityText(for: layout) + (FieldValueStatus.isUpdating(in: row.raw) ? ", Updating" : ""))
     }
 
     private func accessibilityText(for layout: Layout) -> String {

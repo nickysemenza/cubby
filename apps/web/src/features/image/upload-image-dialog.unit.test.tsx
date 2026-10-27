@@ -1,9 +1,14 @@
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
+import { imageWithEntitySchema } from "@cubby/schemas/image";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -29,9 +34,14 @@ afterEach(() => {
 });
 
 function uploadedImageRow(imageId: ImageShortcode, file: File) {
-  return {
+  return entityReadFixture(imageWithEntitySchema, {
     id: imageId,
-    url: "https://storage.example.test/lemon.jpg",
+    fields: {
+      url: fieldValueFixture(
+        imageWithEntitySchema.shape.fields.shape.url,
+        "https://storage.example.test/lemon.jpg",
+      ),
+    },
     key: "lemon.jpg",
     filename: "lemon.jpg",
     size: file.size,
@@ -65,7 +75,10 @@ function uploadedImageRow(imageId: ImageShortcode, file: File) {
     entityId: null,
     entityName: null,
     associations: [],
-  };
+    attachments: [],
+    redirectedFrom: null,
+    previousShortcodes: [],
+  });
 }
 
 describe("UploadImageDialog", () => {

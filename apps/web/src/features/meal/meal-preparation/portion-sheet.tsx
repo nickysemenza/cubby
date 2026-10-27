@@ -106,8 +106,10 @@ export function PortionSheet({
   isSaving?: boolean;
 }) {
   const firstTarget =
-    targetMeals.find((meal) => meal.id === currentMealId)?.id ??
-    targetMeals[0]?.id ??
+    targetMeals.find(
+      (meal) => meal.id === currentMealId && meal.mealKind !== null,
+    )?.id ??
+    targetMeals.find((meal) => meal.mealKind !== null)?.id ??
     null;
   const firstEater = eaters[0]?.id ?? null;
   const draftSequence = useRef(0);
@@ -463,7 +465,18 @@ function PortionDraftRow({
         // `mealLabel` already names the day; the row's date projection would
         // repeat it.
         const { id, shortcode, thumb } = buildRecordComboboxItem("meal", meal);
-        return { id, shortcode, thumb, name: mealLabel(meal) };
+        return {
+          id,
+          shortcode,
+          thumb,
+          name:
+            meal.mealKind === null
+              ? `${mealLabel(meal)} · Updating…`
+              : mealLabel(meal),
+          ...(meal.mealKind === null
+            ? { disabledReason: "Updating meal kind…" }
+            : {}),
+        };
       }),
     [targetMeals],
   );

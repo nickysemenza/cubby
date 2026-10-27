@@ -1,5 +1,10 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { mergeVendorsInput, mergeVendorsOut } from "@cubby/schemas/vendor";
+import {
+  mergeVendorsInput,
+  vendorMergeSummaryOut,
+} from "@cubby/schemas/vendor";
+import { rawVendorOut } from "@cubby/schemas/vendor-raw-read";
+import { z } from "zod";
 
 import {
   asActor,
@@ -44,7 +49,10 @@ export const vendorRepository = defineRepository("vendor", {
   delete: asActor(deleteVendors),
   merge: {
     input: mergeVendorsInput,
-    output: mergeVendorsOut,
+    output: z.object({
+      vendor: rawVendorOut,
+      mergeSummary: vendorMergeSummaryOut,
+    }),
     item: (output) => output.vendor,
     summary: (output) => output.mergeSummary,
     execute: async (ctx, input) => {

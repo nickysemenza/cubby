@@ -16,7 +16,7 @@
  * inside `withConnection` so the six queries share one pooled connection.
  */
 
-import type { CoverageTotals } from "@cubby/schemas/problems";
+import type { CoverageTotals } from "@cubby/schemas/problems-raw-read";
 import { and, eq, exists, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

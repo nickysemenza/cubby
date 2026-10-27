@@ -71,7 +71,6 @@ interface UseInfiniteTableListReturn<
   sums?: Record<string, number>;
   /** The declared list totals as the server words them, by total id. */
   totalLabels?: Record<string, string>;
-  derived: ListQueryResponse<TData>["meta"]["derived"];
   groups?: ListGroupSummary[];
   memberships?: ListGroupMembership[];
   isLoading: boolean;
@@ -264,13 +263,6 @@ export function useInfiniteTableList<
   const totalCount = infiniteData?.pages[0]?.meta?.totalCount ?? 0;
   const lastMeta = infiniteData?.pages.at(-1)?.meta;
   const groups = infiniteData?.pages[0]?.meta?.groups;
-  const derived = useMemo(() => {
-    const combined: NonNullable<ListQueryResponse<TData>["meta"]["derived"]> =
-      {};
-    for (const page of infiniteData?.pages ?? [])
-      Object.assign(combined, page.meta.derived);
-    return combined;
-  }, [infiniteData]);
   const memberships = useMemo(() => {
     if (
       !infiniteData?.pages.some((page) => page.meta.memberships !== undefined)
@@ -390,7 +382,6 @@ export function useInfiniteTableList<
     totalCount,
     sums: isPlaceholderData ? undefined : lastMeta?.sums,
     totalLabels: isPlaceholderData ? undefined : lastMeta?.totalLabels,
-    derived,
     groups,
     memberships,
     isLoading,

@@ -2,8 +2,8 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
-import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { selectListReadFields } from "~/server/generic/list/repo/list-read-schema";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type ReaderDb = Database | DrizzleTransaction;

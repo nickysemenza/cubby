@@ -6,11 +6,11 @@ import {
   deviceShortcode,
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
+import { type ImageJobFilters } from "@cubby/schemas/image-job";
 import {
-  type ImageJobFilters,
-  type ImageJobOut,
-  imageJobOut,
-} from "@cubby/schemas/image-job";
+  type RawImageJobOut,
+  rawImageJobOut,
+} from "@cubby/schemas/image-job-raw-read";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import { describeJobWaitingOn, jobState } from "@cubby/schemas/job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
@@ -134,7 +134,7 @@ const loadFacts = async (
 };
 
 type Execution = Pick<
-  ImageJobOut,
+  RawImageJobOut,
   "waitingOn" | "leaseDeviceId" | "leaseExpiresAt"
 >;
 
@@ -254,7 +254,7 @@ const imageJobRead = {
     });
     return [
       execution.fields(
-        imageJobOut.pick({
+        rawImageJobOut.pick({
           waitingOn: true,
           leaseDeviceId: true,
           leaseExpiresAt: true,
@@ -267,7 +267,7 @@ const imageJobRead = {
           },
       ),
       images.fields(
-        imageJobOut.pick({ imageId: true, displayName: true }),
+        rawImageJobOut.pick({ imageId: true, displayName: true }),
         (row, loaded) => {
           const image = loaded.get(row.imageId);
           if (!image) throw new Error("Image job's Image reference is missing");
@@ -277,7 +277,7 @@ const imageJobRead = {
           };
         },
       ),
-      bind(imageJobOut.pick({ durationMs: true }), (row) => ({
+      bind(rawImageJobOut.pick({ durationMs: true }), (row) => ({
         durationMs:
           row.completedAt && row.dispatchedAt
             ? Math.max(
@@ -287,7 +287,7 @@ const imageJobRead = {
             : null,
       })),
       facts.fields(
-        imageJobOut.pick({
+        rawImageJobOut.pick({
           chargedCost: true,
           standardCost: true,
           lastExecutor: true,
@@ -335,18 +335,18 @@ export const listImageJobsRead = (
     },
   );
 
-const listImageJobs = completeListReader(imageJobOut, listImageJobsRead);
+const listImageJobs = completeListReader(rawImageJobOut, listImageJobsRead);
 
 const reader = createEntityReader<
   ImageJobRow,
-  ImageJobOut,
+  RawImageJobOut,
   "imageJob",
   Database | DrizzleTransaction
 >({
   entity: "imageJob",
   fetchById: createEntityRowFetcher(imageProcessingJob),
   fromDB: async (db, row) =>
-    imageJobOut.parse((await hydrateRead(db, [row], { kind: "full" }))[0]),
+    rawImageJobOut.parse((await hydrateRead(db, [row], { kind: "full" }))[0]),
 });
 
 export const imageJobRepository = defineRepository("imageJob", {

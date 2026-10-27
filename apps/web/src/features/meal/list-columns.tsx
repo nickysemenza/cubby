@@ -1,7 +1,8 @@
-import type { MealFilters, MealOut } from "@cubby/schemas/meal";
+import type { MealFilters } from "@cubby/schemas/meal";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { mealDateLabel } from "~/features/meal/meal-format";
@@ -60,3 +61,5 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
     return { list };
   },
 });
+
+type MealOut = DetailRecordOf<"meal">;

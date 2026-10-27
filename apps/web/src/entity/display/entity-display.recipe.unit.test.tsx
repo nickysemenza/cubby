@@ -1,9 +1,11 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
 import { flexRender } from "@tanstack/react-table";
 import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
@@ -28,6 +30,10 @@ installFeatures();
 /** Row shape covering every recipe field the list surfaces, mirroring
  * `RecipeListItem` only where `createEntityDisplayColumns` reads it. */
 interface RecipeRow {
+  fields: Pick<
+    z.output<typeof entityFieldEnvelopeSchemas.recipe.list>["fields"],
+    "totals" | "source"
+  >;
   tags: string[] | null;
   servings: number | null;
   totals: null;
@@ -40,6 +46,16 @@ interface RecipeRow {
 }
 
 const RECIPE_ROW: RecipeRow = {
+  fields: {
+    totals: fieldValueFixture(
+      entityFieldEnvelopeSchemas.recipe.list.shape.fields.shape.totals,
+      null,
+    ),
+    source: fieldValueFixture(
+      entityFieldEnvelopeSchemas.recipe.list.shape.fields.shape.source,
+      { type: "website", url: "https://www.example.com/recipe" },
+    ),
+  },
   tags: ["dinner", "weeknight"],
   servings: 4,
   totals: null,

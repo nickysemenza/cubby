@@ -51,7 +51,7 @@ import {
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
-import { explainStoredDerived } from "~/server/generic/derived/repo/explain";
+import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { attachLinks } from "~/server/generic/entity-links/repo/entity-links";
 import {
@@ -150,11 +150,11 @@ describe("stored derived values", () => {
     expect(await marks("inventory.valuation")).toContain(entry);
     expect(await marks("product.price")).toContain(beans);
 
-    expect((await valuation(entry))?.meta.state).toBe("missing");
+    expect((await valuation(entry))?.resultExists).toBe(false);
     await drain();
     const stored = await valuation(entry);
     expect(stored?.value).toBe(10);
-    expect(stored?.meta.state).toBe("fresh");
+    expect(stored).toMatchObject({ resultExists: true, stale: false });
     expect(await marks("inventory.valuation")).toEqual([]);
 
     const [identity] = await getDb(ctx.db)
@@ -176,8 +176,15 @@ describe("stored derived values", () => {
     };
     const published = await detail();
     expect(published).toMatchObject({
-      valuation: 10,
-      derived: { valuation: { state: "fresh" } },
+      fields: {
+        valuation: {
+          result: {
+            kind: "cached",
+            freshness: "fresh",
+            decision: { outcome: { kind: "value", value: 10 } },
+          },
+        },
+      },
     });
     await executeEntity(context, {
       action: "update",
@@ -186,8 +193,15 @@ describe("stored derived values", () => {
       data: { amount: { value: 5, unit: "each" } },
     });
     expect(await detail()).toMatchObject({
-      valuation: 10,
-      derived: { valuation: { state: "stale" } },
+      fields: {
+        valuation: {
+          result: {
+            kind: "cached",
+            freshness: "stale",
+            decision: { outcome: { kind: "value", value: 10 } },
+          },
+        },
+      },
     });
     const productDetail = await executeEntity(context, {
       action: "get",
@@ -200,17 +214,35 @@ describe("stored derived values", () => {
     expect(
       getEntityDetailOutputSchema("product").parse(productDetail.item),
     ).toMatchObject({
-      inventoryEntry: [{ id: identity.code, valuation: 10 }],
+      inventoryEntry: [
+        {
+          id: identity.code,
+          fields: {
+            valuation: {
+              result: {
+                kind: "cached",
+                decision: { outcome: { kind: "value", value: 10 } },
+              },
+            },
+          },
+        },
+      ],
     });
     expect(
-      await explainStoredDerived(
+      await explainLiveDerived(
         ctx.db,
         derivedComputes,
         "inventory",
         "valuation",
         entry,
       ),
-    ).toMatchObject({ stored: 10, live: 12.5, meta: { state: "stale" } });
+    ).toMatchObject({
+      kind: "available",
+      result: {
+        kind: "live",
+        decision: { outcome: { kind: "value", value: 12.5 } },
+      },
+    });
     expect((await valuation(entry))?.value).toBe(10);
   });
 
@@ -369,6 +401,58 @@ describe("stored derived values", () => {
     expect(publication.changes.product).toContain(created.id);
   });
 
+  it("backs off a malformed decision while publishing other value targets", async () => {
+    const beans = await makeProduct("Synthetic invalid decision", 2);
+    const claimed = (await claimDerivedMarks(ctx.db)).filter(
+      (mark) =>
+        mark.target === "product.price" ||
+        mark.target === "product.ledgerExpectedQuantity",
+    );
+    const plan = await prepareDerivedPage(
+      ctx.db,
+      {
+        ...derivedComputes,
+        "product.price": async () =>
+          new Map([
+            [
+              beans,
+              {
+                value: 2,
+                sort: 2,
+                decision: {
+                  outcome: { kind: "empty", reason: "unset" },
+                  provenance: { kind: "computed" },
+                } as const,
+              },
+            ],
+          ]),
+      },
+      claimed,
+    );
+    expect(plan.failed.get("product.price")).toContain(
+      "Derived outcome does not match",
+    );
+    await publishDerivedPage(ctx.db, plan);
+    const stored = await loadStoredDerived(
+      ctx.db,
+      "product",
+      [beans],
+      ["price", "ledgerExpectedQuantity"],
+    );
+    expect(stored.get(beans)?.get("price")?.resultExists).toBe(false);
+    expect(stored.get(beans)?.get("ledgerExpectedQuantity")?.value).toBe(0);
+    expect(await marks("product.ledgerExpectedQuantity")).not.toContain(beans);
+    const [failure] = (
+      await getDb(ctx.db).execute(sql`
+      SELECT attempts, "lastError" FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${beans}
+    `)
+    ).rows;
+    expect(failure).toMatchObject({
+      attempts: 1,
+      lastError: expect.stringContaining("Derived outcome does not match"),
+    });
+  });
+
   it("publishes the rest of a page when the database rejects one target's write", async () => {
     const location = await makeLocation("Synthetic rejecting shelf");
     const beans = await makeProduct("Synthetic rejected beans", 2);
@@ -422,7 +506,11 @@ describe("stored derived values", () => {
         ["price", "dataQuality"],
       );
       expect(stored.get(beans)?.get("price")?.value).toBeNull();
-      expect(stored.get(beans)?.get("dataQuality")?.meta.state).toBe("fresh");
+      expect(stored.get(beans)?.get("dataQuality")).toMatchObject({
+        resultExists: true,
+        stale: false,
+        error: null,
+      });
     } finally {
       await unwrapDb(ctx.db).execute(
         sql`ALTER TABLE "DerivedValue" DROP CONSTRAINT "SyntheticPriceRejected"`,
@@ -539,7 +627,11 @@ describe("stored derived values", () => {
       expect(stored.get(available)?.get("ledgerExpectedQuantity")?.value).toBe(
         0,
       );
-      expect(stored.get(removed)?.get("price")?.meta.state).toBe("missing");
+      expect(stored.get(removed)?.get("price")).toMatchObject({
+        resultExists: false,
+        computedAt: null,
+      });
+
       expect(await marks("product.price")).toEqual([busy]);
     } finally {
       release.resolve();
@@ -550,7 +642,10 @@ describe("stored derived values", () => {
     const stored = await prices();
     expect(stored.get(busy)?.get("price")?.value).toBe(5);
     expect(stored.get(available)?.get("price")?.value).toBe(6);
-    expect(stored.get(removed)?.get("price")?.meta.state).toBe("missing");
+    expect(stored.get(removed)?.get("price")).toMatchObject({
+      resultExists: false,
+      computedAt: null,
+    });
     expect(await marks("product.price")).toEqual([]);
   });
 
@@ -665,7 +760,10 @@ describe("stored derived values", () => {
     expect(await marks("inventory.valuation")).toContain(entry);
     await drain();
     expect(await fanoutMarks("inventory.valuation")).toEqual([]);
-    expect((await valuation(entry))?.meta.state).toBe("fresh");
+    expect(await valuation(entry)).toMatchObject({
+      resultExists: true,
+      stale: false,
+    });
   });
 
   it("leaves a writer's busy fanout mark pending without blocking publication", async () => {

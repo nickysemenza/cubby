@@ -22,7 +22,17 @@ const candidate = (
   expenseName: "washer stacking bracket",
   cost: 43.44,
   expenseDate: "2024-05-06",
-  purchaseId: testShortcode("purchase", "PUR-YUKU"),
+  observation: { purchaseId: testShortcode("purchase", "PUR-YUKU") },
+  fields: {
+    purchaseId: {
+      current: {
+        assignment: null,
+        controls: { kind: "readonly", reason: "not_allowed" },
+      },
+      result: { kind: "missing" },
+      work: { kind: "idle" },
+    },
+  },
   vendorName: "Best Buy",
   vendorId: null,
   purchaseDate: "2024-05-06",

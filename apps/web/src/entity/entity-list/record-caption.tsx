@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { renderCompactFieldValue } from "~/entity/display/entity-display";
+import { readPathValue } from "~/entity/read-path";
 
 /** A list row as a caption reads it: its id and whichever fields it names. */
 const captionRowSchema = z.looseObject({ id: z.string() });
@@ -24,7 +25,7 @@ export function recordCaption(
   for (const key of subtitle) {
     const field = fields.find((candidate) => candidate.key === key);
     if (!field) continue;
-    const value = row[field.readKey ?? field.key];
+    const value = readPathValue(row, field.readKey ?? field.key);
     if (
       value == null ||
       value === "" ||

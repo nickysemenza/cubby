@@ -1,4 +1,4 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { ClipboardTextIcon } from "@phosphor-icons/react/dist/csr/ClipboardText";
 import { CoffeeIcon } from "@phosphor-icons/react/dist/csr/Coffee";
@@ -11,6 +11,7 @@ import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { PerfProfiler } from "~/lib/perf/perf-profiler";
@@ -112,7 +113,7 @@ function RecipeViewContent({
   flowLayout?: RecipeFlowLayoutMode;
   onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
   ingredientDataItems: RecipeCosting["rows"];
-  recipeImages: RecipeOut["images"];
+  recipeImages: NonNullable<ReturnType<typeof recipeImagesFor>>;
   ingredients: CostingRow[];
   ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
   totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
@@ -188,7 +189,7 @@ function RecipeDataView({
 }: {
   totals: CalculateTotalsResult | null;
   ingredientDataItems: RecipeCosting["rows"];
-  recipeImages: RecipeOut["images"];
+  recipeImages: NonNullable<ReturnType<typeof recipeImagesFor>>;
   ingredients: CostingRow[];
   ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
   costing: RecipeCosting | null;
@@ -353,7 +354,7 @@ function RecipeWorkflowContent({
   nutritionBasis: "whole" | "serving";
   onNutritionBasisChange: (basis: "whole" | "serving") => void;
   hasServingBasis: boolean;
-  recipeImages: RecipeOut["images"];
+  recipeImages: NonNullable<ReturnType<typeof recipeImagesFor>>;
   isDebugEnabled: boolean;
   openCostingGap?: boolean;
   onCostingGapOpenChange?: (open: boolean) => void;
@@ -448,6 +449,8 @@ function RecipeWorkflowControls({
   onNutritionBasisChange: (basis: "whole" | "serving") => void;
   hasServingBasis: boolean;
 }) {
+  const effectiveRecipeTags = fieldValueOf(recipe.fields.tags);
+
   return (
     <Row
       align="center"
@@ -456,8 +459,8 @@ function RecipeWorkflowControls({
       gap="sm"
       className="print:hidden"
     >
-      {recipe.tags?.length ? (
-        <RecipeTagList tags={recipe.tags} filterable />
+      {effectiveRecipeTags?.length ? (
+        <RecipeTagList tags={effectiveRecipeTags} filterable />
       ) : null}
       <Row align="center" wrap gap="sm" className="ml-auto">
         <WakeLockButton wakeLock={wakeLock} />
@@ -564,7 +567,7 @@ function RecipeWorkflowSupplemental({
   isDebugEnabled,
 }: {
   viewMode: RecipeViewMode;
-  recipeImages: RecipeOut["images"];
+  recipeImages: NonNullable<ReturnType<typeof recipeImagesFor>>;
   nutritionEstimates:
     | React.ComponentProps<typeof NutritionLabel>["estimates"]
     | null;
@@ -597,7 +600,7 @@ function RecipeReaderImages({
   images,
 }: {
   viewMode: RecipeViewMode;
-  images: RecipeOut["images"];
+  images: NonNullable<ReturnType<typeof recipeImagesFor>>;
 }) {
   if (viewMode !== "read" || images.length <= 1) return null;
   return (
@@ -636,6 +639,8 @@ const RecipeDetailInner: React.FC<{
   openCostingGap,
   onCostingGapOpenChange,
 }) => {
+  const effectiveRecipeImages = fieldValueOf(recipe.fields.images);
+
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
   const [internalView, setInternalView] = useState<RecipeViewMode>("read");
@@ -666,7 +671,7 @@ const RecipeDetailInner: React.FC<{
   );
 
   // Get recipe images from the recipe object
-  const recipeImages = recipe.images;
+  const recipeImages = effectiveRecipeImages ?? [];
 
   // Load ingredient data plus the graph of any sub-recipes used as ingredients,
   // so cost/calories roll up correctly (data view). `ingMap` is null until the
@@ -797,3 +802,7 @@ const RecipeDetail: React.FC<React.ComponentProps<typeof RecipeDetailInner>> = (
 );
 
 export default RecipeDetail;
+
+type RecipeOut = DetailRecordOf<"recipe">;
+const recipeImagesFor = (recipe: RecipeOut) =>
+  fieldValueOf(recipe.fields.images);

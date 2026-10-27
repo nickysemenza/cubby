@@ -1,18 +1,26 @@
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { taxonomyShortcode } from "tooling/product-category-fixtures";
+import {
+  taxonomyId,
+  taxonomyShortcode,
+} from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { expense, product } from "~/server/db/schema";
 import { updateProductCategory } from "~/server/domains/product-category/repo/product-category";
+import {
+  entityKernelContextSchema,
+  executeEntity,
+} from "~/server/entity-kernel";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   productPricingSummary,
   productStockSummary,
 } from "~/server/generic/entity-report/repo/summary";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   createInventoryFixture,
@@ -21,10 +29,15 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { listProductsRead, productList } from "./crud";
+import { listProductsRead, productList, updateProduct } from "./crud";
 import { loadProductOwnershipTimelines } from "./ownership";
-import { loadExactEffectivePrices, loadProductPriceSum } from "./pricing";
+import {
+  loadExactEffectivePrices,
+  loadProductPriceSum,
+  storedEffectivePrice,
+} from "./pricing";
 import {
   attachProductComponents,
   listProductComponents,
@@ -128,6 +141,39 @@ describe("category-based service Products", () => {
         ledgerExpectedQuantityLabel: null,
       });
       const valued = [{ id: service.entityId, price: 123 }];
+      const read = await executeEntity(
+        entityKernelContextSchema.parse(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+        { action: "get", entity: "product", id: service.id, missing: "error" },
+      );
+      const canonical = entityFieldEnvelopeSchemas.product.detail.parse(
+        read.item,
+      );
+      expect(canonical.fields.price).toMatchObject({
+        current: {
+          assignment: { kind: "value", value: 123 },
+          controls: { kind: "readonly", reason: "not_allowed" },
+        },
+        result: {
+          kind: "live",
+          decision: { outcome: { kind: "empty", reason: "not_applicable" } },
+        },
+      });
+      expect(canonical.pricing).not.toHaveProperty("cost");
+      expect(canonical.pricing).not.toHaveProperty("effectivePrice");
+      expect(canonical.pricing).not.toHaveProperty("derivedPrice");
+      expect(canonical.pricing).not.toHaveProperty("source");
+      expect(canonical.fields.cost.result).toEqual({ kind: "missing" });
+      expect(
+        storedEffectivePrice(new Map(), {
+          id: service.entityId,
+          price: 123,
+          category: detail.category,
+        }),
+      ).toBeNull();
       expect(
         (await loadExactEffectivePrices(ctx.db, valued)).get(service.entityId),
       ).toBeNull();
@@ -158,10 +204,55 @@ describe("category-based service Products", () => {
         makeProductInput({ name: "Synthetic physical item", price: 70 }),
         ctx.actor,
       );
+      // Sort compares published charges with the immediately available own item price.
+      await drainStoredDerived(ctx.db);
+      const published = entityFieldEnvelopeSchemas.product.detail.parse(
+        (
+          await executeEntity(
+            entityKernelContextSchema.parse(
+              createTestRequestContext(ctx.db, {
+                auth: { userId: ctx.actor.userId },
+              }),
+            ),
+            {
+              action: "get",
+              entity: "product",
+              id: service.id,
+              missing: "error",
+            },
+          )
+        ).item,
+      );
+      expect(published.fields.cost).toMatchObject({
+        current: {
+          assignment: null,
+          controls: { kind: "readonly", reason: "computed" },
+        },
+        result: {
+          kind: "cached",
+          freshness: "fresh",
+          decision: {
+            outcome: {
+              kind: "value",
+              value: {
+                kind: "service_charge",
+                amount: 65,
+                chargeCount: 2,
+                latestCharge: 90,
+              },
+            },
+            provenance: { kind: "computed" },
+          },
+        },
+      });
+      expect(published.fields.price.result).toMatchObject({
+        kind: "live",
+        decision: { outcome: { kind: "empty", reason: "not_applicable" } },
+      });
       const mixed = await productList(
         ctx.db,
         { ids: [service.id, physical.id] },
-        [{ orderBy: "price", direction: "asc" }],
+        [{ orderBy: "cost", direction: "asc" }],
         { pageIndex: 0, pageSize: 10 },
       );
       expect(mixed.data.map((row) => row.id)).toEqual([
@@ -201,8 +292,227 @@ describe("category-based service Products", () => {
         .where(eq(expense.productId, service.entityId));
       expect(originals).toHaveLength(3);
       expect(originals).toContainEqual({ cost: 90, quantity: 30 });
+
+      // An unsuccessful refresh retains one complete published tuple for display and sorting.
+      await getDb(ctx.db).execute(sql`UPDATE "Expense" SET cost = 190
+        WHERE "productId" = ${service.entityId} AND cost = 90`);
+      await getDb(ctx.db).execute(sql`UPDATE "DerivedDirty"
+        SET "lastError" = 'Synthetic Cost refresh failure', "readyAt" = now() + interval '1 hour'
+        WHERE target = 'product.cost' AND ref = ${service.entityId}`);
+      const readCanonical = async () =>
+        entityFieldEnvelopeSchemas.product.detail.parse(
+          (
+            await executeEntity(
+              entityKernelContextSchema.parse(
+                createTestRequestContext(ctx.db, {
+                  auth: { userId: ctx.actor.userId },
+                }),
+              ),
+              {
+                action: "get",
+                entity: "product",
+                id: service.id,
+                missing: "error",
+              },
+            )
+          ).item,
+        );
+      const failed = await readCanonical();
+      expect(failed.fields.cost.result).toMatchObject({
+        kind: "cached",
+        freshness: "stale",
+        computedAt:
+          published.fields.cost.result.kind === "cached"
+            ? published.fields.cost.result.computedAt
+            : null,
+        decision: {
+          outcome: {
+            kind: "value",
+            value: { amount: 65, chargeCount: 2, latestCharge: 90 },
+          },
+        },
+      });
+      expect(failed.fields.cost.work).toMatchObject({
+        kind: "failed",
+        error: "Synthetic Cost refresh failure",
+      });
+      const staleSort = await productList(
+        ctx.db,
+        { ids: [service.id, physical.id] },
+        [{ orderBy: "cost", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(staleSort.data.map((row) => row.id)).toEqual([
+        service.id,
+        physical.id,
+      ]);
+      await getDb(ctx.db)
+        .execute(sql`UPDATE "DerivedDirty" SET "readyAt" = now()
+        WHERE target = 'product.cost' AND ref = ${service.entityId}`);
+      await drainStoredDerived(ctx.db);
+      const refreshed = await readCanonical();
+      expect(refreshed.fields.cost.result).toMatchObject({
+        kind: "cached",
+        freshness: "fresh",
+        decision: {
+          outcome: {
+            kind: "value",
+            value: { amount: 115, chargeCount: 2, latestCharge: 190 },
+          },
+        },
+      });
+      const refreshedSort = await productList(
+        ctx.db,
+        { ids: [service.id, physical.id] },
+        [{ orderBy: "cost", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(refreshedSort.data.map((row) => row.id)).toEqual([
+        physical.id,
+        service.id,
+      ]);
+
+      // A date edit changes latest-charge evidence even when the average is unchanged.
+      await getDb(ctx.db).execute(sql`UPDATE "Expense" SET date = '2026-04-01'
+        WHERE "productId" = ${service.entityId} AND cost = 40`);
+      expect((await readCanonical()).fields.cost.result).toMatchObject({
+        kind: "cached",
+        freshness: "stale",
+      });
+      await drainStoredDerived(ctx.db);
+      expect((await readCanonical()).fields.cost.result).toMatchObject({
+        kind: "cached",
+        freshness: "fresh",
+        decision: {
+          outcome: {
+            kind: "value",
+            value: { amount: 115, chargeCount: 2, latestCharge: 40 },
+          },
+        },
+      });
     },
   );
+
+  it("distinguishes empty service Cost from missing work through category changes", async () => {
+    const service = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic changing Cost applicability",
+        categoryId: taxonomyShortcode("services"),
+        price: 123,
+      }),
+      ctx.actor,
+    );
+    const read = async () =>
+      entityFieldEnvelopeSchemas.product.detail.parse(
+        (
+          await executeEntity(
+            entityKernelContextSchema.parse(
+              createTestRequestContext(ctx.db, {
+                auth: { userId: ctx.actor.userId },
+              }),
+            ),
+            {
+              action: "get",
+              entity: "product",
+              id: service.id,
+              missing: "error",
+            },
+          )
+        ).item,
+      );
+    expect((await read()).fields.cost.result).toEqual({ kind: "missing" });
+    await drainStoredDerived(ctx.db);
+    expect((await read()).fields.cost.result).toMatchObject({
+      kind: "cached",
+      freshness: "fresh",
+      decision: {
+        outcome: { kind: "empty", reason: "unset" },
+        provenance: { kind: "computed" },
+      },
+    });
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({ productId: service.id, cost: 40, date: "2026-01-01" }),
+    );
+    await drainStoredDerived(ctx.db);
+    expect((await read()).fields.cost.result).toMatchObject({
+      kind: "cached",
+      decision: {
+        outcome: {
+          kind: "value",
+          value: {
+            kind: "service_charge",
+            amount: 40,
+            chargeCount: 1,
+            latestCharge: 40,
+          },
+        },
+      },
+    });
+
+    await updateProduct(
+      ctx.db,
+      service.entityId,
+      { categoryId: taxonomyId("tools") },
+      ctx.actor,
+    );
+    const physical = await read();
+    expect(physical.fields.price.current.assignment).toMatchObject({
+      kind: "value",
+      value: 123,
+    });
+    expect(physical.fields.cost.result).toMatchObject({
+      kind: "live",
+      decision: {
+        outcome: { kind: "value", value: { kind: "item", amount: 123 } },
+        provenance: { kind: "own" },
+      },
+    });
+    await drainStoredDerived(ctx.db);
+    const physicalCost = await getDb(ctx.db).execute(
+      sql`SELECT value FROM "DerivedValue" WHERE "entityId" = ${service.entityId} AND key = 'cost'`,
+    );
+    expect(physicalCost.rows).toEqual([]);
+
+    await updateProduct(
+      ctx.db,
+      service.entityId,
+      { categoryId: taxonomyId("services") },
+      ctx.actor,
+    );
+    const restored = await read();
+    expect(restored.fields.price.result).toMatchObject({
+      kind: "live",
+      decision: { outcome: { kind: "empty", reason: "not_applicable" } },
+    });
+    expect(restored.fields.cost.result).toEqual({ kind: "missing" });
+    expect(restored.fields.cost.work).toEqual({ kind: "pending" });
+    const valued = await productList(
+      ctx.db,
+      { ids: [service.id], pricePresenceFilter: "has" },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+    );
+    expect(valued.data).toEqual([]);
+    await drainStoredDerived(ctx.db);
+    expect((await read()).fields.cost.result).toMatchObject({
+      kind: "cached",
+      freshness: "fresh",
+      decision: {
+        outcome: {
+          kind: "value",
+          value: {
+            kind: "service_charge",
+            amount: 40,
+            chargeCount: 1,
+            latestCharge: 40,
+          },
+        },
+      },
+    });
+  });
 
   it("keeps direct service kit charges out of physical quantities and prices while honoring an explicit override", async () => {
     await updateProductCategory(
@@ -460,3 +770,4 @@ describe("category-based service Products", () => {
     expect(components[0]?.onHandUnits).toBeNull();
   });
 });
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";

@@ -1,9 +1,12 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category";
+
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 
 interface CategoryTreeInput {
   id: string;
   name: string;
-  feature: ProductCategoryFeature | null;
+  fields: Pick<ListRowOf<"productCategory">["fields"], "effectiveFeature">;
   /** The server-nested children (`useServerTree`). */
   subRows?: CategoryTreeInput[];
 }
@@ -34,7 +37,7 @@ export function buildCategoryHierarchy(
     row: CategoryTreeInput,
     inherited: ProductCategoryFeature | null,
   ): CategoryHierarchyNode => {
-    const feature = row.feature ?? inherited;
+    const feature = fieldValueOf(row.fields.effectiveFeature) ?? inherited;
     const children = row.subRows?.map((child) => toNode(child, feature));
     const directCount = directCounts.get(row.id) ?? 0;
     const node: CategoryHierarchyNode = {

@@ -1,5 +1,9 @@
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import {
+  fieldEnvelopeFor,
+  fieldValueOf,
+  fieldDecisionOf,
+} from "@cubby/schemas/field-envelope";
 import { z } from "zod";
 
 import { readPathValue } from "./read-path";
@@ -43,6 +47,8 @@ export const readRecordField = <TRecord extends object, TValue>(
 ): TValue => {
   if (Array.isArray(record))
     throw new TypeError(`Cannot read "${key}" off an array as a record`);
+  const envelope = fieldEnvelopeFor(record, key);
+  if (envelope) return schema.parse(fieldValueOf(envelope));
   const property = Object.getOwnPropertyDescriptor(record, key);
   return schema.parse(
     property?.get ? property.get.call(record) : property?.value,
@@ -102,13 +108,13 @@ const storedReference = <TRecord extends object>(
 ): ReferenceFieldValue | null => {
   if (intent !== "stored" || !field.reference || field.reference.multiple)
     return null;
-  const resolution = readRecordField(
-    record,
-    "fieldResolutions",
-    fieldResolutionsSchema.optional(),
-  )?.[field.key];
-  if (!resolution) return null;
-  const id = nullableString.parse(resolution.storedValue);
+  const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
+  if (!envelope) return null;
+  const assignment = envelope.current.assignment;
+  const id =
+    assignment?.kind === "value"
+      ? nullableString.parse(assignment.value)
+      : null;
   const base = field.key.replace(/Ids?$/u, "");
   const raw =
     field.readKey === null
@@ -210,13 +216,9 @@ export function readDisplayReferenceField<TRecord extends object>(
   | null {
   const stored = readReferenceField(record, field, "display");
   if (stored === null || field.reference?.multiple) return stored;
-  const resolutions = readRecordField(
-    record,
-    "fieldResolutions",
-    fieldResolutionsSchema.optional(),
-  );
-  const resolution = resolutions?.[field.key];
-  if (!resolution) return stored;
+  const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
+  if (!envelope) return stored;
+  const decision = fieldDecisionOf(envelope);
   const stem = field.key.replace(/Ids?$/u, "");
   const allocations = readRecordField(
     record,
@@ -229,7 +231,7 @@ export function readDisplayReferenceField<TRecord extends object>(
     incomplete: readRecordField(share, "incomplete", optionalBoolean) ?? false,
     amount: readRecordField(share, "amount", optionalNumber),
   }));
-  if (resolution.mode === "allocated") {
+  if (decision?.provenance?.kind === "allocated") {
     const items = new Map<string, ReferenceItem>();
     for (const share of shares)
       if (share.id) {
@@ -248,10 +250,14 @@ export function readDisplayReferenceField<TRecord extends object>(
         shares.some((share) => !share.id || share.incomplete),
     };
   }
-  const effectiveID = nullableString.parse(resolution.value);
+  const effectiveID = nullableString.parse(fieldValueOf(envelope));
   if (effectiveID === null) return { entity: stored.entity, items: [] };
   const sameTarget = stored.items.find((item) => item.id === effectiveID);
-  const source = resolution.sourceEntity;
+  const provenance = decision?.provenance;
+  const source =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
   const name =
     shares.find((share) => share.id === effectiveID)?.name ??
     sameTarget?.name ??

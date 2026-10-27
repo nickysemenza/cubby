@@ -215,7 +215,14 @@ describe("photo product candidates", () => {
     // One evidence read must supply comparison fields without separate Product reads.
     expect(evidence).toMatchObject({
       notes: "Synthetic evidence notes",
-      tags: ["synthetic"],
+      fields: {
+        tags: {
+          current: { assignment: { kind: "value", value: ["synthetic"] } },
+          result: {
+            decision: { outcome: { kind: "value", value: ["synthetic"] } },
+          },
+        },
+      },
       category: { name: "Synthetic evidence category" },
       externalIds: [
         expect.objectContaining({
@@ -227,6 +234,9 @@ describe("photo product candidates", () => {
       ],
       identifiers: ["SYN-EVIDENCE-1"],
     });
+    expect(evidence).not.toHaveProperty("tags");
+    expect(evidence).not.toHaveProperty("brandId");
+    expect(evidence).not.toHaveProperty("brandName");
     expect(evidence?.purchaseLines).toEqual([
       expect.objectContaining({
         name: "Synthetic ordered line",

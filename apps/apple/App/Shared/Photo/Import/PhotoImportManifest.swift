@@ -396,7 +396,7 @@ final class PhotoImportManifest {
         // e.g. a raised-bed Location routes to the Garden Entry route instead of its own gallery.
         let conditionalPrimary = type.options.first { option in
             guard let predicate = option.route.primaryWhen else { return false }
-            return row.raw[predicate.field]?.stringValue.map(predicate.values.contains) ?? false
+            return row.raw.recordValue(predicate.field)?.stringValue.map(predicate.values.contains) ?? false
         }
         guard
             let primary =
@@ -460,7 +460,7 @@ final class PhotoImportManifest {
     /// `chooseSourceRecord`'s auto-resolve and the background analyzer's `apply` so the review
     /// sheet's decision reason reads identically from both paths.
     private static func automaticDecision(route: PhotoIngressRoute, row: EntityRow) -> PhotoRouteDecision {
-        if let predicate = route.primaryWhen, let value = row.raw[predicate.field]?.stringValue,
+        if let predicate = route.primaryWhen, let value = row.raw.recordValue(predicate.field)?.stringValue,
             predicate.values.contains(value)
         {
             return .automaticConditional(field: predicate.field, value: value)
@@ -1422,8 +1422,8 @@ final class PhotoImportManifest {
             let values = filter.oneOf + (filter.equals.map { [$0] } ?? [])
             guard !values.isEmpty else { return true }
             guard
-                let value = row.raw[filter.field]?.stringValue
-                    ?? row.raw[filter.field]?.boolValue.map(String.init)
+                let value = row.raw.recordValue(filter.field)?.stringValue
+                    ?? row.raw.recordValue(filter.field)?.boolValue.map(String.init)
             else { return true }
             return values.contains(value)
         }

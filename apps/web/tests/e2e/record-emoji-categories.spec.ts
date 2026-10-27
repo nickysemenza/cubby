@@ -1,10 +1,11 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { seedImagePrerequisite } from "./fixtures/photos";
 import { attachExistingImageToEntity } from "~/server/domains/image/repo/image";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { entityApi } from "./support/entity-api";
-import { z } from "zod";
 import superjson from "superjson";
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import {
@@ -18,6 +19,14 @@ import {
 } from "./fixtures/core";
 
 // Real HTTP, editor and reference rendering verify reviewed identity persistence.
+const categoryEmoji = entityFieldEnvelopeSchemas.productCategory.detail
+  .pick({})
+  .extend({
+    fields: entityFieldEnvelopeSchemas.productCategory.detail.shape.fields.pick(
+      { emoji: true },
+    ),
+  });
+
 test("accepts a suggestion, saves compound emoji, and clears it", async ({
   page,
 }) => {
@@ -90,7 +99,9 @@ test("accepts a suggestion, saves compound emoji, and clears it", async ({
     {},
   );
   expect(
-    z.object({ emoji: z.null() }).parse(await beforeAcceptance.json()).emoji,
+    fieldValueOf(
+      categoryEmoji.parse(await beforeAcceptance.json()).fields.emoji,
+    ),
   ).toBeNull();
   await dialog.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(
@@ -101,21 +112,23 @@ test("accepts a suggestion, saves compound emoji, and clears it", async ({
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
   const read = async () =>
-    z
-      .object({ emoji: z.string().nullable() })
-      .parse(
-        await (
-          await entityApi(page.request).get("productCategory", root, {})
-        ).json(),
-      );
-  await expect.poll(async () => (await read()).emoji).toBe("👩🏽‍🍳");
+    categoryEmoji.parse(
+      await (
+        await entityApi(page.request).get("productCategory", root, {})
+      ).json(),
+    );
+  await expect
+    .poll(async () => fieldValueOf((await read()).fields.emoji))
+    .toBe("👩🏽‍🍳");
   await page
     .getByRole("button", { name: "Edit Product Category", exact: true })
     .click();
   await dialog.getByRole("textbox", { name: "Emoji", exact: true }).fill("");
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
-  await expect.poll(async () => (await read()).emoji).toBeNull();
+  await expect
+    .poll(async () => fieldValueOf((await read()).fields.emoji))
+    .toBeNull();
 });
 
 test("unassessed quality remains visible in phone cards", async ({

@@ -131,10 +131,27 @@ export async function registerSchemaNames(
       z.globalRegistry.add(value, { ...z.globalRegistry.get(value), id });
     }
   }
+  registerDiscriminatedMembers(named, claim);
+  return named;
+}
+
+/** Name anonymous union members using their full path from a named schema. */
+export function registerDiscriminatedMembers(
+  named: Map<string, z.ZodType>,
+  claim: (id: string, schema: z.ZodType, source: string) => void = (
+    id,
+    schema,
+    source,
+  ) => {
+    const existing = named.get(id);
+    if (existing && existing !== schema)
+      throw new Error(`Native union model name collision on ${id}: ${source}`);
+    named.set(id, schema);
+  },
+): void {
   const seen = new Set<z.ZodType>();
   for (const [id, schema] of named)
-    nameUnionMembers(schema, id, [], seen, named, claim);
-  return named;
+    nameUnionMembers(schema, id, [], seen, claim);
 }
 
 /** The constant a member's tag property carries, read off its JSON Schema. */
@@ -162,7 +179,6 @@ function nameUnionMembers(
   parent: string,
   trail: readonly string[],
   seen: Set<z.ZodType>,
-  named: ReadonlyMap<string, z.ZodType>,
   claim: (id: string, schema: z.ZodType, source: string) => void,
 ): void {
   if (seen.has(schema)) return;
@@ -172,12 +188,9 @@ function nameUnionMembers(
     if (key !== undefined && z.globalRegistry.get(child)?.id === undefined) {
       const tag = literalTag(child, key);
       if (tag !== undefined) {
-        const bare = `${parent}${pascal(tag)}`;
-        const taken = named.get(bare);
-        const id =
-          taken === undefined || taken === child
-            ? bare
-            : `${parent}${trail.map(pascal).join("")}${pascal(tag)}`;
+        // Anonymous objects are named later by emitters, so absence from the named map
+        // cannot prove that a shorter name is free. Keep the whole structural path.
+        const id = `${parent}${trail.map(pascal).join("")}${pascal(tag)}`;
         claim(id, child, `${parent}${trail.join(".")}${segment}`);
         z.globalRegistry.add(child, { ...z.globalRegistry.get(child), id });
       }
@@ -186,11 +199,12 @@ function nameUnionMembers(
     nameUnionMembers(
       child,
       childId ?? parent,
-      childId !== undefined || structuralSegment.test(segment)
+      childId !== undefined
         ? []
-        : [...trail, segment],
+        : structuralSegment.test(segment)
+          ? trail
+          : [...trail, segment],
       seen,
-      named,
       claim,
     );
   }

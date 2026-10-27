@@ -8,7 +8,7 @@ import {
 import {
   type FinancialTransactionImportPreviewInput,
   type FinancialTransactionImportRow,
-  type FinancialTransactionImportPreviewOut,
+  type RawFinancialTransactionImportPreviewOut as FinancialTransactionImportPreviewOut,
   financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";

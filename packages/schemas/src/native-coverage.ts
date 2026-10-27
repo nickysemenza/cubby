@@ -4,7 +4,7 @@ import { locationValuation } from "./location-fields";
 import { recipeSource } from "./recipe-shared";
 import { merchantVendorInference } from "./financial-transaction-fields";
 import { projectRollup } from "./project-output-fields";
-import { recipeTotals, recipeTopLevelFields } from "./recipe-shared";
+import { recipeTotals, rawRecipeTopLevelFields } from "./recipe-shared";
 import { listLabel } from "./entity-definitions/label-field";
 import { runWorkProgress } from "./run-work-progress";
 import { financialReconciliationSummary } from "./financial-reconciliation";
@@ -197,8 +197,8 @@ export const nativeCoverage = {
       inputs: [
         { path: "totals", schema: recipeTotals },
         { path: "caloriesTotalLabel", schema: listLabel },
-        { path: "yield", schema: recipeTopLevelFields.yield },
-        { path: "servings", schema: recipeTopLevelFields.servings },
+        { path: "yield", schema: rawRecipeTopLevelFields.yield },
+        { path: "servings", schema: rawRecipeTopLevelFields.servings },
         { path: "updatedAt", schema: z.date() },
       ],
     },
@@ -207,8 +207,8 @@ export const nativeCoverage = {
       inputs: [
         { path: "totals", schema: recipeTotals },
         { path: "costTotalLabel", schema: listLabel },
-        { path: "yield", schema: recipeTopLevelFields.yield },
-        { path: "servings", schema: recipeTopLevelFields.servings },
+        { path: "yield", schema: rawRecipeTopLevelFields.yield },
+        { path: "servings", schema: rawRecipeTopLevelFields.servings },
         { path: "updatedAt", schema: z.date() },
       ],
     },
@@ -294,6 +294,8 @@ export const nativeCoverage = {
       "expense-project",
       "ownerLedgerPartyId",
       "product-category",
+      // #3324 still owns native charge annotations; the declared amount path is generic.
+      "product-cost",
       "product-fdc-id",
       "product-external-ids",
       "product-id",

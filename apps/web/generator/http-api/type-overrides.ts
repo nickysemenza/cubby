@@ -22,11 +22,14 @@ export const TYPE_OVERRIDES = {
 /**
  * Kernel responses are untyped JSON objects, so no route reaches these record
  * schemas; hand-written Swift still decodes them by name from a kernel
- * detail or list row. Shrink-only: move each view onto the entity manifest
- * and drop its name.
+ * detail or list row. Shared typed renderers also name their declared value
+ * schemas here when kernel wire erasure otherwise makes them unreachable.
+ * Remove record roots as views move onto the entity manifest.
  */
 export const NATIVE_TYPED_RECORDS = [
   "ImageOut",
-  "InventoryWithLocationAndProductOut",
+  "InventoryDetail",
+  "LocationTreeNodeOut",
   "ProductDetail",
+  "SpendingCategorySummary",
 ] as const;

@@ -58,30 +58,54 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
         self.locationName = locationName
     }
 
-    public init(_ out: InventoryWithLocationAndProductOut) {
+    public init(_ out: InventoryDetail) throws {
+        let amount: Amount
+        switch out.fields.amount.result {
+        case .live(let result):
+            guard case .value(let outcome) = result.decision.outcome else {
+                throw Self.missingAmount()
+            }
+            amount = Amount(
+                value: outcome.value.value, unit: outcome.value.unit, upperValue: outcome.value.upperValue)
+        case .cached(let result):
+            guard case .value(let outcome) = result.decision.outcome else {
+                throw Self.missingAmount()
+            }
+            amount = Amount(
+                value: outcome.value.value, unit: outcome.value.unit, upperValue: outcome.value.upperValue)
+        case .missing, .unrecognized:
+            throw Self.missingAmount()
+        }
         var barcodes: Set<String> = []
         for external in out.product.externalIds where external.kind == .gtin14 {
             barcodes.insert(external.externalId)
         }
-        let cover = out.product.displayImages.first.flatMap {
-            URL(string: $0.representations?.preferred ?? $0.url)
-        }
+        let product = try JSONValue(encoding: out.product)
+        let cover =
+            (product.pathText("displayImages[0].representations.preferred")
+            ?? product.pathText("displayImages[0].url")).flatMap(URL.init(string:))
         self.init(
             id: out.id,
-            amount: Amount(value: out.amount.value, unit: out.amount.unit, upperValue: out.amount.upperValue),
+            amount: amount,
             updatedAt: out.updatedAt,
             placement: out.placement.rawValue,
             product: Product(
                 id: out.product.id,
                 name: out.product.name,
-                brandName: out.product.brandName,
-                primaryGtin: out.product.primaryGtin,
+                brandName: product.pathText("brandName"),
+                primaryGtin: product.pathText("primaryGtin"),
                 barcodes: barcodes,
                 coverImageURL: cover
             ),
             locationID: out.location.id,
             locationName: out.location.name
         )
+    }
+
+    private static func missingAmount() -> DecodingError {
+        .valueNotFound(
+            Amount.self,
+            .init(codingPath: [], debugDescription: "Inventory recount requires an available amount result"))
     }
 
 }

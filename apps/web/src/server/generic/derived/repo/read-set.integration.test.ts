@@ -6,6 +6,7 @@ import {
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
 import { countTestDbQueries, seedEntity, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -36,7 +37,11 @@ import {
 import { markAllStoredDerived } from "~/server/generic/derived/repo/drain";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { drainStoredDerived } from "~/server/testing/background-queue";
-import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+  makeCookbookExtraction,
+} from "~/server/testing/repo.fixtures";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
 /**
@@ -113,6 +118,23 @@ describe("stored derived read sets", () => {
 
   /** Kinds the performance corpus does not create, with their relations. */
   async function seedCorpusGaps() {
+    // Product Cost publishes a stored result only for service-category charges.
+    const service = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic read-set service",
+        categoryId: taxonomyShortcode("services"),
+      }),
+      ctx.actor,
+    );
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic read-set service charge",
+      trade: "other",
+      productId: service.id,
+      cost: 25,
+      date: "2026-01-01",
+      future: false,
+    });
     const other = await seedEntity(ctx.db, "ledgerParty");
     await seedEntity(ctx.db, "ledgerTransfer", {
       fromPartyId: parseShortcodeFor(

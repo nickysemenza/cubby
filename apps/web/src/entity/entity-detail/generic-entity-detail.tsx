@@ -13,6 +13,7 @@ import {
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
@@ -355,14 +356,21 @@ function detailFiles<E extends GenericDetailEntity>(
   const attachments = partitionEntityFiles(bag.attachments ?? []);
   // Product's domain gallery excludes confirmed labels; the universal
   // attachment list remains complete for documents and write preconditions.
+  // An empty outcome has no local gallery; the canonical cover can still apply.
   const images =
     entity === "product"
       ? partitionEntityFiles(
-          readRecordField(record, "images", z.array(imageOut).default([])),
+          readRecordField(record, "images", z.array(imageOut).nullish()) ?? [],
         ).images
       : attachments.images;
-  const { documents } = attachments;
-  return { images, documents };
+  const toDisplayFile = (image: z.output<typeof imageOut>) => {
+    const url = publicImageUrl(image);
+    return url ? [{ ...image, url }] : [];
+  };
+  return {
+    images: images.flatMap(toDisplayFile),
+    documents: attachments.documents.flatMap(toDisplayFile),
+  };
 }
 
 function detailWayfinding<E extends GenericDetailEntity>(

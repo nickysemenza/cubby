@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { WishFilters, WishListItemOut } from "@cubby/schemas/wish";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useQuery } from "@tanstack/react-query";
@@ -81,7 +82,7 @@ function WishRowCover({ row }: { row: WishRow }) {
     <ImageThumbnail
       // The server merges every candidate's photos in candidate order, so a
       // collapsed wish's "+N" badge reads as "more options".
-      images={row.wish.displayImages}
+      images={fieldValueOf(row.wish.fields.displayImages) ?? []}
       alt="Candidate product image"
       lazyPreview
       entity="product"
@@ -218,7 +219,10 @@ export const wishListOverride = defineListOverride<
           );
           add(
             columnHelper.accessor(
-              (row) => (row.kind === "wish" ? row.wish.candidateCount : null),
+              (row) =>
+                row.kind === "wish"
+                  ? (fieldValueOf(row.wish.fields.candidateCount) ?? null)
+                  : null,
               {
                 id: "candidateCount",
                 header: "Options",
@@ -255,7 +259,7 @@ export const wishListOverride = defineListOverride<
             columnHelper.accessor(
               (row) => {
                 if (row.kind === "candidate") return row.candidate.price;
-                const range = row.wish.priceRange;
+                const range = fieldValueOf(row.wish.fields.priceRange);
                 return range ? rangeMidpoint(range.low, range.high) : null;
               },
               {
@@ -304,7 +308,7 @@ export const wishListOverride = defineListOverride<
                       </span>
                     );
                   }
-                  const range = row.wish.priceRange;
+                  const range = fieldValueOf(row.wish.fields.priceRange);
                   if (!range) return <NoneValue />;
                   const unpriced =
                     row.wish.candidates.length - range.pricedCount;

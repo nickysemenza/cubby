@@ -78,6 +78,20 @@ struct RecipeCookPlanTests {
         #expect(plan.yieldLabel(factor: 1.0 / 3.0) == "1.33 serving")
     }
 
+    /// Governed servings arrive as a canonical envelope; the plan reads its effective result.
+    @Test func readsEnvelopedServings() throws {
+        guard case .object(var object) = recipe() else { return }
+        object.removeValue(forKey: "servings")
+        object["fields"] = [
+            "servings": FieldEnvelopeFixture.envelope(
+                assignment: .null, controls: FieldEnvelopeFixture.editable(),
+                result: FieldEnvelopeFixture.live(
+                    FieldEnvelopeFixture.decision(.number(4), provenance: FieldEnvelopeFixture.own)))
+        ]
+        let plan = try #require(RecipeCookPlan(recipe: .object(object)))
+        #expect(plan.servings(factor: 1.5) == 6)
+    }
+
     @Test func aRecipeWithoutInstructionsHasNoSteps() throws {
         let bare: JSONValue = .object([
             "name": .string("Bare"),

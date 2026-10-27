@@ -1,15 +1,14 @@
-import type {
-  purchaseSettlementCandidate,
-  PurchaseSettlementSuggestOut,
-} from "@cubby/schemas/purchase";
+import type { PurchaseSettlementSuggestOut } from "@cubby/schemas/purchase";
 import { useMemo } from "react";
 
+import type { purchaseSettlementCandidateRead } from "~/contracts/purchase.contract";
 import { formatCurrency } from "~/lib/number-format";
 import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 
-export type SettlementCandidate = typeof purchaseSettlementCandidate._output;
+export type SettlementCandidate =
+  typeof purchaseSettlementCandidateRead._output;
 
 /**
  * The reviewable candidate list. Which candidates tie, what each says, the order a suggestion

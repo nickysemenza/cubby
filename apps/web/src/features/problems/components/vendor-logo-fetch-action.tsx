@@ -1,4 +1,3 @@
-import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 
 import {
@@ -7,6 +6,7 @@ import {
   useFetchVendorLogo,
   type VendorLogoFetchOperations,
 } from "~/entity/actions/vendor-logo-entity-action";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 export type { VendorLogoFetchOperations } from "~/entity/actions/vendor-logo-entity-action";
 import { Link } from "@tanstack/react-router";
 
@@ -53,3 +53,5 @@ export function VendorLogoFetchAction({
     </div>
   );
 }
+
+type VendorOut = DetailRecordOf<"vendor">;

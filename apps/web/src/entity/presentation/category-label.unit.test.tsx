@@ -1,8 +1,13 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -11,7 +16,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CategoryLabelById } from "./category-label";
 
-const root = {
+const rootInput = {
   id: testShortcode("productCategory", "CAT-R222"),
   name: "Workshop",
   parentId: null,
@@ -37,13 +42,41 @@ const root = {
   description: null,
   path: [{ id: "CAT-R222", name: "Workshop" }],
 };
+const root = entityReadFixture(
+  entityFieldEnvelopeSchemas.productCategory.list,
+  {
+    ...rootInput,
+    fields: {
+      path: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape.path,
+        rootInput.path,
+      ),
+      feature: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape
+          .feature,
+        "tools",
+      ),
+      stockTracked: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape
+          .stockTracked,
+        false,
+      ),
+    },
+  },
+);
 const child = {
   ...root,
   id: testShortcode("productCategory", "CAT-C222"),
   name: "Hand tools",
   parentId: root.id,
   feature: null,
-  path: [...root.path, { id: "CAT-C222", name: "Hand tools" }],
+  fields: {
+    ...root.fields,
+    path: fieldValueFixture(
+      entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape.path,
+      [...rootInput.path, { id: "CAT-C222", name: "Hand tools" }],
+    ),
+  },
 };
 
 const alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";

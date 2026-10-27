@@ -1,76 +1,55 @@
+import { productFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.product.gen";
 import { describe, expect, it } from "vitest";
 import {
   productFindOrCreateByCodeInput,
-  productMcpOut,
   productQuantitySummaryBatchInput,
 } from "./product";
 import { scanAtLocationCode } from "./scan";
 
-describe("productMcpOut", () => {
-  it("carries product-enrichment identity and image summary fields", () => {
-    const parsed = productMcpOut.parse({
-      id: "PRD-ABCD",
-      name: "M18 framing nailer",
-      brandId: "VEN-22222",
-      brandName: "Milwaukee",
-      model: "2744-20",
-      notes: "Bare tool",
-      primaryGtin: "00045242593057",
-      category: {
-        id: "CAT-TEST",
-        name: "Tools",
-        path: [{ id: "CAT-TEST", name: "Tools" }],
-        feature: "tools",
+describe("canonical Product MCP fields", () => {
+  it("exposes one typed price result with distinct current intent", () => {
+    const schema = productFieldEnvelopeSchemas.mcpOutput;
+    expect(Object.keys(schema.shape)).not.toContain("price");
+    expect(Object.keys(schema.shape)).not.toContain("fieldResolutions");
+    expect(Object.keys(schema.shape)).not.toContain("derived");
+    expect(Object.keys(schema.shape.pricing.shape).sort()).toEqual([
+      "knownExpenseCount",
+      "knownUnitCount",
+      "partial",
+      "unknownExpenseCount",
+    ]);
+    const price = {
+      current: {
+        assignment: { kind: "value", value: 13, ownership: { kind: "record" } },
+        controls: {
+          kind: "editable",
+          canSetNone: false,
+          canConfirm: false,
+          reset: { kind: "unavailable" },
+        },
       },
-      categoryId: "CAT-TEST",
-      classificationEvidence: "",
-      itemImageCount: 2,
-      labelImageCount: 0,
-      tags: ["M18"],
-      price: 329,
-      effectivePrice: 329,
-      pricing: {
-        derivedPrice: 300,
-        effectivePrice: 329,
-        source: "explicit",
-        knownExpenseCount: 1,
-        unknownExpenseCount: 0,
-        knownUnitCount: 1,
-        partial: false,
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: 13 },
+          provenance: { kind: "own", ownership: { kind: "record" } },
+        },
       },
-      expectedQuantity: 1,
-      imageCount: 2,
-      coverImageUrl: "https://images.example.test/2744-20.webp",
-      fdc_id: null,
-      usdaUnavailable: null,
-      labelNutrition: null,
-      stockTracked: null,
-      kind: null,
-      externalIds: [],
-      usdaFdcId: null,
-      ingredientId: null,
-      unitMappings: [],
-      dataQuality: {
-        score: 100,
-        status: "complete",
-        facets: [],
-        gaps: [],
-        exceptions: [],
-        relatedGaps: [],
-        relatedExceptions: [],
-      },
-    });
-
-    expect(parsed).toMatchObject({
-      model: "2744-20",
-      notes: "Bare tool",
-      primaryGtin: "00045242593057",
-      imageCount: 2,
-      coverImageUrl: "https://images.example.test/2744-20.webp",
-      price: 329,
-      effectivePrice: 329,
-      pricing: { source: "explicit", effectivePrice: 329 },
-    });
+      work: { kind: "idle" },
+    };
+    expect(schema.shape.fields.shape.price.safeParse(price).success).toBe(true);
+    expect(
+      schema.shape.fields.shape.price.safeParse({
+        ...price,
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: "invalid price" },
+            provenance: null,
+          },
+        },
+      }).success,
+    ).toBe(false);
   });
 });
 

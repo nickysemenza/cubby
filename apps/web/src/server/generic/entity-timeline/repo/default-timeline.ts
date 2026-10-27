@@ -1,4 +1,5 @@
 import type { AuditLogListOut } from "@cubby/schemas/audit";
+import { displayImagesField } from "@cubby/schemas/display-images";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import type {
@@ -9,6 +10,8 @@ import type {
   EntityTimelineRow,
 } from "@cubby/schemas/entity-timeline";
 import { identifierEffects } from "@cubby/schemas/external-id";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { z } from "zod";
 
 import type {
@@ -30,10 +33,6 @@ const ID_GET_CONCURRENCY = 25;
 const timelineRowSchema = z
   .object({
     id: z.string().min(1),
-    displayImages: z
-      .array(z.object({ url: z.string() }).loose())
-      .optional()
-      .default([]),
   })
   .loose();
 type TimelineRecord = z.output<typeof timelineRowSchema>;
@@ -297,12 +296,16 @@ export const lifecycleRows = (
         : [{ date, kind: `field:${key}`, link: recordLink(entity, record) }];
     });
     if (start === null && markers.length === 0) return [];
+    const imageEnvelope = fieldEnvelopeFor(record, "displayImages");
+    const cover = imageEnvelope
+      ? displayImagesField.nullable().parse(fieldValueOf(imageEnvelope))?.[0]
+      : undefined;
     return [
       {
         id: record.id,
         name: recordTitle(entity, record),
         link: recordLink(entity, record),
-        imageUrl: record.displayImages[0]?.url ?? null,
+        imageUrl: cover ? preferredImageUrl(cover) : null,
         intervals:
           start === null
             ? []

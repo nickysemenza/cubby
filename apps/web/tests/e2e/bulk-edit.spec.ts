@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { entityApi } from "./support/entity-api";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
@@ -67,12 +69,17 @@ test("task board multi-select bulk-edits status without touching other fields", 
 
   for (const task of tasks) {
     const updated = await entityApi(page.request).get("task", task.id, {});
-    expect(await updated.json()).toMatchObject({
-      status: "done",
-      // Seeded as "other" and never touched in the dialog — proves the
-      // write was the dirty-field subset, not the whole form.
-      trade: "other",
-    });
+    const saved = entityFieldEnvelopeSchemas.task.detail
+      .pick({ status: true })
+      .extend({
+        fields: entityFieldEnvelopeSchemas.task.detail.shape.fields.pick({
+          trade: true,
+        }),
+      })
+      .parse(await updated.json());
+    expect(saved.status).toBe("done");
+    // The untouched seeded trade verifies that only dirty fields were written.
+    expect(fieldValueOf(saved.fields.trade)).toBe("other");
   }
 });
 
@@ -136,10 +143,16 @@ test("plantings list bulk-edits status finished plus a date in one write", async
     planting.id,
     {},
   );
-  expect(await updated.json()).toMatchObject({
-    status: "finished",
-    season: { start: null, end: "2026-06-01" },
-  });
+  const saved = entityFieldEnvelopeSchemas.planting.detail
+    .pick({ season: true })
+    .extend({
+      fields: entityFieldEnvelopeSchemas.planting.detail.shape.fields.pick({
+        status: true,
+      }),
+    })
+    .parse(await updated.json());
+  expect(fieldValueOf(saved.fields.status)).toBe("finished");
+  expect(saved.season).toMatchObject({ start: null, end: "2026-06-01" });
 });
 
 async function openBulkEdit(page: Page, rowNames: string[]) {
@@ -157,7 +170,11 @@ async function openBulkEdit(page: Page, rowNames: string[]) {
   return page.getByRole("dialog", { name: /^Bulk edit \d+ / });
 }
 
-const stockTrackedOut = z.object({ stockTracked: z.boolean().nullable() });
+const stockTrackedOut = z.object({
+  fields: entityFieldEnvelopeSchemas.product.detail.shape.fields.pick({
+    stockTracked: true,
+  }),
+});
 const locationOut = z.object({ locationId: z.string().nullable() });
 
 test("an unchecked checkbox writes false, while leaving it unchanged writes nothing", async ({
@@ -177,7 +194,9 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
       product.id,
       {},
     );
-    return stockTrackedOut.parse(await response.json()).stockTracked;
+    return fieldValueOf(
+      stockTrackedOut.parse(await response.json()).fields.stockTracked,
+    );
   };
 
   await gotoAuthenticatedPage(page, path);

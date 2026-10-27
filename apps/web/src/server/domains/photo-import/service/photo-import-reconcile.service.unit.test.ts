@@ -1,5 +1,5 @@
 import { shortcode } from "@cubby/schemas/identifiers";
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import type { RawImageDetail } from "@cubby/schemas/image-raw-read";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -9,7 +9,7 @@ const database = {} as Database;
 const imageA = shortcode("IMG-AAAA");
 const imageB = shortcode("IMG-BBBB");
 const productA = shortcode("PRD-AAAA");
-const uploadedImage: ImageWithEntity = {
+const uploadedImage: RawImageDetail = {
   id: imageA,
   url: "https://example.test/image.jpg",
   key: "image.jpg",

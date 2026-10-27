@@ -1,9 +1,10 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { LocationTreeNode } from "@cubby/schemas/location";
+import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
 import {
-  getCategoryColor,
+  getFeatureColor,
   getLocationTypeColor,
   type LocationType,
-  type ProductCategory,
 } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum, sumBy } from "es-toolkit";
@@ -41,6 +42,7 @@ const ZONE_LABEL_COLORS = [
 interface FurnitureItem {
   productName: string;
   category: ProductCategory | null;
+  categoryFeature: string | null;
   amount: string;
   color: string;
   inventoryId: string;
@@ -166,8 +168,8 @@ function getFurnitureSpec(type: LocationType | null): FurnitureSpec {
   }
 }
 
-export function getItemHeight(category: ProductCategory | null): number {
-  switch (category?.feature) {
+export function getItemHeight(feature: string | null): number {
+  switch (feature) {
     case "food":
       return 0.5;
     case "tools":
@@ -199,6 +201,7 @@ export interface InventoryData {
   amount: { value: number; unit: string };
   valuation: number | null;
   product: { name: string; category: ProductCategory | null };
+  categoryFeature: string | null;
   location: { id: string; name: string; type: LocationType | null };
 }
 
@@ -211,7 +214,7 @@ function isContainerType(type: LocationType | null): boolean {
  * Each piece gets a breadcrumb path and a parent group for visual clustering.
  */
 function collectPiecesFromSubtree(
-  root: InfLocation,
+  root: LocationTreeNode,
   itemsByLocation: Map<string, FurnitureItem[]>,
   basePath: string[],
   resolveColor: (color: string) => string,
@@ -219,15 +222,15 @@ function collectPiecesFromSubtree(
   const pieces: FurniturePiece[] = [];
 
   function walk(
-    node: InfLocation,
+    node: LocationTreeNode,
     path: string[],
     groupId: string,
     groupName: string,
   ) {
     const items = itemsByLocation.get(node.id) ?? [];
     // Create pieces for furniture-type locations even if empty (ghost furniture)
-    if (!isContainerType(node.type)) {
-      const spec = getFurnitureSpec(node.type);
+    if (!isContainerType(fieldValueOf(node.fields.type))) {
+      const spec = getFurnitureSpec(fieldValueOf(node.fields.type));
       const totalValuation = sumBy(items, (it) => it.valuation ?? 0);
       pieces.push({
         gx: 0,
@@ -236,9 +239,11 @@ function collectPiecesFromSubtree(
         w: spec.w,
         d: spec.d,
         h: spec.h,
-        color: resolveColor(getLocationTypeColor(node.type)),
+        color: resolveColor(
+          getLocationTypeColor(fieldValueOf(node.fields.type)),
+        ),
         name: node.name,
-        locationType: node.type,
+        locationType: fieldValueOf(node.fields.type),
         locationId: node.id,
         locationShortcode: node.id,
         items,
@@ -254,7 +259,7 @@ function collectPiecesFromSubtree(
     for (const child of node.children ?? []) {
       const childPath = [...path, child.name];
       // Container children start a new group; others inherit current group
-      if (isContainerType(node.type)) {
+      if (isContainerType(fieldValueOf(node.fields.type))) {
         walk(child, childPath, node.id, node.name);
       } else {
         walk(child, childPath, groupId, groupName);
@@ -293,8 +298,9 @@ function inventoryByLocation(
     locationItems.push({
       productName: item.product.name,
       category: item.product.category,
+      categoryFeature: item.categoryFeature,
       amount: `${item.amount.value} ${item.amount.unit}`,
-      color: resolveColor(getCategoryColor(item.product.category)),
+      color: resolveColor(getFeatureColor(item.categoryFeature)),
       inventoryId: item.id,
       valuation: item.valuation,
     });
@@ -303,19 +309,20 @@ function inventoryByLocation(
   return result;
 }
 
-function partitionRoomChildren(root: InfLocation) {
-  const zoneContainers: InfLocation[] = [];
-  const directFurniture: InfLocation[] = [];
+function partitionRoomChildren(root: LocationTreeNode) {
+  const zoneContainers: LocationTreeNode[] = [];
+  const directFurniture: LocationTreeNode[] = [];
   for (const child of root.children ?? []) {
-    (isContainerType(child.type) ? zoneContainers : directFurniture).push(
-      child,
-    );
+    (isContainerType(fieldValueOf(child.fields.type))
+      ? zoneContainers
+      : directFurniture
+    ).push(child);
   }
   return { zoneContainers, directFurniture };
 }
 
 function containerZone(
-  container: InfLocation,
+  container: LocationTreeNode,
   index: number,
   rootName: string,
   itemsByLocation: Map<string, FurnitureItem[]>,
@@ -338,7 +345,9 @@ function containerZone(
       w: spec.w,
       d: spec.d,
       h: spec.h,
-      color: resolveColor(getLocationTypeColor(container.type)),
+      color: resolveColor(
+        getLocationTypeColor(fieldValueOf(container.fields.type)),
+      ),
       name: `${container.name} (items)`,
       locationType: "table",
       locationId: container.id,
@@ -368,7 +377,7 @@ function containerZone(
 }
 
 export function buildRooms(
-  tree: InfLocation[],
+  tree: LocationTreeNode[],
   inventory: InventoryData[],
   resolveColor: (color: string) => string = (color) => color,
 ): RoomData[] {
@@ -399,8 +408,8 @@ export function buildRooms(
       );
       // Also include the child itself if it has items (or as ghost furniture)
       const childItems = itemsByLocation.get(child.id) ?? [];
-      if (!isContainerType(child.type)) {
-        const spec = getFurnitureSpec(child.type);
+      if (!isContainerType(fieldValueOf(child.fields.type))) {
+        const spec = getFurnitureSpec(fieldValueOf(child.fields.type));
         const totalValuation = sumBy(childItems, (it) => it.valuation ?? 0);
         childPieces.push({
           gx: 0,
@@ -409,9 +418,11 @@ export function buildRooms(
           w: spec.w,
           d: spec.d,
           h: spec.h,
-          color: resolveColor(getLocationTypeColor(child.type)),
+          color: resolveColor(
+            getLocationTypeColor(fieldValueOf(child.fields.type)),
+          ),
           name: child.name,
-          locationType: child.type,
+          locationType: fieldValueOf(child.fields.type),
           locationId: child.id,
           locationShortcode: child.id,
           items: childItems,
@@ -437,7 +448,9 @@ export function buildRooms(
         w: spec.w,
         d: spec.d,
         h: spec.h,
-        color: resolveColor(getLocationTypeColor(rootNode.type)),
+        color: resolveColor(
+          getLocationTypeColor(fieldValueOf(rootNode.fields.type)),
+        ),
         name: `${rootNode.name} (direct)`,
         locationType: "table",
         locationId: rootNode.id,
@@ -670,7 +683,7 @@ function hitTestPieces(
         const ix = piece.gx + 0.2 + col * 0.45;
         const iy = piece.gy + piece.d * 0.25;
         const shelfZ = piece.gz + level + 0.12;
-        const itemH = getItemHeight(item.category);
+        const itemH = getItemHeight(item.categoryFeature);
 
         const tbl = toScreen(ix, iy, shelfZ + itemH, cx, cy);
         const tbr = toScreen(ix + 0.35, iy, shelfZ + itemH, cx, cy);

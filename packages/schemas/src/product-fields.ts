@@ -1,4 +1,7 @@
-import { productCategorySummary } from "./product-category-fields";
+import {
+  productCategorySummary,
+  rawProductCategorySummary,
+} from "./product-category-fields";
 import { z } from "zod";
 import { productShortcode } from "./identifier-fields";
 import { moneyNullable, positiveMoneyNullable } from "./money";
@@ -9,6 +12,7 @@ export const hasFdcLink = (fdc_id: number | null | undefined): boolean =>
 
 /** Cycle-safe Product field schemas used by generated contracts. */
 export const productCategory = productCategorySummary;
+export const rawProductCategory = rawProductCategorySummary;
 
 /** Product identity in linked-record and recommendation responses. */
 export const productRefOut = z.object({
@@ -20,6 +24,17 @@ export const productRefOut = z.object({
 export const productSummaryWithCover = productRefOut.extend({
   coverUrl: z.string().nullable(),
 });
+
+/** Descriptive Cost is separate from the editable numeric valuation price. */
+export const productCost = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("item"), amount: z.number() }),
+  z.object({
+    kind: z.literal("service_charge"),
+    amount: z.number(),
+    chargeCount: z.number().int().positive(),
+    latestCharge: moneyNullable,
+  }),
+]);
 
 export const productPricingOut = z.object({
   cost: z
@@ -39,6 +54,14 @@ export const productPricingOut = z.object({
   // Sum of acquisition quantities, which are fractional for by-weight lines.
   knownUnitCount: z.number().nonnegative(),
   partial: z.boolean(),
+});
+
+/** Coverage evidence does not publish a second price or Cost result. */
+export const productPricingEvidence = productPricingOut.pick({
+  knownExpenseCount: true,
+  unknownExpenseCount: true,
+  knownUnitCount: true,
+  partial: true,
 });
 
 export { moneyNullable, positiveMoneyNullable };

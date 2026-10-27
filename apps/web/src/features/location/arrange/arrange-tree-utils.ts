@@ -3,13 +3,13 @@ import type {
   LocationShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
+  LocationTreeNode,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 
 /**
  * Pure, view-agnostic helpers shared by the Board (Miller columns) and Tree
- * renderers of the /locations/arrange surface. All operate on the `InfLocation[]`
+ * renderers of the /locations/arrange surface. All operate on the `LocationTreeNode[]`
  * roots returned by `location.makeTree`. Kept free of React/transport so they can be
  * unit-tested and reused for optimistic cache surgery.
  *
@@ -22,7 +22,7 @@ import type {
 const UNKNOWN_LOCATION_NAME = "Unknown";
 
 /** Item count to show on a node: prefer the subtree rollup, fall back down. */
-export function locationItemCount(node: InfLocation): number {
+export function locationItemCount(node: LocationTreeNode): number {
   return (
     node.totalItemCount ??
     node.directItemCount ??
@@ -32,7 +32,9 @@ export function locationItemCount(node: InfLocation): number {
 }
 
 /** The global "Unknown" staging location, wherever it lives under Home. */
-export function findUnknownRoot(roots: InfLocation[]): InfLocation | null {
+export function findUnknownRoot(
+  roots: LocationTreeNode[],
+): LocationTreeNode | null {
   for (const location of roots) {
     if (location.name === UNKNOWN_LOCATION_NAME) return location;
     const nested = findUnknownRoot(location.children ?? []);
@@ -43,9 +45,9 @@ export function findUnknownRoot(roots: InfLocation[]): InfLocation | null {
 
 /** Depth-first search for a location node by id across the whole forest. */
 export function findNode(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   id: LocationShortcode,
-): InfLocation | null {
+): LocationTreeNode | null {
   for (const node of roots) {
     if (node.id === id) return node;
     const found = findNode(node.children ?? [], id);
@@ -59,7 +61,7 @@ export function findNode(
  * Used to detect no-op reparents (dropping onto the current parent).
  */
 export function parentIdOf(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   id: LocationShortcode,
 ): LocationShortcode | null {
   for (const node of roots) {
@@ -79,11 +81,11 @@ export function parentIdOf(
  * complete ancestor chain instead of skipping intermediate levels.
  */
 export function pathToNode(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   id: LocationShortcode,
 ): LocationShortcode[] {
   const walk = (
-    nodes: InfLocation[],
+    nodes: LocationTreeNode[],
     trail: LocationShortcode[],
   ): LocationShortcode[] | null => {
     for (const node of nodes) {
@@ -103,13 +105,13 @@ export function pathToNode(
  * itself or any of its own descendants.
  */
 export function isSelfOrDescendant(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   rootId: LocationShortcode,
   candidateId: LocationShortcode,
 ): boolean {
   const root = findNode(roots, rootId);
   if (!root) return false;
-  const walk = (node: InfLocation): boolean => {
+  const walk = (node: LocationTreeNode): boolean => {
     if (node.id === candidateId) return true;
     return (node.children ?? []).some(walk);
   };
@@ -123,7 +125,7 @@ export function isSelfOrDescendant(
  * the real Home Location, so reparenting onto it is an ordinary location move.
  */
 export function isValidLocationDrop(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   dragId: LocationShortcode,
   targetId: LocationShortcode | null,
 ): boolean {
@@ -140,7 +142,7 @@ export function isValidLocationDrop(
 
 /** May the dragged item move to `targetLocationId`? Home never holds items. */
 export function isValidItemDrop(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   sourceLocationId: LocationShortcode,
   targetLocationId: LocationShortcode,
 ): boolean {
@@ -150,7 +152,10 @@ export function isValidItemDrop(
 }
 
 /** Immutable copy of `node` with `children` replaced (undefined children → []). */
-function withChildren(node: InfLocation, children: InfLocation[]): InfLocation {
+function withChildren(
+  node: LocationTreeNode,
+  children: LocationTreeNode[],
+): LocationTreeNode {
   return { ...node, children };
 }
 
@@ -160,15 +165,15 @@ function withChildren(node: InfLocation, children: InfLocation[]): InfLocation {
  * the real Home id. Caller must have already validated the move.
  */
 export function applyLocationMove(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   dragId: LocationShortcode,
   newParentId: LocationShortcode | null,
-): InfLocation[] {
+): LocationTreeNode[] {
   const moved = findNode(roots, dragId);
   if (!moved) return roots;
 
   // First remove the node everywhere it appears (it appears exactly once).
-  const remove = (nodes: InfLocation[]): InfLocation[] =>
+  const remove = (nodes: LocationTreeNode[]): LocationTreeNode[] =>
     nodes
       .filter((n) => n.id !== dragId)
       .map((n) => withChildren(n, remove(n.children ?? [])));
@@ -179,7 +184,7 @@ export function applyLocationMove(
   if (newParentId === null) {
     return [...pruned, relocated];
   }
-  const insert = (nodes: InfLocation[]): InfLocation[] =>
+  const insert = (nodes: LocationTreeNode[]): LocationTreeNode[] =>
     nodes.map((n) =>
       n.id === newParentId
         ? withChildren(n, [...(n.children ?? []), relocated])
@@ -190,9 +195,9 @@ export function applyLocationMove(
 
 /** Immutable copy of `node` with `inventoryItems` replaced. */
 function withItems(
-  node: InfLocation,
+  node: LocationTreeNode,
   inventoryItems: InventoryItemForTree[],
-): InfLocation {
+): LocationTreeNode {
   return { ...node, inventoryItems };
 }
 
@@ -204,16 +209,16 @@ function withItems(
  * Caller must have already validated the move.
  */
 export function applyItemMove(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   itemId: InventoryShortcode,
   sourceLocationId: LocationShortcode,
   targetLocationId: LocationShortcode,
-): InfLocation[] {
+): LocationTreeNode[] {
   const source = findNode(roots, sourceLocationId);
   const item = source?.inventoryItems?.find((i) => i.id === itemId);
   if (!item) return roots;
 
-  const transform = (nodes: InfLocation[]): InfLocation[] =>
+  const transform = (nodes: LocationTreeNode[]): LocationTreeNode[] =>
     nodes.map((n) => {
       let next = n;
       if (n.id === sourceLocationId) {
@@ -236,9 +241,9 @@ export function applyItemMove(
  * `[a]` → children of a. Returns [] if any id in the path is missing.
  */
 export function childrenOf(
-  roots: InfLocation[],
+  roots: LocationTreeNode[],
   path: LocationShortcode[],
-): InfLocation[] {
+): LocationTreeNode[] {
   let level = roots;
   for (const id of path) {
     const node = level.find((n) => n.id === id);

@@ -4,6 +4,8 @@ import {
   type FieldSuggestionsInput,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   basisValueOf,
   fieldSuggestionContextKeys,
@@ -317,11 +319,30 @@ export async function rosterSuggestionTargets(
     for (const row of items) {
       const recordId = recordIds.get(row.id);
       if (!recordId) continue;
+      const governedFields = entityFieldEnvelopeFields[input.entity];
+      const valueOf = (key: string) => {
+        if (!Object.hasOwn(governedFields, key)) return row[key];
+        const envelope = fieldEnvelopeFor(row, key);
+        return envelope ? fieldValueOf(envelope) : null;
+      };
       const basis = Object.fromEntries(
-        Object.entries(row).map(([key, value]) => [key, basisValueOf(value)]),
+        [
+          ...new Set([
+            ...Object.keys(row).filter((key) => key !== "fields"),
+            ...Object.keys(governedFields),
+          ]),
+        ].map((key) => [key, basisValueOf(valueOf(key))]),
       );
       for (const field of input.fields) {
-        const currentValue = suggestionValueSchema.parse(row[field] ?? null);
+        const envelope = fieldEnvelopeFor(row, field);
+        if (
+          Object.hasOwn(governedFields, field) &&
+          (!envelope || envelope.result.kind === "missing")
+        )
+          continue;
+        const currentValue = suggestionValueSchema.parse(
+          valueOf(field) ?? null,
+        );
         targets.push({
           id: row.id,
           entityId: recordId,
@@ -454,8 +475,23 @@ export async function executeSuggestionSweepTarget(
     queuedTarget.field,
   ];
   const basisKeys = fieldSuggestionContextKeys(input.entity, policyKeys);
+  const valueOf = (key: string) => {
+    if (!Object.hasOwn(entityFieldEnvelopeFields[input.entity], key))
+      return record[key];
+    const envelope = fieldEnvelopeFor(record, key);
+    return envelope ? fieldValueOf(envelope) : null;
+  };
+  const targetEnvelope = fieldEnvelopeFor(record, queuedTarget.field);
+  if (
+    Object.hasOwn(
+      entityFieldEnvelopeFields[input.entity],
+      queuedTarget.field,
+    ) &&
+    (!targetEnvelope || targetEnvelope.result.kind === "missing")
+  )
+    throw new Error("Suggestion target field result is unavailable");
   const basis = Object.fromEntries(
-    basisKeys.map((key) => [key, basisValueOf(record[key])]),
+    basisKeys.map((key) => [key, basisValueOf(valueOf(key))]),
   );
   const queuedBasis = Object.fromEntries(
     basisKeys.map((key) => [key, queuedTarget.basis[key] ?? null]),
@@ -471,12 +507,12 @@ export async function executeSuggestionSweepTarget(
   )
     throw new Error("Suggestion basis changed after queuing");
   basis.__resolutionContext = fieldSuggestionResolutionContext(
-    record.fieldResolutions,
+    record.fields,
     policyKeys,
   );
   const target = { ...queuedTarget, basis };
   if (
-    canonicalJson(z.json().parse(record[target.field] ?? null)) !==
+    canonicalJson(z.json().parse(valueOf(target.field) ?? null)) !==
       canonicalJson(target.currentValue) ||
     (await latestFieldWrite(db, input.entity, target.entityId, target.field))
       ?.id !== (fieldDecisionId ?? undefined)

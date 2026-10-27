@@ -4,12 +4,15 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import {
-  fieldResolutionsSchema,
-  type FieldResolution,
-} from "@cubby/schemas/field-resolution";
+  fieldEnvelopeFor,
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
+import { isEqual } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -18,57 +21,41 @@ import { useEntityCommands } from "~/entity/editing/use-entity-commands";
 import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import type { BulkAction } from "~/ui/data-table/bulk-actions.types";
 import { Button } from "~/ui/primitives/button";
 
-const resolutionRecordSchema = z.object({
-  id: z.string().optional(),
-  fieldResolutions: fieldResolutionsSchema.optional(),
-});
 const resolutionPatchSchema = z.record(z.string(), z.json());
 type ResolutionPatch = z.output<typeof resolutionPatchSchema>;
 
-// Not loose: a fixed-shape parse reads only these two keys, while a loose one
-// copies every key of the row — and every table cell reads this.
-const parseResolutionRecord = (record: unknown) => {
-  const parsed = resolutionRecordSchema.safeParse(record);
-  return parsed.success ? parsed.data : null;
-};
-
-function resolutionEntryIn(
-  resolutions: z.output<typeof fieldResolutionsSchema> | undefined,
-  field: string,
-) {
-  if (!resolutions) return null;
-  const key =
-    [field, `${field}Id`].find((candidate) => resolutions[candidate]) ??
-    Object.keys(resolutions).find(
-      (candidate) =>
-        candidate.endsWith("Id") && candidate.slice(0, -2) === field,
+function redundantResetCandidates(entity: StandardEntity, record: unknown) {
+  return entityFieldModels[entity].fields.filter((field) => {
+    const envelope = fieldEnvelopeFor(record, field.readKey ?? field.key);
+    return (
+      field.resolution?.redundancy === "eligible" &&
+      envelope?.current.assignment?.kind === "value" &&
+      envelope.current.controls.kind === "editable" &&
+      envelope.current.controls.reset.kind === "available"
     );
-  return key ? { field: key, resolution: resolutions[key]! } : null;
+  });
 }
 
 function redundantResetPatch(
-  entity: StandardEntity,
-  record: unknown,
+  envelope: ReadableFieldEnvelope,
+  reset: ResolutionPatch,
 ): ResolutionPatch | null {
-  const resolutions = parseResolutionRecord(record)?.fieldResolutions;
-  if (!resolutions) return null;
-  const patch: ResolutionPatch = {};
-  for (const [field, resolution] of Object.entries(resolutions)) {
-    if (
-      resolution.mode !== "explicit" ||
-      !resolution.matchesFallback ||
-      !resolution.canReset
-    )
-      continue;
-    const policy = entityFieldModels[entity].fields.find(
-      (candidate) => candidate.key === field,
-    )?.resolution;
-    if (policy?.redundancy === "eligible") Object.assign(patch, policy.reset);
-  }
-  return Object.keys(patch).length > 0 ? patch : null;
+  const { assignment, controls } = envelope.current;
+  if (
+    assignment?.kind !== "value" ||
+    controls.kind !== "editable" ||
+    controls.reset.kind !== "available" ||
+    controls.reset.preview.kind !== "ready"
+  )
+    return null;
+  const preview = controls.reset.preview.result.decision.outcome;
+  return preview.kind === "value" && isEqual(assignment.value, preview.value)
+    ? reset
+    : null;
 }
 
 /** Permanent list action for removing redundant explicit values in one or many
@@ -77,6 +64,7 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
   entity: StandardEntity | undefined,
 ): BulkAction<TData> | null {
   const commands = useEntityCommands(entity ?? "product");
+  const queryClient = useQueryClient();
   return useMemo(() => {
     if (
       !entity ||
@@ -90,38 +78,65 @@ export function useRedundantOverrideBulkAction<TData extends { id: string }>(
       label: "Use inherited values",
       icon: <ArrowCounterClockwiseIcon />,
       availability: (rows) =>
-        rows.some((row) => redundantResetPatch(entity, row.original))
+        rows.some(
+          (row) => redundantResetCandidates(entity, row.original).length,
+        )
           ? { status: "available" }
           : { status: "hidden" },
       onExecute: async (rows) => {
         const outcomes = await Promise.all(
-          rows.flatMap((row) => {
-            const patch = redundantResetPatch(entity, row.original);
-            return patch
-              ? [
-                  commands.submit({
-                    operation: "update",
-                    intent: "full",
-                    id: row.original.id,
-                    data: parseEntityEditUpdateInput(entity, patch),
+          rows.map(async (row) => {
+            const patch: ResolutionPatch = {};
+            // Lists carry current eligibility; exact equality is checked only on execution.
+            const previews = await Promise.all(
+              redundantResetCandidates(entity, row.original).map(
+                async (field) => ({
+                  field,
+                  explanation: await queryClient.fetchQuery({
+                    ...fieldExplanation.explain.queryOptions({
+                      entityKind: entity,
+                      entityId: row.original.id,
+                      field: field.key,
+                      surface: "detail",
+                    }),
+                    staleTime: 0,
                   }),
-                ]
-              : [];
+                }),
+              ),
+            );
+            for (const { field, explanation } of previews) {
+              if (!field.resolution) continue;
+              const reset = redundantResetPatch(
+                explanation.envelope,
+                resolutionPatchSchema.parse(field.resolution.reset),
+              );
+              if (reset) Object.assign(patch, reset);
+            }
+            if (!Object.keys(patch).length) return false;
+            await commands.submit({
+              operation: "update",
+              intent: "full",
+              id: row.original.id,
+              data: parseEntityEditUpdateInput(entity, patch),
+            });
+            return true;
           }),
         );
-        return { success: outcomes.length > 0 };
+        return { success: outcomes.some(Boolean) };
       },
     };
-  }, [commands, entity]);
+  }, [commands, entity, queryClient]);
 }
 
 export function fieldResolutionFor(
+  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- The canonical field parser owns this generic row boundary.
   record: unknown,
   field: string,
-): FieldResolution | null {
+): ReadableFieldEnvelope | null {
   return (
-    resolutionEntryIn(parseResolutionRecord(record)?.fieldResolutions, field)
-      ?.resolution ?? null
+    fieldEnvelopeFor(record, field) ??
+    fieldEnvelopeFor(record, `${field}Id`) ??
+    null
   );
 }
 
@@ -169,7 +184,7 @@ export function FieldResolutionEntityActions({
   entity: string;
   id: string;
   field: string;
-  resolution: FieldResolution;
+  resolution: ReadableFieldEnvelope;
 }) {
   const entity = generatedBrowserCrudEntities.find(
     (candidate) => candidate === candidateEntity,
@@ -178,31 +193,23 @@ export function FieldResolutionEntityActions({
   const policy = resolutionPolicyFor(entity, field);
   if (!policy) return null;
   const actions: Array<{ label: string; patch: ResolutionPatch }> = [];
-  if (resolution.canReset)
+  const controls = resolution.current.controls;
+  if (controls.kind !== "editable") return null;
+  const value = fieldValueOf(resolution);
+  if (controls.reset.kind === "available")
     actions.push({
-      label:
-        resolution.fallbackValue === null && !policy.labels?.unresolved
-          ? "Clear value"
-          : "Use inherited",
+      label: "Use inherited",
       patch: resolutionPatchSchema.parse(policy.reset),
     });
-  if (
-    policy.confirm &&
-    resolution.mode === "inherit" &&
-    resolution.value !== null
-  )
+  if (policy.confirm && controls.canConfirm && value !== null)
     actions.push({
-      label: "Confirm",
+      label: "Keep this value",
       patch: {
         ...resolutionPatchSchema.parse(policy.confirm),
-        [field]: resolution.value,
+        [field]: z.json().parse(value),
       },
     });
-  if (
-    policy.none &&
-    resolution.mode === "inherit" &&
-    (resolution.value !== null || policy.labels?.none)
-  )
+  if (policy.none && controls.canSetNone)
     actions.push({
       label: `Set to ${policy.labels?.none ?? "none"}`,
       patch: resolutionPatchSchema.parse(policy.none),

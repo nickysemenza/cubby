@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
 
@@ -11,11 +12,19 @@ export const taskContract = defineContract(
       description:
         "Unblocked tasks you can act on now — live, not done, and blocked by nothing — plus blocked tasks with transitive why-chains explaining what's in the way (a manual blocked flag, a blocking task, or a blocking project, nearest blocker first).",
       input: schemas.taskFiltersSchema.optional(),
-      output: schemas.actionableTasksOut,
+      output: schemas.actionableTasksOut.extend({
+        next: z.array(entityFieldEnvelopeSchemas.task.detail),
+        later: z.array(entityFieldEnvelopeSchemas.task.detail),
+        blocked: z.array(
+          schemas.blockedTaskOut.extend({
+            task: entityFieldEnvelopeSchemas.task.detail,
+          }),
+        ),
+      }),
     }),
     chartData: query({
       input: schemas.taskFiltersSchema,
-      output: z.array(schemas.taskOut),
+      output: z.array(entityFieldEnvelopeSchemas.task.detail),
     }),
     summary: query({
       exposure: "capability",
@@ -26,13 +35,17 @@ export const taskContract = defineContract(
     }),
     timeline: query({
       input: schemas.taskFiltersSchema,
-      output: schemas.taskTimelineOut,
+      output: schemas.taskTimelineOut.extend({
+        tasks: z.array(entityFieldEnvelopeSchemas.task.detail),
+      }),
     }),
     bulkReorder: mutation({
       note: "Board drag ordering",
       command: { label: "Reorder tasks", confirmation: null },
       input: schemas.taskBulkReorderInput,
-      output: schemas.taskBulkMutationOut,
+      output: schemas.taskBulkMutationOut.extend({
+        items: z.array(entityFieldEnvelopeSchemas.task.detail),
+      }),
       invalidates: ["task"],
     }),
   },

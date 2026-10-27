@@ -21,12 +21,12 @@ import {
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
+import type { RawProductWithMappingsAndFood } from "@cubby/schemas/product-raw-read";
+import type { RecipeSectionLineRead as SectionIngredientOut } from "@cubby/schemas/recipe";
 import type {
-  RecipeGraphOut,
-  RecipeOut,
-  SectionIngredientOut,
-} from "@cubby/schemas/recipe";
+  RawRecipeGraph,
+  RawRecipeSection,
+} from "@cubby/schemas/recipe-raw-read";
 import type { RowDiagnosticOut } from "@cubby/schemas/recipe-shared";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
@@ -47,6 +47,23 @@ import type { Result } from "~/lib/result-types";
 import { productWasmInputs } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 
+/** Only calculation inputs cross into WASM; presentation metadata stays in its read envelope. */
+export type RecipeCostingIngredient = Pick<
+  IngredientWithFoodLeanOut,
+  "id" | "name" | "naKinds"
+> & {
+  product: Pick<
+    RawProductWithMappingsAndFood,
+    | "id"
+    | "price"
+    | "unitMappings"
+    | "food"
+    | "labelNutrition"
+    | "fdc_id"
+    | "primaryGtin"
+  >[];
+};
+
 // The costing engine (two-pass totals, consumption model, sub-recipe yield
 // scaling, baker %, diagnostics) lives in Rust — recipebridge's costing module
 // — behind the single `cost_recipes` export. This module assembles the input
@@ -65,10 +82,11 @@ export type { IngredientUsage };
  * `flattenSections` so every costing entry point agrees.
  */
 export type CostingRow = SectionIngredientOut & { sectionName: string | null };
-export type RecipeCostingInput = Pick<
-  RecipeOut | RecipeGraphOut,
-  "id" | "yield" | "sections"
->;
+export type RecipeCostingInput = Pick<RawRecipeGraph, "id" | "yield"> & {
+  sections: (Pick<RawRecipeSection, "name"> & {
+    ingredients: SectionIngredientOut[];
+  })[];
+};
 
 /** Flatten a recipe's sections into costing rows, attaching each section name. */
 export const flattenSections = (
@@ -285,10 +303,15 @@ export const recipeWasmInput = (
 });
 
 export const toWProductInput = (
-  p: ProductWithMappingsAndFoodOut,
+  p: Pick<
+    RawProductWithMappingsAndFood,
+    "id" | "price" | "unitMappings" | "food" | "labelNutrition"
+  > &
+    Partial<Pick<RawProductWithMappingsAndFood, "pricing">>,
 ): WProductInput => ({
   id: p.id,
-  price: p.pricing.effectivePrice,
+  // Repository computations carry private pricing; client DTOs supply the selected price.
+  price: p.pricing ? p.pricing.effectivePrice : p.price,
   ...productWasmInputs(p),
 });
 
@@ -320,7 +343,7 @@ const nutrientsToResult = (n: WNutrientsResult): Result<NutrientsPer100> => {
  */
 const rowNutritionSource = (
   row: CostingRow | undefined,
-  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  ingMap: Record<string, RecipeCostingIngredient>,
 ): RowDiagnostic["nutritionSource"] => {
   if (!row || row.type !== "ingredient") return null;
   const ing = ingMap[row.ingredient.id];
@@ -337,7 +360,7 @@ const rowNutritionSource = (
 const toRowDiagnostic = (
   r: WRowResult,
   row: CostingRow | undefined,
-  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  ingMap: Record<string, RecipeCostingIngredient>,
 ): RowDiagnostic => {
   const diagnostic: RowDiagnostic = {
     id: r.id,
@@ -379,7 +402,7 @@ const toRowDiagnostic = (
 const projectRecipeCosting = (
   w: WRecipeCosting,
   rows: CostingRow[],
-  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  ingMap: Record<string, RecipeCostingIngredient>,
 ): RecipeCosting => {
   const nutrients: NutrientsPer100 = {};
   const nutrientsUpper: NutrientsPer100 = {};
@@ -459,7 +482,7 @@ const projectRecipeCosting = (
  */
 export const computeRecipeCosting = (
   recipes: RecipeCostingInput[],
-  ingMap: Record<string, IngredientWithFoodLeanOut>,
+  ingMap: Record<string, RecipeCostingIngredient>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
   recipeMap: Record<string, RecipeCostingInput> = {},
   opts: { explain?: boolean } = {},

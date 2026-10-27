@@ -6,13 +6,28 @@ import Testing
 
 @Suite("Entity row presentation")
 struct EntityRowPresentationTests {
+    private func field(_ value: JSONValue) -> JSONValue {
+        [
+            "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
+            "result": [
+                "kind": "live",
+                "decision": [
+                    "outcome": ["kind": "value", "value": value], "provenance": ["kind": "computed"],
+                ],
+            ],
+            "work": ["kind": "idle"],
+        ]
+    }
+
     @Test func productPlacementUsesTheServerPath() throws {
         let descriptor = EntityCatalog[.product]
         let row = try #require(
             descriptor.row(from: [
                 "id": "PRD-2345", "name": "Synthetic wrench",
-                "primaryPlacement": [
-                    "locationId": "LOC-2345", "path": "Home › Garage › Drawer", "onHand": 2,
+                "fields": [
+                    "primaryPlacement": field([
+                        "locationId": "LOC-2345", "path": "Home › Garage › Drawer", "onHand": 2,
+                    ])
                 ],
             ]))
         let presentation = EntityRowPresentation.resolve(
@@ -41,9 +56,11 @@ struct EntityRowPresentationTests {
     // recipe context, meal type, navigation identity and display image that its old row showed.
     @Test func todayMealUsesManifestFactsAndDisplayImage() throws {
         let raw: JSONValue = [
-            "id": "MEL-2345", "displayName": "Fixture supper", "mealType": "dinner",
-            "recipeNames": ["Fixture stew"],
-            "displayImages": [["url": "https://example.invalid/meal.jpg"]],
+            "id": "MEL-2345", "displayName": "Fixture supper",
+            "fields": [
+                "mealType": field("dinner"), "recipeNames": field(["Fixture stew"]),
+                "displayImages": field([["url": "https://example.invalid/meal.jpg"]]),
+            ],
         ]
         let row = try #require(EntityCatalog[.meal].row(from: raw))
         let presentation = EntityRowPresentation.resolve(
@@ -115,7 +132,7 @@ struct EntityRowPresentationTests {
             raw: [
                 "id": "PRD-1001", "name": "Synthetic skillet", "brandId": "VEN-2345",
                 "brandName": "Synthetic",
-                "dataQuality": ["score": 75, "status": "needs_data"],
+                "fields": ["dataQuality": field(["score": 75, "status": "needs_data"])],
             ])
         let presentation = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
         #expect(presentation.facts.first?.id == "dataQuality")
@@ -125,7 +142,7 @@ struct EntityRowPresentationTests {
             id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
             raw: [
                 "id": "SPC-1001", "name": "Synthetic tools",
-                "dataQuality": ["score": .null, "status": "not_assessed"],
+                "fields": ["dataQuality": field(["score": .null, "status": "not_assessed"])],
             ])
         let unassessed = EntityRowPresentation.resolve(
             descriptor: EntityCatalog[.spendingCategory], row: category)
@@ -160,33 +177,58 @@ struct EntityRowPresentationTests {
     }
 
     /// An inherited owner reads muted with the marker, not an "Inherited · …" caption; a null
-    /// owner reads in the declaration's words (Unknown under inherit, Household when explicit).
+    /// owner reads in the declaration's words (Unknown when unset, Household when explicitly
+    /// none), and a missing result reads Updating rather than an empty value.
     @Test func inheritedOwnerCarriesTheMarkerAndNullOwnerItsLabel() throws {
-        func fact(mode: String, value: JSONValue) throws -> EntityRowPresentation.Fact {
+        func fact(assignment: JSONValue, result: JSONValue) throws -> EntityRowPresentation.Fact {
+            let envelope: JSONValue = [
+                "current": [
+                    "assignment": assignment,
+                    "controls": [
+                        "kind": "editable", "canSetNone": true, "canConfirm": true,
+                        "reset": ["kind": "unavailable"],
+                    ],
+                ],
+                "result": result, "work": ["kind": "idle"],
+            ]
             let row = EntityRow(
                 id: "INV-1001", title: "Synthetic entry", subtitle: nil, imageURL: nil,
-                raw: [
-                    "id": "INV-1001", "ownerLedgerPartyId": value,
-                    "fieldResolutions": [
-                        "ownerLedgerPartyId": [
-                            "mode": .string(mode), "storedValue": .null, "value": value,
-                            "fallbackValue": value,
-                            "source": "purchase", "sourceEntity": .null, "matchesFallback": false,
-                            "canReset": false,
-                        ]
-                    ],
-                ])
+                raw: ["id": "INV-1001", "fields": ["ownerLedgerPartyId": envelope]])
             return try #require(
                 EntityRowPresentation.resolve(
                     descriptor: EntityCatalog[.inventory], row: row, columns: ["ownerLedgerPartyId"]
                 ).facts.first { $0.id == "ownerLedgerPartyId" })
         }
-        let inherited = try fact(mode: "inherit", value: "LPY-4K7M")
+        let inherit: JSONValue = ["kind": "inherit"]
+        let inherited = try fact(
+            assignment: inherit,
+            result: [
+                "kind": "live",
+                "decision": [
+                    "outcome": ["kind": "value", "value": "LPY-4K7M"],
+                    "provenance": [
+                        "kind": "inherited",
+                        "source": ["entityKind": "product", "entityId": "PRD-1001", "name": .null],
+                    ],
+                ],
+            ])
         #expect(inherited.inherited)
         #expect(!inherited.value.contains("Inherited"))
-        #expect(try fact(mode: "inherit", value: .null).value == "Unknown")
-        #expect(try fact(mode: "explicit", value: .null).value == "Household")
-        #expect(try !fact(mode: "explicit", value: .null).inherited)
+        let unset: JSONValue = [
+            "kind": "live",
+            "decision": ["outcome": ["kind": "empty", "reason": "unset"], "provenance": .null],
+        ]
+        #expect(try fact(assignment: inherit, result: unset).value == "Unknown")
+        let household: JSONValue = [
+            "kind": "live",
+            "decision": [
+                "outcome": ["kind": "empty", "reason": "explicit_none"],
+                "provenance": ["kind": "own", "ownership": ["kind": "record"]],
+            ],
+        ]
+        #expect(try fact(assignment: ["kind": "none"], result: household).value == "Household")
+        #expect(try !fact(assignment: ["kind": "none"], result: household).inherited)
+        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Updating…")
     }
 
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
@@ -195,7 +237,10 @@ struct EntityRowPresentationTests {
         func quality(_ dataQuality: JSONValue) -> String? {
             let row = EntityRow(
                 id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
-                raw: ["id": "PRD-1001", "name": "Synthetic skillet", "dataQuality": dataQuality])
+                raw: [
+                    "id": "PRD-1001", "name": "Synthetic skillet",
+                    "fields": ["dataQuality": field(dataQuality)],
+                ])
             return EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
                 .facts.first?.value
         }
@@ -275,21 +320,41 @@ struct EntityRowPresentationTests {
             id: "RCP-1001", title: "Soup", subtitle: nil, imageURL: nil,
             raw: [
                 "id": "RCP-1001", "name": "Soup",
-                "source": ["type": "book", "book": "The Big Book", "cookbookId": "CBK-1"],
+                "fields": ["source": field(["type": "book", "book": "The Big Book", "cookbookId": "CBK-1"])],
             ])
         let website = EntityRow(
             id: "RCP-1002", title: "Soup", subtitle: nil, imageURL: nil,
             raw: [
                 "id": "RCP-1002", "name": "Soup",
-                "source": ["type": "website", "url": "https://www.example.com/recipe"],
+                "source": ["type": "other"],
+                "fields": ["source": field(["type": "website", "url": "https://www.example.com/recipe"])],
             ])
 
-        #expect(RecipeSourcePresentation.parse(book.raw["source"])?.label == "The Big Book")
-        #expect(RecipeSourcePresentation.parse(website.raw["source"])?.label == "example.com")
+        #expect(RecipeSourcePresentation.parse(book.raw.recordValue("source"))?.label == "The Big Book")
+        #expect(RecipeSourcePresentation.parse(website.raw.recordValue("source"))?.label == "example.com")
         #expect(
             EntityRowPresentation.resolve(descriptor: recipe, row: website, columns: ["source"])
                 .facts.contains { $0.id == "source" && $0.value == "example.com" }
         )
+    }
+
+    @Test func purchaseCategorySummaryUsesTheCanonicalResult() {
+        let row = EntityRow(
+            id: "PUR-4K7M", title: "Synthetic order", subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "PUR-4K7M",
+                "fields": [
+                    "spendingCategorySummary": field([
+                        "state": "single",
+                        "categories": [["id": "SPC-4K7M", "name": "Synthetic supplies", "amount": 12]],
+                        "lineCount": 1, "categorizedLineCount": 1, "uncategorizedLineCount": 0,
+                        "complete": true, "amountsKnown": true,
+                    ])
+                ],
+            ])
+        let fact = EntityRowPresentation.fact(
+            "spendingCategorySummary", descriptor: EntityCatalog[.purchase], row: row)
+        #expect(fact?.value.contains("Synthetic supplies") == true)
     }
 
     @Test func photoRowsPromoteTheEntitySemanticDateNotThePhotoDate() throws {
@@ -345,4 +410,22 @@ struct EntityRowPresentationTests {
         #expect(linked == "Has purchase")
         #expect(unlinked != nil && unlinked != linked)
     }
+    @Test func unavailableQualityNeverRevivesATopLevelNeedsDataStatus() {
+        let results: [JSONValue] = [
+            ["kind": "missing"],
+            ["kind": "live", "decision": ["outcome": ["kind": "empty", "reason": "unset"]]],
+        ]
+        for result in results {
+            let row = EntityRow(
+                id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
+                raw: [
+                    "dataQuality": ["status": "needs_data"], "fields": ["dataQuality": ["result": result]],
+                ])
+            #expect(!EntityRowPresentation.needsData(in: row))
+            let fact = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row).facts
+                .first { $0.id == "dataQuality" }
+            #expect(fact?.value == "Unavailable")
+        }
+    }
+
 }

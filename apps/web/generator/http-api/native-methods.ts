@@ -1,5 +1,9 @@
 /** Native convenience names for operations that need no handwritten mapping. */
 export const CLIENT_PASSTHROUGH_METHODS = {
+  "fieldExplanation.imageChain": {
+    method: "displayImageChain",
+    doc: "View a record's display-image sources in precedence order without editing them.",
+  },
   "chatgpt.authorizationHost": {
     method: "chatGptAuthorizationHost",
     doc: null,

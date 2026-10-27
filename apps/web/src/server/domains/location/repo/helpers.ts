@@ -8,11 +8,13 @@ import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { type LocationId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
   LocationListRefOut,
-  LocationOut,
   LocationValuation,
 } from "@cubby/schemas/location";
+import type {
+  RawLocationDetail,
+  RawLocationOutput,
+} from "@cubby/schemas/location-raw-read";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -51,7 +53,7 @@ export const dbLocationToAPI = <Q extends DataQuality | undefined>(
   },
   valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
   dataQuality: Q,
-): Omit<LocationOut, "dataQuality"> & { dataQuality: Q } => {
+): Omit<RawLocationOutput, "dataQuality"> & { dataQuality: Q } => {
   return {
     id: parseShortcodeFor("location", locationData.shortcode),
     lastBulkInventory: locationData.lastBulkInventory,
@@ -113,7 +115,7 @@ export const locationInventoryFields = (
 });
 
 /**
- * Build a hierarchical InfLocation from a LocationWithParentChild record.
+ * Build a hierarchical RawLocationDetail from a LocationWithParentChild record.
  * Recursively processes children and calculates item counts.
  */
 export const buildLocationWithChildren = (
@@ -123,7 +125,7 @@ export const buildLocationWithChildren = (
   valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
   dataQualities: ReadonlyMap<LocationId, DataQuality>,
   displayImages: ReadonlyMap<string, DisplayImageSummary[]>,
-): InfLocation => {
+): RawLocationDetail => {
   const children =
     x.children && x.children.length > 0
       ? x.children

@@ -25,12 +25,12 @@ nonisolated enum EntityFieldValue {
     /// The items of a `resolvedList` field; nil for any other format.
     static func resolvedItems(in raw: JSONValue, field: FieldDescriptor, surface: String) -> [ResolvedItem]? {
         guard field.format == "resolvedList" else { return nil }
-        return resolvedItems(FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface))
+        return resolvedItems(FieldEnvelopePresentation.readValue(in: raw, field: field, surface: surface))
     }
 
     static func resolvedItems(_ value: JSONValue?) -> [ResolvedItem] {
         guard let value, value != .null,
-            let items = try? value.decoded(ResolvedList.self)
+            let items = try? value.decoded([ResolvedListItem].self)
         else { return [] }
         return items.map { item in
             ResolvedItem(
@@ -122,15 +122,16 @@ nonisolated enum EntityFieldValue {
     {
         guard let target = field.reference, !target.multiple else { return nil }
         let stem = field.key.hasSuffix("Id") ? String(field.key.dropLast(2)) : field.key
-        if let id = FieldResolutionPresentation.readValue(in: raw, field: field, surface: surface)?
+        if let id = FieldEnvelopePresentation.readValue(in: raw, field: field, surface: surface)?
             .stringValue, !id.isEmpty
         {
             return Reference(
                 entity: target.entity, id: id,
-                name: FieldResolutionPresentation.referenceName(in: raw, field: field, effectiveID: id),
+                name: FieldEnvelopePresentation.referenceName(in: raw, field: field, effectiveID: id),
                 emoji: raw[stem + "Emoji"]?.stringValue ?? raw[stem]?["emoji"]?.stringValue)
         }
-        if FieldResolutionPresentation(raw: raw, field: field) != nil { return nil }
+        // A governed field's nested projection may name the stored target, not the effective one.
+        if FieldEnvelope.of(raw, field: field) != nil { return nil }
         if let nested = raw[stem], let id = nested["id"]?.stringValue, !id.isEmpty {
             return Reference(
                 entity: target.entity, id: id, name: nested["name"]?.stringValue,

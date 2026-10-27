@@ -191,7 +191,7 @@ struct EntityRowPresentation: Sendable, Hashable {
     }
 
     static func needsData(in row: EntityRow) -> Bool {
-        row.raw["dataQuality"]?["status"]?.stringValue == "needs_data"
+        row.raw.recordValue("dataQuality")?["status"]?.stringValue == "needs_data"
     }
 
     /// One column's fact for `row`, the unit `resolve` assembles; a table cell asks for its own
@@ -204,7 +204,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             let text: String
             if field.readKey == nil {
                 text = "Not assessed"
-            } else if let status = row.raw[key]?["status"]?.stringValue {
+            } else if let status = row.raw.recordValue(key)?["status"]?.stringValue {
                 text = field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
             } else {
                 text = "Unavailable"
@@ -212,7 +212,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             return Fact(id: key, label: field.label, value: text)
         }
         if field.listRenderer == .spendingCategorySummary,
-            let value = row.raw[key],
+            let value = row.raw.recordValue(key),
             let summary = try? value.decoded(SpendingCategorySummary.self)
         {
             let names = summary.categories.map(\.name).joined(separator: ", ")
@@ -220,7 +220,7 @@ struct EntityRowPresentation: Sendable, Hashable {
                 names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"
             return Fact(id: key, label: field.label, value: text)
         }
-        if let names = FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field) {
+        if let names = FieldEnvelopePresentation.allocatedReferenceLabel(in: row.raw, field: field) {
             return Fact(id: key, label: field.label, value: names)
         }
         // A declared `labelPath` is the text the server composed (or the name of the record
@@ -232,7 +232,7 @@ struct EntityRowPresentation: Sendable, Hashable {
         }
         if let renderer = field.listRenderer,
             case .implemented = NativePresentationCoverage.list(renderer),
-            let source = RecipeSourcePresentation.parse(row.raw[key])
+            let source = RecipeSourcePresentation.parse(row.raw.recordValue(key))
         {
             return Fact(id: key, label: field.label, value: source.label)
         }
@@ -246,13 +246,13 @@ struct EntityRowPresentation: Sendable, Hashable {
             }
             return nil
         }
-        let resolution = FieldResolutionPresentation(raw: row.raw, field: field)
-        let inherited = resolution?.isInherited ?? false
+        let envelope = FieldEnvelope.of(row.raw, field: field)
+        let inherited = envelope?.isInherited ?? false
         if let reference = EntityFieldValue.reference(in: row.raw, field: field, surface: "list") {
             return Fact(
                 id: key, label: field.label, value: reference.name ?? reference.id, inherited: inherited)
         } else if let value = EntityFieldValue.text(in: row.raw, field: field, surface: "list")
-            ?? resolution?.emptyLabel(field: field)
+            ?? envelope?.visibleEmptyLabel(field: field)
         {
             return Fact(
                 id: key, label: field.label, value: value,

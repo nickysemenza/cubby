@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { productCreateWithInventoryInput } from "@cubby/schemas/product-capture";
 import { and, eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -120,9 +121,11 @@ describe("atomic staged-photo Product and Inventory capture", () => {
     expect(captured.product.inventoryEntry.map((entry) => entry.id)).toEqual([
       captured.inventory.id,
     ]);
-    expect(captured.product.images.map((entry) => entry.id)).toEqual([
-      staged.shortcode,
-    ]);
+    expect(
+      (fieldValueOf(captured.product.fields.images) ?? []).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual([staged.shortcode]);
     expect(captured.inventory.product.id).toBe(captured.product.id);
     expect(captured.inventory.location.id).toBe(available.id);
     expect(

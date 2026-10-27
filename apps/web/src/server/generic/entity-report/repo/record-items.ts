@@ -1,11 +1,11 @@
 import type { Amount } from "@cubby/schemas/codec";
+import type { RawCookbookList } from "@cubby/schemas/cookbook-raw-read";
 import type {
   ReportCommand,
   ReportRecordRow,
   ReportRowState,
 } from "@cubby/schemas/entity-report";
 import type { ImageAssociation } from "@cubby/schemas/image";
-import type { ProductCookbookRefOut } from "@cubby/schemas/product";
 import type { RunSummary } from "@cubby/schemas/run";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -34,10 +34,7 @@ export const runRowState = (status: string): ReportRowState | undefined => {
 
 /** The cookbooks whose physical copies this product is, one row each opening the cookbook. */
 export const cookbookItems = (
-  cookbooks: readonly Pick<
-    ProductCookbookRefOut,
-    "id" | "name" | "recipeCount"
-  >[],
+  cookbooks: readonly Pick<RawCookbookList, "id" | "name" | "recipeCount">[],
 ): ReportRecordRow[] =>
   cookbooks.map((cookbook) => ({
     entity: "cookbook",

@@ -1,4 +1,4 @@
-import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
+import { rawLedgerPartyOut } from "@cubby/schemas/ledger-party-raw-read";
 import { z } from "zod";
 
 import {
@@ -54,7 +54,7 @@ export const ledgerPartyRepository = defineRepository("ledgerParty", {
   merge: {
     input: mergeInput,
     output: z.object({
-      ledgerParty: ledgerPartyOut,
+      ledgerParty: rawLedgerPartyOut,
       mergeSummary: ledgerPartyMergeSummary,
     }),
     item: (output) => output.ledgerParty,

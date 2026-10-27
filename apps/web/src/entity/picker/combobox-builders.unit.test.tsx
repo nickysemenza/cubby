@@ -1,8 +1,14 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { locationPickerAncestorOut } from "@cubby/schemas/location";
+import { productResolveCandidateOut } from "@cubby/schemas/product";
 import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render } from "@testing-library/react";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
   buildLocationComboboxItem,
@@ -77,6 +83,33 @@ describe("entity picker value adapters", () => {
     ).toMatchObject({ id: vendor, shortcode: vendor });
   });
 
+  it("reads canonical current picker metadata without requiring raw aliases", () => {
+    expect(
+      buildProductComboboxItem({
+        id: testShortcode("product", "PRD-4K7M"),
+        name: "Synthetic drill",
+        fields: {
+          brandName: fieldValueFixture(
+            productResolveCandidateOut.shape.fields.shape.brandName,
+            "Synthetic maker",
+          ),
+        },
+      }).secondary,
+    ).toBe("Synthetic maker");
+    expect(
+      buildLocationComboboxItem({
+        id: testShortcode("location", "LOC-4K7M"),
+        name: "Synthetic shelf",
+        fields: {
+          type: fieldValueFixture(
+            locationPickerAncestorOut.shape.fields.shape.type,
+            "shelf",
+          ),
+        },
+      }).secondary,
+    ).toBe("shelf");
+  });
+
   it("keeps the expense vendor adapter name-valued", () => {
     const vendor = testShortcode("vendor", "VEN-9ABC");
     expect(
@@ -110,7 +143,12 @@ describe("generic record picture", () => {
     const item = buildRecordComboboxItem("recipe", {
       id: recipe,
       name: "Winter stew",
-      displayImages: [{ id: testShortcode("image", "IMG-2ABC"), url: cover }],
+      fields: {
+        displayImages: fieldValueFixture(
+          computedFieldEnvelope(displayImagesField),
+          [{ id: testShortcode("image", "IMG-2ABC"), url: cover }],
+        ),
+      },
     });
     expect(item.thumb?.imageUrl).toBe(cover);
     expect(item.thumb?.fallback).toBeTruthy();
@@ -205,7 +243,7 @@ describe("product stock picker evidence", () => {
     id: product,
     name: "Back Brace",
     brandName: "BraceAbility",
-    category: categorySummaryFixture("household"),
+    category: categoryReadFixture("household"),
     quantityLedger: {
       acquiredUnits: 1,
       exitedUnits: 0,
@@ -244,7 +282,13 @@ describe("product stock picker evidence", () => {
     const item = buildProductComboboxItem(
       {
         ...base,
-        category: categorySummaryFixture("software"),
+        category: categoryReadFixture("software"),
+        fields: {
+          categoryFeature: fieldValueFixture(
+            productResolveCandidateOut.shape.fields.shape.categoryFeature,
+            "software",
+          ),
+        },
         onHand: { state: "counted", units: 2 },
       },
       "stock",
@@ -313,3 +357,37 @@ describe("product stock picker evidence", () => {
     );
   });
 });
+
+it.each([{ images: undefined }, { images: [] }])(
+  "keeps missing and empty picker covers authoritative",
+  ({ images }) => {
+    const fields = {
+      displayImages: fieldValueFixture(
+        computedFieldEnvelope(displayImagesField),
+        images,
+      ),
+    };
+    const snapshot = [
+      {
+        id: testShortcode("image", "IMG-4K7M"),
+        url: "https://example.test/stale.jpg",
+      },
+    ];
+    expect(
+      buildRecordComboboxItem("recipe", {
+        id: "RCP-4K7M",
+        name: "Synthetic stew",
+        fields,
+        displayImages: snapshot,
+      }).thumb?.imageUrl,
+    ).toBeNull();
+    expect(
+      buildProductComboboxItem({
+        id: testShortcode("product", "PRD-4K7M"),
+        name: "Synthetic kettle",
+        fields,
+        coverImageUrl: "https://example.test/stale.jpg",
+      }).thumb?.imageUrl,
+    ).toBeNull();
+  },
+);

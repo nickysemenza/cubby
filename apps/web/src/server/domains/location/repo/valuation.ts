@@ -1,10 +1,10 @@
 /**
- * Location valuation computed from live inputs.
+ * Location valuation reads and explicit live computation.
  *
  * `computeLocationValuations` re-derives the whole tree's valuation (a few
  * hundred locations, about a thousand entries) from live inventory + location
  * data, via the pure rollup in `services/location-valuation-rollup`, pricing
- * every entry through `inventory/valuation`. Lists read the stored
+ * every entry through `inventory/valuation`. Ordinary record reads use the stored
  * `location.valuationRollup` and stored inventory valuations instead (ADR 0021).
  */
 
@@ -13,9 +13,10 @@ import {
   type LocationId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type {
-  LocationValuation,
-  LocationValuationSummaryOut,
+import {
+  locationValuation,
+  type LocationValuation,
+  type LocationValuationSummaryOut,
 } from "@cubby/schemas/location";
 import { and, eq } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -29,6 +30,27 @@ import {
 } from "~/server/domains/inventory/repo/valuation";
 import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+
+/** Ordinary reads share the published rollup; missing or unsupported results stay absent. */
+export async function loadStoredLocationValuations(
+  db: Database | DrizzleTransaction,
+  locationIds: readonly LocationId[],
+): Promise<Map<LocationId, LocationValuation>> {
+  const ids = uniq(locationIds);
+  const stored = await loadStoredDerived(db, "location", ids, [
+    "valuationRollup",
+  ]);
+  const valuations = new Map<LocationId, LocationValuation>();
+  for (const id of ids) {
+    const result = stored.get(id)?.get("valuationRollup");
+    if (!result?.resultExists || result.decision?.outcome.kind !== "value")
+      continue;
+    const value = locationValuation.safeParse(result.value);
+    if (value.success) valuations.set(id, value.data);
+  }
+  return valuations;
+}
 
 interface ValuationInventoryRow {
   id: InventoryId;

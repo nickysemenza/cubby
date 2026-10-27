@@ -1,5 +1,6 @@
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { EntityRef } from "@cubby/schemas/entity";
+import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import { getErrorMessage } from "@cubby/shared";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
@@ -42,12 +43,12 @@ import {
 const NO_SEEDED_IMAGES: EntityDisplayImageMap = {};
 
 function seedProjectImages(
-  projects: readonly { id: string; displayImages: DisplayImageSummary[] }[],
+  projects: readonly EntityFieldEnvelopeRead<"project", "list">[],
 ): EntityDisplayImageMap {
   return Object.fromEntries(
     projects.map((project) => [
       entityDisplayImageKey({ entityKind: "project", entityId: project.id }),
-      project.displayImages[0] ?? null,
+      fieldValueOf(project.fields.displayImages)?.[0] ?? null,
     ]),
   );
 }

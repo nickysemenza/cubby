@@ -1,17 +1,7 @@
-import { displayImagesField } from "@cubby/schemas/display-images";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import { inventoryMcpOut } from "@cubby/schemas/inventory";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
-import { mealMcpOut } from "@cubby/schemas/meal";
-import {
-  type ProductMcpDetailOut,
-  productMcpDetailOut,
-  productMcpOut,
-  productTopLevelOut,
-} from "@cubby/schemas/product";
-import { recipeMcpOut } from "@cubby/schemas/recipe";
+import { productRefOut } from "@cubby/schemas/product-fields";
 import { foodSummary, foodSummaryCompact } from "@cubby/usda";
 import { z } from "zod";
 
@@ -21,17 +11,6 @@ import { z } from "zod";
  * generator loads them with the tool declarations.
  */
 
-/** `resolveProductPricing(price)` without an Expense aggregate: the explicit override or nothing. */
-const pricingFromExplicitPrice = (price: number | null) => ({
-  derivedPrice: null,
-  effectivePrice: price,
-  source: price === null ? ("none" as const) : ("explicit" as const),
-  knownExpenseCount: 0,
-  unknownExpenseCount: 0,
-  knownUnitCount: 0,
-  partial: false,
-});
-
 function parseAs<TSchema extends z.ZodType, TInput>(
   schema: TSchema,
   input: TInput,
@@ -39,107 +18,7 @@ function parseAs<TSchema extends z.ZodType, TInput>(
   return schema.parse(input);
 }
 
-export function slimInventory<TInput>(row: TInput) {
-  return parseAs(inventoryMcpOut, row);
-}
-
-const productProjectionInput = productTopLevelOut.extend({
-  displayImages: displayImagesField.optional(),
-  food: z
-    .object({ fdc_id: z.number().nullable().optional() })
-    .nullable()
-    .optional(),
-  ingredient: z
-    .object({ id: productMcpOut.shape.ingredientId.unwrap() })
-    .nullable()
-    .optional(),
-  unitMappings: productMcpOut.shape.unitMappings.optional(),
-});
-
-function parseProductProjectionInput<TInput>(row: TInput) {
-  return parseAs(productProjectionInput, row);
-}
-
-export function slimProduct<TInput>(row: TInput) {
-  const product = parseProductProjectionInput(row);
-  const itemImages = product.images ?? [];
-  const labelImages = product.labelImages ?? [];
-  const canonicalCover = product.displayImages?.[0];
-  const coverImageUrl = canonicalCover
-    ? preferredImageUrl(canonicalCover)
-    : product.coverImageUrl;
-  const pricing = product.pricing ?? pricingFromExplicitPrice(product.price);
-  return productMcpOut.parse({
-    id: product.id,
-    name: product.name,
-    brandId: product.brandId,
-    brandName: product.brandName,
-    model: product.model,
-    kind: product.kind ?? null,
-    notes: product.notes,
-    primaryGtin: product.primaryGtin,
-    category: product.category,
-    tags: product.tags ?? [],
-    price: product.price,
-    effectivePrice: pricing.effectivePrice,
-    pricing,
-    expectedQuantity: product.expectedQuantity,
-    imageCount: itemImages.length + labelImages.length,
-    itemImageCount: itemImages.filter(isDisplayableImageFile).length,
-    labelImageCount: labelImages.filter(isDisplayableImageFile).length,
-    coverImageUrl: coverImageUrl ?? null,
-    fdc_id: product.fdc_id ?? null,
-    usdaUnavailable: product.usdaUnavailable ?? null,
-    stockTracked: product.stockTracked ?? null,
-    externalIds: product.externalIds,
-    usdaFdcId: product.food?.fdc_id ?? null,
-    ingredientId: product.ingredient?.id ?? null,
-    unitMappings: (product.unitMappings ?? []).map((mapping) => ({
-      a: mapping.a,
-      b: mapping.b,
-      source: mapping.source ?? null,
-    })),
-    labelNutrition: product.labelNutrition ?? null,
-    dataQuality: product.dataQuality,
-  });
-}
-
-export function slimProductDetail<TInput>(row: TInput): ProductMcpDetailOut {
-  const product = parseProductProjectionInput(row);
-  const base = slimProduct(row);
-  let displayPosition = 0;
-  const images = [
-    ...(product.images ?? []),
-    ...(product.labelImages ?? []),
-  ].map((file) => {
-    const displayable =
-      file.purpose !== "label" && isDisplayableImageFile(file);
-    if (displayable) displayPosition += 1;
-    return {
-      ...file,
-      displayPosition: displayable ? displayPosition : null,
-      isCover: displayable && preferredImageUrl(file) === base.coverImageUrl,
-    };
-  });
-  const cover = images.find((file) => file.isCover) ?? null;
-  return productMcpDetailOut.parse({
-    ...base,
-    coverImageId: cover?.id ?? null,
-    images,
-  });
-}
-
-export function slimRecipe<TInput>(row: TInput) {
-  return parseAs(recipeMcpOut, row);
-}
-
-export function slimMeal<TInput>(row: TInput) {
-  return parseAs(mealMcpOut, row);
-}
-
-const linkedProductsInput = z
-  .array(productTopLevelOut.pick({ id: true, name: true }))
-  .optional();
+const linkedProductsInput = z.array(productRefOut).optional();
 const usdaProjectionInput = foodSummary.extend({
   linkedProducts: linkedProductsInput,
 });
@@ -226,10 +105,6 @@ export function slimUsdaFoodListItem<TInput>(row: TInput) {
   });
 }
 
-export interface ProjectedList<TItem> {
-  items: TItem[];
-}
-
 const externalIdSummarySchema = z.object({
   source: z.string(),
   kind: z.string(),
@@ -298,6 +173,10 @@ const projectionItemSchema = z
   .passthrough();
 type ProjectionItem = z.infer<typeof projectionItemSchema>;
 
+const projectionQualitySchema = projectionItemSchema.shape.dataQuality
+  .unwrap()
+  .unwrap();
+
 // Structural, not name-based: any entity whose item carries `dataQuality`
 // (product, purchase, or a future scored entity from `scoredEntities`) gets
 // the same coverage projection, so this never needs a per-entity branch as
@@ -309,8 +188,12 @@ function coverageFor(entity: keyof typeof entitySummary, item: ProjectionItem) {
       kcal: item.totals?.nutrition.kcal ?? null,
     };
   }
-  const quality = item.dataQuality;
-  if (!quality) return undefined;
+  const envelope = fieldEnvelopeFor(item, "dataQuality");
+  const parsed = projectionQualitySchema.safeParse(
+    envelope ? fieldValueOf(envelope) : item.dataQuality,
+  );
+  if (!parsed.success) return undefined;
+  const quality = parsed.data;
   return {
     status: quality.status ?? null,
     missingChecks: [
@@ -404,13 +287,6 @@ export function projectEntityResult<TResult extends ProjectableEntityResult>(
       ["create", "update", "merge"].includes(payload.action),
     ),
   };
-}
-
-export function respondList<TInput, TOutput>(
-  result: TInput[],
-  project: (row: TInput) => TOutput,
-): ProjectedList<TOutput> {
-  return { items: result.map(project) };
 }
 
 /**

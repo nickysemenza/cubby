@@ -4,13 +4,15 @@ import {
   dataQualityGap,
   dataQualityException,
 } from "@cubby/schemas/data-quality";
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
   fieldExplanationSource,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
-import type { FieldResolution } from "@cubby/schemas/field-resolution";
+import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +20,7 @@ import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ResolvedListValue } from "~/entity/display/resolved-list-value";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
@@ -54,10 +57,12 @@ import {
   ResolutionEvidence,
   sectionLabelClassName,
 } from "./resolution-evidence";
+import { SourceStack } from "./source-stack";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 type ExplanationValue = ExplanationSource["value"];
 const explanationScalar = z.union([z.string(), z.number(), z.boolean()]);
+const explanationResolvedList = z.array(resolvedListSchema.element.strict());
 const explanationRecord = z.record(z.string(), z.json());
 
 export function ReadableExplanationValue({
@@ -103,6 +108,25 @@ export function ReadableExplanationValue({
   }
   if (Array.isArray(value)) {
     if (value.length === 0) return <NoneValue />;
+    const resolved = explanationResolvedList.safeParse(value);
+    if (resolved.success)
+      return (
+        <ResolvedListValue
+          items={resolved.data}
+          renderReference={(ref, label) => {
+            const entity = entitySchema.safeParse(ref.entityKind);
+            return entity.success ? (
+              <ExplanationEntityLink
+                entity={entity.data}
+                id={ref.entityId}
+                name={label}
+              />
+            ) : (
+              <span>{label}</span>
+            );
+          }}
+        />
+      );
     const occurrences = new Map<string, number>();
     return (
       <ul className="grid gap-2 pl-4 text-xs">
@@ -218,7 +242,11 @@ function ownCheckFact(value: ExplanationValue, data: FieldExplanationOutput) {
 }
 
 function visibleSources(data: FieldExplanationOutput) {
-  const named = data.resolution?.sourceEntity;
+  const provenance = fieldDecisionOf(data.envelope)?.provenance;
+  const named =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
   return data.sources.flatMap((source) => {
     if (
       named &&
@@ -260,33 +288,63 @@ export function ExplanationEntityLink({
   );
 }
 
-function ExplanationSourceRow({ source }: { source: ExplanationSource }) {
-  const record = explanationRecord.safeParse(source.value);
-  const name = record.success ? z.string().safeParse(record.data.name) : null;
+function ExplanationSources({
+  data,
+  sources,
+}: {
+  data: FieldExplanationOutput;
+  sources: readonly ExplanationSource[];
+}) {
+  const provenance =
+    data.envelope.result.kind === "live"
+      ? data.envelope.result.decision.provenance
+      : null;
+  const winner =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
   return (
-    <LedgerRow as="div">
-      <LedgerCell
-        as="dt"
-        slot="primary"
-        className="text-xs font-medium text-muted-foreground"
-      >
-        {source.label}
-      </LedgerCell>
-      <LedgerCell as="dd" slot="secondary" className="grid gap-1.5">
-        {source.entity ? (
-          <ExplanationEntityLink
-            entity={source.entity.entityKind}
-            id={source.entity.entityId}
-            name={name?.success ? name.data : null}
-          />
-        ) : null}
-        {source.value !== null || source.entity === null ? (
-          <ReadableExplanationValue
-            value={source.entity ? sourceFacts(source) : source.value}
-          />
-        ) : null}
-      </LedgerCell>
-    </LedgerRow>
+    <SourceStack
+      label="Current evidence sources"
+      rows={sources.map(
+        (source): Parameters<typeof SourceStack>[0]["rows"][number] => {
+          const record = explanationRecord.safeParse(source.value);
+          const parsedName = record.success
+            ? z.string().safeParse(record.data.name)
+            : null;
+          const name = parsedName?.success ? parsedName.data : null;
+          return {
+            key: explanationSourceKey(source),
+            status:
+              winner &&
+              source.entity?.entityKind === winner.entityKind &&
+              source.entity.entityId === winner.entityId
+                ? "deciding"
+                : "skipped",
+            title: (
+              <>
+                {source.label !== name || !source.entity ? (
+                  <span>{source.label}</span>
+                ) : null}
+                {source.entity ? (
+                  <ExplanationEntityLink
+                    entity={source.entity.entityKind}
+                    id={source.entity.entityId}
+                    name={name}
+                  />
+                ) : null}
+              </>
+            ),
+            children:
+              source.value !== null || source.entity === null ? (
+                <ReadableExplanationValue
+                  value={source.entity ? sourceFacts(source) : source.value}
+                />
+              ) : null,
+          };
+        },
+      )}
+    />
   );
 }
 
@@ -446,7 +504,7 @@ type WhyValueProps = {
   field: string;
   label: string;
   surface?: "list" | "detail" | "summary";
-  resolution?: FieldResolution | null;
+  resolution?: ReadableFieldEnvelope | null;
   onSet?: () => void;
   pendingSuggestion?: ReactNode;
   qualityChecks?: NonNullable<
@@ -537,7 +595,7 @@ export function WhyValueContents({
       ) : null}
       {result.isPending ? (
         <p className="text-muted-foreground">Loading…</p>
-      ) : result.isError ? (
+      ) : result.isError && result.data === undefined ? (
         <Stack gap="sm">
           <ErrorDisplay error={result.error} title="this explanation" />
           <Button
@@ -551,6 +609,21 @@ export function WhyValueContents({
         </Stack>
       ) : (
         <>
+          {result.isError ? (
+            <div className="grid gap-1">
+              <ErrorDisplay
+                error={result.error}
+                title="refreshing this explanation"
+              />
+              <Button
+                size="xs"
+                variant="link"
+                onClick={() => void result.refetch()}
+              >
+                Retry explanation
+              </Button>
+            </div>
+          ) : null}
           <DecisionChain
             data={result.data}
             onSet={onSet}
@@ -558,7 +631,7 @@ export function WhyValueContents({
           />
           {result.data.interpretation ? (
             <div className="grid gap-1 text-xs leading-5">
-              {!result.data.resolution && !result.data.resolutionEvidence ? (
+              {!result.data.resolutionEvidence ? (
                 <p className="font-medium">
                   {result.data.interpretation.result}
                 </p>
@@ -602,30 +675,18 @@ export function WhyValueContents({
           {visibleSources(result.data).length > 0 ? (
             <section className="grid gap-2 border-t border-border pt-3">
               <h3 className={sectionLabelClassName}>Evidence</h3>
-              <Ledger as="dl" variant="facts">
-                {visibleSources(result.data)
-                  .slice(0, 6)
-                  .map((source) => (
-                    <ExplanationSourceRow
-                      key={explanationSourceKey(source)}
-                      source={source}
-                    />
-                  ))}
-              </Ledger>
+              <ExplanationSources
+                data={result.data}
+                sources={visibleSources(result.data).slice(0, 6)}
+              />
               {visibleSources(result.data).length > 6 ? (
                 <Disclosure
                   summary={`Show ${visibleSources(result.data).length - 6} more evidence entries`}
                 >
-                  <Ledger as="dl" variant="facts">
-                    {visibleSources(result.data)
-                      .slice(6)
-                      .map((source) => (
-                        <ExplanationSourceRow
-                          key={explanationSourceKey(source)}
-                          source={source}
-                        />
-                      ))}
-                  </Ledger>
+                  <ExplanationSources
+                    data={result.data}
+                    sources={visibleSources(result.data).slice(6)}
+                  />
                 </Disclosure>
               ) : null}
             </section>
@@ -679,11 +740,11 @@ function ExplanationTechnicalDetails({
             },
             {
               label: "Result code",
-              value: String(data.value),
+              value: String(fieldValueOf(data.envelope)),
               className: "font-mono",
               hide:
-                !z.string().safeParse(data.value).success ||
-                data.interpretation?.result === data.value,
+                !z.string().safeParse(fieldValueOf(data.envelope)).success ||
+                data.interpretation?.result === fieldValueOf(data.envelope),
             },
             {
               label: "Evaluated",
@@ -707,14 +768,9 @@ function ExplanationTechnicalDetails({
 }
 
 function ExplanationFooter({ data }: { data: FieldExplanationOutput }) {
-  const derived = data.derived ?? {
-    meta: { state: "fresh" as const, decidedBy: null, asOf: null },
-    stored: data.value,
-    live: data.value,
-  };
   return (
     <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 border-t border-border bg-popover px-3 py-2">
-      <DerivedFreshness derived={derived} context={data} />
+      <DerivedFreshness envelope={data.envelope} context={data} />
     </footer>
   );
 }

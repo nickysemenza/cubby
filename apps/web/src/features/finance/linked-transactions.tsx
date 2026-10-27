@@ -1,13 +1,11 @@
-import type {
-  FinancialTransactionFilters,
-  FinancialTransactionOut,
-} from "@cubby/schemas/financial-transaction";
+import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useCallback, useMemo } from "react";
 
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityListFor } from "~/entity/entity-list";
 import { useEntityList } from "~/entity/hooks/use-entity-list";
 import { useEntityFieldSave } from "~/entity/hooks/use-update-mutation";
@@ -218,3 +216,5 @@ export function LinkedTransactions({
     </Stack>
   );
 }
+
+type FinancialTransactionOut = ListRowOf<"financialTransaction">;

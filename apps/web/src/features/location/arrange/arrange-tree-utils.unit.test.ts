@@ -2,9 +2,10 @@ import type {
   InfLocation,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
-import { infLocation } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
+import { locationReadFixture } from "~/features/location/location-read.fixtures";
 
 import { canDropOnArrangeTarget } from "./arrange-drop-policy";
 import {
@@ -28,7 +29,7 @@ function loc(
   children: InfLocation[] = [],
   items: InventoryItemForTree[] = [],
 ): InfLocation {
-  return infLocation.parse({
+  return locationReadFixture({
     id: testShortcode("location", id),
     name,
     aliases: [],
@@ -48,7 +49,7 @@ function loc(
 }
 
 function item(id: string, productId: string): InventoryItemForTree {
-  const parsed = infLocation.parse({
+  const parsed = locationReadFixture({
     id: testShortcode("location", `item-${id}`),
     name: "fixture location",
     aliases: [],

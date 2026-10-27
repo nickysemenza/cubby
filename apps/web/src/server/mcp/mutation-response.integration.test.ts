@@ -1,7 +1,10 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -9,6 +12,10 @@ import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { product, ingredient as ingredientTable } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
+import {
+  addRecipeToMeal,
+  createMealWithEntityId,
+} from "~/server/domains/meal/repo/crud";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
@@ -43,6 +50,96 @@ const requireMutationSuccess = (
 describe("mutation response demand", () => {
   const ctx = withTestDb("mcp");
   afterEach(() => setCfEnv(undefined));
+
+  it("returns canonical nonempty Meals from recipe mutation MCP actions", async () => {
+    const recipe = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Synthetic mutation soup" }),
+      ctx.actor,
+    );
+    const meal = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", {
+        date: "2026-10-01",
+        name: "Synthetic recipe mutation meal",
+        mealType: "dinner",
+      }),
+      ctx.actor,
+    );
+    const first = await addRecipeToMeal(
+      ctx.db,
+      meal.entityId,
+      { recipeId: recipe.id, scale: 1, sortOrder: 0 },
+      ctx.actor,
+    );
+    const second = await addRecipeToMeal(
+      ctx.db,
+      meal.entityId,
+      { recipeId: recipe.id, scale: 2, sortOrder: 1 },
+      ctx.actor,
+    );
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const update = await callMcpTool(
+      createMcpServer(),
+      "nutrition",
+      {
+        action: "update_recipe",
+        input: { id: first.mealRecipeId, scale: 3 },
+      },
+      kernelRequestContext(context),
+      { entityKernel: context },
+    );
+    requireMutationSuccess(update);
+    const updated = entityFieldEnvelopeSchemas.meal.list.parse(
+      update.structuredContent,
+    );
+    expect(updated.id).toBe(meal.output.id);
+    expect(updated.recipes.map((row) => [row.id, row.scale])).toEqual([
+      [first.mealRecipeId, 3],
+      [second.mealRecipeId, 2],
+    ]);
+    expect(fieldValueOf(updated.fields.mealType)).toBe("dinner");
+    expect(updated.fields.mealType.current.assignment).toMatchObject({
+      kind: "value",
+      value: "dinner",
+    });
+    for (const key of [
+      "mealType",
+      "mealKind",
+      "recipeNames",
+      "fieldResolutions",
+      "derived",
+    ])
+      expect(update.structuredContent).not.toHaveProperty(key);
+    const remove = await callMcpTool(
+      createMcpServer(),
+      "nutrition",
+      {
+        action: "remove_recipe",
+        input: { id: first.mealRecipeId },
+      },
+      kernelRequestContext(context),
+      { entityKernel: context },
+    );
+    requireMutationSuccess(remove);
+    const removed = entityFieldEnvelopeSchemas.meal.list.parse(
+      remove.structuredContent,
+    );
+    expect(removed.recipes.map((row) => [row.id, row.scale])).toEqual([
+      [second.mealRecipeId, 2],
+    ]);
+    expect(fieldValueOf(removed.fields.mealType)).toBe("dinner");
+    for (const key of [
+      "mealType",
+      "mealKind",
+      "recipeNames",
+      "fieldResolutions",
+      "derived",
+    ])
+      expect(remove.structuredContent).not.toHaveProperty(key);
+  });
 
   // Full and projected operations retain distinct output and input contracts.
   it("keeps full operations full and requires read demand before writing", async () => {

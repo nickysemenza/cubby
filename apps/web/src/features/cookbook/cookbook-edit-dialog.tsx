@@ -1,4 +1,8 @@
-import type { CookbookSummary } from "@cubby/schemas/recipe";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+type CookbookSummary = Pick<
+  DetailRecordOf<"cookbook">,
+  "id" | "name" | "author" | "subjects"
+>;
 import { getErrorMessage } from "@cubby/shared";
 import { useState } from "react";
 

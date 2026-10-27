@@ -24,7 +24,7 @@ export const Route = createFileRoute("/_authenticated/ai")({
 
 function AiRoute() {
   const search = Route.useSearch();
-  const navigate = useNavigate();
+  const navigate = useNavigate({ from: "/ai" });
   const tabs = useTabParam(search.tab, "decisions", tabSchema, (next) =>
     navigate({ to: ".", search: (previous) => ({ ...previous, tab: next }) }),
   );

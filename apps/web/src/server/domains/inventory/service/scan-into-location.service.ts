@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Scan-into-location: the single owner of "a code was read while standing at a
  * location, now what".
@@ -13,15 +14,13 @@
  *
  * The branching itself is pure and lives in `scan-plan.ts`.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import type {
   ResolveScanStraysInput,
   ResolveScanStraysOut,
   ScanAtLocationInput,
-  ScanAtLocationOut,
 } from "@cubby/schemas/scan";
+import type { RawScanAtLocation } from "@cubby/schemas/scan-raw-read";
 
 import type { UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
@@ -65,7 +64,7 @@ export async function scanAtLocation(
   upcLookupClient: UpcLookupPort,
   input: ScanAtLocationInput,
   actor: ActorContext,
-): Promise<ScanAtLocationOut> {
+): Promise<RawScanAtLocation> {
   const locationId = await resolveOrThrow(db, "location", input.locationId);
 
   // A Cubby product label resolves by lookup and a raw scan is classified
@@ -99,7 +98,6 @@ export async function scanAtLocation(
     name: product.name,
     created,
     brandName: product.brandName,
-    hasPrice: product.pricing.effectivePrice != null,
   };
   const now = new Date();
 
@@ -137,7 +135,7 @@ export async function scanAtLocation(
   // scan of the same code can land in between. Rather than reserve against
   // that, let the unique index arbitrate and converge on the winner: the row
   // exists either way, and confirming it is exactly what the second scan meant.
-  return await runWithConflictRecovery<ScanAtLocationOut>(
+  return await runWithConflictRecovery<RawScanAtLocation>(
     async () => {
       await insertInventoryEntry(
         db,

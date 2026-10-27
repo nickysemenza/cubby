@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -107,7 +106,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("gardenEntry", "GardenEntry") },
     fields: [
       {
         key: "locationId",
@@ -417,6 +415,20 @@ export default defineEntity({
     ],
   },
   fields: {
+    embedded: [
+      {
+        path: ["images"],
+        entity: "image",
+        projections: [
+          "output",
+          "list",
+          "detail",
+          "mcpOutput",
+          "mcpList",
+          "mcpDetail",
+        ],
+      },
+    ],
     create: {
       module: "@cubby/schemas/garden-entry",
       export: "gardenEntryCreateInput",
@@ -425,10 +437,13 @@ export default defineEntity({
       module: "@cubby/schemas/garden-entry",
       export: "gardenEntryUpdateData",
     },
-    output: { module: "@cubby/schemas/garden-entry", export: "gardenEntryOut" },
+    output: {
+      module: "@cubby/schemas/garden-entry-raw-read",
+      export: "rawGardenEntryOut",
+    },
     list: {
-      module: "@cubby/schemas/garden-entry",
-      export: "gardenEntryListItemOut",
+      module: "@cubby/schemas/garden-entry-raw-read",
+      export: "rawGardenEntryListItemOut",
     },
   },
   storage: {

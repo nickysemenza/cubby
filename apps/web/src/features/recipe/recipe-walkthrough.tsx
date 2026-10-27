@@ -1,4 +1,3 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import type {
   RecipeFlowInstructionRef,
   RecipeFlowPlan,
@@ -7,6 +6,7 @@ import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { ArrowRightIcon } from "@phosphor-icons/react/dist/csr/ArrowRight";
 import { useRef, useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { cn } from "~/lib/utils";
 import { Row, Stack } from "~/ui/layout";
@@ -261,3 +261,5 @@ export function RecipeWalkthrough({
     </Stack>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

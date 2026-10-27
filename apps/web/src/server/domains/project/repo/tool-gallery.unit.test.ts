@@ -1,4 +1,4 @@
-import type { ToolGalleryInventoryEntryOut } from "@cubby/schemas/project";
+import type { RawToolGalleryInventoryEntry } from "@cubby/schemas/project-tool-raw-read";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -8,7 +8,7 @@ const entry = (
   id: string,
   name: string,
   ancestors: string[] = [],
-): ToolGalleryInventoryEntryOut => ({
+): RawToolGalleryInventoryEntry => ({
   id: testShortcode("inventory", id),
   amount: { value: 1, unit: "each" },
   placement: "stock",

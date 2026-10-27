@@ -1,10 +1,10 @@
 import type { BrowserCapture } from "@cubby/schemas/purchase-import";
 import type { ImportExtractionOutcome } from "@cubby/schemas/purchase-import";
 import {
-  type RecipeOut,
-  recipeOut,
-  sectionIngredientOut,
-} from "@cubby/schemas/recipe";
+  rawRecipeOutput as recipeOut,
+  rawSectionIngredient as sectionIngredientOut,
+} from "@cubby/schemas/recipe-raw-read";
+import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 
 import { formatCurrency } from "~/lib/number-format";

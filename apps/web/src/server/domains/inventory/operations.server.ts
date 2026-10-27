@@ -11,7 +11,9 @@ import {
   inventoryBulkAddPayload,
   inventoryBulkDiscardPayload,
   inventoryFindDuplicatesInput,
+  inventoryDuplicateUniqueProductOut,
   inventoryLocationSnapshotInput,
+  inventoryReceivingStockOut,
   moveInventoryEntriesPayload,
   reconcileSessionPayload,
   type InventoryReceiveExpenseInput,
@@ -22,6 +24,7 @@ import {
   setInventoryOwnershipInput,
 } from "@cubby/schemas/inventory-ownership";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
+import { scanProductOut, scanStrayOut } from "@cubby/schemas/scan";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 import type { z } from "zod";
@@ -53,6 +56,8 @@ import { discardFromInventoryEntries } from "~/server/domains/product/repo/disca
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import {
   bindShortcodeResolver,
   lookupShortcodes,
@@ -485,16 +490,21 @@ async function findInventoryDuplicates(
   const duplicates = await findDuplicateUniqueProducts(db, {
     excludeLocationId,
   });
-  return duplicates.map((product) => ({
-    id: parseShortcodeFor("product", product.shortcode),
-    name: product.name,
-    brandName: product.brandName,
-    expectedQuantity: product.expectedQuantity,
-    locations: product.inventoryEntry.map((entry) => ({
-      id: parseShortcodeFor("location", entry.location.shortcode),
-      name: entry.location.name,
+  return publicFieldEnvelopeRows({
+    db,
+    entity: "product",
+    schema: inventoryDuplicateUniqueProductOut,
+    rows: duplicates.map((product) => ({
+      id: parseShortcodeFor("product", product.shortcode),
+      name: product.name,
+      brandName: product.brandName,
+      expectedQuantity: product.expectedQuantity,
+      locations: product.inventoryEntry.map((entry) => ({
+        id: parseShortcodeFor("location", entry.location.shortcode),
+        name: entry.location.name,
+      })),
     })),
-  }));
+  });
 }
 
 async function getInventoryLocationSnapshot(
@@ -568,35 +578,137 @@ export async function receiveExpenseInventoryWorkflow(
 }
 
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {
-  receiveExpense: (context, input) =>
-    receiveExpenseInventoryWorkflow(context.db, context.actorContext, input),
-  receivingContext: (context, input) => getReceivingContext(context.db, input),
-  bulkAdd: (context, input) =>
-    bulkAddInventoryWorkflow(context.db, context.actorContext, input),
+  receiveExpense: async (context, input) => {
+    const result = await receiveExpenseInventoryWorkflow(
+      context.db,
+      context.actorContext,
+      input,
+    );
+    const [item] = await readPublicEntityRows({
+      db: context.db,
+      entity: "inventory",
+      projection: "detail",
+      rows: [result.item],
+    });
+    if (!item) throw new Error("Received inventory result is missing");
+    return { ...result, item };
+  },
+  receivingContext: async (context, input) => {
+    const result = await getReceivingContext(context.db, input);
+    const stock = await publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "inventory",
+      schema: inventoryReceivingStockOut,
+      rows: result.stock,
+    });
+    return { ...result, stock };
+  },
+  bulkAdd: async (context, input) => {
+    const result = await bulkAddInventoryWorkflow(
+      context.db,
+      context.actorContext,
+      input,
+    );
+    return {
+      ...result,
+      items: await readPublicEntityRows({
+        db: context.db,
+        entity: "inventory",
+        projection: "detail",
+        rows: result.items,
+      }),
+    };
+  },
   bulkDiscard: (context, input) => bulkDiscardInventoryWorkflow(context, input),
-  bulkMove: (context, input) =>
-    bulkMoveInventoryWorkflow(context.db, context.actorContext, input),
-  moveEntries: (context, input) =>
-    moveInventoryEntriesWorkflow(context.db, context.actorContext, input),
-  reconcileSession: (context, input) =>
-    reconcileSessionWorkflow(
+  bulkMove: async (context, input) => {
+    const result = await bulkMoveInventoryWorkflow(
+      context.db,
+      context.actorContext,
+      input,
+    );
+    return {
+      ...result,
+      items: await readPublicEntityRows({
+        db: context.db,
+        entity: "inventory",
+        projection: "detail",
+        rows: result.items,
+      }),
+    };
+  },
+  moveEntries: async (context, input) => {
+    const result = await moveInventoryEntriesWorkflow(
+      context.db,
+      context.actorContext,
+      input,
+    );
+    return {
+      ...result,
+      items: await readPublicEntityRows({
+        db: context.db,
+        entity: "inventory",
+        projection: "detail",
+        rows: result.items,
+      }),
+    };
+  },
+  reconcileSession: async (context, input) => {
+    const result = await reconcileSessionWorkflow(
       { db: context.db, actorContext: context.actorContext },
       input,
-    ),
-  scanAtLocation: (context, input) =>
-    scanAtLocationService(
+    );
+    return {
+      ...result,
+      items: await readPublicEntityRows({
+        db: context.db,
+        entity: "inventory",
+        projection: "detail",
+        rows: result.items,
+      }),
+    };
+  },
+  scanAtLocation: async (context, input) => {
+    const result = await scanAtLocationService(
       context.db,
       context.usdaClient,
       context.upcLookupClient,
       input,
       context.actorContext,
-    ),
+    );
+    const [products, strays] = await Promise.all([
+      publicFieldEnvelopeRows({
+        db: context.db,
+        entity: "product",
+        schema: scanProductOut,
+        rows: [result.product],
+      }),
+      publicFieldEnvelopeRows({
+        db: context.db,
+        entity: "inventory",
+        schema: scanStrayOut,
+        rows: result.strays.map((row) => ({ ...row, id: row.entryId })),
+      }),
+    ]);
+    const product = products[0];
+    if (!product) throw new Error("Scan result produced no public Product");
+    return { ...result, product, strays };
+  },
   resolveScanStrays: (context, input) =>
     resolveScanStraysService(context.db, input, context.actorContext),
   findDuplicates: (context, input) =>
     findInventoryDuplicates(context.db, input),
-  locationSnapshot: (context, input) =>
-    getInventoryLocationSnapshot(context.db, input),
+  locationSnapshot: async (context, input) => {
+    const result = await getInventoryLocationSnapshot(context.db, input);
+    return {
+      ...result,
+      items: await readPublicEntityRows({
+        db: context.db,
+        entity: "inventory",
+        projection: "detail",
+        rows: result.items,
+      }),
+    };
+  },
   setOwnership: (context, input) => setOwnership(context, input),
   confirmOwnership: (context, input) => confirmOwnership(context, input),
 });

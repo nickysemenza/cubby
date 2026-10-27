@@ -108,7 +108,7 @@ function CalendarInspectorOverlay({
           <EntityQualityFact
             entity="meal"
             id={item.id}
-            quality={item.dataQuality}
+            envelope={item.source.fields.dataQuality}
           />
         ) : null}
         <div className="text-muted-foreground">{itemMetadata(item)}</div>

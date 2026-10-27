@@ -1,4 +1,9 @@
-import financialTransactionDefinition from "./entity-definitions/14-financialTransaction.entity";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  financialTransactionFieldEnvelopeFields,
+  financialTransactionPublicReadFields,
+} from "./generated/entity-field-envelope-fields.financialTransaction.gen";
+import { rawFinancialTransactionOut } from "./financial-transaction-raw-read";
 import { postedRequiresDate } from "./financial-transaction-fields";
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
@@ -380,8 +385,11 @@ export type MerchantVendorInferenceInput = z.infer<
 export type FinancialTransactionSortField =
   GeneratedEntitySortField<"financialTransaction">;
 
-export const financialTransactionOut =
-  financialTransactionDefinition.readSchemas.output;
+export const financialTransactionOut = withFieldEnvelopes(
+  rawFinancialTransactionOut,
+  financialTransactionFieldEnvelopeFields,
+  financialTransactionPublicReadFields,
+);
 export type FinancialTransactionOut = z.infer<typeof financialTransactionOut>;
 
 export const financialTransactionListResponse = createPaginatedResponseSchema(
@@ -490,6 +498,21 @@ const financialStatementNewAccount = z.object({
   sourceAliases: financialAccountSourceAliases,
 });
 
+export const rawImportPreviewExistingTransaction = z.object({
+  id: financialTransactionShortcode,
+  amount: z.number(),
+  status: financialTransactionStatus,
+  postedDate: plainDate.nullable(),
+  transactionDate: plainDate.nullable(),
+  merchant: z.string().nullable(),
+  rawDescription: z.string().nullable(),
+});
+export const importPreviewExistingTransaction = withFieldEnvelopes(
+  rawImportPreviewExistingTransaction,
+  { merchant: financialTransactionFieldEnvelopeFields.merchant },
+  financialTransactionPublicReadFields,
+);
+
 export const financialTransactionImportPreviewRow = z.object({
   key: z.string(),
   status: financialTransactionImportPreviewStatus,
@@ -498,19 +521,7 @@ export const financialTransactionImportPreviewRow = z.object({
   newAccount: financialStatementNewAccount.nullable(),
   proposed: financialTransactionImportProposedTransaction,
   existingTransactionIds: z.array(financialTransactionShortcode),
-  existingTransactions: z
-    .array(
-      z.object({
-        id: financialTransactionShortcode,
-        amount: z.number(),
-        status: financialTransactionStatus,
-        postedDate: plainDate.nullable(),
-        transactionDate: plainDate.nullable(),
-        merchant: z.string().nullable(),
-        rawDescription: z.string().nullable(),
-      }),
-    )
-    .default([]),
+  existingTransactions: z.array(importPreviewExistingTransaction).default([]),
   vendorInference: merchantVendorInference
     .nullable()
     .default(null)
@@ -532,4 +543,17 @@ export const financialTransactionImportPreviewOut = z.object({
 });
 export type FinancialTransactionImportPreviewOut = z.infer<
   typeof financialTransactionImportPreviewOut
+>;
+export const rawFinancialTransactionImportPreviewRow =
+  financialTransactionImportPreviewRow.extend({
+    existingTransactions: z
+      .array(rawImportPreviewExistingTransaction)
+      .default([]),
+  });
+export const rawFinancialTransactionImportPreviewOut =
+  financialTransactionImportPreviewOut.extend({
+    rows: z.array(rawFinancialTransactionImportPreviewRow),
+  });
+export type RawFinancialTransactionImportPreviewOut = z.infer<
+  typeof rawFinancialTransactionImportPreviewOut
 >;

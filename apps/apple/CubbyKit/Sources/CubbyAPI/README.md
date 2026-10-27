@@ -10,6 +10,10 @@ SwiftPM code-generation plugin.
 `Models/`. Generated files are ignored and restored by the generation task.
 Handwritten callers name models through CubbyKit's generated `APITypes.swift`.
 Branded identifiers, dates and JSON codecs live in `CubbyAPISupport`.
+Anonymous discriminator members retain their full path from the nearest named
+schema, so a nested value arm cannot claim its containing object's model name.
+Recursive stored properties use `NativeIndirect`, including self references
+hidden behind named aliases; child arrays retain their ordinary value semantics.
 CubbyKit's `LenientISO8601DateTranscoder` preserves server milliseconds when
 encoding dates, including photo-review revisions used by stale-write guards.
 
@@ -26,7 +30,11 @@ Manifest-driven editors, commands and entity kernel operations send composed
 JSON directly. Their server declarations remain authoritative for validation;
 client form validation still provides immediate feedback. A declaration can
 select a JSON representation with `nativeModels` without weakening its server
-schema. Specialized native experiences retain their typed models.
+schema. Specialized native experiences retain their typed models. Retained record roots
+enter the same wire projection once as operation outputs. Their CubbyKit aliases
+refer to the registered model even when another exported name owns that schema;
+generation must not clone a second wire model to preserve an alias. Inventory
+recounts consume the canonical `InventoryDetail` amount outcome.
 
 Models distinguish required nullable keys from omitted keys. Optional nullable
 fields use `NativeField` to preserve absent, null and value states, including

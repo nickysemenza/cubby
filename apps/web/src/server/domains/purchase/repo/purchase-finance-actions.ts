@@ -6,6 +6,7 @@ import {
   type ProductShortcode,
   type PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
+import { purchaseLinkExpenseCandidate } from "@cubby/schemas/purchase";
 import type {
   purchaseLinkExpensesCandidatesInput,
   purchaseLinkExpensesCandidatesOut,
@@ -48,6 +49,7 @@ import {
 } from "~/server/domains/purchase/repo/purchase-split-draft";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { AppError, createAppError } from "~/server/errors/app-error";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**
@@ -123,9 +125,16 @@ export async function listLinkExpenseCandidates(
     [{ orderBy: "date", direction: "desc" }],
     { pageIndex: 0, pageSize: LINK_CANDIDATE_LIMIT },
   );
+  const composed = composeLinkExpenseCandidates(input.purchaseId, page.data);
   return {
+    ...composed,
     scopes: LINK_EXPENSE_SCOPES,
-    ...composeLinkExpenseCandidates(input.purchaseId, page.data),
+    candidates: await publicFieldEnvelopeRows({
+      db,
+      entity: "expense",
+      schema: purchaseLinkExpenseCandidate,
+      rows: composed.candidates,
+    }),
   };
 }
 

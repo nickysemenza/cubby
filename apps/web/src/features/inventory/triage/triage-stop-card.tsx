@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { MapPinIcon } from "@phosphor-icons/react/dist/csr/MapPin";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 import { SkipForwardIcon } from "@phosphor-icons/react/dist/csr/SkipForward";
@@ -49,9 +50,10 @@ export function TriageStopCard({
   const [discardOpen, setDiscardOpen] = useState(false);
 
   const expected = product.quantityLedger.expectedQuantity;
+  const expenseTotal = fieldValueOf(product.fields.expenseTotal);
   const proposed = defaultStockAmount({
     expectedQuantity: expected,
-    onHandUnits: product.onHandUnits,
+    onHandUnits: fieldValueOf(product.fields.onHandUnits),
   });
 
   const ensureUnknown = useMutation(
@@ -81,7 +83,7 @@ export function TriageStopCard({
   };
 
   const busy = ensureUnknown.isPending || park.isPending;
-  const cover = product.displayImages[0]?.url;
+  const cover = fieldValueOf(product.fields.displayImages)?.[0]?.url;
 
   return (
     <Panel tone="default">
@@ -102,13 +104,15 @@ export function TriageStopCard({
             <h2 className="min-w-0 font-heading text-xl font-semibold">
               <EntityRefLink bare entity="product" data={product} />
             </h2>
-            {product.brandName && (
-              <Description size="xs">{product.brandName}</Description>
+            {fieldValueOf(product.fields.brandName) && (
+              <Description size="xs">
+                {fieldValueOf(product.fields.brandName)}
+              </Description>
             )}
             <Description>
               The ledger says {expected} bought
-              {product.expenseTotal > 0
-                ? ` for ${formatCurrency(product.expenseTotal)}`
+              {expenseTotal !== null && expenseTotal > 0
+                ? ` for ${formatCurrency(expenseTotal ?? 0)}`
                 : ""}
               . Nothing is on a shelf.
             </Description>
@@ -170,7 +174,7 @@ export function TriageStopCard({
           {
             id: product.id,
             name: product.name,
-            brandName: product.brandName,
+            brandName: fieldValueOf(product.fields.brandName),
             defaultAmount: proposed,
           },
         ]}

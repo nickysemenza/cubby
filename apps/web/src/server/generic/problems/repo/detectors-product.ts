@@ -15,8 +15,11 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { ProblemItem, problemDetectors } from "@cubby/schemas/problems";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import {
+  ProblemItem,
+  problemDetectors,
+} from "@cubby/schemas/problems-raw-read";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import {
@@ -578,7 +581,7 @@ export const findProductsWithoutUnitMappings = async (
     shortcode: ProductShortcode;
     name: string;
     brandName: string | null;
-    category: ProductCategorySummary | null;
+    category: RawProductCategorySummary | null;
   }[]
 > => {
   const dbClient = getDb(db);

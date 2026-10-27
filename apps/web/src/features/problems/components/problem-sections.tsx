@@ -2,6 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ReferentialLivenessViolation } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { displayGtin } from "@cubby/schemas/external-id";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type AllProblems,
   type CoverageProblemKey,
@@ -672,7 +673,9 @@ function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
 function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   const base = {
     title: item.name,
-    fields: facts(manufacturerFact(item.brandName)),
+    fields: facts(
+      manufacturerFact(fieldValueOf(item.fields.brandName) ?? null),
+    ),
     route: entityDetailLink("product", item.id),
     editLabel: "Open product",
   };
@@ -806,7 +809,7 @@ function outsideOwnershipFacts(
   const boundary = `${formatCalendarDay(row.projectBoundary, "dateShort")} (incl. grace)`;
   const acquired = row.conflict === "acquired_after_end";
   return facts(
-    manufacturerFact(row.brandName),
+    manufacturerFact(fieldValueOf(row.fields.brandName) ?? null),
     recordFact("project", [{ id: row.projectId, name: row.projectName }]),
     fact(acquired ? "Acquired" : "Disposed of", tool, "warning"),
     fact(acquired ? "Project ended" : "Project started", boundary),
@@ -820,7 +823,7 @@ function purchaseFacts(
     fact("Stated", formatCurrency(purchase.statedTotal)),
     fact(
       "Expenses",
-      `${formatCurrency(purchase.expenseTotal)} (${countLabel(purchase.expenseCount, "expense")})`,
+      `${formatCurrency(purchase.observation.expenseTotal)} (${countLabel(purchase.observation.expenseCount, "expense")})`,
       "warning",
     ),
   );
@@ -829,7 +832,7 @@ function purchaseFacts(
 function purchaseDeltaHint(
   purchase: ProblemItem<"purchasesNotReconciling">,
 ): string | null {
-  const delta = reconciliationDelta(purchase);
+  const delta = reconciliationDelta({ ...purchase, ...purchase.observation });
   if (delta === null) return null;
   const gap = formatCurrency(Math.abs(delta));
   return delta < 0
@@ -978,7 +981,9 @@ const DECLARED_SECTIONS = [
       ) : null,
     renderItem: (product) => ({
       title: product.name,
-      fields: facts(manufacturerFact(product.brandName)),
+      fields: facts(
+        manufacturerFact(fieldValueOf(product.fields.brandName) ?? null),
+      ),
       details: [createdAgoDetail(product.createdAt)],
       route: entityDetailLink("product", product.id),
       inlineFix: {
@@ -1284,7 +1289,10 @@ const DECLARED_SECTIONS = [
       title: vendor.name,
       fields: facts(
         fact("Website", vendor.website ?? "None recorded"),
-        fact("Purchases", String(vendor.purchaseCount)),
+        fact(
+          "Purchases",
+          fieldValueOf(vendor.fields.purchaseCount)?.toString() ?? "Updating…",
+        ),
         fact("Expense lines", String(vendor.expenseRowCount)),
       ),
       route: entityDetailLink("vendor", vendor.id),
@@ -1395,7 +1403,7 @@ const DECLARED_SECTIONS = [
       fields: facts(
         fact(
           "Imported",
-          `${cookbook.recipeCount} of ${cookbook.sourceRecipeCount}`,
+          `${cookbook.observation.recipeCount} of ${cookbook.observation.sourceRecipeCount}`,
         ),
         fact("Missing", String(cookbook.missingRecipeCount), "warning"),
       ),
@@ -1545,7 +1553,7 @@ const DECLARED_SECTIONS = [
         // Show the actual value a fresh lookup would write per field — not
         // just which fields are missing — so it's clear what "Apply" changes.
         fields: facts(
-          manufacturerFact(product.brandName),
+          manufacturerFact(fieldValueOf(product.fields.brandName) ?? null),
           fact("UPC", product.upc),
           proposed.brandName != null &&
             fact("New brandName", proposed.brandName, "positive"),
@@ -1611,10 +1619,10 @@ const DECLARED_SECTIONS = [
                 />
               </span>,
             ),
-          purchase.vendorId &&
+          purchase.observation.vendorId &&
             purchase.vendorName &&
             recordFact("vendor", [
-              { id: purchase.vendorId, name: purchase.vendorName },
+              { id: purchase.observation.vendorId, name: purchase.vendorName },
             ]),
         ),
         details: hint
@@ -1627,7 +1635,10 @@ const DECLARED_SECTIONS = [
         badges: [
           // The same soft `warning`-tone verdict the ledger column and the purchase
           // page show, from the same classifier — never a defect red.
-          <ReconciliationStatus key="reconciliation" purchase={purchase} />,
+          <ReconciliationStatus
+            key="reconciliation"
+            purchase={{ ...purchase, ...purchase.observation }}
+          />,
         ],
         route: entityDetailLink("purchase", purchase.id),
         editLabel: "Open purchase",
@@ -1645,25 +1656,33 @@ const DECLARED_SECTIONS = [
     renderItem: (item) => ({
       title: item.vendorName ?? "Vendor deleted",
       fields: facts(
-        fact("Expenses", formatCurrency(item.expenseTotal)),
+        fact("Expenses", formatCurrency(item.observation.expenseTotal)),
         fact(
           "Projected",
-          formatCurrency(item.financialReconciliation.projectedTotal),
+          formatCurrency(
+            item.observation.financialReconciliation.projectedTotal,
+          ),
         ),
         // The gap itself, signed — the finding, rather than making the reader
         // compute it from the two totals beside it.
         fact(
-          item.financialReconciliation.delta > 0 ? "Over by" : "Short by",
-          formatCurrency(Math.abs(item.financialReconciliation.delta)),
+          item.observation.financialReconciliation.delta > 0
+            ? "Over by"
+            : "Short by",
+          formatCurrency(
+            Math.abs(item.observation.financialReconciliation.delta),
+          ),
           "warning",
         ),
         fact(
           "Transactions",
-          String(item.financialReconciliation.transactionCount),
+          String(item.observation.financialReconciliation.transactionCount),
         ),
-        item.vendorId &&
+        item.observation.vendorId &&
           item.vendorName &&
-          recordFact("vendor", [{ id: item.vendorId, name: item.vendorName }]),
+          recordFact("vendor", [
+            { id: item.observation.vendorId, name: item.vendorName },
+          ]),
       ),
       route: entityDetailLink("purchase", item.id),
       editLabel: "Open purchase",
@@ -1705,7 +1724,7 @@ const DECLARED_SECTIONS = [
         // Labeled but deliberately NOT a link: the expense is the actionable
         // row and the purchase is only context, so every route out of this
         // card points at the expense (see the section note above).
-        fact("Purchase", item.purchaseId),
+        fact("Purchase", item.observation.purchaseId),
         // Name both days. "3 days apart" alone is a claim the reader can't
         // check without opening both records — exactly the work the card is
         // meant to save.

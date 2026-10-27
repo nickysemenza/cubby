@@ -69,7 +69,7 @@ interface RecipeLinePatchUpdate {
  * their current values. Instructions are left out, so they are untouched.
  */
 function buildRecipeLinePatch(
-  recipe: RecipeDetail,
+  recipe: Pick<RecipeDetail, "id" | "sections">,
   lineId: string,
   patch: RecipeLinePatch,
 ): RecipeLinePatchUpdate {

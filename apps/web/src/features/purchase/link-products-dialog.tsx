@@ -1,11 +1,9 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type ProductShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type {
-  PurchaseOut,
-  purchaseLinkProductCandidate,
-} from "@cubby/schemas/purchase";
+import type { purchaseLinkProductCandidate } from "@cubby/schemas/purchase";
 import { countLabel } from "@cubby/shared/pluralize";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -14,9 +12,9 @@ import type { RowSelectionState, Updater } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import type { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import {
-  createCurrencyColumn,
   createImageColumn,
   createNameColumn,
   rowImages,
@@ -27,17 +25,20 @@ import {
 } from "~/entity/table/list-workbench";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
+import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/ui/data-table/table-features";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
 
 const isRowSelectionUpdater = (
   value: Updater<RowSelectionState>,
@@ -134,21 +135,33 @@ export function LinkProductsDialog({
         );
         add(createNameColumn(helper, "product", "name", { header: "Product" }));
         add(
-          helper.accessor((row) => row.brandName, {
+          helper.accessor((row) => fieldValueOf(row.fields.brandName), {
             id: "brandName",
             header: "Manufacturer",
             meta: {
               className: "w-40",
               mobile: { slot: "subtitle", label: "Maker" },
             },
-            cell: (info) =>
-              isUnknownBrandName(info.getValue()) ? "—" : info.getValue(),
+            cell: (info) => (
+              <FieldRecordValue record={info.row.original} field="brandName">
+                {isUnknownBrandName(info.getValue()) ? "—" : info.getValue()}
+              </FieldRecordValue>
+            ),
           }),
         );
         add(
-          createCurrencyColumn(helper, "price", {
+          helper.accessor((row) => fieldValueOf(row.fields.price), {
+            id: "price",
             header: "Price",
-            mobile: { slot: "meta", priority: 20 },
+            meta: { numeric: true, mobile: { slot: "meta", priority: 20 } },
+            cell: (info) => {
+              const value = info.getValue();
+              return (
+                <FieldRecordValue record={info.row.original} field="price">
+                  {value === null ? <NoneValue /> : formatCurrency(value)}
+                </FieldRecordValue>
+              );
+            },
           }),
         );
       }),
@@ -224,3 +237,5 @@ export function LinkProductsDialog({
     </Overlay>
   );
 }
+
+type PurchaseOut = DetailRecordOf<"purchase">;

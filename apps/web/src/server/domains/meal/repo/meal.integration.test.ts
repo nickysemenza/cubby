@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type MealCreateInput,
   mealAddRecipeInput,
@@ -11,17 +12,20 @@ import {
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, recipe } from "~/server/db/schema";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { mealHandlers } from "~/server/domains/meal/operations.server";
 import {
   addRecipeToMealWorkflow,
   getShoppingListWorkflow,
   saveMealRecipePreparationWorkflow,
 } from "~/server/domains/meal/operations.server";
+import { systemPrincipal } from "~/server/http/authenticate";
 import {
   createRecipeFixture,
   ingredientRef,
@@ -49,6 +53,7 @@ const requirePortionForMeal = (
     .flatMap((preparation) => preparation.portions)
     .find((candidate) => candidate.targetMeal.id === targetMealId);
   if (!portion) throw new Error("expected portion for target meal");
+  expect(portion.targetMeal).not.toHaveProperty("mealKind");
   return portion;
 };
 
@@ -191,6 +196,24 @@ describe("meal recipe preparations", () => {
       mealKind: full?.mealKind,
       totals: full?.totals,
     });
+    const publicResult = await mealHandlers.operations.upcomingSummary({
+      data: { from: "2026-09-24", to: "2026-09-24" },
+      request: {
+        principal: systemPrincipal(
+          buildKernelContext(ctx.db, ctx.actor.userId),
+        ),
+        headers: new Headers(),
+        signal: new AbortController().signal,
+      },
+    });
+    if (!publicResult.ok) throw new Error(publicResult.error.message);
+    const publicSummary = publicResult.data[0];
+    if (!publicSummary) throw new Error("Expected the bounded Meal summary");
+    expect(fieldValueOf(publicSummary.fields.mealType)).toBe(full?.mealType);
+    expect(fieldValueOf(publicSummary.fields.mealKind)).toBe(full?.mealKind);
+    expect(publicSummary.totals).toEqual(summary?.totals);
+    expect(publicSummary).not.toHaveProperty("mealType");
+    expect(publicSummary).not.toHaveProperty("mealKind");
     expect(summary?.totals.cost).toMatchObject({
       status: "complete",
       lower: 20,
@@ -275,6 +298,38 @@ describe("meal recipe preparations", () => {
         ],
       }),
     ]);
+  });
+
+  it("reports the classification that omitted each non-cooked meal without exposing a live mealKind alias", async () => {
+    for (const kind of [
+      "leftovers",
+      "eating_out",
+      "takeout",
+      "other",
+    ] as const) {
+      await createMealWithEntityId(
+        ctx.db,
+        buildEntity("meal", {
+          date: "2026-09-23",
+          name: `Synthetic omitted ${kind}`,
+          mealKind: kind,
+        }),
+        ctx.actor,
+      );
+    }
+    const shopping = await getShoppingListWorkflow(
+      ctx.db,
+      shoppingListInput.parse({ from: "2026-09-23", to: "2026-09-23" }),
+      createTestRequestContext(ctx.db).services.availability,
+    );
+    expect(shopping.items).toEqual([]);
+    expect(
+      shopping.omittedMeals.map((meal) => meal.omission.reason).sort(),
+    ).toEqual(["eating_out", "leftovers", "other", "takeout"]);
+    for (const meal of shopping.omittedMeals) {
+      expect(meal.omission.label).toBeTruthy();
+      expect(meal).not.toHaveProperty("mealKind");
+    }
   });
 
   it("commits portions atomically without auto-decrementing inventory", async () => {

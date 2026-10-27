@@ -242,7 +242,7 @@ export type RecipeSource = z.infer<typeof recipeSource>;
  * live here because a sub-recipe line (`recipe-fields.ts`) embeds them inside
  * that same declaration, which therefore cannot read its own generated map.
  */
-export const recipeTopLevelFields = {
+export const rawRecipeTopLevelFields = {
   id: recipeShortcode,
   name: z.string(),
   ...timestampedFields,
@@ -263,27 +263,30 @@ export const recipeTopLevelFields = {
   forkedFromRecipeName: z.string().nullable(),
 };
 
-export const recipeTopLevel = z.object(recipeTopLevelFields);
-export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;
+export const rawRecipeTopLevel = z.object(rawRecipeTopLevelFields);
+export type RawRecipeTopLevel = z.infer<typeof rawRecipeTopLevel>;
 
-export type RecipeServingBasis = Pick<
-  RecipeTopLevel,
-  "servings" | "yield" | "fieldResolutions"
+type RecipeRead = import("./entity-field-envelopes").EntityFieldEnvelopeRead<
+  "recipe",
+  "detail"
 >;
+export type RecipeServingBasis = Pick<RecipeRead, "yield"> & {
+  fields: Pick<RecipeRead["fields"], "servings">;
+};
 
 /** The stored rule is shared with legacy read shapes that predate resolutions. */
 export const resolveRecipeServingValue = (
-  recipe: Pick<RecipeServingBasis, "servings" | "yield">,
+  recipe: Pick<RawRecipeTopLevel, "servings" | "yield">,
 ): number | null =>
   recipe.servings ??
   (recipe.yield?.unit === "servings" ? recipe.yield.value : null);
 
-/** Read consumers use the backend resolution; old embedded recipes remain readable. */
+/** Read consumers use the same effective result as lists and explanations. */
 export const recipeServingsForRead = (
   recipe: RecipeServingBasis,
 ): number | null => {
-  const resolution = recipe.fieldResolutions?.servings;
-  return resolution
-    ? z.number().nullable().parse(resolution.value)
-    : resolveRecipeServingValue(recipe);
+  const result = recipe.fields.servings.result;
+  return result.kind !== "missing" && result.decision.outcome.kind === "value"
+    ? result.decision.outcome.value
+    : null;
 };

@@ -1,6 +1,5 @@
 import { productPricingInputsFor } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { inventoryReadSchemas } from "../inventory-fields";
 import { defineEntity } from "./definition.js";
 import { amount, positiveAmount } from "@cubby/schemas/codec";
@@ -20,7 +19,6 @@ import {
   inventoryOwnershipModeValues,
 } from "@cubby/schemas/inventory-ownership";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
-import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { imageOut } from "./field-primitives.js";
 import {
   CURRENT_MEMBER_FILTER,
@@ -283,9 +281,6 @@ export default defineEntity(
       },
     },
     model: {
-      stored: {
-        automaticFields: automaticFields("inventory", "InventoryEntry"),
-      },
       fields: [
         {
           key: "productId",
@@ -310,7 +305,7 @@ export default defineEntity(
           },
           display: { list: false },
           validation: {
-            read: null,
+            read: locationShortcode,
             create: locationShortcode,
             update: locationShortcode.optional(),
           },
@@ -426,21 +421,21 @@ export default defineEntity(
             description:
               "An owner set on the entry (or Household) wins; otherwise one recorded acquisition supplies its beneficiary, then an enabled vendor account default, then an enabled payment account default.",
             projections: {
-              list: "fieldResolutions.ownerLedgerPartyId.value",
-              detail: "fieldResolutions.ownerLedgerPartyId.value",
-              summary: "fieldResolutions.ownerLedgerPartyId.value",
+              list: "ownerLedgerPartyId",
+              detail: "ownerLedgerPartyId",
+              summary: "ownerLedgerPartyId",
             },
             sourceDependencies: [
               {
-                path: "fieldResolutions.ownerLedgerPartyId.sourceEntity",
+                path: "fields.ownerLedgerPartyId.result.decision.provenance.source",
                 label: "Source",
               },
               {
-                path: "fieldResolutions.ownerLedgerPartyId.storedValue",
+                path: "fields.ownerLedgerPartyId.current.assignment.value",
                 label: "Stored override",
               },
               {
-                path: "fieldResolutions.ownerLedgerPartyId.fallbackValue",
+                path: "fields.ownerLedgerPartyId.current.controls.reset.preview.result.decision.outcome.value",
                 label: "Inherited value",
               },
             ],
@@ -449,16 +444,6 @@ export default defineEntity(
             read: ledgerPartyShortcode.nullable(),
             create: ledgerPartyShortcode.nullable().default(null),
             update: ledgerPartyShortcode.nullable().optional(),
-          },
-        },
-        {
-          display: { detail: false, list: false },
-          key: "fieldResolutions",
-          kind: "json",
-          validation: {
-            read: optionalFieldResolutionsSchema,
-            create: null,
-            update: null,
           },
         },
         {
@@ -743,18 +728,30 @@ export default defineEntity(
       },
       output: [
         "id",
+        "locationId",
         "amount",
         "valuation",
         "verifiedAt",
         "placement",
         "ownerLedgerPartyId",
-        "fieldResolutions",
         "effectiveOwnership",
         "createdAt",
         "updatedAt",
       ],
     },
     fields: {
+      embedded: [
+        {
+          path: ["product"],
+          entity: "product",
+          projections: ["list", "detail", "mcpList", "mcpDetail"],
+        },
+        {
+          path: ["location"],
+          entity: "location",
+          projections: ["list", "detail", "mcpList", "mcpDetail"],
+        },
+      ],
       create: {
         module: "@cubby/schemas/inventory",
         export: "inventoryCreatePayloadData",
@@ -764,20 +761,20 @@ export default defineEntity(
         export: "inventoryUpdatePayloadData",
       },
       output: {
-        module: "@cubby/schemas/inventory",
-        export: "inventoryEntryOut",
+        module: "@cubby/schemas/inventory-raw-read",
+        export: "rawInventoryOutput",
       },
       list: {
-        module: "@cubby/schemas/inventory",
-        export: "inventoryListItemOut",
+        module: "@cubby/schemas/inventory-raw-read",
+        export: "rawInventoryList",
       },
       detail: {
-        module: "@cubby/schemas/inventory",
-        export: "inventoryWithLocationAndProductOut",
+        module: "@cubby/schemas/inventory-raw-read",
+        export: "rawInventoryDetail",
       },
       mcpDetail: {
-        module: "@cubby/schemas/inventory",
-        export: "inventoryWithLocationAndProductMcpEntityOut",
+        module: "@cubby/schemas/inventory-raw-read",
+        export: "rawInventoryMcpDetail",
       },
     },
     storage: {

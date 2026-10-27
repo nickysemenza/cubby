@@ -7,8 +7,12 @@ import type {
 } from "../start-operations/collect.ts";
 import { collectNativeContract } from "./native-contract.ts";
 import { renderSwiftModels } from "./swift-models.ts";
+import { registerDiscriminatedMembers } from "./schema-names.ts";
 
-const render = (output: z.ZodType) => {
+const render = (
+  output: z.ZodType,
+  named: ReadonlyMap<string, z.ZodType> = new Map(),
+) => {
   const contract: LoadedContract[] = [
     {
       exportName: "exampleContract",
@@ -25,10 +29,80 @@ const render = (output: z.ZodType) => {
       },
     },
   ];
-  return renderSwiftModels(collectNativeContract(contract));
+  return renderSwiftModels(collectNativeContract(contract, new Map(), named));
 };
 
 describe("native model generation guards", () => {
+  it("keeps alias-hidden recursive parents indirect while leaving child arrays unwrapped", () => {
+    const source = renderSwiftModels({
+      operations: [],
+      records: ["output/Root"],
+      models: {
+        "output/Root": {
+          type: "object",
+          properties: { node: { $ref: "native://output/Node" } },
+          required: ["node"],
+        },
+        "output/Node": {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            parent: { $ref: "native://output/Alias" },
+            children: {
+              type: "array",
+              items: { $ref: "native://output/Node" },
+            },
+          },
+          required: ["name", "children"],
+        },
+        "output/Alias": { $ref: "native://output/Node" },
+      },
+    })
+      .artifacts.map((artifact) => artifact.source)
+      .join("\n");
+    expect(source).toContain("@NativeIndirect public var `parent`: Alias?");
+    expect(source).toContain("public var `children`: [Node]");
+    expect(source).not.toContain("@NativeIndirect public var `children`");
+    expect(source).toContain("self.`_parent` = .init(wrappedValue:");
+  });
+  it("keeps nested value-union members distinct from their anonymous object container", () => {
+    const assignment = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("inherit") }),
+      z.object({
+        kind: z.literal("value"),
+        value: z.number(),
+        ownership: z.object({ kind: z.literal("record") }),
+      }),
+    ]);
+    const outcome = z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("empty") }),
+      z.object({
+        kind: z.literal("value"),
+        value: z.object({
+          id: z.string(),
+          fields: z.object({
+            price: z.object({ current: z.object({ assignment }) }),
+          }),
+        }),
+      }),
+    ]);
+    const output = z
+      .object({ result: z.object({ outcome }) })
+      .meta({ id: "SyntheticNestedEnvelope" });
+    const named = new Map<string, z.ZodType>([
+      ["SyntheticNestedEnvelope", output],
+    ]);
+    registerDiscriminatedMembers(named);
+    const source = render(output, named)
+      .artifacts.map((artifact) => artifact.source)
+      .join("\n");
+    expect(source).toContain("public var `id`: String");
+    expect(source).toContain("public var `value`: Double");
+    expect(source).not.toContain("public var `fields`: JSONValue");
+    expect([...named.keys()]).toContain(
+      "SyntheticNestedEnvelopeResultOutcomeValueValueFieldsPriceCurrentAssignmentValue",
+    );
+  });
   it("rejects enum values whose Swift case names would collide", () => {
     expect(() => render(z.enum(["future-state", "future_state"]))).toThrow(
       /enum case collision/u,

@@ -47,6 +47,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
   const files = (await readdir(SPEC_DIRECTORY))
     .filter((name) => name.endsWith(".entity.ts"))
     .sort((left, right) => left.localeCompare(right));
+  const entityKeys: string[] = [];
   const prefixes: Record<string, string> = {};
   const lengths: Record<string, number> = {};
   for (const name of files) {
@@ -71,6 +72,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
       throw new EntityDeclarationError(
         `${name} must declare key and identifiers literally.`,
       );
+    entityKeys.push(key);
     const shortcode = literal(
       valueOf(identifiers, "shortcode"),
       `${name} identifiers.shortcode`,
@@ -100,6 +102,7 @@ export const renderShortcodeRegistryArtifacts = async (): Promise<
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
       source:
         generatedHeader +
+        renderRecord({ name: "ENTITY_KEYS", entries: entityKeys }) +
         renderRecord({
           name: "SHORTCODE_PREFIX",
           entries: prefixes,

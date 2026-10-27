@@ -25,18 +25,20 @@ export const purchaseDocumentKindValues = [
 ] as const;
 export const purchaseDocumentKind = z.enum(purchaseDocumentKindValues);
 export const purchaseImages = z.array(
-  z.object({
-    id: imageShortcode,
-    url: z.url(),
-    filename: z.string(),
-    contentType: z.string(),
-    /**
-     * The R2 object key. Nothing RENDERS it — it's here because it's part of an
-     * image's identity, and because `PendingDocument` (the upload widget's row
-     * type) requires it, which is what lets the document list offer a detach
-     * affordance without a per-document round-trip back to `image.getByID`.
-     */
-    key: z.string(),
-    documentKind: purchaseDocumentKind,
-  }),
+  z
+    .object({
+      id: imageShortcode,
+      url: z.url(),
+      filename: z.string(),
+      contentType: z.string(),
+      /**
+       * The R2 object key. Nothing RENDERS it — it's here because it's part of an
+       * image's identity, and because `PendingDocument` (the upload widget's row
+       * type) requires it, which is what lets the document list offer a detach
+       * affordance without a per-document round-trip back to `image.getByID`.
+       */
+      key: z.string(),
+      documentKind: purchaseDocumentKind,
+    })
+    .meta({ "x-cubby-live-entity": "image" }),
 );

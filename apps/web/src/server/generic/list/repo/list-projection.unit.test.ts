@@ -1,9 +1,12 @@
-import { productListItemOut } from "@cubby/schemas/product";
+import { rawProductList } from "@cubby/schemas/product-raw-read";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { selectListReadRows } from "~/entity/model/list-read-schema";
 import { db } from "~/server/db";
+import {
+  selectListReadRows,
+  validateListReadRows,
+} from "~/server/generic/list/repo/list-read-schema";
 
 import {
   loadListGroup,
@@ -158,10 +161,7 @@ describe("list projection group execution", () => {
     ).rejects.toThrow("Invalid");
     const missing = listReadPlan<Row>("product", {
       bindings: (bind) => [
-        bind(
-          productListItemOut.pick({ unitPrice: true }).partial(),
-          () => ({}),
-        ),
+        bind(rawProductList.pick({ unitPrice: true }).partial(), () => ({})),
       ],
     });
     await expect(
@@ -183,10 +183,10 @@ describe("list projection group execution", () => {
     expect(() =>
       listReadPlan<Row>("product", {
         bindings: (bind) => [
-          bind(productListItemOut.pick({ unitPrice: true }), () => ({
+          bind(rawProductList.pick({ unitPrice: true }), () => ({
             unitPrice: null,
           })),
-          bind(productListItemOut.pick({ unitPrice: true }), () => ({
+          bind(rawProductList.pick({ unitPrice: true }), () => ({
             unitPrice: null,
           })),
         ],
@@ -221,6 +221,13 @@ describe("list projection group execution", () => {
         projection.fields,
       ),
     ).toEqual([{ id: "PRD-4K7M", unitPrice: null }]);
+    const loaded = { id: "PRD-4K7M", unitPrice: null, unitMappings: [] };
+    expect(
+      validateListReadRows("product", [loaded], projection.fields),
+    ).toEqual([loaded]);
+    expect(selectListReadRows("product", [loaded], projection.fields)).toEqual([
+      { id: "PRD-4K7M", unitPrice: null },
+    ]);
     expect(() => selectedListProjection("product", ["unknownField"])).toThrow(
       "Unknown list field",
     );

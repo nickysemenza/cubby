@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { MealRecipeId, MealShortcode } from "@cubby/schemas/identifiers";
 import type {
   MealNutritionFood,
@@ -174,8 +175,10 @@ function NutritionPeople({
                                 className="hover:underline"
                               >
                                 {food.meal.name ??
-                                  (food.meal.mealType
-                                    ? MEAL_TYPE_LABELS[food.meal.mealType]
+                                  (fieldValueOf(food.meal.fields.mealType)
+                                    ? MEAL_TYPE_LABELS[
+                                        fieldValueOf(food.meal.fields.mealType)!
+                                      ]
                                     : "Meal")}
                               </Link>
                             </h4>

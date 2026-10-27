@@ -6,7 +6,6 @@ import { suggestionStatus } from "@cubby/schemas/ai";
  * dates, lexical search, the generated sort roster and paging.
  */
 import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
-import type { DerivedSidecar } from "@cubby/schemas/derived-value";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -93,6 +92,7 @@ import {
 } from "~/server/db/helpers";
 import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
+import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   dataQualityFilterPredicates,
@@ -101,14 +101,15 @@ import {
 import {
   loadPageStoredMeta,
   type PageStoredMeta,
-} from "~/server/generic/derived/repo/sidecar";
+} from "~/server/generic/derived/repo/read";
+import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
   type HierarchyEntity,
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { withPageDerived } from "~/server/generic/list/repo/page-derived";
+import { withPageFields } from "~/server/generic/list/repo/page-fields";
 import { listTermExpanders } from "~/server/generic/list/repo/terms";
 import {
   lexicalEligibility,
@@ -2210,7 +2211,7 @@ export function listScaffold<
       spec: ListSpec<Row, Out>,
     ): Promise<{
       data: Out[];
-      derived?: Record<string, DerivedSidecar>;
+      fieldReads?: PageFieldReadContexts;
       count: number;
       groups?: ListGroupSummary[];
       memberships?: ListGroupMembership[];
@@ -2326,6 +2327,9 @@ export function listScaffold<
           }));
       let prefetched: ListPagePrefetch | undefined;
       let storedMeta: Promise<PageStoredMeta> | undefined;
+      let currentOwnership:
+        | ReturnType<typeof loadCurrentFieldOwnership>
+        | undefined;
       // The id/count projection binds no fields, so it carries no envelope.
       const withEnvelope = Boolean(spec.derived) && projection.kind !== "base";
       const readLoadedPageWithCount =
@@ -2359,6 +2363,10 @@ export function listScaffold<
                   : undefined;
                 // Awaited after hydration; this only keeps an early failure handled.
                 storedMeta?.catch(() => undefined);
+                currentOwnership = withEnvelope
+                  ? loadCurrentFieldOwnership(db, entity, pageIds)
+                  : undefined;
+                currentOwnership?.catch(() => undefined);
                 const data = await loadIds(pageIds, projection);
                 span.setAttributes({
                   "db.result_count": data.length,
@@ -2449,8 +2457,15 @@ export function listScaffold<
             const hydrate = () =>
               spec.hydrate(data, projection, context, prefetched);
             const complete = withEnvelope
-              ? await withPageDerived(db, entity, data, hydrate, storedMeta)
-              : { data: await hydrate(), derived: undefined };
+              ? await withPageFields(
+                  db,
+                  entity,
+                  data,
+                  hydrate,
+                  storedMeta,
+                  currentOwnership,
+                )
+              : { data: await hydrate(), fieldReads: undefined };
             const hydrated = complete.data;
             if (!parent) return { ...complete, count, ...grouped };
             const codeOf = (row: Out) => {
@@ -2472,7 +2487,7 @@ export function listScaffold<
                     childCount: counts.get(codeOf(row)) ?? 0,
                   }) as Out,
               ),
-              derived: complete.derived,
+              fieldReads: complete.fieldReads,
               count,
               ...grouped,
             };

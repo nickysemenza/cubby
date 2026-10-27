@@ -1,5 +1,6 @@
 import { galleryEntities } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
@@ -173,6 +174,26 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     }
     expect(hits).toEqual([]);
   });
+
+  it("validates the aggregate entity_read schema without an oversized AJV stack frame", () => {
+    const tool = tools.find((candidate) => candidate.name === "entity_read");
+    if (!tool) throw new Error("Missing entity_read tool");
+    const schema = advertisedJsonSchema(tool.name, tool.output, "output");
+    const validate = new AjvJsonSchemaValidator().getValidator(schema);
+    expect(
+      validate({
+        action: "list",
+        entity: "location",
+        items: [
+          { id: testShortcode("location", "ABC1"), name: "Synthetic cupboard" },
+        ],
+      }).valid,
+    ).toBe(true);
+    expect(
+      validate({ action: "list", entity: "location", items: [{ id: 123 }] })
+        .valid,
+    ).toBe(false);
+  }, 30_000);
 
   it("publishes a tuple as one items schema with Zod's own length bounds", () => {
     const schema = safeToJsonSchema(

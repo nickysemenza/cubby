@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -6,6 +7,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -41,6 +43,7 @@ describe("kernel read-only boundaries", () => {
   it("lists and reads a cookbook through the kernel", async () => {
     const id = await seedCookbook("Synthetic Loaves");
     await seedCookbook("Another Synthetic Book");
+    await drainStoredDerived(ctx.db);
 
     const list = await executeEntity(context(), {
       action: "list",
@@ -66,8 +69,9 @@ describe("kernel read-only boundaries", () => {
       id,
       name: "Synthetic Loaves",
       author: ["Synthetic Author"],
-      recipeCount: 0,
     });
+    if (!detail.item) throw new Error("expected cookbook");
+    expect(fieldValueOf(detail.item.fields.recipeCount)).toBe(0);
   });
 
   it("refuses cookbook create and every write to a read-only entity", async () => {

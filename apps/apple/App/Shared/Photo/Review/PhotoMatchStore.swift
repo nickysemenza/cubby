@@ -355,7 +355,7 @@ final class PhotoMatchStore {
                 revision += 1
                 if allowsRepair, !observers.isEmpty {
                     let repairs = document.repair.compactMap { row in
-                        URL(string: row.url).map { (row.id, $0) }
+                        URL(string: row.originalUrl).map { (row.id, $0) }
                     }
                     repairTask = Task {
                         await self.repair(repairs, client: client, token: token)

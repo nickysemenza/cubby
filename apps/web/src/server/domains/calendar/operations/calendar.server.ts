@@ -4,6 +4,7 @@ import {
   getCalendarSchedule,
 } from "~/server/domains/calendar/repo/calendar";
 import { calendarFeedStateFor } from "~/server/domains/calendar/repo/client";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 function calendarOrigin(headers: Headers): string {
@@ -23,7 +24,24 @@ const calendarClient = (context: { headers: Headers }) =>
 
 export const calendarHandlers = implementOperationDomain(calendarContract, {
   range: (context, input) => getCalendarRange(context.db, input),
-  schedule: (context, input) => getCalendarSchedule(context.db, input),
+  schedule: async (context, input) => {
+    const result = await getCalendarSchedule(context.db, input);
+    const [tasks, plantings] = await Promise.all([
+      readPublicEntityRows({
+        db: context.db,
+        entity: "task",
+        projection: "detail",
+        rows: result.tasks,
+      }),
+      readPublicEntityRows({
+        db: context.db,
+        entity: "planting",
+        projection: "detail",
+        rows: result.plantings,
+      }),
+    ]);
+    return { tasks, plantings };
+  },
   getFeed: async (context) => ({
     token: await (await calendarClient(context)).getToken(),
   }),

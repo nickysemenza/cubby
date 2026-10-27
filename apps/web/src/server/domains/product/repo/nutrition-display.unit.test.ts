@@ -1,6 +1,7 @@
 import { productWithFoodMcpEntityOut } from "@cubby/schemas/product";
 import type { NutrientSummary } from "@cubby/usda";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { buildNutritionDisplay } from "./nutrition-display";
 
@@ -101,8 +102,12 @@ describe("product nutrition display", () => {
   });
 
   it("the MCP product projection carries no full nutrient table", () => {
-    const nutritionInfo =
-      productWithFoodMcpEntityOut.shape.food.unwrap().shape.nutritionInfo.shape;
-    expect(nutritionInfo).not.toHaveProperty("nutrientSummary");
+    const schema = JSON.stringify(
+      z.toJSONSchema(productWithFoodMcpEntityOut.shape.fields.shape.food, {
+        unrepresentable: "any",
+      }),
+    );
+    expect(schema).not.toContain('"nutrientSummary"');
+    expect(schema).toContain('"nutrientsPer100"');
   });
 });

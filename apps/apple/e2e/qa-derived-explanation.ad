@@ -21,6 +21,6 @@ wait "role=Button label=Explain" 30000
 wait "role=Button label=\"Use inherited\"" 30000
 click "role=Button label=Explain"
 wait "id=field.explanation.derived" 30000
-wait text "Published" 30000
+wait "id=field.explanation.effective-value" 30000
 click "role=Button label=\"Close field explanation\""
 wait "role=Button id=detail.product.edit" 30000

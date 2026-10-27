@@ -1,4 +1,3 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import {
   financialTransactionShortcode,
   shortcode,
@@ -17,6 +16,7 @@ import {
 import { useMemo, useState } from "react";
 import { z } from "zod";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { financialTransaction as financeOperations } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
 import { formatCurrency } from "~/lib/number-format";
@@ -298,3 +298,5 @@ export function MatchStatementButton({
     </>
   );
 }
+
+type FinancialTransactionOut = DetailRecordOf<"financialTransaction">;

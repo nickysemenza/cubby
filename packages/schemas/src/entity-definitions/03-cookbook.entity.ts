@@ -364,9 +364,18 @@ export default defineEntity(
         module: "@cubby/schemas/recipe",
         export: "cookbookUpdateInput",
       },
-      output: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
-      list: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
-      detail: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
+      output: {
+        module: "@cubby/schemas/cookbook-raw-read",
+        export: "rawCookbookOutput",
+      },
+      list: {
+        module: "@cubby/schemas/cookbook-raw-read",
+        export: "rawCookbookList",
+      },
+      detail: {
+        module: "@cubby/schemas/cookbook-raw-read",
+        export: "rawCookbookDetail",
+      },
     },
     // The book a set of EPUB-extracted recipes came from. Holds the full
     // assembled `ImportRecipe[]` JSON so recipes can be re-derived without

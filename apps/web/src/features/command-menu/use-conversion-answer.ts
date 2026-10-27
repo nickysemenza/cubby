@@ -65,7 +65,13 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
           import("~/lib/wasm"),
         ]);
         if (signal.aborted) return null;
-        const mappings = getIngredientMappings(ingredient);
+        const mappings = getIngredientMappings({
+          product: ingredient.product.map((product) => ({
+            ...product,
+            food: fieldValueOf(product.fields.food) ?? null,
+            price: fieldValueOf(product.fields.price) ?? null,
+          })),
+        });
         if (mappings.length === 0) return null;
 
         const amount = { value: parsed.value, unit: parsed.unit };
@@ -114,3 +120,4 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
 
   return conversion ?? null;
 }
+import { fieldValueOf } from "@cubby/schemas/field-envelope";

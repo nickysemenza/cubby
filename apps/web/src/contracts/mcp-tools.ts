@@ -1,19 +1,19 @@
-import { inventoryMcpBulkMoveOut } from "@cubby/schemas/inventory";
 import {
   mcpUsdaFoodListItemOut,
   recipeAvailabilityMcpOut,
   usdaFoodMcpListOut,
   usdaFoodMcpOut,
 } from "@cubby/schemas/mcp";
-import { mealMcpOut } from "@cubby/schemas/meal";
 import {
   productLookupUpcOut,
-  productMcpDetailOut,
-  productMcpOut,
+  productFindOrCreateByUPCOut,
+  productTopLevelMcpEntityOut,
+  productWithFoodMcpEntityOut,
 } from "@cubby/schemas/product";
 import {
   recipesUsingIngredientOut,
   recipeTagsOut,
+  recipeRefOut,
 } from "@cubby/schemas/recipe";
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
@@ -24,7 +24,6 @@ import { expenseContract } from "~/contracts/expense.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
 import { ingredientContract } from "~/contracts/ingredient.contract";
-import { inventoryContract } from "~/contracts/inventory.contract";
 import {
   defineMcpTools,
   kernelAction,
@@ -34,16 +33,9 @@ import {
 } from "~/contracts/mcp-define";
 import {
   mcpItemsEnvelope,
-  respondList,
-  slimInventory,
-  slimMeal,
-  slimProduct,
-  slimProductDetail,
-  slimRecipe,
   slimUsdaFood,
   slimUsdaFoodListItem,
 } from "~/contracts/mcp-projections";
-import { mealContract } from "~/contracts/meal.contract";
 import { productContract } from "~/contracts/product.contract";
 import {
   recipeContract,
@@ -216,7 +208,7 @@ export const MCP_ACTION_OVERRIDES = {
             usage,
           ]);
         const recipes = [...byRecipe.values()].map((rows) => ({
-          ...slimRecipe(rows[0]!.recipe),
+          ...recipeRefOut.parse(rows[0]!.recipe),
           usages: rows.map((usage) => ({
             lineId: usage.id,
             sectionName: usage.sectionName ?? null,
@@ -230,42 +222,15 @@ export const MCP_ACTION_OVERRIDES = {
       output: recipesUsingIngredientOut,
     },
   ),
-  "inventory.moveEntries": mcpActionOverride(
-    inventoryContract.ops.moveEntries,
-    {
-      project: (output) => respondList(output.items, slimInventory),
-      output: inventoryMcpBulkMoveOut,
-    },
-  ),
-  "inventory.reconcileSession": mcpActionOverride(
-    inventoryContract.ops.reconcileSession,
-    {
-      project: (output) => respondList(output.items, slimInventory),
-      output: inventoryMcpBulkMoveOut,
-    },
-  ),
-  "meal.removeRecipe": mcpActionOverride(mealContract.ops.removeRecipe, {
-    project: slimMeal,
-    output: mealMcpOut,
-  }),
-  "meal.updateRecipe": mcpActionOverride(mealContract.ops.updateRecipe, {
-    project: slimMeal,
-    output: mealMcpOut,
-  }),
   "product.findOrCreateByUPC": mcpActionOverride(
     productContract.ops.findOrCreateByUPC,
     {
       project: (output) => ({
-        ...slimProduct(output.product),
-        warnings: output.sideEffects.warnings,
+        ...output,
+        product: productTopLevelMcpEntityOut.parse(output.product),
       }),
-      output: productMcpOut.extend({
-        warnings: z
-          .array(z.string())
-          .optional()
-          .describe(
-            "Best-effort follow-ups that failed after the product was saved, e.g. the cover-photo import.",
-          ),
+      output: productFindOrCreateByUPCOut.extend({
+        product: productTopLevelMcpEntityOut,
       }),
     },
   ),
@@ -273,16 +238,16 @@ export const MCP_ACTION_OVERRIDES = {
     project: (output) => ({
       ...output,
       localProduct: output.localProduct
-        ? slimProduct(output.localProduct)
+        ? productTopLevelMcpEntityOut.parse(output.localProduct)
         : null,
     }),
     output: productLookupUpcOut.extend({
-      localProduct: productMcpOut.nullable(),
+      localProduct: productTopLevelMcpEntityOut.nullable(),
     }),
   }),
   "product.verifyImages": mcpActionOverride(productContract.ops.verifyImages, {
-    project: slimProductDetail,
-    output: productMcpDetailOut,
+    project: (output) => productWithFoodMcpEntityOut.parse(output),
+    output: productWithFoodMcpEntityOut,
     batch: {
       maxItems: 20,
       resultDetail: "full",

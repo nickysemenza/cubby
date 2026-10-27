@@ -1,4 +1,5 @@
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { Link } from "@tanstack/react-router";
@@ -104,10 +105,15 @@ export const inventoryListOverride = defineListOverride<
   use() {
     const { categories } = useProductCategories();
     const filterOptions = useFilterOptions({
-      productCategories: categories.map((category) => ({
-        value: category.id,
-        label: category.path.map((node) => node.name).join(" / "),
-      })),
+      productCategories: categories.map((category) => {
+        const effectiveCategoryPath = fieldValueOf(category.fields.path);
+        return {
+          value: category.id,
+          label: (effectiveCategoryPath ?? [])
+            .map((node) => node.name)
+            .join(" / "),
+        };
+      }),
     });
     const updateMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("inventory", "update"),
@@ -125,27 +131,34 @@ export const inventoryListOverride = defineListOverride<
       () =>
         createCubbyColumnCollection<InventoryListItem>((add) => {
           add(
-            createEditableAmountColumn(columnHelper, "amount", {
-              header: "Qty",
-              className: "w-36",
-              mobile: { slot: "trailing", priority: 10 },
-              onSave: async (newAmount, row) => {
-                await updateMutation.mutateAsync({
-                  id: row.id,
-                  data: { amount: newAmount },
-                });
+            createEditableAmountColumn(
+              columnHelper,
+              (row) => fieldValueOf(row.fields.amount),
+              {
+                id: "amount",
+                isEditable: (row) =>
+                  row.fields.amount.current.controls.kind === "editable",
+                header: "Qty",
+                className: "w-36",
+                mobile: { slot: "trailing", priority: 10 },
+                onSave: async (newAmount, row) => {
+                  await updateMutation.mutateAsync({
+                    id: row.id,
+                    data: { amount: newAmount },
+                  });
+                },
+                // The click-through to the entry's detail page survives the
+                // editable (same link-in-display pattern as the name column).
+                renderDisplay: (content, row) => (
+                  <Link
+                    to={entities.inventory.routes.detail}
+                    params={entityDetailParams(row.id)}
+                  >
+                    {content}
+                  </Link>
+                ),
               },
-              // The click-through to the entry's detail page survives the
-              // editable (same link-in-display pattern as the name column).
-              renderDisplay: (content, row) => (
-                <Link
-                  to={entities.inventory.routes.detail}
-                  params={entityDetailParams(row.id)}
-                >
-                  {content}
-                </Link>
-              ),
-            }),
+            ),
           );
         }),
       // oxlint-disable-next-line react/exhaustive-deps -- updateMutation changes every render but is functionally stable
@@ -175,12 +188,13 @@ export const inventoryListOverride = defineListOverride<
               },
               cell: (info) => {
                 const product = info.getValue();
+                const gtin = fieldValueOf(product.fields.primaryGtin);
                 return (
                   <Stack gap="xs" className="min-w-0 flex-1">
                     <InventoryProductLink product={product} />
-                    {product.primaryGtin && (
+                    {gtin && (
                       <div className="text-xs text-muted-foreground">
-                        <ProductGtin gtin={product.primaryGtin} />
+                        <ProductGtin gtin={gtin} />
                       </div>
                     )}
                   </Stack>
@@ -217,19 +231,25 @@ export const inventoryListOverride = defineListOverride<
             ),
           );
           add(
-            columnHelper.accessor((row) => row.product.brandName, {
-              id: "brandName",
-              header: "Manufacturer",
-              enableSorting: false,
-              meta: {
-                columnGroup: "Catalog",
-                provenance: relationshipFieldProvenance("inventory", "product"),
-                className: "min-w-0 w-40 truncate",
-                mobile: { slot: "meta", priority: 70 },
-                filterConfig: { placeholder: "Filter by brandName..." },
+            columnHelper.accessor(
+              (row) => fieldValueOf(row.product.fields.brandName),
+              {
+                id: "brandName",
+                header: "Manufacturer",
+                enableSorting: false,
+                meta: {
+                  columnGroup: "Catalog",
+                  provenance: relationshipFieldProvenance(
+                    "inventory",
+                    "product",
+                  ),
+                  className: "min-w-0 w-40 truncate",
+                  mobile: { slot: "meta", priority: 70 },
+                  filterConfig: { placeholder: "Filter by brandName..." },
+                },
+                cell: (info) => info.getValue() || <NoneValue />,
               },
-              cell: (info) => info.getValue() || <NoneValue />,
-            }),
+            ),
           );
           add(
             columnHelper.accessor((row) => row.product.category, {

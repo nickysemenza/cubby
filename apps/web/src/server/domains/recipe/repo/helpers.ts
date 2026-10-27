@@ -1,15 +1,15 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { totalsPreview } from "@cubby/schemas/nutrition";
 import type {
-  RecipeGraphOut,
-  RecipeListItem,
-  RecipeOut,
-  RecipeSectionOut,
-  RecipeTopLevel,
-  SectionIngredient,
-} from "@cubby/schemas/recipe";
+  RawRecipeGraph as RecipeGraphOut,
+  RawRecipeList as RecipeListItem,
+  RawRecipeOutput as RecipeOut,
+  RawRecipeSection as RecipeSectionOut,
+  RawRecipeTopLevel as RecipeTopLevel,
+  RawSectionIngredient as SectionIngredient,
+} from "@cubby/schemas/recipe-raw-read";
 
 import { totalsForRead } from "~/lib/nutrition-estimates";
 import {
@@ -42,8 +42,9 @@ type RecipeImageRow = {
   deletedAt?: Date | null;
 };
 
-const mapRecipeImages = (images: RecipeImageRow[] | undefined): ImageOut[] =>
-  mapImages(images);
+const mapRecipeImages = (
+  images: RecipeImageRow[] | undefined,
+): RawImageOutput[] => mapImages(images);
 
 // Uses cookbookId, not SourceType; ingredientRef must be a trusted SQL expression.
 export const ownRecipeCountForIngredientSql = (ingredientRef: string): string =>
@@ -109,7 +110,10 @@ export const computeRecipeUsages = (
 
   const recipeUsages = mapRelation(liveRecipeUsages, (usage) => ({
     id: usage.id,
-    recipe: dbRecipeToTopLevel(usage.recipeSection.recipe),
+    recipe: {
+      id: parseShortcodeFor("recipe", usage.recipeSection.recipe.shortcode),
+      name: usage.recipeSection.recipe.name,
+    },
     sectionName: usage.recipeSection.name,
     amounts: usage.amounts,
     rawLine: usage.rawLine,

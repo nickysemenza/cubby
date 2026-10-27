@@ -1,5 +1,4 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import {
@@ -9,6 +8,7 @@ import {
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import type { FoodSummary } from "@cubby/usda";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { isDisplayMapping } from "~/features/units/unit-mapping-graph";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
@@ -78,7 +78,7 @@ interface PreviewConvRow {
  * the preview is identical on both.
  */
 export const buildPreviewMappings = (
-  row: EnrichmentRow,
+  row: IngredientEnrichmentRead,
   {
     food,
     dollars,
@@ -95,7 +95,13 @@ export const buildPreviewMappings = (
 ): UnitMapping[] => {
   const base: UnitMapping[] = (() => {
     try {
-      return getIngredientMappings(row);
+      return getIngredientMappings({
+        product: row.product.map((product) => ({
+          ...product,
+          food: fieldValueOf(product.fields.food) ?? null,
+          price: fieldValueOf(product.fields.price) ?? null,
+        })),
+      });
     } catch {
       return [];
     }
@@ -158,12 +164,12 @@ export const blankConvRow = (
 });
 
 /** Whether any of the row's products already resolves to a USDA food, or carries a label nutrition override (which supersedes USDA outright). */
-export const hasUsdaLink = (row: EnrichmentRow): boolean =>
+export const hasUsdaLink = (row: IngredientEnrichmentRead): boolean =>
   row.product.some(
     (p) =>
-      p.food != null ||
+      fieldValueOf(p.fields.food) != null ||
       p.fdc_id != null ||
-      p.primaryGtin != null ||
+      fieldValueOf(p.fields.primaryGtin) != null ||
       p.labelNutrition != null,
   );
 
@@ -173,7 +179,8 @@ export const hasUsdaLink = (row: EnrichmentRow): boolean =>
  * from the enrichment worklist. Computed server-side now (the workbench row no
  * longer ships `appearsInRecipes`); see `cookbookOnlyForIngredientSql`.
  */
-export const isCookbookOnly = (row: EnrichmentRow): boolean => row.cookbookOnly;
+export const isCookbookOnly = (row: IngredientEnrichmentRead): boolean =>
+  row.cookbookOnly;
 
 /** The gap-aware analysis that drives which editor inputs a row needs. */
 interface GapAnalysis {
@@ -202,10 +209,16 @@ interface GapAnalysis {
  * conversions for measure/calorie gaps). Single source of truth for both the
  * Browse editor and the review card.
  */
-export const analyzeGaps = (row: EnrichmentRow): GapAnalysis => {
+export const analyzeGaps = (row: IngredientEnrichmentRead): GapAnalysis => {
   const currentMappings = (() => {
     try {
-      return getIngredientMappings(row).filter(isDisplayMapping);
+      return getIngredientMappings({
+        product: row.product.map((product) => ({
+          ...product,
+          food: fieldValueOf(product.fields.food) ?? null,
+          price: fieldValueOf(product.fields.price) ?? null,
+        })),
+      }).filter(isDisplayMapping);
     } catch {
       return [];
     }
@@ -230,7 +243,7 @@ export const analyzeGaps = (row: EnrichmentRow): GapAnalysis => {
       : priceEdge.a.unit
     : null;
   const linkedFoods = row.product
-    .map((p) => p.food)
+    .map((p) => fieldValueOf(p.fields.food))
     .filter((f): f is NonNullable<typeof f> => f != null);
   const missingKinds = [
     applicable.has("weight") && !covered.has("weight") && "weight",
@@ -298,17 +311,17 @@ export const buildPriceAndMappings = ({
  * Whether a price exists on the product (scalar or a money mapping) — used to
  * tell "no price yet" apart from "priced but unreachable" (islanded).
  */
-export const hasPriceEntry = (row: EnrichmentRow): boolean =>
+export const hasPriceEntry = (row: IngredientEnrichmentRead): boolean =>
   row.product.some(
     (p) =>
-      p.pricing.effectivePrice != null ||
+      fieldValueOf(p.fields.price) != null ||
       p.unitMappings.some(
         (m) => isMoneyUnit(m.a.unit) || isMoneyUnit(m.b.unit),
       ),
   );
 
 /** The default price unit for a row: count items price per `each`, the rest per `lb`. */
-export const defaultPriceUnit = (row: EnrichmentRow): string =>
+export const defaultPriceUnit = (row: IngredientEnrichmentRead): string =>
   row.priceMode === "per-each" ? "each" : "lb";
 
 /**
@@ -332,7 +345,7 @@ type ProductWrite =
 type ProductUpdateData = Extract<ProductWrite, { kind: "update" }>["data"];
 
 export const buildProductWrite = (
-  row: EnrichmentRow,
+  row: IngredientEnrichmentRead,
   {
     food,
     eachPrice,
@@ -426,3 +439,4 @@ export function UnitInput({
     </div>
   );
 }
+import { fieldValueOf } from "@cubby/schemas/field-envelope";

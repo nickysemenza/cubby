@@ -1,6 +1,7 @@
-import type { PurchaseFilters, PurchaseOut } from "@cubby/schemas/purchase";
+import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import { useMemo } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 
@@ -37,3 +38,5 @@ export const purchaseListOverride = defineListOverride<
     return { list };
   },
 });
+
+type PurchaseOut = DetailRecordOf<"purchase">;

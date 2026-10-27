@@ -1,8 +1,4 @@
 import type { ShortcodeEntity } from "./entity-manifest";
-import {
-  withEntityDetailMedia,
-  withEntityListMedia,
-} from "./entity-read-media";
 import { shortcodeSchema } from "./identifier-fields";
 import type { z } from "zod";
 
@@ -18,6 +14,14 @@ export const entitySchema = <
   SMcpOutput extends z.ZodType,
   SMcpDetail extends z.ZodType,
   SMcpList extends z.ZodType,
+  Public extends Readonly<{
+    output: z.ZodType;
+    detail: z.ZodType;
+    list: z.ZodType;
+    mcpOutput: z.ZodType;
+    mcpDetail: z.ZodType;
+    mcpList: z.ZodType;
+  }>,
 >(
   entity: E,
   schemas: {
@@ -32,14 +36,13 @@ export const entitySchema = <
     mcpDetail: SMcpDetail;
     mcpList: SMcpList;
   },
+  publicReads: Public,
 ) => ({
   entity,
   id: shortcodeSchema(entity),
   ...schemas,
+  ...publicReads,
+  repositoryOutput: schemas.output,
   repositoryDetail: schemas.detail,
   repositoryList: schemas.list,
-  detail: withEntityDetailMedia(schemas.detail),
-  list: withEntityListMedia(schemas.list),
-  mcpDetail: withEntityDetailMedia(schemas.mcpDetail),
-  mcpList: withEntityListMedia(schemas.mcpList),
 });

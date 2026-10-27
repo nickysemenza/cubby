@@ -1,8 +1,5 @@
-import type {
-  ProjectDashboardSummaryOut,
-  ProjectOut,
-  TaskOut,
-} from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import { capitalize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -23,6 +20,7 @@ import {
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { RecordMark } from "~/entity/components/record-mark";
 import { entities, entityDetailParams } from "~/entity/entities";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
@@ -410,11 +408,17 @@ function OverviewView({
 function NextWork({ tasks }: { tasks: TaskOut[] }) {
   const projectRefs = useMemo(
     () =>
-      tasks.flatMap((task) =>
-        task.projectId
-          ? [{ entityKind: "project" as const, entityId: task.projectId }]
-          : [],
-      ),
+      tasks.flatMap((task) => {
+        const effectiveTaskProjectId = fieldValueOf(task.fields.projectId);
+        return effectiveTaskProjectId
+          ? [
+              {
+                entityKind: "project" as const,
+                entityId: effectiveTaskProjectId,
+              },
+            ]
+          : [];
+      }),
     [tasks],
   );
   const projectImages = useEntityDisplayImages(projectRefs);
@@ -427,42 +431,48 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
       caption="Upcoming actionable tasks across your projects"
     >
       <Stack gap="xs">
-        {tasks.map((task) => (
-          <Row key={task.id} align="center" gap="sm" className="text-sm">
-            <StatusIcon status={task.status} />
-            <Link
-              to={entities.task.routes.detail}
-              params={entityDetailParams(task.id)}
-              className="truncate hover:underline"
-            >
-              {task.name}
-            </Link>
-            {task.projectName && task.projectId && (
-              <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
-                <EntityRefLink
-                  displayImage={
-                    projectImages[
-                      entityDisplayImageKey({
-                        entityKind: "project",
-                        entityId: task.projectId,
-                      })
-                    ] ?? null
-                  }
-                  entity="project"
-                  data={{ id: task.projectId, name: task.projectName }}
-                />
-              </span>
-            )}
-            {(task.due?.start ?? null) && (
-              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                <DateDisplay
-                  start={task.due?.start ?? null}
-                  end={task.due?.end ?? null}
-                />
-              </span>
-            )}
-          </Row>
-        ))}
+        {tasks.map((task) => {
+          const effectiveTaskProjectId = fieldValueOf(task.fields.projectId);
+          return (
+            <Row key={task.id} align="center" gap="sm" className="text-sm">
+              <StatusIcon status={task.status} />
+              <Link
+                to={entities.task.routes.detail}
+                params={entityDetailParams(task.id)}
+                className="truncate hover:underline"
+              >
+                {task.name}
+              </Link>
+              {task.projectName && effectiveTaskProjectId && (
+                <span className="max-w-40 min-w-0 text-xs text-muted-foreground">
+                  <EntityRefLink
+                    displayImage={
+                      projectImages[
+                        entityDisplayImageKey({
+                          entityKind: "project",
+                          entityId: effectiveTaskProjectId,
+                        })
+                      ] ?? null
+                    }
+                    entity="project"
+                    data={{
+                      id: effectiveTaskProjectId,
+                      name: task.projectName,
+                    }}
+                  />
+                </span>
+              )}
+              {(task.due?.start ?? null) && (
+                <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                  <DateDisplay
+                    start={task.due?.start ?? null}
+                    end={task.due?.end ?? null}
+                  />
+                </span>
+              )}
+            </Row>
+          );
+        })}
       </Stack>
     </Section>
   );
@@ -498,11 +508,12 @@ function ProjectCards({
   return (
     <Grid cols="cards3">
       {projects.map((project) => {
+        const cover = coverImages?.[project.id]?.[0];
         return (
           <ProjectCard
             key={project.id}
             project={project}
-            coverUrl={coverImages?.[project.id]?.[0]?.url}
+            coverUrl={cover ? publicImageUrl(cover) : undefined}
           />
         );
       })}
@@ -531,6 +542,10 @@ export function ProjectCard({
   coverUrl: string | undefined;
   inspection?: ProjectCardInspection;
 }) {
+  const effectiveProjectEmoji = fieldValueOf(project.fields.emoji);
+  const effectiveProjectKind = fieldValueOf(project.fields.kind);
+  const effectiveProjectLocations = fieldValueOf(project.fields.locations);
+
   // subtree degenerates to the project's own numbers for a leaf project (see
   // subtree.ts), so this is safe to use uniformly rather than branching on
   // subtree.projectCount. `actualSpent` (money out, excluding planned +
@@ -578,7 +593,11 @@ export function ProjectCard({
           className="inline-flex max-w-full min-w-0 items-center gap-2"
           onClick={(event) => event.stopPropagation()}
         >
-          <RecordMark entity="project" emoji={project.emoji} size={20} />
+          <RecordMark
+            entity="project"
+            emoji={effectiveProjectEmoji}
+            size={20}
+          />
           <span className="truncate">{project.name}</span>
         </Link>
       }
@@ -625,10 +644,10 @@ export function ProjectCard({
         </div>
       ) : null}
       <Row wrap gap="sm">
-        {project.kind && (
-          <Badge variant="secondary">{capitalize(project.kind)}</Badge>
+        {effectiveProjectKind && (
+          <Badge variant="secondary">{capitalize(effectiveProjectKind)}</Badge>
         )}
-        {project.locations.map((loc) => (
+        {(effectiveProjectLocations ?? []).map((loc) => (
           <Badge
             key={loc}
             variant="outline"
@@ -676,3 +695,10 @@ export function ProjectCard({
 function DashboardSkeleton() {
   return <DashboardSectionLoading label="Loading project work…" sections={4} />;
 }
+
+type ProjectOut = DetailRecordOf<"project">;
+type TaskOut = DetailRecordOf<"task">;
+
+type ProjectDashboardSummaryOut = Awaited<
+  ReturnType<typeof project.dashboardSummary.call>
+>;

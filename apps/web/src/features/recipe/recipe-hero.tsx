@@ -1,5 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { BookBookmarkIcon } from "@phosphor-icons/react/dist/csr/BookBookmark";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
@@ -11,6 +11,7 @@ import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 
 import { EntityFilterLink } from "~/entity/components/entity-ref-link";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { Panel, Row } from "~/ui/layout";
 import { Image } from "~/ui/primitives/image";
@@ -26,41 +27,43 @@ import { recipeTimeEntries } from "../../entity/presentation/recipe-utils";
  * ceiling.
  */
 function RecipeSourceBadges({ recipe }: { recipe: RecipeOut }) {
+  const effectiveRecipeSource = fieldValueOf(recipe.fields.source);
+
   return (
     <>
-      {recipe.source?.type === "book" && (
+      {effectiveRecipeSource?.type === "book" && (
         <Row align="center" gap="tight">
-          <RecipeSourceLink source={recipe.source} iconSize={12} />
+          <RecipeSourceLink source={effectiveRecipeSource} iconSize={12} />
           <EntityFilterLink
             to="/recipes"
             search={
-              recipe.source.cookbookId
-                ? { source: recipe.source.cookbookId }
+              effectiveRecipeSource.cookbookId
+                ? { source: effectiveRecipeSource.cookbookId }
                 : { sourceType: "Book" }
             }
             label={
-              recipe.source.cookbookId
-                ? `Show all recipes from ${recipe.source.book}`
+              effectiveRecipeSource.cookbookId
+                ? `Show all recipes from ${effectiveRecipeSource.book}`
                 : "Show all recipes from books"
             }
           />
         </Row>
       )}
-      {recipe.source?.type === "website" && (
+      {effectiveRecipeSource?.type === "website" && (
         <EntityFilterLink
           to="/recipes"
           search={{ sourceType: "Website" }}
           label="Show all recipes from websites"
         />
       )}
-      {recipe.source?.type === "notion" && (
+      {effectiveRecipeSource?.type === "notion" && (
         <EntityFilterLink
           to="/recipes"
           search={{ sourceType: "Notion" }}
           label="Show all recipes from Notion"
         />
       )}
-      {recipe.source?.type === "other" && (
+      {effectiveRecipeSource?.type === "other" && (
         <EntityFilterLink
           to="/recipes"
           search={{ sourceType: "Other" }}
@@ -89,9 +92,13 @@ interface RecipeHeroProps {
 }
 
 export function RecipeHero({ recipe }: RecipeHeroProps) {
+  const effectiveRecipeDisplayImages = fieldValueOf(
+    recipe.fields.displayImages,
+  );
+
   const heroImage =
     useEntityDisplayImage({ entityKind: "recipe", entityId: recipe.id }) ??
-    recipe.displayImages?.[0];
+    effectiveRecipeDisplayImages?.[0];
   const hasImage = !!heroImage;
 
   // Count total ingredients across all sections
@@ -192,3 +199,5 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     </figure>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

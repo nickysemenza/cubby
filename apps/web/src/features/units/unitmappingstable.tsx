@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -97,7 +98,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
 
   return (
     <EntityRefLink
-      displayImage={product.displayImages[0] ?? null}
+      displayImage={fieldValueOf(product.fields.displayImages)?.[0] ?? null}
       entity="product"
       data={product}
     />

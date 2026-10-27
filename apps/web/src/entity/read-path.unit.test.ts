@@ -18,6 +18,40 @@ describe("readPathValue", () => {
     ]);
   });
 
+  it("reads governed values and explicit empty outcomes through nested projections", () => {
+    const envelope = {
+      current: {
+        assignment: null,
+        controls: { kind: "readonly", reason: "computed" },
+      },
+      work: { kind: "idle" },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: [{ name: "Example" }] },
+          provenance: { kind: "computed" },
+        },
+      },
+    };
+    const record = {
+      fields: {
+        contributors: envelope,
+        empty: {
+          ...envelope,
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "empty", reason: "explicit_none" },
+              provenance: null,
+            },
+          },
+        },
+      },
+    };
+    expect(readPathValue(record, "contributors[].name")).toEqual(["Example"]);
+    expect(readPathValue(record, "empty")).toBeNull();
+  });
+
   it("reads missing links as undefined", () => {
     expect(readPathValue(row, "category.missing.name")).toBeUndefined();
     expect(readPathValue(null, "id")).toBeUndefined();

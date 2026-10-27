@@ -6,9 +6,9 @@ import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   MAX_PROJECT_TREE_DEPTH,
   type ProjectCreateInput,
-  type ProjectOut,
   type ProjectUpdateInput,
 } from "@cubby/schemas/project";
+import type { RawProjectOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -160,7 +160,7 @@ export const getProjectByID = (
   db: Database,
   id: ProjectId,
   tree?: ProjectTree,
-): Promise<ProjectOut> =>
+): Promise<RawProjectOut> =>
   (tree ? createProjectReader(tree) : projectReader).getByID(db, id);
 
 export const getProjectByShortcode = (db: Database, shortcode: string) =>
@@ -276,7 +276,7 @@ async function projectSettingsAfterParentChange(
         await tx.execute<{
           assigneeId: import("@cubby/schemas/identifiers").LedgerPartyId | null;
           locations: string[];
-          trade: ProjectOut["defaultTrade"];
+          trade: RawProjectOut["defaultTrade"];
         }>(sql`
     SELECT ${effectiveFieldSql("project", "assigneeId", { id: sql`${id}::uuid` })} AS "assigneeId",
       ${effectiveFieldSql("project", "locations", { id: sql`${id}::uuid` })} AS locations,

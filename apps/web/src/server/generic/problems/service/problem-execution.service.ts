@@ -1,4 +1,4 @@
-import type { ProblemKey } from "@cubby/schemas/problems";
+import type { ProblemKey } from "@cubby/schemas/problems-raw-read";
 
 import type { ProblemSource } from "~/entity/problems/problem-query";
 import { problemQuery } from "~/entity/problems/problem-registry";

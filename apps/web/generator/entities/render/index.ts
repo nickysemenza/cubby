@@ -1,6 +1,7 @@
 import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import { renderFieldSchemaArtifacts } from "./field-schemas.ts";
+import { renderFieldEnvelopeArtifacts } from "./field-envelopes.ts";
 import { renderEntityMetadataArtifacts } from "./metadata.ts";
 import { renderEntityDatabaseArtifacts } from "./database.ts";
 import { renderEntityReadArtifacts } from "./read-contracts.ts";
@@ -36,6 +37,7 @@ export const renderEntityArtifacts = (
   ...renderEntityMetadataArtifacts(entities),
   ...renderEntityDatabaseArtifacts(entities, moduleChildren),
   ...renderFieldSchemaArtifacts(entities),
+  ...renderFieldEnvelopeArtifacts(entities),
   ...renderEntityReadArtifacts(entities),
   ...renderEntitySchemaArtifacts(entities),
   renderOptionGlyphs(entities),

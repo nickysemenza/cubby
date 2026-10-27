@@ -1,9 +1,11 @@
-import type { ProjectOut } from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
 
 import { ProjectCard } from "./projects-dashboard";
 
@@ -18,44 +20,43 @@ afterEach(() => {
 });
 
 function projectFixture(): ProjectOut {
-  return {
-    assigneeId: null,
-    assigneeName: null,
-    id: testShortcode("project", "card"),
-    name: "Kitchen refresh",
-    status: "planning",
-    kind: null,
-    locations: [],
-    defaultTrade: null,
-    costEstimate: null,
-    parentProjectId: null,
-    dates: null,
-    notes: null,
-    googleDriveFolderUrl: null,
-    notionPageUrl: null,
-    dateWindow: {
-      derivedStart: null,
-      derivedEnd: null,
-      effectiveStart: null,
-      effectiveEnd: null,
-      startSource: "none",
-      endSource: "none",
-    },
-    parentProjectName: null,
-    childProjectIds: [],
-    blockedByIds: [],
-    blockingIds: [],
-    createdAt: new Date("2026-08-27T00:00:00Z"),
-    updatedAt: new Date("2026-08-27T00:00:00Z"),
-    rollup: {
-      spent: 0,
-      actualSpent: 0,
-      committedSpent: 0,
-      credits: 0,
-      expenseCount: 0,
-      taskCount: 0,
-      doneTaskCount: 0,
-      subtree: {
+  return buildFieldEnvelopeRow({
+    schema: entityFieldEnvelopeSchemas.project.detail,
+    entity: "project",
+    row: {
+      attachments: [],
+      displayImages: [],
+      redirectedFrom: null,
+      previousShortcodes: [],
+      assigneeId: null,
+      assigneeName: null,
+      id: testShortcode("project", "card"),
+      name: "Kitchen refresh",
+      status: "planning",
+      kind: null,
+      locations: [],
+      defaultTrade: null,
+      costEstimate: null,
+      parentProjectId: null,
+      dates: null,
+      notes: null,
+      googleDriveFolderUrl: null,
+      notionPageUrl: null,
+      dateWindow: {
+        derivedStart: null,
+        derivedEnd: null,
+        effectiveStart: null,
+        effectiveEnd: null,
+        startSource: "none",
+        endSource: "none",
+      },
+      parentProjectName: null,
+      childProjectIds: [],
+      blockedByIds: [],
+      blockingIds: [],
+      createdAt: new Date("2026-08-27T00:00:00Z"),
+      updatedAt: new Date("2026-08-27T00:00:00Z"),
+      rollup: {
         spent: 0,
         actualSpent: 0,
         committedSpent: 0,
@@ -63,14 +64,23 @@ function projectFixture(): ProjectOut {
         expenseCount: 0,
         taskCount: 0,
         doneTaskCount: 0,
-        projectCount: 0,
-        costEstimate: null,
+        subtree: {
+          spent: 0,
+          actualSpent: 0,
+          committedSpent: 0,
+          credits: 0,
+          expenseCount: 0,
+          taskCount: 0,
+          doneTaskCount: 0,
+          projectCount: 0,
+          costEstimate: null,
+        },
       },
+      spent: 0,
+      taskProgress: "0/0",
+      dataQuality: testCompleteDataQuality(),
     },
-    spent: 0,
-    taskProgress: "0/0",
-    dataQuality: testCompleteDataQuality(),
-  };
+  });
 }
 
 describe("ProjectCard inspection", () => {
@@ -122,3 +132,5 @@ describe("ProjectCard inspection", () => {
     expect(onRowClick).toHaveBeenCalledOnce();
   });
 });
+
+type ProjectOut = DetailRecordOf<"project">;

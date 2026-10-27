@@ -1,4 +1,4 @@
-import type { ProductListItem } from "@cubby/schemas/product";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 
 /** A product row as the `unlocated` view lists it. */
-export type TriageProduct = ProductListItem;
+export type TriageProduct = ListRowOf<"product">;

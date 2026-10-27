@@ -61,7 +61,7 @@
   "apps/web/src/server/domains/product/repo/gtin.ts": 3,
   "apps/web/src/server/domains/product/repo/kit-projection.ts": 4,
   "apps/web/src/server/domains/product/repo/orphan-condition.ts": 9,
-  "apps/web/src/server/domains/product/repo/pricing.ts": 3,
+  "apps/web/src/server/domains/product/repo/pricing.ts": 2,
   "apps/web/src/server/domains/product/repo/quantity-ledger.ts": 5,
   "apps/web/src/server/domains/project/repo/lookup.ts": 4,
   "apps/web/src/server/domains/purchase-import/repo/aggregate-replacement.ts": 2,

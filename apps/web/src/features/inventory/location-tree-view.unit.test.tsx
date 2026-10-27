@@ -1,5 +1,5 @@
-import type { ImageOut } from "@cubby/schemas/image";
-import { imageOut } from "@cubby/schemas/image";
+import { imageOut, type ImageOut } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { InfLocation } from "@cubby/schemas/location";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
@@ -12,7 +12,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { sampleLocations } from "~/features/design/data/samples";
+import { locationReadFixture } from "~/features/location/location-read.fixtures";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -37,9 +42,18 @@ function renderTree(tree: React.ReactNode) {
 const FLOUR_ID = testShortcode("inventory", "INV-FLOUR");
 const RICE_ID = testShortcode("inventory", "INV-RICE");
 
-const kitchenImage: ImageOut = imageOut.parse({
+const kitchenImage: ImageOut = entityReadFixture(imageOut, {
   id: testShortcode("image", "IMG-KITCHEN"),
-  url: "https://example.test/kitchen.jpg",
+  fields: {
+    url: fieldValueFixture(
+      imageOut.shape.fields.shape.url,
+      "https://example.test/kitchen.jpg",
+    ),
+    capturedByName: fieldValueFixture(
+      imageOut.shape.fields.shape.capturedByName,
+      null,
+    ),
+  },
   key: "kitchen.jpg",
   filename: "kitchen.jpg",
   size: 100,
@@ -63,7 +77,6 @@ const kitchenImage: ImageOut = imageOut.parse({
   capturePlaceName: null,
   captureDeviceLabel: null,
   capturedByPartyId: null,
-  capturedByName: null,
   captureAttribution: "none",
   provenanceEvidence: null,
   sourceEvidence: null,
@@ -87,7 +100,9 @@ function treeData(): InfLocation[] {
     {
       ...kitchen,
       images: [kitchenImage],
-      displayImages: [kitchenImage],
+      displayImages: [
+        { id: kitchenImage.id, url: "https://example.test/kitchen.jpg" },
+      ],
       directItemCount: 1,
       totalItemCount: 2,
       inventoryItems: [
@@ -118,7 +133,7 @@ function treeData(): InfLocation[] {
       ],
     },
     garage,
-  ];
+  ].map(locationReadFixture);
 }
 
 describe("LocationTree", () => {
@@ -162,7 +177,7 @@ describe("LocationTree", () => {
     expect(screen.queryByRole("link", { name: "Top Shelf" })).toBeNull();
     expect(
       screen.getByRole("img", { name: "Photo of Kitchen" }),
-    ).toHaveAttribute("src", kitchenImage.url);
+    ).toHaveAttribute("src", publicImageUrl(kitchenImage));
     expect(screen.getByLabelText("1 item here, 2 total")).toHaveTextContent(
       "2",
     );

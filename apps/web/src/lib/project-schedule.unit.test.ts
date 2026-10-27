@@ -1,9 +1,11 @@
-import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
+import type { ProjectOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import { buildDetailScheduleRows } from "./project-schedule";
+
+type ScheduleTask = Parameters<typeof buildDetailScheduleRows>[2][number];
 
 const projectId = (seed: string) => testShortcode("project", seed);
 const taskId = (seed: string) => testShortcode("task", seed);
@@ -37,8 +39,8 @@ function task(
   parent?: string,
   due?: string,
   dueEnd?: string,
-): TaskOut {
-  return fromPartial<TaskOut>({
+): ScheduleTask {
+  return fromPartial<ScheduleTask>({
     id: taskId(seed),
     name: seed,
     projectId: owner ? projectId(owner) : null,

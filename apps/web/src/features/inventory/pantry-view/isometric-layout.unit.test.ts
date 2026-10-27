@@ -1,7 +1,10 @@
-import { type InfLocation, infLocation } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { type InfLocation } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it, vi } from "vitest";
+
+import { locationReadFixture } from "~/features/location/location-read.fixtures";
 
 import { buildRooms, type InventoryData } from "./isometric-layout";
 
@@ -12,7 +15,7 @@ describe("isometric pantry layout", () => {
     type: "room" | "shelf" | "furniture",
     children: InfLocation[] = [],
   ) =>
-    infLocation.parse({
+    locationReadFixture({
       id: testShortcode("location", id),
       name,
       aliases: [],
@@ -42,11 +45,12 @@ describe("isometric pantry layout", () => {
     const inventory: InventoryData[] = [
       {
         id: "inventory-1",
+        categoryFeature: "household",
         amount: { value: 1, unit: "each" },
         valuation: 20,
         product: {
           name: "String lights",
-          category: categorySummaryFixture("household"),
+          category: categoryReadFixture("household"),
         },
         location: { id: tote.id, name: tote.name, type: "furniture" },
       },
@@ -70,10 +74,15 @@ describe("isometric pantry layout", () => {
     const inventory: InventoryData[] = [
       {
         id: "inventory-1",
+        categoryFeature: "food",
         amount: { value: 2, unit: "each" },
         valuation: 8,
-        product: { name: "Coffee", category: categorySummaryFixture("food") },
-        location: { id: shelf.id, name: shelf.name, type: shelf.type },
+        product: { name: "Coffee", category: categoryReadFixture("food") },
+        location: {
+          id: shelf.id,
+          name: shelf.name,
+          type: fieldValueOf(shelf.fields.type),
+        },
       },
     ];
     const resolveColor = vi.fn((color: string) => `resolved:${color}`);

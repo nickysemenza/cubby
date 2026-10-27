@@ -1,9 +1,11 @@
-import type { ProductCategory } from "@cubby/shared";
+import type { ProductCategorySummary as ProductCategory } from "@cubby/schemas/product-category-fields";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { Spinner } from "~/ui/primitives/spinner";
+
+import { categoryText } from "./category-text";
 
 interface CategoryLabelProps {
   category: ProductCategory | null;
@@ -16,7 +18,7 @@ export function CategoryLabel({ category }: CategoryLabelProps) {
     <EntityRefLink
       entity="productCategory"
       id={category.id}
-      name={category.path.map((node) => node.name).join(" / ")}
+      name={categoryText(category)}
     />
   );
 }
@@ -35,12 +37,7 @@ export function CategoryLabelById({
 }) {
   const { categories, isLoading, isComplete, error } = useProductCategories();
   const category = categories.find((row) => row.id === id);
-  if (category)
-    return (
-      <CategoryLabel
-        category={{ ...category, feature: category.effectiveFeature }}
-      />
-    );
+  if (category) return <CategoryLabel category={category} />;
   if (!error && (isLoading || !isComplete)) {
     if (name) return <span className="min-w-0 truncate">{name}</span>;
     return <Spinner className="size-3" aria-label="Loading category" />;

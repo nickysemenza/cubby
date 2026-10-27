@@ -1,16 +1,20 @@
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import {
+  toolGalleryInventoryEntryOut,
+  toolGalleryItemOut,
+} from "@cubby/schemas/project";
 import type {
   ToolGalleryFilters,
   ToolGalleryGroupBy,
   ToolGalleryGroupOut,
-  ToolGalleryInventoryEntryOut,
   ToolGalleryItemOut,
   ToolGalleryOut,
   Trade,
 } from "@cubby/schemas/project";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/project";
+import type { RawToolGalleryInventoryEntry } from "@cubby/schemas/project-tool-raw-read";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -21,6 +25,7 @@ import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { categoryFeatureSql } from "~/server/domains/product-category/repo/category-feature";
 import { getProductImagesByProductIds } from "~/server/domains/product/repo/crud";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 
 import { deriveToolTrades } from "./tool-trades";
 import { EMPTY_METRICS, loadResourceMetrics } from "./tools";
@@ -29,11 +34,11 @@ const MULTIPLE_LOCATIONS_KEY = "__multiple_locations__";
 const UNCLASSIFIED_KEY = "";
 
 type InventoryPlacementRow = {
-  id: ToolGalleryInventoryEntryOut["id"];
-  amount: ToolGalleryInventoryEntryOut["amount"];
-  placement: ToolGalleryInventoryEntryOut["placement"];
+  id: RawToolGalleryInventoryEntry["id"];
+  amount: RawToolGalleryInventoryEntry["amount"];
+  placement: RawToolGalleryInventoryEntry["placement"];
   locationId: LocationId;
-  location: Omit<ToolGalleryInventoryEntryOut["location"], "ancestors">;
+  location: Omit<RawToolGalleryInventoryEntry["location"], "ancestors">;
 };
 
 type GalleryCandidate = {
@@ -48,7 +53,7 @@ type GalleryCandidate = {
 };
 
 type EnrichedCandidate = Omit<GalleryCandidate, "inventoryEntries"> & {
-  inventoryEntries: ToolGalleryInventoryEntryOut[];
+  inventoryEntries: RawToolGalleryInventoryEntry[];
   trade: Trade | null;
   groupKey: string;
   groupLabel: string;
@@ -59,7 +64,7 @@ type GalleryGroupIdentity = {
   label: string;
 };
 
-function locationPath(entry: ToolGalleryInventoryEntryOut): string[] {
+function locationPath(entry: RawToolGalleryInventoryEntry): string[] {
   return [
     ...entry.location.ancestors.map((ancestor) => ancestor.name),
     entry.location.name,
@@ -67,7 +72,7 @@ function locationPath(entry: ToolGalleryInventoryEntryOut): string[] {
 }
 
 function locationGroup(
-  entry: ToolGalleryInventoryEntryOut,
+  entry: RawToolGalleryInventoryEntry,
 ): GalleryGroupIdentity {
   // Home is the inventory tree's structural root. A tool below it belongs to
   // the first household area; a tool stored directly at Home remains in Home.
@@ -311,7 +316,7 @@ export async function projectToolGallery(
     loadResourceMetrics(dbc, pageIds),
   ]);
 
-  const items = page.map<ToolGalleryItemOut>((candidate) => {
+  const rawItems = page.map((candidate) => {
     const images = (imagesByProduct[candidate.productId] ?? []).filter(
       isDisplayableImageFile,
     );
@@ -329,6 +334,27 @@ export async function projectToolGallery(
       groupLabel: candidate.groupLabel,
       ...metrics,
     };
+  });
+
+  const entries = await publicFieldEnvelopeRows({
+    db,
+    entity: "inventory",
+    schema: toolGalleryInventoryEntryOut,
+    rows: rawItems.flatMap((item) => item.inventoryEntries),
+  });
+  let entryOffset = 0;
+  const items = await publicFieldEnvelopeRows({
+    db,
+    entity: "product",
+    schema: toolGalleryItemOut,
+    rows: rawItems.map((item) => {
+      const inventoryEntries = entries.slice(
+        entryOffset,
+        entryOffset + item.inventoryEntries.length,
+      );
+      entryOffset += item.inventoryEntries.length;
+      return { ...item, id: item.productId, inventoryEntries };
+    }),
   });
 
   return {

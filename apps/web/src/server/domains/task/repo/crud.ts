@@ -15,16 +15,15 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   TaskBulkReorderInput,
   TaskCreateInput,
-  TaskOut,
   TaskUpdateInput,
 } from "@cubby/schemas/project";
 import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
+import type { RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { type ListReadRow } from "~/entity/model/list-read-fields";
-import { selectListReadFields } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -60,6 +59,7 @@ import {
   replaceDependencyEdges,
 } from "~/server/generic/entity-links/repo/dependency-edges";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { selectListReadFields } from "~/server/generic/list/repo/list-read-schema";
 /**
  * Task CRUD operations.
  *
@@ -342,7 +342,7 @@ const taskReader = createEntityReader({
   },
 });
 
-const getTaskByID = (db: Database, id: TaskId): Promise<TaskOut> =>
+const getTaskByID = (db: Database, id: TaskId): Promise<RawTaskOut> =>
   taskReader.getByID(db, id);
 
 export const getTaskByShortcode = (db: Database, shortcode: string) =>
@@ -358,7 +358,7 @@ export const getTaskByShortcode = (db: Database, shortcode: string) =>
 export const getTasksByIDs = async (
   db: Database,
   ids: TaskId[],
-): Promise<TaskOut[]> => {
+): Promise<RawTaskOut[]> => {
   if (ids.length === 0) return [];
   const rawRows = await getDb(db).query.task.findMany({
     where: and(inArray(task.id, ids), notDeleted(task)),
@@ -758,7 +758,7 @@ export const reorderTasks = async (
   db: Database,
   input: TaskBulkReorderInput,
   actor: ActorContext,
-): Promise<TaskOut[]> => {
+): Promise<RawTaskOut[]> => {
   const { ranks, move, position } = input;
   const placementWhere = position
     ? await buildTaskWhere(

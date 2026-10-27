@@ -8,6 +8,7 @@ import {
   type CalendarRangeInput,
 } from "@cubby/schemas/calendar";
 import type { EntityRef } from "@cubby/schemas/entity";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -411,7 +412,7 @@ export function UnifiedCalendar({
       Object.fromEntries(
         items.map((item) => [
           entityDisplayImageKey({ entityKind: item.kind, entityId: item.id }),
-          item.displayImages[0] ?? null,
+          fieldValueOf(item.source.fields.displayImages)?.[0] ?? null,
         ]),
       ),
     [items],

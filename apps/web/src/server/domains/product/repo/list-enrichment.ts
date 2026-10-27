@@ -1,23 +1,79 @@
-import type {
-  ProductListItem,
-  ProductWithFoodOut,
-} from "@cubby/schemas/product";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
+import { rawProductList } from "@cubby/schemas/product-raw-read";
+import type {
+  RawProductList,
+  RawProductDetail,
+} from "@cubby/schemas/product-raw-read";
 
 import { computePerUnitPrices } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { unitPriceLabel } from "~/server/generic/list/repo/list-display-labels";
 
+// Nested categories are already public here; applicability comes from the selected price decision.
+const unitPriceReadInput = rawProductList.pick({
+  id: true,
+  unitMappings: true,
+  food: true,
+  labelNutrition: true,
+});
+
+type ProductUnitPriceProjection = Pick<
+  RawProductDetail,
+  "unitPriceMappings"
+> & {
+  service: boolean;
+  values: Pick<RawProductList, "unitPrice" | "unitPriceLabel"> & {
+    unitPriceDetailLabel: Exclude<
+      RawProductDetail["unitPriceDetailLabel"],
+      undefined
+    >;
+  };
+};
+
+/** Public quotes use the selected valuation; private aggregates remain calculation evidence. */
+export function projectProductUnitPrices({
+  product,
+  price,
+  service,
+}: {
+  product: unknown;
+  price: number | null;
+  service: boolean;
+}): ProductUnitPriceProjection {
+  const input = unitPriceReadInput.parse(product);
+  const unitPriceMappings = getAllUnitMappingsFromProduct({ ...input, price });
+  const comparable = computePerUnitPrices(unitPriceMappings);
+  const unitPrice =
+    service || (comparable.natural === null && comparable.perGram === null)
+      ? null
+      : comparable;
+  const label = unitPriceLabel(unitPrice);
+  return {
+    unitPriceMappings,
+    service,
+    values: {
+      unitPrice,
+      unitPriceLabel: label,
+      unitPriceDetailLabel: service
+        ? "Not applicable—charges may cover different periods, usage, or seats. See Cost."
+        : label,
+    },
+  };
+}
+
 /** Detail labels and explanation evidence come from the same conversion graph. */
 export const productUnitPriceDetailFields = (
   product: Parameters<typeof getAllUnitMappingsFromProduct>[0] &
-    Pick<ProductListItem, "category">,
-): Pick<ProductWithFoodOut, "unitPriceMappings" | "unitPriceDetailLabel"> => {
-  const unitPriceMappings = getAllUnitMappingsFromProduct(product);
+    Pick<RawProductList, "category" | "pricing">,
+): Pick<RawProductDetail, "unitPriceMappings" | "unitPriceDetailLabel"> => {
+  const unitPriceMappings = getAllUnitMappingsFromProduct({
+    ...product,
+    price: product.pricing.effectivePrice,
+  });
   return {
     unitPriceMappings,
     unitPriceDetailLabel: isServiceProductCategory(product.category)
-      ? "Not applicable—charges may cover different periods, usage, or seats. See Average charge."
+      ? "Not applicable—charges may cover different periods, usage, or seats. See Cost."
       : unitPriceLabel(computePerUnitPrices(unitPriceMappings)),
   };
 };
@@ -28,7 +84,7 @@ import {
 } from "~/server/domains/usda-food/repo/usda-helpers";
 
 type ProductListEnrichmentInput = Pick<
-  ProductListItem,
+  RawProductList,
   | "id"
   | "primaryGtin"
   | "fdc_id"
@@ -76,7 +132,10 @@ export async function enrichProductListItems<
     : products.map((product) => ({ ...product, food: null }));
 
   return foodEnriched.map((product) => {
-    const unitPriceMappings = getAllUnitMappingsFromProduct(product);
+    const unitPriceMappings = getAllUnitMappingsFromProduct({
+      ...product,
+      price: product.pricing.effectivePrice,
+    });
     return {
       ...product,
       unitPriceMappings,

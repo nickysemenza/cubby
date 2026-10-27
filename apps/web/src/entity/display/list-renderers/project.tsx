@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
 import { useDenseCell } from "~/ui/common/stacked-value";
 import { textCellData } from "~/ui/data-table/cell-data";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
@@ -22,7 +24,12 @@ const taskProgress: ListRenderer<"project"> = (helper) =>
           readFields: ["rollup"],
           className: "w-32",
           mono: true,
-          cellData: textCellData("text", (row) => row.taskProgress),
+          cellData: textCellData("text", (row) => {
+            const effectiveRowTaskProgress = fieldValueOf(
+              row.fields.taskProgress,
+            );
+            return effectiveRowTaskProgress;
+          }),
           mobile: { slot: "meta", priority: 30 },
         }),
         cell: function TaskProgressCell({ row, getValue }) {

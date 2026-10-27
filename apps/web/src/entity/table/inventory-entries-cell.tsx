@@ -1,10 +1,7 @@
 "use client";
 
-import {
-  type LocationShortcode,
-  parseShortcodeFor,
-} from "@cubby/schemas/identifiers";
-import type { LocationType } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { type LocationShortcode } from "@cubby/schemas/identifiers";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ReactNode } from "react";
 
@@ -13,6 +10,7 @@ import {
   EntityRefList,
 } from "~/entity/components/entity-ref-link";
 import { useDenseCell } from "~/ui/common/stacked-value";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { NoneValue } from "~/ui/primitives/none-value";
@@ -32,25 +30,9 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImageMap,
 } from "../entity-media/entity-display-images";
-import { buildLocationComboboxItem } from "../picker/combobox-builders";
+import { buildRecordComboboxItem } from "../picker/combobox-builders";
 import type { SearchProviderProps } from "../picker/with-search-hook";
 import { EditableEntityCell } from "./editable-entity-cell";
-
-/**
- * The inventory column's generic related-row accessor can also describe a
- * product. Inline location editing is the boundary that requires a location
- * summary, so establish both its shape and its public-id proof here.
- */
-function locationSummary(
-  related: InventoryRelatedEntity["data"] | undefined,
-): { id: LocationShortcode; name: string; type: LocationType | null } | null {
-  if (!related || !("type" in related)) return null;
-  return {
-    id: parseShortcodeFor("location", related.id),
-    name: related.name,
-    type: related.type,
-  };
-}
 
 interface InventoryEntriesInlineEditConfig<T, TEntry> {
   /** WithLocationSearch — injected so unit tests can stub it. */
@@ -78,22 +60,10 @@ export interface InventoryEntriesCellProps<
   inlineEdit?: InventoryEntriesInlineEditConfig<T, TEntry>;
 }
 
-type LocationRelatedEntity = Extract<
-  InventoryRelatedEntity,
-  { entity: "location" }
->["data"];
-type ProductRelatedEntity = Extract<
-  InventoryRelatedEntity,
-  { entity: "product" }
->["data"];
-
-const isLocationRelatedEntity = (
-  related: InventoryRelatedEntity["data"],
-): related is LocationRelatedEntity => "type" in related;
-
-const isProductRelatedEntity = (
-  related: InventoryRelatedEntity["data"],
-): related is ProductRelatedEntity => "brandName" in related;
+function amountLabel(entry: InventoryEntryBase): string {
+  const amount = fieldValueOf(entry.fields.amount);
+  return amount ? tryFormatAmount(amount) : "";
+}
 
 /**
  * Cell body for `createInventoryEntriesColumn` (extracted so the
@@ -128,7 +98,7 @@ function InventoryEntriesCellBody<
       displayImages[
         entityDisplayImageKey({ entityKind: entity, entityId: related.id })
       ] ?? null;
-    if (entity === "location" && isLocationRelatedEntity(related)) {
+    if (entity === "location") {
       return (
         <EntityRefLink
           displayImage={displayImage}
@@ -138,7 +108,7 @@ function InventoryEntriesCellBody<
         />
       );
     }
-    if (entity === "product" && isProductRelatedEntity(related)) {
+    if (entity === "product") {
       return (
         <EntityRefLink
           displayImage={displayImage}
@@ -157,13 +127,15 @@ function InventoryEntriesCellBody<
     if (dense)
       return (
         <span key={entry.id} className="flex min-w-0">
-          {renderRelatedEntity(related, tryFormatAmount(entry.amount))}
+          {renderRelatedEntity(related, amountLabel(entry))}
         </span>
       );
     return (
       <span key={entry.id} className="inline-flex items-center gap-1">
         <span className="text-muted-foreground">
-          {tryFormatAmount(entry.amount)}
+          <FieldRecordValue record={entry} field="amount">
+            {amountLabel(entry) || <NoneValue />}
+          </FieldRecordValue>
         </span>
         <span className="text-muted-foreground/50">@</span>
         {renderRelatedEntity(related)}
@@ -210,8 +182,10 @@ function InventoryEntriesCellBody<
   if (layout === "inline") {
     if (inlineEdit && entries.length === 1) {
       const entry = entries[0]!;
-      const related = locationSummary(getRelatedEntity(entry));
-      const current = related ? buildLocationComboboxItem(related) : null;
+      const related = getRelatedEntity(entry);
+      const current = related
+        ? buildRecordComboboxItem("location", related)
+        : null;
 
       return (
         <EditableEntityCell
@@ -234,24 +208,31 @@ function InventoryEntriesCellBody<
             const linkData = related && v.id === related.id ? related : null;
             if (dense && linkData)
               return (
-                <EntityRefLink
-                  displayImage={
-                    displayImages[
-                      entityDisplayImageKey({
-                        entityKind: "location",
-                        entityId: linkData.id,
-                      })
-                    ] ?? null
-                  }
-                  entity="location"
-                  data={linkData}
-                  context={tryFormatAmount(entry.amount)}
-                />
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <EntityRefLink
+                    displayImage={
+                      displayImages[
+                        entityDisplayImageKey({
+                          entityKind: "location",
+                          entityId: linkData.id,
+                        })
+                      ] ?? null
+                    }
+                    entity="location"
+                    data={linkData}
+                    context={amountLabel(entry) || undefined}
+                  />
+                  <FieldRecordValue record={entry} field="amount">
+                    {null}
+                  </FieldRecordValue>
+                </span>
               );
             return (
               <span className="inline-flex items-center gap-1">
                 <span className="text-muted-foreground">
-                  {tryFormatAmount(entry.amount)}
+                  <FieldRecordValue record={entry} field="amount">
+                    {amountLabel(entry) || <NoneValue />}
+                  </FieldRecordValue>
                 </span>
                 <span className="text-muted-foreground/50">@</span>
                 {linkData ? (
@@ -306,10 +287,7 @@ function InventoryEntriesCellBody<
   );
   const relatedList = (() => {
     if (entity === "location") {
-      const locations = relatedEntities.filter(isLocationRelatedEntity);
-      if (locations.length !== relatedEntities.length) {
-        throw new Error("Unexpected product in a location inventory cell");
-      }
+      const locations = relatedEntities;
       return (
         <EntityRefList
           entity="location"
@@ -319,10 +297,7 @@ function InventoryEntriesCellBody<
         />
       );
     }
-    const products = relatedEntities.filter(isProductRelatedEntity);
-    if (products.length !== relatedEntities.length) {
-      throw new Error("Unexpected location in a product inventory cell");
-    }
+    const products = relatedEntities;
     return (
       <EntityRefList
         entity="product"
@@ -336,7 +311,11 @@ function InventoryEntriesCellBody<
     <Stack gap="tight">
       <Stack gap="tight" className="text-xs">
         {entries.map((entry) => (
-          <div key={entry.id}>{tryFormatAmount(entry.amount)}</div>
+          <div key={entry.id}>
+            <FieldRecordValue record={entry} field="amount">
+              {amountLabel(entry) || <NoneValue />}
+            </FieldRecordValue>
+          </div>
         ))}
       </Stack>
       {relatedList}

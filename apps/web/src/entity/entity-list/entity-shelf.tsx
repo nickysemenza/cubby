@@ -1,5 +1,12 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  preferredImageUrl,
+  publicImageUrl,
+  publicImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
@@ -17,15 +24,6 @@ import { recordCaption } from "./record-caption";
  */
 const shelfRowSchema = z.looseObject({
   id: z.string(),
-  displayImages: z
-    .array(
-      z.object({
-        id: z.string(),
-        url: z.string(),
-        representations: z.object({ preferred: z.string() }).optional(),
-      }),
-    )
-    .optional(),
 });
 type ShelfRow = z.infer<typeof shelfRowSchema>;
 
@@ -38,21 +36,26 @@ function shelfTitle(entity: BrowserRoutedEntity, row: ShelfRow): string {
 
 // Image browser rows are the media record itself, not an entity carrying
 // displayImages. Pending/failed uploads must remain icon tiles.
-const imageBrowserMedia = z.object({
+const imageBrowserMedia = publicImageUrlSummary.extend({
   id: z.string(),
-  url: z.string(),
   status: z.literal("UPLOADED"),
 });
 // A card shows the server-preferred representation: the background-removed
 // cutout when one is ready and the image is not pinned to its original.
 function shelfImages(entity: BrowserRoutedEntity, row: ShelfRow) {
-  if (entity !== "image")
-    return (row.displayImages ?? []).map((image) => ({
+  if (entity !== "image") {
+    const envelope = fieldEnvelopeFor(row, "displayImages");
+    const images = envelope
+      ? displayImagesField.nullable().parse(fieldValueOf(envelope))
+      : null;
+    return (images ?? []).map((image) => ({
       id: image.id,
-      url: image.representations?.preferred ?? image.url,
+      url: preferredImageUrl(image),
     }));
+  }
   const image = imageBrowserMedia.safeParse(row);
-  return image.success ? [image.data] : [];
+  const url = image.success ? publicImageUrl(image.data) : undefined;
+  return image.success && url ? [{ id: image.data.id, url }] : [];
 }
 
 /**

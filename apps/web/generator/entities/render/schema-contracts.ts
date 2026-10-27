@@ -94,8 +94,14 @@ export const renderEntitySchemaArtifacts = (
           : entity.descriptor.searchable === true
             ? `z.object(${filterSchema.export}).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
             : `z.object(${filterSchema.export})`;
-      return `  ${JSON.stringify(entity.key)}: entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}}),`;
+      return `  ${JSON.stringify(entity.key)}: entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}},entityFieldEnvelopeSchemas[${JSON.stringify(entity.key)}]),`;
     })
+    .join("\n");
+  const repositoryListBindings = schemaEntitySpecs
+    .map(
+      ({ key, contract, inspector }) =>
+        `  ${JSON.stringify(key)}: compileListReadSchema(withEntityListMedia(${contract.list.export})${treeRowExtension(inspector)}),`,
+    )
     .join("\n");
   const bindings = entities
     .filter((entity) => entity.shortcode !== null)
@@ -148,19 +154,20 @@ export const renderEntitySchemaArtifacts = (
   const queryResultVariants = (action: "get" | "list", mcp = false) =>
     schemaEntitySpecs
       .filter((entity) => exposed(entity, action, mcp))
-      .map(({ key, contract, inspector }) => {
-        const schema =
+      .map(({ key, inspector }) => {
+        const projection =
           action === "get"
             ? mcp
-              ? contract.mcpDetail
-              : contract.detail
+              ? "mcpDetail"
+              : "detail"
             : mcp
-              ? contract.mcpList
-              : contract.list;
+              ? "mcpList"
+              : "list";
+        const schema = `entityFieldEnvelopeSchemas[${JSON.stringify(key)}].${projection}`;
         const result =
           action === "get"
-            ? `item:withEntityDetailMedia(${schema.export}).nullable()`
-            : `items:z.array(withEntityListMedia(${schema.export})${treeRowExtension(inspector)}),meta:paginatedMetaSchema`;
+            ? `item:${schema}.nullable()`
+            : `items:z.array(${schema}${treeRowExtension(inspector)}),meta:paginatedMetaSchema`;
         return `z.object({action:z.literal(${JSON.stringify(action)}),entity:z.literal(${JSON.stringify(key)}),${result}})`;
       })
       .join(",\n  ");
@@ -212,8 +219,8 @@ export const renderEntitySchemaArtifacts = (
           throw new EntityDeclarationError(
             `${entity.key}.merge output is missing.`,
           );
-        const output = mcp ? entity.contract.mcpOutput : entity.contract.output;
-        return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:${output.export},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
+        const projection = mcp ? "mcpOutput" : "output";
+        return `z.object({action:z.literal("merge"),entity:z.literal(${JSON.stringify(entity.key)}),item:entityFieldEnvelopeSchemas[${JSON.stringify(entity.key)}].${projection},mergeSummary:z.json(),sideEffects:mutationSideEffectsSchema})`;
       })
       .join(",\n  ");
   return [
@@ -224,7 +231,9 @@ export const renderEntitySchemaArtifacts = (
         'import { bulkUpdateInputSchema, bulkCollectionPatchSchema } from "@cubby/schemas/entity-collection";\n' +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
         'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
-        'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
+        'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
+        'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
+        'import { compileListReadSchema } from "~/entity/model/list-read-fields";\n' +
         'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
@@ -232,6 +241,7 @@ export const renderEntitySchemaArtifacts = (
         'import { entitySchema } from "@cubby/schemas/entity-schema-bindings";\n\n' +
         "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
+        `export const ENTITY_REPOSITORY_LIST_READ_SCHEMAS = {\n${repositoryListBindings}\n} as const;\n` +
         "export type EntitySchemaBindingMap = typeof ENTITY_SCHEMA_BINDINGS;\n" +
         "export type EntitySchemaBindingEntity = keyof EntitySchemaBindingMap;\n" +
         "type EntitySchemaBinding = EntitySchemaBindingMap[EntitySchemaBindingEntity];\n" +

@@ -79,16 +79,24 @@ describe("effective reference display", () => {
     const row = {
       spendingCategoryId: "SPC-4K7M",
       spendingCategoryName: "Stored category",
-      fieldResolutions: {
+      fields: {
         spendingCategoryId: {
-          mode: "allocated",
-          storedValue: "SPC-4K7M",
-          value: null,
-          fallbackValue: null,
-          source: "Principal line allocation",
-          sourceEntity: null,
-          matchesFallback: false,
-          canReset: true,
+          current: {
+            assignment: {
+              kind: "value",
+              value: "SPC-4K7M",
+              ownership: { kind: "record" },
+            },
+            controls: { kind: "readonly", reason: "allocated" },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "empty", reason: "mixed" },
+              provenance: { kind: "allocated" },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
       spendingCategoryAllocations: [
@@ -120,16 +128,37 @@ describe("effective reference display", () => {
     const row = {
       projectId: "PRJ-4K7M",
       projectName: "Stored project",
-      fieldResolutions: {
+      fields: {
         projectId: {
-          mode: "inherit",
-          storedValue: "PRJ-4K7M",
-          value: "PRJ-7M4K",
-          fallbackValue: "PRJ-7M4K",
-          source: "Purchase",
-          sourceEntity: null,
-          matchesFallback: false,
-          canReset: true,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: true,
+              reset: {
+                kind: "available",
+                preview: {
+                  kind: "ready",
+                  result: {
+                    kind: "live",
+                    decision: {
+                      outcome: { kind: "value", value: "PRJ-7M4K" },
+                      provenance: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: "PRJ-7M4K" },
+              provenance: { kind: "default", source: null },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
       projectAllocations: [
@@ -153,16 +182,25 @@ it("keeps an inherited effective target out of the stored picker baseline", () =
   const row = {
     projectId: "PRJ-4K7M",
     projectName: "Inherited project",
-    fieldResolutions: {
+    fields: {
       projectId: {
-        mode: "inherit",
-        storedValue: null,
-        value: "PRJ-4K7M",
-        fallbackValue: "PRJ-4K7M",
-        source: "Purchase",
-        sourceEntity: null,
-        matchesFallback: true,
-        canReset: false,
+        current: {
+          assignment: { kind: "inherit" },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: true,
+            reset: { kind: "unavailable" },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: "PRJ-4K7M" },
+            provenance: { kind: "default", source: null },
+          },
+        },
+        work: { kind: "idle" },
       },
     },
   };

@@ -3,11 +3,9 @@ import {
   type IngredientShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { ingredientListItemOut } from "@cubby/schemas/ingredient";
-import type {
-  IngredientFilters,
-  IngredientListItem,
-} from "@cubby/schemas/ingredient";
+import { type IngredientFilters } from "@cubby/schemas/ingredient";
+import { rawIngredientList as ingredientListItemOut } from "@cubby/schemas/ingredient-raw-read";
+import type { RawIngredientList as IngredientListItem } from "@cubby/schemas/ingredient-raw-read";
 /**
  * Ingredient search, lookup, and list reads.
  *
@@ -16,7 +14,7 @@ import type {
  * costing path, and the enrichment-workbench worklist. None of these mutate.
  */
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { RecipeRef } from "@cubby/schemas/recipe";
+import { type RecipeRef } from "@cubby/schemas/recipe";
 import {
   and,
   eq,

@@ -8,6 +8,8 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { entityRefKey, type EntityRef } from "@cubby/schemas/entity";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   basisValueOf,
   fieldSuggestionContextKeys,
@@ -230,15 +232,29 @@ async function prepareField(
     (row) => row.entity === entity && row.field === target.field,
   );
   if (!policy) return null;
+  const policyKeys = [...policy.basis.map((row) => row.key), target.field];
+  const governedFields = entityFieldEnvelopeFields[entity];
+  const valueOf = (key: string) => {
+    if (!Object.hasOwn(governedFields, key)) return record[key];
+    const envelope = fieldEnvelopeFor(record, key);
+    return envelope ? fieldValueOf(envelope) : null;
+  };
+  const targetEnvelope = fieldEnvelopeFor(record, target.field);
+  if (
+    Object.hasOwn(governedFields, target.field) &&
+    (!targetEnvelope || targetEnvelope.result.kind === "missing")
+  )
+    return null;
+  // Effective values drive comparison; the full envelope retains assignment intent and ownership.
   const basis = Object.fromEntries(
-    fieldSuggestionContextKeys(entity, [
-      ...policy.basis.map((row) => row.key),
-      target.field,
-    ]).map((key) => [key, basisValueOf(record[key])]),
+    fieldSuggestionContextKeys(entity, policyKeys).map((key) => [
+      key,
+      basisValueOf(valueOf(key)),
+    ]),
   );
   basis.__resolutionContext = fieldSuggestionResolutionContext(
-    record.fieldResolutions,
-    [...policy.basis.map((row) => row.key), target.field],
+    record.fields,
+    policyKeys,
   );
   const lastWrite = await latestFieldWrite(
     db,
@@ -253,7 +269,7 @@ async function prepareField(
     basis,
     fieldDecisionId: lastWrite?.id ?? null,
     decisionModelOverride: ports.suggestPorts?.decisionModel,
-    currentValue: record[target.field] ?? null,
+    currentValue: valueOf(target.field) ?? null,
   });
   const activation = await readAiRefreshActivation(db);
   const manifest = activation?.manifest ?? (await compiledRefreshManifest());

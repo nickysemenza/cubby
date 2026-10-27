@@ -1,5 +1,4 @@
 import type { ReportSlot } from "@cubby/schemas/entity-report";
-import type { RunOut } from "@cubby/schemas/run";
 import {
   hasImportRunReports,
   isExecutedRunPurpose,
@@ -619,3 +618,5 @@ export function installFeatures(): void {
     },
   });
 }
+
+type RunOut = DetailRecordOf<"run">;

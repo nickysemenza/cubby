@@ -398,7 +398,13 @@ describe("generic bulk updates", () => {
       blockedByIds: [{ op: "add", key: parent.output.id }],
     });
     expect(await read("task", task.output.id)).toMatchObject({
-      projectId: project.output.id,
+      fields: {
+        projectId: {
+          result: {
+            decision: { outcome: { kind: "value", value: project.output.id } },
+          },
+        },
+      },
       blockedByIds: [parent.output.id],
     });
     await bulk("task", [task.output.id], {
@@ -406,7 +412,9 @@ describe("generic bulk updates", () => {
       projectId: null,
     });
     expect(await read("task", task.output.id)).toMatchObject({
-      projectId: null,
+      fields: {
+        projectId: { result: { decision: { outcome: { kind: "empty" } } } },
+      },
     });
   });
 
@@ -475,13 +483,31 @@ describe("generic bulk updates", () => {
       `selected rows: ${[first.id, second.id, bystander.id].join(", ")}`,
     );
     expect(await read("product", first.id)).toMatchObject({
-      brandName: "Synthetic Alpha",
+      fields: {
+        brandName: {
+          result: {
+            decision: { outcome: { kind: "value", value: "Synthetic Alpha" } },
+          },
+        },
+      },
     });
     expect(await read("product", second.id)).toMatchObject({
-      brandName: "Synthetic Beta",
+      fields: {
+        brandName: {
+          result: {
+            decision: { outcome: { kind: "value", value: "Synthetic Beta" } },
+          },
+        },
+      },
     });
     expect(await read("product", bystander.id)).toMatchObject({
-      brandName: "Synthetic Gamma",
+      fields: {
+        brandName: {
+          result: {
+            decision: { outcome: { kind: "value", value: "Synthetic Gamma" } },
+          },
+        },
+      },
     });
   });
 
@@ -506,10 +532,26 @@ describe("generic bulk updates", () => {
       ],
     });
     expect(await read("product", first.id)).toMatchObject({
-      tags: ["mount-a", "shared"],
+      fields: {
+        tags: {
+          result: {
+            decision: {
+              outcome: { kind: "value", value: ["mount-a", "shared"] },
+            },
+          },
+        },
+      },
     });
     expect(await read("product", second.id)).toMatchObject({
-      tags: ["mount-b", "shared"],
+      fields: {
+        tags: {
+          result: {
+            decision: {
+              outcome: { kind: "value", value: ["mount-b", "shared"] },
+            },
+          },
+        },
+      },
     });
     await expect(
       bulk("product", [first.id], { tags: ["replacement"] }),

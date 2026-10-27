@@ -2,7 +2,7 @@ import { z } from "zod";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
 import { productShortcode, purchaseShortcode } from "./identifiers";
 import { moneyNullable } from "./money";
-import { productListItemOut } from "./product";
+import { productFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.product.gen";
 
 /**
  * What's inside a kit (a `productComponent` `EntityLink`). A combo tool kit or a
@@ -88,7 +88,7 @@ export const productComponentsOut = z.array(productComponentOut);
 export const kitComponentRowOut = z.object({
   parentProductId: productShortcode,
   quantity: componentQuantity,
-  product: productListItemOut,
+  product: productFieldEnvelopeSchemas.list,
 });
 export type KitComponentRowOut = z.infer<typeof kitComponentRowOut>;
 export const kitComponentRowsOut = z.array(kitComponentRowOut);

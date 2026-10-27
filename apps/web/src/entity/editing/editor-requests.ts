@@ -1,7 +1,6 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { EXPENSE_DISPOSITION_COST_TYPE } from "@cubby/schemas/expense-fields";
-import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ProductShortcode,
   ProjectShortcode,
@@ -11,6 +10,8 @@ import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
 import type { z } from "zod";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 
 import { readReferenceField } from "../entity-references";
 import type { EntityEditDraft } from "./intent-types";
@@ -175,26 +176,34 @@ export const financialTransactionEditRequest = (
   "surface"
 > & {
   intent: "full";
-} => ({
-  entity: "financialTransaction",
-  operation: "update",
-  intent: "full",
-  record: transaction,
-  seed: {
-    accountId: transaction.accountId,
-    purchaseId: transaction.purchaseId ?? null,
-    kind: transaction.kind,
-    status: transaction.status,
-    amount: transaction.amount,
-    transactionDate: transaction.transactionDate ?? "",
-    postedDate: transaction.postedDate ?? "",
-    merchant: transaction.merchant ?? "",
-    rawDescription: transaction.rawDescription ?? "",
-    sourceCategory: transaction.sourceCategory ?? "",
-    sourceRefs: transaction.sourceRefs,
-    notes: transaction.notes ?? "",
-  },
-});
+} => {
+  const effectiveTransactionMerchant = fieldValueOf(
+    transaction.fields.merchant,
+  );
+  const effectiveTransactionSourceRefs = fieldValueOf(
+    transaction.fields.sourceRefs,
+  );
+  return {
+    entity: "financialTransaction",
+    operation: "update",
+    intent: "full",
+    record: transaction,
+    seed: {
+      accountId: transaction.accountId,
+      purchaseId: transaction.purchaseId ?? null,
+      kind: transaction.kind,
+      status: transaction.status,
+      amount: transaction.amount,
+      transactionDate: transaction.transactionDate ?? "",
+      postedDate: transaction.postedDate ?? "",
+      merchant: effectiveTransactionMerchant ?? "",
+      rawDescription: transaction.rawDescription ?? "",
+      sourceCategory: transaction.sourceCategory ?? "",
+      sourceRefs: effectiveTransactionSourceRefs ?? [],
+      notes: transaction.notes ?? "",
+    },
+  };
+};
 
 const wishEditRequest = (
   wish: WishOut,
@@ -242,7 +251,7 @@ const locationEditRequest = (
   // `productId`/`parentId` project only as the nested `product`/`parent`
   // relation objects — same reasoning as `inventoryEditRequest` above.
   seed: {
-    productId: location.product?.id ?? null,
+    productId: fieldValueOf(location.fields.product)?.id ?? null,
     parentId: location.parent?.id ?? null,
   },
 });
@@ -316,3 +325,20 @@ export function detailEditRequest<E extends EditableEntity>(
   if (fieldScope) request.fieldScope = fieldScope;
   return request;
 }
+
+type FinancialAccountOut = DetailRecordOf<"financialAccount">;
+type FinancialTransactionOut = Pick<
+  DetailRecordOf<"financialTransaction">,
+  | "id"
+  | "accountId"
+  | "purchaseId"
+  | "kind"
+  | "status"
+  | "amount"
+  | "transactionDate"
+  | "postedDate"
+  | "rawDescription"
+  | "sourceCategory"
+  | "fields"
+  | "notes"
+>;

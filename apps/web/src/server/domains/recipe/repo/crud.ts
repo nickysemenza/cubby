@@ -12,13 +12,15 @@ import {
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { recipeListItemOut } from "@cubby/schemas/recipe";
-import type {
-  RecipeCreateInput,
-  RecipeGraphOut,
-  RecipeOut,
-  RecipeUpdateInput,
+import {
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
+import { rawRecipeList as recipeListItemOut } from "@cubby/schemas/recipe-raw-read";
+import type {
+  RawRecipeGraph as RecipeGraphOut,
+  RawRecipeOutput as RecipeOut,
+} from "@cubby/schemas/recipe-raw-read";
 import {
   and,
   eq,
@@ -32,7 +34,10 @@ import {
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
-import { collectSubRecipeIds } from "~/lib/recipe-graph";
+import {
+  collectSubRecipeIds,
+  type RecipeGraphRecipe,
+} from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -199,7 +204,7 @@ export const getRecipesByIDs = async (
 /** Sub-recipe closure shared by costing and needs expansion. */
 export const getSubRecipeClosure = async (
   db: Database,
-  roots: readonly Pick<RecipeOut, "id" | "sections">[],
+  roots: readonly RecipeGraphRecipe[],
 ): Promise<Record<string, RecipeGraphOut>> => {
   const closure: Record<string, RecipeGraphOut> = {};
   let frontier = collectSubRecipeIds(roots);

@@ -495,7 +495,10 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: { module: "@cubby/schemas/image-job", export: "imageJobOut" },
+    output: {
+      module: "@cubby/schemas/image-job-raw-read",
+      export: "rawImageJobOut",
+    },
   },
   storage: {
     // Queue, lease and adoption state stays operational, outside the model.

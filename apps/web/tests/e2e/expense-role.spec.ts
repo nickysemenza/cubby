@@ -1,4 +1,6 @@
-import { expenseOut } from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+const expenseOut = entityFieldEnvelopeSchemas.expense.detail;
 import { z } from "zod";
 import { buildEntity } from "tooling/factories/build";
 
@@ -53,16 +55,27 @@ test("unclassified Expense explains its role gap and resolution preserves money"
     lineKind: "principal",
   });
   expect(resolved.ok(), await resolved.text()).toBe(true);
-  const stored = await readExpense(
-    page,
-    item.id,
-    expenseOut.pick({ cost: true, lineKind: true, dataQuality: true }),
-  );
+  const readStored = () =>
+    readExpense(
+      page,
+      item.id,
+      expenseOut.pick({ cost: true }).extend({
+        fields: expenseOut.shape.fields.pick({
+          lineKind: true,
+          dataQuality: true,
+        }),
+      }),
+    );
+  const stored = await readStored();
   expect(stored.cost).toBe(-2.13);
-  expect(stored.lineKind).toBe("principal");
-  expect(stored.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
-    "expense_receipt_role",
-  );
+  expect(fieldValueOf(stored.fields.lineKind)).toBe("principal");
+  await expect
+    .poll(async () => {
+      const quality = fieldValueOf((await readStored()).fields.dataQuality);
+      if (!quality) throw new Error("Updated Expense quality result missing");
+      return quality.gaps.map((gap) => gap.check);
+    })
+    .not.toContain("expense_receipt_role");
 });
 
 // Pending inference must not block the Product assignment that establishes principal.
@@ -116,18 +129,18 @@ test("capture keeps pending role controls available and saves an explicitly sele
   const rows = z
     .object({
       items: z.array(
-        expenseOut.pick({
-          name: true,
-          lineKind: true,
-          productId: true,
-          cost: true,
+        expenseOut.pick({ name: true, cost: true }).extend({
+          fields: expenseOut.shape.fields.pick({
+            lineKind: true,
+            productId: true,
+          }),
         }),
       ),
     })
     .parse(await listed.json()).items;
-  expect(rows.find((row) => row.name === name)).toMatchObject({
-    lineKind: "principal",
-    productId: product.id,
-    cost: 2.13,
-  });
+  const saved = rows.find((row) => row.name === name);
+  if (!saved) throw new Error("Created principal Expense missing");
+  expect(fieldValueOf(saved.fields.lineKind)).toBe("principal");
+  expect(fieldValueOf(saved.fields.productId)).toBe(product.id);
+  expect(saved.cost).toBe(2.13);
 });

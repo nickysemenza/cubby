@@ -5,13 +5,12 @@ import {
 } from "@cubby/schemas/nutrition";
 import { type SectionIngredientOut } from "@cubby/schemas/recipe";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
-import {
-  testIngredientLine,
-  testEmptyRecipe,
-} from "@cubby/schemas/testing/recipe";
+import { testIngredientLine } from "@cubby/schemas/testing/recipe";
 import { act, render, screen, within } from "@testing-library/react";
 import { ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { emptyRecipeReadFixture } from "~/features/recipe/recipe-read.fixtures";
 const unavailableNutrition = buildNutrition(() => ({
   status: "unavailable" as const,
   reason: "no_data" as const,
@@ -45,7 +44,7 @@ afterEach(() => {
 });
 
 const recipe = (id: string, name: string) =>
-  testEmptyRecipe({ id: testShortcode("recipe", id), name: name });
+  emptyRecipeReadFixture({ id: testShortcode("recipe", id), name: name });
 
 const ingredient = (
   id: string,

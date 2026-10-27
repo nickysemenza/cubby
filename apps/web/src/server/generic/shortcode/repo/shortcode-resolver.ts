@@ -24,9 +24,10 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   financialTransaction,
   sourceTransactionRecord,
@@ -41,7 +42,7 @@ import {
   planting,
   product,
   purchase,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import { describeUnresolvableCode } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -54,7 +55,7 @@ export type { EntityRef } from "@cubby/schemas/identifiers";
 
 /** Accepts legacy codes; `parseShortcode` normalizes them before lookup. */
 export async function resolveShortcode(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   code: string,
 ): Promise<EntityRef | null> {
   const parsed = parseShortcode(code);
@@ -65,7 +66,7 @@ export async function resolveShortcode(
 
 /** Resolves only live rows of the expected entity; a mismatched prefix is null. */
 export async function resolveLiveShortcode<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   code: string,
   entity: E,
 ): Promise<EntityId<E> | null> {
@@ -84,7 +85,7 @@ export async function resolveLiveShortcode<E extends ShortcodeEntity>(
 
 /** Invalid, cross-entity, and soft-deleted codes are absent from the result. */
 export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   codes: readonly string[],
   entity: E,
 ): Promise<Map<string, EntityId<E>>> {
@@ -120,7 +121,7 @@ export async function resolveLiveShortcodes<E extends ShortcodeEntity>(
 }
 
 export async function resolveOrThrow<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: E,
   code: string,
 ): Promise<EntityId<E>> {
@@ -137,7 +138,7 @@ export async function resolveOrThrow<E extends ShortcodeEntity>(
 
 /** A missing just-created row is an invariant failure, not a client 404. */
 export async function resolveCreatedOrInvariant<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: E,
   code: string,
 ): Promise<EntityId<E>> {
@@ -152,7 +153,7 @@ export async function resolveCreatedOrInvariant<E extends ShortcodeEntity>(
 
 /** Throws with every missing code; returns IDs positionally with duplicates. */
 export async function resolveAllOrThrow<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: E,
   codes: readonly string[],
 ): Promise<EntityId<E>[]> {
@@ -180,7 +181,7 @@ export async function resolveAllOrThrow<E extends ShortcodeEntity>(
 
 /** Drops unresolved codes while preserving the order of resolved ones. */
 export async function resolveAllPresent<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: E,
   codes: readonly string[],
 ): Promise<EntityId<E>[]> {
@@ -195,17 +196,17 @@ export async function resolveAllPresent<E extends ShortcodeEntity>(
 export const bindShortcodeResolver = <E extends ShortcodeEntity>(
   entity: E,
 ) => ({
-  one: (db: Database | DrizzleTransaction, code: string) =>
+  one: (db: RepositoryQueryInput, code: string) =>
     resolveOrThrow(db, entity, code),
-  all: (db: Database | DrizzleTransaction, codes: readonly string[]) =>
+  all: (db: RepositoryQueryInput, codes: readonly string[]) =>
     resolveAllOrThrow(db, entity, codes),
-  present: (db: Database | DrizzleTransaction, codes: readonly string[]) =>
+  present: (db: RepositoryQueryInput, codes: readonly string[]) =>
     resolveAllPresent(db, entity, codes),
 });
 
 /** Resolves in one query per entity and keys results by canonical code. */
 export async function resolveShortcodes(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   codes: readonly string[],
 ): Promise<Map<string, EntityRef>> {
   const byEntity = new Map<ShortcodeEntity, string[]>();
@@ -231,7 +232,7 @@ export async function resolveShortcodes(
 
 /** Reverse lookup, keyed by `entityRefKey` to prevent cross-entity collisions. */
 export async function lookupShortcodes(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   refs: readonly EntityRef[],
 ): Promise<Map<string, string>> {
   const byEntity = new Map<ShortcodeEntity, Set<string>>();
@@ -412,7 +413,7 @@ export const DISPLAY_NAME_COLUMN = shortcodeEntities.reduce(
 
 /** Batched UUID-to-label lookup; rows without a label are omitted. */
 export async function lookupEntityLabels(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   refs: readonly EntityRef[],
 ): Promise<Map<string, string>> {
   const byEntity = new Map<ShortcodeEntity, Set<string>>();
@@ -462,7 +463,7 @@ export async function lookupEntityLabels(
  * is for a required FK whose target may be tombstoned after the fact.
  */
 export async function lookupEntityReferences<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: E,
   ids: readonly (string | null | undefined)[],
   opts: { includeDeleted?: boolean } = {},
@@ -507,7 +508,7 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
 
 /** Inventory labels are relational: `product · location`. */
 async function inventoryEntryLabels(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   ids: ReadonlySet<string>,
 ): Promise<Map<string, string>> {
   const rows = await unwrapDb(db)
@@ -546,7 +547,7 @@ interface ResolvedRow<E extends ShortcodeEntity> {
 }
 
 async function resolveParsed<E extends ShortcodeEntity>(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   entity: E,
   codes: readonly string[],
 ): Promise<ResolvedRow<E>[]> {

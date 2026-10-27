@@ -2,7 +2,12 @@ import { z } from "zod";
 
 import { entityFieldModels } from "./entity-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
-import { fieldResolutionsSchema } from "./field-resolution";
+import {
+  fieldEnvelope,
+  fieldAssignment,
+  fieldDecision,
+  fieldProvenance,
+} from "./field-envelope";
 
 const INHERITANCE_CONTEXT_KEYS = {
   expense: ["lineKind", "purchaseId", "productId", "projectId", "trade"],
@@ -36,17 +41,56 @@ export function fieldSuggestionContextKeys(
   return [...new Set([...basisKeys, ...inherited, ...finance])];
 }
 
+/** Suggestion evidence excludes refresh timing, work and presentation controls. */
+export const fieldSuggestionResolutionEvidence = z.object({
+  current: z.object({ assignment: fieldAssignment(z.json()).nullable() }),
+  decision: z
+    .object({
+      outcome: fieldDecision(z.json()).shape.outcome,
+      provenanceKind: z
+        .enum(fieldProvenance.options.map((option) => option.shape.kind.value))
+        .nullable(),
+    })
+    .nullable(),
+});
+export type FieldSuggestionResolutionEvidence = z.output<
+  typeof fieldSuggestionResolutionEvidence
+>;
+
 export function fieldSuggestionResolutionContext(
   raw: unknown,
   keys: readonly string[],
 ): string | null {
-  const parsed = fieldResolutionsSchema.safeParse(raw);
+  const parsed = z
+    .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+    .safeParse(raw);
   if (!parsed.success) return null;
   const selected = new Set(keys);
+  const evidence = Object.fromEntries(
+    Object.entries(parsed.data)
+      .filter(([key]) => selected.has(key))
+      .map(([key, envelope]) => {
+        const decision =
+          envelope.result.kind === "missing" ? null : envelope.result.decision;
+        return [
+          key,
+          {
+            current: { assignment: envelope.current.assignment },
+            decision: decision
+              ? {
+                  outcome: decision.outcome,
+                  provenanceKind: decision.provenance?.kind ?? null,
+                }
+              : null,
+          },
+        ];
+      }),
+  );
+  // The JSON boundary normalizes Date-valued field inputs to their wire strings.
   return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(parsed.data).filter(([key]) => selected.has(key)),
-    ),
+    z
+      .record(z.string(), fieldSuggestionResolutionEvidence)
+      .parse(JSON.parse(JSON.stringify(evidence))),
   );
 }
 

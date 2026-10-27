@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { countLabel } from "@cubby/shared/pluralize";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -57,9 +58,9 @@ export function AddLabelsPopover({
       toast.warning(`${location.name} no longer exists`);
       return;
     }
-    if (!typeSupportsQrCode(full.type)) {
+    if (!typeSupportsQrCode(fieldValueOf(full.fields.type))) {
       toast.warning(
-        `${location.name} is a ${full.type} and doesn't support QR labels`,
+        `${location.name} is a ${fieldValueOf(full.fields.type)} and doesn't support QR labels`,
       );
       return;
     }
@@ -79,7 +80,9 @@ export function AddLabelsPopover({
       return;
     }
     const children = full.children ?? [];
-    const eligible = children.filter((c) => typeSupportsQrCode(c.type));
+    const eligible = children.filter((c) =>
+      typeSupportsQrCode(fieldValueOf(c.fields.type)),
+    );
 
     if (eligible.length === 0) {
       toast.warning(

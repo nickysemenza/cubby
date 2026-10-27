@@ -1,3 +1,5 @@
+import type { ImageOut } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type FC, useState } from "react";
@@ -9,15 +11,8 @@ import { Button, buttonVariants } from "~/ui/primitives/button";
 import { PhotoGrid } from "../entity-media/photo-grid";
 import { PhotoViewer } from "../entity-media/photo-viewer";
 
-/** Minimal image type for display - only the fields we actually use */
-interface MinimalImage {
-  id: string;
-  url: string;
-  filename: string;
-}
-
 interface EntityImageListProps {
-  images: MinimalImage[];
+  images: Pick<ImageOut, "id" | "fields" | "filename">[];
   showViewAllButton?: boolean;
   /**
    * Detaching belongs to the owning entity. The removal button is a sibling of
@@ -44,6 +39,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
       ) : (
         <div>
           <PhotoGrid
+            imageUrl={publicImageUrl}
             images={images}
             fit={imageFit}
             className="mb-4"
@@ -70,6 +66,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
             }
           />
           <PhotoViewer
+            imageUrl={publicImageUrl}
             images={images}
             index={viewerIndex}
             onIndexChange={setViewerIndex}

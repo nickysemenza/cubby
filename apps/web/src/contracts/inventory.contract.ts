@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import {
   bulkMovePayload,
   inventoryBulkAddOut,
@@ -27,8 +28,10 @@ import {
   scanAtLocationInput,
   scanAtLocationOut,
 } from "@cubby/schemas/scan";
+import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
+const inventoryItemsRead = z.array(entityFieldEnvelopeSchemas.inventory.detail);
 
 export const inventoryContract = defineContract(
   "inventory",
@@ -38,7 +41,9 @@ export const inventoryContract = defineContract(
         "Receive the selected Purchase Expense quantity into an inventory location. This records stock and may merge it into an existing entry; inspect receiving_context first when the target is unclear.",
       command: { label: "Receive inventory", confirmation: null },
       input: inventoryReceiveExpenseInput,
-      output: inventoryReceiveExpenseOut,
+      output: inventoryReceiveExpenseOut.extend({
+        item: entityFieldEnvelopeSchemas.inventory.detail,
+      }),
       invalidates: ["inventory", "product", "purchase", "problems"],
     }),
     receivingContext: query({
@@ -61,7 +66,7 @@ export const inventoryContract = defineContract(
         ],
       },
       input: inventoryBulkAddPayload,
-      output: inventoryBulkAddOut,
+      output: inventoryBulkAddOut.extend({ items: inventoryItemsRead }),
       invalidates: ["inventory"],
     }),
     bulkDiscard: mutation({
@@ -78,7 +83,9 @@ export const inventoryContract = defineContract(
       note: "The web multi-select move; inventory.move_entries moves entries per destination",
       command: { label: "Move inventory", confirmation: null },
       input: bulkMovePayload,
-      output: inventoryWithLocationAndProductListAndSideEffectsOut,
+      output: inventoryWithLocationAndProductListAndSideEffectsOut.extend({
+        items: inventoryItemsRead,
+      }),
       invalidates: ["inventory"],
     }),
     moveEntries: mutation({
@@ -87,14 +94,18 @@ export const inventoryContract = defineContract(
       destructive: true,
       command: { label: "Move inventory", confirmation: null },
       input: moveInventoryEntriesPayload,
-      output: inventoryWithLocationAndProductListAndSideEffectsOut,
+      output: inventoryWithLocationAndProductListAndSideEffectsOut.extend({
+        items: inventoryItemsRead,
+      }),
       invalidates: ["inventory"],
     }),
     reconcileSession: mutation({
       description:
         "Commit a physical shelf audit of one location: the expected entry ids, the snapshot read before counting, and a resolution per entry. Only when the member counted that shelf.",
       input: reconcileSessionPayload,
-      output: inventoryWithLocationAndProductListAndSideEffectsOut,
+      output: inventoryWithLocationAndProductListAndSideEffectsOut.extend({
+        items: inventoryItemsRead,
+      }),
       invalidates: ["inventory"],
     }),
     scanAtLocation: mutation({
@@ -121,7 +132,9 @@ export const inventoryContract = defineContract(
     locationSnapshot: query({
       exposure: "view",
       input: inventoryLocationSnapshotInput,
-      output: inventoryLocationSnapshotOut,
+      output: inventoryLocationSnapshotOut.extend({
+        items: inventoryItemsRead,
+      }),
     }),
     setOwnership: mutation({
       exposure: "view",

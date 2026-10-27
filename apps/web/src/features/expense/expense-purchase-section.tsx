@@ -1,10 +1,11 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, type FC } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
@@ -12,6 +13,7 @@ import {
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -68,6 +70,8 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   summaryLine = null,
   soloNote = null,
 }) => {
+  const effectiveExpensePurchaseId = fieldValueOf(expense.fields.purchaseId);
+
   // Called unconditionally, before the no-purchase return below: `purchaseId` can
   // change under the same component instance (clearing a vendor detaches the
   // Expense), and a conditional hook would break the hook order when it does.
@@ -92,7 +96,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // The caller only mounts this section for an Expense that has a Purchase; this keeps
   // the parent link's `params` honest rather than asserting a non-null id.
   // `purchaseId` is the purchase's shortcode (per the purchase shortcode cutover).
-  if (!expense.purchaseId) return null;
+  if (!effectiveExpensePurchaseId) return null;
 
   // `isPending` gates the Expense list: without it "only Expense in this Purchase"
   // flashes on every load, which reads as an answer rather than a pending state.
@@ -119,6 +123,7 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
   // The expense can be detached (or its purchase deleted) after this detail
   // payload was fetched. Do not render a stale purchase link in that window.
   if (!data) return null;
+  const vendorId = fieldValueOf(data.purchase.fields.vendorId);
 
   return (
     <Stack gap="sm">
@@ -142,14 +147,20 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
         {/* Secondary: the rest of this vendor's spend in the ledger. `vendor`
             is the URL key and carries the vendor shortcode (same shape as
             `?project=`), which is what the id-based filter matches on. */}
-        <Link
-          to="/expenses"
-          search={{ vendor: data.purchase.vendorId }}
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          aria-label={`Show every Expense from ${data.purchase.vendorName ?? "this vendor"}`}
-        >
-          <FunnelIcon className="size-3.5" />
-        </Link>
+        <FieldRecordValue record={data.purchase} field="vendorId">
+          {vendorId ? (
+            <Link
+              to="/expenses"
+              search={{ vendor: vendorId }}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              aria-label={`Show every Expense from ${data.purchase.vendorName ?? "this vendor"}`}
+            >
+              <FunnelIcon className="size-3.5" />
+            </Link>
+          ) : (
+            <NoneValue />
+          )}
+        </FieldRecordValue>
       </Row>
 
       {others.length === 0 ? (
@@ -197,3 +208,5 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
     </Stack>
   );
 };
+
+type ExpenseOut = DetailRecordOf<"expense">;

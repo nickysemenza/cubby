@@ -1,7 +1,8 @@
-import type { RecipeOut, RecipeUpdateInput } from "@cubby/schemas/recipe";
+import type { RecipeUpdateInput } from "@cubby/schemas/recipe";
 import { toast } from "sonner";
 
 import { useEntityDetailController } from "~/entity/editing/use-entity-detail-controller";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 
 import { RecipeForm } from "./recipe-form/index";
 
@@ -37,3 +38,5 @@ export default function EditRecipeForm({
     />
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

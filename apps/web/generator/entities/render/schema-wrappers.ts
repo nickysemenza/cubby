@@ -1,4 +1,3 @@
-import { declarationModules } from "../declarations.ts";
 import { pascalCase } from "@cubby/shared/text-case";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -10,7 +9,7 @@ import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 /**
  * Per-entity Zod wrappers (`packages/schemas/src/generated/<key>.gen.ts`):
  * the create/update/read objects over the generated field schemas, the
- * `{ id, data }` update envelope, the gallery list row, and the filter fields.
+ * `{ id, data }` update envelope, the canonical list row, and the filter fields.
  * The hand-written module re-exports them under the same names and keeps only
  * genuine extras (refinements, workflow inputs, bespoke rows).
  *
@@ -22,9 +21,9 @@ import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
  * hand-written module consumes. A token names a wrapper; a trailing `+` also
  * emits the inferred type under the same PascalCase name.
  *
- * - `create`, `update`, `updateInput`, `out`, `listItem`: `z.object(...)` over
- *   the generated create/update/read schemas; `listItem` is `out` plus the
- *   server-resolved `displayImages`, so it needs `out`.
+ * - `create`, `update`, `updateInput`: wrappers over declared mutation schemas.
+ * - `out`, `listItem`: canonical generated envelope projections; raw compiler
+ *   and repository inputs live in explicitly named bootstrap modules.
  * - `filters`: the complete `<key>FilterFields` + filters schema (an entity
  *   with no hand-written filter extras).
  * - `filtersBase`: `<key>BaseFilterFields`, the audit/related/derived spread
@@ -36,7 +35,7 @@ const WRAPPERS = {
   shipment: "update+ out+ filtersBase",
   email: "out+ filtersBase",
   device: "create+ update+ updateInput out+ filters+",
-  expense: "update+ updateInput+ out+ listItem+ filtersBase",
+  expense: "update+ updateInput+ filtersBase",
   financialAccount: "create+ update+ updateInput+ out+ filtersBase",
   financialTransaction: "filtersBase",
   imageJob: "out+ filtersBase",
@@ -52,12 +51,12 @@ const WRAPPERS = {
   product: "create+ update updateInput+ filtersBase",
   productCategory: "create+ update+ updateInput out+ filters+",
   spendingCategory: "create+ update+ updateInput out+ filters+",
-  project: "create+ update+ updateInput+ out+ listItem+ filtersBase",
+  project: "create+ update+ updateInput+ filtersBase",
   purchase: "out+ listItem+ filtersBase",
   recipe: "create+ update updateInput+ filtersBase",
   run: "out+ filters+",
-  task: "create+ update+ updateInput+ out+ listItem+ filtersBase",
-  vendor: "create+ update+ updateInput+ out+ filtersBase",
+  task: "create+ update+ updateInput+ filtersBase",
+  vendor: "create+ update+ updateInput+ filtersBase",
   vendorAccount: "create+ update+ updateInput out+ filters+",
   wish: "create+ update+ updateInput+ out+ listItem+ filtersBase",
 } satisfies Record<string, string>;
@@ -136,13 +135,13 @@ const objectWrappers = (
       kind: "out",
       suffix: "Out",
       roster: fieldModel.output,
-      expression: `definition.readSchemas.output`,
+      expression: `${entity.key}FieldEnvelopeSchemas.output`,
     },
     {
       kind: "listItem",
       suffix: "ListItemOut",
       roster: null,
-      expression: `withEntityListMedia(definition.readSchemas.list)`,
+      expression: `${entity.key}FieldEnvelopeSchemas.list`,
       requires: "out",
     },
   ];
@@ -226,14 +225,11 @@ export const renderSchemaWrapperArtifacts = (
     ];
     const imports =
       (wanted.has("out")
-        ? `import definition from "${declarationModules.get(entity.key)?.path}";\n`
+        ? `import { ${entity.key}FieldEnvelopeSchemas } from "./entity-field-envelopes.${entity.key}.gen";\n`
         : "") +
       (code.includes("z.") ? 'import { z } from "zod";\n' : "") +
       (wanted.has("updateInput")
         ? `import { ${name}Shortcode } from "../identifier-fields";\n`
-        : "") +
-      (wanted.has("listItem")
-        ? 'import { withEntityListMedia } from "../entity-read-media";\n'
         : "") +
       (hasAudit
         ? 'import { auditDateFilterFields } from "../base-entity";\n'

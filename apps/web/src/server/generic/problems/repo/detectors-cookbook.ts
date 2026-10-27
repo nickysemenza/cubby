@@ -1,4 +1,4 @@
-import { ProblemItem } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems-raw-read";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";

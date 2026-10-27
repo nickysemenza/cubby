@@ -1,5 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
-  ProjectOut,
   ProjectTaskStatusBreakdown,
   TaskStatus,
 } from "@cubby/schemas/project";
@@ -10,6 +10,7 @@ import { useMemo } from "react";
 
 import { RecordMark } from "~/entity/components/record-mark";
 import { entities, entityDetailParams } from "~/entity/entities";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { getStatusChartColor } from "~/lib/status-colors";
 import { NoneValue } from "~/ui/primitives/none-value";
 import { Visualization } from "~/ui/visualizations/visualization";
@@ -63,7 +64,7 @@ export function TaskStatusBoard({
           projectId: row.projectId,
           projectShortcode: proj?.id ?? null,
           name: proj?.name ?? "Unknown project",
-          emoji: proj?.emoji,
+          emoji: proj ? fieldValueOf(proj.fields.emoji) : null,
           date: proj?.dates?.start ?? "",
           breakdown: row,
           remaining: total,
@@ -182,3 +183,5 @@ export function TaskStatusBoard({
     </div>
   );
 }
+
+type ProjectOut = DetailRecordOf<"project">;

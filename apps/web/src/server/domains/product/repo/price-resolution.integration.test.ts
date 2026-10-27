@@ -170,6 +170,7 @@ describe("Product valuation price resolution on canonical reads", () => {
       sourceEntity: null,
       matchesFallback: false,
       canReset: true,
+      assignmentAllowed: true,
     });
     await executeEntity(context, {
       action: "update",
@@ -202,6 +203,7 @@ describe("Product valuation price resolution on canonical reads", () => {
       sourceEntity: null,
       matchesFallback: false,
       canReset: false,
+      assignmentAllowed: true,
     });
     const missing = await createProductIdentityFixture(
       ctx.db,
@@ -220,6 +222,7 @@ describe("Product valuation price resolution on canonical reads", () => {
       sourceEntity: null,
       matchesFallback: false,
       canReset: false,
+      assignmentAllowed: true,
     });
     await executeEntity(context, {
       action: "update",

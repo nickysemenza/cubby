@@ -1,4 +1,7 @@
-import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
+import {
+  type RawRecipeOutput as RecipeOut,
+  rawRecipeOutput as recipeOut,
+} from "@cubby/schemas/recipe-raw-read";
 import {
   testCompleteDataQuality,
   testEntityId,

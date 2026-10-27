@@ -1,6 +1,6 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
 import { useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/catalog/image.gen";
 import { Picker } from "~/ui/combobox/picker";
@@ -120,3 +120,5 @@ export function ImageEditDialog({
     </Overlay>
   );
 }
+
+type ImageWithEntity = DetailRecordOf<"image">;

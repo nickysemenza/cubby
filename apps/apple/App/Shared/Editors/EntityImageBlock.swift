@@ -14,11 +14,15 @@ struct EntityImageBlock: View {
     private static let maxPhotos = 20
 
     private var existing: [ImageCode: (url: URL?, filename: String)] {
+        Self.existingImages(in: model.original)
+    }
+
+    static func existingImages(in record: JSONValue?) -> [ImageCode: (url: URL?, filename: String)] {
         var map: [ImageCode: (URL?, String)] = [:]
-        for attachment in model.original?["attachments"]?.arrayValue ?? [] {
+        for attachment in record?["attachments"]?.arrayValue ?? [] {
             guard let id = attachment["id"]?.stringValue else { continue }
             map[ImageCode(id)] = (
-                attachment["url"]?.stringValue.flatMap(URL.init(string:)),
+                attachment.recordValue("url")?.stringValue.flatMap(URL.init(string:)),
                 attachment["filename"]?.stringValue ?? id
             )
         }

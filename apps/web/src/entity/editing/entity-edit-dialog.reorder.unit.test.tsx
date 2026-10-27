@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityMutationTransport } from "~/entity/entity-mutation-command";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { installFeatures } from "~/features/registry";
 import { entityMutation } from "~/integrations/tanstack-query/generated/catalog/entityMutation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -20,7 +21,12 @@ const images = ["IMG-AAAA", "IMG-BBBB", "IMG-CCCC"].map((id, index) =>
     seed: index,
     overrides: {
       id,
-      url: `https://images.example/${id}.jpg`,
+      fields: {
+        url: fieldValueFixture(
+          imageOut.shape.fields.shape.url,
+          `https://images.example/${id}.jpg`,
+        ),
+      },
       filename: `photo-${index + 1}.jpg`,
       key: `key-${id}`,
     },
@@ -33,9 +39,11 @@ const record = mock(locationOut, {
     id: "LOC-4K7M",
     name: "Garage shelf",
     aliases: [],
-    type: "room",
     tags: [],
-    images,
+    fields: {
+      type: fieldValueFixture(locationOut.shape.fields.shape.type, "room"),
+      images: fieldValueFixture(locationOut.shape.fields.shape.images, images),
+    },
   },
 });
 

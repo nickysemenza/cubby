@@ -1,5 +1,8 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
   productCategorySearchItems,
@@ -13,43 +16,71 @@ const toolsId = testShortcode("productCategory", "CAT-4ABC");
 
 const categories: ProductCategoryRow[] = [
   {
+    fields: {
+      path: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape[
+          "path"
+        ],
+        [{ id: rootId, name: "Apparel" }],
+      ),
+    },
     id: rootId,
     name: "Apparel",
     parentId: null,
     aliases: [],
     description: null,
-    path: [{ id: rootId, name: "Apparel" }],
   },
   {
+    fields: {
+      path: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape[
+          "path"
+        ],
+        [
+          { id: rootId, name: "Apparel" },
+          { id: groupId, name: "Outerwear" },
+        ],
+      ),
+    },
     id: groupId,
     name: "Outerwear",
     parentId: rootId,
     aliases: [],
     description: null,
-    path: [
-      { id: rootId, name: "Apparel" },
-      { id: groupId, name: "Outerwear" },
-    ],
   },
   {
+    fields: {
+      path: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape[
+          "path"
+        ],
+        [
+          { id: rootId, name: "Apparel" },
+          { id: groupId, name: "Outerwear" },
+          { id: leafId, name: "Rain shell" },
+        ],
+      ),
+    },
     id: leafId,
     name: "Rain shell",
     parentId: groupId,
     aliases: ["waterproof jacket"],
     description: "Outer layer for wet weather.",
-    path: [
-      { id: rootId, name: "Apparel" },
-      { id: groupId, name: "Outerwear" },
-      { id: leafId, name: "Rain shell" },
-    ],
   },
   {
+    fields: {
+      path: fieldValueFixture(
+        entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape[
+          "path"
+        ],
+        [{ id: toolsId, name: "Tools" }],
+      ),
+    },
     id: toolsId,
     name: "Tools",
     parentId: null,
     aliases: [],
     description: null,
-    path: [{ id: toolsId, name: "Tools" }],
   },
 ];
 

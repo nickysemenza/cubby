@@ -1,4 +1,5 @@
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   ImageShortcode,
   ProductShortcode,
@@ -8,6 +9,7 @@ import {
   productCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
   PhotoGroupProposal,
@@ -83,6 +85,7 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
@@ -101,6 +104,7 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { Image } from "~/ui/primitives/image";
 import { Input } from "~/ui/primitives/input";
+import { NoneValue } from "~/ui/primitives/none-value";
 import { StaticTable } from "~/ui/primitives/static-table";
 import { StatusText } from "~/ui/primitives/status-text";
 import {
@@ -108,6 +112,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
+import { tryFormatAmount } from "~/ui/text/format-amount";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 
 import {
@@ -529,6 +534,7 @@ function GroupPhotos({
   return (
     <div className="min-w-0 space-y-2">
       <PhotoGrid
+        imageUrl={(image) => image.url}
         className="grid-cols-2 sm:grid-cols-3 md:grid-cols-3 [&>div:first-child]:col-span-2"
         images={tiles}
         tileClassName="max-sm:max-h-48"
@@ -577,6 +583,7 @@ function GroupPhotos({
         }}
       />
       <PhotoViewer
+        imageUrl={(image) => image.url}
         images={tiles}
         index={viewing}
         onIndexChange={setViewing}
@@ -1051,7 +1058,7 @@ function FieldCrossChecks({
   identifiers,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
-  product?: Pick<PhotoProductEvidence, "name" | "brandName" | "model">;
+  product?: Pick<PhotoProductEvidence, "name" | "fields" | "model">;
   unavailable: boolean;
   identifiers?: ReactNode;
 }) {
@@ -1068,7 +1075,9 @@ function FieldCrossChecks({
       check.field === "name"
     )
       return product
-        ? product[check.field]
+        ? check.field === "brandName"
+          ? fieldValueOf(product.fields.brandName)
+          : product[check.field]
         : unavailable
           ? "Current product unavailable"
           : "Loading current product…";
@@ -1215,17 +1224,22 @@ function OnHand({ product }: { product: PhotoProductEvidence }) {
     return (
       <Row gap="xs" wrap align="center">
         <span className="text-muted-foreground">On hand</span>
-        {entries.map((entry) => (
-          <Row key={entry.id} gap="xs" align="center">
-            <span>
-              {entry.amount.value} {entry.amount.unit}
-            </span>
-            <EntityRefLink
-              entity="location"
-              data={{ id: entry.location.id, name: entry.location.name }}
-            />
-          </Row>
-        ))}
+        {entries.map((entry) => {
+          const amount = fieldValueOf(entry.fields.amount);
+          return (
+            <Row key={entry.id} gap="xs" align="center">
+              <span>
+                <FieldRecordValue record={entry} field="amount">
+                  {amount ? tryFormatAmount(amount) : <NoneValue />}
+                </FieldRecordValue>
+              </span>
+              <EntityRefLink
+                entity="location"
+                data={{ id: entry.location.id, name: entry.location.name }}
+              />
+            </Row>
+          );
+        })}
       </Row>
     );
   const units = product.quantity?.onHandUnits;
@@ -1294,7 +1308,9 @@ function SelectedProductEvidence({
 
               className="font-medium"
             />
-            {product.brandName ? <p>{product.brandName}</p> : null}
+            {fieldValueOf(product.fields.brandName) ? (
+              <p>{fieldValueOf(product.fields.brandName)}</p>
+            ) : null}
             {product.model ? <p>{product.model}</p> : null}
           </div>
         </Row>
@@ -1317,7 +1333,7 @@ function SelectedProductEvidence({
           {product.ownPhotos?.map((photo) => (
             <div key={photo.id}>
               <Image
-                src={photo.url}
+                src={publicImageUrl(photo)}
                 alt="Own Product photo"
                 displayWidth={56}
                 className="size-14 object-contain"
@@ -1430,9 +1446,13 @@ function ExistingProductChanges({
           {productReviewFields.map(({ key: field, presentation }) => {
             const before =
               field === "tags"
-                ? (current.data?.tags.join(", ") ?? "")
+                ? current.data
+                  ? (fieldValueOf(current.data.fields.tags)?.join(", ") ?? "")
+                  : ""
                 : field === "brandId"
-                  ? (current.data?.brandName ?? "")
+                  ? current.data
+                    ? (fieldValueOf(current.data.fields.brandName) ?? "")
+                    : ""
                   : (current.data?.[field] ?? "");
             const change = changes[field];
             const after =
@@ -1452,9 +1472,18 @@ function ExistingProductChanges({
                       const next = { ...changes };
                       if (!checked) delete next[field];
                       else if (field === "tags")
-                        next.tags = current.data?.tags ?? [];
+                        next.tags =
+                          current.data?.fields.tags.current.assignment?.kind ===
+                          "value"
+                            ? current.data.fields.tags.current.assignment.value
+                            : [];
                       else if (field === "brandId")
-                        next.brandId = current.data?.brandId ?? null;
+                        next.brandId =
+                          current.data?.fields.brandId.current.assignment
+                            ?.kind === "value"
+                            ? current.data.fields.brandId.current.assignment
+                                .value
+                            : null;
                       else next[field] = before;
                       return {
                         ...toGroupInput(proposal),
@@ -1467,7 +1496,10 @@ function ExistingProductChanges({
                   {!Object.hasOwn(changes, field) ? (
                     <span className="ml-2 font-normal text-muted-foreground">
                       {field === "brandId"
-                        ? (current.data?.brandName ?? "Not set")
+                        ? current.data
+                          ? (fieldValueOf(current.data.fields.brandName) ??
+                            "Not set")
+                          : "Not set"
                         : before || "Not set"}
                     </span>
                   ) : null}
@@ -2503,6 +2535,9 @@ function InventoryFields({
       { enabled: Boolean(inventory?.existingEntryId) },
     ),
   );
+  const existingAmount = existingEntry.data
+    ? fieldValueOf(existingEntry.data.fields.amount)
+    : null;
   const destination =
     proposal.product.kind === "existing" ? proposal.product.existing?.id : null;
   useEffect(
@@ -2623,8 +2658,8 @@ function InventoryFields({
           {inventory?.locationId ? (
             <p className="mt-2 text-xs text-muted-foreground">
               {inventory.mode === "add"
-                ? existingEntry.data
-                  ? `Add ${quantity} to ${existingEntry.data.amount.value} at ${inventory.locationName}: ${existingEntry.data.amount.value + quantity} after applying.`
+                ? existingAmount
+                  ? `Add ${quantity} to ${existingAmount.value} at ${inventory.locationName}: ${existingAmount.value + quantity} after applying.`
                   : `Add ${quantity} to the explicitly selected entry at ${inventory.locationName}.`
                 : `Create a count of ${quantity} at ${inventory.locationName}.`}
             </p>
@@ -2656,7 +2691,7 @@ function InventoryFields({
                   if (!entry)
                     throw new Error("Inventory entry no longer exists");
                   if (
-                    entry.amount.unit !== "each" ||
+                    fieldValueOf(entry.fields.amount)?.unit !== "each" ||
                     entry.placement !== "stock"
                   )
                     throw new Error("Choose stock counted in whole items");
@@ -4368,6 +4403,7 @@ export function PhotoGroupReview({
                 count={review.unassignedImageIds.length}
               >
                 <PhotoGrid
+                  imageUrl={(image) => image.url}
                   images={review.unassignedImageIds.flatMap((id) =>
                     photoTile(imagesById.get(id)),
                   )}

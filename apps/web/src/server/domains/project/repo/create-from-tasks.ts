@@ -1,7 +1,7 @@
 /**
  * Inbox → project promotion: create a new project and move the given tasks
- * onto it in one transaction — see `createProjectFromTasksInput`/`Out` in
- * `@cubby/schemas/project` and `project.createFromTasks` (routers/project.ts).
+ * onto it in one transaction — see `createProjectFromTasksInput` and
+ * `project.createFromTasks`. The operation serializes these private repository results.
  * Neither side persists if the other fails (plain `withTransaction` rollback).
  *
  * Deliberately does NOT call `createProject` (which starts its own top-level
@@ -10,10 +10,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import { projectCreateInput } from "@cubby/schemas/project";
-import type {
-  CreateProjectFromTasksInput,
-  CreateProjectFromTasksOut,
-} from "@cubby/schemas/project";
+import type { CreateProjectFromTasksInput } from "@cubby/schemas/project";
+import type { RawProjectOut, RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -41,7 +39,7 @@ export async function createProjectFromTasks(
   input: CreateProjectFromTasksInput,
   actor: ActorContext,
 ): Promise<{
-  output: CreateProjectFromTasksOut;
+  output: { project: RawProjectOut; tasks: RawTaskOut[] };
   projectEntityId: ProjectId;
   taskEntityIds: TaskId[];
 }> {

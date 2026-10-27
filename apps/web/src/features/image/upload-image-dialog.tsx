@@ -180,6 +180,7 @@ export function UploadImageDialog({
           />
           {drafts.length > 0 ? (
             <PhotoGrid
+              imageUrl={(image) => image.url}
               images={drafts}
               className="mt-2"
               onSelect={(_draft, index) => setViewingDraftIndex(index)}
@@ -218,6 +219,7 @@ export function UploadImageDialog({
             />
           ) : null}
           <PhotoViewer
+            imageUrl={(image) => image.url}
             images={drafts}
             index={viewingDraftIndex}
             onOpenChange={(nextOpen) => {

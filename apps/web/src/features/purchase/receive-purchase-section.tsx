@@ -1,8 +1,9 @@
-import type { ExpenseOut } from "@cubby/schemas/project";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type FC } from "react";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { entityListFor } from "~/entity/entity-list";
 import { ReceiveExpenseDialog } from "~/features/expense/receive-expense-dialog";
@@ -31,13 +32,19 @@ export const PurchaseReceiving: DetailSlotComponent<"purchase"> = ({
   if (lines.isPending) return <StatusText>Loading lines…</StatusText>;
   if (lines.isError)
     return <StatusText tone="destructive">{lines.error.message}</StatusText>;
-  const productLines = lines.data.items.filter((line) => line.productId);
+  const productLines = lines.data.items.filter((line) => {
+    const effectiveLineProductId = fieldValueOf(line.fields.productId);
+    return effectiveLineProductId;
+  });
   if (productLines.length === 0)
     return (
       <Description size="xs">
         No line on this purchase names a Product to receive.
       </Description>
     );
+  const receivingProductId = receiving
+    ? fieldValueOf(receiving.fields.productId)
+    : null;
   return (
     <Stack gap="sm">
       <Description size="xs">
@@ -47,14 +54,14 @@ export const PurchaseReceiving: DetailSlotComponent<"purchase"> = ({
       {productLines.map((line) => (
         <ReceiveLine key={line.id} line={line} onReceive={setReceiving} />
       ))}
-      {receiving?.productId ? (
+      {receiving && receivingProductId ? (
         <ReceiveExpenseDialog
           open
           onOpenChange={(next) => {
             if (!next) setReceiving(null);
           }}
-          productId={receiving.productId}
-          productName={receiving.productName ?? receiving.productId}
+          productId={receivingProductId}
+          productName={receiving.productName ?? receivingProductId}
           expenseName={receiving.name}
           expenseId={receiving.id}
         />
@@ -77,3 +84,5 @@ const ReceiveLine: FC<{
     <VerbButton verb="receive" onClick={() => onReceive(line)} />
   </Row>
 );
+
+type ExpenseOut = ListRowOf<"expense">;

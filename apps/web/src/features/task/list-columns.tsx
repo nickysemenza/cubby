@@ -1,7 +1,8 @@
-import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
+import type { TaskFilters } from "@cubby/schemas/project";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { Badge } from "~/ui/primitives/badge";
@@ -37,3 +38,5 @@ export const taskListOverride = defineListOverride<TaskOut, TaskFilters>({
     return { list };
   },
 });
+
+type TaskOut = DetailRecordOf<"task">;

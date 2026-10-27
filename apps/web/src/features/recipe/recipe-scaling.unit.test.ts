@@ -1,5 +1,13 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
+const recipeOut = entityFieldEnvelopeSchemas.recipe.detail;
 import type { Amount } from "@cubby/schemas/codec";
-import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   testCompleteDataQuality,
   testEntityId,
@@ -32,21 +40,57 @@ const row = (id: string, amounts: Amount[]) =>
 
 const recipe = (
   ingredients: ReadonlyArray<ReturnType<typeof row>>,
-  extra: Partial<
-    Pick<RecipeOut, "yield" | "servings" | "fieldResolutions">
-  > = {},
+  extra: {
+    yield?: RecipeOut["yield"];
+    fields?: Partial<RecipeOut["fields"]>;
+  } = {},
 ): RecipeOut =>
-  recipeOut.parse({
+  entityReadFixture(recipeOut, {
     id: testShortcode("recipe", "RCP-SCALE"),
     name: "R",
     meta: null,
     yield: null,
-    servings: null,
+    ...extra,
+    fields: {
+      images: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["images"],
+        [],
+      ),
+      tags: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["tags"],
+        [],
+      ),
+      dataQuality: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+          "dataQuality"
+        ],
+        testCompleteDataQuality(),
+      ),
+      servings: {
+        current: {
+          assignment: { kind: "inherit" },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: false,
+            reset: { kind: "unavailable" },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "empty", reason: "unset" },
+            provenance: null,
+          },
+        },
+        work: { kind: "idle" },
+      },
+      ...extra.fields,
+    },
     notes: null,
     forkedFromRecipeId: null,
     forkedFromRecipeName: null,
-    images: [],
-    tags: [],
+
     sections: [
       {
         id: testEntityId("recipe", "section"),
@@ -59,8 +103,6 @@ const recipe = (
     ],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
-    dataQuality: testCompleteDataQuality(),
-    ...extra,
   });
 
 const amountsOf = (r: RecipeOut, i = 0) =>
@@ -123,43 +165,85 @@ describe("scaleRecipe", () => {
     const scaled = scaleRecipe(
       recipe([row("flour", [{ value: 1, unit: "cup" }])], {
         yield: { value: 4, unit: "servings" },
-        servings: 4,
+        fields: {
+          servings: {
+            current: {
+              assignment: {
+                kind: "value",
+                value: 4,
+                ownership: { kind: "record" },
+              },
+              controls: {
+                kind: "editable",
+                canSetNone: true,
+                canConfirm: false,
+                reset: { kind: "unavailable" },
+              },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "value", value: 4 },
+                provenance: { kind: "own", ownership: { kind: "record" } },
+              },
+            },
+            work: { kind: "idle" },
+          },
+        },
       }),
       1.5,
     );
     expect(scaled.yield?.value).toBe(6);
-    expect(scaled.servings).toBe(6);
+    expect(fieldValueOf(scaled.fields.servings)).toBe(6);
   });
 
   it("scales the canonical serving resolution while preserving its assignment intent", () => {
     const input = recipe([], {
-      servings: null,
       yield: { value: 4, unit: "servings" },
-      fieldResolutions: {
+      fields: {
         servings: {
-          mode: "inherit",
-          storedValue: null,
-          value: 4,
-          fallbackValue: 4,
-          source: "Recipe yield",
-          sourceEntity: null,
-          matchesFallback: true,
-          canReset: false,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: true,
+              reset: { kind: "unavailable" },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: 4 },
+              provenance: { kind: "default", source: null },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
     });
     const scaled = scaleRecipe(input, 1.5);
     expect(getEffectiveServings(scaled)).toBe(6);
-    expect(scaled.fieldResolutions?.servings).toMatchObject({
-      mode: "inherit",
-      storedValue: null,
-      value: 6,
-      fallbackValue: 6,
-      source: "Recipe yield",
-      matchesFallback: true,
-      canReset: false,
+    expect(scaled.fields?.servings).toMatchObject({
+      current: {
+        assignment: { kind: "inherit" },
+        controls: {
+          kind: "editable",
+          canSetNone: true,
+          canConfirm: true,
+          reset: { kind: "unavailable" },
+        },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: 6 },
+          provenance: { kind: "default", source: null },
+        },
+      },
+      work: { kind: "idle" },
     });
-    expect(input.fieldResolutions?.servings?.value).toBe(4);
+    expect(fieldValueOf(input.fields.servings)).toBe(4);
   });
 
   it("returns the input untouched at 1x", () => {
@@ -167,3 +251,5 @@ describe("scaleRecipe", () => {
     expect(scaleRecipe(input, 1)).toBe(input);
   });
 });
+
+type RecipeOut = DetailRecordOf<"recipe">;

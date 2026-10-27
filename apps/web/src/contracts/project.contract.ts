@@ -1,4 +1,6 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { projectShortcode } from "@cubby/schemas/identifiers";
+import { createPaginatedResponseSchemaWithContext } from "@cubby/schemas/pagination";
 import { projectResourceFeatureLabels } from "@cubby/schemas/product-category-relations";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
@@ -11,7 +13,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 // through without an MCP-side edit.
 
 /** Project row minus the notes, id arrays and timestamps an entity get returns in full. */
-const houseStatusProject = schemas.projectOut.omit({
+const houseStatusProject = entityFieldEnvelopeSchemas.project.detail.omit({
   notes: true,
   googleDriveFolderUrl: true,
   notionPageUrl: true,
@@ -23,20 +25,30 @@ const houseStatusProject = schemas.projectOut.omit({
 });
 
 /** Enough to name and schedule an upcoming task; the blocking graph lives elsewhere. */
-const houseStatusTask = schemas.taskOut.pick({
-  id: true,
-  name: true,
-  status: true,
-  projectId: true,
-  projectName: true,
-  subjectProductId: true,
-  subjectProductName: true,
-  due: true,
-  trade: true,
+const houseStatusTask = entityFieldEnvelopeSchemas.task.detail
+  .pick({
+    id: true,
+    name: true,
+    status: true,
+    projectName: true,
+    subjectProductName: true,
+    due: true,
+  })
+  .extend({
+    fields: entityFieldEnvelopeSchemas.task.detail.shape.fields.pick({
+      projectId: true,
+      subjectProductId: true,
+      trade: true,
+    }),
+  });
+
+const projectDashboardRead = schemas.projectDashboardSummaryOut.extend({
+  projects: z.array(entityFieldEnvelopeSchemas.project.detail),
+  nextTasks: z.array(entityFieldEnvelopeSchemas.task.detail),
 });
 
 /** `dashboardSummary` minus `filterOptions` (UI select options only). */
-const projectHouseStatusOut = schemas.projectDashboardSummaryOut
+const projectHouseStatusOut = projectDashboardRead
   .omit({
     filterOptions: true,
     projects: true,
@@ -95,12 +107,15 @@ export const projectContract = defineContract(
     dashboardSummary: query({
       nativeModels: { output: "json" },
       input: schemas.projectDashboardFiltersSchema,
-      output: schemas.projectDashboardSummaryOut,
+      output: projectDashboardRead,
       cache: { profile: "stable" },
     }),
     tree: query({
       input: schemas.projectTreeInput,
-      output: schemas.projectTreeOut,
+      output: createPaginatedResponseSchemaWithContext(
+        entityFieldEnvelopeSchemas.project.list,
+        "project",
+      ),
     }),
     getDependencyGraph: query({
       input: schemas.projectDependencyGraphInput,
@@ -111,7 +126,10 @@ export const projectContract = defineContract(
       note: "entity.create a project, then entity.bulkUpdate its tasks",
       command: { label: "Create project from tasks", confirmation: null },
       input: schemas.createProjectFromTasksInput,
-      output: schemas.createProjectFromTasksOut,
+      output: z.object({
+        project: entityFieldEnvelopeSchemas.project.output,
+        tasks: z.array(entityFieldEnvelopeSchemas.task.output),
+      }),
       invalidates: ["taskProject"],
     }),
     toolSuggestions: query({

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   MealShortcode,
   RecipeShortcode,
@@ -59,6 +60,8 @@ function recipeOrdinal(
 export const MealComposition: DetailSlotComponent<"meal"> = ({
   record: meal,
 }) => {
+  const effectiveMealMealKind = fieldValueOf(meal.fields.mealKind);
+
   const mealId = meal.id;
   const invalidate = useInvalidateMeals();
   const mealKey = entityDetailFor("meal").queryKey(mealId);
@@ -76,11 +79,11 @@ export const MealComposition: DetailSlotComponent<"meal"> = ({
       <Stack gap="sm">
         {meal.recipes.length === 0 ? (
           <Description>
-            {meal.mealKind === "cooked"
+            {effectiveMealMealKind === "cooked"
               ? "No recipes yet. Add food when you're ready to plan or log this meal."
-              : meal.mealKind === "leftovers"
+              : effectiveMealMealKind === "leftovers"
                 ? "No new recipes. Add leftovers from another meal below."
-                : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipe required.`}
+                : `${MEAL_KIND_LABELS[effectiveMealMealKind ?? "cooked"]} — no recipe required.`}
           </Description>
         ) : (
           meal.recipes.map((mr, index) => (

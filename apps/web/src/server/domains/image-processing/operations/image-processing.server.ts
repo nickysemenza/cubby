@@ -1,3 +1,5 @@
+import { imageProcessingStatusOutput } from "@cubby/schemas/image-processing";
+
 import { imageProcessingContract } from "~/contracts/image-processing.contract";
 import {
   getImageProcessingReadProjection,
@@ -14,6 +16,7 @@ import {
   scheduleImageProcessingJobs,
 } from "~/server/domains/image-processing/service/image-processing.service";
 import { imageAnalysisHistory } from "~/server/domains/image/repo/image-analysis-history";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
@@ -46,11 +49,20 @@ export const imageProcessingHandlers = implementOperationDomain(
         ...input,
         userId: context.actorContext.userId,
       }),
-    status: async (context, input) =>
-      getImageProcessingReadProjection(
+    status: async (context, input) => {
+      const row = await getImageProcessingReadProjection(
         context.db,
         await resolveOrThrow(context.db, "image", input.id),
-      ),
+      );
+      const [result] = await publicFieldEnvelopeRows({
+        db: context.db,
+        entity: "image",
+        schema: imageProcessingStatusOutput,
+        rows: [{ ...row, id: input.id }],
+      });
+      if (!result) throw new Error("Image processing status unavailable");
+      return result;
+    },
     analyses: async (context, input) => imageAnalysisHistory(context.db, input),
     retry: async (context, input) =>
       retryImageProcessingFailures(context.db, input),

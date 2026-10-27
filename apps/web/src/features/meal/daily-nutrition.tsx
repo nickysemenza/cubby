@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
   type MealShortcode,
@@ -163,7 +164,10 @@ function DailyAddFood({
             className="min-h-11 justify-start"
             onClick={() => setTarget(m.id)}
           >
-            {m.name ?? (m.mealType ? MEAL_TYPE_LABELS[m.mealType] : "Meal")}
+            {m.name ??
+              (fieldValueOf(m.fields.mealType)
+                ? MEAL_TYPE_LABELS[fieldValueOf(m.fields.mealType)!]
+                : "Meal")}
           </Button>
         ))}
         {!newMeal ? (

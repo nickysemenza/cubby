@@ -8,9 +8,9 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
  * these are re-exported from the package barrel.
  */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { IngredientOut } from "@cubby/schemas/ingredient";
-import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import type { RawIngredientOutput as IngredientOut } from "@cubby/schemas/ingredient-raw-read";
+import type { RawIngredientWithRecipesAndProduct as IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-raw-read";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -52,7 +52,7 @@ type IngredientSelect = typeof ingredient.$inferSelect;
 type ProductSelect = typeof product.$inferSelect & {
   brandName: string | null;
   brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
-  category: ProductCategorySummary | null;
+  category: RawProductCategorySummary | null;
   categoryStockTracking: CategoryStockTracking | null;
   classificationEvidence: string;
 };

@@ -16,11 +16,11 @@
  * `*.unit.test.ts` vitest project (see vitest.config.ts).
  */
 
-import type { ProjectListItemOut } from "@cubby/schemas/project";
+import { buildForest, foldForest, type ForestNode } from "./project-forest";
 
-import { buildForest, foldForest } from "./project-forest";
-
-export type ProjectTreeRow = ProjectListItemOut & { subRows: ProjectTreeRow[] };
+type ProjectTreeRow<T extends ForestNode> = T & {
+  subRows: ProjectTreeRow<T>[];
+};
 
 /**
  * Builds a nested WBS tree from a flat, possibly-filtered project list.
@@ -31,11 +31,11 @@ export type ProjectTreeRow = ProjectListItemOut & { subRows: ProjectTreeRow[] };
  * *past* the depth cap has a perfectly acyclic path to a root, so it is
  * truncated rather than promoted.
  */
-export function buildProjectTree(
-  projects: ProjectListItemOut[],
-): ProjectTreeRow[] {
+export function buildProjectTree<T extends ForestNode>(
+  projects: T[],
+): ProjectTreeRow<T>[] {
   const forest = buildForest(projects);
-  return foldForest<ProjectListItemOut, ProjectTreeRow>(
+  return foldForest<T, ProjectTreeRow<T>>(
     forest,
     (project, subRows) => ({ ...project, subRows }),
     { roots: [...forest.roots, ...forest.cyclicRoots] },

@@ -1,8 +1,14 @@
+import type { ProductListItem } from "@cubby/schemas/product";
+import { productListItemOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 
@@ -28,19 +34,33 @@ it("keeps stock context available without adding a third dense row line", () => 
         <div data-testid="stock-cell" style={{ width: 180 }}>
           <InventoryEntriesCell
             entries={[
-              {
-                id: testShortcode("inventory", "INV-1234"),
-                amount: { value: 2, unit: "each" },
-                location: {
-                  id: testShortcode("location", "LOC-1234"),
-                  name: "Example shelf",
-                  type: "shelf",
+              entityReadFixture(
+                productListItemOut.shape.inventoryEntry.element,
+                {
+                  id: testShortcode("inventory", "INV-1234"),
+                  fields: {
+                    amount: fieldValueFixture(
+                      productListItemOut.shape.inventoryEntry.element.shape
+                        .fields.shape.amount,
+                      { value: 2, unit: "each" },
+                    ),
+                  },
+                  location: entityReadFixture(
+                    productListItemOut.shape.inventoryEntry.element.shape
+                      .location,
+                    {
+                      id: testShortcode("location", "LOC-1234"),
+                      name: "Example shelf",
+                    },
+                  ),
                 },
-              },
+              ),
             ]}
             context={context}
             entity="location"
-            getRelatedEntity={(entry) => entry.location}
+            getRelatedEntity={(
+              entry: ProductListItem["inventoryEntry"][number],
+            ) => entry.location}
             layout="inline"
             row={{ id: "synthetic-row" }}
           />

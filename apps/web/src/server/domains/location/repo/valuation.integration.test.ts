@@ -45,7 +45,7 @@ const page = { pageIndex: 0, pageSize: 50 };
 describe("location valuation — computed on read", () => {
   const ctx = withTestDb();
 
-  it("computeLocationValuations matches the pure rollup, and getLocationById threads the same map", async () => {
+  it("live compute matches the pure rollup, while detail waits for the published result", async () => {
     const crateSku = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Wooden Crate" }),
@@ -88,6 +88,8 @@ describe("location valuation — computed on read", () => {
       container: { directValuation: 25, directItemCount: 1 },
     });
 
+    expect((await getLocationById(ctx.db, room.entityId)).valuation).toBeNull();
+    await drainStoredDerived(ctx.db);
     const storedRoom = await getLocationById(ctx.db, room.entityId);
     expect(storedRoom.valuation).toMatchObject({
       container: { directValuation: 25, directItemCount: 1 },

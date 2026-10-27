@@ -1,4 +1,4 @@
-import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import type {
   RecipeFlowOperation,
   RecipeFlowPlan,
@@ -12,6 +12,7 @@ import { useId, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { cn } from "~/lib/utils";
 import { Panel } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -470,3 +471,5 @@ export function RecipeFlowTable({
     </Table>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

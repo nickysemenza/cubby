@@ -4,9 +4,9 @@ import {
   type ProductId,
   productId,
 } from "@cubby/schemas/identifiers";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
+import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
 import { round2 } from "@cubby/shared";
-import type { AnyColumn } from "drizzle-orm";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -31,11 +31,13 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
-import type { StoredDerivedRead } from "~/server/generic/derived/repo/read";
+import { serviceProductSqlText } from "~/server/domains/product/repo/service-category";
+import {
+  storedDerivedSql,
+  type StoredDerivedRead,
+} from "~/server/generic/derived/repo/read";
 
-import { serviceProductSqlText } from "./service-category";
-
-export type ProductPricing = ProductTopLevelOut["pricing"];
+export type ProductPricing = RawProductOutput["pricing"];
 
 export type PricingAggregate = Omit<
   z.infer<typeof pricingAggregateRowSchema>,
@@ -131,6 +133,8 @@ export const resolveProductPriceField = (
   mode: storedPrice !== null ? "explicit" : "inherit",
   storedValue: storedPrice,
   value: pricing.effectivePrice,
+  assignmentAllowed: !service,
+  ...(service ? { emptyReason: "not_applicable" as const } : {}),
   fallbackValue: pricing.derivedPrice,
   source: service
     ? "not applicable to services"
@@ -143,7 +147,7 @@ export const resolveProductPriceField = (
   // cannot honestly point at one Expense or Purchase as its source record.
   sourceEntity: null,
   matchesFallback: storedPrice !== null && storedPrice === pricing.derivedPrice,
-  canReset: storedPrice !== null,
+  canReset: !service && storedPrice !== null,
 });
 
 /**
@@ -429,54 +433,22 @@ const derivedProductPriceSql = (productAlias = '"product"') =>
 export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `(CASE WHEN NOT ${serviceProductSqlText(`${productAlias}."id"`)} THEN COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)}) END)`;
 
-/** List Cost is descriptive; inventory valuation continues to use effectiveProductPriceSql. */
-export const displayProductCostSql = (productAlias: string) =>
-  `(CASE WHEN ${serviceProductSqlText(`${productAlias}."id"`)} THEN
-    (SELECT round(avg(e."cost")::numeric, 2)::double precision FROM "Expense" e
-      WHERE e."productId" = ${productAlias}."id" AND e."deletedAt" IS NULL
-        AND ${actualExpenseSql("e")} AND e."cost" > 0)
-    ELSE ${effectiveProductPriceSql(productAlias)} END)`;
+/** One read precedence for the value, filters, sorting and filtered totals. */
+export const productReadPriceSql: SQL = sql`CASE WHEN NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))} THEN ${storedDerivedSql(
+  "product",
+  "price",
+  product.id,
+  { currentAssignment: sql`${product.price}` },
+)} END`;
 
-/**
- * Catalog evidence and the filtered footer group live sibling quantities and
- * own acquisition rows once for the visited ancestors. Page-sized reads keep
- * the correlated aggregate so a small scope does not scan unrelated history.
- */
-const groupedProductPriceSql = (
-  seed: SQL,
-): SQL => sql`${kitAncestorCteSql(seed, { groupedSiblingQuantities: true })}, kit_own_ids AS MATERIALIZED (
-    SELECT DISTINCT ka."productId" FROM kit_anc ka
-  ), kit_own AS MATERIALIZED (
-    SELECT kpe."productId", ${sql.raw(PRICING_OWN_MEASURES)}
-      FROM "Expense" kpe
-      JOIN kit_own_ids koi ON koi."productId" = kpe."productId"
-     WHERE ${sql.raw(PRICING_OWN_PREDICATES)}
-     GROUP BY kpe."productId"
-  )
-  SELECT ka.target AS "entityId", ${sql.raw(PROJECTED_DERIVED_PRICE)} AS "derivedPrice"
-  FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
-  GROUP BY ka.target`;
+/** Cost sorting selects the same service snapshot or physical valuation as display. */
+export const productReadCostSql: SQL = sql`CASE WHEN ${sql.raw(serviceProductSqlText('"Product"."id"'))}
+  THEN ${storedDerivedSql("product", "cost", product.id)} ELSE ${productReadPriceSql} END`;
 
-/** Explicit price-presence filters remain closed predicates with their own price evidence. */
-export const hasDerivedProductPriceSql = (
-  productId: AnyColumn,
-): SQL => sql`${productId} IN (
-  SELECT price_evidence."entityId" FROM (${groupedProductPriceSql(kitSeedForProductIds([], true))}) price_evidence
-  WHERE price_evidence."derivedPrice" IS NOT NULL
-)`;
-
-const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
-  const condition = whereClause ?? sql`TRUE`;
-  const derived = groupedProductPriceSql(sql`
-    SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0
-      FROM "Product"
-     WHERE ${condition} AND NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))} AND "Product"."price" IS NULL
-  `);
-  return sql<number>`SELECT (COALESCE((
-    SELECT sum("Product"."price"::numeric) FROM "Product"
-     WHERE ${condition} AND NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))} AND "Product"."price" IS NOT NULL
-  ), 0) + COALESCE((SELECT sum(price."derivedPrice"::numeric) FROM (${derived}) price), 0))::double precision AS "priceSum"`;
-};
+const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => sql`
+  SELECT COALESCE(sum((${productReadPriceSql})::numeric), 0)::double precision AS "priceSum"
+  FROM "Product" WHERE ${whereClause ?? sql`TRUE`}
+    AND NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))}`;
 
 export const loadProductPriceSum = async (
   db: Database | DrizzleTransaction,
@@ -489,16 +461,19 @@ export const loadProductPriceSum = async (
   return rows[0]?.priceSum ?? 0;
 };
 
-/**
- * A Product's effective price for list embeds: the stored `product.price`
- * (ADR 0021), or its own explicit price until the first value is published.
- */
-export const storedEffectivePrice = (
+/** Inventory embeds use the same immediate override and reset rules as Product reads. */
+export function storedEffectivePrice(
   stored: ReadonlyMap<string, ReadonlyMap<string, StoredDerivedRead>>,
-  row: { readonly id: ProductId; readonly price: number | null },
-): number | null => {
+  row: Pick<typeof product.$inferSelect, "id" | "price"> &
+    Pick<RawProductOutput, "category">,
+): number | null {
+  if (isServiceProductCategory(row.category)) return null;
+  if (row.price !== null)
+    return resolveProductPricing(row.price).effectivePrice;
   const read = stored.get(row.id)?.get("price");
-  return read && read.meta.state !== "missing"
+  return read?.resultExists &&
+    read.decision?.provenance &&
+    read.decision.provenance.kind !== "own"
     ? z.number().nullable().parse(read.value)
-    : resolveProductPricing(row.price).effectivePrice;
-};
+    : null;
+}

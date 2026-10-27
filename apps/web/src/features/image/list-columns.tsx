@@ -1,6 +1,7 @@
-import type { ImageListFilters, ImageWithEntity } from "@cubby/schemas/image";
+import type { ImageListFilters } from "@cubby/schemas/image";
 import { useMemo } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { labeledFieldProvenance } from "~/entity/fields/field-provenance";
 import { useFilenameEditable } from "~/entity/hooks/use-name-editable";
 import { useImageUpdateMutation } from "~/entity/hooks/use-update-mutation";
@@ -62,3 +63,5 @@ export const imageListOverride = defineListOverride<
 });
 
 const IMAGE_LIST_OPTIONS = { deletable: true as const };
+
+type ImageWithEntity = DetailRecordOf<"image">;

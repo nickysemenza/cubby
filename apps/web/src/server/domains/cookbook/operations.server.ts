@@ -1,23 +1,23 @@
 import { cookbookContract } from "~/contracts/cookbook.contract";
-import {
-  getCookbookSummary,
-  listCookbooks,
-} from "~/server/domains/cookbook/repo/cookbook";
+import { listCookbooks } from "~/server/domains/cookbook/repo/cookbook";
 import { executeEntityAs } from "~/server/entity-kernel";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const cookbookHandlers = implementOperationDomain(cookbookContract, {
-  list: (context) => listCookbooks(context.db),
+  list: async (context) =>
+    readPublicEntityRows({
+      db: context.db,
+      entity: "cookbook",
+      projection: "output",
+      rows: await listCookbooks(context.db),
+    }),
   update: async (context, input) => {
-    await executeEntityAs(context, "update", {
+    const result = await executeEntityAs(context, "update", {
       entity: "cookbook",
       id: input.id,
       data: input.data,
     });
-    const refreshed = await getCookbookSummary(context.db, input.id);
-    if (refreshed === null) {
-      throw new Error("Updated cookbook could not be reloaded");
-    }
-    return refreshed;
+    return { id: result.item.id };
   },
 });

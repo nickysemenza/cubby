@@ -1,6 +1,7 @@
-import { productListItemOut } from "@cubby/schemas/product";
-import { kitComponentRowOut } from "@cubby/schemas/product-components";
-import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
+import type { KitComponentRowOut } from "@cubby/schemas/product-components";
+import { testShortcode } from "@cubby/schemas/testing";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,77 +14,36 @@ import {
 const productId = (seed: string) => testShortcode("product", seed);
 
 const productAt = (shortcode: string, componentCount = 0) =>
-  productListItemOut.parse({
+  fromPartial<EntityFieldEnvelopeRead<"product", "list">>({
     id: testShortcode("product", shortcode),
-    displayImages: [],
-    name: `Product ${shortcode}`,
-    aliases: [],
-    tags: [],
-    primaryGtin: null,
-    fdc_id: null,
-    growsPlantId: null,
-    brandId: "VEN-22222",
-    brandName: "Test",
-    model: null,
-    modelPresence: false,
-    upcPresence: false,
-    notesPresence: false,
-    dataGaps: [],
-    owners: [],
-    notes: null,
-    labelNutrition: null,
-    expectedQuantity: null,
-    categoryId: null,
-    category: null,
-    images: [],
-    labelImages: [],
-    itemImageCount: 0,
-    labelImageCount: 0,
-    classificationEvidence: "",
-    externalIds: [],
-    price: null,
-    pricing: {
-      derivedPrice: null,
-      effectivePrice: null,
-      source: "none",
-      knownExpenseCount: 0,
-      unknownExpenseCount: 0,
-      knownUnitCount: 0,
-      partial: false,
+    name: `Synthetic product ${shortcode}`,
+    fields: {
+      componentCount: {
+        current: {
+          assignment: null,
+          controls: { kind: "readonly", reason: "computed" },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: componentCount },
+            provenance: { kind: "computed" },
+          },
+        },
+        work: { kind: "idle" },
+      },
     },
-    usdaUnavailable: null,
-    stockTracked: null,
-    kind: null,
-    commodity: false,
-    dataQuality: testCompleteDataQuality(),
-    unitMappings: [],
-    ingredient: null,
-    inventoryEntry: [],
-    expenseCount: 0,
-    componentCount,
-    expenseTotal: 0,
-    purchaseDate: null,
-    primaryPlacement: null,
-    quantityLedger: {
-      acquiredUnits: 0,
-      exitedUnits: 0,
-      expectedQuantity: 0,
-      unknownAcquisitionLines: 0,
-      unknownExitLines: 0,
-      locationCount: 0,
-    },
-    onHandUnits: 0,
-    quantityVariance: 0,
-    createdAt: new Date("2026-01-01"),
-    updatedAt: new Date("2026-01-01"),
   });
 
-const componentOf = (parent: string, child: string, quantity = 1) =>
-  kitComponentRowOut.parse({
-    parentProductId: testShortcode("product", parent),
-    quantity,
-    product: productAt(child),
-  });
+const componentOf = (
+  parent: string,
+  child: string,
+  quantity = 1,
+): KitComponentRowOut => ({
+  parentProductId: testShortcode("product", parent),
+  quantity,
+  product: productAt(child),
+});
 
 describe("buildProductTreeRows", () => {
   it("namespaces child ids by parent so a shared component never collides", () => {

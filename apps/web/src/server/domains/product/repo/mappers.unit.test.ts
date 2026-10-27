@@ -1,8 +1,8 @@
+import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/product";
 import {
-  productListItemOut,
-  productTopLevelOut,
-  productWithIngredientAndInventoryAndMappingsOut,
-} from "@cubby/schemas/product";
+  rawProductList,
+  rawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import {
   testCompleteDataQuality,
   testEntityId,
@@ -248,7 +248,7 @@ describe("product mappers", () => {
     expect(result.images[0]).not.toHaveProperty("deletedAt");
     expect(result.externalIds[0]).not.toHaveProperty("deletedAt");
     expect(result.externalIds[0]).not.toHaveProperty("productId");
-    expect(productTopLevelOut.parse(result)).toEqual(result);
+    expect(rawProductOutput.parse(result)).toEqual(result);
   });
 
   it("maps list rows to the list contract without full location payloads", () => {
@@ -338,7 +338,6 @@ describe("product mappers", () => {
           location: {
             id: testShortcode("location", "LOC-TEST"),
             name: "Pantry",
-            type: "room",
           },
         },
       ],
@@ -348,7 +347,7 @@ describe("product mappers", () => {
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntry[0]).not.toHaveProperty("locationId");
     expect(result.expenseTotal).toEqual(42.5);
-    expect(productListItemOut.parse(result)).toEqual(result);
+    expect(rawProductList.parse(result)).toEqual(result);
   });
 
   it("coerces expenseTotal the same way as expenseCount", () => {
@@ -407,7 +406,6 @@ describe("product mappers", () => {
           createdAt: CREATED_AT,
           updatedAt: UPDATED_AT,
           deletedAt: null,
-          recipes: [{ deletedAt: null }, { deletedAt: DELETED_AT }],
         },
         {
           id: testEntityId("cookbook", "623e4567-e89b-12d3-a456-426614174000"),
@@ -423,7 +421,6 @@ describe("product mappers", () => {
           createdAt: CREATED_AT,
           updatedAt: UPDATED_AT,
           deletedAt: DELETED_AT,
-          recipes: [{ deletedAt: null }],
         },
         {
           id: testEntityId("cookbook", "723e4567-e89b-12d3-a456-426614174000"),
@@ -439,7 +436,6 @@ describe("product mappers", () => {
           createdAt: CREATED_AT,
           updatedAt: UPDATED_AT,
           deletedAt: null,
-          recipes: [{ deletedAt: null }],
         },
       ],
       inventoryEntry: [
@@ -564,12 +560,10 @@ describe("product mappers", () => {
       {
         id: testShortcode("cookbook", "CKB-2345"),
         name: "Weeknight Cooking",
-        recipeCount: 1,
       },
       {
         id: testShortcode("cookbook", "CKB-2346"),
         name: "Weekend Cooking",
-        recipeCount: 1,
       },
     ]);
     expect(result.inventoryEntry[0]).not.toHaveProperty("productId");

@@ -1,4 +1,7 @@
-import type { DerivedMeta } from "@cubby/schemas/derived-value";
+import {
+  fieldDecisionOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
 import type { ReactNode } from "react";
 
 import { cn } from "~/lib/utils";
@@ -24,16 +27,31 @@ export function UpdatingDot() {
 }
 
 /** Marks stay in the value flow, independent of hover-only cell controls. */
-export function DerivedValue({
-  meta,
+export function FieldValueMark({
+  envelope,
   children,
 }: {
-  meta?: DerivedMeta;
+  envelope?: ReadableFieldEnvelope;
   children: ReactNode;
 }) {
-  const inherited = meta?.decidedBy?.level === "inherited";
-  const auto = meta?.decidedBy?.level === "suggested" && meta.decidedBy.auto;
-  const updating = meta?.state === "stale" || meta?.state === "waiting";
+  const provenance = envelope
+    ? fieldDecisionOf(envelope)?.provenance
+    : undefined;
+  const inherited = provenance?.kind === "inherited";
+  const auto =
+    provenance?.kind === "own" &&
+    provenance.ownership.kind === "automatic" &&
+    envelope?.current.assignment?.kind === "value" &&
+    envelope.current.assignment.ownership.kind === "automatic" &&
+    provenance.ownership.receiptId ===
+      envelope.current.assignment.ownership.receiptId;
+  const updating =
+    envelope?.work.kind === "pending" ||
+    envelope?.work.kind === "waiting" ||
+    (envelope?.result.kind === "cached" &&
+      envelope.result.freshness === "stale");
+  const error = envelope?.work.kind === "failed" ? envelope.work.error : null;
+  const missing = envelope?.result.kind === "missing";
   return (
     <span
       data-slot="derived-value"
@@ -52,16 +70,18 @@ export function DerivedValue({
           ↳
         </span>
       ) : null}
-      <span className="min-w-0 truncate">{children}</span>
+      <span className="min-w-0 truncate">
+        {missing ? (error === null ? "Updating…" : "Unavailable") : children}
+      </span>
       {auto ? <span className="shrink-0 text-3xs">auto</span> : null}
       {updating ? <UpdatingDot /> : null}
-      {meta?.state === "failed" ? (
+      {error !== null ? (
         <Tooltip>
           <TooltipTrigger
             render={
               <button
                 type="button"
-                aria-label={meta.error ?? "Derived value failed"}
+                aria-label={error}
                 className="shrink-0 text-destructive"
               />
             }
@@ -69,7 +89,7 @@ export function DerivedValue({
             !
           </TooltipTrigger>
           <TooltipContent className="max-w-80 break-words whitespace-pre-wrap">
-            {meta.error ?? "Derived value failed"}
+            {error}
           </TooltipContent>
         </Tooltip>
       ) : null}

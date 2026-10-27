@@ -2,16 +2,18 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { mealListItemOut } from "@cubby/schemas/meal";
 import type {
   MealCreateInput,
   MealFilters,
-  MealOut,
   MealRecipeInput,
   MealUpdateInput,
-  UpcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
+import {
+  rawMealList,
+  type RawMealOutput,
+  type RawUpcomingMealSummary,
+} from "@cubby/schemas/meal-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 
@@ -60,7 +62,7 @@ import {
   mealTotalsFields,
 } from "./helpers";
 
-type MealMutationResult = { output: MealOut; entityId: MealId };
+type MealMutationResult = { output: RawMealOutput; entityId: MealId };
 
 /** A protocol adapter may compare its stale projection while this update owns
  * the row lock. The Meal repository remains the only owner of writes. */
@@ -128,13 +130,13 @@ const mealReader = createEntityReader({
 export const getMealByID = (
   db: Database,
   id: MealId,
-): Promise<MealOut | null> => mealReader.getByIDOrNull(db, id);
+): Promise<RawMealOutput | null> => mealReader.getByIDOrNull(db, id);
 
 export const getMealByShortcode = (db: Database, shortcode: string) =>
   mealReader.getByShortcode(db, shortcode);
 
 /** Throws MEAL_NOT_FOUND if the meal is missing — for callers that need a value. */
-const requireMeal = (db: Database, id: MealId): Promise<MealOut> =>
+const requireMeal = (db: Database, id: MealId): Promise<RawMealOutput> =>
   mealReader.getByID(db, id);
 
 /** Meals whose date falls within [from, to] (inclusive) — the calendar query. */
@@ -145,7 +147,7 @@ export const getMealsByDateRange = async (
   from: string,
   to: string,
   condition?: SQL,
-): Promise<MealOut[]> => {
+): Promise<RawMealOutput[]> => {
   const rows = await getDb(db).query.meal.findMany({
     where: and(
       gte(meal.date, from),
@@ -171,7 +173,7 @@ export const getUpcomingMealSummary = async (
   from: string,
   to: string,
   limit = 4,
-): Promise<UpcomingMealSummaryOut> => {
+): Promise<RawUpcomingMealSummary[]> => {
   const rows = await getDb(db).query.meal.findMany({
     where: and(gte(meal.date, from), lte(meal.date, to), notDeleted(meal)),
     orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
@@ -278,11 +280,11 @@ export const mealListRead = async (
               ),
           );
           return [
-            bind(mealListItemOut.pick({ displayName: true }), (row) => ({
+            bind(rawMealList.pick({ displayName: true }), (row) => ({
               displayName: row.name?.trim() || row.date,
             })),
             recipes.fields(
-              mealListItemOut.pick({ recipes: true, recipeNames: true }),
+              rawMealList.pick({ recipes: true, recipeNames: true }),
               (row, loaded) => {
                 const values = loaded.get(row.id);
                 if (!values) throw new Error("Meal recipes were not loaded");
@@ -290,7 +292,7 @@ export const mealListRead = async (
               },
             ),
             recipes.fields(
-              mealListItemOut.pick({
+              rawMealList.pick({
                 totals: true,
                 cost: true,
                 calories: true,
@@ -303,7 +305,7 @@ export const mealListRead = async (
                 return mealTotalsFields(values.recipes);
               },
             ),
-            bind(mealListItemOut.pick({ images: true }), (row) => ({
+            bind(rawMealList.pick({ images: true }), (row) => ({
               images: mapImages(
                 (row.images ?? []).flatMap((entry) =>
                   "image" in entry ? [entry] : [],
@@ -332,7 +334,7 @@ export const mealList = async (
     readIntent,
     { kind: "full" },
   );
-  return parseCompleteListRead(mealListItemOut, Promise.resolve(result));
+  return parseCompleteListRead(rawMealList, Promise.resolve(result));
 };
 
 export const createMealWithEntityId = defineMutationWriter({
@@ -499,7 +501,7 @@ export const addRecipeToMeal = async (
   mealId: MealId,
   input: MealRecipeInput,
   actor: ActorContext,
-): Promise<{ meal: MealOut; mealRecipeId: MealRecipeId }> => {
+): Promise<{ meal: RawMealOutput; mealRecipeId: MealRecipeId }> => {
   const mealRecipeId = await withTransaction(db, async (tx) => {
     const recipeId = await resolveOrThrow(tx, "recipe", input.recipeId);
     // Repeats are INTENTIONAL, not a duplicate bug: a meal may serve the same
@@ -548,7 +550,7 @@ const updateMealRecipe = async (
   id: MealRecipeId,
   data: { scale?: number; sortOrder?: number | null },
   actor: ActorContext,
-): Promise<MealOut> => {
+): Promise<RawMealOutput> => {
   const mealId = await getMealIdForRecipe(db, id);
   await withTransaction(db, async (tx) => {
     const recipePatch: typeof data = {};
@@ -579,7 +581,7 @@ const removeMealRecipe = async (
   db: Database,
   id: MealRecipeId,
   actor: ActorContext,
-): Promise<MealOut> => {
+): Promise<RawMealOutput> => {
   const mealId = await getMealIdForRecipe(db, id);
   await withTransaction(db, async (tx) => {
     const [lockedMeal] = await tx

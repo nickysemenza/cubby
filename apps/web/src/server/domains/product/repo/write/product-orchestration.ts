@@ -22,11 +22,12 @@ import {
 } from "@cubby/schemas/mutation-side-effects";
 import type {
   ProductCreateInput,
-  ProductTopLevelOut,
   ProductUpdateInput,
-  ProductWithFoodAndSideEffectsOut,
-  ProductWithFoodOut,
 } from "@cubby/schemas/product";
+import type {
+  RawProductDetail,
+  RawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
@@ -74,12 +75,16 @@ const isProductCodeConflict = (error: unknown) =>
   (error instanceof AppError && error.reason === "PRODUCT_ALREADY_EXISTS");
 
 interface ProductWriteServices<
-  TOutput extends ProductMutationSnapshot = ProductWithFoodOut,
+  TOutput extends ProductMutationSnapshot = RawProductDetail,
 > {
   db: Database;
   product: ProductWriteActions<TOutput>;
   recipeCosting: RecipeCostingService;
 }
+
+type RawProductDetailWithSideEffects = RawProductDetail & {
+  sideEffects: MutationSideEffects;
+};
 
 type UpcProductUpdate = Pick<ProductUpdateInput["data"], "brandId" | "price">;
 
@@ -122,7 +127,7 @@ export const createProductWithSideEffects = (
   services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: ProductCreateInput,
   actor: ActorContext,
-): Promise<{ output: ProductWithFoodAndSideEffectsOut; entityId: ProductId }> =>
+): Promise<{ output: RawProductDetailWithSideEffects; entityId: ProductId }> =>
   createProductWithReadSideEffects(services, input, actor);
 
 export const updateProductWithSideEffects = (
@@ -130,7 +135,7 @@ export const updateProductWithSideEffects = (
   id: ProductId,
   data: ProductUpdateInput["data"],
   actor: ActorContext,
-): Promise<ProductWithFoodAndSideEffectsOut> =>
+): Promise<RawProductDetailWithSideEffects> =>
   updateProductWithReadSideEffects(services, id, data, actor);
 
 export async function createProductWithReadSideEffects<
@@ -226,7 +231,7 @@ export async function applyUpcDataWithSideEffects(
   services: ProductWriteServices & { upcLookupClient: UpcLookupPort },
   input: { id: ProductId; upc: string },
   actor: ActorContext,
-): Promise<ProductWithFoodAndSideEffectsOut> {
+): Promise<RawProductDetailWithSideEffects> {
   const current = await services.product.getProductByID(input.id);
   const { lookups } = await readCachedUpcLookups(
     services.db,
@@ -297,12 +302,12 @@ export async function applyUpcDataWithSideEffects(
  * lands with no ingredient link / mappings, invisible to recipe costing).
  */
 export interface FindOrCreateByUPCResult {
-  product: ProductTopLevelOut;
+  product: RawProductOutput;
   created: boolean;
   sideEffects: MutationSideEffects;
 }
 
-const matched = (product: ProductTopLevelOut): FindOrCreateByUPCResult => ({
+const matched = (product: RawProductOutput): FindOrCreateByUPCResult => ({
   product,
   created: false,
   sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
@@ -333,7 +338,7 @@ type UPCLookupHit = NonNullable<Awaited<ReturnType<UpcLookupPort["lookup"]>>>;
 
 export interface LookupUPCResult {
   upc: string;
-  localProduct: ProductTopLevelOut | null;
+  localProduct: RawProductOutput | null;
   usdaFood: (ReturnType<typeof usdaIdentity> & { fdc_id: number }) | null;
   externalLookup:
     | (ReturnType<typeof externalIdentity> & {
@@ -401,7 +406,7 @@ export async function findOrCreateByUPC(
   if (existing) return matched(existing);
 
   const emitCreated = async (
-    { output: product }: { output: ProductTopLevelOut; entityId: ProductId },
+    { output: product }: { output: RawProductOutput; entityId: ProductId },
     warnings: readonly string[] = [],
   ): Promise<FindOrCreateByUPCResult> => {
     return {
@@ -524,7 +529,7 @@ async function findOrCreateByISBN(
   if (existing) return matched(existing);
 
   const emitCreated = async (
-    { output: product }: { output: ProductTopLevelOut; entityId: ProductId },
+    { output: product }: { output: RawProductOutput; entityId: ProductId },
     warnings: readonly string[],
   ): Promise<FindOrCreateByUPCResult> => {
     return {

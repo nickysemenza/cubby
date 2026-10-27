@@ -453,7 +453,8 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
           type,
           optional,
           allowsNull,
-          recursive: value === name,
+          // A named alias may hide the same stored-value cycle as a direct self reference.
+          recursive: value === name || resolve(concrete) === schema,
         };
       });
       declarations.set(

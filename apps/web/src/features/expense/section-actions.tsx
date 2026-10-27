@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useState } from "react";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
@@ -14,6 +15,8 @@ export const SplitExpenseAction: SectionActionComponent<"expense"> = ({
   record: expense,
   action,
 }) => {
+  const effectiveExpensePurchaseId = fieldValueOf(expense.fields.purchaseId);
+
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -22,12 +25,12 @@ export const SplitExpenseAction: SectionActionComponent<"expense"> = ({
         disabledReason={action.disabledReason ?? undefined}
         onClick={() => setOpen(true)}
       />
-      {expense.purchaseId ? (
+      {effectiveExpensePurchaseId ? (
         <SplitExpenseDialog
           open={open}
           onOpenChange={setOpen}
           expense={expense}
-          purchaseShortcode={expense.purchaseId}
+          purchaseShortcode={effectiveExpensePurchaseId}
         />
       ) : null}
     </>
@@ -42,6 +45,8 @@ export const ReceiveExpenseAction: SectionActionComponent<"expense"> = ({
   record: expense,
   action,
 }) => {
+  const effectiveExpenseProductId = fieldValueOf(expense.fields.productId);
+
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -51,12 +56,12 @@ export const ReceiveExpenseAction: SectionActionComponent<"expense"> = ({
         disabledReason={action.disabledReason ?? undefined}
         onClick={() => setOpen(true)}
       />
-      {expense.productId ? (
+      {effectiveExpenseProductId ? (
         <ReceiveExpenseDialog
           open={open}
           onOpenChange={setOpen}
-          productId={expense.productId}
-          productName={expense.productName ?? expense.productId}
+          productId={effectiveExpenseProductId}
+          productName={expense.productName ?? effectiveExpenseProductId}
           expenseName={expense.name}
           expenseId={expense.id}
         />

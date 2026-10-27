@@ -12,6 +12,7 @@ import { taskList } from "~/server/domains/task/repo/lookup";
 import { getTaskSummary } from "~/server/domains/task/repo/summary";
 import { getTaskTimeline } from "~/server/domains/task/repo/timeline";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -52,10 +53,32 @@ export const taskBulkReorderWorkflow = Object.assign(
 );
 
 export const taskHandlers = implementOperationDomain(taskContract, {
-  listActionable: (context, input) =>
-    listActionableTasks(context.db, input ?? {}),
-  chartData: async (context, input) =>
-    (
+  listActionable: async (context, input) => {
+    const result = await listActionableTasks(context.db, input ?? {});
+    const rows = await readPublicEntityRows({
+      db: context.db,
+      entity: "task",
+      projection: "detail",
+      rows: [
+        ...result.next,
+        ...result.later,
+        ...result.blocked.map((row) => row.task),
+      ],
+    });
+    return {
+      next: rows.slice(0, result.next.length),
+      later: rows.slice(
+        result.next.length,
+        result.next.length + result.later.length,
+      ),
+      blocked: result.blocked.map((row, index) => ({
+        ...row,
+        task: rows[result.next.length + result.later.length + index]!,
+      })),
+    };
+  },
+  chartData: async (context, input) => {
+    const result = (
       await listAll((pagination) =>
         taskList(
           context.db,
@@ -65,9 +88,41 @@ export const taskHandlers = implementOperationDomain(taskContract, {
           "page",
         ),
       )
-    ).data,
+    ).data;
+    return readPublicEntityRows({
+      db: context.db,
+      entity: "task",
+      projection: "detail",
+      rows: result,
+    });
+  },
   summary: (context) => getTaskSummary(context.db),
-  timeline: (context, input) => getTaskTimeline(context.db, input),
-  bulkReorder: (context, input) =>
-    taskBulkReorderWorkflow(context.db, input, context.actorContext),
+  timeline: async (context, input) => {
+    const result = await getTaskTimeline(context.db, input);
+    return {
+      ...result,
+      tasks: await readPublicEntityRows({
+        db: context.db,
+        entity: "task",
+        projection: "detail",
+        rows: result.tasks,
+      }),
+    };
+  },
+  bulkReorder: async (context, input) => {
+    const result = await taskBulkReorderWorkflow(
+      context.db,
+      input,
+      context.actorContext,
+    );
+    return {
+      ...result,
+      items: await readPublicEntityRows({
+        db: context.db,
+        entity: "task",
+        projection: "detail",
+        rows: result.items,
+      }),
+    };
+  },
 });

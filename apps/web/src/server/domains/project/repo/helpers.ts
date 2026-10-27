@@ -6,11 +6,8 @@ import {
   type ProjectId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type {
-  ProjectDateWindow,
-  ProjectOut,
-  ProjectRollup,
-} from "@cubby/schemas/project";
+import type { ProjectDateWindow, ProjectRollup } from "@cubby/schemas/project";
+import type { RawProjectOut } from "@cubby/schemas/work-raw-read";
 
 import type { ProjectParentRow } from "./subtree";
 
@@ -19,13 +16,13 @@ export type ProjectRow = {
   id: ProjectId;
   shortcode: string;
   name: string;
-  status: ProjectOut["status"];
-  kind: ProjectOut["kind"];
+  status: RawProjectOut["status"];
+  kind: RawProjectOut["kind"];
   assigneeId: LedgerPartyId | null;
   assigneeMode: "inherit" | "explicit";
   locations: string[];
   locationsMode: "inherit" | "explicit";
-  defaultTrade: ProjectOut["defaultTrade"];
+  defaultTrade: RawProjectOut["defaultTrade"];
   costEstimate: number | null;
   parentProjectId: ProjectId | null;
   startDate: string | null;
@@ -271,7 +268,7 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
   rowsById: ReadonlyMap<ProjectId, ProjectParentRow>;
   rowsByShortcode: ReadonlyMap<string, ProjectParentRow>;
   dataQuality: Q;
-}): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
+}): Omit<RawProjectOut, "dataQuality"> & { dataQuality: Q } => {
   return {
     id: parseShortcodeFor("project", row.shortcode),
     name: row.name,
@@ -324,7 +321,7 @@ export const hydrateProjectRow = <Q extends DataQuality | undefined>(
     blocking: Map<ProjectId, ProjectId[]>;
   },
   dataQuality: Q,
-): Omit<ProjectOut, "dataQuality"> & { dataQuality: Q } => {
+): Omit<RawProjectOut, "dataQuality"> & { dataQuality: Q } => {
   const toShortcode = (id: ProjectId) => context.shortcodeById.get(id) ?? "";
   return dbProjectToAPI({
     row,

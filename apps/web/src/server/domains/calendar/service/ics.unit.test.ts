@@ -9,6 +9,10 @@ import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
+import {
+  mealCalendarSourceFixture,
+  taskCalendarSourceFixture,
+} from "~/features/calendar/calendar-source.fixtures";
 import { mock } from "~/lib/test/mock-schema";
 
 import { kindsForFeed, renderIcs } from "./ics";
@@ -36,7 +40,6 @@ const meal = (overrides: DeepPartial<MealItem> = {}): MealItem =>
       title: "Taco night",
       startDate: "2026-08-15",
       endDateExclusive: "2026-08-16",
-      recipeNames: ["Carnitas"],
       mealTotals: {
         cost: {
           status: "complete",
@@ -58,8 +61,12 @@ const meal = (overrides: DeepPartial<MealItem> = {}): MealItem =>
       // Pinned, not generated: `mock` would otherwise pick a random slot/kind
       // per seed, and a non-cooked kind adds a DESCRIPTION line that every
       // other assertion here would have to account for.
-      mealType: "dinner",
-      mealKind: "cooked",
+      source: mealCalendarSourceFixture({
+        id: testShortcode("meal", "MEL-4K7M"),
+        mealType: "dinner",
+        mealKind: "cooked",
+        recipeNames: ["Carnitas"],
+      }),
       ...overrides,
     },
   });
@@ -73,7 +80,10 @@ const task = (overrides: DeepPartial<TaskItem> = {}): TaskItem =>
       startDate: "2026-08-20",
       endDateExclusive: "2026-08-21",
       status: "not_started",
-      trade: "building",
+      source: taskCalendarSourceFixture(
+        testShortcode("task", "TSK-9H64"),
+        "building",
+      ),
       projectName: null,
       ...overrides,
     },
@@ -151,7 +161,14 @@ describe("renderIcs wire format", () => {
 
   it("escapes backslash, semicolon, comma and newline in TEXT values", () => {
     const ics = render([
-      meal({ title: String.raw`a,b;c\d`, recipeNames: ["one", "two"] }),
+      meal({
+        title: String.raw`a,b;c\d`,
+        source: mealCalendarSourceFixture({
+          id: testShortcode("meal", "MEL-4K7M"),
+          mealType: "dinner",
+          recipeNames: ["one", "two"],
+        }),
+      }),
     ]);
     const lines = unfold(ics);
     expect(lines).toContain(String.raw`SUMMARY:a\,b\;c\\d`);
@@ -187,7 +204,17 @@ describe("renderIcs events", () => {
   it("leaves an unslotted meal an all-day event", () => {
     // No slot means no time of day was ever stated, so the feed must not invent
     // one — this stays the exclusive-DTEND all-day form.
-    const lines = unfold(render([meal({ mealType: null })]));
+    const lines = unfold(
+      render([
+        meal({
+          source: mealCalendarSourceFixture({
+            id: testShortcode("meal", "MEL-4K7M"),
+            mealType: null,
+            recipeNames: ["Carnitas"],
+          }),
+        }),
+      ]),
+    );
     expect(lines).toContain("DTSTART;VALUE=DATE:20260815");
     expect(lines).toContain("DTEND;VALUE=DATE:20260816");
   });

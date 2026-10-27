@@ -10,7 +10,11 @@ import { vendorSpendingProfile } from "./spending-classification";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import { batchOutSchema } from "./batch";
-import { fieldResolutionsSchema } from "./field-resolution";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import { fieldEnvelope, withFieldEnvelopes } from "./field-envelope";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { shortcodeEntities } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifier-fields";
@@ -24,7 +28,10 @@ import {
   spendingCategoryShortcode,
 } from "./identifiers";
 import { productCategory } from "./product-fields";
-import { purchasedCategorySummary } from "./product-category-fields";
+import {
+  rawProductCategorySummary,
+  rawPurchasedCategorySummary,
+} from "./product-category-fields";
 import {
   aiUsageTransport,
   aiUsageTransportValues,
@@ -136,12 +143,19 @@ export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
 
 export const MAX_DETECTED_INVENTORY_ITEMS = 20;
 
-export const detectedProductMatchSchema = z.object({
+export const rawDetectedProductMatchSchema = z.object({
   id: productShortcode,
   name: z.string(),
   brandName: z.string().nullable(),
-  category: productCategory.nullable(),
+  category: rawProductCategorySummary.omit({ feature: true }).nullable(),
 });
+export const detectedProductMatchSchema = withFieldEnvelopes(
+  rawDetectedProductMatchSchema.extend({
+    category: productCategory.nullable(),
+  }),
+  { brandName: productFieldEnvelopeFields.brandName },
+  productPublicReadFields,
+);
 export type DetectedProductMatch = z.infer<typeof detectedProductMatchSchema>;
 
 export const detectedItemSchema = z.object({
@@ -149,6 +163,10 @@ export const detectedItemSchema = z.object({
   matchedProduct: detectedProductMatchSchema.nullable(),
 });
 export type DetectedItem = z.infer<typeof detectedItemSchema>;
+export const rawDetectedItemSchema = detectedItemSchema.extend({
+  matchedProduct: rawDetectedProductMatchSchema.nullable(),
+});
+export type RawDetectedItem = z.infer<typeof rawDetectedItemSchema>;
 
 export const detectedInventoryAiResultSchema = z.object({
   items: z.array(detectedInventoryItemSchema).max(MAX_DETECTED_INVENTORY_ITEMS),
@@ -164,6 +182,10 @@ export const detectedInventorySchema = z.object({
   cache: aiCacheMetadataSchema,
 });
 export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
+export const rawDetectedInventorySchema = detectedInventorySchema.extend({
+  items: z.array(rawDetectedItemSchema),
+});
+export type RawDetectedInventory = z.infer<typeof rawDetectedInventorySchema>;
 
 export const approveDetectedInventoryItemInput = z.object({
   locationId: locationShortcode,
@@ -472,7 +494,7 @@ export const suggestionPurchaseEvidenceSchema = z.object({
   distinctPurchaseCount: z.number().int(),
   unknownCategoryLineCount: z.number().int(),
   truncated: z.boolean(),
-  categories: z.array(purchasedCategorySummary),
+  categories: z.array(rawPurchasedCategorySummary),
 });
 export const financeCategoryReviewSchema = z.object({
   evidence: suggestionPurchaseEvidenceSchema.optional(),
@@ -865,7 +887,7 @@ export type ExternalIdKindSuggestionInput = z.infer<
 export const fieldSuggestionsOut = z.object({
   suggestions: z.record(z.string(), fieldSuggestionSchema.nullable()),
   /** Authoritative inheritance state for this exact draft snapshot. */
-  fieldResolutions: fieldResolutionsSchema.optional(),
+  fields: z.record(z.string(), fieldEnvelope(z.json(), z.json())).optional(),
   /** Requested targets the server allowed the decision model to evaluate. */
   eligibleTargets: z.array(z.string()).optional(),
   /** One entry per requested target; why `suggestions[target]` is or isn't a

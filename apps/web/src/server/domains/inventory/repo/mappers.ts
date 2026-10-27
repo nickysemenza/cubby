@@ -1,19 +1,15 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import {
-  inventoryDisplayName,
-  type inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/inventory";
+import { inventoryDisplayName } from "@cubby/schemas/inventory";
 import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
-import type { z } from "zod";
+import type { RawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
 
 import { mapImages, parseInventoryAmount } from "~/server/db/helpers";
 import type {
   InventoryEntryDeepDB,
   InventoryEntryListDB,
 } from "~/server/domains/inventory/repo/types";
-import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import {
   mapDbProductToInventoryEmbed,
@@ -108,15 +104,13 @@ export const dbInventoryEntryToAPI: (
   valuation: number | null,
   pricing: ProductPricing,
   dataQuality: DataQuality,
-  locationDataQuality: DataQuality,
   ownership?: InventoryOwnershipTrace,
   displayImages?: DisplayImageSummary[],
-) => z.infer<typeof inventoryWithLocationAndProductOut> = (
+) => RawInventoryDetail = (
   inventoryentry,
   valuation,
   pricing,
   dataQuality,
-  locationDataQuality,
   ownership,
   displayImages = [],
 ) => {
@@ -127,27 +121,11 @@ export const dbInventoryEntryToAPI: (
     ...inventoryEntryOwnershipFields(
       ownership ?? unresolvedOwnership(inventoryentry),
     ),
+    locationId: parseShortcodeFor("location", location.shortcode),
     location: {
       id: parseShortcodeFor("location", location.shortcode),
-      lastBulkInventory: location.lastBulkInventory,
-      // Like `valuation` below: the embed is a lightweight identity reference,
-      // not the place callers read a location's AI description from.
-      aiDescription: null,
-      images: mapImages(location.images),
-      // Valuation is a whole-tree rollup; an inventory entry's embedded
-      // location is a lightweight identity reference, not a place callers
-      // read this location's own aggregate value from.
-      valuation: null,
       name: location.name,
-      aliases: location.aliases ?? [],
-      notes: location.notes ?? null,
       type: parseLocationType(location.type),
-      // The inventory embed carries the holding location's own identity so a
-      // stock row can render the bin it sits in without a second fetch.
-      product: mapLocationIdentityProduct(location),
-      createdAt: location.createdAt,
-      updatedAt: location.updatedAt,
-      dataQuality: locationDataQuality,
     },
     product: {
       displayImages,

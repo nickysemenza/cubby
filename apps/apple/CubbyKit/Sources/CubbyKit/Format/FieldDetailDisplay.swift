@@ -37,7 +37,7 @@ extension FieldDescriptor {
 
     /// A derived allocation is meaningful even when this field cannot be assigned manually.
     public func displayApplicabilityRefusal(in raw: JSONValue) -> String? {
-        if raw["fieldResolutions"]?[key]?["mode"]?.stringValue == "allocated" { return nil }
+        if FieldEnvelope.of(raw, field: self)?.isAllocated == true { return nil }
         return applicabilityRefusal(in: raw)
     }
 
@@ -58,7 +58,7 @@ extension FieldDescriptor {
     /// `meta.url`) when the field has one, else the field's own value.
     public func detailValue(in raw: JSONValue) -> JSONValue? {
         if let readPath { return raw.pathValue(readPath) }
-        return raw[key]
+        return raw.recordValue(key)
     }
 
     /// The value a surface reads, as the web does. Detail reads the declared `readPath`; other
@@ -68,7 +68,7 @@ extension FieldDescriptor {
         if readPath != nil, surface == "detail" || explanation?.projections[surface] == nil {
             return detailValue(in: raw)
         }
-        return FieldResolutionPresentation.readValue(in: raw, field: self, surface: surface)
+        return FieldEnvelopePresentation.readValue(in: raw, field: self, surface: surface)
     }
 
     /// The declared label for a string value (`display.valueOptions`), if the field names one.

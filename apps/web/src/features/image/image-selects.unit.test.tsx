@@ -1,4 +1,5 @@
-import type { ImageWithEntity } from "@cubby/schemas/image";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+type ImageWithEntity = DetailRecordOf<"image">;
 import { fireEvent, render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

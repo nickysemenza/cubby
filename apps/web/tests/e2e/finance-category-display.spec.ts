@@ -1,7 +1,7 @@
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
-import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   openCellExplanation,
   gotoAuthenticatedPage,
@@ -14,6 +14,14 @@ import {
   performOperation,
   unbatchFor,
 } from "./support/dispatch-wire";
+
+const expectationField = fieldEnvelope(z.string().nullable(), z.string());
+const purchasePolicy = z.object({
+  fields: z.object({
+    spendingCategoryId: fieldEnvelope(z.string().nullable(), z.string()),
+    itemizationExpectation: expectationField,
+  }),
+});
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
@@ -75,32 +83,60 @@ test("linked Expense categories display their readable label and transaction exp
     z
       .object({
         spendingCategoryId: z.null(),
-        spendingCategorySummary: spendingCategorySummarySchema,
-        itemizationExpectation: z.null(),
-        coverage: z.object({ expectation: z.string() }),
-        fieldResolutions: z.object({
-          itemizationExpectation: fieldResolutionSchema,
+        fields: z.object({
+          spendingCategorySummary: fieldEnvelope(
+            z.never(),
+            spendingCategorySummarySchema,
+          ),
+          coverage: fieldEnvelope(
+            z.never(),
+            z.object({ expectation: z.string() }),
+          ),
+          itemizationExpectation: expectationField,
         }),
       })
       .parse(await saved.json()),
   ).toMatchObject({
     spendingCategoryId: null,
-    spendingCategorySummary: {
-      state: "single",
-      categories: [{ id: categoryId, name: categoryName, amount: null }],
-      complete: true,
-      amountsKnown: false,
-    },
-    itemizationExpectation: null,
-    coverage: { expectation: "not_expected" },
-    fieldResolutions: {
+    fields: {
+      spendingCategorySummary: {
+        result: {
+          decision: {
+            outcome: {
+              kind: "value",
+              value: {
+                state: "single",
+                categories: [
+                  { id: categoryId, name: categoryName, amount: null },
+                ],
+                complete: true,
+                amountsKnown: false,
+              },
+            },
+          },
+        },
+      },
+      coverage: {
+        result: {
+          decision: {
+            outcome: { kind: "value", value: { expectation: "not_expected" } },
+          },
+        },
+      },
       itemizationExpectation: {
-        mode: "inherit",
-        storedValue: null,
-        value: "not_expected",
-        fallbackValue: "not_expected",
-        sourceEntity: { entityKind: "purchase", entityId: purchaseId },
-        canReset: false,
+        current: {
+          assignment: { kind: "inherit" },
+          controls: { kind: "editable", reset: { kind: "unavailable" } },
+        },
+        result: {
+          decision: {
+            outcome: { kind: "value", value: "not_expected" },
+            provenance: {
+              kind: "inherited",
+              source: { entityKind: "purchase", entityId: purchaseId },
+            },
+          },
+        },
       },
     },
   });
@@ -143,9 +179,13 @@ test("linked Expense categories display their readable label and transaction exp
   await page.keyboard.press("Escape");
   await openCellExplanation(row, "How itemization is determined");
   await expect(popover).toContainText("Technical details");
-  await expect(
-    popover.getByText("Confirmed allocations 1", { exact: true }),
-  ).toBeVisible();
+  const allocationEvidence = popover
+    .getByRole("listitem")
+    .filter({ hasText: "Confirmed allocations 1" });
+  await expect(allocationEvidence.getByRole("link")).toHaveAttribute(
+    "href",
+    `/purchases/${purchaseId}`,
+  );
   await expect(
     popover.getByText("Confirmed allocations", { exact: true }),
   ).toHaveCount(0);
@@ -165,11 +205,16 @@ test("linked Expense categories display their readable label and transaction exp
   expect(
     z
       .object({
-        itemizationExpectation: z.null(),
         spendingCategoryId: z.null(),
+        fields: z.object({ itemizationExpectation: expectationField }),
       })
       .parse(await unchanged.json()),
-  ).toEqual({ itemizationExpectation: null, spendingCategoryId: null });
+  ).toMatchObject({
+    spendingCategoryId: null,
+    fields: {
+      itemizationExpectation: { current: { assignment: { kind: "inherit" } } },
+    },
+  });
 });
 
 test("draft category edits hide obsolete policy provenance while the replacement request is pending", async ({
@@ -218,17 +263,15 @@ test("draft category edits hide obsolete policy provenance while the replacement
     {},
   );
   expect(
-    z
-      .object({
-        fieldResolutions: z.object({
-          itemizationExpectation: fieldResolutionSchema,
-        }),
-      })
-      .parse(await persisted.json()).fieldResolutions.itemizationExpectation,
+    purchasePolicy.parse(await persisted.json()).fields.itemizationExpectation,
   ).toMatchObject({
-    mode: "inherit",
-    value: "required",
-    sourceEntity: { entityId: oldCategory },
+    current: { assignment: { kind: "inherit" } },
+    result: {
+      decision: {
+        outcome: { kind: "value", value: "required" },
+        provenance: { kind: "inherited", source: { entityId: oldCategory } },
+      },
+    },
   });
   await page.getByRole("button", { name: /Edit Purchase/i }).click();
   const dialog = page.getByRole("dialog");
@@ -281,40 +324,41 @@ test("draft category edits hide obsolete policy provenance while the replacement
     releaseRequest();
   }
   const saved = await entityApi(page.request).get("purchase", purchaseId, {});
-  expect(
-    z
-      .object({
-        spendingCategoryId: z.string(),
-        itemizationExpectation: z.null(),
-      })
-      .parse(await saved.json()),
-  ).toEqual({
-    spendingCategoryId: oldCategory,
-    itemizationExpectation: null,
+  expect(purchasePolicy.parse(await saved.json())).toMatchObject({
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "value", value: oldCategory } },
+        result: {
+          decision: { outcome: { kind: "value", value: oldCategory } },
+        },
+      },
+      itemizationExpectation: { current: { assignment: { kind: "inherit" } } },
+    },
   });
   await performOperation(page, "entity.mutate", () =>
     dialog.getByRole("button", { name: "Save changes", exact: true }).click(),
   );
   await expect(dialog).toHaveCount(0);
   const updated = await entityApi(page.request).get("purchase", purchaseId, {});
-  expect(
-    z
-      .object({
-        spendingCategoryId: z.string(),
-        itemizationExpectation: z.null(),
-        fieldResolutions: z.object({
-          itemizationExpectation: fieldResolutionSchema,
-        }),
-      })
-      .parse(await updated.json()),
-  ).toMatchObject({
-    spendingCategoryId: newCategory,
-    itemizationExpectation: null,
-    fieldResolutions: {
+  expect(purchasePolicy.parse(await updated.json())).toMatchObject({
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "value", value: newCategory } },
+        result: {
+          decision: { outcome: { kind: "value", value: newCategory } },
+        },
+      },
       itemizationExpectation: {
-        mode: "inherit",
-        value: "not_expected",
-        sourceEntity: { entityId: newCategory },
+        current: { assignment: { kind: "inherit" } },
+        result: {
+          decision: {
+            outcome: { kind: "value", value: "not_expected" },
+            provenance: {
+              kind: "inherited",
+              source: { entityId: newCategory },
+            },
+          },
+        },
       },
     },
   });
@@ -346,6 +390,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const { id: principal } = await createEntityFixture(page, "expense", {
     name: `${tag} principal`,
+    lineKind: "principal",
+    lineBasis: "item_line",
     costType: "services",
     trade: "other",
     purchaseId,
@@ -365,6 +411,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   );
   await createEntityFixture(page, "expense", {
     name: `${tag} second principal`,
+    lineKind: "principal",
+    lineBasis: "item_line",
     costType: "services",
     trade: "other",
     purchaseId,
@@ -382,6 +430,8 @@ test("expense category pills agree with quality for direct, allocated, and missi
   });
   const { id: missing } = await createEntityFixture(page, "expense", {
     name: `${tag} unclassified`,
+    lineKind: "principal",
+    lineBasis: "item_line",
     costType: "services",
     trade: "other",
     cost: 10,
@@ -390,14 +440,22 @@ test("expense category pills agree with quality for direct, allocated, and missi
   const read = async (id: string) => {
     const response = await entityApi(page.request).get("expense", id, {});
     expect(response.ok(), await response.text()).toBeTruthy();
-    return z
+    const envelope = z
       .object({
-        dataQuality: z.object({
-          score: z.number().nullable(),
-          gaps: z.array(z.object({ check: z.string() })),
+        fields: z.object({
+          dataQuality: fieldEnvelope(
+            z.json(),
+            z.object({
+              score: z.number().nullable(),
+              gaps: z.array(z.object({ check: z.string() })),
+            }),
+          ),
         }),
       })
-      .parse(await response.json()).dataQuality;
+      .parse(await response.json()).fields.dataQuality;
+    const value = fieldValueOf(envelope);
+    if (!value) throw new Error("Synthetic Expense quality was not computed");
+    return value;
   };
   expect((await read(missing)).score).toBeLessThan(100);
   expect((await read(missing)).gaps.map((gap) => gap.check)).toContain(

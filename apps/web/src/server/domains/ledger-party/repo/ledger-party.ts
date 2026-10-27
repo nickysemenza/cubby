@@ -9,10 +9,12 @@ import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyCreateInput,
   LedgerPartyFilters,
-  LedgerPartyOut,
   LedgerPartyUpdateData,
 } from "@cubby/schemas/ledger-party";
-import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
+import {
+  type RawLedgerPartyOut,
+  rawLedgerPartyOut,
+} from "@cubby/schemas/ledger-party-raw-read";
 import { type MealFoodAmount } from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -325,9 +327,9 @@ const ledgerPartyRead = listReadPlan<LedgerPartyRow>("ledgerParty");
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: LedgerPartyRow[],
-): Promise<LedgerPartyOut[]> =>
+): Promise<RawLedgerPartyOut[]> =>
   (await ledgerPartyRead.read(db, rows, { kind: "full" })).map((row) =>
-    ledgerPartyOut.parse(row),
+    rawLedgerPartyOut.parse(row),
   );
 
 const scaffold = listScaffold("ledgerParty", ledgerParty);
@@ -489,7 +491,7 @@ export const listLedgerPartiesRead = (
   );
 
 export const listLedgerParties = completeListReader(
-  ledgerPartyOut,
+  rawLedgerPartyOut,
   listLedgerPartiesRead,
 );
 

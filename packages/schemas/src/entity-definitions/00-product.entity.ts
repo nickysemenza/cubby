@@ -1,6 +1,5 @@
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { imageAssociationStorage } from "./image-associations";
 import {
   productPrimaryPlacement,
@@ -32,22 +31,25 @@ import {
 import { productAttachmentImageOut } from "./field-primitives.js";
 import { productImagePurpose } from "../image-summary.js";
 import { money } from "@cubby/schemas/money";
-import {
-  optionalFieldResolutionsSchema,
-  resolvedListSchema,
-} from "@cubby/schemas/field-resolution";
+import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
   moneyNullable,
   positiveMoneyNullable,
   productPricingOut,
+  productPricingEvidence,
+  productCost,
   productQuantityVarianceState,
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { fdcId, foodSummary } from "@cubby/usda";
 import { FILTER_ANY, FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
-import { productCategorySummary } from "../product-category-fields";
+import {
+  productCategorySummary,
+  rawProductCategorySummary,
+  productCategoryFeature,
+} from "../product-category-fields";
 
 /** Kit links: a component's price and quantities read its kits' lines. */
 const KIT_LINK_INPUTS: DerivedStoredInput[] = [
@@ -260,7 +262,13 @@ export default defineEntity(
             kind: "fields",
             id: "stock-and-price",
             title: "Stock & price",
-            fields: ["price", "stockTracked", "kind", "acquisitionOrigin"],
+            fields: [
+              "cost",
+              "price",
+              "stockTracked",
+              "kind",
+              "acquisitionOrigin",
+            ],
           },
           { kind: "fields", id: "owners", title: "Owner", fields: ["owners"] },
           { kind: "slot", id: "ownership", title: "Ownership & evidence" },
@@ -1136,7 +1144,8 @@ Rules:
           kind: "json",
           nullable: true,
           validation: {
-            read: productCategorySummary.nullable(),
+            read: rawProductCategorySummary.nullable(),
+            publicRead: productCategorySummary.nullable(),
             create: null,
             update: null,
           },
@@ -1145,13 +1154,18 @@ Rules:
           key: "categoryFeature",
           kind: "text",
           nullable: true,
+          validation: {
+            read: productCategoryFeature.nullable(),
+            create: null,
+            update: null,
+          },
           labelOverride: "Category family",
           // Saved views expose this column; use the inherited family matched by its filter.
           display: {
             columnGroup: "Catalog",
             detail: false,
             listHidden: true,
-            readPath: "category.feature",
+            readPath: "categoryFeature",
           },
           provenance: {
             kind: "derived",
@@ -1235,8 +1249,7 @@ Rules:
           control: { kind: "number", renderer: "money", width: "half" },
           display: {
             columnGroup: "Purchasing",
-            columnLabel: "Cost",
-            labelPath: "pricing.cost.label",
+            listHidden: true,
             format: "currency",
           },
           resolution: {
@@ -1246,27 +1259,23 @@ Rules:
           explanation: {
             ruleId: "product.effective-valuation-price",
             description:
-              "Cost shows the effective item price for physical Products and the average positive actual charge for services. Service averages exclude credits and unknown amounts and do not imply a monthly rate. Inventory valuation uses only the item price.",
+              "Valuation price uses an eligible manual item-price override or the Expense-derived item price. It is not applicable to services; their descriptive charge average is a separate Cost result.",
             projections: {
-              list: "pricing.cost.amount",
-              detail: "fieldResolutions.price.value",
-              summary: "fieldResolutions.price.value",
+              list: "price",
+              detail: "price",
+              summary: "price",
             },
             sourceDependencies: [
               {
-                path: "pricing.cost",
-                label: "Cost basis, charge count and latest dated charge",
-              },
-              {
-                path: "fieldResolutions.price.storedValue",
+                path: "fields.price.current.assignment.value",
                 label: "Manual valuation price",
               },
               {
-                path: "fieldResolutions.price.fallbackValue",
+                path: "fields.price.current.controls.reset.preview.result.decision.outcome.value",
                 label: "Expense-derived unit price",
               },
               {
-                path: "fieldResolutions.price.source",
+                path: "fields.price.result.decision.provenance",
                 label: "Selected price source",
               },
               { path: "pricing.partial", label: "Incomplete expense coverage" },
@@ -1278,6 +1287,33 @@ Rules:
             ),
             create: positiveMoneyNullable.optional(),
             update: positiveMoneyNullable.optional(),
+          },
+        },
+        {
+          key: "cost",
+          kind: "json",
+          display: {
+            columnGroup: "Purchasing",
+            format: "currency",
+            readPath: "cost.amount",
+            renderer: { detail: "product-cost" },
+            width: "sm",
+            mobile: { slot: "trailing", priority: 10 },
+          },
+          provenance: {
+            kind: "derived",
+            sources: [{ entity: "expense", relation: "expenses" }],
+          },
+          validation: {
+            read: productCost.nullish(),
+            publicRead: productCost,
+            create: null,
+            update: null,
+          },
+          explanation: {
+            ruleId: "product.descriptive-cost",
+            description:
+              "Physical Cost follows the selected valuation price. Service Cost is the published average of positive actual charges, with its matching count and latest dated charge; it is not a monthly rate.",
           },
         },
         {
@@ -1389,21 +1425,21 @@ Rules:
               "A Product's own stock-tracking decision wins; otherwise its Product Category's effective decision applies. With neither, the Product is undecided.",
             resolver: "field",
             projections: {
-              list: "fieldResolutions.stockTracked.value",
-              detail: "fieldResolutions.stockTracked.value",
-              summary: "fieldResolutions.stockTracked.value",
+              list: "stockTracked",
+              detail: "stockTracked",
+              summary: "stockTracked",
             },
             sourceDependencies: [
               {
-                path: "fieldResolutions.stockTracked.storedValue",
+                path: "fields.stockTracked.current.assignment.value",
                 label: "Product decision",
               },
               {
-                path: "fieldResolutions.stockTracked.fallbackValue",
+                path: "fields.stockTracked.current.controls.reset.preview.result.decision.outcome.value",
                 label: "Category decision",
               },
               {
-                path: "fieldResolutions.stockTracked.sourceEntity",
+                path: "fields.stockTracked.result.decision.provenance.source",
                 label: "Source category",
               },
             ],
@@ -1585,16 +1621,7 @@ Rules:
           kind: "json",
           validation: {
             read: productPricingOut,
-            create: null,
-            update: null,
-          },
-        },
-        {
-          display: { detail: false, list: false },
-          key: "fieldResolutions",
-          kind: "json",
-          validation: {
-            read: optionalFieldResolutionsSchema,
+            publicRead: productPricingEvidence,
             create: null,
             update: null,
           },
@@ -1630,8 +1657,8 @@ Rules:
                 label: "Product accounting category",
               },
               {
-                path: "pricing.effectivePrice",
-                label: "Effective product price",
+                path: "price",
+                label: "Selected valuation price",
               },
               {
                 path: "unitPriceMappings",
@@ -1961,7 +1988,7 @@ Rules:
             sourceDependencies: [
               { path: "stockStatusItems", label: "Inventory evaluation" },
               {
-                path: "fieldResolutions.stockTracked",
+                path: "fields.stockTracked",
                 label: "Tracking policy and source",
               },
               { path: "quantityLedger", label: "Acquisitions and exits" },
@@ -2269,7 +2296,6 @@ Rules:
       },
       // Stored derived values that are not list fields (ADR 0021).
       stored: {
-        automaticFields: automaticFields("product", "Product"),
         conversionCoverage: {
           compute: "product.conversionCoverage",
           inputs: [
@@ -2368,6 +2394,13 @@ Rules:
             dependsOn: [
               { entity: "product", key: "price", through: KIT_COMPONENT_LINK },
             ],
+          },
+        },
+        cost: {
+          type: "number",
+          stored: {
+            compute: "product.cost",
+            inputs: PRODUCT_PRICING_INPUTS,
           },
         },
         // The primary live GTIN, else the oldest.
@@ -2568,8 +2601,8 @@ Rules:
         "images",
         "externalIds",
         "price",
+        "cost",
         "pricing",
-        "fieldResolutions",
         "usdaUnavailable",
         "stockTracked",
         "kind",
@@ -2578,6 +2611,7 @@ Rules:
         "createdAt",
         "updatedAt",
         "category",
+        "categoryFeature",
         "itemImageCount",
         "labelImageCount",
         "labelImages",
@@ -2585,31 +2619,87 @@ Rules:
       ],
     },
     fields: {
+      embedded: [
+        {
+          path: ["images"],
+          entity: "image",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
+          path: ["labelImages"],
+          entity: "image",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
+          path: ["category"],
+          entity: "productCategory",
+          projections: [
+            "output",
+            "list",
+            "detail",
+            "mcpOutput",
+            "mcpList",
+            "mcpDetail",
+          ],
+        },
+        {
+          path: ["servingAsLocations"],
+          entity: "location",
+          projections: ["detail", "mcpDetail"],
+        },
+        {
+          path: ["servingAsLocations", "ancestors"],
+          entity: "location",
+          projections: ["detail", "mcpDetail"],
+        },
+        {
+          path: ["inventoryEntry"],
+          entity: "inventory",
+          projections: ["list", "detail", "mcpList", "mcpDetail"],
+        },
+      ],
       create: {
         module: "@cubby/schemas/product",
         export: "productCreateInput",
       },
       update: { module: "@cubby/schemas/product", export: "productUpdateData" },
       output: {
-        module: "@cubby/schemas/product",
-        export: "productTopLevelOut",
+        module: "@cubby/schemas/product-raw-read",
+        export: "rawProductOutput",
       },
-      list: { module: "@cubby/schemas/product", export: "productListItemOut" },
+      list: {
+        module: "@cubby/schemas/product-raw-read",
+        export: "rawProductList",
+      },
       detail: {
-        module: "@cubby/schemas/product",
-        export: "productWithFoodOut",
+        module: "@cubby/schemas/product-raw-read",
+        export: "rawProductDetail",
       },
       mcpOutput: {
-        module: "@cubby/schemas/product",
-        export: "productTopLevelMcpEntityOut",
+        module: "@cubby/schemas/product-raw-read",
+        export: "rawProductMcpOutput",
       },
       mcpList: {
-        module: "@cubby/schemas/product",
-        export: "productListItemMcpEntityOut",
+        module: "@cubby/schemas/product-raw-read",
+        export: "rawProductMcpList",
       },
       mcpDetail: {
-        module: "@cubby/schemas/product",
-        export: "productWithFoodMcpEntityOut",
+        module: "@cubby/schemas/product-raw-read",
+        export: "rawProductMcpDetail",
       },
     },
     storage: {
@@ -4098,6 +4188,10 @@ Rules:
         },
       ],
       ports: {
+        fieldEnvelope: {
+          module: "~/server/domains/product/repo/field-envelope",
+          export: "projectProductFieldEnvelopes",
+        },
         repository: {
           module: "~/server/domains/product/repo/repository",
           export: "productRepository",

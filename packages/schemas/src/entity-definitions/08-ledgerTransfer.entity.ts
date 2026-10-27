@@ -413,8 +413,8 @@ export default defineEntity({
       export: "ledgerTransferUpdateData",
     },
     output: {
-      module: "@cubby/schemas/ledger-transfer",
-      export: "ledgerTransferOut",
+      module: "@cubby/schemas/ledger-transfer-raw-read",
+      export: "rawLedgerTransferOut",
     },
   },
   // A durable movement between ledger parties; it is never spend.

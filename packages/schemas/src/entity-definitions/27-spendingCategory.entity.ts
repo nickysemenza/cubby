@@ -1,9 +1,7 @@
-import { automaticFields } from "./automatic-fields";
 import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
 import { z } from "zod";
 import { spendingCategoryShortcode as code } from "../identifier-fields";
-import { optionalFieldResolutionsSchema } from "../field-resolution";
 import { productExpectation } from "../purchase-evidence-policy";
 import { defineEntity } from "./definition";
 
@@ -105,9 +103,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: {
-      automaticFields: automaticFields("spendingCategory", "SpendingCategory"),
-    },
     hierarchy: { parentField: "parentId", maxDepth: 10 },
     fields: [
       {
@@ -297,16 +292,6 @@ export default defineEntity({
         },
       },
       {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
-        },
-      },
-      {
         // Gates only the import arrival prompt for Products whose own stock
         // tracking is undecided (ADR 0013).
         key: "stockTracked",
@@ -326,21 +311,21 @@ export default defineEntity({
             "A spending category's own stock-tracking decision wins; otherwise the nearest live ancestor with a decision supplies it. With neither, the category is undecided.",
           resolver: "field",
           projections: {
-            list: "fieldResolutions.stockTracked.value",
-            detail: "fieldResolutions.stockTracked.value",
-            summary: "fieldResolutions.stockTracked.value",
+            list: "stockTracked",
+            detail: "stockTracked",
+            summary: "stockTracked",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.stockTracked.storedValue",
+              path: "fields.stockTracked.current.assignment.value",
               label: "Category decision",
             },
             {
-              path: "fieldResolutions.stockTracked.fallbackValue",
+              path: "fields.stockTracked.current.controls.reset.preview.result.decision.outcome.value",
               label: "Ancestor decision",
             },
             {
-              path: "fieldResolutions.stockTracked.sourceEntity",
+              path: "fields.stockTracked.result.decision.provenance.source",
               label: "Source category",
             },
           ],
@@ -430,7 +415,6 @@ export default defineEntity({
       "itemizationExpectation",
       "productExpectation",
       "stockTracked",
-      "fieldResolutions",
       "createdAt",
       "updatedAt",
     ],
@@ -467,8 +451,8 @@ export default defineEntity({
       export: "spendingCategoryUpdateData",
     },
     output: {
-      module: "@cubby/schemas/spending-category",
-      export: "spendingCategoryOut",
+      module: "@cubby/schemas/spending-category-raw-read",
+      export: "rawSpendingCategoryOut",
     },
   },
   storage: {

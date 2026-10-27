@@ -23,7 +23,7 @@ import type { LocationCreateInput } from "@cubby/schemas/location";
 import type { PlantCreateInput } from "@cubby/schemas/plant";
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
-import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { type RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -50,6 +50,7 @@ import {
   insertPayloadsWithIdentities,
   type EntityPayloadValues,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getDb, notDeleted } from "../db/helpers";
@@ -65,7 +66,6 @@ import {
 } from "../domains/product/repo/crud";
 import { createRecipe } from "../domains/recipe/repo/crud";
 import type { CookbookImportContext } from "../domains/recipe/repo/import-recipe-convert";
-import { resolveLiveShortcode } from "../generic/shortcode/repo/shortcode-resolver";
 
 // Shared fixture builders for the repo integration tests. Each factory states
 // the irrelevant scaffolding fields once so a test only spells out the values

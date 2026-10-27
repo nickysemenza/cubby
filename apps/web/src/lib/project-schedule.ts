@@ -56,11 +56,13 @@ type ScheduleTask = Pick<
   | "name"
   | "status"
   | "due"
-  | "projectId"
   | "parentTaskId"
   | "blockedByIds"
   | "blockingIds"
->;
+> & {
+  /** The report supplies resolved ownership before this scheduling calculation. */
+  projectId: ProjectOut["id"] | null;
+};
 
 function taskScheduleRow(
   task: ScheduleTask,

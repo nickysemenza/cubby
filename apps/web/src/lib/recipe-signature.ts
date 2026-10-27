@@ -1,3 +1,4 @@
+import { sanitizeSectionName } from "@cubby/schemas/codec";
 /**
  * Stable content signatures for recipes, so an import preview can tell
  * "already imported, no changes" from "will update". Every builder constructs
@@ -6,11 +7,12 @@
  * raw source line as `rawLine`, so comparing raw lines is a faithful "did the
  * source change" check — independent of ingredient resolution / linking.
  */
-
-import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type { RecipeGraphOut, RecipeOut } from "@cubby/schemas/recipe";
+import type {
+  RawRecipeGraph as RecipeGraphOut,
+  RawRecipeOutput as RecipeOut,
+} from "@cubby/schemas/recipe-raw-read";
 
 import {
   cookbookRecipeNotes,
@@ -35,12 +37,16 @@ const signature = (content: RecipeSignatureContent): string =>
 
 /** Signature of an already-imported recipe, from its stored content. */
 export function recipeOutSignature(recipe: RecipeOut | RecipeGraphOut): string {
+  // Import identity compares authored content, so a yield-derived serving
+  // result must not make an unchanged source look edited.
+  const servings = recipe.servings ?? null;
+  const tags = recipe.tags;
   return signature({
     yield: recipe.yield
       ? { value: recipe.yield.value, unit: recipe.yield.unit }
       : null,
-    servings: recipe.servings ?? null,
-    tags: [...(recipe.tags ?? [])].sort(),
+    servings,
+    tags: [...(tags ?? [])].sort(),
     notes: recipe.notes ?? null,
     sections: recipe.sections.map((s) => ({
       name: s.name ?? null,

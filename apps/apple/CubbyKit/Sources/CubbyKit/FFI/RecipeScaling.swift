@@ -107,7 +107,7 @@ public struct RecipeCookPlan: Sendable, Equatable {
         self.steps = steps
         yieldValue = recipe["yield"]?["value"]?.doubleValue
         yieldUnit = recipe["yield"]?["unit"]?.stringValue
-        servingsValue = recipe["servings"]?.doubleValue
+        servingsValue = recipe.recordValue("servings")?.doubleValue
     }
 
     /// One ingredient line at `factor`: `4 cup (500 g) flour, sifted`.

@@ -279,8 +279,8 @@ describe("structured field read-to-input vectors", () => {
   } satisfies Record<string, () => Promise<string>>;
 
   /**
-   * The bulky nutrition blocks a meal's recipe rows read are not part of any input, so the vector
-   * pins them as `null` rather than carrying a few hundred lines of "unavailable".
+   * Occurrence nutrition is not part of any input. Pin it to null while retaining
+   * the nested Recipe's canonical field envelopes in the shared read vector.
    */
   const elided = (id: string, value: z.core.util.JSONType) =>
     id === "meal.recipes"
@@ -290,10 +290,6 @@ describe("structured field read-to-input vectors", () => {
           .map((row) => ({
             ...row,
             scaledTotals: null,
-            recipe: {
-              ...z.record(z.string(), z.json()).parse(row.recipe),
-              totals: null,
-            },
           }))
       : value;
 

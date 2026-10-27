@@ -1,4 +1,3 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { BookOpenIcon } from "@phosphor-icons/react/dist/csr/BookOpen";
 import { GitBranchIcon } from "@phosphor-icons/react/dist/csr/GitBranch";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
@@ -15,6 +14,7 @@ import {
 import { useCallback, useMemo, useState } from "react";
 
 import { entityDetailFor } from "~/entity/entity-detail";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useRecipeCostingData } from "~/entity/hooks/use-recipe-costing-data";
 import { DetailPagePending } from "~/entity/navigation/route-pending";
 import { Page } from "~/entity/page/page";
@@ -241,3 +241,5 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
     </Page>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

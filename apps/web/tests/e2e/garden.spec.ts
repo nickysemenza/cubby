@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type { Page } from "@playwright/test";
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
@@ -118,7 +120,15 @@ test("a planting opens from its list inspector and saves an edited status", asyn
     existingPlanting.id,
     {},
   );
-  expect(await updated.json()).toMatchObject({ status: "finished" });
+  const saved = entityFieldEnvelopeSchemas.planting.detail
+    .pick({})
+    .extend({
+      fields: entityFieldEnvelopeSchemas.planting.detail.shape.fields.pick({
+        status: true,
+      }),
+    })
+    .parse(await updated.json());
+  expect(fieldValueOf(saved.fields.status)).toBe("finished");
 });
 
 test("a planting journal entry persists and appears in its location relation", async ({

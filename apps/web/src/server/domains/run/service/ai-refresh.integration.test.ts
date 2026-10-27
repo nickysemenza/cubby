@@ -431,7 +431,12 @@ describe("targeted prompt refresh", () => {
       .from(aiEvaluation)
       .where(fieldRefreshTarget);
     expect(evaluation?.snapshot).toMatchObject({
-      basis: { name: "Synthetic canonical groceries" },
+      basis: {
+        name: "Synthetic canonical groceries",
+        categoryId: null,
+        __resolutionContext: expect.stringContaining('"categoryId"'),
+      },
+      currentValue: null,
     });
     expect(await productCategoryId(ctx.db, item.id)).toBeNull();
     await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
@@ -863,6 +868,13 @@ describe("targeted prompt refresh", () => {
         .from(aiEvaluation)
         .where(fieldRefreshTarget);
       expect(evaluation).toBeDefined();
+      expect(evaluation?.snapshot).toMatchObject({
+        currentValue: taxonomyShortcode("tools"),
+        basis: {
+          categoryId: taxonomyShortcode("tools"),
+          __resolutionContext: expect.stringContaining('"categoryId"'),
+        },
+      });
       await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
       expect(await productCategoryId(ctx.db, item.id)).toBe(
         taxonomyId("tools"),

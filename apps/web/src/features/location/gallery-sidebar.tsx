@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { useEffect, useRef } from "react";
 
@@ -18,7 +18,7 @@ export function GallerySidebar({
   collapsed,
   onToggleCollapse,
 }: {
-  locations: InfLocation[];
+  locations: LocationTreeNode[];
   query: string;
   filtering: boolean;
   selectedId?: string;

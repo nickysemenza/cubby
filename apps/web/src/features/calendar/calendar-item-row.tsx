@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { capitalize } from "@cubby/shared";
 
@@ -9,6 +10,7 @@ import { InheritedMarker } from "~/entity/fields/field-resolution";
 import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Badge } from "~/ui/primitives/badge";
 
@@ -101,7 +103,10 @@ function CalendarItemPresentation({
     entityKind: item.kind,
     entityId: item.id,
   });
-  const image = resolvedImage ?? item.displayImages[0] ?? null;
+  const image =
+    resolvedImage ??
+    fieldValueOf(item.source.fields.displayImages)?.[0] ??
+    null;
   if (variant === "month")
     return <CalendarItemCompact item={item} image={image} />;
   // "detail" is the fortnight density: the rich two-line block with a thumbnail
@@ -191,9 +196,11 @@ function CalendarItemCompact({
           {presentation.compactBadge.label}
         </Badge>
       )}
-      {item.kind === "project" && item.projectKind && (
+      {item.kind === "project" && fieldValueOf(item.source.fields.kind) && (
         <span className="shrink-0 text-muted-foreground">
-          {capitalize(item.projectKind)}
+          <FieldRecordValue record={item.source} field="kind">
+            {capitalize(fieldValueOf(item.source.fields.kind) ?? "")}
+          </FieldRecordValue>
         </span>
       )}
       {span && (

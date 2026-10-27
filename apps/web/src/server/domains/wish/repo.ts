@@ -13,14 +13,16 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   WishCreateInput,
   WishFilters,
-  WishOut,
   WishUpdateData,
 } from "@cubby/schemas/wish";
-import { wishListItemOut } from "@cubby/schemas/wish";
 import {
   wishPriceRangeOut,
   type WishPriceRange,
 } from "@cubby/schemas/wish-fields";
+import {
+  type RawWishOut,
+  rawWishListItemOut,
+} from "@cubby/schemas/wish-raw-read";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -178,7 +180,7 @@ const toWishOut = (
   row: WishRow,
   candidates: CandidateRow[],
   dataQuality: DataQuality,
-): WishOut => {
+): RawWishOut => {
   const publicCandidates = publicWishCandidates(candidates);
   return {
     id: parseShortcodeFor("wish", row.shortcode),
@@ -198,7 +200,7 @@ const toWishOut = (
 const hydrateWishes = async (
   db: Database | DrizzleTransaction,
   rows: WishRow[],
-): Promise<WishOut[]> => {
+): Promise<RawWishOut[]> => {
   const [candidates, dataQualities] = await Promise.all([
     candidateRowsForWishes(
       db,
@@ -231,7 +233,7 @@ const wishRead = {
     );
     return [
       candidates.fields(
-        wishListItemOut.pick({
+        rawWishListItemOut.pick({
           candidates: true,
           candidateItems: true,
           candidateCount: true,
@@ -307,7 +309,7 @@ export const wishListSummary = async (db: Database, filters: WishFilters) => {
 };
 
 export const wishList = completeListReader(
-  wishListItemOut,
+  rawWishListItemOut,
   wishListRead,
   wishListSummary,
 );

@@ -1,5 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import { displayImagesField } from "@cubby/schemas/display-images";
 import {
   type Entity,
   type EntityRef,
@@ -8,9 +8,10 @@ import {
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { locationType, type LocationType } from "@cubby/schemas/location";
+import { locationType } from "@cubby/schemas/location";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsThreeIcon } from "@phosphor-icons/react/dist/csr/DotsThree";
 import { EyeIcon } from "@phosphor-icons/react/dist/csr/Eye";
@@ -38,8 +39,10 @@ import {
   entityPluralLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { readRecordField } from "~/entity/entity-references";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
+import { readPathValue } from "~/entity/read-path";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import { cn } from "~/lib/utils";
@@ -96,11 +99,7 @@ import {
 import { serverTreeChildCount } from "../../ui/hooks/use-server-tree-children";
 import { isOpenDeadline } from "../display/entity-display";
 import { useEntityDisplayImage } from "../entity-media/entity-display-images";
-import {
-  buildLocationComboboxItem,
-  buildProductComboboxItem,
-  buildRecordComboboxItem,
-} from "../picker/combobox-builders";
+import { buildRecordComboboxItem } from "../picker/combobox-builders";
 import { referenceEntitySearch } from "../picker/reference-entity-search";
 import type { SearchProviderProps } from "../picker/with-search-hook";
 import {
@@ -111,6 +110,7 @@ import {
 import { EditableEntityCell } from "./editable-entity-cell";
 import { ImageThumbnail } from "./image-thumbnail";
 
+const optionalBooleanSchema = z.boolean().nullish();
 const recordEmojiSchema = z.object({ emoji: z.string().nullable().optional() });
 
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
@@ -474,13 +474,9 @@ interface CreateImageColumnOptions<T> {
   rowEntity?: (row: T) => Entity | undefined;
   /** Field-key id when an entity declares an images column. */
   id?: string;
-  /** How this row resolves its thumbnail. Defaults to `row.displayImages` —
-   *  the server-resolved list contract (own gallery/cover, or a borrowed
-   *  entity's photos) that every `displayImages` manifest entity's list row
-   *  carries. Pass `getImages` only for a table of a non-list shape whose rows
-   *  still carry their own `images[]` (purchase products, kit components,
-   *  project tools) — name `rowImages` at the call site for those, or a
-   *  cascade resolver when the row borrows a linked entity's cover. */
+  /** Defaults to the canonical `displayImages` envelope: the server selects
+   *  the row's own or borrowed cover. Supply `getImages` for non-entity display
+   *  snapshots or an explicit media projection, not a retired entity slot. */
   getImages?: (row: T) => Array<{ id: string; url: string; filename?: string }>;
   /** The record a row is about, when the row carries no images of its own (a
    *  Suggestion, a recipe line): its cover comes from the table's batched
@@ -496,21 +492,15 @@ interface CreateImageColumnOptions<T> {
 
 /** A row carrying the server-resolved `displayImages` list contract — the
  *  default `getImages` source. */
-interface DisplayImagesRow {
-  displayImages: DisplayImageSummary[];
-}
-
-/**
- * Runtime twin of `DisplayImagesRow` for a table whose row type is narrower
- * than the rows it actually receives (the expense list's `ColumnHelper` is
- * typed to `ExpenseOut` so it can share column factories with the project
- * page's embedded expense table). A predicate, not an assertion: the guard
- * scripts forbid asserting into a branded-id shape.
- */
+const displayImagesRow = z.object({
+  fields: z.object({
+    displayImages: fieldEnvelope(z.unknown(), displayImagesField),
+  }),
+});
+type DisplayImagesRow = z.output<typeof displayImagesRow>;
 export const hasDisplayImages = <T extends object>(
   row: T,
-): row is T & DisplayImagesRow =>
-  "displayImages" in row && Array.isArray(row.displayImages);
+): row is T & DisplayImagesRow => displayImagesRow.safeParse(row).success;
 
 type ImageColumnDef<T extends object> = CubbyColumnDef<
   T,
@@ -525,7 +515,7 @@ type ImageColumnDef<T extends object> = CubbyColumnDef<
 export const isImageColumnId = (id: string | null | undefined): boolean =>
   id === "image" || id === "images";
 
-export function createImageColumn<T extends object & DisplayImagesRow>(
+export function createImageColumn<T extends object>(
   columnHelper: ColumnHelper<T>,
   options: CreateImageColumnOptions<T>,
 ): ImageColumnDef<T>;
@@ -554,7 +544,11 @@ export function createImageColumn<T extends object>(
   // implementation signature just can't say so, hence the runtime predicate.
   const getImages =
     options.getImages ??
-    ((row: T) => (hasDisplayImages(row) ? row.displayImages : []));
+    ((row: T) => {
+      return hasDisplayImages(row)
+        ? (fieldValueOf(row.fields.displayImages) ?? [])
+        : [];
+    });
 
   return columnHelper.accessor((row) => getImages(row), {
     id: options.id ?? "image",
@@ -650,13 +644,19 @@ const ingredientInlineSchema = z.object({ id: z.string(), name: z.string() });
 const productInlineSchema = z.object({
   id: z.string(),
   name: z.string(),
-  brandName: z.string().nullable(),
+  brandName: z.string().nullable().optional(),
+  fields: z
+    .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+    .optional(),
 });
 const recipeInlineSchema = z.object({ id: z.string(), name: z.string() });
 const locationInlineSchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: locationType.nullable(),
+  type: locationType.nullable().optional(),
+  fields: z
+    .record(z.string(), fieldEnvelope(z.unknown(), z.unknown()))
+    .optional(),
 });
 const usdaFoodInlineSchema = z.object({
   fdc_id: z.number(),
@@ -667,12 +667,12 @@ type EntityColumnData =
   | { entity: "ingredient"; items: { name: string; id: string }[] }
   | {
       entity: "product";
-      items: { name: string; id: string; brandName: string | null }[];
+      items: z.output<typeof productInlineSchema>[];
     }
   | { entity: "recipe"; items: { name: string; id: string }[] }
   | {
       entity: "location";
-      items: { name: string; id: string; type: LocationType | null }[];
+      items: z.output<typeof locationInlineSchema>[];
     };
 
 type EntityColumnItems<TEntity extends EntityColumnData["entity"]> = Extract<
@@ -909,10 +909,7 @@ export function createEditableAccessorColumn<
   });
 }
 
-export function createTextColumn<
-  K extends PropertyKey,
-  T extends Record<K, string | null | undefined>,
->(
+export function createTextColumn<K extends PropertyKey, T extends object>(
   columnHelper: ColumnHelper<T>,
   accessor: K,
   options?: {
@@ -945,7 +942,11 @@ export function createTextColumn<
       ));
   const renderRow = (value: string | null, row: T) => renderValue(value, row);
   const editable = options?.editable;
-  const textValue = (row: T): string | null => row[accessor] ?? null;
+  const textValue = (row: T): string | null =>
+    z
+      .string()
+      .nullish()
+      .parse(readPathValue(row, String(accessor))) ?? null;
 
   const cellData = textCellData<T>(
     "text",
@@ -987,10 +988,7 @@ export function createTextColumn<
 }
 
 /** A string value drawn from a fixed option roster; read-only without `editable`. */
-export function createSelectColumn<
-  K extends PropertyKey,
-  T extends Record<K, string | null | undefined>,
->(
+export function createSelectColumn<K extends PropertyKey, T extends object>(
   columnHelper: ColumnHelper<T>,
   accessor: K,
   options: {
@@ -1007,7 +1005,11 @@ export function createSelectColumn<
 ) {
   const roster = options.options;
   const editable = options.editable;
-  const selectValue = (row: T): string | null => row[accessor] ?? null;
+  const selectValue = (row: T): string | null =>
+    z
+      .string()
+      .nullish()
+      .parse(readPathValue(row, String(accessor))) ?? null;
   const cellData = selectCellData<T>(
     selectValue,
     roster,
@@ -1169,16 +1171,12 @@ type SingleEntityColumnData =
   | { entity: "ingredient"; data: { name: string; id: string } | null }
   | {
       entity: "product";
-      data: {
-        name: string;
-        id: string;
-        brandName: string | null;
-      } | null;
+      data: z.output<typeof productInlineSchema> | null;
     }
   | { entity: "recipe"; data: { name: string; id: string } | null }
   | {
       entity: "location";
-      data: { name: string; id: string; type: LocationType | null } | null;
+      data: z.output<typeof locationInlineSchema> | null;
     }
   | {
       entity: "usda-food";
@@ -1233,6 +1231,14 @@ function CanonicalSingleEntityLink({
     <EntityRefLink displayImage={displayImage} entity={entity} data={data} />
   );
 }
+
+const singleEntitySchemas = {
+  ingredient: ingredientInlineSchema,
+  product: productInlineSchema,
+  recipe: recipeInlineSchema,
+  location: locationInlineSchema,
+  "usda-food": usdaFoodInlineSchema,
+};
 
 type SingleEntityAdapter = {
   /** Validates a row's relation summary once before constructing its UI data. */
@@ -1304,11 +1310,7 @@ const singleEntityAdapters = {
     SearchProvider: referenceEntitySearch("ingredient"),
   }),
   product: defineSingleEntityAdapter(productInlineSchema, {
-    buildItem: (data) =>
-      buildProductComboboxItem({
-        ...data,
-        id: parseShortcodeFor("product", data.id),
-      }),
+    buildItem: (data) => buildRecordComboboxItem("product", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="product" data={data} />
     ),
@@ -1342,11 +1344,7 @@ const singleEntityAdapters = {
     SearchProvider: referenceEntitySearch("recipe"),
   }),
   location: defineSingleEntityAdapter(locationInlineSchema, {
-    buildItem: (data) =>
-      buildLocationComboboxItem({
-        ...data,
-        id: parseShortcodeFor("location", data.id),
-      }),
+    buildItem: (data) => buildRecordComboboxItem("location", data),
     renderLink: (data) => (
       <CanonicalSingleEntityLink entity="location" data={data} />
     ),
@@ -1417,7 +1415,7 @@ interface SingleEntityEditableConfig<T> {
 export function createSingleEntityInlineLinkColumn<
   TEntity extends SingleEntityColumnData["entity"],
   K extends PropertyKey,
-  T extends Record<K, SingleEntityData<TEntity>>,
+  T extends object,
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
@@ -1436,7 +1434,12 @@ export function createSingleEntityInlineLinkColumn<
   },
 ) {
   const editableConfig = options?.editable;
-  const valueFor = (row: T): SingleEntityColumnData["data"] => row[accessor];
+  const valueFor = (row: T): SingleEntityColumnData["data"] => {
+    const value = readPathValue(row, String(accessor));
+    // Parse the declared entity: an identity-only sibling schema strips its content.
+    const parsed = singleEntitySchemas[entity].safeParse(value);
+    return parsed.success ? parsed.data : null;
+  };
   // usda-food has no generic picker, so it's never copy/pasteable here.
   const cellData =
     entity === "usda-food"
@@ -1606,10 +1609,7 @@ export function renderOptionCell(
  * text. A dedicated `"boolean"` kind would have been paste-incompatible with
  * every existing column for no gain.
  */
-export function createBooleanColumn<
-  K extends PropertyKey,
-  T extends Record<K, boolean | null | undefined>,
->(
+export function createBooleanColumn<K extends PropertyKey, T extends object>(
   columnHelper: ColumnHelper<T>,
   accessor: K,
   options: {
@@ -1644,14 +1644,23 @@ export function createBooleanColumn<
     };
   },
 ) {
-  // A row with a `fieldResolutions` entry (an inherited value) displays the
+  // A row with a canonical field envelope displays the
   // effective value but edits the stored one, like generic entity fields; a
   // cell cleared to undecided therefore shows the inherited value again.
-  const stored = (row: T) => row[accessor];
+  const stored = (row: T): boolean | null => {
+    const envelope = fieldResolutionFor(row, String(accessor));
+    const value: unknown = envelope
+      ? envelope.current.assignment?.kind === "value"
+        ? envelope.current.assignment.value
+        : null
+      : readRecordField(row, String(accessor), optionalBooleanSchema);
+    return typeof value === "boolean" ? value : null;
+  };
   const effective = (row: T): boolean | null | undefined => {
     const resolution = fieldResolutionFor(row, String(accessor));
     if (!resolution) return stored(row);
-    return typeof resolution.value === "boolean" ? resolution.value : null;
+    const value = fieldValueOf(resolution);
+    return typeof value === "boolean" ? value : null;
   };
   const selectOptions = options.trueFalseOptions;
   const filterPlaceholder = options.placeholder ?? "Set value...";
@@ -1797,13 +1806,11 @@ export function createExternalLinkColumn<
   });
 }
 
-export function createEditableAmountColumn<
-  K extends PropertyKey,
-  T extends Record<K, Amount>,
->(
+export function createEditableAmountColumn<T extends object>(
   columnHelper: ColumnHelper<T>,
-  accessor: K,
+  accessor: (row: T) => Amount | null,
   options: {
+    id: string;
     header?: string;
     className?: string;
     onSave: (newAmount: Amount, row: T) => Promise<void>;
@@ -1817,13 +1824,16 @@ export function createEditableAmountColumn<
     isEditable?: (row: T) => boolean;
   },
 ) {
-  const valueFor = (row: T) => row[accessor];
-  const cellData = amountCellData<T>(valueFor, (row, amount) =>
-    options.onSave(amount, row),
-  );
+  const valueFor = accessor;
+  const cellData = {
+    ...amountCellData<T>(valueFor, (row, amount) =>
+      options.onSave(amount, row),
+    ),
+    canWrite: (row: T) => options.isEditable?.(row) !== false,
+  };
   const renderDisplay = options.renderDisplay;
   return columnHelper.accessor(valueFor, {
-    id: String(accessor),
+    id: options.id,
     header: options.header ?? "Amount",
     meta: attachCubbyColumnMeta({
       numeric: true,
@@ -1836,8 +1846,13 @@ export function createEditableAmountColumn<
       const row = info.row.original;
       const unitMappings = options.getUnitMappings?.(row);
 
-      if (options.isEditable && !options.isEditable(row)) {
-        const display = <span>{tryFormatAmount(amount)}</span>;
+      if (amount === null || options.isEditable?.(row) === false) {
+        const display =
+          amount === null ? (
+            <NoneValue />
+          ) : (
+            <span>{tryFormatAmount(amount)}</span>
+          );
         return options.renderDisplay
           ? options.renderDisplay(display, row)
           : display;
@@ -1866,10 +1881,7 @@ export function createEditableAmountColumn<
  * for a date that can be in the future). Read-only by default; pass
  * `editable` for an inline `EditableCell` date-picker.
  */
-export function createPlainDateColumn<
-  K extends PropertyKey,
-  T extends Record<K, string | null | undefined>,
->(
+export function createPlainDateColumn<K extends PropertyKey, T extends object>(
   columnHelper: ColumnHelper<T>,
   accessor: K,
   options?: {
@@ -1904,7 +1916,11 @@ export function createPlainDateColumn<
   },
 ) {
   const editable = options?.editable;
-  const valueFor = (row: T): string | null => row[accessor] ?? null;
+  const valueFor = (row: T): string | null =>
+    z
+      .string()
+      .nullish()
+      .parse(readPathValue(row, String(accessor))) ?? null;
   const renderValue = (value: string | null, row: T, muted?: boolean) =>
     value ? (
       <span className={muted ? "text-muted-foreground" : undefined}>

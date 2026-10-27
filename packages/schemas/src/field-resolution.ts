@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { projectShortcode } from "./identifier-fields";
+import { fieldEmptyReason } from "./field-outcome";
 
 export const fieldResolutionSourceSchema = z.object({
   entityKind: z.enum([
@@ -29,6 +30,10 @@ export const fieldResolutionSchema = z.object({
   mode: z.enum(["inherit", "explicit", "none", "allocated"]),
   storedValue: z.json(),
   value: z.json(),
+  /** Current resolver policy; independent of a retained stored assignment. */
+  assignmentAllowed: z.boolean().optional(),
+  /** Internal resolver fact; the public envelope owns its outcome representation. */
+  emptyReason: fieldEmptyReason.optional(),
   fallbackValue: z.json(),
   source: z.string(),
   sourceEntity: fieldResolutionSourceSchema.nullable(),

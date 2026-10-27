@@ -32,6 +32,43 @@ export function stripMockFromJsonSchema(schema: JsonObject): JsonObject {
   return stripped;
 }
 
+/**
+ * Keep root union variants in separate validator functions. Inlining every
+ * entity/action branch made AJV's entity_read validator exceed V8's stack
+ * frame limit even for a name-only selection. References preserve constraints.
+ */
+function factorOutputUnions(schema: JsonObject): JsonObject {
+  const existing = schema.definitions;
+  const definitions: JsonObject =
+    existing !== undefined && isJsonObject(existing) ? { ...existing } : {};
+  let count = 0;
+  const factor = (value: JSONType): JSONType => {
+    if (!isJsonObject(value)) return value;
+    const node = { ...value };
+    // Stop at value-bearing properties/items: only the root branch graph
+    // needs splitting, and existing references keep their document scope.
+    for (const key of ["anyOf", "oneOf", "allOf"]) {
+      const branches = node[key];
+      if (!Array.isArray(branches)) continue;
+      node[key] = branches.map((branch) => {
+        const child = factor(branch);
+        if (!isJsonObject(child) || !isJsonObject(child.properties ?? null))
+          return child;
+        let name: string;
+        do name = `cubby_union_${count++}`;
+        while (Object.hasOwn(definitions, name));
+        definitions[name] = child;
+        return { $ref: `#/definitions/${name}` };
+      });
+    }
+    return node;
+  };
+  const output = factor(schema);
+  if (!isJsonObject(output))
+    throw new Error("A JSON Schema root must be an object");
+  return count ? { ...output, definitions } : schema;
+}
+
 export function sdkOutputSchema(schema: z.core.$ZodType): z.ZodType {
   // The SDK normalizer returns undefined for non-object outputs, then its
   // validator crashes while parsing structured content. This guard prevents
@@ -100,7 +137,10 @@ export function safeToJsonSchema(
     if (!isJsonObject(parsed)) {
       throw new Error("A generated JSON Schema root must be an object");
     }
-    const stripped = stripMockFromJsonSchema(parsed);
+    const stripped =
+      io === "output"
+        ? factorOutputUnions(stripMockFromJsonSchema(parsed))
+        : stripMockFromJsonSchema(parsed);
     return io === "output" && stripped.type === undefined
       ? { ...stripped, type: "object" }
       : stripped;

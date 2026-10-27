@@ -1,9 +1,16 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
+const recipeOut = entityFieldEnvelopeSchemas.recipe.detail;
 import {
   buildNutrition,
   type NutritionTotals,
   withMacros,
 } from "@cubby/schemas/nutrition";
-import { type RecipeOut, recipeOut } from "@cubby/schemas/recipe";
 import {
   testCompleteDataQuality,
   testEntityId,
@@ -103,18 +110,38 @@ const recipe = (
   name: string,
   ingredients: ReadonlyArray<ReturnType<typeof ing> | ReturnType<typeof sub>>,
 ): RecipeOut =>
-  recipeOut.parse({
+  entityReadFixture(recipeOut, {
+    fields: {
+      servings: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["servings"],
+        null,
+      ),
+      images: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["images"],
+        [],
+      ),
+      tags: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["tags"],
+        [],
+      ),
+      dataQuality: fieldValueFixture(
+        entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+          "dataQuality"
+        ],
+        testCompleteDataQuality(),
+      ),
+    },
     id: recipeId(id),
     name,
     meta: null,
     yield: null,
-    servings: null,
+
     notes: null,
     forkedFromRecipeId: null,
     forkedFromRecipeName: null,
-    images: [],
+
     displayImage: null,
-    tags: [],
+
     sections: [
       {
         id: testEntityId("recipe", `section-${id}`),
@@ -127,7 +154,6 @@ const recipe = (
     ],
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
-    dataQuality: testCompleteDataQuality(),
   });
 
 // Sof (sub) + a duplicated ingredient X, used in both root and sub.
@@ -213,3 +239,5 @@ describe("recipeTreeToMarkdown — matrix", () => {
     expect(md).toMatch(/\| X \| 100 g \| 100 g \| 200 g/);
   });
 });
+
+type RecipeOut = DetailRecordOf<"recipe">;

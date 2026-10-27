@@ -1,4 +1,5 @@
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { LocationTreeNode, LocationType } from "@cubby/schemas/location";
 import { SquaresFourIcon } from "@phosphor-icons/react/dist/csr/SquaresFour";
 import { Link } from "@tanstack/react-router";
 import * as React from "react";
@@ -24,23 +25,25 @@ export interface LocationSegment {
 }
 
 /**
- * Convert an InfLocation (with parent chain) to an array of LocationSegments.
+ * Convert an LocationTreeNode (with parent chain) to an array of LocationSegments.
  * Returns segments from root to leaf.
  *
  * Exported because the same walk is how a picker row derives its breadcrumb for
  * a location fetched by shortcode — that read carries a nested `parent` chain
  * rather than the flat `ancestors` the search endpoint returns.
  */
-export function locationToSegments(location: InfLocation): LocationSegment[] {
+export function locationToSegments(
+  location: LocationTreeNode,
+): LocationSegment[] {
   const segments: LocationSegment[] = [];
 
   // Walk up the parent chain
-  let current: InfLocation | null | undefined = location;
+  let current: LocationTreeNode | null | undefined = location;
   while (current) {
     segments.unshift({
       id: current.id,
       name: current.name,
-      type: current.type,
+      type: fieldValueOf(current.fields.type),
     });
     current = current.parent;
   }
@@ -52,7 +55,7 @@ interface LocationBreadcrumbProps {
   /** Array of location segments from root to leaf (alternative to location prop) */
   segments?: LocationSegment[];
   /** Location object to derive segments from (alternative to segments prop) */
-  location?: InfLocation;
+  location?: LocationTreeNode;
   /** Show [type] annotation for non-default types */
   showTypeAnnotations?: boolean;
   /** Highlight segments with non-default types */

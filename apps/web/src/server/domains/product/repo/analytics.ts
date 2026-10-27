@@ -3,7 +3,7 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
  * Product analytics operations.
  * Category distribution, duplicate detection, and backfill operations.
  */
-import type { ProductCategory } from "@cubby/schemas/product";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { and, arrayOverlaps, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -202,7 +202,7 @@ export const getProductsSharingTags = async (
     shortcode: string;
     name: string;
     brandName: string | null;
-    category: ProductCategory | null;
+    category: RawProductCategorySummary | null;
     tags: string[];
   }>
 > => {
@@ -239,7 +239,7 @@ export const getCategoryDistribution = async (
   db: Database,
 ): Promise<
   Array<{
-    category: ProductCategory | null;
+    category: RawProductCategorySummary | null;
     productCount: number;
     locations: Array<{ id: string; name: string; count: number }>;
   }>
@@ -276,7 +276,7 @@ export const getCategoryDistribution = async (
   const categoryMap = new Map<
     string | null,
     {
-      category: ProductCategory | null;
+      category: RawProductCategorySummary | null;
       productCount: number;
       locationCounts: Map<string, { id: string; name: string; count: number }>;
     }
@@ -312,7 +312,7 @@ export const getCategoryDistribution = async (
   }
 
   const result: Array<{
-    category: ProductCategory | null;
+    category: RawProductCategorySummary | null;
     productCount: number;
     locations: Array<{ id: string; name: string; count: number }>;
   }> = [];

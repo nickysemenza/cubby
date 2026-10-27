@@ -5,6 +5,11 @@ import { addDays, format, parseISO } from "date-fns";
 import { describe, expect, it } from "vitest";
 
 import { groupItemsByDay } from "./calendar-agenda";
+import {
+  plantingCalendarSourceFixture,
+  mealCalendarSourceFixture,
+  taskCalendarSourceFixture,
+} from "./calendar-source.fixtures";
 
 /** All-day events are half-open: a single day ends on the NEXT day, the same
  * shape `repo/calendar.ts` emits via `shiftPlainDate(date, 1)`. */
@@ -20,10 +25,10 @@ const meal = (id: string, startDate: string): CalendarItem => ({
   endDateExclusive: nextDay(startDate),
   interaction: "move",
   sortOrder: null,
-  mealType: null,
-  mealKind: "cooked",
-  recipeNames: [],
-  displayImages: [],
+  source: mealCalendarSourceFixture({
+    id: testShortcode("meal", id),
+    date: startDate,
+  }),
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
@@ -46,15 +51,14 @@ const task = (
   interaction: "move",
   due: { start: startDate, end: null },
   status: "not_started",
-  trade: "planning",
+  source: taskCalendarSourceFixture(testShortcode("task", id), "planning"),
   projectName: null,
   subjectProductName: null,
-  displayImages: [],
 });
 
 const planting = (id: string, startDate: string): CalendarItem => ({
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", id)),
   id: testShortcode("planting", id),
   milestone: "sowed",
   title: id,

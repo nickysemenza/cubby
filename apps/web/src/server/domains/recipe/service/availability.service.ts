@@ -22,8 +22,8 @@ import {
   parseShortcodeFor,
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
-import type { RecipeGraphOut } from "@cubby/schemas/recipe";
+import type { RawIngredientWithFoodLean as IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient-raw-read";
+import type { RawRecipeGraph as RecipeGraphOut } from "@cubby/schemas/recipe-raw-read";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { uniq } from "es-toolkit";
 

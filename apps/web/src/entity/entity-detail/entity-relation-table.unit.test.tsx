@@ -1,4 +1,6 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   purchaseProductOut,
   productPurchaseOut,
@@ -17,6 +19,7 @@ import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import {
   type EntityListInputByEntity,
   productListItem,
@@ -358,7 +361,26 @@ describe("EntityRelationTable", () => {
     const category = categorySummaryFixture("tools");
     const product = mock(productListItem, {
       seed: 3,
-      overrides: { category, categoryId: category.id },
+      overrides: {
+        fields: {
+          categoryId: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+              "categoryId"
+            ],
+            category.id,
+          ),
+        },
+        category: {
+          id: category.id,
+          name: category.name,
+          fields: {
+            path: fieldValueFixture(
+              productCategorySummary.shape.fields.shape.path,
+              category.path,
+            ),
+          },
+        },
+      },
     });
     expect(product.externalIds.length).toBeGreaterThan(0);
     const list = entityList.list.withTransport(async () => ({

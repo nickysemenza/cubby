@@ -1,12 +1,13 @@
-import {
-  expenseChargeContextOut,
-  type ExpenseOut,
-} from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { expenseContract } from "~/contracts/expense.contract";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { expense as expenseOperations } from "~/integrations/tanstack-query/generated/catalog/expense.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -14,50 +15,113 @@ import {
   type ExpensePurchaseOperations,
   ExpensePurchaseSection,
 } from "./expense-purchase-section";
+const expenseChargeContextOut = expenseContract.ops.chargeContext.output;
 
-const expense: ExpenseOut = {
-  id: testShortcode("expense", "EXP-2345"),
-  name: "Router bits",
-  cost: 24.99,
-  date: "2026-07-31",
-  bookingTransactionCode: null,
-  economicRole: "vendor",
-  spendingCategoryId: null,
-  spendingCategoryName: null,
-  lineKind: "principal",
-  lineBasis: "item_line",
-  costType: "materials",
-  trade: "other",
-  url: null,
-  notes: null,
-  future: false,
-  projectId: null,
-  productId: null,
-  productQuantity: null,
-  vendor: "Tool Nirvana",
-  orderId: "#11325",
-  orderUrl: null,
-  purchaseId: testShortcode("purchase", "PUR-2345"),
-  purchaseDate: "2026-07-29",
-  purchaseDisplayLabel: null,
-  vendorId: testShortcode("vendor", "VEN-2345"),
-  vendorLogo: null,
-  projectName: null,
-  productName: null,
-  beneficiaries: [],
-  funders: [],
-  sourceClaims: [],
-  dataQuality: testCompleteDataQuality(),
-  createdAt: new Date("2026-07-31T12:00:00Z"),
-  updatedAt: new Date("2026-07-31T12:00:00Z"),
-};
+const expense: ExpenseOut = entityReadFixture(
+  entityFieldEnvelopeSchemas.expense.detail,
+  {
+    fields: {
+      spendingCategoryId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "spendingCategoryId"
+        ],
+        null,
+      ),
+      lineKind: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "lineKind"
+        ],
+        "principal",
+      ),
+      costType: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "costType"
+        ],
+        "materials",
+      ),
+      trade: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape["trade"],
+        "other",
+      ),
+      projectId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "projectId"
+        ],
+        null,
+      ),
+      productId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "productId"
+        ],
+        null,
+      ),
+      vendor: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape["vendor"],
+        "Tool Nirvana",
+      ),
+      orderId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape["orderId"],
+        "#11325",
+      ),
+      purchaseId: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "purchaseId"
+        ],
+        testShortcode("purchase", "PUR-2345"),
+      ),
+      dataQuality: fieldValueFixture(
+        entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape[
+          "dataQuality"
+        ],
+        testCompleteDataQuality(),
+      ),
+    },
+    id: testShortcode("expense", "EXP-2345"),
+    name: "Router bits",
+    cost: 24.99,
+    date: "2026-07-31",
+    bookingTransactionCode: null,
+    economicRole: "vendor",
+
+    spendingCategoryName: null,
+
+    lineBasis: "item_line",
+
+    url: null,
+    notes: null,
+    future: false,
+
+    productQuantity: null,
+
+    orderUrl: null,
+
+    purchaseDate: "2026-07-29",
+    purchaseDisplayLabel: null,
+    vendorId: testShortcode("vendor", "VEN-2345"),
+    vendorLogo: null,
+    projectName: null,
+    productName: null,
+    beneficiaries: [],
+    funders: [],
+    sourceClaims: [],
+
+    createdAt: new Date("2026-07-31T12:00:00Z"),
+    updatedAt: new Date("2026-07-31T12:00:00Z"),
+  },
+);
 
 const purchase = {
   id: testShortcode("purchase", "PUR-2345"),
   orderId: "#11325",
   displayLabel: null,
   date: "2026-07-29",
-  vendorId: testShortcode("vendor", "VEN-2345"),
+  fields: {
+    vendorId: fieldValueFixture(
+      expenseChargeContextOut.unwrap().shape.purchase.shape.fields.shape
+        .vendorId,
+      testShortcode("vendor", "VEN-2345"),
+    ),
+  },
   vendorName: "Tool Nirvana",
 };
 
@@ -127,7 +191,17 @@ describe("ExpensePurchaseSection", () => {
   it("uses the canonical purchase date for an orderless purchase label", async () => {
     render(
       <ExpensePurchaseSection
-        expense={{ ...expense, orderId: null }}
+        expense={{
+          ...expense,
+          fields: {
+            ...expense.fields,
+            orderId: fieldValueFixture(
+              entityFieldEnvelopeSchemas.expense.detail.shape.fields.shape
+                .orderId,
+              null,
+            ),
+          },
+        }}
         operations={buildOperations({
           purchase: { ...purchase, orderId: null },
           siblings: [],
@@ -143,3 +217,5 @@ describe("ExpensePurchaseSection", () => {
     expect(chargeLink).not.toHaveTextContent("Jul 31, 2026");
   });
 });
+
+type ExpenseOut = DetailRecordOf<"expense">;

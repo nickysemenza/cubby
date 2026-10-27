@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 
@@ -64,8 +65,12 @@ function StuckTotalsCell({
 const estimateColumn =
   (metric: "cost" | "kcal"): ListRenderer<"recipe"> =>
   (helper) => {
-    const getEstimate = (row: RecipeRow) =>
-      metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
+    const getEstimate = (row: RecipeRow) => {
+      const effectiveRowTotals = fieldValueOf(row.fields.totals);
+      return metric === "cost"
+        ? effectiveRowTotals?.cost
+        : effectiveRowTotals?.nutrition.kcal;
+    };
     // The primary figure is the server's text; only the per-serving subline
     // below is still derived here.
     const labelKey =
@@ -113,7 +118,7 @@ const estimateColumn =
                         : undefined
                     }
                   >
-                    {recipe[labelKey]}
+                    {fieldValueOf(recipe.fields[labelKey])}
                   </span>
                   {perItem && hasKnownEstimate(estimate) && (
                     <span className="ml-1.5 text-2xs text-muted-foreground">

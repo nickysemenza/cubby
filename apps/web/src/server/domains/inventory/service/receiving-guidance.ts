@@ -1,4 +1,5 @@
 import type { InventoryReceivingContextOut } from "@cubby/schemas/inventory";
+import type { RawReceivingInventoryStock } from "@cubby/schemas/inventory-raw-read";
 
 const DEFAULT_RECEIVING_UNIT = "each";
 
@@ -22,7 +23,7 @@ type Guidance = Pick<
 export function deriveReceivingGuidance(input: {
   expectedQuantity: number | null;
   stock: Array<
-    Pick<InventoryReceivingContextOut["stock"][number], "id" | "locationId"> & {
+    Pick<RawReceivingInventoryStock, "id" | "locationId"> & {
       amount: { unit: string };
     }
   >;

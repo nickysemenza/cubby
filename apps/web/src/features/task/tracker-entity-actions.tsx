@@ -1,11 +1,13 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
   type TaskShortcode,
 } from "@cubby/schemas/identifiers";
-import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
 import { useState } from "react";
 
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { CreateProjectFromTasksDialog } from "~/features/task/create-project-from-tasks-dialog";
 
 import { VerbMenuItem } from "../../entity/actions/action-verb-ui";
@@ -20,18 +22,20 @@ const ALREADY_PURCHASED = "Already purchased";
 const ADJUSTMENT_NOT_CLASSIFIED = "Adjustments aren't classified";
 
 const asExpense = (row: EntityActionRow): ExpenseOut | null => {
-  const parsed = expenseOut.safeParse(row);
+  const parsed = entityFieldEnvelopeSchemas.expense.detail.safeParse(row);
   return parsed.success ? parsed.data : null;
 };
 
 export function useMarkExpensePurchasedAction(): EntityActionHandles {
   const [target, setTarget] = useState<ExpenseOut | null>(null);
-  const disabledReason = (expense: ExpenseOut) =>
-    expense.lineKind !== "principal"
+  const disabledReason = (expense: ExpenseOut) => {
+    const effectiveExpenseLineKind = fieldValueOf(expense.fields.lineKind);
+    return effectiveExpenseLineKind !== "principal"
       ? ADJUSTMENT_NOT_CLASSIFIED
       : expense.future
         ? undefined
         : ALREADY_PURCHASED;
+  };
   const availability = ({ rows }: EntityActionResolutionContext) => {
     const expense = rows[0] ? asExpense(rows[0]) : null;
     if (!expense) return { status: "hidden" } as const;
@@ -120,3 +124,5 @@ export const createProjectFromTasksActionDefinition = defineEntityAction({
   preserveSelection: true,
   use: useCreateProjectFromTasksAction,
 });
+
+type ExpenseOut = DetailRecordOf<"expense">;

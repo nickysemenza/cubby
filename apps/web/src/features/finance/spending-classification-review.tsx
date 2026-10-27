@@ -1,5 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { SpendingCategoryShortcode } from "@cubby/schemas/identifiers";
-import type { ProductCategoryOut } from "@cubby/schemas/product-category";
 import {
   spendingCategoryMappingMode,
   vendorSpendingProfile,
@@ -8,10 +8,10 @@ import type {
   SpendingClassificationReviewInput,
   SpendingClassificationReviewPreview,
 } from "@cubby/schemas/spending-classification-review";
-import type { VendorOut } from "@cubby/schemas/vendor";
 import { useMutation } from "@tanstack/react-query";
 import { useId, useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
@@ -228,12 +228,16 @@ export function ProductCategoryClassification({
 }: {
   record: ProductCategoryOut;
 }) {
+  const effectiveRecordSpendingCategoryId = fieldValueOf(
+    record.fields.spendingCategoryId,
+  );
+
   return (
     <ClassificationReview
       initialCategory={
-        record.spendingCategoryId
+        effectiveRecordSpendingCategoryId
           ? buildRecordComboboxItem("spendingCategory", {
-              id: record.spendingCategoryId,
+              id: effectiveRecordSpendingCategoryId,
               name: record.spendingCategoryName,
               emoji: record.spendingCategoryEmoji,
             })
@@ -243,7 +247,7 @@ export function ProductCategoryClassification({
         action: "productCategory",
         productCategoryId: record.id,
         spendingCategoryMode: record.spendingCategoryMode,
-        spendingCategoryId: record.spendingCategoryId,
+        spendingCategoryId: effectiveRecordSpendingCategoryId,
       }}
     />
   );
@@ -263,12 +267,19 @@ export function SpendingCategoryMergeReview({
   );
 }
 export function VendorClassification({ record }: { record: VendorOut }) {
+  const effectiveRecordDefaultSpendingCategoryId = fieldValueOf(
+    record.fields.defaultSpendingCategoryId,
+  );
+  const effectiveRecordSpendingProfile = fieldValueOf(
+    record.fields.spendingProfile,
+  );
+
   return (
     <ClassificationReview
       initialCategory={
-        record.defaultSpendingCategoryId
+        effectiveRecordDefaultSpendingCategoryId
           ? buildRecordComboboxItem("spendingCategory", {
-              id: record.defaultSpendingCategoryId,
+              id: effectiveRecordDefaultSpendingCategoryId,
               name: record.defaultSpendingCategoryName,
               emoji: record.defaultSpendingCategoryEmoji,
             })
@@ -277,9 +288,12 @@ export function VendorClassification({ record }: { record: VendorOut }) {
       initial={{
         action: "vendor",
         vendorId: record.id,
-        spendingProfile: record.spendingProfile,
-        defaultSpendingCategoryId: record.defaultSpendingCategoryId,
+        spendingProfile: effectiveRecordSpendingProfile ?? "unspecified",
+        defaultSpendingCategoryId: effectiveRecordDefaultSpendingCategoryId,
       }}
     />
   );
 }
+
+type ProductCategoryOut = DetailRecordOf<"productCategory">;
+type VendorOut = DetailRecordOf<"vendor">;

@@ -1,3 +1,12 @@
+import {
+  expenseFieldEnvelopeFields,
+  expensePublicReadFields,
+} from "./generated/entity-field-envelope-fields.expense.gen";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
 import { cents, dollars } from "@cubby/shared";
 import { z } from "zod";
 import {
@@ -523,7 +532,7 @@ export const purchaseLinkExpensesCandidatesInput = z.object({
   scope: linkExpenseScope.default("vendorOrUnattached"),
   search: z.string().optional(),
 });
-export const purchaseLinkExpenseCandidate = z.object({
+export const rawPurchaseLinkExpenseCandidate = z.object({
   id: expenseShortcode,
   name: z.string(),
   date: z.string().nullable(),
@@ -538,6 +547,14 @@ export const purchaseLinkExpenseCandidate = z.object({
   /** The line under the name, already worded. */
   summary: z.string(),
 });
+export const purchaseLinkExpenseCandidate = withFieldEnvelopes(
+  rawPurchaseLinkExpenseCandidate,
+  {
+    trade: expenseFieldEnvelopeFields.trade,
+    projectId: expenseFieldEnvelopeFields.projectId,
+  },
+  expensePublicReadFields,
+);
 export const purchaseLinkExpensesCandidatesOut = z.object({
   scopes: z.array(z.object({ value: linkExpenseScope, label: z.string() })),
   candidates: z.array(purchaseLinkExpenseCandidate),
@@ -573,13 +590,20 @@ export const purchaseLinkProductsCandidatesInput = z.object({
   search: z.string().optional(),
 });
 /** A product offered for attaching: what the picker shows, no more. */
-export const purchaseLinkProductCandidate = z.object({
-  id: productShortcode,
-  name: z.string(),
-  brandName: z.string().nullable(),
-  price: z.number().nullable(),
-  coverImageUrl: z.string().nullable(),
-});
+export const purchaseLinkProductCandidate = withFieldEnvelopes(
+  z.object({
+    id: productShortcode,
+    name: z.string(),
+    brandName: z.string().nullable(),
+    price: z.number().nullable(),
+    coverImageUrl: z.string().nullable(),
+  }),
+  {
+    brandName: productFieldEnvelopeFields.brandName,
+    price: productFieldEnvelopeFields.price,
+  },
+  productPublicReadFields,
+);
 export const purchaseLinkProductsCandidatesOut = z.object({
   candidates: z.array(purchaseLinkProductCandidate),
   message: z.string().nullable(),

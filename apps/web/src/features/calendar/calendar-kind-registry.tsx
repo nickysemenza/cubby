@@ -3,11 +3,12 @@ import {
   type CalendarItem,
   type CalendarItemKind,
 } from "@cubby/schemas/calendar";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
 } from "@cubby/schemas/meal-classification";
-import { TRADE_LABELS } from "@cubby/schemas/project";
+import { TRADE_LABELS, type Trade } from "@cubby/schemas/project";
 import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import { capitalize } from "@cubby/shared";
 import type { Icon } from "@phosphor-icons/react/lib";
@@ -83,51 +84,64 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   };
 };
 
+const tradeLabel = (trade: Trade | null) =>
+  trade === null ? null : TRADE_LABELS[trade];
+
 const calendarKindRegistry = {
   meal: {
     create: (date) => mealCaptureRequest({ date }),
-    icon: (item) => mealTypeIcon(item.mealType),
+    icon: (item) => mealTypeIcon(fieldValueOf(item.source.fields.mealType)),
     // Time first, the way an agenda reads. It is the slot's canonical hour, not
     // a stored one — the same map the ICS feed places the event at, so a chip
     // here and the event in a subscribed calendar always agree.
-    metadata: (item) =>
-      [
-        mealTypeTimeLabel(item.mealType),
-        item.mealType ? MEAL_TYPE_LABELS[item.mealType] : "Unslotted meal",
-        item.mealKind === "cooked" ? "Cooked" : null,
-        ...item.recipeNames,
+    metadata: (item) => {
+      const mealType = fieldValueOf(item.source.fields.mealType);
+      const mealKind = fieldValueOf(item.source.fields.mealKind);
+      return [
+        mealTypeTimeLabel(mealType),
+        mealType ? MEAL_TYPE_LABELS[mealType] : "Unslotted meal",
+        mealKind === "cooked" ? "Cooked" : null,
+        ...(fieldValueOf(item.source.fields.recipeNames) ?? []),
       ]
         .filter(Boolean)
-        .join(" · "),
-    compactBadge: (item) =>
-      item.mealKind === "cooked"
+        .join(" · ");
+    },
+    compactBadge: (item) => {
+      const kind = fieldValueOf(item.source.fields.mealKind);
+      return kind === null || kind === "cooked"
         ? undefined
         : {
-            label: MEAL_KIND_LABELS[item.mealKind],
-            variant: mealKindBadgeVariant[item.mealKind],
-          },
-    richBadge: (item) =>
-      item.mealKind === "cooked"
+            label: MEAL_KIND_LABELS[kind],
+            variant: mealKindBadgeVariant[kind],
+          };
+    },
+    richBadge: (item) => {
+      const kind = fieldValueOf(item.source.fields.mealKind);
+      return kind === null || kind === "cooked"
         ? undefined
         : {
-            label: MEAL_KIND_LABELS[item.mealKind],
-            variant: mealKindBadgeVariant[item.mealKind],
+            label: MEAL_KIND_LABELS[kind],
+            variant: mealKindBadgeVariant[kind],
+          };
+    },
+    edit: (item) =>
+      item.source.fields.mealType.current.controls.kind === "editable" &&
+      item.source.fields.mealKind.current.controls.kind === "editable"
+        ? {
+            mode: "editable",
+            entity: "meal",
+            intent: "calendar",
+            record: item.source,
+          }
+        : {
+            mode: "read-only",
+            entity: "meal",
+            reason:
+              "This meal's current fields cannot be edited from the calendar.",
           },
-    edit: (item) => ({
-      mode: "editable",
-      entity: "meal",
-      intent: "calendar",
-      record: {
-        id: item.id,
-        name: item.name,
-        date: item.startDate,
-        mealType: item.mealType,
-        mealKind: item.mealKind,
-      },
-    }),
     event: (item) => ({
       className:
-        item.mealKind === "cooked"
+        fieldValueOf(item.source.fields.mealKind) === "cooked"
           ? undefined
           : "border border-dashed border-slate",
       color: entities.meal.color.accent,
@@ -141,7 +155,7 @@ const calendarKindRegistry = {
       [
         item.assignedProjectName,
         item.subjectProductName,
-        TRADE_LABELS[item.trade],
+        tradeLabel(fieldValueOf(item.source.fields.trade)),
       ]
         .filter(Boolean)
         .join(" · "),
@@ -170,11 +184,13 @@ const calendarKindRegistry = {
     icon: () => KIND_ICONS.expense,
     metadata: (item) =>
       [
-        item.vendor,
+        fieldValueOf(item.source.fields.vendor),
         item.productName,
         ...(item.spendingContext?.projectNames ?? []),
         ...(item.spendingContext?.parties.map((party) => party.name) ?? []),
-        item.trade ? TRADE_LABELS[item.trade] : "Unassigned trade",
+        fieldValueOf(item.source.fields.trade)
+          ? tradeLabel(fieldValueOf(item.source.fields.trade))
+          : "Unassigned trade",
       ]
         .filter(Boolean)
         .join(" · "),
@@ -243,7 +259,9 @@ const calendarKindRegistry = {
     metadata: (item, today) =>
       [
         PROJECT_STATUS_LABELS[item.status],
-        item.projectKind ? capitalize(item.projectKind) : null,
+        fieldValueOf(item.source.fields.kind)
+          ? capitalize(fieldValueOf(item.source.fields.kind) ?? "")
+          : null,
         itemSpanLabel(item, today),
       ]
         .filter(Boolean)

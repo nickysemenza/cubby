@@ -40,10 +40,14 @@ final class StubScanService: ScanService, Sendable {
     ) -> ScanAtLocationOut {
         ScanAtLocationOut(
             outcome: outcome,
+            sideEffects: .init(),
             product: .init(
-                id: ProductCode(id), name: name, created: false, brandName: nil, hasPrice: true),
-            strays: strays,
-            sideEffects: .init()
+                id: ProductCode(id), name: name, created: false,
+                fields: try! JSONValue.object([
+                    "brandName": FieldEnvelopeFixture.envelope(
+                        result: FieldEnvelopeFixture.live(FieldEnvelopeFixture.emptyDecision("unset")))
+                ]).decoded()),
+            strays: strays
         )
     }
 }
@@ -51,7 +55,7 @@ final class StubScanService: ScanService, Sendable {
 private func stray(_ entry: String, ambiguous: Bool = false) -> ScanStrayOut {
     ScanStrayOut(
         entryId: InventoryEntryCode(entry), location: .init(id: LocationCode("LOC-9999"), name: "Elsewhere"),
-        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: ambiguous)
+        ambiguousQuantity: ambiguous, fields: scanAmountFields())
 }
 
 @Suite("ScanSession", .timeLimit(.minutes(1)))
@@ -215,4 +219,17 @@ struct ScanSessionTests {
         #expect(!session.submit("012345678905"))
         #expect(session.chips.isEmpty)
     }
+}
+
+/// Canonical stock response fixture; scan quantity ambiguity remains separate observation evidence.
+func scanAmountFields<T: Decodable>() -> T {
+    try! JSONValue.object([
+        "amount": FieldEnvelopeFixture.envelope(
+            assignment: FieldEnvelopeFixture.value(["value": 1, "unit": "each"]),
+            controls: FieldEnvelopeFixture.editable(),
+            result: FieldEnvelopeFixture.live(
+                FieldEnvelopeFixture.decision(
+                    ["value": 1, "unit": "each"], provenance: FieldEnvelopeFixture.own))
+        )
+    ]).decoded()
 }

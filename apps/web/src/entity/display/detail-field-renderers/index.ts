@@ -1,5 +1,6 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { DetailRendererId } from "@cubby/schemas/entity-manifest";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
 import type {
   DetailRecordOf,
@@ -59,6 +60,7 @@ const buildDetailRendererCoverage = () => {
       "expense-project": implemented(expenseDetailFields["expense-project"]),
     },
     product: {
+      "product-cost": implemented(productDetailFields["product-cost"]),
       "product-id": implemented(productDetailFields["product-id"]),
       "product-category": implemented(productDetailFields["product-category"]),
       "product-primary-gtin": implemented(
@@ -87,9 +89,16 @@ const buildDetailRendererCoverage = () => {
       ),
     },
     purchase: {
-      "spending-category-summary": implemented((record) => ({
-        value: renderSpendingCategorySummary(record.spendingCategorySummary),
-      })),
+      "spending-category-summary": implemented((record) => {
+        const effectiveRecordSpendingCategorySummary = fieldValueOf(
+          record.fields.spendingCategorySummary,
+        );
+        return {
+          value: renderSpendingCategorySummary(
+            effectiveRecordSpendingCategorySummary,
+          ),
+        };
+      }),
     },
     financialTransaction: {
       "spending-category-summary": implemented(

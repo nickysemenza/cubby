@@ -1,3 +1,4 @@
+import type { ProjectId } from "@cubby/schemas/identifiers";
 /**
  * The WBS renderer's page reader: same filters as {@link projectList}, but the
  * unit of pagination is a **root of the filtered forest** rather than a row.
@@ -24,17 +25,13 @@
  * this table ever grew orders of magnitude, the root selection is the part that
  * would need to become a recursive CTE.
  */
-
-import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type {
-  ProjectFilters,
-  ProjectListItemOut,
-} from "@cubby/schemas/project";
+import type { ProjectFilters } from "@cubby/schemas/project";
+import type { RawProjectListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -68,7 +65,7 @@ export const projectTreePage = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{
-  data: ProjectListItemOut[];
+  data: RawProjectListItemOut[];
   count: number;
   sums: { costEstimate: number };
 }> => {

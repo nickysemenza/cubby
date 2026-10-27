@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { expenseChildren } from "../child-tables/expense.js";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
 import { financialTransactionShortcode } from "../identifier-fields";
@@ -35,10 +34,7 @@ import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
-import {
-  optionalFieldResolutionsSchema,
-  optionalProjectAllocationsSchema,
-} from "@cubby/schemas/field-resolution";
+import { optionalProjectAllocationsSchema } from "@cubby/schemas/field-resolution";
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
@@ -373,7 +369,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("expense", "Expense") },
     fields: [
       {
         display: { detail: false, list: false },
@@ -413,21 +408,21 @@ export default defineEntity({
           description:
             "An explicit Expense category wins over contextual defaults, Product Category mappings, and the stored Purchase fallback. Shared adjustments use the principal lines' category allocation.",
           projections: {
-            list: "fieldResolutions.spendingCategoryId.value",
-            detail: "fieldResolutions.spendingCategoryId.value",
-            summary: "fieldResolutions.spendingCategoryId.value",
+            list: "spendingCategoryId",
+            detail: "spendingCategoryId",
+            summary: "spendingCategoryId",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.spendingCategoryId.sourceEntity",
+              path: "fields.spendingCategoryId.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.spendingCategoryId.storedValue",
+              path: "fields.spendingCategoryId.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.spendingCategoryId.fallbackValue",
+              path: "fields.spendingCategoryId.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -479,16 +474,6 @@ export default defineEntity({
           read: z.enum(["vendor", "reimbursement"]).default("vendor"),
           create: z.enum(["vendor", "reimbursement"]).default("vendor"),
           update: z.enum(["vendor", "reimbursement"]).optional(),
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
         },
       },
       {
@@ -636,13 +621,13 @@ Rules:
           description:
             "An item line's cost type is its own. A tax, shipping, or fee line follows the items it was charged on, unless it names its own trade.",
           projections: {
-            list: "fieldResolutions.costType.value",
-            detail: "fieldResolutions.costType.value",
-            summary: "fieldResolutions.costType.value",
+            list: "costType",
+            detail: "costType",
+            summary: "costType",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.costType.storedValue",
+              path: "fields.costType.current.assignment.value",
               label: "Stored value",
             },
           ],
@@ -679,18 +664,21 @@ Rules:
           description:
             "An expense trade override wins. Otherwise an item line uses its purchase default trade, then its effective project's default trade, and a tax, shipping, or fee line follows the items it was charged on.",
           projections: {
-            list: "fieldResolutions.trade.value",
-            detail: "fieldResolutions.trade.value",
-            summary: "fieldResolutions.trade.value",
+            list: "trade",
+            detail: "trade",
+            summary: "trade",
           },
           sourceDependencies: [
-            { path: "fieldResolutions.trade.sourceEntity", label: "Source" },
             {
-              path: "fieldResolutions.trade.storedValue",
+              path: "fields.trade.result.decision.provenance.source",
+              label: "Source",
+            },
+            {
+              path: "fields.trade.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.trade.fallbackValue",
+              path: "fields.trade.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -766,21 +754,21 @@ Rules:
           description:
             "A principal expense project override wins; otherwise the expense uses its purchase's default project, then Household for food or Unassigned. Purchase-level adjustments are allocated across the purchase's principal project totals.",
           projections: {
-            list: "fieldResolutions.projectId.value",
-            detail: "fieldResolutions.projectId.value",
-            summary: "fieldResolutions.projectId.value",
+            list: "projectId",
+            detail: "projectId",
+            summary: "projectId",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.projectId.sourceEntity",
+              path: "fields.projectId.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.projectId.storedValue",
+              path: "fields.projectId.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.projectId.fallbackValue",
+              path: "fields.projectId.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -1354,7 +1342,6 @@ Rules:
       "spendingCategoryId",
       "spendingCategoryName",
       "economicRole",
-      "fieldResolutions",
       "spendingCategoryAllocations",
       "projectAllocations",
       "id",
@@ -1391,8 +1378,24 @@ Rules:
   fields: {
     create: { module: "@cubby/schemas/project", export: "expenseCreateInput" },
     update: { module: "@cubby/schemas/project", export: "expenseUpdateData" },
-    output: { module: "@cubby/schemas/project", export: "expenseOut" },
-    list: { module: "@cubby/schemas/project", export: "expenseListItemOut" },
+    output: { module: "@cubby/schemas/work-raw-read", export: "rawExpenseOut" },
+    list: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseListItemOut",
+    },
+    detail: { module: "@cubby/schemas/work-raw-read", export: "rawExpenseOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseOut",
+    },
+    mcpList: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseListItemOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawExpenseOut",
+    },
   },
   storage: {
     indexes: [

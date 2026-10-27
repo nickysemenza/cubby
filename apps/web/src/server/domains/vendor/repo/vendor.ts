@@ -25,14 +25,16 @@ import type {
   VendorFilters,
   VendorMergeSummaryOut,
   VendorOptionsOut,
-  VendorOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
-import { vendorOut } from "@cubby/schemas/vendor";
 import {
   vendorAgentHints,
   vendorOrderEvidence,
 } from "@cubby/schemas/vendor-import-fields";
+import {
+  rawVendorOut,
+  type RawVendorOut,
+} from "@cubby/schemas/vendor-raw-read";
 import {
   and,
   asc,
@@ -334,12 +336,12 @@ const vendorBrandedProductCount = declaredRollup(
   vendor,
 );
 
-const role = vendorOut.shape.role.enum;
-const vendorRole = sql<VendorOut["role"]>`(SELECT CASE
-  WHEN roles.seller AND roles.brand THEN ${sqlEnumConstant(vendorOut.shape.role, role.both)}
-  WHEN roles.seller THEN ${sqlEnumConstant(vendorOut.shape.role, role.seller)}
-  WHEN roles.brand THEN ${sqlEnumConstant(vendorOut.shape.role, role.brand)}
-  ELSE ${sqlEnumConstant(vendorOut.shape.role, role.unused)} END
+const role = rawVendorOut.shape.role.enum;
+const vendorRole = sql<RawVendorOut["role"]>`(SELECT CASE
+  WHEN roles.seller AND roles.brand THEN ${sqlEnumConstant(rawVendorOut.shape.role, role.both)}
+  WHEN roles.seller THEN ${sqlEnumConstant(rawVendorOut.shape.role, role.seller)}
+  WHEN roles.brand THEN ${sqlEnumConstant(rawVendorOut.shape.role, role.brand)}
+  ELSE ${sqlEnumConstant(rawVendorOut.shape.role, role.unused)} END
   FROM (SELECT ${vendorPurchases().exists()} AS seller,
     ${vendorBrandedProducts().exists()} AS brand) roles)`;
 
@@ -589,8 +591,8 @@ type VendorRow = {
   defaultSpendingCategoryId: SpendingCategoryShortcode | null;
   defaultSpendingCategoryName: string | null;
   defaultSpendingCategoryEmoji: string | null;
-  itemizationExpectation: VendorOut["itemizationExpectation"];
-  fieldResolutions: VendorOut["fieldResolutions"];
+  itemizationExpectation: RawVendorOut["itemizationExpectation"];
+  fieldResolutions: RawVendorOut["fieldResolutions"];
   orderEvidence: string | null;
   orderEmailSenders: string[];
   browserDomains: string[];
@@ -599,7 +601,7 @@ type VendorRow = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
-  role: VendorOut["role"];
+  role: RawVendorOut["role"];
   purchaseCount: number;
   brandedProductCount: number;
   brandCategoryCount: number;
@@ -679,7 +681,10 @@ const vendorLogoToAPI = (logo: VendorRow["logo"]) =>
     sourceEvidence: imageSourceEvidence.nullable().parse(logo.sourceEvidence),
   };
 
-const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
+const dbVendorToAPI = (
+  row: VendorRow,
+  dataQuality: DataQuality,
+): RawVendorOut => {
   const agentHints = vendorAgentHints.parse(row.agentHints);
   return {
     id: parseShortcodeFor("vendor", row.shortcode),
@@ -824,12 +829,12 @@ export const vendorListRead = async (
     read: {
       references: { defaultSpendingCategoryId: { kind: "public" } },
       bindings: (bind) => [
-        bind(vendorOut.pick({ agentHintsLabel: true }), (row) => ({
+        bind(rawVendorOut.pick({ agentHintsLabel: true }), (row) => ({
           agentHintsLabel: agentHintsLabel(
             vendorAgentHints.parse(row.agentHints),
           ),
         })),
-        bind(vendorOut.pick({ logo: true }), (row) => ({
+        bind(rawVendorOut.pick({ logo: true }), (row) => ({
           logo: vendorLogoToAPI(row.logo ?? null),
         })),
       ],
@@ -866,7 +871,7 @@ export const vendorList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ): Promise<{
-  data: VendorOut[];
+  data: RawVendorOut[];
   count: number;
   sums?: { spend: number; purchaseCount: number };
 }> => {
@@ -877,7 +882,7 @@ export const vendorList = async (
   const result = {
     ...page,
     data: withDisplayImages(
-      page.data.map((row) => vendorOut.parse(row)),
+      page.data.map((row) => rawVendorOut.parse(row)),
       page.data,
     ),
   };
@@ -888,7 +893,7 @@ export const vendorList = async (
 export const getVendorByID = async (
   db: Database,
   id: VendorId,
-): Promise<VendorOut> => {
+): Promise<RawVendorOut> => {
   const [row] = await getDb(db)
     .select({
       ...vendorColumns,
@@ -920,7 +925,7 @@ export const getVendorByID = async (
 export const getVendorByShortcode = async (
   db: Database,
   shortcode: string,
-): Promise<VendorOut | null> => {
+): Promise<RawVendorOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "vendor");
   return id ? getVendorByID(db, parseEntityId("vendor", id)) : null;
 };
@@ -1131,7 +1136,7 @@ export const replaceVendorLogo = async (
   },
   actor: ActorContext,
 ): Promise<{
-  output: VendorOut;
+  output: RawVendorOut;
   entityId: VendorId;
   detachedImageKeys: string[];
 }> => {
@@ -1313,7 +1318,7 @@ export const mergeVendors = async (
   input: { keepId: VendorShortcode; mergeIds: VendorShortcode[] },
   actor: ActorContext,
 ): Promise<{
-  vendor: VendorOut;
+  vendor: RawVendorOut;
   detachedImageKeys: string[];
   mergeSummary: VendorMergeSummaryOut;
 }> => {

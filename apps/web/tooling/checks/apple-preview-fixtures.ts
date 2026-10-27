@@ -31,8 +31,15 @@ import {
   mealListItemOut,
   mealNutritionOut,
   mealNutritionPerson,
+  mealRecipeOut,
+  mealTypeSchema,
+  mealKindSchema,
 } from "@cubby/schemas/meal";
-import { mealRecipeOut } from "@cubby/schemas/meal-fields";
+import { rawMealList } from "@cubby/schemas/meal-raw-read";
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "../../src/entity/fields/field-envelope.fixtures";
 import { nutritionEstimate } from "@cubby/schemas/nutrition";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { problemsCountSchema } from "@cubby/schemas/problems";
@@ -244,9 +251,17 @@ function buildRecipe(
       recipe: {
         id: spec.recipeId,
         name: spec.name,
-        servings: null,
         yield: null,
-        totals: null,
+        fields: {
+          servings: fieldValueFixture(
+            mealRecipeOut.shape.recipe.shape.fields.shape.servings,
+            null,
+          ),
+          totals: fieldValueFixture(
+            mealRecipeOut.shape.recipe.shape.fields.shape.totals,
+            null,
+          ),
+        },
       },
       scale: 1,
       sortOrder: spec.sortOrder,
@@ -259,8 +274,8 @@ function buildRecipe(
   });
 }
 
-type MealType = z.infer<typeof mealListItemOut>["mealType"];
-type MealKind = z.infer<typeof mealListItemOut>["mealKind"];
+type MealType = z.infer<typeof mealTypeSchema> | null;
+type MealKind = z.infer<typeof mealKindSchema>;
 
 interface MealSpec {
   id: string;
@@ -283,7 +298,7 @@ function buildMeal(
       sortOrder: index,
     }),
   );
-  return mock(mealListItemOut, {
+  const base = mock(rawMealList, {
     seed,
     overrides: {
       id: spec.id,
@@ -292,7 +307,7 @@ function buildMeal(
       sortOrder: null,
       mealType: spec.mealType,
       mealKind: spec.mealKind,
-      recipes,
+      recipes: [],
       totals: totalsOf(seed + 2, "unavailable"),
       images: [],
       displayName: spec.name,
@@ -309,6 +324,19 @@ function buildMeal(
         relatedExceptions: [],
       },
       displayImages: [],
+    },
+  });
+  const fields = mealListItemOut.shape.fields.shape;
+  return entityReadFixture(mealListItemOut, {
+    ...base,
+    recipes,
+    fields: {
+      mealType: fieldValueFixture(fields.mealType, spec.mealType),
+      mealKind: fieldValueFixture(fields.mealKind, spec.mealKind),
+      images: fieldValueFixture(fields.images, []),
+      recipeNames: fieldValueFixture(fields.recipeNames, [...spec.recipeNames]),
+      dataQuality: fieldValueFixture(fields.dataQuality, base.dataQuality),
+      displayImages: fieldValueFixture(fields.displayImages, []),
     },
   });
 }
@@ -363,7 +391,12 @@ const lunch = {
   id: "MEL-6TXQ",
   date: "2026-09-14",
   name: "Garden lunch",
-  mealType: "lunch" as const,
+  fields: {
+    mealType: fieldValueFixture(
+      mealListItemOut.shape.fields.shape.mealType,
+      "lunch",
+    ),
+  },
 };
 
 function buildMealNutrition(): z.infer<typeof mealNutritionOut> {

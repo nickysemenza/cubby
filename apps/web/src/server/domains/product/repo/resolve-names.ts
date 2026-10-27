@@ -1,11 +1,15 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { productResolveCandidateOut } from "@cubby/schemas/product";
 import type {
-  ProductPickerItemOut,
   ProductResolveCandidateOut,
   ProductResolveLineInput,
   ProductResolveNamesInput,
   ProductResolveNamesOut,
 } from "@cubby/schemas/product";
+import type {
+  RawProductPickerItem,
+  RawProductResolveCandidate,
+} from "@cubby/schemas/product-raw-read";
 import { and, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -22,19 +26,21 @@ import {
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 
 import { getProductPickerItemsByIds } from "./crud";
 
 const MAX_LINES = 200;
 
 const toCandidate = (
-  item: ProductPickerItemOut,
-): ProductResolveCandidateOut => ({
+  item: RawProductPickerItem,
+): RawProductResolveCandidate => ({
   id: item.id,
   name: item.name,
   brandId: item.brandId,
   brandName: item.brandName,
   category: item.category,
+  categoryFeature: item.categoryFeature,
   price: item.price,
   coverImageUrl: item.coverImageUrl,
 });
@@ -106,14 +112,19 @@ export const resolveProductNames = async (
     ...resolved.flatMap(idsFor),
     ...lines.flatMap((line) => idHitsFor(line).map((hit) => hit.id)),
   ]);
-  const itemByShortcode = new Map<string, ProductPickerItemOut>(
-    items.map((item) => [item.id, item]),
+  const candidates = await publicFieldEnvelopeRows({
+    db,
+    entity: "product",
+    schema: productResolveCandidateOut,
+    rows: items.map(toCandidate),
+  });
+  const itemByShortcode = new Map<string, ProductResolveCandidateOut>(
+    candidates.map((item) => [item.id, item]),
   );
   const hydrate = (shortcodes: string[]) =>
     shortcodes
       .map((shortcode) => itemByShortcode.get(shortcode))
-      .filter((item): item is ProductPickerItemOut => item !== undefined)
-      .map(toCandidate);
+      .filter((item): item is ProductResolveCandidateOut => item !== undefined);
   return resolved.map((entry, index) => {
     const ingredient = ingredients[index];
     return {

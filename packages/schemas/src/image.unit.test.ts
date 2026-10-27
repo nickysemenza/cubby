@@ -64,6 +64,19 @@ describe("native image metadata", () => {
 
   it("keeps private hash metadata out of the normal image output", () => {
     const output = imageOut.parse({
+      fields: Object.fromEntries(
+        Object.entries(imageOut.shape.fields.shape).map(([key, schema]) => [
+          key,
+          schema.parse({
+            current: {
+              assignment: null,
+              controls: { kind: "readonly", reason: "computed" },
+            },
+            result: { kind: "missing" },
+            work: { kind: "pending" },
+          }),
+        ]),
+      ),
       id: "IMG-2345",
       url: "https://images.example/photo.jpg",
       key: "images/photo.jpg",

@@ -1,4 +1,7 @@
-import { recipeOut } from "@cubby/schemas/recipe";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
+const recipeOut = entityFieldEnvelopeSchemas.recipe.detail;
 import type { RecipeFlowPlan } from "@cubby/schemas/recipe-flow";
 import {
   testCompleteDataQuality,
@@ -10,7 +13,7 @@ const sectionId = testEntityId("recipe", "walkthrough-section");
 const usageId = testEntityId("recipe", "walkthrough-sugar");
 const createdAt = new Date("2026-01-01");
 
-export const walkthroughRecipe = recipeOut.parse({
+export const walkthroughRecipe = entityReadFixture(recipeOut, {
   id: testShortcode("recipe", "RCP-WALKTHROUGH"),
   name: "Example lemon cakes",
   images: [],

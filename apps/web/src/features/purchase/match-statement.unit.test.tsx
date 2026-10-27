@@ -1,4 +1,8 @@
-import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+const financialTransactionOut =
+  entityFieldEnvelopeSchemas.financialTransaction.detail;
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Profiler } from "react";
@@ -28,7 +32,12 @@ const transaction = mock(financialTransactionOut, {
   overrides: {
     id: testShortcode("financialTransaction", "FTX-4K7M"),
     amount: 91,
-    merchant: "Example Hardware",
+    fields: {
+      merchant: fieldValueFixture(
+        financialTransactionOut.shape.fields.shape.merchant,
+        "Example Hardware",
+      ),
+    },
     displayName: "Example Hardware",
     allocations: [],
     status: "posted",

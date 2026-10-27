@@ -1,16 +1,31 @@
 {
-  "id": "PRD-2345",
-  "redirectedFrom": null,
-  "previousShortcodes": [],
-  "name": "Sample Product",
   "acquisitionOrigin": "unknown",
-  "owners": [
-    {
-      "label": "Household",
-      "ref": null,
-      "inherited": false
-    }
-  ],
+  "id": "PRD-2345",
+  "name": "Sample Product",
+  "aliases": [],
+  "fdc_id": null,
+  "model": null,
+  "notes": null,
+  "expectedQuantity": null,
+  "externalIds": [],
+  "pricing": {
+    "knownExpenseCount": 0,
+    "unknownExpenseCount": 0,
+    "knownUnitCount": 0,
+    "partial": false
+  },
+  "usdaUnavailable": null,
+  "kind": null,
+  "commodity": false,
+  "labelNutrition": null,
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-01T00:00:00Z",
+  "category": null,
+  "itemImageCount": 0,
+  "labelImageCount": 0,
+  "labelImages": [],
+  "classificationEvidence": "",
+  "unitPriceMappings": [],
   "ownershipEvidence": {
     "state": "uncertain",
     "acquiredAt": null,
@@ -20,7 +35,7 @@
   "nutritionDisplay": {
     "source": "label",
     "title": "From package label",
-    "basis": "Per serving · 30 g",
+    "basis": "Per serving \u00b7 30 g",
     "sourceNote": "Synthetic package label",
     "inferenceEvidence": null,
     "rows": [
@@ -32,55 +47,12 @@
       }
     ]
   },
-  "aliases": [],
-  "tags": [],
-  "primaryGtin": null,
-  "fdc_id": null,
-  "model": null,
-  "notes": null,
-  "expectedQuantity": null,
-  "category": null,
-  "images": [],
-  "externalIds": [],
-  "price": null,
-  "pricing": {
-    "derivedPrice": null,
-    "effectivePrice": null,
-    "source": "none",
-    "knownExpenseCount": 0,
-    "unknownExpenseCount": 0,
-    "knownUnitCount": 0,
-    "partial": false
-  },
-  "usdaUnavailable": null,
-  "stockTracked": null,
-  "kind": null,
-  "dataQuality": {
-    "status": "complete",
-    "score": 100,
-    "facets": [],
-    "gaps": [],
-    "exceptions": [],
-    "relatedGaps": [],
-    "relatedExceptions": []
-  },
-  "createdAt": "2026-01-01T00:00:00.000Z",
-  "updatedAt": "2026-01-01T00:00:00Z",
   "coverImageUrl": null,
   "ingredient": null,
   "unitMappings": [],
   "inventoryEntry": [],
-  "servingAsLocations": [],
-  "componentCount": 0,
-  "food": null,
-  "commodity": false,
   "recipeUsages": [],
   "cookbooks": [],
-  "primaryPlacement": {
-    "locationId": "LOC-5678",
-    "path": "Home › Garage › Shelf A",
-    "onHand": 2
-  },
   "quantityLedger": {
     "acquiredUnits": 0,
     "exitedUnits": 0,
@@ -89,20 +61,603 @@
     "unknownExitLines": 0,
     "locationCount": 0
   },
-  "onHandUnits": null,
-  "quantityVariance": null,
-  "displayImages": [],
   "attachments": [],
-  "categoryId": null,
-  "itemImageCount": 0,
-  "labelImageCount": 0,
-  "labelImages": [],
-  "classificationEvidence": "",
-  "sources": [],
-  "brandId": "VEN-2345",
-  "brandName": "Sample Manufacturer",
-  "growsPlantId": null,
-  "labelNutrition": null,
-  "unitPriceMappings": [],
-  "derived": {}
+  "redirectedFrom": null,
+  "previousShortcodes": [],
+  "fields": {
+    "tags": {
+      "current": {
+        "assignment": {
+          "kind": "value",
+          "value": [],
+          "ownership": {
+            "kind": "record"
+          }
+        },
+        "controls": {
+          "kind": "editable",
+          "canSetNone": true,
+          "canConfirm": false,
+          "reset": {
+            "kind": "unavailable"
+          }
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": []
+          },
+          "provenance": {
+            "kind": "own",
+            "ownership": {
+              "kind": "record"
+            }
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "brandId": {
+      "current": {
+        "assignment": {
+          "kind": "value",
+          "value": "VEN-2345",
+          "ownership": {
+            "kind": "record"
+          }
+        },
+        "controls": {
+          "kind": "editable",
+          "canSetNone": true,
+          "canConfirm": false,
+          "reset": {
+            "kind": "unavailable"
+          }
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": "VEN-2345"
+          },
+          "provenance": {
+            "kind": "own",
+            "ownership": {
+              "kind": "record"
+            }
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "brandName": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": "Sample Manufacturer"
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "categoryId": {
+      "current": {
+        "assignment": {
+          "kind": "inherit"
+        },
+        "controls": {
+          "kind": "editable",
+          "canSetNone": true,
+          "canConfirm": false,
+          "reset": {
+            "kind": "unavailable"
+          }
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": null
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "growsPlantId": {
+      "current": {
+        "assignment": {
+          "kind": "inherit"
+        },
+        "controls": {
+          "kind": "editable",
+          "canSetNone": true,
+          "canConfirm": false,
+          "reset": {
+            "kind": "unavailable"
+          }
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": null
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "price": {
+      "current": {
+        "assignment": {
+          "kind": "inherit"
+        },
+        "controls": {
+          "kind": "editable",
+          "canSetNone": true,
+          "canConfirm": false,
+          "reset": {
+            "kind": "unavailable"
+          }
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": null
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "cost": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "stockTracked": {
+      "current": {
+        "assignment": {
+          "kind": "inherit"
+        },
+        "controls": {
+          "kind": "editable",
+          "canSetNone": true,
+          "canConfirm": false,
+          "reset": {
+            "kind": "unavailable"
+          }
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": null
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "primaryGtin": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "images": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": []
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "food": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "owners": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": [
+              {
+                "label": "Household",
+                "ref": null,
+                "inherited": false
+              }
+            ]
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "componentCount": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": 0
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "servingAsLocations": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": []
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "stockStatus": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "stockStatusItems": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "unitPriceDetailLabel": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "externalIdsLabel": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "missing"
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "quantityVariance": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "onHandUnits": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "dataQuality": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": {
+              "status": "complete",
+              "score": 100,
+              "facets": [],
+              "gaps": [],
+              "exceptions": [],
+              "relatedGaps": [],
+              "relatedExceptions": []
+            }
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "displayImages": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": []
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "primaryPlacement": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "value",
+            "value": {
+              "locationId": "LOC-5678",
+              "path": "Home \u203a Garage \u203a Shelf A",
+              "onHand": 2
+            }
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    },
+    "categoryFeature": {
+      "current": {
+        "assignment": null,
+        "controls": {
+          "kind": "readonly",
+          "reason": "computed"
+        }
+      },
+      "result": {
+        "kind": "live",
+        "decision": {
+          "outcome": {
+            "kind": "empty",
+            "reason": "unset"
+          },
+          "provenance": {
+            "kind": "computed"
+          }
+        }
+      },
+      "work": {
+        "kind": "idle"
+      }
+    }
+  },
+  "servingAsLocations": [],
+  "componentCount": 0,
+  "food": null
 }

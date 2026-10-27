@@ -586,21 +586,24 @@ describe("MCP catalog schemas", () => {
     ).toBe(true);
   });
 
-  it("publishes valid Draft-7 schemas with resolvable references and empty merchant candidate tuples", async () => {
-    const validator = new Ajv({ strict: false, validateFormats: false });
-    const invalid: string[] = [];
-    for (const tool of catalog.tools) {
+  // Every tool graph must compile independently; a catalog-wide deadline scales
+  // with unrelated tools and obscures which advertised graph failed.
+  it.each(Object.keys(MCP_TOOL_BINDINGS))(
+    "publishes valid Draft-7 schemas with resolvable references for %s",
+    (name) => {
+      const tool = catalog.tools.find((candidate) => candidate.name === name);
+      if (!tool) throw new Error(`Missing advertised tool ${name}`);
+      const validator = new Ajv({ strict: false, validateFormats: false });
+      const invalid: string[] = [];
       for (const field of ["inputSchema", "outputSchema"] as const) {
-        if (!validator.validateSchema(tool[field] ?? {})) {
-          invalid.push(`${tool.name}.${field}`);
-        } else {
-          validator.compile(tool[field] ?? {});
-        }
+        if (!validator.validateSchema(tool[field] ?? {}))
+          invalid.push(`${name}.${field}`);
+        else validator.compile(tool[field] ?? {});
       }
-    }
-    expect(invalid).toEqual([]);
-    // This compiles every advertised input and output graph, not one schema.
-  }, 15_000);
+      expect(invalid).toEqual([]);
+    },
+    15_000,
+  );
 
   it("publishes object outputs for every action", () => {
     // `structuredContent` must be an object; a bare array output fails every

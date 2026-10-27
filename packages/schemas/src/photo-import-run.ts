@@ -1,3 +1,14 @@
+import {
+  imageFieldEnvelopeFields,
+  imagePublicReadFields,
+} from "./generated/entity-field-envelope-fields.image.gen";
+import { imageRepresentations } from "./image-summary";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import { rawProductDetail } from "./product-raw-read";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
 import { assessmentChildHandle } from "./assessment-reference";
@@ -30,7 +41,6 @@ import { productVariantComparison } from "./product-variant-comparison";
 import {
   productListInventoryEntryOut,
   productQuantitySummaryOut,
-  productWithFoodOut,
 } from "./product";
 
 export const runTargetDeviceWorkState = z.enum([
@@ -591,6 +601,19 @@ export const photoAcceptedSourceLine = z.object({
 });
 export type PhotoAcceptedSourceLine = z.infer<typeof photoAcceptedSourceLine>;
 
+/** Current own-photo Image values, bounded to the evidence the comparison UI displays. */
+const rawPhotoProductOwnPhoto = z.object({
+  id: imageShortcode,
+  url: z.url(),
+  representations: imageRepresentations.optional(),
+  capturedAt: z.string().nullable().optional(),
+});
+export const photoProductOwnPhoto = withFieldEnvelopes(
+  rawPhotoProductOwnPhoto,
+  imageFieldEnvelopeFields,
+  imagePublicReadFields,
+);
+
 export const photoProductCandidate = z.object({
   id: productShortcode,
   name: z.string(),
@@ -615,15 +638,7 @@ export const photoProductCandidate = z.object({
   hasInventory: z.boolean(),
   quantity: productQuantitySummaryOut.optional(),
   inventoryEntries: z.array(productListInventoryEntryOut).optional(),
-  ownPhotos: z
-    .array(
-      z.object({
-        id: imageShortcode,
-        url: z.string(),
-        capturedAt: z.string().nullable().optional(),
-      }),
-    )
-    .optional(),
+  ownPhotos: z.array(photoProductOwnPhoto).optional(),
   variantEvidence: z
     .array(
       z.object({
@@ -661,8 +676,8 @@ export const photoProductCandidate = z.object({
   purchaseLineCount: z.number().int().nonnegative().optional(),
 });
 export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
-
-export const photoProductEvidence = photoProductCandidate
+// Evidence retains the observed source facts used by frozen comparisons.
+const rawPhotoProductEvidence = photoProductCandidate
   .pick({
     id: true,
     name: true,
@@ -678,11 +693,16 @@ export const photoProductEvidence = photoProductCandidate
     brandName: z.string().nullable(),
     model: z.string().nullable(),
     identifiers: z.array(z.string()),
-    notes: productWithFoodOut.shape.notes,
-    tags: productWithFoodOut.shape.tags,
-    category: productWithFoodOut.shape.category,
-    externalIds: productWithFoodOut.shape.externalIds,
+    notes: rawProductDetail.shape.notes,
+    tags: rawProductDetail.shape.tags,
+    category: rawProductDetail.shape.category,
+    externalIds: rawProductDetail.shape.externalIds,
   });
+export const photoProductEvidence = withFieldEnvelopes(
+  rawPhotoProductEvidence,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
 export type PhotoProductEvidence = z.infer<typeof photoProductEvidence>;
 export const photoRejectedCandidate = z.object({
   id: productShortcode,

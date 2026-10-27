@@ -11,13 +11,17 @@ import {
   listEntities,
 } from "./generated/entity-lists.gen";
 
-const hasField = (schema: z.core.$ZodType, field: string): boolean => {
-  if (schema instanceof z.ZodObject) return field in schema.shape;
+const schemaAt = (
+  schema: z.core.$ZodType,
+  path: readonly string[],
+): z.core.$ZodType | undefined => {
+  if (path.length === 0) return schema;
   if (schema instanceof z.ZodIntersection)
-    return (
-      hasField(schema.def.left, field) || hasField(schema.def.right, field)
-    );
-  return false;
+    return schemaAt(schema.def.left, path) ?? schemaAt(schema.def.right, path);
+  if (!(schema instanceof z.ZodObject)) return undefined;
+  const [key, ...rest] = path;
+  const child = key === undefined ? undefined : schema.shape[key];
+  return child ? schemaAt(child, rest) : undefined;
 };
 
 // The kernel list output is `{ items: [...row], meta }`; the row is the contract.
@@ -33,14 +37,15 @@ const listRowSchema = (entity: ListEntity): z.core.$ZodType => {
 };
 
 // The list contract behind every thumbnail — web tables, native rows — is
-// `displayImages`, attached server-side by `withDisplayImages`. A new
+// `fields.displayImages`, selected by the public envelope serializer. A new
 // entity must carry it, even when the truthful result is an empty array.
 describe("displayImages list contract", () => {
   it("every entity list schema carries the field", () => {
     for (const entity of listEntities) {
       expect
         .soft(
-          hasField(listRowSchema(entity), "displayImages"),
+          schemaAt(listRowSchema(entity), ["fields", "displayImages"]) !==
+            undefined,
           `${entity} list schema lacks displayImages`,
         )
         .toBe(true);
@@ -54,13 +59,43 @@ describe("entity detail media contract", () => {
       const schema = getEntityDetailOutputSchema(entity);
       expect
         .soft(
-          hasField(schema, "displayImages"),
+          schemaAt(schema, ["fields", "displayImages"]) !== undefined,
           `${entity} lacks displayImages`,
         )
         .toBe(true);
       expect
-        .soft(hasField(schema, "attachments"), `${entity} lacks attachments`)
+        .soft(
+          schemaAt(schema, ["attachments"]) !== undefined,
+          `${entity} lacks attachments`,
+        )
         .toBe(true);
+      expect
+        .soft(
+          schemaAt(schema, ["displayImages"]),
+          `${entity} exposes a competing displayImages slot`,
+        )
+        .toBeUndefined();
+      const attachments = schemaAt(schema, ["attachments"]);
+      if (!(attachments instanceof z.ZodArray))
+        throw new Error(`${entity} attachments must be an array`);
+      expect
+        .soft(
+          schemaAt(attachments.element, ["fields", "url"]),
+          `${entity} attachment lacks its URL envelope`,
+        )
+        .toBeDefined();
+      for (const legacy of [
+        "url",
+        "fieldResolutions",
+        "derived",
+        "attachments",
+      ])
+        expect
+          .soft(
+            schemaAt(attachments.element, [legacy]),
+            `${entity} attachment exposes ${legacy}`,
+          )
+          .toBeUndefined();
     }
   });
 });

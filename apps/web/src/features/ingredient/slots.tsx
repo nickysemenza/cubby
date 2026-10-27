@@ -19,9 +19,12 @@ export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
   const product = ingredient.product.find(
     (candidate) => candidate.id === ingredient.nutritionProduct?.productId,
   );
+  const food = product ? fieldValueOf(product.fields.food) : null;
+  const brandName = product ? fieldValueOf(product.fields.brandName) : null;
+  const price = product ? fieldValueOf(product.fields.price) : null;
   const nutrients = product?.labelNutrition
     ? labelNutrientsPer100(product.labelNutrition)
-    : product?.food?.nutritionInfo?.nutrientsPer100;
+    : food?.nutritionInfo?.nutrientsPer100;
   if (!product || !nutrients)
     return (
       <Description>
@@ -29,13 +32,17 @@ export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
         USDA food or a package label.
       </Description>
     );
-  const mappings = getAllUnitMappingsFromProduct(product);
+  const mappings = getAllUnitMappingsFromProduct({
+    ...product,
+    food: food ?? null,
+    price: price ?? null,
+  });
   return (
     <Stack gap="md">
       <ProductNutritionLabel
         nutrients={nutrients}
         mappings={mappings}
-        portions={product.food?.portionInfoRaw ?? []}
+        portions={food?.portionInfoRaw ?? []}
         servingGrams={product.labelNutrition?.servingGrams}
       />
       <Description>
@@ -43,22 +50,22 @@ export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
           ? "From package label, shown from "
           : "Shown from "}
         {product.name}
-        {product.brandName ? ` by ${product.brandName}` : ""}.
+        {brandName ? ` by ${brandName}` : ""}.
       </Description>
       <NutrientDensityStats
         nutrients={nutrients}
         mappings={mappings}
-        price={product.pricing.effectivePrice ?? product.price}
+        price={price ?? null}
         mappingProduct={{
           id: product.id,
           name: product.name,
-          brandName: product.brandName,
+          brandName: brandName ?? null,
         }}
       />
       {/* USDA-only: the full raw nutrient join behind a disclosure. A label
           override has no such join, and when both exist the label leads. */}
-      {!product.labelNutrition && product.food?.nutritionInfo && (
-        <FullNutrientBreakdown nutritionInfo={product.food.nutritionInfo} />
+      {!product.labelNutrition && food?.nutritionInfo && (
+        <FullNutrientBreakdown nutritionInfo={food.nutritionInfo} />
       )}
     </Stack>
   );
@@ -83,3 +90,4 @@ export const IngredientRecipeUsages: DetailSlotComponent<"ingredient"> = ({
     <Description>Not used in any recipes yet.</Description>
   );
 };
+import { fieldValueOf } from "@cubby/schemas/field-envelope";

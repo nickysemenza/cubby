@@ -365,8 +365,11 @@ export default defineEntity({
   fields: {
     create: { module: "@cubby/schemas/wish", export: "wishCreateInput" },
     update: { module: "@cubby/schemas/wish", export: "wishUpdateData" },
-    output: { module: "@cubby/schemas/wish", export: "wishOut" },
-    list: { module: "@cubby/schemas/wish", export: "wishListItemOut" },
+    output: { module: "@cubby/schemas/wish-raw-read", export: "rawWishOut" },
+    list: {
+      module: "@cubby/schemas/wish-raw-read",
+      export: "rawWishListItemOut",
+    },
   },
   storage: {
     indexes: [{ on: ["createdAt"] }, { on: ["acquiredAt"] }],

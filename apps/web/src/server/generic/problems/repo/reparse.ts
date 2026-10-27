@@ -11,7 +11,7 @@ import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { StaleIngredientParse } from "@cubby/schemas/problems";
+import type { StaleIngredientParse } from "@cubby/schemas/problems-raw-read";
 import { and, count, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { computeParseDrift, hasDrift } from "~/lib/parse-drift";

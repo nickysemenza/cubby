@@ -1,8 +1,9 @@
-import type { ProjectListItemOut, ProjectOut } from "@cubby/schemas/project";
+import type { ProjectListItemOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { ProjectScheduleRow } from "~/lib/project-schedule";
 
 import {
@@ -77,3 +78,5 @@ describe("project schedule rows", () => {
     ).toEqual(["root", "phase", "work", "sibling"]);
   });
 });
+
+type ProjectOut = DetailRecordOf<"project">;

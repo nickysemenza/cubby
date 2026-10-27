@@ -16,6 +16,7 @@ import {
   PopoverTitle,
 } from "~/ui/primitives/popover";
 
+import { SourceStack } from "./source-stack";
 import { ExplanationEntityLink } from "./why-value";
 
 export type ImageChainQueryOptions =
@@ -25,50 +26,55 @@ type Chain = z.infer<typeof imageChainExplanation>;
 
 export function ImageChain({ chain }: { chain: Chain }) {
   return (
-    <div aria-label="Display image chain" className="grid min-w-0 gap-3">
-      {chain.levels.map((level) => (
-        <section
-          key={`${level.source?.entityId ?? "default"}:${level.label}`}
-          className="grid min-w-0 gap-2"
-        >
-          <h4 className="flex flex-wrap items-center gap-1 text-xs font-medium">
-            {level.source ? (
-              <ExplanationEntityLink
-                entity={level.source.entityKind}
-                id={level.source.entityId}
-                name={level.label}
-              />
+    <SourceStack
+      label="Display image chain"
+      rows={chain.levels.map((level) => ({
+        key: `${level.source?.entityId ?? "default"}:${level.label}`,
+        status: level.images.some((image) => image.chosen)
+          ? "deciding"
+          : "skipped",
+        title: level.source ? (
+          <ExplanationEntityLink
+            entity={level.source.entityKind}
+            id={level.source.entityId}
+            name={level.label}
+          />
+        ) : (
+          level.label
+        ),
+        children: (
+          <>
+            {level.images.length ? (
+              <div className="flex gap-2 overflow-x-auto p-1">
+                {level.images.map((image) => (
+                  <figure key={image.id} className="shrink-0">
+                    <Image
+                      src={image.url}
+                      alt={
+                        image.chosen ? "Chosen cover" : `${level.label} image`
+                      }
+                      displayWidth={64}
+                      className={cn(
+                        "size-16 rounded-md object-cover",
+                        image.chosen &&
+                          "outline-2 outline-offset-2 outline-info",
+                      )}
+                    />
+                    {image.chosen ? (
+                      <figcaption className="mt-1 text-xs text-muted-foreground">
+                        Cover
+                      </figcaption>
+                    ) : null}
+                  </figure>
+                ))}
+              </div>
             ) : (
-              level.label
+              <p className="text-xs text-muted-foreground">No images</p>
             )}
-          </h4>
-          {level.images.length ? (
-            <div className="flex gap-2 overflow-x-auto p-1">
-              {level.images.map((image) => (
-                <figure key={image.id} className="shrink-0">
-                  <Image
-                    src={image.url}
-                    alt={image.chosen ? "Chosen cover" : `${level.label} image`}
-                    displayWidth={64}
-                    className={cn(
-                      "size-16 rounded-md object-cover",
-                      image.chosen && "outline-2 outline-offset-2 outline-info",
-                    )}
-                  />
-                  {image.chosen ? (
-                    <figcaption className="mt-1 text-xs text-muted-foreground">
-                      Cover
-                    </figcaption>
-                  ) : null}
-                </figure>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No images</p>
-          )}
-        </section>
-      ))}
-    </div>
+          </>
+        ),
+      }))}
+    />
   );
 }
 

@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityApi } from "./support/entity-api";
-import { z } from "zod";
 
 import { relationshipDiscoveryContract } from "./support/relationship-discovery-contract";
 import {
@@ -31,22 +32,28 @@ test("placement acceptance follows the surviving stock row after merging", async
   ).toBe(true);
   await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(fixture.destination.id));
-  const survivor = z.object({
-    location: z.object({ id: z.string() }),
-    amount: z.object({ value: z.number() }),
+  const survivor = entityFieldEnvelopeSchemas.inventory.detail.pick({}).extend({
+    location: entityFieldEnvelopeSchemas.inventory.detail.shape.location.pick({
+      id: true,
+    }),
+    fields: entityFieldEnvelopeSchemas.inventory.detail.shape.fields.pick({
+      amount: true,
+    }),
   });
   await expect
     .poll(
       async () =>
-        survivor.parse(
-          await (
-            await entityApi(page.request).get(
-              "inventory",
-              fixture.destination.id,
-              {},
-            )
-          ).json(),
-        ).amount.value,
+        fieldValueOf(
+          survivor.parse(
+            await (
+              await entityApi(page.request).get(
+                "inventory",
+                fixture.destination.id,
+                {},
+              )
+            ).json(),
+          ).fields.amount,
+        )?.value,
     )
     .toBe(2);
   expect(

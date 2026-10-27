@@ -88,7 +88,11 @@ struct ScopePickerSheet: View {
                         .font(.fieldGuideBody)
                         .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(1)
-                    Eyebrow(node.type.rawValue)
+                    if let type = (try? JSONValue(encoding: node.fields.type)).flatMap(FieldEnvelope.init)?
+                        .effectiveValue?.stringValue
+                    {
+                        Eyebrow(type)
+                    }
                 }
                 Spacer(minLength: FieldGuideTokens.Space.sm)
                 Text("\(node.totalItems)")

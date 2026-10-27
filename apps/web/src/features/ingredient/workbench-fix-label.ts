@@ -1,4 +1,4 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 
 import { hasPriceEntry } from "./workbench-editor-core";
 
@@ -10,11 +10,11 @@ const FIX_LABEL = {
   "add-weight-mapping": "Add weight",
   "add-volume-mapping": "Add volume",
   done: "Done",
-} satisfies Record<EnrichmentRow["recommendedFix"], string>;
+} satisfies Record<IngredientEnrichmentRead["recommendedFix"], string>;
 
 // The "Next" badge label. A priced-but-money-uncovered row is islanded — the fix
 // is to connect the existing price, not set a new one, so say so.
-export const fixBadgeLabel = (row: EnrichmentRow): string => {
+export const fixBadgeLabel = (row: IngredientEnrichmentRead): string => {
   if (
     !row.coverage.covered.includes("money") &&
     hasPriceEntry(row) &&

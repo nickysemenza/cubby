@@ -6,8 +6,8 @@ import type {
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { type ExpenseOut } from "@cubby/schemas/project";
 import { reconcilePurchase, splitExpenseInput } from "@cubby/schemas/purchase";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
@@ -94,7 +94,23 @@ describe("purchase list totals", () => {
     expect(page.result.data[0]).not.toHaveProperty("vendorId");
     expect(page.result.data[0]).not.toHaveProperty("orderUrl");
     expect(page.tables).toContain("DerivedValue");
-    expect(page.queryCount).toBe(3);
+    await createRepoEntity(ctx, "purchase", {
+      vendorId,
+      date: "2026-01-16",
+      orderId: "BASE-002",
+    });
+    const repeated = await countTestDbQueries(() =>
+      purchaseListRead(
+        ctx.db,
+        { vendorId },
+        [],
+        { pageIndex: 0, pageSize: 10 },
+        "page",
+        selectedListProjection("purchase", ["spendingCategoryId"]),
+      ),
+    );
+    expect(repeated.result.data).toHaveLength(2);
+    expect(repeated.queryCount).toBe(page.queryCount);
   });
   it("sums live ledger rows across pages and respects the purchase filter", async () => {
     const vendorId = await vendorShortcodeByName(
@@ -367,7 +383,7 @@ const vendorShortcodeByName = async (
 const expenseByShortcode = async (
   db: Database,
   shortcode: ExpenseShortcode,
-): Promise<ExpenseOut> => {
+): Promise<RawExpenseOut> => {
   const row = await getExpenseByShortcode(db, shortcode);
   if (!row) throw new Error(`test setup: expense ${shortcode} not found`);
   return row;

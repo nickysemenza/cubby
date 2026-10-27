@@ -1,5 +1,5 @@
 import type { DetailBreadcrumb } from "@cubby/schemas/entity-detail-summary";
-import type { ProductWithFoodOut } from "@cubby/schemas/product";
+import type { RawProductDetail } from "@cubby/schemas/product-raw-read";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 
@@ -56,7 +56,7 @@ const emptyRecipeUsages = {
 export async function readProductDetail(
   context: ProductDetailReadContext,
   shortcode: string,
-): Promise<(ProductWithFoodOut & { breadcrumb: DetailBreadcrumb }) | null> {
+): Promise<(RawProductDetail & { breadcrumb: DetailBreadcrumb }) | null> {
   const parsed = parseShortcode(shortcode);
   if (parsed?.type !== "product") return null;
 

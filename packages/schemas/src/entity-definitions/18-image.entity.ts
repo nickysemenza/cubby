@@ -875,14 +875,17 @@ export default defineEntity(
     fields: {
       create: null,
       update: { module: "@cubby/schemas/image", export: "imageUpdateInput" },
-      output: { module: "@cubby/schemas/image", export: "imageOut" },
+      output: {
+        module: "@cubby/schemas/image-raw-read",
+        export: "rawImageOutput",
+      },
       list: {
-        module: "@cubby/schemas/image",
-        export: "imageWithEntitySchema",
+        module: "@cubby/schemas/image-raw-read",
+        export: "rawImageList",
       },
       detail: {
-        module: "@cubby/schemas/image",
-        export: "imageWithEntitySchema",
+        module: "@cubby/schemas/image-raw-read",
+        export: "rawImageDetail",
       },
     },
     storage: {

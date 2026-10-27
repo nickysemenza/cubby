@@ -19,7 +19,6 @@ import {
 import { getErrorMessage } from "@cubby/shared";
 import { z } from "zod";
 
-import { listReadSchema } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
@@ -47,10 +46,15 @@ import {
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import {
+  loadPublicFieldReadContexts,
+  publicFieldEnvelopeRows,
+} from "~/server/generic/derived/repo/public-read";
 import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
+import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import {
   bindWorkflow,
   workflow,
@@ -329,9 +333,22 @@ const buildEntityOperations = <
           parseSchema<S["id"], string>(binding.schemas.id, input.id),
         )
         .call("found", async ({ context }, { input, id }) => {
+          const fieldReads = loadPublicFieldReadContexts(
+            context.db,
+            binding.entity,
+            [input.id],
+          );
+          fieldReads.catch(() => {
+            // SILENT: The promise is awaited below; prevent an unhandled rejection on an early not-found response.
+          });
           const item = await binding.repository.get(context, id);
           if (item !== null)
-            return { item, redirectedFrom: null, missingMessage: null };
+            return {
+              item,
+              fieldReads,
+              redirectedFrom: null,
+              missingMessage: null,
+            };
           // A merged-away code reads as its survivor (ADR 0006). Mutations never
           // follow this redirect; they refuse with the survivor's code instead.
           const identity = await resolveEntityIdentity(context.db, input.id);
@@ -350,11 +367,17 @@ const buildEntityOperations = <
           if (canonical !== null && identity.state === "redirected")
             return {
               item: canonical,
+              fieldReads: loadPublicFieldReadContexts(
+                context.db,
+                binding.entity,
+                [identity.canonicalShortcode],
+              ),
               redirectedFrom: identity.requested,
               missingMessage: null,
             };
           return {
             item: null,
+            fieldReads,
             redirectedFrom: null,
             missingMessage: isShortcodeEntity(binding.entity)
               ? await describeUnresolvableCode(
@@ -383,7 +406,20 @@ const buildEntityOperations = <
             redirectedFrom: found.redirectedFrom,
           };
         })
-        .output(({ input, found, media }) => {
+        .call("enveloped", async ({ context }, { found, media }) =>
+          media === null
+            ? null
+            : (
+                await publicFieldEnvelopeRows({
+                  db: context.db,
+                  entity: binding.entity,
+                  schema: binding.schemas.detail,
+                  rows: [media],
+                  contexts: await found.fieldReads,
+                })
+              )[0],
+        )
+        .output(({ input, found, media, enveloped }) => {
           if (media === null && input.missing !== "null")
             throw createAppError(
               ENTITY_NOT_FOUND_REASON[binding.entity],
@@ -393,13 +429,7 @@ const buildEntityOperations = <
           return entityQueryResultSchema.parse({
             action: "get",
             entity: binding.entity,
-            item:
-              media === null
-                ? null
-                : parseSchema<S["detail"], typeof media>(
-                    binding.schemas.detail,
-                    media,
-                  ),
+            item: enveloped ?? null,
           });
         }),
     ),
@@ -455,19 +485,24 @@ const buildEntityOperations = <
             page.data,
           ),
         }))
-        .output(({ validated, mediaPage }) =>
+        .call("enveloped", async ({ context }, { mediaPage }) =>
+          publicFieldEnvelopeRows({
+            db: context.db,
+            entity: binding.entity,
+            schema: binding.schemas.list,
+            rows: mediaPage.data,
+            contexts: mediaPage.fieldReads,
+          }),
+        )
+        .output(({ validated, mediaPage, enveloped }) =>
           entityQueryResultSchema.parse({
             action: "list",
             entity: binding.entity,
             ...buildPaginatedResponse(
               validated.pagination,
-              withChildCounts(
-                z.array(binding.schemas.list).parse(mediaPage.data),
-                mediaPage.data,
-              ),
+              withChildCounts(enveloped, mediaPage.data),
               mediaPage.count,
               {
-                derived: mediaPage.derived ?? {},
                 ...aggregates(
                   binding.entity,
                   "sums" in mediaPage

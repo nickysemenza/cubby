@@ -1,4 +1,4 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
 import {
   financialTransactionShortcode,
   runEntityId,
@@ -41,7 +41,7 @@ const rank = (
 });
 
 const transaction = (id: string, amount: number) =>
-  fromPartial<FinancialTransactionOut>({
+  fromPartial<RawFinancialTransactionOut>({
     id,
     amount,
     kind: "purchase",

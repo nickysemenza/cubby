@@ -1,6 +1,7 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
-import { productTopLevelOut } from "@cubby/schemas/product";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { testShortcode } from "@cubby/schemas/testing";
+import { parseShortcode } from "@cubby/shared";
 import {
   act,
   fireEvent,
@@ -13,6 +14,7 @@ import { z } from "zod";
 
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -28,10 +30,48 @@ import {
 const id = testShortcode("product", "lifecycle");
 const categoryId = testShortcode("productCategory", "food");
 const ingredientId = testShortcode("ingredient", "apple");
-type PageRecord = Pick<
-  z.output<typeof productTopLevelOut>,
-  "id" | "name" | "brandName" | "categoryId"
-> & { ingredient?: null };
+// Minimal caller state for lifecycle races; public wire schemas have separate coverage.
+
+function recordFixture<T extends { id: string }>(input: T) {
+  const entity = parseShortcode(input.id)?.type;
+  if (!entity) throw new Error("Synthetic record identity missing");
+  const row = z.looseObject({ id: z.string() }).parse(input);
+  const schemas = entityFieldEnvelopeSchemas[entity].detail.shape.fields.shape;
+  const fields = z.record(z.string(), z.unknown()).parse(row.fields ?? {});
+  for (const [key, schema] of Object.entries(schemas)) {
+    if (!(schema instanceof z.ZodType))
+      throw new Error("Synthetic field schema missing");
+    if (Object.hasOwn(row, key))
+      fields[key] = fieldValueFixture(schema, row[key]);
+    else {
+      const nestedKey = key.replace(/Ids?$/u, "");
+      if (
+        !Object.hasOwn(fields, key) &&
+        nestedKey !== key &&
+        Object.hasOwn(row, nestedKey)
+      ) {
+        const nested = z
+          .object({ id: z.string() })
+          .nullable()
+          .safeParse(row[nestedKey]);
+        if (nested.success)
+          fields[key] = fieldValueFixture(schema, nested.data?.id ?? null);
+      }
+    }
+  }
+  const result = { ...input, fields };
+  for (const key of Object.keys(schemas)) Reflect.deleteProperty(result, key);
+  return result;
+}
+
+const pageRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  brandName: z.string(),
+  categoryId: z.string().nullable(),
+  ingredient: z.null().optional(),
+});
+type PageRecord = z.output<typeof pageRecordSchema>;
 const baseRecord = {
   id,
   name: "Synthetic apple",
@@ -89,25 +129,40 @@ function Page({
   readRecord?: () => Promise<PageRecord | null>;
   mutationPort?: EntityMutationPort;
 }) {
+  const currentRecord = recordFixture(record);
   return (
     <RecordSuggestionsProvider
       entity="product"
       records={
         extra
-          ? [record, { ...record, id: testShortcode("product", "extra") }]
-          : [record]
+          ? [
+              currentRecord,
+              { ...currentRecord, id: testShortcode("product", "extra") },
+            ]
+          : [currentRecord]
       }
       fieldKeys={["categoryId", "ingredientId"]}
       operations={operations}
       storedSuggestionOperations={storedOperations}
-      readRecord={readRecord}
+      readRecord={
+        readRecord
+          ? async () => {
+              const fresh = await readRecord();
+              return fresh ? recordFixture(fresh) : null;
+            }
+          : undefined
+      }
       mutationPort={mutationPort}
     >
-      <RecordFieldSuggestion record={record} field="categoryId" surface="cell">
+      <RecordFieldSuggestion
+        record={currentRecord}
+        field="categoryId"
+        surface="cell"
+      >
         <span>{record.categoryId ? "Saved category" : "Empty category"}</span>
       </RecordFieldSuggestion>
       <RecordFieldSuggestion
-        record={record}
+        record={currentRecord}
         field="ingredientId"
         surface="cell"
       >
@@ -154,7 +209,7 @@ describe("suggestion lifecycle", () => {
       "spendingCategory",
       "finance-lifecycle",
     );
-    const record = {
+    const record = recordFixture({
       id: expenseId,
       name: "Synthetic supplies",
       vendor: "Synthetic supplier",
@@ -162,7 +217,7 @@ describe("suggestion lifecycle", () => {
       lineKind: "principal",
       costType: "materials",
       spendingCategoryId: null,
-    };
+    });
     const calls: FieldSuggestionsInput[] = [];
     const operations = {
       suggestFields: ai.suggestFields.withTransport(async ({ input }) => {

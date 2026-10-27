@@ -1,3 +1,4 @@
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { util } from "zod/v4/core";
 
 /**
@@ -47,8 +48,9 @@ function walk(value: unknown, steps: readonly Step[]): unknown {
     }
     // The objects and own keys a `z.record` parse accepted, without that
     // parse's copy of the object at every step of every cell's path.
-    current =
-      util.isPlainObject(current) && Object.hasOwn(current, step.key)
+    current = fieldEnvelopeFor(current, step.key)
+      ? fieldValueOf(fieldEnvelopeFor(current, step.key)!)
+      : util.isPlainObject(current) && Object.hasOwn(current, step.key)
         ? current[step.key]
         : undefined;
   }

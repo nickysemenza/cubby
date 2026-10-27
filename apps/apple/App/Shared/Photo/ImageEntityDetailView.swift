@@ -88,7 +88,8 @@ struct ImageEntityDetailView: View {
             ToolbarItem {
                 CopyDiagnosticsButton {
                     ImageDetailDiagnostics(
-                        id: id.rawValue, preferredRepresentation: detail?.representations?.preferred,
+                        id: id.rawValue,
+                        preferredRepresentation: detail?.imageURL?.absoluteString,
                         preferredDescription: processing.confirmation?.description
                             ?? processing.preferred?.result.description,
                         serverSha256: diagnostics.server?.identity.sha256,
@@ -139,6 +140,7 @@ private struct PhotoTab: View {
     @Binding var showingAllAnalyses: Bool
 
     var body: some View {
+        let record = (try? JSONValue(encoding: detail)) ?? .null
         ContinuousDetailSection(title: "Preferred representation") {
             if let url = detail.imageURL {
                 ZoomablePhoto(
@@ -146,7 +148,7 @@ private struct PhotoTab: View {
                 )
                 LabeledContent(
                     "Showing",
-                    value: detail.representations?.preferredKind.rawValue.capitalized ?? "Original")
+                    value: record.pathText("representations.preferredKind")?.capitalized ?? "Unavailable")
             } else {
                 Text("No image representation").foregroundStyle(.secondary)
                     .preference(key: DetailSectionEmpty.self, value: true)
@@ -220,22 +222,33 @@ private struct PhotoTab: View {
             }
         }.detailContentsAnchor("processing-jobs")
         ContinuousDetailSection(title: "Provenance") {
-            ProvenanceRows(detail: detail)
+            ProvenanceRows(detail: detail, record: record)
         }.detailContentsAnchor("provenance")
         ContinuousDetailSection(title: "In libraries") {
-            let sightings = detail.sightings ?? []
-            if sightings.isEmpty {
-                Text("No library sightings").foregroundStyle(.secondary)
-                    .preference(key: DetailSectionEmpty.self, value: true)
-            }
-            ForEach(Array(sightings.enumerated()), id: \.offset) { _, sighting in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(
-                        "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")"
-                    )
-                    DateDisplay(date: sighting.capturedAt ?? sighting.observedAt)
-                        .font(.caption).foregroundStyle(.secondary)
+            if let value = record.recordValue("sightings"),
+                let sightings = try? value.decoded([ImageSightingOut].self)
+            {
+                if sightings.isEmpty {
+                    Text("No library sightings").foregroundStyle(.secondary)
+                        .preference(key: DetailSectionEmpty.self, value: true)
                 }
+                ForEach(Array(sightings.enumerated()), id: \.offset) { _, sighting in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(
+                            "\(sighting.ownerName ?? "Unknown owner") · \(sighting.deviceName ?? "Unknown device")"
+                        )
+                        DateDisplay(date: sighting.capturedAt ?? sighting.observedAt)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                Text(
+                    FieldEnvelope(record["fields"]?["sightings"] ?? .null)?.isUpdating == true
+                        ? "Updating…" : "Unavailable"
+                )
+                .foregroundStyle(.secondary)
+                FieldValueStatus(
+                    raw: .object(["fields": .object(["sightings": record["fields"]?["sightings"] ?? .null])]))
             }
         }.detailContentsAnchor("in-libraries")
         ContinuousDetailSection(title: "Used in") {
@@ -450,6 +463,7 @@ private struct ImageDetailDiagnostics: Encodable {
 /// map when a location is known. Detail-only data (`ImageWithEntity`, not the list projection).
 private struct ProvenanceRows: View {
     let detail: ImageWithEntity
+    let record: JSONValue
 
     var body: some View {
         if let capturedAt = detail.capturedAt {
@@ -461,7 +475,7 @@ private struct ProvenanceRows: View {
         if let placeName = detail.capturePlaceName {
             LabeledContent("Place", value: placeName)
         }
-        if let capturedByName = detail.capturedByName {
+        if let capturedByName = record.pathText("capturedByName") {
             LabeledContent("Captured by", value: capturedByName)
         }
         if let captureDeviceLabel = detail.captureDeviceLabel {
@@ -474,7 +488,7 @@ private struct ProvenanceRows: View {
             }
         }
         // The server words the evidence (`display.detailLabelPath`); nothing here re-joins it.
-        if case .value(.some(let evidence)) = detail.provenanceEvidenceLabel {
+        if let evidence = record.pathText("provenanceEvidenceLabel") {
             LabeledContent("Evidence", value: evidence)
         }
         if let location = detail.captureLocation {

@@ -8,7 +8,8 @@ import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import { inventoryFiltersSchema } from "@cubby/schemas/inventory";
 import { locationFiltersSchema } from "@cubby/schemas/location";
 import { mealFiltersSchema } from "@cubby/schemas/meal";
-import { problemDetectors, type ProblemKey } from "@cubby/schemas/problems";
+import type { ProblemKey } from "@cubby/schemas/problems";
+import { problemDetectors } from "@cubby/schemas/problems-raw-read";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import {
   projectFiltersSchema,

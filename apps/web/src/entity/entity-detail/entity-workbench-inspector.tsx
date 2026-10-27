@@ -1,8 +1,8 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
-import { imageUrlSummary } from "@cubby/schemas/image-summary";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type ReactNode, useCallback, useState } from "react";
-import { z } from "zod";
 
 import {
   EntityActionButtons,
@@ -35,9 +35,12 @@ type EntityWorkbenchInspectorProps = {
 const recordEntities = new Set<Entity>(detailEntities);
 const isDetailEntity = (entity: Entity): entity is DetailEntity =>
   recordEntities.has(entity);
-const recordMedia = z.looseObject({
-  displayImages: z.array(imageUrlSummary.extend({ id: z.string() })).optional(),
-});
+function recordImages(record: unknown) {
+  const envelope = fieldEnvelopeFor(record, "displayImages");
+  return envelope
+    ? (displayImagesField.nullable().parse(fieldValueOf(envelope)) ?? [])
+    : [];
+}
 
 /** The inspector shares record fields and mutations without mounting the full route. */
 export function EntityWorkbenchInspector({
@@ -90,9 +93,7 @@ function EntityWorkbenchInspectorContent({
       leading={
         <EntityCover
           entity={entity}
-          images={
-            recordMedia.safeParse(resolvedRecord).data?.displayImages ?? []
-          }
+          images={recordImages(resolvedRecord)}
           size={28}
           alt={resolvedName ?? ""}
           preview

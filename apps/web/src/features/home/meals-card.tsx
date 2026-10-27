@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -9,6 +10,7 @@ import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-displa
 import { mealListLabel } from "~/features/meal/meal-format";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 import { DenseCellContext } from "~/ui/common/stacked-value";
+import { FieldValueMark } from "~/ui/derived/value-mark";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout";
@@ -73,10 +75,13 @@ export function TodayMeals({
           <DenseCellContext.Provider value={{ linksTo: null }}>
             <HomeList label="Meals ahead">
               {meals.slice(0, MEAL_ROWS).map((item) => {
-                const label = mealListLabel(item);
-                const slot = item.mealType
-                  ? MEAL_TYPE_LABELS[item.mealType]
-                  : null;
+                const mealType = fieldValueOf(item.fields.mealType);
+                const label = mealListLabel({
+                  name: item.name,
+                  date: item.date,
+                  mealType,
+                });
+                const slot = mealType ? MEAL_TYPE_LABELS[mealType] : null;
                 return (
                   <HomeRow
                     key={item.id}
@@ -94,6 +99,9 @@ export function TodayMeals({
                       }
                       className="max-w-full min-w-0"
                     />
+                    <FieldValueMark envelope={item.fields.mealType}>
+                      {null}
+                    </FieldValueMark>
                   </HomeRow>
                 );
               })}

@@ -1,16 +1,26 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import type { ProductCategoryFeature } from "@cubby/schemas/product-category";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import { buildCategoryHierarchy } from "./category-tree";
 
 type Cat = Parameters<typeof buildCategoryHierarchy>[0][number];
 const cat = (
   id: string,
-  feature: Cat["feature"] = null,
+  feature: ProductCategoryFeature | null = null,
   children?: Cat[],
 ): Cat => ({
   id,
   name: id,
-  feature,
+  fields: {
+    effectiveFeature: fieldValueFixture(
+      entityFieldEnvelopeSchemas.productCategory.list.shape.fields.shape
+        .effectiveFeature,
+      feature,
+    ),
+  },
   ...(children ? { subRows: children } : {}),
 });
 

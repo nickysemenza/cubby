@@ -1,5 +1,6 @@
 import type { ReclassifyEmailsOut } from "@cubby/schemas/email-actions";
-import { emailPurchaseLink } from "@cubby/schemas/email-fields";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type EmailShortcode,
   parseShortcodeFor,
@@ -109,13 +110,22 @@ export const EMAIL_PAIR_READ_FIELDS = [
 ] as const;
 
 /** The Email row fields a pair action reads; the list hydrates them. */
-const pairRow = z.object({
-  id: z.string(),
-  checksum: z.string(),
-  ownedByViewer: z.boolean(),
-  ledgerPartyName: z.string().nullable(),
-  purchaseLinks: z.array(emailPurchaseLink),
-});
+const pairRow = z
+  .object({
+    id: z.string(),
+    checksum: z.string(),
+    fields: entityFieldEnvelopeSchemas.email.list.shape.fields.pick({
+      ownedByViewer: true,
+      ledgerPartyName: true,
+      purchaseLinks: true,
+    }),
+  })
+  .transform(({ fields, ...email }) => ({
+    ...email,
+    ownedByViewer: fieldValueOf(fields.ownedByViewer) ?? false,
+    ledgerPartyName: fieldValueOf(fields.ledgerPartyName),
+    purchaseLinks: fieldValueOf(fields.purchaseLinks) ?? [],
+  }));
 
 /** The (Email, Purchase) pair a row stands for inside a Purchase's Emails section. */
 function usePurchasePair() {

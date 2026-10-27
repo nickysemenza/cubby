@@ -59,5 +59,12 @@ it("publishes only schema-admitted list filter names", () => {
   expect(metadata).toMatchObject({
     filterFields: ["searchQuery"],
   });
+  expect(metadata).toMatchObject({
+    declaredFields: expect.arrayContaining(["name", "fields.price"]),
+  });
+  if (!metadata || !("declaredFields" in metadata))
+    throw new Error("Expected list metadata");
+  expect(metadata.declaredFields).not.toContain("fieldResolutions");
+  expect(metadata.declaredFields).not.toContain("derived");
   expect(JSON.stringify(metadata)).not.toContain("synthetic-");
 });

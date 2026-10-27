@@ -11,6 +11,12 @@ import {
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CalendarItemPresentation } from "./calendar-item-row";
+import {
+  plantingCalendarSourceFixture,
+  mealCalendarSourceFixture,
+  taskCalendarSourceFixture,
+  expenseCalendarSourceFixture,
+} from "./calendar-source.fixtures";
 
 const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   kind: "meal",
@@ -21,10 +27,13 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   endDateExclusive: "2026-08-19",
   interaction: "move",
   sortOrder: null,
-  mealType: "dinner",
-  mealKind: "eating_out",
-  recipeNames: [],
-  displayImages: [],
+  source: mealCalendarSourceFixture({
+    id: testShortcode("meal", "MEL-1111"),
+    date: "2026-08-18",
+    name: "Dinner with Andy and a deliberately long title",
+    mealType: "dinner",
+    mealKind: "eating_out",
+  }),
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
@@ -36,7 +45,7 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
 
 const plantingMilestone: Extract<CalendarItem, { kind: "planting" }> = {
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", "PLT-3B2C")),
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",
@@ -56,17 +65,20 @@ const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
   interaction: "move",
   cost: 79,
   future: true,
-  vendor: "Target",
-  trade: "other",
+  source: expenseCalendarSourceFixture(
+    testShortcode("expense", "EXP-1111"),
+    "other",
+    "Target",
+    [
+      {
+        id: testShortcode("image", "IMG-4K7M"),
+        url: "https://example.com/tray.png",
+      },
+    ],
+  ),
   projectName: "Kitchen",
   spendingContext: { projectNames: ["Kitchen"], parties: [] },
   productName: "Souper Cubes",
-  displayImages: [
-    {
-      id: testShortcode("image", "IMG-4K7M"),
-      url: "https://example.com/tray.png",
-    },
-  ],
 };
 
 describe("CalendarItemPresentation", () => {
@@ -167,11 +179,13 @@ describe("CalendarItemPresentation", () => {
       interaction: "move",
       due: { start: "2026-08-18", end: null },
       status: "blocked",
-      trade: "appliances",
+      source: taskCalendarSourceFixture(
+        testShortcode("task", "TSK-1111"),
+        "appliances",
+      ),
       projectName: "Household",
       assignedProjectName: "Household",
       subjectProductName: "KitchenAid mixer",
-      displayImages: [],
     };
     render(<CalendarItemPresentation item={task} variant="rich" />);
     expect(screen.getByText("Blocked")).toBeInTheDocument();

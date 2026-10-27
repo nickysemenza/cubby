@@ -337,7 +337,7 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: { module: "@cubby/schemas/job-entity", export: "jobOut" },
+    output: { module: "@cubby/schemas/job-raw-read", export: "rawJobOut" },
   },
   storage: {
     indexes: [

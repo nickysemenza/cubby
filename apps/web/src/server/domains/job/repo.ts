@@ -1,11 +1,8 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
-import {
-  jobOut,
-  type JobFilters,
-  type JobOut,
-} from "@cubby/schemas/job-entity";
+import { type JobFilters } from "@cubby/schemas/job-entity";
+import { rawJobOut, type RawJobOut } from "@cubby/schemas/job-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { inArray } from "drizzle-orm";
 
@@ -106,14 +103,14 @@ const read = {
       return { images, locations };
     });
     return [
-      bind(jobOut.pick({ lane: true }), (row) => ({
+      bind(rawJobOut.pick({ lane: true }), (row) => ({
         lane: jobKindPolicy(row.kind).lane,
       })),
-      waiting.fields(jobOut.pick({ waitingOn: true }), (row, loaded) => ({
+      waiting.fields(rawJobOut.pick({ waitingOn: true }), (row, loaded) => ({
         waitingOn: describeJobWaitingOn(loaded.get(row.id) ?? null),
       })),
       subjects.fields(
-        jobOut.pick({ imageId: true, locationId: true }),
+        rawJobOut.pick({ imageId: true, locationId: true }),
         (row, loaded) => ({
           imageId:
             row.subjectKind === "image" && row.subjectId
@@ -149,17 +146,17 @@ const listRead = (
     },
     { read },
   );
-const list = completeListReader(jobOut, listRead);
+const list = completeListReader(rawJobOut, listRead);
 const reader = createEntityReader<
   JobRow,
-  JobOut,
+  RawJobOut,
   "job",
   Database | DrizzleTransaction
 >({
   entity: "job",
   fetchById: createEntityRowFetcher(job),
   fromDB: async (db, row) =>
-    jobOut.parse((await plan().read(db, [row], { kind: "full" }))[0]),
+    rawJobOut.parse((await plan().read(db, [row], { kind: "full" }))[0]),
 });
 
 export const jobRepository = defineRepository("job", {

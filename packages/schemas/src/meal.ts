@@ -1,4 +1,5 @@
-import mealDefinition from "./entity-definitions/06-meal.entity";
+import { mealFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.meal.gen";
+import { rawUpcomingMealSummary } from "./meal-raw-read";
 import { z } from "zod";
 import { mealBaseFilterFields } from "./generated/meal.gen";
 
@@ -29,23 +30,18 @@ import {
   recipeShortcode,
 } from "./identifiers";
 import { ledgerPartyPersonSummary } from "./ledger-party-fields";
-import { mealKindSchema, mealTypeSchema } from "./meal-classification";
+import { mealKindSchema } from "./meal-classification";
 import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
 import {
   nutritionTotals,
   nutritionTotalsPartial,
   measureEstimate,
 } from "./nutrition";
-import { createPaginatedResponseSchema } from "./pagination";
-import { mealRecipeOut, mealTotals } from "./meal-fields";
 export {
   mealRecipeInput,
   type MealRecipeInput,
   scaledTotals,
   type ScaledTotals,
-  mealRecipeSummary,
-  mealRecipeOut,
-  type MealRecipeOut,
   mealTotals,
   type MealTotals,
 } from "./meal-fields";
@@ -194,9 +190,7 @@ const mealPreparationSourceMealOut = z.object({
   name: z.string().nullable(),
 });
 
-const mealPreparationTargetMealOut = mealPreparationSourceMealOut.extend({
-  mealKind: mealKindSchema,
-});
+const mealPreparationTargetMealOut = mealPreparationSourceMealOut;
 
 const mealPreparationEaterOut = ledgerPartyPersonSummary;
 
@@ -324,54 +318,30 @@ export type SaveMealRecipePreparationOut = z.infer<
   typeof saveMealRecipePreparationOut
 >;
 
-const mealOutFields = mealDefinition.readSchemas.output.shape;
-
-export const mealOut = mealDefinition.readSchemas.output;
+export const mealOut = mealFieldEnvelopeSchemas.output;
 export type MealOut = z.infer<typeof mealOut>;
 
 /** List-row projection: `mealOut` plus the server-resolved gallery cover(s). */
-export const mealListItemOut = mealDefinition.readSchemas.list;
+export const mealListItemOut = mealFieldEnvelopeSchemas.list;
 export type MealListItemOut = z.infer<typeof mealListItemOut>;
 
 /** Generic MCP entity result; MealRecipe rows have no public shortcode. */
-export const mealMcpEntityOut = mealOut.extend({
-  recipes: z.array(mealRecipeOut.omit({ id: true })),
-});
-
-/**
- * Slim MCP projection of a meal row: built from the same field map as
- * `mealOut` minus its audit timestamps, so it cannot drift from the plain
- * shape. Each entry in `recipes` is a full `mealRecipeOut` — its `id` is the
- * mealRecipe row id (the one `nutrition.update_recipe`/`nutrition.remove_recipe` take)
- * and the recipe's own name lives at `recipes[].recipe.name`.
- */
-export const mealMcpOut = z.object({
-  id: mealOutFields.id,
-  date: mealOutFields.date,
-  name: mealOutFields.name,
-  sortOrder: mealOutFields.sortOrder,
-  mealType: mealOutFields.mealType,
-  mealKind: mealOutFields.mealKind,
-  recipes: mealOutFields.recipes,
-  totals: mealOutFields.totals,
-  recipeNames: mealOutFields.recipeNames,
-});
-export type MealMcpOut = z.infer<typeof mealMcpOut>;
-
-export const mealMcpListOut = createPaginatedResponseSchema(mealMcpOut);
+export const mealMcpEntityOut = mealFieldEnvelopeSchemas.mcpOutput;
+export const mealRecipeOut = mealListItemOut.shape.recipes.element;
+export const mealRecipeSummary = mealRecipeOut.shape.recipe;
+export type MealRecipeOut = z.output<typeof mealRecipeOut>;
 
 export const mealListOut = z.array(mealOut);
 
-export const upcomingMealSummaryOut = z.array(
-  z.object({
-    id: mealShortcode,
-    date: mealDate,
-    name: z.string().nullable(),
-    mealType: mealTypeSchema.nullable(),
-    mealKind: mealKindSchema,
-    totals: mealTotals,
-  }),
-);
+export const upcomingMealSummaryOut = rawUpcomingMealSummary
+  .omit({ mealType: true, mealKind: true })
+  .extend({
+    fields: mealFieldEnvelopeSchemas.output.shape.fields.pick({
+      mealType: true,
+      mealKind: true,
+    }),
+  })
+  .array();
 export type UpcomingMealSummaryOut = z.infer<typeof upcomingMealSummaryOut>;
 
 export const shoppingListContribution = z.object({
@@ -453,7 +423,10 @@ export const shoppingListOut = z.object({
       id: mealShortcode,
       name: z.string().nullable(),
       date: mealDate,
-      mealKind: mealKindSchema,
+      omission: z.object({
+        reason: mealKindSchema.exclude(["cooked"]),
+        label: z.string(),
+      }),
     }),
   ),
 });

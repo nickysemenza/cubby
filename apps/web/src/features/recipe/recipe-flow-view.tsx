@@ -1,4 +1,3 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import type {
   RecipeFlowArtifact,
   RecipeFlowOperation,
@@ -23,6 +22,7 @@ import { z } from "zod";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { Picker } from "~/ui/combobox/picker";
@@ -647,3 +647,5 @@ export function RecipeFlowAction({ recipeId }: { recipeId: RecipeOut["id"] }) {
     </Button>
   );
 }
+
+type RecipeOut = DetailRecordOf<"recipe">;

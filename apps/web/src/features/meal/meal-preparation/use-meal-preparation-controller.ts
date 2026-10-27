@@ -1,13 +1,14 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   LedgerPartyShortcode,
   MealShortcode,
 } from "@cubby/schemas/identifiers";
-import type { MealOut } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import { meal as mealOperations } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
 
@@ -54,7 +55,7 @@ function sourceChoicesFor(
             mealId: target.id,
             mealRecipeId: recipe.id,
             label: `${recipe.recipe.name}${ordinal ? ` · ${ordinal}` : ""} · ${target.name ?? target.date}`,
-            servings: recipe.recipe.servings ?? null,
+            servings: fieldValueOf(recipe.recipe.fields.servings) ?? null,
           };
         }),
       ) ?? []
@@ -110,12 +111,12 @@ export function useMealPreparationController({
   });
   const targetMeals: PreparationTargetOption[] =
     targetMealsQuery?.data
-      ?.map((target) => ({
-        id: target.id,
-        date: target.date,
-        name: target.name,
-        mealKind: target.mealKind,
-      }))
+      ?.flatMap((target): PreparationTargetOption[] => {
+        const mealKind = fieldValueOf(target.fields.mealKind);
+        return [
+          { id: target.id, date: target.date, name: target.name, mealKind },
+        ];
+      })
       .sort((left, right) =>
         left.id === mealId ? -1 : right.id === mealId ? 1 : 0,
       ) ?? [];
@@ -221,3 +222,5 @@ export function useMealPreparationController({
     refetchPreparations: typeof preparationQuery.refetch;
   };
 }
+
+type MealOut = ListRowOf<"meal">;

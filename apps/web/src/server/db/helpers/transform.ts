@@ -4,8 +4,8 @@ import { amount, amountFromColumns } from "@cubby/schemas/codec";
  * Extract, map, and transform database records.
  */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ImageOut } from "@cubby/schemas/image";
 import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
+import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import type { z } from "zod";
@@ -22,13 +22,13 @@ export type MappableImageRecord = {
   filename: string;
   size: number;
   contentType: string;
-  status: ImageOut["status"];
+  status: RawImageOutput["status"];
   width?: number | null;
   height?: number | null;
   detectedContentType?: string | null;
   sha256?: string | null;
-  renderStatus?: ImageOut["renderStatus"] | null;
-  storageStatus?: ImageOut["storageStatus"] | null;
+  renderStatus?: RawImageOutput["renderStatus"] | null;
+  storageStatus?: RawImageOutput["storageStatus"] | null;
   verifiedAt?: Date | null;
   source?: "own" | "catalog" | "unknown" | "screenshot" | null;
   sourcePageUrl?: string | null;
@@ -65,7 +65,7 @@ export type MappableImageRecord = {
 };
 
 /**
- * Project image join rows to `ImageOut[]`, dropping soft-deleted rows (on both
+ * Project image join rows to `RawImageOutput[]`, dropping soft-deleted rows (on both
  * the join row and the image itself). Accepts either the bare image record or
  * the `{ image }` join-table wrapper — the single image-mapping path shared by
  * every entity (product/location/recipe/inventory).
@@ -78,7 +78,7 @@ export const mapImages = (
       >
     | undefined
     | null,
-): ImageOut[] => {
+): RawImageOutput[] => {
   if (!rows) return [];
   return rows
     .flatMap((row) => {
@@ -86,7 +86,7 @@ export const mapImages = (
       return isNotDeleted(row) && isNotDeleted(dbImage) ? [dbImage] : [];
     })
     .map((dbImage) => ({
-      // The public code, never the uuid: `ImageOut.id` IS the shortcode, the
+      // The public code, never the uuid: `RawImageOutput.id` IS the shortcode, the
       // same way every other entity's API `id` is.
       id: parseShortcodeFor("image", dbImage.shortcode),
       url: getR2PublicUrl(dbImage.key),

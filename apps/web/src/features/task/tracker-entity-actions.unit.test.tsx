@@ -1,4 +1,10 @@
-import { expenseOut } from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import {
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
+const expenseOut = entityFieldEnvelopeSchemas.expense.detail;
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -16,7 +22,18 @@ import {
   useMarkExpensePurchasedAction,
 } from "./tracker-entity-actions";
 
-const plannedExpense = expenseOut.parse({
+const plannedExpense = entityReadFixture(expenseOut, {
+  fields: {
+    lineKind: fieldValueFixture(
+      expenseOut.shape.fields.shape.lineKind,
+      "principal",
+    ),
+    costType: fieldValueFixture(
+      expenseOut.shape.fields.shape.costType,
+      "materials",
+    ),
+    trade: fieldValueFixture(expenseOut.shape.fields.shape.trade, "building"),
+  },
   id: testShortcode("expense", "EXP-2345"),
   name: "Paint",
   cost: 42,
@@ -91,7 +108,16 @@ describe("tracker entity actions", () => {
     });
     await waitFor(() => expect(result.current).not.toBeNull());
     const purchased = expenseOut.parse({ ...plannedExpense, future: false });
-    const adjustment = expenseOut.parse({ ...plannedExpense, lineKind: "tax" });
+    const adjustment = expenseOut.parse({
+      ...plannedExpense,
+      fields: {
+        ...plannedExpense.fields,
+        lineKind: fieldValueFixture(
+          expenseOut.shape.fields.shape.lineKind,
+          "tax",
+        ),
+      },
+    });
 
     expect(
       result.current.availability?.({

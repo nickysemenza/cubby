@@ -1,9 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LocationId } from "@cubby/schemas/identifiers";
-import type {
-  InventoryReceiveExpenseInput,
-  InventoryReceiveExpenseOut,
-} from "@cubby/schemas/inventory";
+import type { InventoryReceiveExpenseInput } from "@cubby/schemas/inventory";
+import type { RawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -135,7 +133,7 @@ export const receiveExpenseInventory = async (
       stocked,
       locationId,
     );
-    let item: InventoryReceiveExpenseOut["item"] | undefined;
+    let item: RawInventoryDetail | undefined;
     if (action.kind === "move" && existing) {
       item = await updateInventoryEntry(
         transactionDb,

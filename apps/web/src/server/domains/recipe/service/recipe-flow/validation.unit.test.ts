@@ -1,12 +1,12 @@
 import {
-  type RecipeOut,
-  recipeOut,
-  sectionIngredientOut,
-} from "@cubby/schemas/recipe";
-import {
   type RecipeFlowPlan,
   recipeFlowGenerateInputSchema,
 } from "@cubby/schemas/recipe-flow";
+import {
+  rawRecipeOutput as recipeOut,
+  rawSectionIngredient as sectionIngredientOut,
+} from "@cubby/schemas/recipe-raw-read";
+import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 

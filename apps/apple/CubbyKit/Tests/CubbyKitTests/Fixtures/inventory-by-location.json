@@ -1,14 +1,8 @@
 [
   {
     "id": "INV-2345",
-    "amount": {
-      "value": 3,
-      "unit": "each"
-    },
-    "valuation": null,
     "verifiedAt": null,
     "placement": "stock",
-    "ownerLedgerPartyId": null,
     "effectiveOwnership": {
       "mode": "inherit",
       "explicitOwner": null,
@@ -21,93 +15,20 @@
     },
     "createdAt": "2026-03-01T10:00:00.000Z",
     "updatedAt": "2026-03-02T10:00:00.000Z",
-    "displayName": "Sample Product at Bin 1",
     "product": {
       "id": "PRD-2345",
       "name": "Sample Product",
-      "primaryGtin": "00012345678905",
       "fdc_id": null,
       "model": null,
       "notes": null,
       "expectedQuantity": null,
       "category": null,
-      "price": null,
       "usdaUnavailable": false,
       "createdAt": "2026-01-01T00:00:00.000Z",
       "updatedAt": "2026-01-01T00:00:00.000Z",
-      "images": [
-        {
-          "id": "IMG-2345",
-          "url": "https://images.example/pending.jpg",
-          "key": "k1",
-          "filename": "a.jpg",
-          "size": 10,
-          "contentType": "image/jpeg",
-          "status": "PENDING",
-          "useOriginal": false,
-          "captureAttribution": "none",
-          "width": null,
-          "height": null,
-          "detectedContentType": null,
-          "sha256": null,
-          "verifiedAt": null,
-          "createdAt": "2026-01-01T00:00:00.000Z",
-          "updatedAt": "2026-01-01T00:00:00.000Z",
-          "source": "unknown",
-          "sourcePageUrl": null,
-          "sourceAssetUrl": null,
-          "sourceName": null,
-          "renderStatus": null,
-          "storageStatus": null,
-          "capturedAt": null,
-          "capturedAtOffsetMinutes": null,
-          "captureLocation": null,
-          "capturePlaceName": null,
-          "captureDeviceLabel": null,
-          "capturedByPartyId": null,
-          "capturedByName": null,
-          "provenanceEvidence": null,
-          "sourceEvidence": null,
-          "purpose": null
-        },
-        {
-          "id": "IMG-3456",
-          "url": "https://images.example/cover.jpg",
-          "key": "k2",
-          "filename": "b.jpg",
-          "size": 10,
-          "contentType": "image/jpeg",
-          "status": "UPLOADED",
-          "useOriginal": false,
-          "captureAttribution": "none",
-          "width": 800,
-          "height": 600,
-          "detectedContentType": "image/jpeg",
-          "sha256": null,
-          "verifiedAt": null,
-          "createdAt": "2026-01-01T00:00:00.000Z",
-          "updatedAt": "2026-01-01T00:00:00.000Z",
-          "source": "unknown",
-          "sourcePageUrl": null,
-          "sourceAssetUrl": null,
-          "sourceName": null,
-          "renderStatus": null,
-          "storageStatus": null,
-          "capturedAt": null,
-          "capturedAtOffsetMinutes": null,
-          "captureLocation": null,
-          "capturePlaceName": null,
-          "captureDeviceLabel": null,
-          "capturedByPartyId": null,
-          "capturedByName": null,
-          "provenanceEvidence": null,
-          "sourceEvidence": null,
-          "purpose": null
-        }
-      ],
       "externalIds": [
         {
-          "id": "00000000-0000-0000-0000-000000000001",
+          "id": "00000000-0000-4000-8000-000000000001",
           "source": "amazon",
           "kind": "asin",
           "externalId": "B000000000",
@@ -117,7 +38,7 @@
           "updatedAt": "2026-01-01T00:00:00.000Z"
         },
         {
-          "id": "00000000-0000-0000-0000-000000000002",
+          "id": "00000000-0000-4000-8000-000000000002",
           "source": "legacy",
           "kind": "gtin_14",
           "externalId": "04006381333931",
@@ -128,59 +49,610 @@
         }
       ],
       "unitMappings": [],
-      "brandId": "VEN-2345",
-      "brandName": "Sample Manufacturer",
-      "displayImages": [
-        {
-          "id": "IMG-4567",
-          "url": "https://images.example/brand-logo.jpg"
+      "fields": {
+        "brandName": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": "Sample Manufacturer"
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "price": {
+          "current": {
+            "assignment": {
+              "kind": "inherit"
+            },
+            "controls": {
+              "kind": "editable",
+              "canSetNone": true,
+              "canConfirm": false,
+              "reset": {
+                "kind": "unavailable"
+              }
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "empty",
+                "reason": "unset"
+              },
+              "provenance": null
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "primaryGtin": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": "00012345678905"
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "images": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": [
+                  {
+                    "id": "IMG-2345",
+                    "key": "k1",
+                    "filename": "a.jpg",
+                    "size": 10,
+                    "contentType": "image/jpeg",
+                    "status": "PENDING",
+                    "width": null,
+                    "height": null,
+                    "detectedContentType": null,
+                    "sha256": null,
+                    "renderStatus": null,
+                    "storageStatus": null,
+                    "source": "unknown",
+                    "sourcePageUrl": null,
+                    "sourceAssetUrl": null,
+                    "sourceName": null,
+                    "useOriginal": false,
+                    "verifiedAt": null,
+                    "capturedAt": null,
+                    "capturedAtOffsetMinutes": null,
+                    "captureLocation": null,
+                    "capturePlaceName": null,
+                    "captureDeviceLabel": null,
+                    "capturedByPartyId": null,
+                    "captureAttribution": "none",
+                    "provenanceEvidence": null,
+                    "sourceEvidence": null,
+                    "createdAt": "2026-01-01T00:00:00.000Z",
+                    "updatedAt": "2026-01-01T00:00:00.000Z",
+                    "fields": {
+                      "representations": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "url": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": "https://images.example/pending.jpg"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "capturedByName": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "empty",
+                              "reason": "unset"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "sightings": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "provenanceEvidenceLabel": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "id": "IMG-3456",
+                    "key": "k2",
+                    "filename": "b.jpg",
+                    "size": 10,
+                    "contentType": "image/jpeg",
+                    "status": "UPLOADED",
+                    "width": 800,
+                    "height": 600,
+                    "detectedContentType": "image/jpeg",
+                    "sha256": null,
+                    "renderStatus": null,
+                    "storageStatus": null,
+                    "source": "unknown",
+                    "sourcePageUrl": null,
+                    "sourceAssetUrl": null,
+                    "sourceName": null,
+                    "useOriginal": false,
+                    "verifiedAt": null,
+                    "capturedAt": null,
+                    "capturedAtOffsetMinutes": null,
+                    "captureLocation": null,
+                    "capturePlaceName": null,
+                    "captureDeviceLabel": null,
+                    "capturedByPartyId": null,
+                    "captureAttribution": "none",
+                    "provenanceEvidence": null,
+                    "sourceEvidence": null,
+                    "createdAt": "2026-01-01T00:00:00.000Z",
+                    "updatedAt": "2026-01-01T00:00:00.000Z",
+                    "fields": {
+                      "representations": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "url": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": "https://images.example/cover.jpg"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "capturedByName": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "empty",
+                              "reason": "unset"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "sightings": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "provenanceEvidenceLabel": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "displayImages": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": [
+                  {
+                    "id": "IMG-4567",
+                    "url": "https://images.example/brand-logo.jpg"
+                  }
+                ]
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "categoryFeature": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "empty",
+                "reason": "unset"
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
         }
-      ]
+      }
     },
     "location": {
       "id": "LOC-5678",
       "name": "Bin 1",
-      "aliases": [],
-      "tags": [],
-      "type": "box",
-      "notes": null,
-      "product": null,
-      "lastBulkInventory": null,
-      "aiDescription": null,
-      "images": [],
-      "valuation": null,
-      "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z",
-      "dataQuality": {
-        "status": "complete",
-        "score": 100,
-        "facets": [],
-        "gaps": [],
-        "exceptions": [],
-        "relatedGaps": [],
-        "relatedExceptions": []
+      "fields": {
+        "type": {
+          "current": {
+            "assignment": {
+              "kind": "value",
+              "value": "box",
+              "ownership": {
+                "kind": "record"
+              }
+            },
+            "controls": {
+              "kind": "editable",
+              "canSetNone": true,
+              "canConfirm": false,
+              "reset": {
+                "kind": "unavailable"
+              }
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": "box"
+              },
+              "provenance": {
+                "kind": "own",
+                "ownership": {
+                  "kind": "record"
+                }
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        }
       }
     },
-    "dataQuality": {
-      "status": "complete",
-      "score": 100,
-      "facets": [],
-      "gaps": [],
-      "exceptions": [],
-      "relatedGaps": [],
-      "relatedExceptions": []
+    "displayName": "Sample Product at Bin 1",
+    "attachments": [],
+    "redirectedFrom": null,
+    "previousShortcodes": [],
+    "fields": {
+      "amount": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "value": 3,
+                "unit": "each"
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "ownerLedgerPartyId": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "valuation": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "dataQuality": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "status": "complete",
+                "score": 100,
+                "facets": [],
+                "gaps": [],
+                "exceptions": [],
+                "relatedGaps": [],
+                "relatedExceptions": []
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "displayImages": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "locationId": {
+        "current": {
+          "assignment": {
+            "kind": "value",
+            "value": "LOC-5678",
+            "ownership": {
+              "kind": "record"
+            }
+          },
+          "controls": {
+            "kind": "editable",
+            "canSetNone": false,
+            "canConfirm": false,
+            "reset": {
+              "kind": "unavailable"
+            }
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": "LOC-5678"
+            },
+            "provenance": {
+              "kind": "own",
+              "ownership": {
+                "kind": "record"
+              }
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      }
     }
   },
   {
     "id": "INV-3456",
-    "amount": {
-      "value": 1,
-      "unit": "each"
-    },
-    "valuation": null,
     "verifiedAt": "2026-03-03T10:00:00.000Z",
     "placement": "stock",
-    "ownerLedgerPartyId": null,
     "effectiveOwnership": {
       "mode": "inherit",
       "explicitOwner": null,
@@ -193,59 +665,359 @@
     },
     "createdAt": "2026-03-01T10:00:00.000Z",
     "updatedAt": "2026-03-03T10:00:00.000Z",
-    "displayName": "Other Product at Bin 1",
     "product": {
       "id": "PRD-3456",
       "name": "Other Product",
-      "primaryGtin": null,
       "fdc_id": null,
       "model": null,
       "notes": null,
       "expectedQuantity": null,
       "category": null,
-      "price": null,
       "usdaUnavailable": false,
       "createdAt": "2026-01-01T00:00:00.000Z",
       "updatedAt": "2026-01-01T00:00:00.000Z",
-      "images": [],
       "externalIds": [],
       "unitMappings": [],
-      "brandId": "VEN-2345",
-      "brandName": "Other Manufacturer",
-      "displayImages": []
+      "fields": {
+        "brandName": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": "Other Manufacturer"
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "price": {
+          "current": {
+            "assignment": {
+              "kind": "inherit"
+            },
+            "controls": {
+              "kind": "editable",
+              "canSetNone": true,
+              "canConfirm": false,
+              "reset": {
+                "kind": "unavailable"
+              }
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "empty",
+                "reason": "unset"
+              },
+              "provenance": null
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "primaryGtin": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "empty",
+                "reason": "unset"
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "images": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": []
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "displayImages": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": []
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        },
+        "categoryFeature": {
+          "current": {
+            "assignment": null,
+            "controls": {
+              "kind": "readonly",
+              "reason": "computed"
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "empty",
+                "reason": "unset"
+              },
+              "provenance": {
+                "kind": "computed"
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        }
+      }
     },
     "location": {
       "id": "LOC-5678",
       "name": "Bin 1",
-      "aliases": [],
-      "tags": [],
-      "type": "box",
-      "notes": null,
-      "product": null,
-      "lastBulkInventory": null,
-      "aiDescription": null,
-      "images": [],
-      "valuation": null,
-      "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z",
-      "dataQuality": {
-        "status": "complete",
-        "score": 100,
-        "facets": [],
-        "gaps": [],
-        "exceptions": [],
-        "relatedGaps": [],
-        "relatedExceptions": []
+      "fields": {
+        "type": {
+          "current": {
+            "assignment": {
+              "kind": "value",
+              "value": "box",
+              "ownership": {
+                "kind": "record"
+              }
+            },
+            "controls": {
+              "kind": "editable",
+              "canSetNone": true,
+              "canConfirm": false,
+              "reset": {
+                "kind": "unavailable"
+              }
+            }
+          },
+          "result": {
+            "kind": "live",
+            "decision": {
+              "outcome": {
+                "kind": "value",
+                "value": "box"
+              },
+              "provenance": {
+                "kind": "own",
+                "ownership": {
+                  "kind": "record"
+                }
+              }
+            }
+          },
+          "work": {
+            "kind": "idle"
+          }
+        }
       }
     },
-    "dataQuality": {
-      "status": "complete",
-      "score": 100,
-      "facets": [],
-      "gaps": [],
-      "exceptions": [],
-      "relatedGaps": [],
-      "relatedExceptions": []
+    "displayName": "Other Product at Bin 1",
+    "attachments": [],
+    "redirectedFrom": null,
+    "previousShortcodes": [],
+    "fields": {
+      "amount": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "value": 1,
+                "unit": "each"
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "ownerLedgerPartyId": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "valuation": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "dataQuality": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": {
+                "status": "complete",
+                "score": 100,
+                "facets": [],
+                "gaps": [],
+                "exceptions": [],
+                "relatedGaps": [],
+                "relatedExceptions": []
+              }
+            },
+            "provenance": {
+              "kind": "computed"
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "displayImages": {
+        "current": {
+          "assignment": null,
+          "controls": {
+            "kind": "readonly",
+            "reason": "computed"
+          }
+        },
+        "result": {
+          "kind": "missing"
+        },
+        "work": {
+          "kind": "idle"
+        }
+      },
+      "locationId": {
+        "current": {
+          "assignment": {
+            "kind": "value",
+            "value": "LOC-5678",
+            "ownership": {
+              "kind": "record"
+            }
+          },
+          "controls": {
+            "kind": "editable",
+            "canSetNone": false,
+            "canConfirm": false,
+            "reset": {
+              "kind": "unavailable"
+            }
+          }
+        },
+        "result": {
+          "kind": "live",
+          "decision": {
+            "outcome": {
+              "kind": "value",
+              "value": "LOC-5678"
+            },
+            "provenance": {
+              "kind": "own",
+              "ownership": {
+                "kind": "record"
+              }
+            }
+          }
+        },
+        "work": {
+          "kind": "idle"
+        }
+      }
     }
   }
 ]

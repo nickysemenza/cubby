@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  mealFieldEnvelopeFields,
+  mealPublicReadFields,
+} from "./generated/entity-field-envelope-fields.meal.gen";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
 import { mealFoodAmount } from "./meal-amount";
 import { nutrientKey } from "./nutrition";
@@ -62,12 +67,16 @@ export const mealNutritionInput = z.union([
   z.object({ date: z.iso.date() }),
 ]);
 export type MealNutritionInput = z.infer<typeof mealNutritionInput>;
-export const nutritionMeal = z.object({
-  id: mealShortcode,
-  date: mealDate,
-  name: generatedMealFieldSchemas.read.name,
-  mealType: generatedMealFieldSchemas.read.mealType,
-});
+export const nutritionMeal = withFieldEnvelopes(
+  z.object({
+    id: mealShortcode,
+    date: mealDate,
+    name: generatedMealFieldSchemas.read.name,
+    mealType: generatedMealFieldSchemas.read.mealType,
+  }),
+  { mealType: mealFieldEnvelopeFields.mealType },
+  mealPublicReadFields,
+);
 const foodCommon = {
   meal: nutritionMeal,
   name: z.string(),

@@ -17,6 +17,8 @@ booted and the relevant build artifacts warm while working on one feature.
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
 
+When T3 supplies `CUBBY_E2E_AGENT_DEVICE`, simulator installation, launch and replay use that exact launcher and host/session binding. The shared panel owns device boot and session lifetime.
+
 Run `pnpm test:e2e:sim -- --headless` for native JSON client writes
 against the disposable Worker. Use
 `pnpm test:e2e:sim -- --headless --photo --purchase` or
@@ -46,6 +48,11 @@ a passing journey. Scroll to a target by counting from `scroll bottom`, not with
 `pnpm test:e2e:sim -- --qa --journey qa-derived-explanation` checks that a Product
 row menu retains both Explain and Use inherited, opens the published/live
 comparison, and closes back to the same record without applying an override.
+
+In a fresh `--qa --hold` session, replay `e2e/image-source-navigation.yaml`
+with the device driver's `--maestro` flag to verify that an Inventory image's
+Product source opens inside the explanation sheet. Back must return to the
+source stack, and closing it must return to the Inventory record.
 
 `pnpm test:e2e:sim -- --qa --journey qa-run-evidence` checks the sole hosted
 Run evidence sheet against the synthetic approval Run: enter from the native

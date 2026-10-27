@@ -1,5 +1,4 @@
 import type { IngredientOut } from "@cubby/schemas/ingredient";
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { getErrorMessage } from "@cubby/shared";
@@ -17,6 +16,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useEntityActionMutation } from "~/entity/hooks/use-action-mutation";
 import { buildProductComboboxItem } from "~/entity/picker/combobox-builders";
@@ -257,7 +257,7 @@ function LivePanels({
   naDisabled,
   className,
 }: {
-  row: EnrichmentRow;
+  row: IngredientEnrichmentRead;
   previewMappings: UnitMapping[];
   currentMappings: UnitMapping[];
   linkedFoods: { foodInfo: { description: string } }[];
@@ -421,7 +421,7 @@ export function EnrichmentEditor({
   layout = "side",
   ref,
 }: {
-  row: EnrichmentRow;
+  row: IngredientEnrichmentRead;
   initialFood?: UsdaFoodListRow | null;
   /** Seed the price unit (Queue carries the last-used unit across cards). */
   initialPriceUnit?: string;
@@ -439,7 +439,13 @@ export function EnrichmentEditor({
     product?.id ?? null,
   );
   const productItems = useMemo(
-    () => row.product.map((candidate) => buildProductComboboxItem(candidate)),
+    () =>
+      row.product.map((candidate) =>
+        buildProductComboboxItem({
+          ...candidate,
+          brandName: fieldValueOf(candidate.fields.brandName) ?? null,
+        }),
+      ),
     [row.product],
   );
 
@@ -657,3 +663,4 @@ export function EnrichmentEditor({
     />
   );
 }
+import { fieldValueOf } from "@cubby/schemas/field-envelope";

@@ -1,8 +1,8 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
-import { formatCategoryLabel } from "@cubby/shared";
 import {
   fireEvent,
   render,
@@ -10,12 +10,13 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { categorySummaryFixture } from "tooling/product-category-fixtures";
+import { categoryReadFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entities } from "~/entity/entities";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import {
   ledgerPartyListItem,
   mealListItem,
@@ -23,6 +24,7 @@ import {
   productListItem,
 } from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
+import { categoryText } from "~/entity/presentation/category-text";
 import { listPage } from "~/entity/routing/list-page";
 import { mealNameUpdate } from "~/features/meal/list-columns";
 import { installFeatures } from "~/features/registry";
@@ -165,9 +167,16 @@ describe("listPage", () => {
     // A plain roster isolates shared selection from Product's kit/media reads.
     const party = mock(ledgerPartyListItem, {
       overrides: {
+        fields: {
+          displayImages: fieldValueFixture(
+            entityFieldEnvelopeSchemas.ledgerParty.list.shape.fields.shape[
+              "displayImages"
+            ],
+            [],
+          ),
+        },
         id: testShortcode("ledgerParty", "LPY-4K7M"),
         name: "Example party",
-        displayImages: [],
       },
     });
     await renderListPage("ledgerParty", "/ledger-parties?view=table", [party]);
@@ -262,11 +271,32 @@ describe("GenericEntityList", () => {
 
   const meal = mock(mealListItem, {
     overrides: {
+      fields: {
+        mealType: fieldValueFixture(
+          entityFieldEnvelopeSchemas.meal.list.shape.fields.shape["mealType"],
+          "dinner",
+        ),
+        mealKind: fieldValueFixture(
+          entityFieldEnvelopeSchemas.meal.list.shape.fields.shape["mealKind"],
+          "cooked",
+        ),
+        costTotalLabel: fieldValueFixture(
+          entityFieldEnvelopeSchemas.meal.list.shape.fields.shape[
+            "costTotalLabel"
+          ],
+          "$18.50",
+        ),
+        displayImages: fieldValueFixture(
+          entityFieldEnvelopeSchemas.meal.list.shape.fields.shape[
+            "displayImages"
+          ],
+          [],
+        ),
+      },
       id: testShortcode("meal", "ML-4K7M"),
       date: "2026-08-18",
       name: "Weeknight Supper",
-      mealType: "dinner",
-      mealKind: "cooked",
+
       recipes: [],
       totals: withMacros({
         cost: {
@@ -280,9 +310,8 @@ describe("GenericEntityList", () => {
           reason: "no_data",
         })),
       }),
-      costTotalLabel: "$18.50",
+
       displayName: "Weeknight Supper",
-      displayImages: [],
     },
   });
 
@@ -308,24 +337,64 @@ describe("GenericEntityList", () => {
   it("shelf: captions each card from the declared `shelf.subtitle` fields", async () => {
     const priced = mock(productListItem, {
       overrides: {
+        fields: {
+          cost: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape.cost,
+            { kind: "item", amount: 42 },
+          ),
+          price: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape["price"],
+            42,
+          ),
+          categoryId: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+              "categoryId"
+            ],
+            categoryReadFixture("household").id,
+          ),
+          displayImages: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+              "displayImages"
+            ],
+            [],
+          ),
+        },
         id: testShortcode("product", "PRD-4K7M"),
         name: "Cast iron skillet",
-        price: 42,
-        categoryId: categorySummaryFixture("household").id,
-        category: categorySummaryFixture("household"),
+
+        category: categoryReadFixture("household"),
         externalIds: [],
-        displayImages: [],
       },
     });
     const unpriced = mock(productListItem, {
       overrides: {
+        fields: {
+          cost: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape.cost,
+            null,
+          ),
+          price: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape["price"],
+            null,
+          ),
+          categoryId: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+              "categoryId"
+            ],
+            categoryReadFixture("tools").id,
+          ),
+          displayImages: fieldValueFixture(
+            entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
+              "displayImages"
+            ],
+            [],
+          ),
+        },
         id: testShortcode("product", "PRD-ZX4C"),
         name: "Mystery gadget",
-        price: null,
-        categoryId: categorySummaryFixture("tools").id,
-        category: categorySummaryFixture("tools"),
+
+        category: categoryReadFixture("tools"),
         externalIds: [],
-        displayImages: [],
       },
     });
     await renderListPage("product", "/products?view=shelf", [priced, unpriced]);
@@ -343,7 +412,7 @@ describe("GenericEntityList", () => {
     const gadgetCard = gadget.closest<HTMLElement>("[data-entity-card]");
     expect(gadgetCard).not.toBeNull();
     expect(
-      within(gadgetCard!).getByText(formatCategoryLabel(unpriced.category)),
+      within(gadgetCard!).getByText(categoryText(unpriced.category)),
     ).toBeVisible();
     expect(gadgetCard).not.toHaveTextContent('"path"');
     expect(gadgetCard?.querySelector("pre")).toBeNull();

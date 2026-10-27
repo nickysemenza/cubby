@@ -1,5 +1,4 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import type {
   FoodSummaryEnrichment,
   FoodSummaryWithLinkedProducts,
@@ -34,11 +33,11 @@ export class USDAService {
     private usdaClient: USDAServiceClient,
     private getLinkedProducts: (
       lookup?: FoodLookupParam,
-    ) => Promise<ProductTopLevelOut[]>,
+    ) => Promise<FoodSummaryWithLinkedProducts["linkedProducts"]>,
     private getLinkedProductLookups?: () => Promise<FoodLookupParam[]>,
     private getLinkedProductsBatch?: (
       lookups: FoodLookupParam[],
-    ) => Promise<ProductTopLevelOut[][]>,
+    ) => Promise<FoodSummaryWithLinkedProducts["linkedProducts"][]>,
     private countLinkedProducts?: (
       lookups: FoodLookupParam[],
     ) => Promise<number[]>,
@@ -247,9 +246,8 @@ export class USDAService {
   private async getFoodEnrichment(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryEnrichment> {
-    const linkedProducts: ProductTopLevelOut[] = await this.getLinkedProducts(
-      this.foodLookup(foodSummary),
-    );
+    const linkedProducts: FoodSummaryWithLinkedProducts["linkedProducts"] =
+      await this.getLinkedProducts(this.foodLookup(foodSummary));
 
     const inferredUnitMappings = unitMappingsFromFood(foodSummary);
 

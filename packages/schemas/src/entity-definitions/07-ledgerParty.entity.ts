@@ -224,7 +224,10 @@ export default defineEntity({
       module: "@cubby/schemas/ledger-party",
       export: "ledgerPartyUpdateData",
     },
-    output: { module: "@cubby/schemas/ledger-party", export: "ledgerPartyOut" },
+    output: {
+      module: "@cubby/schemas/ledger-party-raw-read",
+      export: "rawLedgerPartyOut",
+    },
   },
   // A durable economic participant in the household ledger.
   storage: {

@@ -8,11 +8,11 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
-  spendingCategoryOut,
   type SpendingCategoryCreateInput,
   type SpendingCategoryUpdateData,
   type SpendingCategoryFilters,
 } from "@cubby/schemas/spending-category";
+import { rawSpendingCategoryOut } from "@cubby/schemas/spending-category-raw-read";
 import { and, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -142,7 +142,7 @@ const categoryRead = {
     });
     return [
       tracking.fields(
-        spendingCategoryOut.pick({
+        rawSpendingCategoryOut.pick({
           stockTracked: true,
           fieldResolutions: true,
         }),
@@ -160,7 +160,7 @@ const categoryRead = {
         },
       ),
       connections.fields(
-        spendingCategoryOut.pick({ productCategories: true }),
+        rawSpendingCategoryOut.pick({ productCategories: true }),
         (row, { mappings, categories }) => ({
           productCategories: categories.flatMap((category) => {
             const mapping = mappings.get(category.id);
@@ -203,7 +203,7 @@ const listRead = (
     { filters, sorts, pagination, projection, readIntent },
     { read: categoryRead },
   );
-const list = completeListReader(spendingCategoryOut, listRead);
+const list = completeListReader(rawSpendingCategoryOut, listRead);
 export const listSpendingCategories = list;
 export const readSpendingCategories = listRead;
 const crud = createEntityCrud({
@@ -211,7 +211,9 @@ const crud = createEntityCrud({
   entity: "spendingCategory",
   fetchById: createEntityRowFetcher(spendingCategory),
   fromDB: async (db, row: Row) =>
-    spendingCategoryOut.parse((await hydrate(db, [row], { kind: "full" }))[0]),
+    rawSpendingCategoryOut.parse(
+      (await hydrate(db, [row], { kind: "full" }))[0],
+    ),
   toUpdate: (
     data: Omit<SpendingCategoryUpdateData, "parentId"> & {
       parentId?: EntityId<"spendingCategory"> | null;
@@ -515,7 +517,10 @@ export const spendingCategoryRepository = defineRepository("spendingCategory", {
   update: asActor(update),
   merge: {
     input: mergeInput,
-    output: z.object({ spendingCategory: spendingCategoryOut, mergeSummary }),
+    output: z.object({
+      spendingCategory: rawSpendingCategoryOut,
+      mergeSummary,
+    }),
     item: (output) => output.spendingCategory,
     summary: (output) => output.mergeSummary,
     execute: async (ctx, input) => {

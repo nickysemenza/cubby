@@ -15,6 +15,7 @@ import { expense } from "~/server/db/schema";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -289,6 +290,7 @@ describe("entity report", () => {
     slot: Parameters<typeof buildEntityReport>[1]["slot"],
     id: string,
   ) => {
+    await drainStoredDerived(ctx.db);
     const out = await buildEntityReport(
       ctx.db,
       { slot, scope: { kind: "record", id: id } },

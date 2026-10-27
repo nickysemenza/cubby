@@ -1,17 +1,14 @@
 import type { FilterOptionsOut } from "@cubby/schemas/filter-options";
-import type {
-  FinancialAccountFilters,
-  FinancialAccountOut,
-} from "@cubby/schemas/financial-account";
+import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
 import type {
   FinancialTransactionFilters,
-  FinancialTransactionOut,
   FinancialTransactionSourceOptionsOut,
 } from "@cubby/schemas/financial-transaction";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
@@ -91,3 +88,6 @@ export const financialTransactionListOverride = defineListOverride<
     return { list };
   },
 });
+
+type FinancialAccountOut = DetailRecordOf<"financialAccount">;
+type FinancialTransactionOut = DetailRecordOf<"financialTransaction">;

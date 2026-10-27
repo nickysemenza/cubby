@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -474,7 +476,14 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               entityKind="RECIPE"
               onImagesChange={handlePendingImagesChange}
               existingImages={
-                mode === "edit" && recipe?.images ? recipe.images : []
+                mode === "edit" && recipe
+                  ? (fieldValueOf(recipe.fields.images) ?? []).map((image) => ({
+                      id: image.id,
+                      url: publicImageUrl(image) ?? "",
+                      filename: image.filename,
+                      key: image.key,
+                    }))
+                  : []
               }
               onExistingImagesRemove={handleRemovedImagesChange}
               autoImportUrl={scrapedImageUrl}

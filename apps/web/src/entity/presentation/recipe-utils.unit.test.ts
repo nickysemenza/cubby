@@ -1,7 +1,12 @@
-import { totalsPreview } from "@cubby/schemas/nutrition";
-import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { recipeTopLevel, type SectionIngredient } from "@cubby/schemas/recipe";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { expect, it } from "vitest";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+import { servingBasisFixture } from "~/features/recipe/recipe-read.fixtures";
 
 import {
   getEffectiveServings,
@@ -11,45 +16,69 @@ import {
 } from "./recipe-utils";
 import { formatYield } from "./recipe-yield";
 
-it("uses the canonical serving resolution even when legacy fields suggest another value", () => {
+it("reads the serving envelope without recomputing a fallback from yield", () => {
   expect(
     getEffectiveServings({
-      servings: null,
       yield: { value: 10, unit: "servings" },
-      fieldResolutions: {
+      fields: {
         servings: {
-          mode: "inherit",
-          storedValue: null,
-          value: 4,
-          fallbackValue: 4,
-          source: "Recipe yield",
-          sourceEntity: null,
-          matchesFallback: true,
-          canReset: false,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: true,
+              reset: { kind: "unavailable" },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: 4 },
+              provenance: { kind: "default", source: null },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
     }),
   ).toBe(4);
   expect(
     getEffectiveServings({
-      servings: null,
+      fields: {
+        servings: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+            "servings"
+          ],
+          null,
+        ),
+      },
+
       yield: { value: 2.5, unit: "servings" },
     }),
-  ).toBe(2.5);
+  ).toBeNull();
   expect(
     getServingBasis({
-      servings: null,
       yield: { value: 10, unit: "servings" },
-      fieldResolutions: {
+      fields: {
         servings: {
-          mode: "inherit",
-          storedValue: null,
-          value: 4,
-          fallbackValue: 4,
-          source: "Recipe yield",
-          sourceEntity: null,
-          matchesFallback: true,
-          canReset: false,
+          current: {
+            assignment: { kind: "inherit" },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: true,
+              reset: { kind: "unavailable" },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: 4 },
+              provenance: { kind: "default", source: null },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
     }),
@@ -57,68 +86,81 @@ it("uses the canonical serving resolution even when legacy fields suggest anothe
 });
 
 it("recipe utils", () => {
-  const recipe: RecipeOut = {
-    sections: [
-      {
-        ingredients: [],
-        instructions: [],
-        id: "",
-        name: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+  const recipe: RecipeOut = entityReadFixture(
+    entityFieldEnvelopeSchemas.recipe.detail,
+    {
+      fields: {
+        images: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["images"],
+          [],
+        ),
+        dataQuality: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+            "dataQuality"
+          ],
+          testCompleteDataQuality(),
+        ),
       },
-      {
-        ingredients: [
-          {
-            id: "",
-            type: "ingredient",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            recipe: null,
-            ingredient: {
-              id: testShortcode("ingredient", "ING-2345"),
-              name: "flour-i",
+      sections: [
+        {
+          ingredients: [],
+          instructions: [],
+          id: "00000000-0000-4000-8000-000000000001",
+          name: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          ingredients: [
+            {
+              id: "00000000-0000-4000-8000-000000000002",
+              type: "ingredient",
               createdAt: new Date(),
               updatedAt: new Date(),
+              recipe: null,
+              ingredient: {
+                id: testShortcode("ingredient", "ING-2345"),
+                name: "flour-i",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              amounts: [],
             },
-            amounts: [],
-          },
-          {
-            id: "",
-            type: "recipe",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            ingredient: null,
-            recipe: {
-              id: testShortcode("recipe", "RCP-2345"),
-              name: "flour-r",
+            {
+              id: "00000000-0000-4000-8000-000000000003",
+              type: "recipe",
               createdAt: new Date(),
               updatedAt: new Date(),
-              meta: null,
-              forkedFromRecipeId: null,
-              forkedFromRecipeName: null,
+              ingredient: null,
+              recipe: entityReadFixture(recipeTopLevel, {
+                id: testShortcode("recipe", "RCP-2345"),
+                name: "flour-r",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                meta: null,
+                forkedFromRecipeId: null,
+                forkedFromRecipeName: null,
+              }),
+              amounts: [],
             },
-            amounts: [],
-          },
-        ],
-        instructions: [{ instruction: "Mix ingredients" }],
-        id: "",
-        name: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ],
-    id: testShortcode("recipe", "RCP-2346"),
-    name: "",
-    meta: null,
-    images: [],
-    dataQuality: testCompleteDataQuality(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    forkedFromRecipeId: null,
-    forkedFromRecipeName: null,
-    ...totalsPreview(null),
-  };
+          ],
+          instructions: [{ instruction: "Mix ingredients" }],
+          id: "00000000-0000-4000-8000-000000000004",
+          name: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      id: testShortcode("recipe", "RCP-2346"),
+      name: "",
+      meta: null,
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      forkedFromRecipeId: null,
+      forkedFromRecipeName: null,
+    },
+  );
   let si: SectionIngredient | undefined = recipe.sections[1]?.ingredients[0];
   expect(si).toBeDefined();
   if (!si) return;
@@ -131,21 +173,48 @@ it("recipe utils", () => {
 
 it("nutrition basis requires a serving count and preserves one serving", () => {
   expect(
-    getRecipeNutritionBasis({ yield: { value: 300, unit: "g" } }, "serving"),
+    getRecipeNutritionBasis(
+      servingBasisFixture({ yield: { value: 300, unit: "g" } }),
+      "serving",
+    ),
   ).toMatchObject({ basis: "whole", factor: 1, hasServing: false });
   expect(
     getRecipeNutritionBasis(
-      { servings: 1, yield: { value: 300, unit: "g" } },
+      {
+        fields: {
+          servings: fieldValueFixture(
+            entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+              "servings"
+            ],
+            1,
+          ),
+        },
+        yield: { value: 300, unit: "g" },
+      },
       "serving",
     ),
   ).toMatchObject({ basis: "serving", factor: 1, label: "per serving" });
   expect(
     getRecipeNutritionBasis(
-      { yield: { value: 4, unit: "servings" } },
+      servingBasisFixture({ yield: { value: 4, unit: "servings" } }),
       "serving",
     ),
   ).toMatchObject({ basis: "serving", factor: 0.25 });
-  expect(getRecipeNutritionBasis({ servings: 4 }, "whole")).toMatchObject({
+  expect(
+    getRecipeNutritionBasis(
+      {
+        fields: {
+          servings: fieldValueFixture(
+            entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+              "servings"
+            ],
+            4,
+          ),
+        },
+      },
+      "whole",
+    ),
+  ).toMatchObject({
     basis: "whole",
     factor: 1,
   });
@@ -154,7 +223,16 @@ it("nutrition basis requires a serving count and preserves one serving", () => {
 it("keeps per-serving nutrition independent of fractional display rounding", () => {
   const recipeScale = 0.3333;
   const basis = getRecipeNutritionBasis(
-    { servings: 2 },
+    {
+      fields: {
+        servings: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+            "servings"
+          ],
+          2,
+        ),
+      },
+    },
     "serving",
     recipeScale,
   );
@@ -173,31 +251,66 @@ it("formatYield drops the bare-count 'whole' unit", () => {
 });
 
 it("getServingBasis prefers servings and labels yield units", () => {
-  const base: RecipeOut = {
-    id: testShortcode("recipe", "RCP-2347"),
-    name: "Recipe",
-    meta: null,
-    images: [],
-    sections: [],
-    dataQuality: testCompleteDataQuality(),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    forkedFromRecipeId: null,
-    forkedFromRecipeName: null,
-    ...totalsPreview(null),
-  };
+  const base: RecipeOut = entityReadFixture(
+    entityFieldEnvelopeSchemas.recipe.detail,
+    {
+      fields: {
+        images: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape["images"],
+          [],
+        ),
+        dataQuality: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+            "dataQuality"
+          ],
+          testCompleteDataQuality(),
+        ),
+      },
+      id: testShortcode("recipe", "RCP-2347"),
+      name: "Recipe",
+      meta: null,
 
-  expect(getServingBasis({ ...base, servings: 4 })).toEqual({
+      sections: [],
+
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      forkedFromRecipeId: null,
+      forkedFromRecipeName: null,
+    },
+  );
+
+  expect(
+    getServingBasis({
+      ...base,
+      fields: {
+        ...base.fields,
+        servings: fieldValueFixture(
+          entityFieldEnvelopeSchemas.recipe.detail.shape.fields.shape[
+            "servings"
+          ],
+          4,
+        ),
+      },
+    }),
+  ).toEqual({
     divisor: 4,
     noun: "serving",
   });
   expect(
-    getServingBasis({ ...base, yield: { value: 12, unit: "churros" } }),
+    getServingBasis(
+      servingBasisFixture({ ...base, yield: { value: 12, unit: "churros" } }),
+    ),
   ).toEqual({ divisor: 12, noun: "churro" });
   expect(
-    getServingBasis({ ...base, yield: { value: 2, unit: "whole" } }),
+    getServingBasis(
+      servingBasisFixture({ ...base, yield: { value: 2, unit: "whole" } }),
+    ),
   ).toEqual({ divisor: 2, noun: "each" });
-  expect(getServingBasis({ ...base, yield: { value: 1, unit: "loaf" } })).toBe(
-    null,
-  );
+  expect(
+    getServingBasis(
+      servingBasisFixture({ ...base, yield: { value: 1, unit: "loaf" } }),
+    ),
+  ).toBe(null);
 });
+
+type RecipeOut = DetailRecordOf<"recipe">;

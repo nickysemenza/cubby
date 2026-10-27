@@ -1,6 +1,7 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
+  LocationTreeNode,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { useDraggable } from "@dnd-kit/core";
@@ -11,6 +12,8 @@ import { useMemo } from "react";
 
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { cn } from "~/lib/utils";
+import { FieldRecordValue } from "~/ui/derived/record-value";
+import { NoneValue } from "~/ui/primitives/none-value";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
 import { ArrangeMoveTo } from "./arrange-move-to";
@@ -22,7 +25,7 @@ interface ArrangeItemChipProps {
   /** The location this item currently lives at (the move's source). */
   sourceLocationId: LocationShortcode;
   /** Needed so Move to… can exclude the Home structural location. */
-  roots: InfLocation[];
+  roots: LocationTreeNode[];
 }
 
 /**
@@ -41,20 +44,25 @@ export function ArrangeItemChip({
   });
   const images = image ? [image] : [];
 
-  const drag = useMemo<ItemDragData>(
-    () => ({
-      arrangeDrag: "item",
-      inventoryEntryId: item.id,
-      amount: item.amount,
-      sourceLocationId,
-    }),
-    [item.id, item.amount, sourceLocationId],
+  const amount = fieldValueOf(item.fields.amount);
+  const drag = useMemo<ItemDragData | null>(
+    () =>
+      amount
+        ? {
+            arrangeDrag: "item",
+            inventoryEntryId: item.id,
+            amount,
+            sourceLocationId,
+          }
+        : null,
+    [item.id, amount, sourceLocationId],
   );
 
   const { setNodeRef, setActivatorNodeRef, listeners, attributes, isDragging } =
     useDraggable({
       id: `arrange-item:${item.id}`,
-      data: drag,
+      data: drag ?? undefined,
+      disabled: drag === null,
     });
 
   return (
@@ -69,6 +77,7 @@ export function ArrangeItemChip({
         ref={setActivatorNodeRef}
         type="button"
         aria-label={`Drag ${item.productName}`}
+        disabled={drag === null}
         className="touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary max-md:min-h-11 max-md:min-w-11"
         {...listeners}
         {...attributes}
@@ -101,11 +110,15 @@ export function ArrangeItemChip({
         {item.productName}
       </Link>
       <span className="shrink-0 text-muted-foreground">
-        {tryFormatAmount(item.amount)}
+        <FieldRecordValue record={item} field="amount">
+          {amount ? tryFormatAmount(amount) : <NoneValue />}
+        </FieldRecordValue>
       </span>
-      <ArrangeMoveTo
-        target={{ kind: "item", drag, name: item.productName, roots }}
-      />
+      {drag ? (
+        <ArrangeMoveTo
+          target={{ kind: "item", drag, name: item.productName, roots }}
+        />
+      ) : null}
     </div>
   );
 }

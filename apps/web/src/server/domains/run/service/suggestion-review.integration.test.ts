@@ -1,3 +1,9 @@
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  basisValueOf,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import {
@@ -6,7 +12,9 @@ import {
 } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
+import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -183,11 +191,33 @@ describe("Suggestion review", () => {
       });
       if (listed.action !== "list" || !listed.items[0])
         throw new Error("Synthetic field basis missing");
+      const row = listed.items[0];
+      const plain = z.record(z.string(), z.unknown()).parse(row);
+      const governed = entityFieldEnvelopeFields.product;
       const basis = Object.fromEntries(
-        Object.entries(listed.items[0]).flatMap(([key, value]) =>
-          typeof value === "string" || value === null ? [[key, value]] : [],
-        ),
+        [
+          ...new Set([
+            ...Object.keys(row).filter((key) => key !== "fields"),
+            ...Object.keys(governed),
+          ]),
+        ].map((key) => {
+          const envelope = fieldEnvelopeFor(row, key);
+          const value = Object.hasOwn(governed, key)
+            ? envelope
+              ? fieldValueOf(envelope)
+              : null
+            : plain[key];
+          return [key, basisValueOf(value)];
+        }),
       );
+      const policy = decisionCatalogRows().find(
+        (entry) => entry.entity === "product" && entry.field === "categoryId",
+      );
+      if (!policy) throw new Error("Synthetic category policy missing");
+      basis.__resolutionContext = fieldSuggestionResolutionContext(row.fields, [
+        ...policy.basis.map((entry) => entry.key),
+        "categoryId",
+      ]);
       const basePorts = categoryPorts(0.8).suggestPorts;
       let chooseOther = false;
       const ports = {

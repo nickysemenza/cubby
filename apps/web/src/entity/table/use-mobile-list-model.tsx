@@ -1,4 +1,10 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  publicImageUrl,
+  publicImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import { parseShortcode } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
@@ -14,7 +20,7 @@ import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { extractEntityTitle } from "~/ui/data-table/entity-utils";
 import type { MobileMetaValue } from "~/ui/data-table/mobile-card";
 import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
-import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValue } from "~/ui/derived/why-value";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -122,15 +128,11 @@ function hasRenderableContent(content: ReactNode): boolean {
 }
 
 const mobileImageRowSchema = z.object({
-  // The server-resolved list contract (own or borrowed photos) — every
-  // `displayImages` manifest entity's list row carries this.
-  displayImages: z.array(z.unknown()).optional(),
-  // Non-list shapes (purchase products, kit components, project tools) still
-  // carry their own `images[]`, so this stays alongside `displayImages`.
-  images: z.array(z.unknown()).optional(),
+  fields: z.record(z.string(), z.unknown()).optional(),
   imageUrl: z.string().nullish(),
-  product: z.object({ images: z.array(z.unknown()).optional() }).optional(),
+  product: z.unknown().optional(),
 });
+const mobileImages = z.array(publicImageUrlSummary).nullable();
 
 const inventoryMobileRowSchema = z.object({
   product: z.object({ name: z.string().optional() }).optional(),
@@ -151,13 +153,26 @@ function rowHasImage(original: RowData): boolean {
   const parsed = mobileImageRowSchema.safeParse(original);
   if (!parsed.success) return false;
   const row = parsed.data;
-  if (Array.isArray(row.displayImages) && row.displayImages.length > 0) {
-    return true;
+  // A selected cover slot is authoritative even before it has a usable result.
+  if (Object.hasOwn(row.fields ?? {}, "displayImages")) {
+    const envelope = fieldEnvelopeFor(row, "displayImages");
+    return envelope
+      ? (displayImagesField.nullable().parse(fieldValueOf(envelope))?.length ??
+          0) > 0
+      : false;
   }
-  if (Array.isArray(row.images) && row.images.length > 0) return true;
+  const hasImages = (record: unknown) => {
+    const envelope = fieldEnvelopeFor(record, "images");
+    return envelope
+      ? (mobileImages.parse(fieldValueOf(envelope)) ?? []).some(
+          (image) => publicImageUrl(image) !== undefined,
+        )
+      : false;
+  };
+  if (hasImages(row)) return true;
   if (row.imageUrl && row.imageUrl.length > 0) return true;
-  const nested = row.product?.images;
-  return Array.isArray(nested) && nested.length > 0;
+  const product = fieldEnvelopeFor(original, "product");
+  return hasImages(product ? fieldValueOf(product) : row.product);
 }
 
 function inventoryProductName(original: RowData): string | undefined {
@@ -285,12 +300,12 @@ function collectMobileSlots<TItem extends RowData>(
         rendered
       );
     const resolutionValue = (
-      <DerivedRecordValue
+      <FieldRecordValue
         record={row.original}
         field={explanation?.field ?? colId}
       >
         {inspectedValue}
-      </DerivedRecordValue>
+      </FieldRecordValue>
     );
     const provenanceValue = meta?.provenance ? (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1">

@@ -1,4 +1,3 @@
-import type { CalendarScheduleOut } from "@cubby/schemas/calendar";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -16,8 +15,11 @@ import {
   type ScheduleSegment,
   type ScheduleWindow,
 } from "~/features/schedule/schedule-grid";
+import type { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { Description } from "~/ui/primitives/description";
+
+type CalendarScheduleOut = Awaited<ReturnType<typeof calendar.schedule.call>>;
 
 const milestoneFields = [
   ["season.start", "Sowed"],

@@ -7,8 +7,11 @@ import type {
   SettledSuggestionQuestion,
 } from "@cubby/schemas/ai";
 import { suggestionReviewRowSchema } from "@cubby/schemas/ai";
+import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { productTopLevelOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
+import { parseShortcode } from "@cubby/shared";
 import {
   act,
   fireEvent,
@@ -35,6 +38,7 @@ import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contract
 
 import {
   fieldSuggestionBasisFromRecord,
+  suggestionRecordFieldValue,
   type EntitySuggestionsOperations,
 } from "./field-suggestion";
 import { FieldSuggestionApply } from "./field-suggestion-apply";
@@ -48,6 +52,75 @@ import {
 } from "./record-suggestions";
 import { suggestTargetsFor } from "./suggestion-targets";
 
+function fixtureField(value: unknown, computed = false) {
+  return {
+    current: {
+      assignment: computed
+        ? null
+        : value === null
+          ? { kind: "inherit" }
+          : { kind: "value", value, ownership: { kind: "record" } },
+      controls: computed
+        ? { kind: "readonly", reason: "computed" }
+        : {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: false,
+            reset: { kind: "unavailable" },
+          },
+    },
+    result: {
+      kind: "live",
+      decision: {
+        outcome:
+          value === null
+            ? { kind: "empty", reason: "unset" }
+            : { kind: "value", value },
+        provenance: null,
+      },
+    },
+    work: { kind: "idle" },
+  };
+}
+
+function fixtureRecord<T extends { id: string }>(input: T) {
+  const entity = parseShortcode(input.id)?.type;
+  if (!entity) throw new Error("Synthetic record identity missing");
+  const row = z.looseObject({ id: z.string() }).parse(input);
+  const fields = z.record(z.string(), z.unknown()).parse(row.fields ?? {});
+  for (const [key, stored] of Object.entries(
+    entityFieldEnvelopeFields[entity],
+  )) {
+    const field = entityFieldModels[entity].fields.find(
+      (candidate) => (candidate.readKey ?? candidate.key) === key,
+    );
+    const nestedKey = field?.key.replace(/Ids?$/u, "");
+    let present = Object.hasOwn(row, key);
+    let value = row[key];
+    if (
+      !present &&
+      field?.reference &&
+      nestedKey &&
+      Object.hasOwn(row, nestedKey)
+    ) {
+      const nested = z
+        .object({ id: z.string() })
+        .nullable()
+        .safeParse(row[nestedKey]);
+      if (nested.success) {
+        present = true;
+        value = nested.data?.id ?? null;
+      }
+    }
+    if (present && !Object.hasOwn(fields, key))
+      fields[key] = fixtureField(value, stored === null);
+  }
+  const canonical = { ...input, fields };
+  for (const key of Object.keys(entityFieldEnvelopeFields[entity]))
+    Reflect.deleteProperty(canonical, key);
+  return canonical;
+}
+
 installFeatures();
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -56,11 +129,11 @@ beforeEach(() => {
 });
 
 it("links live detail proposals and alternatives through the canonical field renderer", async () => {
-  const record = {
+  const record = fixtureRecord({
     id: testShortcode("task", "proposal"),
     name: "Synthetic task",
     projectId: null,
-  };
+  });
   const proposedId = testShortcode("project", "proposed");
   const alternativeId = testShortcode("project", "alternative");
   for (const { projectId, name } of [
@@ -181,7 +254,7 @@ function Surface({
   operations: EntitySuggestionsOperations;
   visible?: boolean;
 }) {
-  const record = { id, name, brandName: null, categoryId: null };
+  const record = fixtureRecord({ id, name, brandName: null, categoryId: null });
   return (
     <RecordSuggestionsProvider
       entity="product"
@@ -215,12 +288,14 @@ describe("record suggestions", () => {
   // A virtualized list's loaded records are not all active. Mounting the
   // next row must ask it in a domain batch without re-asking a warm sibling.
   it("batches only mounted rows and retains each field's cache on scrolling", async () => {
-    const records = ["first", "second", "offscreen"].map((name) => ({
-      id: testShortcode("product", name),
-      name,
-      brandName: null,
-      categoryId: null,
-    }));
+    const records = ["first", "second", "offscreen"].map((name) =>
+      fixtureRecord({
+        id: testShortcode("product", name),
+        name,
+        brandName: null,
+        categoryId: null,
+      }),
+    );
     const single = vi.fn(async () => ({ suggestions: {}, outcomes: {} }));
     const batches: FieldSuggestionsInput[][] = [];
     const operations: EntitySuggestionsOperations = {
@@ -274,7 +349,7 @@ describe("record suggestions", () => {
         return { suggestions: {}, outcomes: {} };
       }),
     };
-    const record = {
+    const record = fixtureRecord({
       id,
       name: "",
       brandName: null,
@@ -282,7 +357,7 @@ describe("record suggestions", () => {
       notes: null,
       classificationEvidence: null,
       categoryId: null,
-    };
+    });
     render(
       <RecordSuggestionsProvider
         entity="product"
@@ -349,8 +424,10 @@ describe("record suggestions", () => {
         })),
       };
       function Cell({ loaded }: { loaded: boolean }) {
-        const base = { id, name: "Synthetic product" };
-        const record = loaded ? { ...base, [readKey]: null } : base;
+        const base = fixtureRecord({ id, name: "Synthetic product" });
+        const record = loaded
+          ? fixtureRecord({ ...base, [readKey]: null })
+          : base;
         return (
           <RecordSuggestionsProvider
             entity="product"
@@ -459,7 +536,12 @@ describe("record suggestions", () => {
       <RecordSuggestionsProvider
         entity="product"
         records={[
-          { id, uuid: recordId, name: "Synthetic row", categoryId: null },
+          fixtureRecord({
+            id,
+            uuid: recordId,
+            name: "Synthetic row",
+            categoryId: null,
+          }),
         ]}
         fieldKeys={["name"]}
         operations={operations}
@@ -467,11 +549,20 @@ describe("record suggestions", () => {
       >
         <RecordSuggestionsBulkAction
           records={[
-            { id, uuid: recordId, name: "Synthetic row", categoryId: null },
+            fixtureRecord({
+              id,
+              uuid: recordId,
+              name: "Synthetic row",
+              categoryId: null,
+            }),
           ]}
         />
         <RecordFieldSuggestion
-          record={{ id, name: "Synthetic row", categoryId: null }}
+          record={fixtureRecord({
+            id,
+            name: "Synthetic row",
+            categoryId: null,
+          })}
           field="categoryId"
         >
           <span>Current value</span>
@@ -521,12 +612,12 @@ describe("record suggestions", () => {
         return { suggestions: { categoryId: null }, outcomes: {} };
       }),
     };
-    const record = {
+    const record = fixtureRecord({
       id,
       name: "Synthetic oats",
       brandName: null,
       categoryId: null,
-    };
+    });
     const List = () => (
       <RecordSuggestionsProvider
         entity="product"
@@ -569,7 +660,9 @@ describe("record suggestions", () => {
     const List = ({ name }: { name: string }) => (
       <RecordSuggestionsProvider
         entity="product"
-        records={[{ id, name, brandName: null, categoryId: null }]}
+        records={[
+          fixtureRecord({ id, name, brandName: null, categoryId: null }),
+        ]}
         fieldKeys={["categoryId"]}
         operations={operations}
         storedSuggestionOperations={stored}
@@ -613,12 +706,12 @@ describe("record suggestions", () => {
       <RecordSuggestionsProvider
         entity="product"
         records={[
-          {
+          fixtureRecord({
             id,
             name: "Synthetic gadget",
             brandName: null,
             categoryId: null,
-          },
+          }),
         ]}
         fieldKeys={["categoryId"]}
         operations={operations}
@@ -685,12 +778,12 @@ describe("record suggestions", () => {
         <RecordSuggestionsProvider
           entity="product"
           records={[
-            {
+            fixtureRecord({
               id,
               name: "Synthetic gadget",
               brandName: null,
               categoryId: null,
-            },
+            }),
           ]}
           fieldKeys={["categoryId"]}
           operations={operations}
@@ -726,12 +819,14 @@ describe("record suggestions", () => {
   // of rows fanned out past the database limiter.
   it("reads a page's settled questions in one batched dispatch", async () => {
     const settled = settledBy(() => ({ outcome: decline, revision: null }));
-    const records = Array.from({ length: 12 }, (_, index) => ({
-      id: testShortcode("product", `batch${index}`),
-      name: `Synthetic batch row ${index}`,
-      brandName: null,
-      categoryId: null,
-    }));
+    const records = Array.from({ length: 12 }, (_, index) =>
+      fixtureRecord({
+        id: testShortcode("product", `batch${index}`),
+        name: `Synthetic batch row ${index}`,
+        brandName: null,
+        categoryId: null,
+      }),
+    );
     render(
       <RecordSuggestionsProvider
         entity="product"
@@ -769,12 +864,14 @@ describe("record suggestions", () => {
         return { suggestions: {}, outcomes: {} };
       }),
     };
-    const records = Array.from({ length: 20 }, (_, index) => ({
-      id: testShortcode("product", `row${index}`),
-      name: `Synthetic row ${index}`,
-      brandName: null,
-      categoryId: null,
-    }));
+    const records = Array.from({ length: 20 }, (_, index) =>
+      fixtureRecord({
+        id: testShortcode("product", `row${index}`),
+        name: `Synthetic row ${index}`,
+        brandName: null,
+        categoryId: null,
+      }),
+    );
     const Wrapper = harness.wrapper;
     const html = renderToString(
       <Wrapper>
@@ -925,12 +1022,12 @@ describe("record suggestions", () => {
       settled?: StoredSuggestionOperations["settled"];
       surface?: "cell" | "inline";
     }) => {
-      const record = {
+      const record = fixtureRecord({
         id,
         name: "Synthetic cached gadget",
         brandName: null,
         categoryId: null,
-      };
+      });
       return (
         <RecordSuggestionsProvider
           entity="product"
@@ -1114,7 +1211,12 @@ describe("record suggestions", () => {
       }),
     };
     function Cell({ name }: { name: keyof typeof answers }) {
-      const record = { id, name, brandName: null, categoryId: null };
+      const record = fixtureRecord({
+        id,
+        name,
+        brandName: null,
+        categoryId: null,
+      });
       return (
         <RecordSuggestionsProvider
           entity="product"
@@ -1191,11 +1293,11 @@ describe("record suggestions", () => {
   });
 
   it("opens the normal editor with the saved value after acceptance fails", async () => {
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("inventory", "bin"),
       product: { id: testShortcode("product", "bin"), name: "Storage bin" },
       location: { id: testShortcode("location", "old"), name: "Garage" },
-    };
+    });
     const locationId = testShortcode("location", "new");
     const commands: EntityBrowserMutationInput[] = [];
     let calls = 0;
@@ -1271,14 +1373,14 @@ describe("record suggestions", () => {
     expect(commands).toHaveLength(1);
   });
 
-  it("saves a remove (prune) suggestion by patching the array field, preserving other tags", async () => {
-    const record = {
+  it("saves a removal after an unrelated tag addition, preserving the new tag", async () => {
+    const record = fixtureRecord({
       id: testShortcode("product", "tag-remove"),
       name: "Rain shell",
       brandName: "Jacquemus",
       categoryId: null,
       tags: ["jacquemus", "ecosystem", "mount"],
-    };
+    });
     const removeSuggestion = {
       assessmentId: "00000000-0000-4000-8000-000000000002",
       value: "jacquemus",
@@ -1307,7 +1409,27 @@ describe("record suggestions", () => {
       seed: 1,
       overrides: {
         id: record.id,
-        tags: ["ecosystem", "mount"],
+        fields: {
+          tags: {
+            current: {
+              assignment: {
+                kind: "value",
+                value: ["ecosystem", "mount"],
+                ownership: { kind: "record" },
+              },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: {
+                  kind: "value",
+                  value: ["ecosystem", "mount"],
+                },
+                provenance: { kind: "own", ownership: { kind: "record" } },
+              },
+            },
+          },
+        },
       },
     });
     render(
@@ -1316,7 +1438,20 @@ describe("record suggestions", () => {
         records={[record]}
         fieldKeys={["tags"]}
         operations={operations}
-        readRecord={async () => record}
+        readRecord={async () =>
+          fixtureRecord({
+            ...record,
+            fields: {
+              ...record.fields,
+              tags: fixtureField([
+                "jacquemus",
+                "ecosystem",
+                "mount",
+                "compatibility",
+              ]),
+            },
+          })
+        }
         mutationPort={createEntityMutationPort({
           execute: async (command) => {
             commands.push(command);
@@ -1345,18 +1480,18 @@ describe("record suggestions", () => {
       action: "update",
       entity: "product",
       id: record.id,
-      data: { tags: ["ecosystem", "mount"] },
+      data: { tags: ["ecosystem", "mount", "compatibility"] },
     });
   });
 
   it("refuses a remove suggestion once its removal is no longer present", async () => {
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("product", "tag-stale"),
       name: "Rain shell",
       brandName: "Jacquemus",
       categoryId: null,
       tags: ["jacquemus", "mount"],
-    };
+    });
     const removeSuggestion = {
       assessmentId: "00000000-0000-4000-8000-000000000003",
       value: "jacquemus",
@@ -1390,7 +1525,12 @@ describe("record suggestions", () => {
         // The tag was removed by someone else between the suggestion and the
         // click — a sibling basis field (brandName) is unchanged, so only
         // the every-removal-still-present check catches this.
-        readRecord={async () => ({ ...record, tags: ["mount"] })}
+        readRecord={async () =>
+          fixtureRecord({
+            ...record,
+            fields: { ...record.fields, tags: fixtureField(["mount"]) },
+          })
+        }
         mutationPort={createEntityMutationPort({
           execute: async (command) => {
             commands.push(command);
@@ -1448,11 +1588,11 @@ describe("record suggestions", () => {
   });
 
   it("rechecks authoritative eligibility before accepting a rendered proposal", async () => {
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("task", "stale"),
       name: "Install a circuit breaker",
       trade: null,
-    };
+    });
     let calls = 0;
     const commands: EntityBrowserMutationInput[] = [];
     const operations: EntitySuggestionsOperations = {
@@ -1474,16 +1614,25 @@ describe("record suggestions", () => {
         operations={operations}
         readRecord={async () => ({
           ...record,
-          fieldResolutions: {
+          fields: {
             trade: {
-              mode: "inherit",
-              storedValue: null,
-              value: "electrical",
-              fallbackValue: "electrical",
-              source: "Project default",
-              sourceEntity: null,
-              matchesFallback: true,
-              canReset: false,
+              current: {
+                assignment: { kind: "inherit" },
+                controls: {
+                  kind: "editable",
+                  canSetNone: true,
+                  canConfirm: true,
+                  reset: { kind: "unavailable" },
+                },
+              },
+              result: {
+                kind: "live",
+                decision: {
+                  outcome: { kind: "value", value: "electrical" },
+                  provenance: { kind: "default", source: null },
+                },
+              },
+              work: { kind: "idle" },
             },
           },
         })}
@@ -1516,7 +1665,7 @@ describe("record suggestions", () => {
     // Acceptance must reproduce the request's own declared keys and
     // inheritance context, without widening it to other visible targets
     // or silently dropping a context key from its drift fingerprint.
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("expense", "regression"),
       name: "Lumber order",
       lineKind: "principal" as const,
@@ -1528,7 +1677,7 @@ describe("record suggestions", () => {
       productId: null,
       orderId: null,
       date: null,
-    };
+    });
     let saved = false;
     const commands: EntityBrowserMutationInput[] = [];
     const calls: FieldSuggestionsInput[] = [];
@@ -1561,7 +1710,12 @@ describe("record suggestions", () => {
         ]}
         operations={operations}
         readRecord={async () =>
-          saved ? { ...record, costType: "tools" } : record
+          saved
+            ? fixtureRecord({
+                ...record,
+                fields: { ...record.fields, costType: fixtureField("tools") },
+              })
+            : record
         }
         mutationPort={createEntityMutationPort({
           execute: async (command) => {
@@ -1602,23 +1756,48 @@ describe("record suggestions", () => {
   });
 
   it("resets a redundant override when the proposal matches its inherited fallback", async () => {
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("task", "redundant"),
       name: "Replace electrical panel",
       trade: "plumbing",
-      fieldResolutions: {
+      fields: {
         trade: {
-          mode: "explicit" as const,
-          storedValue: "plumbing",
-          value: "plumbing",
-          fallbackValue: "electrical",
-          source: "Task override",
-          sourceEntity: null,
-          matchesFallback: false,
-          canReset: true,
+          current: {
+            assignment: {
+              kind: "value",
+              value: "plumbing",
+              ownership: { kind: "record" },
+            },
+            controls: {
+              kind: "editable",
+              canSetNone: true,
+              canConfirm: false,
+              reset: {
+                kind: "available",
+                preview: {
+                  kind: "ready",
+                  result: {
+                    kind: "live",
+                    decision: {
+                      outcome: { kind: "value", value: "electrical" },
+                      provenance: null,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: "plumbing" },
+              provenance: { kind: "own", ownership: { kind: "record" } },
+            },
+          },
+          work: { kind: "idle" },
         },
       },
-    };
+    });
     const commands: EntityBrowserMutationInput[] = [];
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(async () => ({
@@ -1671,29 +1850,52 @@ describe("record suggestions", () => {
       }),
     };
     const resolution = {
-      storedValue: null,
-      value: null,
-      fallbackValue: null,
-      source: "Purchase default",
-      sourceEntity: null,
-      matchesFallback: false,
-      canReset: false,
+      current: {
+        assignment: { kind: "inherit" },
+        controls: {
+          kind: "editable",
+          canSetNone: true,
+          canConfirm: false,
+          reset: { kind: "unavailable" },
+        },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "empty", reason: "unset" },
+          provenance: null,
+        },
+      },
+      work: { kind: "idle" },
     };
     render(
       <RecordSuggestionsProvider
         entity="expense"
         records={[
-          {
+          fixtureRecord({
             id: testShortcode("expense", "inherited"),
             name: "Permit fee",
             lineKind: "principal",
             projectId: null,
             trade: null,
-            fieldResolutions: {
-              projectId: { ...resolution, mode: "inherit" },
-              trade: { ...resolution, mode: "none" },
+            fields: {
+              projectId: resolution,
+              trade: {
+                ...resolution,
+                current: {
+                  ...resolution.current,
+                  assignment: { kind: "none" },
+                },
+                result: {
+                  kind: "live",
+                  decision: {
+                    outcome: { kind: "empty", reason: "explicit_none" },
+                    provenance: { kind: "own", ownership: { kind: "record" } },
+                  },
+                },
+              },
             },
-          },
+          }),
         ]}
         fieldKeys={["projectId", "trade"]}
         operations={operations}
@@ -1728,13 +1930,13 @@ describe("record suggestions", () => {
   it("merges outcomes across the suggested, provided, and prune request groups onto one row", async () => {
     // categoryId is empty → its own "suggested" group; tags already has
     // entries → its own "prune" group. Two separate requests, one row.
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("product", "merge-outcomes"),
       name: "Rain shell",
       brandName: "Jacquemus",
       categoryId: null,
       tags: ["jacquemus"],
-    };
+    });
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(
         async ({ input }): Promise<FieldSuggestionsOut> => {
@@ -1795,12 +1997,12 @@ describe("record suggestions", () => {
   it("names the first basis field to add when the client never asked at all", async () => {
     // An empty name leaves categoryId's basis insufficient
     // (`isBasisSufficient`), so no request ever goes out.
-    const record = {
+    const record = fixtureRecord({
       id: testShortcode("product", "unasked"),
       name: "",
       brandName: null,
       categoryId: null,
-    };
+    });
     const operations: EntitySuggestionsOperations = {
       suggestFields: ai.suggestFields.withTransport(async () => ({
         suggestions: {},
@@ -1823,4 +2025,84 @@ describe("record suggestions", () => {
       await screen.findByText("Not checked — add a name first"),
     ).toBeInTheDocument();
   });
+});
+
+it("reads effective governed suggestion values without falling back to stale plain slots", () => {
+  const tags = {
+    current: {
+      assignment: {
+        kind: "value",
+        value: ["stored-tag"],
+        ownership: { kind: "record" },
+      },
+      controls: {
+        kind: "editable",
+        canSetNone: false,
+        canConfirm: false,
+        reset: { kind: "unavailable" },
+      },
+    },
+    result: {
+      kind: "live",
+      decision: {
+        outcome: { kind: "value", value: ["effective-tag"] },
+        provenance: null,
+      },
+    },
+    work: { kind: "idle" },
+  };
+  const record = {
+    id: testShortcode("product", "canonical-tags"),
+    name: "Synthetic tag evidence",
+    tags: ["stale-plain-tag"],
+    fields: { tags },
+  };
+  expect(suggestionRecordFieldValue("product", record, "tags")).toEqual([
+    "effective-tag",
+  ]);
+  expect(
+    fieldSuggestionBasisFromRecord(
+      "product",
+      { targets: [], basisKeys: ["tags"] },
+      record,
+    ).tags,
+  ).toBe('["effective-tag"]');
+  expect(
+    suggestionRecordFieldValue(
+      "product",
+      {
+        ...record,
+        fields: { tags: { ...tags, result: { kind: "missing" } } },
+      },
+      "tags",
+    ),
+  ).toBeUndefined();
+  expect(
+    suggestionRecordFieldValue(
+      "product",
+      {
+        ...record,
+        fields: {
+          tags: {
+            ...tags,
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "empty", reason: "unset" },
+                provenance: null,
+              },
+            },
+          },
+        },
+      },
+      "tags",
+    ),
+  ).toBeNull();
+  expect(
+    suggestionRecordFieldValue(
+      "product",
+      { id: record.id, tags: record.tags },
+      "tags",
+    ),
+  ).toBeUndefined();
 });

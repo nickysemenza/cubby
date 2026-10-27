@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { imageAssociationStorage } from "./image-associations";
 import { recordEmojiField } from "../emoji";
@@ -26,7 +25,6 @@ import {
 } from "../project-fields.js";
 import { z } from "zod";
 import { TRADE_SUGGEST_RULE, tradeSchema } from "@cubby/schemas/task-fields";
-import { optionalFieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 
 /** Rows a project's folded dates read (stored derived inputs, ADR 0021). */
 const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
@@ -362,7 +360,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("project", "Project") },
     hierarchy: {
       parentField: "parentProjectId",
       maxDepth: MAX_PROJECT_TREE_DEPTH,
@@ -376,16 +373,6 @@ export default defineEntity({
             ...recordEmojiField.control.suggest,
             basis: ["name", "notes", "kind"],
           },
-        },
-      },
-      {
-        display: { detail: false, list: false },
-        key: "fieldResolutions",
-        kind: "json",
-        validation: {
-          read: optionalFieldResolutionsSchema,
-          create: null,
-          update: null,
         },
       },
       {
@@ -463,21 +450,21 @@ Rules:
           description:
             "Explicit project locations win; otherwise the nearest parent project with explicit locations supplies them.",
           projections: {
-            list: "fieldResolutions.locations.value",
-            detail: "fieldResolutions.locations.value",
-            summary: "fieldResolutions.locations.value",
+            list: "locations",
+            detail: "locations",
+            summary: "locations",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.locations.sourceEntity",
+              path: "fields.locations.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.locations.storedValue",
+              path: "fields.locations.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.locations.fallbackValue",
+              path: "fields.locations.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -539,21 +526,21 @@ Rules:
           description:
             "An explicit default assignee or None wins; otherwise follow the parent project default.",
           projections: {
-            list: "fieldResolutions.assigneeId.value",
-            detail: "fieldResolutions.assigneeId.value",
-            summary: "fieldResolutions.assigneeId.value",
+            list: "assigneeId",
+            detail: "assigneeId",
+            summary: "assigneeId",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.assigneeId.sourceEntity",
+              path: "fields.assigneeId.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.assigneeId.storedValue",
+              path: "fields.assigneeId.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.assigneeId.fallbackValue",
+              path: "fields.assigneeId.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -617,21 +604,21 @@ Rules:
           description:
             "A project trade override wins; otherwise the nearest parent project with a default trade supplies it.",
           projections: {
-            list: "fieldResolutions.defaultTrade.value",
-            detail: "fieldResolutions.defaultTrade.value",
-            summary: "fieldResolutions.defaultTrade.value",
+            list: "defaultTrade",
+            detail: "defaultTrade",
+            summary: "defaultTrade",
           },
           sourceDependencies: [
             {
-              path: "fieldResolutions.defaultTrade.sourceEntity",
+              path: "fields.defaultTrade.result.decision.provenance.source",
               label: "Source",
             },
             {
-              path: "fieldResolutions.defaultTrade.storedValue",
+              path: "fields.defaultTrade.current.assignment.value",
               label: "Stored override",
             },
             {
-              path: "fieldResolutions.defaultTrade.fallbackValue",
+              path: "fields.defaultTrade.current.controls.reset.preview.result.decision.outcome.value",
               label: "Inherited value",
             },
           ],
@@ -1101,7 +1088,6 @@ Rules:
     },
     output: [
       "emoji",
-      "fieldResolutions",
       "assigneeId",
       "assigneeName",
       "id",
@@ -1131,8 +1117,24 @@ Rules:
   fields: {
     create: { module: "@cubby/schemas/project", export: "projectCreateInput" },
     update: { module: "@cubby/schemas/project", export: "projectUpdateData" },
-    output: { module: "@cubby/schemas/project", export: "projectOut" },
-    list: { module: "@cubby/schemas/project", export: "projectListItemOut" },
+    output: { module: "@cubby/schemas/work-raw-read", export: "rawProjectOut" },
+    list: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectListItemOut",
+    },
+    detail: { module: "@cubby/schemas/work-raw-read", export: "rawProjectOut" },
+    mcpOutput: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectOut",
+    },
+    mcpList: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectListItemOut",
+    },
+    mcpDetail: {
+      module: "@cubby/schemas/work-raw-read",
+      export: "rawProjectOut",
+    },
   },
   storage: {
     indexes: [

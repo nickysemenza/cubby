@@ -29,6 +29,7 @@ describe("PhotoViewer", () => {
     const onIndexChange = vi.fn();
     render(
       <PhotoViewer
+        imageUrl={(image) => image.url}
         images={images}
         index={0}
         onIndexChange={onIndexChange}
@@ -49,7 +50,12 @@ describe("PhotoViewer", () => {
   });
 
   it("can preview the next image after a different image fails to load", () => {
-    const props = { images, onIndexChange: vi.fn(), onOpenChange: vi.fn() };
+    const props = {
+      images,
+      imageUrl: (image: (typeof images)[number]) => image.url,
+      onIndexChange: vi.fn(),
+      onOpenChange: vi.fn(),
+    };
     const view = render(<PhotoViewer {...props} index={0} />, {
       wrapper: harness.wrapper,
     });

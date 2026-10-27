@@ -1,20 +1,19 @@
+import type { Amount } from "@cubby/schemas/codec";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
-import type { FieldResolution } from "@cubby/schemas/field-resolution";
+import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { productCost } from "@cubby/schemas/product-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  describeProductPricingSource,
-  productPriceClearLabel,
-  renderProductPriceValue,
-  renderProductChargeCost,
-} from "~/features/product/list-columns";
+import { ProductCostValue } from "~/entity/display/product-cost-value";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { specFromCellData } from "~/ui/data-table/cell-data";
 
 import {
   type CubbyColumnDef as ColumnDef,
@@ -27,6 +26,7 @@ import {
 import { EntityActionsProvider } from "../actions/entity-actions";
 import {
   createActionsColumn,
+  createEditableAmountColumn,
   createBooleanColumn,
   createCurrencyColumn,
   createEntityInlineLinkColumn,
@@ -35,7 +35,6 @@ import {
   createSingleEntityInlineLinkColumn,
   rowImages,
 } from "./column-helpers";
-import { EditableCell } from "./editable-cell";
 
 const activeBrowserHarnesses: Array<
   ReturnType<typeof createBrowserTestHarness>
@@ -93,6 +92,39 @@ function renderColumn<TRow extends RowData, TValue>(
   );
   return result;
 }
+
+describe("createEditableAmountColumn", () => {
+  it("uses the selected amount and gates clipboard writes with current eligibility", () => {
+    type Row = { selected: Amount | null; editable: boolean };
+    const onSave = vi.fn(async (_amount: Amount, _row: Row) => {});
+    const column = createEditableAmountColumn(
+      createCubbyColumnHelper<Row>(),
+      (row) => row.selected,
+      {
+        id: "amount",
+        onSave,
+        isEditable: (row) => row.editable,
+      },
+    );
+    const data = column.meta?.cellData;
+    if (!data) throw new Error("Expected amount clipboard data");
+    const unavailable: Row = { selected: null, editable: false };
+    expect(data.getCopyPayload(unavailable)).toBeNull();
+    expect(specFromCellData(data, unavailable).onPasteValue).toBeUndefined();
+    const available: Row = {
+      selected: { value: 3, unit: "each" },
+      editable: true,
+    };
+    expect(data.getCopyPayload(available)?.json).toEqual({
+      value: 3,
+      unit: "each",
+    });
+    expect(specFromCellData(data, available).onPasteValue).toBeTypeOf(
+      "function",
+    );
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
 
 describe("createSingleEntityInlineLinkColumn", () => {
   it("always supplies a semantic entity header unless the caller names one", () => {
@@ -430,13 +462,13 @@ describe("createImageColumn", () => {
     );
   });
 
-  it("defaults to `row.displayImages` when `getImages` is omitted", () => {
+  it("defaults to the canonical displayImages envelope when getImages is omitted", () => {
     // The server-resolved list contract every `displayImages` manifest
     // entity's list row carries — `getImages` is only for a table of a
     // non-list shape.
     type DisplayImagesRow = {
       id: string;
-      displayImages: DisplayImageSummary[];
+      fields: { displayImages: ReadableFieldEnvelope };
     };
     const column = createImageColumn(
       createCubbyColumnHelper<DisplayImagesRow>(),
@@ -449,12 +481,30 @@ describe("createImageColumn", () => {
         data: [
           {
             id: "PRD-1",
-            displayImages: [
-              {
-                id: testShortcode("image", "IMG-1"),
-                url: "https://example.com/cover.png",
+            fields: {
+              displayImages: {
+                current: {
+                  assignment: null,
+                  controls: { kind: "readonly", reason: "computed" },
+                },
+                result: {
+                  kind: "live",
+                  decision: {
+                    outcome: {
+                      kind: "value",
+                      value: [
+                        {
+                          id: testShortcode("image", "IMG-1"),
+                          url: "https://example.com/cover.png",
+                        },
+                      ],
+                    },
+                    provenance: { kind: "computed" },
+                  },
+                },
+                work: { kind: "idle" },
               },
-            ],
+            },
           },
         ],
         columns: columnForTable(column),
@@ -718,20 +768,29 @@ describe("createBooleanColumn", () => {
 // inherited is a silent no-op and the row never gets its own decision.
 describe("createBooleanColumn with a field resolution", () => {
   type ResolvedRow = TrackedRow & {
-    fieldResolutions: Record<string, FieldResolution>;
+    fields: Record<string, ReadableFieldEnvelope>;
   };
   const inheriting = (value: boolean): ResolvedRow => ({
     stockTracked: null,
-    fieldResolutions: {
+    fields: {
       stockTracked: {
-        mode: "inherit",
-        storedValue: null,
-        value,
-        fallbackValue: value,
-        source: "Synthetic category",
-        sourceEntity: null,
-        matchesFallback: false,
-        canReset: false,
+        current: {
+          assignment: { kind: "inherit" },
+          controls: {
+            kind: "editable",
+            canSetNone: true,
+            canConfirm: true,
+            reset: { kind: "unavailable" },
+          },
+        },
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: value },
+            provenance: { kind: "default", source: null },
+          },
+        },
+        work: { kind: "idle" },
       },
     },
   });
@@ -822,117 +881,80 @@ describe("boolean tones come from the roster, not the factory", () => {
   });
 });
 
-// `Product.price`'s EditableCell edits the manual override but displays
-// `pricing.effectivePrice` (override OR the Expense-derived fallback), so an
-// override and a derived price render as the same bare number with nothing
-// telling them apart. `renderProductPriceValue` / `describeProductPricingSource`
-// / `productPriceClearLabel` are the shared fix — both the product detail page
-// and the product list column call the same three functions, so the two
-// surfaces cannot disagree about what the cell means.
-describe("Product pricing cell (explicit vs derived legibility)", () => {
-  it("labels service averages per charge and exposes the basis without a price editor", () => {
+describe("canonical Product Cost", () => {
+  const envelope = computedFieldEnvelope(productCost);
+  const current = {
+    assignment: null,
+    controls: { kind: "readonly", reason: "computed" },
+  };
+  it("labels the published service average and matching evidence", () => {
+    const field = envelope.parse({
+      current,
+      result: {
+        kind: "cached",
+        computedAt: "2026-10-01T00:00:00Z",
+        freshness: "stale",
+        decision: {
+          outcome: {
+            kind: "value",
+            value: {
+              kind: "service_charge",
+              amount: 65,
+              chargeCount: 2,
+              latestCharge: 90,
+            },
+          },
+          provenance: { kind: "computed" },
+        },
+      },
+      work: {
+        kind: "failed",
+        error: "Synthetic refresh failure",
+        retryAt: null,
+      },
+    });
     render(
       <>
-        {renderProductChargeCost({
-          amount: 65,
-          label: "$65.00 / charge",
-          explanation: "Average excludes credits; not a monthly rate.",
-          chargeCount: 2,
-          latestCharge: 90,
-        })}
+        <ProductCostValue envelope={field} />
       </>,
     );
-    expect(screen.getByText("$65.00 / charge")).toBeVisible();
     expect(
-      screen.getByLabelText(/2 charges.*Latest dated charge: \$90.00/),
-    ).toBeVisible();
-    expect(screen.queryByRole("textbox")).toBeNull();
-  });
-  const explicitPricing = {
-    effectivePrice: 20,
-    derivedPrice: 12,
-    source: "explicit" as const,
-    knownExpenseCount: 3,
-    partial: false,
-  };
-  const derivedPricing = {
-    effectivePrice: 12,
-    derivedPrice: 12,
-    source: "derived" as const,
-    knownExpenseCount: 3,
-    partial: false,
-  };
-  const nonePricing = {
-    effectivePrice: null,
-    derivedPrice: null,
-    source: "none" as const,
-    knownExpenseCount: 0,
-    partial: false,
-  };
-
-  it("describes each pricing source in prose, shared by the caption and the cell tooltip", () => {
-    expect(describeProductPricingSource(explicitPricing)).toBe(
-      "Manual override",
-    );
-    expect(describeProductPricingSource(derivedPricing)).toBe(
-      "Derived from 3 expenses",
-    );
-    expect(
-      describeProductPricingSource({ ...derivedPricing, partial: true }),
-    ).toBe("Derived from 3 expenses · partial history");
-    expect(describeProductPricingSource(nonePricing)).toBe(
-      "No override or quantified purchase history",
+      screen.getByRole("button", { name: /65.00 per charge/ }),
+    ).toHaveTextContent("$65.00 / charge");
+    expect(screen.getByRole("button")).toHaveAccessibleName(
+      /2 charges.*90.00.*not a monthly rate/,
     );
   });
-
-  it("marks an explicit override with a pin and leaves the derived norm unmarked, so the two never read as the same bare number", () => {
-    const { unmount } = render(
-      <div>{renderProductPriceValue(explicitPricing)}</div>,
+  it("distinguishes a missing computation from a completed empty result", () => {
+    const view = render(
+      <>
+        <ProductCostValue
+          envelope={envelope.parse({
+            current,
+            result: { kind: "missing" },
+            work: { kind: "pending" },
+          })}
+        />
+      </>,
     );
-    expect(screen.getByText("$20.00")).toBeInTheDocument();
-    expect(
-      screen.getByText("$20.00").parentElement?.querySelector("svg"),
-    ).not.toBeNull();
-    unmount();
-
-    render(<div>{renderProductPriceValue(derivedPricing)}</div>);
-    expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(
-      screen.getByText("$12.00").parentElement?.querySelector("svg"),
-    ).toBeNull();
-  });
-
-  it("renders the muted dash when there is no price at all", () => {
-    render(<div>{renderProductPriceValue(nonePricing)}</div>);
-    expect(screen.getByText("—")).toBeInTheDocument();
-  });
-
-  it("names the derived fallback when clearing has one to return to, and says so plainly when it doesn't", () => {
-    expect(productPriceClearLabel({ derivedPrice: 12 })).toBe(
-      "Revert to $12.00 (derived)",
+    expect(screen.getByText("Updating…")).toBeVisible();
+    view.rerender(
+      <>
+        <ProductCostValue
+          envelope={envelope.parse({
+            current,
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "empty", reason: "unset" },
+                provenance: { kind: "computed" },
+              },
+            },
+            work: { kind: "idle" },
+          })}
+        />
+      </>,
     );
-    expect(productPriceClearLabel({ derivedPrice: null })).toBe(
-      "Clear override (no derived price on record)",
-    );
-  });
-
-  it("a derived-only product's cell carries no override pin, and its editor opens blank — the raw stored override, not the displayed fallback", async () => {
-    render(
-      <EditableCell
-        value={null}
-        onSave={async () => {}}
-        config={{ type: "currency" }}
-        renderValue={() => renderProductPriceValue(derivedPricing)}
-      />,
-    );
-
-    expect(screen.getByText("$12.00")).toBeInTheDocument();
-    expect(
-      screen.getByText("$12.00").parentElement?.querySelector("svg"),
-    ).toBeNull();
-
-    fireEvent.click(screen.getByRole("button"));
-    const input = await screen.findByRole("spinbutton");
-    expect(input).toHaveValue(null);
+    expect(screen.queryByText("Updating…")).not.toBeInTheDocument();
   });
 });

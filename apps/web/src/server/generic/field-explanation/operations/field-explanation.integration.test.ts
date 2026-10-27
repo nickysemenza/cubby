@@ -1,4 +1,5 @@
 import { externalIdInputs } from "@cubby/schemas/external-id";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
@@ -24,6 +25,7 @@ import {
 import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -63,8 +65,9 @@ describe("derived field explanations against canonical records", () => {
       field: "spendingCategoryId",
       surface: "list",
     });
-    expect(explanation.value).toEqual(canonical.value);
-    expect(explanation.resolution).toEqual(canonical);
+    expect(fieldValueOf(explanation.envelope)).toEqual(canonical.value);
+    expect(explanation).not.toHaveProperty("resolution");
+    expect(explanation).not.toHaveProperty("derived");
     return explanation;
   }
 
@@ -262,15 +265,24 @@ describe("derived field explanations against canonical records", () => {
       trade: "other",
     });
     const explanation = await explainExpenseCategory(line);
-    expect(explanation.resolution).toMatchObject({
-      value: explicit.shortcode,
-      source: "expense override",
-      sourceEntity: { entityId: explicit.shortcode },
+    expect(explanation.envelope).toMatchObject({
+      current: { assignment: { kind: "value", value: explicit.shortcode } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: explicit.shortcode },
+          provenance: { kind: "own" },
+        },
+      },
     });
     expect(explanation.resolutionEvidence?.chain.rows[0]?.state?.kind).toBe(
       "done",
     );
-    expect(explanation.resolution?.fallbackValue).toBe(mapped.shortcode);
+    expect(
+      explanation.resolutionEvidence?.chain.rows.find(
+        (row) => row.id === parent.shortcode,
+      )?.trailing,
+    ).toBe("Fixture tools");
     expect(
       explanation.resolutionEvidence?.chain.rows.flatMap((row) =>
         row.id ? [row.id] : [],
@@ -304,15 +316,9 @@ describe("derived field explanations against canonical records", () => {
     async ({ profile, contextWins }) => {
       const f = await categoryContextFixture(profile);
       const explanation = await explainExpenseCategory(f.line);
-      expect(explanation.resolution).toMatchObject({
-        value: contextWins ? f.contextual.shortcode : f.mapped.shortcode,
-        fallbackValue: contextWins
-          ? f.contextual.shortcode
-          : f.mapped.shortcode,
-        source: contextWins
-          ? "vendor food context"
-          : "product category mapping",
-      });
+      expect(fieldValueOf(explanation.envelope)).toBe(
+        contextWins ? f.contextual.shortcode : f.mapped.shortcode,
+      );
       expect(explanation.resolutionEvidence?.fallbackSource?.entityId).toBe(
         contextWins ? f.vendor.shortcode : f.category.shortcode,
       );
@@ -353,11 +359,7 @@ describe("derived field explanations against canonical records", () => {
       sql`UPDATE "Product" SET "categoryId"=${blocked.id} WHERE id=${f.product.id}`,
     );
     const explanation = await explainExpenseCategory(f.line);
-    expect(explanation.resolution).toMatchObject({
-      value: f.deliberate.shortcode,
-      fallbackValue: f.deliberate.shortcode,
-      source: "purchase default",
-    });
+    expect(fieldValueOf(explanation.envelope)).toBe(f.deliberate.shortcode);
     expect(explanation.resolutionEvidence?.fallbackSource?.entityId).toBe(
       f.purchase.shortcode,
     );
@@ -392,7 +394,7 @@ describe("derived field explanations against canonical records", () => {
       sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
     );
     const live = await explainExpenseCategory(f.line);
-    expect(live.resolution?.value).toBe(f.mapped.shortcode);
+    expect(fieldValueOf(live.envelope)).toBe(f.mapped.shortcode);
     expect(
       live.resolutionEvidence?.chain.rows.find(
         (row) => row.title === "Vendor default without a Product",
@@ -402,11 +404,7 @@ describe("derived field explanations against canonical records", () => {
       sql`UPDATE "Product" SET "deletedAt"=CURRENT_TIMESTAMP WHERE id=${f.product.id}`,
     );
     const deleted = await explainExpenseCategory(f.line);
-    expect(deleted.resolution).toMatchObject({
-      value: null,
-      fallbackValue: null,
-      source: "none",
-    });
+    expect(fieldValueOf(deleted.envelope)).toBeNull();
     expect(deleted.resolutionEvidence?.fallbackSource).toBeNull();
     expect(
       deleted.resolutionEvidence?.chain.rows.find(
@@ -417,10 +415,7 @@ describe("derived field explanations against canonical records", () => {
       sql`UPDATE "Expense" SET "productId"=NULL WHERE id=${f.line.id}`,
     );
     const absent = await explainExpenseCategory(f.line);
-    expect(absent.resolution).toMatchObject({
-      value: f.contextual.shortcode,
-      source: "vendor default",
-    });
+    expect(fieldValueOf(absent.envelope)).toBe(f.contextual.shortcode);
     expect(absent.resolutionEvidence?.fallbackSource?.entityId).toBe(
       f.vendor.shortcode,
     );
@@ -442,10 +437,9 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: f.purchase.id,
     });
     const explanation = await explainExpenseCategory(unresolved);
-    expect(explanation.resolution).toMatchObject({
-      value: null,
-      fallbackValue: null,
-      source: "none",
+    expect(explanation.envelope.result).toMatchObject({
+      kind: "live",
+      decision: { outcome: { kind: "empty", reason: "not_applicable" } },
     });
     expect(explanation.resolutionEvidence?.fallbackSource).toBeNull();
     expect(
@@ -488,10 +482,18 @@ describe("derived field explanations against canonical records", () => {
       });
 
     const inherited = await explain(leaf.shortcode);
-    expect(inherited.resolution).toMatchObject({
-      mode: "inherit",
-      value: "household",
-      sourceEntity: { entityId: root.shortcode },
+    expect(inherited.envelope).toMatchObject({
+      current: { assignment: { kind: "inherit" } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: "household" },
+          provenance: {
+            kind: "inherited",
+            source: { entityId: root.shortcode },
+          },
+        },
+      },
     });
     expect(
       inherited.resolutionEvidence?.chain.rows.map((row) => [
@@ -511,10 +513,11 @@ describe("derived field explanations against canonical records", () => {
     ]);
 
     const bound = await explain(root.shortcode);
-    expect(bound.resolution).toMatchObject({
-      mode: "explicit",
-      fallbackValue: null,
+    expect(bound.envelope.current.assignment).toMatchObject({
+      kind: "value",
+      value: "household",
     });
+    expect(bound.resolutionEvidence?.fallbackSource).toBeNull();
     expect(bound.actions[0]?.target.entityId).toBe(root.shortcode);
   });
 
@@ -546,10 +549,33 @@ describe("derived field explanations against canonical records", () => {
       field: "trade",
       surface: "list",
     });
-    expect(explanation.resolution?.fallbackValue).toBe("plumbing");
+    expect(
+      explanation.resolutionEvidence?.chain.rows.find(
+        (row) => row.id === second.shortcode,
+      )?.trailing,
+    ).toBe("Plumbing");
     expect(explanation.resolutionEvidence?.fallbackSource).toMatchObject({
       entityKind: "project",
       entityId: second.shortcode,
+    });
+    expect(explanation.envelope.current.controls).toMatchObject({
+      kind: "editable",
+      reset: {
+        kind: "available",
+        preview: {
+          kind: "ready",
+          result: {
+            kind: "live",
+            decision: {
+              outcome: { kind: "value", value: "plumbing" },
+              provenance: {
+                kind: "inherited",
+                source: { entityKind: "project", entityId: second.shortcode },
+              },
+            },
+          },
+        },
+      },
     });
   });
 
@@ -598,7 +624,10 @@ describe("derived field explanations against canonical records", () => {
       field: "trade",
       surface: "list",
     });
-    expect(explanation.resolution?.mode).toBe("allocated");
+    expect(explanation.envelope.result).toMatchObject({
+      kind: "live",
+      decision: { provenance: { kind: "allocated" } },
+    });
     expect(explanation.resolutionEvidence?.outcome).toBe("mixed");
     expect(
       explanation.resolutionEvidence?.contributors
@@ -622,7 +651,7 @@ describe("derived field explanations against canonical records", () => {
       field: "projectId",
       surface: "list",
     });
-    expect(projects.resolution?.value).toBeNull();
+    expect(fieldValueOf(projects.envelope)).toBeNull();
     expect(projects.resolutionEvidence?.outcome).toBe("resolved");
     expect(
       projects.resolutionEvidence?.contributors?.map(
@@ -637,7 +666,7 @@ describe("derived field explanations against canonical records", () => {
       field: "trade",
       surface: "list",
     });
-    expect(refreshed.resolution?.value).toBe("plumbing");
+    expect(fieldValueOf(refreshed.envelope)).toBe("plumbing");
     expect(refreshed.resolutionEvidence?.outcome).toBe("resolved");
     expect(
       await getDb(ctx.db).query.expense.findFirst({
@@ -680,7 +709,7 @@ describe("derived field explanations against canonical records", () => {
       field: "trade",
       surface: "list",
     });
-    expect(explanation.resolution?.value).toBe("building");
+    expect(fieldValueOf(explanation.envelope)).toBe("building");
     expect(explanation.resolutionEvidence?.outcome).toBe("resolved");
     expect(explanation.resolutionEvidence?.contributors).toHaveLength(2);
   });
@@ -767,7 +796,7 @@ describe("derived field explanations against canonical records", () => {
       field: "assigneeId",
       surface: "list",
     });
-    expect(explanation.resolution?.value).toBeNull();
+    expect(fieldValueOf(explanation.envelope)).toBeNull();
     expect(explanation.resolutionEvidence?.outcome).toBe("resolved");
     expect(explanation.resolutionEvidence?.chain.rows).toEqual(
       expect.arrayContaining([
@@ -786,7 +815,7 @@ describe("derived field explanations against canonical records", () => {
     expect(
       trade.resolutionEvidence?.chain.rows.map((row) => row.id),
     ).not.toContain(grandparent.shortcode);
-    expect(trade.resolution?.value).toBe("other");
+    expect(fieldValueOf(trade.envelope)).toBe("other");
     expect(trade.resolutionEvidence?.chain.rows[0]?.state?.kind).toBe("done");
   });
 
@@ -838,10 +867,18 @@ describe("derived field explanations against canonical records", () => {
       id: product.id,
       missing: "error",
     });
-    if (record.action !== "get") throw new Error("Expected product detail");
-    expect(record.item).toMatchObject({
-      pricing: { effectivePrice: 20, derivedPrice: 6 },
+    if (record.action !== "get" || !record.item)
+      throw new Error("Expected product detail");
+    const pricing = await loadProductPricing(ctx.db, [
+      { id: product.entityId, price: 20 },
+    ]);
+    expect(pricing.get(product.entityId)).toMatchObject({
+      effectivePrice: 20,
+      derivedPrice: 6,
     });
+    expect(fieldValueOf(record.item.fields.price)).toBe(20);
+    expect(record.item).not.toHaveProperty("pricing.effectivePrice");
+    expect(record.item).not.toHaveProperty("pricing.derivedPrice");
 
     const price = await explainField(requestContext, {
       entityKind: "product",
@@ -849,14 +886,19 @@ describe("derived field explanations against canonical records", () => {
       field: "price",
       surface: "detail",
     });
-    expect(price.value).toBe(20);
-    expect(price.resolution).toMatchObject({
-      mode: "explicit",
-      storedValue: 20,
-      value: 20,
-      fallbackValue: 6,
-      sourceEntity: null,
-      canReset: true,
+    expect(fieldValueOf(price.envelope)).toBe(20);
+    expect(price.envelope).toMatchObject({
+      current: {
+        assignment: { kind: "value", value: 20 },
+        controls: { kind: "editable", reset: { kind: "available" } },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: 20 },
+          provenance: { kind: "own" },
+        },
+      },
     });
     expect(price.sources).toEqual([]);
     expect(price.resolutionEvidence?.contributors?.[0]?.chain.rows[0]?.id).toBe(
@@ -879,7 +921,7 @@ describe("derived field explanations against canonical records", () => {
       field: "unitPrice",
       surface: "detail",
     });
-    expect(unitPrice.value).toBe("$20.00/ea");
+    expect(fieldValueOf(unitPrice.envelope)).toBe("$20.00/ea");
     expect(unitPrice.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -900,7 +942,7 @@ describe("derived field explanations against canonical records", () => {
       field: "expenseCount",
       surface: "list",
     });
-    expect(count.value).toBe(1);
+    expect(fieldValueOf(count.envelope)).toBe(1);
     expect(count.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -952,14 +994,21 @@ describe("derived field explanations against canonical records", () => {
       surface: "detail",
     });
     expect(record.item).toMatchObject({
-      ownerLedgerPartyId: owner.output.id,
-      fieldResolutions: {
-        ownerLedgerPartyId: { mode: "explicit", value: owner.output.id },
+      fields: {
+        ownerLedgerPartyId: {
+          current: { assignment: { kind: "value", value: owner.output.id } },
+        },
       },
     });
-    expect(explanation.resolution).toMatchObject({
-      mode: "explicit",
-      value: owner.output.id,
+    expect(explanation.envelope).toMatchObject({
+      current: { assignment: { kind: "value", value: owner.output.id } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: owner.output.id },
+          provenance: { kind: "own" },
+        },
+      },
     });
     expect(explanation.resolutionEvidence?.chain.rows[0]).toMatchObject({
       title: expect.stringMatching(/^This /),
@@ -994,7 +1043,7 @@ describe("derived field explanations against canonical records", () => {
     const linkedExpenses = result.sources.filter(
       (source) => source.entity?.entityKind === "expense",
     );
-    expect(result.value).toBe(31);
+    expect(fieldValueOf(result.envelope)).toBe(31);
     expect(linkedExpenses.length).toBeGreaterThan(0);
     expect(linkedExpenses.length).toBeLessThan(31);
     expect(result.truncated).toBe(true);
@@ -1037,10 +1086,18 @@ describe("derived field explanations against canonical records", () => {
       field: "itemizationExpectation",
       surface: "list",
     });
-    expect(explanation.resolution).toMatchObject({
-      mode: "allocated",
-      storedValue: "required",
-      value: "not_expected",
+    expect(explanation.envelope).toMatchObject({
+      current: {
+        assignment: { kind: "value", value: "required" },
+        controls: { kind: "readonly", reason: "allocated" },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: "not_expected" },
+          provenance: { kind: "allocated" },
+        },
+      },
     });
     expect(explanation.resolutionEvidence?.chain.rows[1]).toMatchObject({
       trailing: "Expected",
@@ -1080,10 +1137,7 @@ describe("derived field explanations against canonical records", () => {
         surface: "list",
       });
     const unlinked = await explain();
-    expect(unlinked.resolution).toMatchObject({
-      value: "not_expected",
-      source: "spending category policy",
-    });
+    expect(fieldValueOf(unlinked.envelope)).toBe("not_expected");
     expect(
       unlinked.resolutionEvidence?.chain.rows.find(
         (row) => row.title === "Linked Purchase policies",
@@ -1107,9 +1161,15 @@ describe("derived field explanations against canonical records", () => {
       amount: 1,
     });
     const single = await explain();
-    expect(single.resolution).toMatchObject({
-      value: "required",
-      sourceEntity: { entityId: purchase.shortcode },
+    expect(single.envelope.result).toMatchObject({
+      kind: "live",
+      decision: {
+        outcome: { kind: "value", value: "required" },
+        provenance: {
+          kind: "inherited",
+          source: { entityId: purchase.shortcode },
+        },
+      },
     });
     expect(
       single.resolutionEvidence?.chain.rows.find(
@@ -1135,9 +1195,12 @@ describe("derived field explanations against canonical records", () => {
       amount: 1,
     });
     const multiple = await explain();
-    expect(multiple.resolution).toMatchObject({
-      value: "required",
-      sourceEntity: null,
+    expect(multiple.envelope.result).toMatchObject({
+      kind: "live",
+      decision: {
+        outcome: { kind: "value", value: "required" },
+        provenance: { kind: "default", source: null },
+      },
     });
     expect(
       multiple.resolutionEvidence?.chain.rows.find(
@@ -1152,10 +1215,15 @@ describe("derived field explanations against canonical records", () => {
       sql`UPDATE "FinancialTransaction" SET "itemizationExpectation"=${itemizationExpectation.enum.unknown} WHERE id=${transaction.id}`,
     );
     const overridden = await explain();
-    expect(overridden.resolution).toMatchObject({
-      value: "unknown",
-      fallbackValue: "required",
-      source: "transaction override",
+    expect(overridden.envelope).toMatchObject({
+      current: { assignment: { kind: "value", value: "unknown" } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: "unknown" },
+          provenance: { kind: "own" },
+        },
+      },
     });
     expect(
       overridden.resolutionEvidence?.chain.rows.find(
@@ -1177,10 +1245,15 @@ describe("derived field explanations against canonical records", () => {
       bookingTransactionCode: transaction.shortcode,
     });
     const reimbursed = await explain();
-    expect(reimbursed.resolution).toMatchObject({
-      mode: "allocated",
-      value: "not_expected",
-      fallbackValue: "not_expected",
+    expect(reimbursed.envelope).toMatchObject({
+      current: { controls: { kind: "readonly", reason: "allocated" } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: "not_expected" },
+          provenance: { kind: "allocated" },
+        },
+      },
     });
     expect(
       reimbursed.resolutionEvidence?.chain.rows.find(
@@ -1233,7 +1306,7 @@ describe("derived field explanations against canonical records", () => {
       field: "itemizationExpectation",
       surface: "list",
     });
-    expect(explanation.resolution?.value).toBe("required");
+    expect(fieldValueOf(explanation.envelope)).toBe("required");
     expect(explanation.resolutionEvidence?.outcome).toBe("resolved");
     expect(explanation.resolutionEvidence?.contributors).toHaveLength(20);
     expect(explanation.truncated).toBe(true);
@@ -1259,10 +1332,15 @@ describe("derived field explanations against canonical records", () => {
       field: "trade",
       surface: "detail",
     });
-    expect(explanation.resolution).toMatchObject({
-      mode: "explicit",
-      storedValue: "electrical",
-      value: "electrical",
+    expect(explanation.envelope).toMatchObject({
+      current: { assignment: { kind: "value", value: "electrical" } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: "electrical" },
+          provenance: { kind: "own" },
+        },
+      },
     });
     expect(explanation.sources).toEqual([]);
   });
@@ -1283,11 +1361,18 @@ describe("derived field explanations against canonical records", () => {
       field: "defaultTrade",
       surface: "detail",
     });
-    expect(explanation.resolution).toMatchObject({
-      mode: "inherit",
-      storedValue: null,
-      value: "building",
-      sourceEntity: { entityKind: "project", entityId: parent.shortcode },
+    expect(explanation.envelope).toMatchObject({
+      current: { assignment: { kind: "inherit" } },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: "building" },
+          provenance: {
+            kind: "inherited",
+            source: { entityKind: "project", entityId: parent.shortcode },
+          },
+        },
+      },
     });
     expect(explanation.sources).toEqual([]);
   });

@@ -12,10 +12,10 @@ import {
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
-  ProductCategory,
   ProductFilters,
   ProductMovementKind,
 } from "@cubby/schemas/product";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { countLabel } from "@cubby/shared/pluralize";
 import {
   and,
@@ -99,7 +99,7 @@ export type ProductMovementProduct = {
   id: ProductShortcode;
   name: string;
   brandName: string | null;
-  category: ProductCategory | null;
+  category: RawProductCategorySummary | null;
   coverImageUrl: string | null;
   usedOnProjects: MovementProject[];
   ownershipIntervals: ProductOwnershipInterval[];
@@ -128,7 +128,7 @@ type CohortProduct = {
   id: ProductShortcode;
   name: string;
   brandName: string | null;
-  category: ProductCategory | null;
+  category: RawProductCategorySummary | null;
   coverImageUrl: string | null;
 };
 

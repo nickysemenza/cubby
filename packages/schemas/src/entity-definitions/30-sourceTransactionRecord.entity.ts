@@ -765,8 +765,8 @@ export default defineEntity({
       export: "sourceTransactionRecordUpdateData",
     },
     output: {
-      module: "@cubby/schemas/source-transaction-record",
-      export: "sourceTransactionRecordOut",
+      module: "@cubby/schemas/source-transaction-record-raw-read",
+      export: "rawSourceTransactionRecordOut",
     },
   },
   storage: {

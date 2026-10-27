@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -53,14 +54,17 @@ export function useShortcodeLookups(shortcodes: string[]) {
       shortcode: d.id,
       name: d.name,
       entityKind: "location" as const,
-      locationType: d.type ?? undefined,
+      locationType: fieldValueOf(d.fields.type) ?? undefined,
       parentName: d.parentName,
     }));
     const prods = productData.map((d) => ({
       shortcode: d.id,
       name: d.name,
       entityKind: "product" as const,
-      productCategory: d.category,
+      productCategory: d.category
+        ? { ...d.category, path: fieldValueOf(d.category.fields.path) ?? [] }
+        : null,
+      productFeature: fieldValueOf(d.fields.categoryFeature),
     }));
     return [...locs, ...prods];
   }, [locationData, productData]);

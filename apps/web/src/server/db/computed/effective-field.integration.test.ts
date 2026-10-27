@@ -1,10 +1,12 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
-import { getDb } from "~/server/db/helpers";
-import { task as taskTable } from "~/server/db/schema";
+import { getDb, unwrapDb } from "~/server/db/helpers";
+import { project as projectTable, task as taskTable } from "~/server/db/schema";
 import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
 import { listProductCategories } from "~/server/domains/product-category/repo/product-category";
 import { productList } from "~/server/domains/product/repo/crud";
@@ -20,6 +22,14 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+
+import {
+  effectiveFieldSql,
+  inheritedFieldDecisionSchema,
+  inheritedFieldDecisionSql,
+  inheritedFieldSql,
+  inheritedSourceSql,
+} from "./effective-field";
 
 const page = { pageIndex: 0, pageSize: 100 };
 
@@ -82,6 +92,154 @@ describe("inherited values", () => {
     const projects: ProjectRow[] = [p1, p2, p3, p4, p5, p6, p7];
     return { a, b, p1, p2, p3, p4, p5, p6, p7, projects };
   };
+
+  it("previews clearing only local intent and distinguishes an ancestor None from no decision", async () => {
+    const w = await projectWorld();
+    const read = async (id: string) => {
+      const row = { id: sql`${id}::uuid` };
+      const result = await unwrapDb(db()).execute(sql`SELECT
+        ${inheritedFieldDecisionSql("project", "assigneeId", row)} AS decision,
+        ${inheritedFieldSql("project", "assigneeId", row)} AS fallback,
+        ${inheritedSourceSql("project", "assigneeId", row)} AS source,
+        ${effectiveFieldSql("project", "assigneeId", row)} AS effective`);
+      const first = result.rows[0];
+      if (!first) throw new Error("Expected the selected project");
+      return z
+        .object({
+          decision: inheritedFieldDecisionSchema,
+          fallback: z.uuid().nullable(),
+          source: z.object({ position: z.number(), id: z.uuid() }).nullable(),
+          effective: z.uuid().nullable(),
+        })
+        .parse(first);
+    };
+    const own = await read(w.p7.id);
+    expect(own.effective).toBe(w.b.id);
+    expect(own.decision).toEqual({
+      kind: "value",
+      value: w.a.id,
+      source: { entityKind: "project", entityId: w.p1.id },
+    });
+    expect(own.fallback).toBe(w.a.id);
+    expect(own.source).toMatchObject({ position: 1, id: w.p1.id });
+    expect((await read(w.p5.id)).decision).toEqual({
+      kind: "empty",
+      reason: "explicit_none",
+      source: { entityKind: "project", entityId: w.p3.id },
+    });
+    expect((await read(w.p4.id)).decision).toEqual({
+      kind: "empty",
+      reason: "unset",
+      source: null,
+    });
+    await getDb(db())
+      .update(projectTable)
+      .set({ assigneeId: null, assigneeMode: "inherit" })
+      .where(eq(projectTable.id, w.p7.id));
+    expect((await read(w.p7.id)).effective).toBe(own.fallback);
+    expect((await read(w.p1.id)).effective).toBe(w.a.id);
+  });
+
+  it("retains the terminal Project identity through a Task's effective Project path", async () => {
+    const w = await projectWorld();
+    const task = await insertWithShortcode(db(), "task", {
+      name: "Synthetic preview task",
+      projectId: w.p6.id,
+      projectMode: "explicit",
+      assigneeId: w.b.id,
+      assigneeMode: "explicit",
+      trade: "other",
+    });
+    const row = { id: sql`${task.id}::uuid` };
+    const result = await unwrapDb(db()).execute(sql`SELECT
+      ${inheritedFieldDecisionSql("task", "assigneeId", row)} AS decision,
+      ${inheritedFieldSql("task", "assigneeId", row)} AS fallback,
+      ${inheritedSourceSql("task", "assigneeId", row)} AS source`);
+    const first = result.rows[0];
+    if (!first) throw new Error("Expected the selected task");
+    expect(inheritedFieldDecisionSchema.parse(first.decision)).toEqual({
+      kind: "value",
+      value: w.a.id,
+      source: { entityKind: "project", entityId: w.p1.id },
+    });
+    expect(first.fallback).toBe(w.a.id);
+    expect(first.source).toMatchObject({ position: 2, id: w.p1.id });
+    await getDb(db())
+      .update(taskTable)
+      .set({ projectId: w.p5.id })
+      .where(eq(taskTable.id, task.id));
+    const none = await unwrapDb(db()).execute(sql`SELECT
+      ${inheritedFieldDecisionSql("task", "assigneeId", row)} AS decision`);
+    expect(inheritedFieldDecisionSchema.parse(none.rows[0]?.decision)).toEqual({
+      kind: "empty",
+      reason: "explicit_none",
+      source: { entityKind: "project", entityId: w.p3.id },
+    });
+  });
+
+  it("keeps an unassigned array default distinct from an ancestor's explicitly empty array", async () => {
+    const w = await projectWorld();
+    const read = async (id: string) => {
+      const result = await unwrapDb(db()).execute(sql`SELECT
+        ${inheritedFieldDecisionSql("project", "locations", { id: sql`${id}::uuid` })} AS decision`);
+      return inheritedFieldDecisionSchema.parse(result.rows[0]?.decision);
+    };
+    expect(await read(w.p4.id)).toEqual({
+      kind: "value",
+      value: [],
+      source: null,
+    });
+    expect(await read(w.p5.id)).toEqual({
+      kind: "value",
+      value: [],
+      source: { entityKind: "project", entityId: w.p3.id },
+    });
+    expect(await read(w.p7.id)).toEqual({
+      kind: "value",
+      value: ["Inherit garage"],
+      source: { entityKind: "project", entityId: w.p1.id },
+    });
+  });
+
+  it("refuses a cardholder preview on a bank account while preserving the member source on a card", async () => {
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic preview account owner",
+      kind: "member",
+    });
+    const card = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "credit_card", network: null },
+      ledgerPartyId: owner.output.id,
+    });
+    const bank = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "bank_account", accountType: "checking" },
+      ledgerPartyId: owner.output.id,
+    });
+    const result = await unwrapDb(db()).execute(sql`SELECT f.shortcode,
+      ${inheritedFieldDecisionSql("financialAccount", "primaryCardholderId", "f")} AS decision,
+      ${inheritedFieldSql("financialAccount", "primaryCardholderId", "f")} AS fallback
+      FROM "FinancialAccount" f WHERE f.shortcode IN (${card.output.id}, ${bank.output.id})`);
+    const rows = new Map(
+      result.rows.map((row) => [
+        row.shortcode,
+        {
+          decision: inheritedFieldDecisionSchema.parse(row.decision),
+          fallback: row.fallback,
+        },
+      ]),
+    );
+    expect(rows.get(bank.output.id)?.decision).toEqual({
+      kind: "empty",
+      reason: "not_applicable",
+      source: null,
+    });
+    const selected = rows.get(card.output.id);
+    expect(selected?.fallback).toEqual(expect.any(String));
+    expect(selected?.decision).toMatchObject({
+      kind: "value",
+      value: selected?.fallback,
+      source: { entityKind: "ledgerParty", entityId: selected?.fallback },
+    });
+  });
 
   it("filters projects by their inherited assignee and locations", async () => {
     const w = await projectWorld();

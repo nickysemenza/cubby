@@ -1,4 +1,7 @@
-import type { RecipeListItem } from "@cubby/schemas/recipe";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
+type RecipeListItem = ListRowOf<"recipe">;
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -85,10 +88,10 @@ export const recipeListOverride = defineListOverride<
           data: { tags: nextTags },
         });
       };
-      const tagsCellDataDef = tagsCellData<RecipeListItem>(
-        (row) => row.tags ?? null,
-        saveTags,
-      );
+      const tagsCellDataDef = tagsCellData<RecipeListItem>((row) => {
+        const effectiveRowTags = fieldValueOf(row.fields.tags);
+        return effectiveRowTags ?? null;
+      }, saveTags);
       // Yield falls back to inline-editable `servings` only when the recipe
       // has no structured yield; copy/paste is available on exactly those rows.
       const saveServings = async (
@@ -107,7 +110,10 @@ export const recipeListOverride = defineListOverride<
       };
       const servingsCellDataDef = numberCellData<RecipeListItem>(
         "number",
-        (row) => (row.yield ? null : (row.servings ?? null)),
+        (row) => {
+          const effectiveRowServings = fieldValueOf(row.fields.servings);
+          return row.yield ? null : (effectiveRowServings ?? null);
+        },
         saveServings,
       );
       const renderTags = (tags: string[] | null) => {
@@ -122,7 +128,7 @@ export const recipeListOverride = defineListOverride<
       };
       return createCubbyColumnCollection<RecipeListItem>((add) => {
         add(
-          columnHelper.accessor("tags", {
+          columnHelper.accessor((row) => fieldValueOf(row.fields.tags) ?? [], {
             id: "tags",
             header: "Tags",
             enableSorting: true,
@@ -135,7 +141,7 @@ export const recipeListOverride = defineListOverride<
               const recipe = info.row.original;
               return (
                 <EditableTagsCell
-                  value={recipe.tags ?? null}
+                  value={fieldValueOf(recipe.fields.tags) ?? null}
                   renderValue={renderTags}
                   clipboard={specFromCellData(tagsCellDataDef, recipe)}
                   onSave={(nextTags) => saveTags(recipe, nextTags)}
@@ -146,35 +152,41 @@ export const recipeListOverride = defineListOverride<
         );
         // Accessor (not display) so it sorts server-side on `servings`.
         add(
-          columnHelper.accessor((row) => row.servings ?? undefined, {
-            id: "servings",
-            meta: attachCubbyColumnMeta({
-              numeric: true,
-              className: "w-24",
-              mobile: { slot: "trailing", priority: 5, interactive: true },
-              cellData: servingsCellDataDef,
-            }),
-            cell: (info) => {
-              const recipe = info.row.original;
-              // A structured yield is owned by the detail page's editor.
-              if (recipe.yield) return formatYield(recipe.yield);
-              return (
-                <EditableCell
-                  value={recipe.servings ?? null}
-                  config={{ type: "number" }}
-                  clipboard={specFromCellData(servingsCellDataDef, recipe)}
-                  renderValue={(servings) =>
-                    servings == null ? (
-                      <NoneValue />
-                    ) : (
-                      countLabel(servings, "serving")
-                    )
-                  }
-                  onSave={(newValue) => saveServings(recipe, newValue)}
-                />
-              );
+          columnHelper.accessor(
+            (row) => {
+              const effectiveRowServings = fieldValueOf(row.fields.servings);
+              return effectiveRowServings ?? undefined;
             },
-          }),
+            {
+              id: "servings",
+              meta: attachCubbyColumnMeta({
+                numeric: true,
+                className: "w-24",
+                mobile: { slot: "trailing", priority: 5, interactive: true },
+                cellData: servingsCellDataDef,
+              }),
+              cell: (info) => {
+                const recipe = info.row.original;
+                // A structured yield is owned by the detail page's editor.
+                if (recipe.yield) return formatYield(recipe.yield);
+                return (
+                  <EditableCell
+                    value={fieldValueOf(recipe.fields.servings)}
+                    config={{ type: "number" }}
+                    clipboard={specFromCellData(servingsCellDataDef, recipe)}
+                    renderValue={(servings) =>
+                      servings == null ? (
+                        <NoneValue />
+                      ) : (
+                        countLabel(servings, "serving")
+                      )
+                    }
+                    onSave={(newValue) => saveServings(recipe, newValue)}
+                  />
+                );
+              },
+            },
+          ),
         );
       });
       // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable

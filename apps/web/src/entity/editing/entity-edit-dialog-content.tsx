@@ -1,6 +1,10 @@
 import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import {
+  publicImageUrl,
+  publicImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import { getErrorMessage } from "@cubby/shared";
 import { isEqual } from "es-toolkit";
 import {
@@ -66,23 +70,26 @@ const NO_PURPOSES: ImagePurposes = {};
 const NO_IMAGES: readonly PendingImage[] = [];
 const NO_FIELDS: readonly string[] = [];
 /**
- * A gallery entity's `record.images` in the shape the upload block edits. A
+ * A gallery entity's selected images in the shape the upload block edits. A
  * product image carries `purpose: null` for "no explicit role", which the
  * block spells as an absent `purpose`.
  */
 const recordImagesSchema = z
   .array(
-    z
-      .object({
+    publicImageUrlSummary
+      .extend({
         id: z.string(),
-        url: z.string(),
         filename: z.string(),
         key: z.string(),
         purpose: z.enum(["item", "label"]).nullish(),
       })
-      .transform(({ purpose, ...image }): PendingImage =>
-        purpose ? { ...image, purpose } : image,
-      ),
+      .transform(({ purpose, ...image }): PendingImage => ({
+        id: image.id,
+        url: publicImageUrl(image) ?? "",
+        filename: image.filename,
+        key: image.key,
+        ...(purpose ? { purpose } : {}),
+      })),
   )
   .catch([]);
 
@@ -171,7 +178,9 @@ export function EntityEditorImages<E extends EditableEntity>({
   );
   // The record's own gallery only matters for an update; a create has none.
   const recordImages = useStableValue(
-    operation === "update" ? recordImagesSchema.parse(record?.images) : [],
+    operation === "update" && record
+      ? readRecordField(record, "images", recordImagesSchema)
+      : [],
   );
   const media = presentation.media?.({
     form,
@@ -320,7 +329,7 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   // generic photo-capture field below the presentation's own fields; no
   // per-entity Fields component knows about images. An update roster that
   // also carries `removeImageIds` / `imageOrder` lets the existing gallery be
-  // trimmed / reordered; the `imageOrder` field is seeded from `record.images`
+  // trimmed / reordered; the `imageOrder` field is seeded from the selected image field
   // and only reaches the payload when the order changed (`definitions.ts`).
   // A roster with `pendingImagePurposes` (attachment roles) sends the role
   // of each pending image and any role correction on an existing one.

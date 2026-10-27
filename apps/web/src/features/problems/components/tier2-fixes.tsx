@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { ProblemItem } from "@cubby/schemas/problems";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQueries } from "@tanstack/react-query";
@@ -316,7 +317,12 @@ export function DuplicateTransactionRefFix({
             if (row.id === keepId) continue;
             await update.mutateAsync({
               id: row.id,
-              data: { sourceRefs: withoutSourceRef(row.sourceRefs, variant) },
+              data: {
+                sourceRefs: withoutSourceRef(
+                  fieldValueOf(row.fields.sourceRefs) ?? [],
+                  variant,
+                ),
+              },
             });
           }
           toast.success("Reference removed from the other transactions");

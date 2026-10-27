@@ -1,7 +1,9 @@
-import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
+import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
+import type { ExpenseFilters } from "@cubby/schemas/project";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useDeferredFilterOptions } from "~/entity/hooks/use-deferred-filter-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
@@ -41,7 +43,8 @@ const FACET_COLUMN_IDS = {
 } as const;
 
 const rowClassName = (row: { original: ExpenseOut }) =>
-  row.original.fieldResolutions?.projectId?.mode === "allocated"
+  fieldDecisionOf(row.original.fields.projectId)?.provenance?.kind ===
+  "allocated"
     ? "bg-[var(--row-zebra)] text-muted-foreground"
     : undefined;
 
@@ -177,3 +180,5 @@ export const expenseListOverride = defineListOverride<
     };
   },
 });
+
+type ExpenseOut = ListRowOf<"expense">;

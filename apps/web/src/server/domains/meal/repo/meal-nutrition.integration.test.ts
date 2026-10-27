@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   type LedgerPartyShortcode,
   type MealShortcode,
@@ -111,7 +112,11 @@ describe("meal nutrition service", () => {
     const [sourceMeal, targetMeal, eater, labelledProduct, recipe] =
       await Promise.all([
         seedMeal("2026-09-14", "Cooked lunch"),
-        seedMeal("2026-09-14", "Dinner leftovers"),
+        insertWithShortcode(ctx.db, "meal", {
+          date: "2026-09-14",
+          name: "Dinner leftovers",
+          mealType: "dinner",
+        }),
         seedParty("Mixed eater"),
         seedProduct("Labelled yogurt", {
           kcal: 100,
@@ -179,6 +184,14 @@ describe("meal nutrition service", () => {
 
     const day = await getMealNutrition(ctx.db, { date: "2026-09-14" }, noUsda);
     expect(day.meals).toHaveLength(2);
+    const dinner = day.meals.find((meal) => meal.id === targetMeal.shortcode)!;
+    expect(dinner).not.toHaveProperty("mealType");
+    expect(fieldValueOf(dinner.fields.mealType)).toBe("dinner");
+    for (const person of day.people) {
+      for (const { meal } of [...person.meals, ...person.foods]) {
+        expect(meal).toEqual(day.meals.find((item) => item.id === meal.id));
+      }
+    }
     expect(day.people).toHaveLength(1);
     const person = day.people[0]!;
     expect(person.foods.map((food) => food.sourceKind).sort()).toEqual([

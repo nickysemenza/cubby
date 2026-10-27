@@ -1,4 +1,5 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
+import { fieldEmptyReason } from "@cubby/schemas/field-envelope";
 import type { FieldResolution } from "@cubby/schemas/field-resolution";
 import {
   fieldResolutionSchema,
@@ -264,6 +265,7 @@ export function expenseSpendingCategoryResolutionSql(
         WHEN f.purchase_category_id IS NOT NULL AND ${principal} THEN CASE WHEN f.purchase_category_origin='legacy' THEN 'legacy purchase default; provenance needs review' ELSE 'purchase default' END
         WHEN f.merchant_id IS NOT NULL THEN 'vendor default'
         WHEN f.mapping_mode='blocked' THEN 'product category blocked' ELSE 'none' END,
+      'emptyReason',CASE WHEN c.id IS NULL AND f.mapping_mode=${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.blocked)} THEN ${sqlEnumConstant(fieldEmptyReason, fieldEmptyReason.enum.blocked)} ELSE ${sqlEnumConstant(fieldEmptyReason, fieldEmptyReason.enum.unset)} END,
       'sourceEntity',${expenseCategorySourceSql()},
       'matchesFallback',c.id IS NOT DISTINCT FROM fallback.id,'canReset',f.override_id IS NOT NULL)
     FROM chosen f LEFT JOIN ${categoryCatalog} c ON c.id=f.category_id

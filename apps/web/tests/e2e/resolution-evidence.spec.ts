@@ -66,8 +66,14 @@ test("explains allocated trades with expandable contributor precedence", async (
   await expect(panel.getByText("Mixed", { exact: true })).toBeVisible();
   await expect(panel.getByText(/No value was determined/)).toHaveCount(0);
   await expect(
-    panel.getByRole("heading", { name: "Resolution order", exact: true }),
+    panel.getByRole("heading", { name: "Contributing records", exact: true }),
   ).toBeVisible();
+  await expect(
+    panel.getByRole("list", { name: "Resolution order", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    panel.getByText("2 allocation shares", { exact: true }),
+  ).toHaveCount(1);
   const contributor = panel
     .locator("div")
     .filter({
@@ -128,11 +134,13 @@ test("shows owner rollup evidence once without nested wire fields", async ({
   ).toBeVisible();
   await expect(
     panel
+      .getByRole("region", { name: "Effective result" })
       .getByText("Synthetic owner evidence owner", { exact: true })
       .filter({ visible: true }),
   ).toHaveCount(1);
   await expect(
     panel
+      .getByRole("region", { name: "Effective result" })
       .getByText("Synthetic owner evidence other", { exact: true })
       .filter({ visible: true }),
   ).toHaveCount(1);

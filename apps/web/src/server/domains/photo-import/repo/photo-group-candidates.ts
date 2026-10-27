@@ -3,12 +3,10 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   PhotoGroupProposal,
   PhotoGroupProposalList,
-  photoRunCandidatesResponse,
 } from "@cubby/schemas/photo-import-run";
 import { getErrorMessage } from "@cubby/shared";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
-import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
@@ -142,7 +140,7 @@ export async function photoRunCandidates(
   actor: ActorContext,
   compareVariants: ProductVariantComparator,
   groupKeys?: readonly string[],
-): Promise<z.infer<typeof photoRunCandidatesResponse>> {
+) {
   const proposals = groupKeys
     ? review.proposals.filter((proposal) =>
         groupKeys.includes(proposal.groupKey),

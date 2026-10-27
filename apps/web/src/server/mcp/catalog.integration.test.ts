@@ -1,3 +1,5 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
 import { recordShipmentEvidenceInput } from "@cubby/schemas/shipment-evidence";
@@ -24,6 +26,7 @@ import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessm
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
@@ -363,7 +366,7 @@ describe("MCP catalog", () => {
         action: "find_or_create_by_upc",
         upc: "012345678905",
       }),
-    ).toMatchObject({ id: productId });
+    ).toMatchObject({ product: { id: productId } });
     // Exercise a known exception-eligible gap rather than whichever required
     // field happens to be first as the quality registry grows.
     const purchaseId = z
@@ -391,24 +394,27 @@ describe("MCP catalog", () => {
         lineBasis: "allocation",
       },
     });
+    await drainStoredDerived(ctx.db);
     const detail = await call("entity_read", {
       action: "get",
       entity: "purchase",
       id: purchaseId,
       resultDetail: "full",
     });
-    const [gap] = z
+    const { item } = z
       .object({
         item: z.object({
-          dataQuality: z.object({
-            gaps: z.array(z.object({ check: z.string(), kind: z.string() })),
+          fields: entityFieldEnvelopeSchemas.purchase.detail.shape.fields.pick({
+            dataQuality: true,
           }),
         }),
       })
-      .parse(detail)
-      .item.dataQuality.gaps.filter(
-        (candidate) => candidate.check === "purchase_itemization",
-      );
+      .parse(detail);
+    const quality = fieldValueOf(item.fields.dataQuality);
+    if (!quality) throw new Error("Purchase quality result missing");
+    const [gap] = quality.gaps.filter(
+      (candidate) => candidate.check === "purchase_itemization",
+    );
     expect(gap).toBeDefined();
     expect(
       await call("data_exception", {
@@ -871,7 +877,18 @@ describe("MCP catalog", () => {
     );
     expect(readback.isError).not.toBe(true);
     expect(readback.structuredContent).toMatchObject({
-      item: { cost: 12, productId: product.shortcode },
+      item: {
+        cost: 12,
+        fields: {
+          productId: {
+            result: {
+              decision: {
+                outcome: { kind: "value", value: product.shortcode },
+              },
+            },
+          },
+        },
+      },
     });
   });
 

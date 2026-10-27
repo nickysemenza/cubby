@@ -1,10 +1,10 @@
 import type { AssessmentFamily } from "@cubby/schemas/assessment";
-import type { RunOut } from "@cubby/schemas/run";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
 import { entityListHref } from "~/entity/entity-list-href";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
@@ -386,3 +386,5 @@ export function RunDiagnostics({ record }: { record: RunOut }) {
     </div>
   );
 }
+
+type RunOut = DetailRecordOf<"run">;

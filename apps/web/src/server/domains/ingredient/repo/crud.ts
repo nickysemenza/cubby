@@ -11,11 +11,11 @@ import {
   parseShortcodeFor,
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import type {
-  IngredientWithRecipesAndProductOut,
+import {
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
+import type { RawIngredientWithRecipesAndProduct as IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-raw-read";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 

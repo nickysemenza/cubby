@@ -1,19 +1,13 @@
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type { LocationType } from "@cubby/schemas/location";
 import pluralize from "pluralize";
 
 /** A homogeneous direct-child set earns a useful physical label. */
 export function locationChildGroupLabel(
-  children: ReadonlyArray<Pick<InfLocation, "type">>,
+  types: readonly (LocationType | null)[],
 ): string {
-  if (children.length === 0) return "Locations";
-  const types = new Set(
-    children
-      .map((child) => child.type)
-      .filter((type): type is LocationType => type != null),
-  );
-  if (types.size !== 1 || children.some((child) => child.type == null)) {
+  if (types.length === 0) return "Locations";
+  const [first] = types;
+  if (first == null || types.some((type) => type !== first))
     return "Compartments";
-  }
-  const [type] = types;
-  return pluralize(type ?? "compartment", children.length);
+  return pluralize(first, types.length);
 }

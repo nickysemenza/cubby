@@ -98,7 +98,7 @@ export const locationListOverride = defineListOverride<
               columnHelper,
               "inventoryEntries",
               "product",
-              (e) => e.product,
+              (e: LocationListItemOut["inventoryEntries"][number]) => e.product,
               {
                 layout: "inline",
                 columnGroup: "Stock",

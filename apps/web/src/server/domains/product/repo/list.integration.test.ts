@@ -16,6 +16,7 @@ import { location, product } from "~/server/db/schema";
 import { createIngredient } from "~/server/domains/ingredient/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -165,6 +166,7 @@ describe("product list price footer", () => {
       }),
     );
 
+    await drainStoredDerived(ctx.db);
     const filteredSum = await loadProductPriceSum(
       ctx.db,
       and(
@@ -280,6 +282,7 @@ describe("product list price footer", () => {
       inArray(product.id, [leaf.entityId, other.entityId]),
       notDeleted(product),
     );
+    await drainStoredDerived(ctx.db);
     expect(await loadProductPriceSum(ctx.db, filtered)).toBeCloseTo(9.75, 2);
 
     await getDb(ctx.db).execute(sql`UPDATE "EntityLink"
@@ -290,6 +293,8 @@ describe("product list price footer", () => {
     const after = await loadProductPricing(ctx.db, products);
     expect(after.get(leaf.entityId)?.derivedPrice).toBe(10);
     expect(after.get(other.entityId)?.effectivePrice).toBe(2.25);
+    expect(await loadProductPriceSum(ctx.db, filtered)).toBeCloseTo(9.75, 2);
+    await drainStoredDerived(ctx.db);
     expect(await loadProductPriceSum(ctx.db, filtered)).toBeCloseTo(12.25, 2);
   });
 });

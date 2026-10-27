@@ -1,6 +1,10 @@
-import { infLocation } from "@cubby/schemas/location";
-import { plantingOut } from "@cubby/schemas/planting";
-import { projectOut } from "@cubby/schemas/project";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
+const infLocation = entityFieldEnvelopeSchemas.location.detail;
+const plantingOut = entityFieldEnvelopeSchemas.planting.detail;
+const projectOut = entityFieldEnvelopeSchemas.project.detail;
+
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,16 +16,20 @@ import { mock } from "~/lib/test/mock-schema";
 import { PreviewQuery } from "../preview/preview-query";
 import { manifestPreviewCard } from "./entity-preview-content";
 
-const withMedia = <T,>(value: T, url?: string) => ({
+const withMedia = <T extends { fields: { displayImages: unknown } }>(
+  value: T,
+  url?: string,
+) => ({
   ...value,
-  derived: {},
-  displayImages: url
-    ? [{ id: testShortcode("image", "IMG-PREVIEW"), url }]
-    : [],
+  fields: {
+    ...value.fields,
+    displayImages: fieldValueFixture(
+      entityFieldEnvelopeSchemas.project.detail.shape.fields.shape
+        .displayImages,
+      url ? [{ id: testShortcode("image", "IMG-PREVIEW"), url }] : [],
+    ),
+  },
   attachments: [],
-  redirectedFrom: null,
-  previousShortcodes: [],
-  sources: [],
 });
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -134,9 +142,17 @@ describe("manifestPreviewCard", () => {
     const tomato = mock(plantingOut, {
       seed: 8,
       overrides: {
+        fields: {
+          status: fieldValueFixture(
+            entityFieldEnvelopeSchemas.planting.detail.shape.fields.shape[
+              "status"
+            ],
+            "growing",
+          ),
+        },
         locationId: testShortcode("location", "LOC-4K7M"),
         locationName: "Raised bed 2",
-        status: "growing",
+
         displayName: "Tomato · Cherokee Purple",
       },
     });
@@ -156,9 +172,17 @@ describe("manifestPreviewCard", () => {
     const tomato = mock(plantingOut, {
       seed: 8,
       overrides: {
+        fields: {
+          status: fieldValueFixture(
+            entityFieldEnvelopeSchemas.planting.detail.shape.fields.shape[
+              "status"
+            ],
+            "growing",
+          ),
+        },
         locationId: testShortcode("location", "LOC-4K7M"),
         locationName,
-        status: "growing",
+
         displayName: "Tomato · Cherokee Purple",
       },
     });
@@ -181,7 +205,18 @@ describe("manifestPreviewCard", () => {
   it("shows exactly the declared preview facts", () => {
     const project = mock(projectOut, {
       seed: 3,
-      overrides: { costEstimate: 500, spent: 120, taskProgress: "3/5" },
+      overrides: {
+        fields: {
+          taskProgress: fieldValueFixture(
+            entityFieldEnvelopeSchemas.project.detail.shape.fields.shape[
+              "taskProgress"
+            ],
+            "3/5",
+          ),
+        },
+        costEstimate: 500,
+        spent: 120,
+      },
     });
 
     const card = manifestPreviewCard("project", withMedia(project));
@@ -197,14 +232,43 @@ describe("manifestPreviewCard", () => {
   it("leads with the cover image and links the breadcrumb parent", () => {
     const parent = mock(infLocation, {
       seed: 1,
-      overrides: { name: "Garage", type: "room", product: null },
+      overrides: {
+        fields: {
+          type: fieldValueFixture(
+            entityFieldEnvelopeSchemas.location.detail.shape.fields.shape[
+              "type"
+            ],
+            "room",
+          ),
+          product: fieldValueFixture(
+            entityFieldEnvelopeSchemas.location.detail.shape.fields.shape[
+              "product"
+            ],
+            null,
+          ),
+        },
+        name: "Garage",
+      },
     });
     const bin = mock(infLocation, {
       seed: 2,
       overrides: {
+        fields: {
+          type: fieldValueFixture(
+            entityFieldEnvelopeSchemas.location.detail.shape.fields.shape[
+              "type"
+            ],
+            "area",
+          ),
+          product: fieldValueFixture(
+            entityFieldEnvelopeSchemas.location.detail.shape.fields.shape[
+              "product"
+            ],
+            null,
+          ),
+        },
         name: "garbage bin area",
-        type: "area",
-        product: null,
+
         parent,
       },
     });

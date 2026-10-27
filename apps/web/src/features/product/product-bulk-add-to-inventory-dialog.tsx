@@ -1,3 +1,4 @@
+import type { Amount } from "@cubby/schemas/codec";
 /**
  * ProductBulkAddToInventoryDialog — stock one product or a whole selection at
  * one location.
@@ -18,8 +19,7 @@
  *   summing is how a re-run doubles a shelf, so every already-stocked row says
  *   what it will become.
  */
-
-import type { Amount } from "@cubby/schemas/codec";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   locationShortcode,
   type ProductShortcode,
@@ -193,10 +193,15 @@ export const ProductBulkAddToInventoryDialog: FC<
     refetch: () => Promise.all(stockPages.map((page) => page.refetch())),
   };
   const onHandByProductId = new Map<string, string>(
-    (stock.data ?? []).map((entry) => [
-      entry.product.id,
-      tryFormatAmount(entry.amount),
-    ]),
+    (stock.data ?? []).map((entry) => {
+      const effectiveEntryAmount = fieldValueOf(entry.fields.amount);
+      return [
+        entry.product.id,
+        effectiveEntryAmount
+          ? tryFormatAmount(effectiveEntryAmount)
+          : "Unknown",
+      ];
+    }),
   );
   const overAccounted = preview?.kitWarning ?? null;
   const amountDirty =

@@ -30,6 +30,7 @@ import type {
   KitMembershipPurchaseOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
+import type { RawProductList } from "@cubby/schemas/product-raw-read";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq, uniqBy } from "es-toolkit";
@@ -91,7 +92,9 @@ export async function listKitComponentRows(
   db: Database,
   parentProductIds: ProductId[],
   usdaClient?: UsdaFoodBatchPort,
-): Promise<KitComponentRowOut[]> {
+): Promise<
+  Array<Omit<KitComponentRowOut, "product"> & { product: RawProductList }>
+> {
   if (parentProductIds.length === 0) return [];
   const dbc = getDb(db);
 

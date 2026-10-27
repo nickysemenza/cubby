@@ -446,44 +446,49 @@ describe("persisted Suggestion sweeps", () => {
     expect(await productCategoryId(ctx.db, addition.id)).toBeNull();
   });
 
-  // Regression: a Vendor whose item-line expectation derives from its order
-  // evidence stores NULL, so the sweep sees a blank and treats a confident
-  // proposal as an Addition. The field is review-only, so it stays pending.
-  it("keeps a confident Vendor item-line proposal over a derived value pending", async () => {
-    const context = kernelCtx(ctx);
-    const vendor = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic online shop",
-      orderEvidence: "online_account",
-    });
-    const suggest = vi.fn(async () =>
-      suggestion("itemizationExpectation", {
-        value: "required",
-        label: "Expected",
-        probability: 0.97,
-      }),
-    );
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "vendor",
-        fields: ["itemizationExpectation"],
-        filters: { ids: [vendor.shortcode] },
-      },
-      { context, suggest },
-    );
-    expect(await runSuggestions(ctx.db, started.id)).toEqual([
-      expect.objectContaining({
-        kind: "addition",
-        status: "pending",
-        confidence: 0.97,
-      }),
-    ]);
-    const [stored] = await getDb(ctx.db)
-      .select({ value: vendorTable.itemizationExpectation })
-      .from(vendorTable)
-      .where(eq(vendorTable.id, vendor.id));
-    expect(stored?.value).toBeNull();
-  });
+  // Derived current values participate in equality; a different review-only proposal stays pending.
+  it.each([
+    { value: "required", expected: [] },
+    {
+      value: "not_expected",
+      expected: [{ kind: "correction", status: "pending", confidence: 0.97 }],
+    },
+  ])(
+    "compares Vendor item-line advice $value against its effective value",
+    async ({ value, expected }) => {
+      const context = kernelCtx(ctx);
+      const vendor = await insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic online shop",
+        orderEvidence: "online_account",
+      });
+      const suggest = vi.fn(async () =>
+        suggestion("itemizationExpectation", {
+          value,
+          label: "Expected",
+          probability: 0.97,
+        }),
+      );
+      const started = await startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "vendor",
+          fields: ["itemizationExpectation"],
+          filters: { ids: [vendor.shortcode] },
+        },
+        { context, suggest },
+      );
+      expect(
+        (await runSuggestions(ctx.db, started.id)).map(
+          ({ kind, status, confidence }) => ({ kind, status, confidence }),
+        ),
+      ).toEqual(expected);
+      const [stored] = await getDb(ctx.db)
+        .select({ value: vendorTable.itemizationExpectation })
+        .from(vendorTable)
+        .where(eq(vendorTable.id, vendor.id));
+      expect(stored?.value).toBeNull();
+    },
+  );
 
   it("leaves an auto-apply candidate pending when the kernel write throws", async () => {
     const context = kernelCtx(ctx);

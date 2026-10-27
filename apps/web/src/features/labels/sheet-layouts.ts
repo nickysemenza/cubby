@@ -58,5 +58,7 @@ export interface LabelItem {
   entityKind: "location" | "product";
   locationType?: LocationType;
   productCategory?: ProductCategory | null;
+  /** Styling captured when this print artifact is assembled. */
+  productFeature?: string | null;
   parentName?: string | null;
 }

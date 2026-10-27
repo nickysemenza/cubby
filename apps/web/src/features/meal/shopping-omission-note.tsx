@@ -1,5 +1,4 @@
 import type { ShoppingListOut, UnexpandedSubRecipe } from "@cubby/schemas/meal";
-import { MEAL_KIND_LABELS } from "@cubby/schemas/meal-classification";
 import { countLabel } from "@cubby/shared/pluralize";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -99,7 +98,7 @@ export function ShoppingOmissionNote({
               >
                 {m.name || formatCalendarDay(m.date, "weekdayMonthDay")}
               </Link>
-              <span>{MEAL_KIND_LABELS[m.mealKind]}</span>
+              <span>{m.omission.label}</span>
             </Row>
           ))}
         </Stack>

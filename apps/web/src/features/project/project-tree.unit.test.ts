@@ -1,6 +1,11 @@
-import type { ProjectListItemOut } from "@cubby/schemas/project";
-import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import {
+  projectListItemOut,
+  type ProjectListItemOut,
+} from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
+
+import { mock } from "~/lib/test/mock-schema";
 
 import { buildProjectTree } from "./project-tree";
 
@@ -9,63 +14,17 @@ import { buildProjectTree } from "./project-tree";
  * Readable seeds are converted to deterministic, schema-valid project
  * shortcodes; callers should assert against the resulting fixture values. */
 function proj(id: string, parentProjectId?: string): ProjectListItemOut {
-  return {
-    assigneeId: null,
-    assigneeName: null,
-    id: testShortcode("project", id),
-    displayImages: [],
-    name: id,
-    status: "planning",
-    kind: null,
-    locations: [],
-    defaultTrade: null,
-    costEstimate: null,
-    parentProjectId:
-      parentProjectId != null
-        ? testShortcode("project", parentProjectId)
-        : null,
-    dates: null,
-    notes: null,
-    googleDriveFolderUrl: null,
-    notionPageUrl: null,
-    dateWindow: {
-      derivedStart: null,
-      derivedEnd: null,
-      effectiveStart: null,
-      effectiveEnd: null,
-      startSource: "none",
-      endSource: "none",
+  return mock(projectListItemOut, {
+    seed: 1,
+    overrides: {
+      id: testShortcode("project", id),
+      name: id,
+      parentProjectId:
+        parentProjectId != null
+          ? testShortcode("project", parentProjectId)
+          : null,
     },
-    parentProjectName: null,
-    childProjectIds: [],
-    blockedByIds: [],
-    blockingIds: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    rollup: {
-      spent: 0,
-      actualSpent: 0,
-      committedSpent: 0,
-      credits: 0,
-      expenseCount: 0,
-      taskCount: 0,
-      doneTaskCount: 0,
-      subtree: {
-        spent: 0,
-        actualSpent: 0,
-        committedSpent: 0,
-        credits: 0,
-        expenseCount: 0,
-        taskCount: 0,
-        doneTaskCount: 0,
-        projectCount: 0,
-        costEstimate: null,
-      },
-    },
-    spent: 0,
-    taskProgress: "0/0",
-    dataQuality: testCompleteDataQuality(),
-  };
+  });
 }
 
 /** Flattens a tree (pre-order) for total-count / id-order assertions. */

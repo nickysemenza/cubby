@@ -1,14 +1,15 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { displayGtin } from "@cubby/schemas/external-id";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import { duplicateProductIdentitySchema } from "@cubby/schemas/problems";
 import { productListItemOut } from "@cubby/schemas/product";
-import { purchaseListItemOut } from "@cubby/schemas/purchase";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { BarcodeIcon } from "@phosphor-icons/react/dist/csr/Barcode";
@@ -64,29 +65,41 @@ interface NamedMergeRow extends MergeDisplayRow {
 
 const productMergeRowSchema = z.union([
   duplicateProductIdentitySchema.shape.products.element,
-  // List actions can run before the relations enrichment supplies the barcode.
-  productListItemOut
-    .pick({ id: true, name: true, primaryGtin: true })
-    .partial({ primaryGtin: true }),
+  // Suggestion merge reviews carry only Product identity; list rows may also
+  // omit the barcode until relation enrichment completes.
+  productListItemOut.pick({ id: true, name: true }).extend({
+    fields: productListItemOut.shape.fields
+      .pick({ primaryGtin: true })
+      .partial()
+      .optional(),
+  }),
 ]);
 type ProductMergeRow = z.output<typeof productMergeRowSchema>;
 
-interface VendorMergeRow extends MergeDisplayRow {
-  name: string;
-  purchaseCount: number;
-  spend: number;
-}
-
-const purchaseMergeRowSchema = purchaseListItemOut.pick({
-  id: true,
-  date: true,
-  displayLabel: true,
-  expenseCount: true,
-  expenseTotal: true,
-  orderId: true,
-  vendorId: true,
-  vendorName: true,
-});
+const vendorMergeRowSchema = entityFieldEnvelopeSchemas.vendor.list
+  .pick({ id: true, name: true })
+  .extend({
+    fields: entityFieldEnvelopeSchemas.vendor.list.shape.fields.pick({
+      purchaseCount: true,
+      spend: true,
+    }),
+  });
+type VendorMergeRow = z.output<typeof vendorMergeRowSchema>;
+const purchaseMergeRowSchema = entityFieldEnvelopeSchemas.purchase.list
+  .pick({
+    id: true,
+    date: true,
+    displayLabel: true,
+    orderId: true,
+    vendorName: true,
+  })
+  .extend({
+    fields: entityFieldEnvelopeSchemas.purchase.list.shape.fields.pick({
+      expenseCount: true,
+      expenseTotal: true,
+      vendorId: true,
+    }),
+  });
 type PurchaseMergeRow = z.output<typeof purchaseMergeRowSchema>;
 
 const isNamedMergeRow = (row: MergeDisplayRow): row is NamedMergeRow =>
@@ -97,12 +110,7 @@ const isProductMergeRow = (row: MergeDisplayRow): row is ProductMergeRow =>
   productMergeRowSchema.safeParse(row).success;
 
 const isVendorMergeRow = (row: MergeDisplayRow): row is VendorMergeRow =>
-  "name" in row &&
-  typeof row.name === "string" &&
-  "purchaseCount" in row &&
-  typeof row.purchaseCount === "number" &&
-  "spend" in row &&
-  typeof row.spend === "number";
+  vendorMergeRowSchema.safeParse(row).success;
 
 const isPurchaseMergeRow = (row: MergeDisplayRow): row is PurchaseMergeRow =>
   purchaseMergeRowSchema.safeParse(row).success;
@@ -311,8 +319,12 @@ const entityDefinitions = withEntityNames({
       isRow: isProductMergeRow,
       rowLabel: (row) => <span className="truncate">{row.name}</span>,
       rowStat: (row) => {
+        const primaryGtin =
+          "fields" in row && row.fields?.primaryGtin
+            ? fieldValueOf(row.fields.primaryGtin)
+            : null;
         const gtins =
-          "gtins" in row ? row.gtins : row.primaryGtin ? [row.primaryGtin] : [];
+          "gtins" in row ? row.gtins : primaryGtin ? [primaryGtin] : [];
         return (
           <>
             {gtins.length > 0 && (
@@ -405,7 +417,7 @@ const entityDefinitions = withEntityNames({
         }),
       rowLabel: (row) => row.name,
       rowStat: (row) =>
-        `${countLabel(row.purchaseCount, "purchase")} · ${formatCurrency(row.spend)}`,
+        `${countLabel(fieldValueOf(row.fields.purchaseCount) ?? 0, "purchase")} · ${formatCurrency(fieldValueOf(row.fields.spend) ?? 0)}`,
       copy: {
         title: (keeperLabel) => <>Merge into {keeperLabel}</>,
         description:
@@ -457,13 +469,21 @@ const entityDefinitions = withEntityNames({
       isRow: isPurchaseMergeRow,
       candidateQuery: (keeper) =>
         entityListFor("purchase").listQueryPlan({
-          filters: { vendorId: keeper.vendorId },
+          filters: {
+            vendorId: fieldValueOf(keeper.fields.vendorId) ?? undefined,
+          },
           // Generous relative to any one vendor's purchase count, within MAX_PAGE_SIZE.
           pagination: { pageIndex: 0, pageSize: 200 },
         }),
-      rowLabel: (row) => purchaseLabel(row),
+      rowLabel: (row) =>
+        purchaseLabel({
+          date: row.date,
+          displayLabel: row.displayLabel,
+          orderId: row.orderId,
+          vendorName: row.vendorName,
+        }),
       rowStat: (row) =>
-        `${row.expenseCount} · ${formatCurrency(row.expenseTotal)}`,
+        `${fieldValueOf(row.fields.expenseCount) ?? 0} · ${formatCurrency(fieldValueOf(row.fields.expenseTotal) ?? 0)}`,
       copy: {
         title: (keeperLabel) => <>Merge into {keeperLabel}</>,
         description:

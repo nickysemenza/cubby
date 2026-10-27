@@ -1,8 +1,11 @@
 import type { FoodLookupParam, FoodSummary } from "@cubby/usda";
 
-import type { USDAClient } from "~/server/clients/usda";
-
-export type UsdaFoodBatchPort = Pick<USDAClient, "findFoodsBatch">;
+/** Repository reads depend on food lookup behavior, not the request-scoped RPC client. */
+export interface UsdaFoodBatchPort {
+  findFoodsBatch(
+    lookups: FoodLookupParam[],
+  ): Promise<Array<FoodSummary | null>>;
+}
 
 export async function batchEnrichWithFood<T extends object>(
   items: T[],

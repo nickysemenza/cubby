@@ -275,8 +275,8 @@ export default defineEntity({
     create: null,
     update: null,
     output: {
-      module: "@cubby/schemas/transaction-import",
-      export: "transactionImportOut",
+      module: "@cubby/schemas/transaction-import-raw-read",
+      export: "rawTransactionImportOut",
     },
   },
   storage: {

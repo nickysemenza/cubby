@@ -1,22 +1,22 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
-import type { ProductListItem } from "@cubby/schemas/product";
 import {
   isServiceProductCategory,
-  type ProductCategorySummary,
+  type RawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
+import type { RawProductList } from "@cubby/schemas/product-raw-read";
 
 import {
   deriveProductQuantitySummary,
   hasComparableQuantityHistory,
 } from "~/server/lib/product-quantity-summary";
 
-type StockContextInput = Pick<ProductListItem, "quantityLedger"> & {
+type StockContextInput = Pick<RawProductList, "quantityLedger"> & {
   inventoryEntry: readonly Pick<
-    ProductListItem["inventoryEntry"][number],
+    RawProductList["inventoryEntry"][number],
     "amount"
   >[];
   stockTracked?: boolean | null;
-  category?: ProductCategorySummary | null;
+  category?: RawProductCategorySummary | null;
 };
 
 /** Recorded quantities describe evidence, never automatic consumption or disposal. */

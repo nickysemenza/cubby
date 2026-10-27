@@ -57,7 +57,12 @@ describe("Account scalar suggestion acceptance", () => {
       missing: "error",
     });
     expect(detail).toMatchObject({
-      item: { identity: { kind: "cash" }, network: null },
+      item: {
+        identity: { kind: "cash" },
+        fields: {
+          network: { result: { decision: { outcome: { kind: "empty" } } } },
+        },
+      },
     });
   });
 
@@ -382,14 +387,30 @@ describe("Account scalar suggestion acceptance", () => {
     });
     expect(saved).toMatchObject({
       item: {
-        providerVendorId: provider.output.id,
-        network: "mastercard",
+        fields: {
+          providerVendorId: {
+            result: {
+              decision: {
+                outcome: { kind: "value", value: provider.output.id },
+              },
+            },
+          },
+          network: {
+            result: {
+              decision: { outcome: { kind: "value", value: "mastercard" } },
+            },
+          },
+          primaryCardholderId: {
+            result: {
+              decision: { outcome: { kind: "value", value: member.output.id } },
+            },
+          },
+        },
         identity: {
           kind: "credit_card",
 
           network: "mastercard",
         },
-        primaryCardholderId: member.output.id,
 
         ...histories,
       },

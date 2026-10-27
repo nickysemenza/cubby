@@ -1,5 +1,6 @@
 import { dataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import type { ProductListItem } from "@cubby/schemas/product";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
@@ -39,7 +40,7 @@ function checkedRenderer<TSchema extends z.ZodType>(
 
 const qualityRow = z.object({
   id: z.string(),
-  dataQuality: dataQuality.optional(),
+  fields: z.object({ dataQuality: computedFieldEnvelope(dataQuality) }),
 });
 
 const categoryRow = z.object({ category: productCategorySummary.nullable() });
@@ -78,7 +79,12 @@ const productRenderers = {
   categoryId: productCategory,
   category: productCategory,
   externalIds: productExternalIds,
-} satisfies Partial<Record<keyof ProductListItem, CompactFieldRenderer>>;
+} satisfies Partial<
+  Record<
+    keyof ProductListItem | keyof ProductListItem["fields"],
+    CompactFieldRenderer
+  >
+>;
 
 /** A row-backed domain renderer shared by lists, relation tables, and shelves. */
 export function compactFieldRendererFor(
@@ -90,7 +96,7 @@ export function compactFieldRendererFor(
       <EntityQualityFact
         entity={entity}
         id={record.id}
-        quality={record.dataQuality}
+        envelope={record.fields.dataQuality}
       />
     ));
   if (entity !== "product") return null;

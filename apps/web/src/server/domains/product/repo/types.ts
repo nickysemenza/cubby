@@ -2,7 +2,7 @@ import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { ResolvedListItem } from "@cubby/schemas/field-resolution";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { LocationAncestorOut } from "@cubby/schemas/location";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 
 import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
 import type { MappableImageRecord } from "~/server/db/helpers";
@@ -24,7 +24,7 @@ type ProductSelect = typeof product.$inferSelect & {
   brandName: string | null;
   brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
   classificationEvidence: string;
-  category: ProductCategorySummary | null;
+  category: RawProductCategorySummary | null;
   categoryStockTracking: CategoryStockTracking | null;
 };
 type LocationSelect = typeof location.$inferSelect;
@@ -77,11 +77,7 @@ export type ProductDeepDB = ProductSelect & {
     | null;
   quantityLedger: QuantityLedger;
   componentCount: number;
-  cookbooks?: Array<
-    typeof cookbook.$inferSelect & {
-      recipes?: Array<{ deletedAt: Date | null }>;
-    }
-  >;
+  cookbooks?: Array<typeof cookbook.$inferSelect>;
 };
 
 export type ProductListDB = ProductSelect & {

@@ -18,7 +18,7 @@ installFeatures();
 
 interface TestRow {
   id: string;
-  fieldResolutions?: unknown;
+  fields?: unknown;
 }
 
 const rows = (...ids: string[]) =>
@@ -111,16 +111,41 @@ describe("useListBulkActions", () => {
     const redundant = fromPartial<Row<TestRow>>({
       original: {
         id: "PRJ-REDUNDANT",
-        fieldResolutions: {
+        fields: {
           locations: {
-            mode: "explicit",
-            storedValue: ["Main house"],
-            value: ["Main house"],
-            fallbackValue: ["Main house"],
-            source: "Parent project",
-            sourceEntity: null,
-            matchesFallback: true,
-            canReset: true,
+            current: {
+              assignment: {
+                kind: "value",
+                value: ["Main house"],
+                ownership: { kind: "record" },
+              },
+              controls: {
+                kind: "editable",
+                canSetNone: true,
+                canConfirm: false,
+                reset: {
+                  kind: "available",
+                  preview: {
+                    kind: "ready",
+                    result: {
+                      kind: "live",
+                      decision: {
+                        outcome: { kind: "value", value: ["Main house"] },
+                        provenance: null,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            result: {
+              kind: "live",
+              decision: {
+                outcome: { kind: "value", value: ["Main house"] },
+                provenance: { kind: "own", ownership: { kind: "record" } },
+              },
+            },
+            work: { kind: "idle" },
           },
         },
       },

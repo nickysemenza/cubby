@@ -1,6 +1,6 @@
 /** Canonical-name collision candidates for explicit Vendor duplicate review. */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { ProblemItem } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems-raw-read";
 import { type Column, type SQL, sql } from "drizzle-orm";
 
 import { hasTextSql } from "~/server/db/computed/text-whitespace";

@@ -1,7 +1,11 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
+import { publicImageUrlSummary } from "@cubby/schemas/image-summary";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 import { ShelfGrid } from "~/entity/table/shelf";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -94,13 +98,23 @@ describe("entity cards", () => {
             id: "IMG-2345",
             filename: "Uploaded photo",
             status: "UPLOADED",
-            url: "https://example.com/photo.jpg",
+            fields: {
+              url: fieldValueFixture(
+                publicImageUrlSummary.shape.fields.shape.url,
+                "https://example.com/photo.jpg",
+              ),
+            },
           },
           {
             id: "IMG-6789",
             filename: "Pending photo",
             status: "PENDING",
-            url: "https://example.com/pending.jpg",
+            fields: {
+              url: fieldValueFixture(
+                publicImageUrlSummary.shape.fields.shape.url,
+                "https://example.com/pending.jpg",
+              ),
+            },
           },
         ]}
       />,
@@ -136,4 +150,56 @@ describe("entity cards", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledOnce();
   });
+});
+
+it("reads preferred shelf covers only from the governed display snapshot", () => {
+  harness = createBrowserTestHarness();
+  const schema = computedFieldEnvelope(displayImagesField);
+  const snapshot = [
+    {
+      id: "IMG-4K7M",
+      url: "https://example.com/original.jpg",
+      representations: {
+        original: "https://example.com/original.jpg",
+        transparent: "https://example.com/cutout.png",
+        preferred: "https://example.com/cutout.png",
+        preferredKind: "transparent",
+      },
+    },
+  ];
+  render(
+    <EntityShelf
+      entity="recipe"
+      items={[
+        {
+          id: "RCP-4K7M",
+          name: "Current cover",
+          fields: { displayImages: fieldValueFixture(schema, snapshot) },
+        },
+        {
+          id: "RCP-4K7N",
+          name: "Missing cover",
+          fields: { displayImages: fieldValueFixture(schema, undefined) },
+          displayImages: snapshot,
+        },
+        {
+          id: "RCP-4K7P",
+          name: "Empty cover",
+          fields: { displayImages: fieldValueFixture(schema, []) },
+          displayImages: snapshot,
+        },
+      ]}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  expect(screen.getByRole("img", { name: "Current cover" })).toHaveAttribute(
+    "src",
+    expect.stringContaining("cutout.png"),
+  );
+  expect(
+    screen.getByRole("img", { name: "Missing cover" }),
+  ).not.toHaveAttribute("src");
+  expect(screen.getByRole("img", { name: "Empty cover" })).not.toHaveAttribute(
+    "src",
+  );
 });

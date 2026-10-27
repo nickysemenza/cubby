@@ -54,9 +54,11 @@ public enum BinPlan {
                 reason: .ancestor,
                 message: "\(target.name) contains \(anchorNode.name) — it can't move inside it.")
         }
+        let type = (try? JSONValue(encoding: target.fields.type))
+            .flatMap(FieldEnvelope.init)?.effectiveValue?.stringValue
         return .adopt(
             AdoptableBin(
-                id: target.id, name: target.name, type: target.type.rawValue, currentParentName: parent.name
+                id: target.id, name: target.name, type: type, currentParentName: parent.name
             ))
     }
 }

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { MailTriagePreviewInput } from "@cubby/schemas/mailbox-research";
 import { MAILBOX_CLASSIFICATION_LABEL } from "@cubby/schemas/mailbox-research";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
@@ -27,6 +28,10 @@ const models = [
 
 /** Explicit previews use the same read operation as MCP; no automatic inference. */
 export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
+  const effectiveRecordOwnedByViewer = fieldValueOf(
+    record.fields.ownedByViewer,
+  );
+
   const hydrated = useHydrated();
   const client = useQueryClient();
   const [model, setModel] = useState("live");
@@ -46,7 +51,7 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
   const result = isForRecord ? preview.data : undefined;
   return (
     <div className="space-y-3">
-      {record.ownedByViewer && record.provider === "gmail" && (
+      {effectiveRecordOwnedByViewer && record.provider === "gmail" && (
         <section aria-label="Classification preview" className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <Picker

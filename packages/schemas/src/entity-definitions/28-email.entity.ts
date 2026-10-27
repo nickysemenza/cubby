@@ -655,7 +655,7 @@ export default defineEntity({
   fields: {
     create: null,
     update: null,
-    output: { module: "@cubby/schemas/email", export: "emailOut" },
+    output: { module: "@cubby/schemas/email-raw-read", export: "rawEmailOut" },
   },
   storage: {
     // Transitional pointer: the content/events/attachments keep their UUIDs.

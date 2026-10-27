@@ -5,32 +5,46 @@ import SwiftUI
 struct ProductNutritionDetailSlot: View {
     let row: EntityRow
 
-    private var display: ProductDetailNutritionDisplay? {
-        guard let detail = try? row.decode(ProductDetail.self) else { return nil }
-        return detail.nutritionDisplay
+    private var display: Result<ProductNutritionDisplay, any Error> {
+        Result {
+            guard let value = row.raw.recordValue("nutritionDisplay") else {
+                throw DecodingError.dataCorrupted(
+                    .init(
+                        codingPath: [],
+                        debugDescription: "Product.nutritionDisplay: required presentation is missing"))
+            }
+            return try value.decoded(ProductNutritionDisplay.self)
+        }
     }
 
     var body: some View {
-        if let display {
-            if display.rows.isEmpty {
-                Text(display.title).foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                    Text(display.title).font(.headline)
-                    Text(display.basis).font(.caption).foregroundStyle(.secondary)
-                    ForEach(display.rows, id: \.key) { nutrient in
-                        LabeledContent(
-                            nutrient.label,
-                            value: nutrient.inferred
-                                ? "0 · inferred from label"
-                                : nutrient.amount.formatted(.number.precision(.fractionLength(0...3))))
-                    }
-                    if let evidence = display.inferenceEvidence {
-                        Text(evidence).font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let source = display.sourceNote {
-                        Text(source).font(.caption).foregroundStyle(.secondary)
-                    }
+        switch display {
+        case .success(let display): nutritionContents(display)
+        case .failure(let error):
+            Text(error.userMessage).foregroundStyle(FieldGuideTokens.destructive)
+                .task { Diagnostics.report(error, context: "product.nutrition-display") }
+        }
+    }
+
+    @ViewBuilder private func nutritionContents(_ display: ProductNutritionDisplay) -> some View {
+        if display.rows.isEmpty {
+            Text(display.title).foregroundStyle(.secondary)
+        } else {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                Text(display.title).font(.headline)
+                Text(display.basis).font(.caption).foregroundStyle(.secondary)
+                ForEach(display.rows, id: \.key) { nutrient in
+                    LabeledContent(
+                        nutrient.label,
+                        value: nutrient.inferred
+                            ? "0 · inferred from label"
+                            : nutrient.amount.formatted(.number.precision(.fractionLength(0...3))))
+                }
+                if let evidence = display.inferenceEvidence {
+                    Text(evidence).font(.caption).foregroundStyle(.secondary)
+                }
+                if let source = display.sourceNote {
+                    Text(source).font(.caption).foregroundStyle(.secondary)
                 }
             }
         }

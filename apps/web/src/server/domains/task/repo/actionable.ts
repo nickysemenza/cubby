@@ -59,14 +59,16 @@ import {
   type TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
-  ActionableTaskOut,
-  ActionableTasksOut,
   BlockedReason,
-  BlockedTaskOut,
   ProjectStatus,
   TaskFilters,
   TaskStatus,
 } from "@cubby/schemas/project";
+import type {
+  RawActionableTaskOut,
+  RawActionableTasksOut,
+  RawBlockedTaskOut,
+} from "@cubby/schemas/work-raw-read";
 import { and, asc, ne } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -238,8 +240,8 @@ function pushTo<K, V>(map: Map<K, V[]>, key: K, value: V): void {
  * `not_started`, then name ascending.
  */
 function compareNext(
-  a: ActionableTaskOut,
-  b: ActionableTaskOut,
+  a: RawActionableTaskOut,
+  b: RawActionableTaskOut,
   today: string,
 ): number {
   const aDue = effectiveTaskDueDate(a);
@@ -263,7 +265,10 @@ function compareNext(
  * ranges are less meaningful than a committed task's, so this uses `dueDate`
  * rather than the effective/range date), then `updatedAt` descending.
  */
-function compareLater(a: ActionableTaskOut, b: ActionableTaskOut): number {
+function compareLater(
+  a: RawActionableTaskOut,
+  b: RawActionableTaskOut,
+): number {
   const aStart = a.due?.start ?? null;
   const bStart = b.due?.start ?? null;
   if (aStart !== bStart) {
@@ -275,7 +280,7 @@ function compareLater(a: ActionableTaskOut, b: ActionableTaskOut): number {
 }
 
 /** `blocked` order: effective due date ascending (nulls last), then name ascending. */
-function compareBlocked(a: BlockedTaskOut, b: BlockedTaskOut): number {
+function compareBlocked(a: RawBlockedTaskOut, b: RawBlockedTaskOut): number {
   const aDue = effectiveTaskDueDate(a.task);
   const bDue = effectiveTaskDueDate(b.task);
   if (aDue !== bDue) {
@@ -465,7 +470,7 @@ export async function readTaskActionability(db: Database) {
 export async function listActionableTasks(
   db: Database,
   filters: TaskFilters = {},
-): Promise<ActionableTasksOut> {
+): Promise<RawActionableTasksOut> {
   // Membership is delegated to the ordinary list predicate. The actionable
   // renderer then adds its disclosed open/top-level semantics while retaining
   // the full graph below to explain why a matching row is blocked.
@@ -536,9 +541,9 @@ export async function listActionableTasks(
       ),
     );
 
-  const next: ActionableTaskOut[] = [];
-  const later: ActionableTaskOut[] = [];
-  const blocked: BlockedTaskOut[] = [];
+  const next: RawActionableTaskOut[] = [];
+  const later: RawActionableTaskOut[] = [];
+  const blocked: RawBlockedTaskOut[] = [];
   const today = householdLocalDate();
 
   const appendActionableRow = (row: (typeof hydratedOpenTaskRows)[number]) => {

@@ -15,7 +15,7 @@ import {
   externalIdInput,
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
-import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { isNutrientKey } from "@cubby/usda";
@@ -33,7 +33,7 @@ import {
 } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
 
-import { readReferenceField } from "../entity-references";
+import { readRecordField, readReferenceField } from "../entity-references";
 import {
   collectionDraft,
   collectionEditSchema,
@@ -68,9 +68,13 @@ const readOnly = (reason: string): EntityEditAccess => ({
 });
 
 const valueFor = (record: EntityEditRecord | undefined, id: string) => {
-  const candidate = Object.entries(record ?? {}).find(
-    ([key]) => key === id,
-  )?.[1];
+  const envelope = fieldEnvelopeFor(record, id);
+  // Editors seed stored intent, not a cached or inherited effective result.
+  const candidate = envelope
+    ? envelope.current.assignment?.kind === "value"
+      ? envelope.current.assignment.value
+      : null
+    : Object.entries(record ?? {}).find(([key]) => key === id)?.[1];
   // Tolerant: a read projection may nest `Date`s (audit stamps on
   // `unitMappings`/`externalIds` rows); opening an editor never throws on
   // one (`value-schema.ts`).
@@ -135,7 +139,7 @@ const recordImageIds = (record: EntityEditRecord | undefined): string[] =>
   z
     .array(z.object({ id: z.string() }).loose())
     .catch([])
-    .parse(record?.images)
+    .parse(record ? readRecordField(record, "images", z.unknown()) : undefined)
     .map((image) => image.id);
 const imageIdList = (value: EntityEditValue): string[] | undefined => {
   const parsed = z.array(z.string()).safeParse(value);
@@ -353,12 +357,8 @@ const builderFor = <E extends EditableEntity>(
   ) => {
     const resolutionField = resolutionFieldByMode.get(id);
     if (!resolutionField) return undefined;
-    const resolutions = fieldResolutionsSchema.safeParse(
-      record?.fieldResolutions,
-    );
-    const mode = resolutions.success
-      ? resolutions.data[resolutionField]?.mode
-      : undefined;
+    const mode = fieldEnvelopeFor(record, resolutionField)?.current.assignment
+      ?.kind;
     return mode === "inherit" || mode === undefined ? "inherit" : "explicit";
   };
 

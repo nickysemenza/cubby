@@ -1,6 +1,12 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
+import { publicImageUrlSummary } from "@cubby/schemas/image-summary";
 import { render, renderHook, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 import { useMobileListModel } from "./use-mobile-list-model";
@@ -133,4 +139,78 @@ describe("useMobileListModel", () => {
 
     expect(result.current[0]?.detailsHref).toBeUndefined();
   });
+});
+
+it("reserves mobile image slots for canonical covers and bounded specialist inputs", () => {
+  const cover = computedFieldEnvelope(displayImagesField);
+  const image = {
+    fields: {
+      url: fieldValueFixture(
+        publicImageUrlSummary.shape.fields.shape.url,
+        "https://example.test/own.jpg",
+      ),
+    },
+  };
+  const images = computedFieldEnvelope(z.array(publicImageUrlSummary));
+  const cases = [
+    {
+      fields: {
+        displayImages: fieldValueFixture(cover, [
+          { id: "IMG-4K7M", url: "https://example.test/cover.jpg" },
+        ]),
+      },
+      expected: true,
+    },
+    {
+      fields: { displayImages: fieldValueFixture(cover, undefined) },
+      imageUrl: "https://example.test/stale.jpg",
+      expected: false,
+    },
+    {
+      fields: { displayImages: fieldValueFixture(cover, []) },
+      imageUrl: "https://example.test/stale.jpg",
+      expected: false,
+    },
+    { fields: { images: fieldValueFixture(images, [image]) }, expected: true },
+    {
+      product: { fields: { images: fieldValueFixture(images, [image]) } },
+      expected: true,
+    },
+    { imageUrl: "https://example.test/snapshot.jpg", expected: true },
+    {
+      displayImages: [
+        { id: "IMG-4K7M", url: "https://example.test/retired.jpg" },
+      ],
+      expected: false,
+    },
+  ];
+  for (const { expected, ...input } of cases) {
+    const original = { id: "PRD-4K7M", ...input };
+    const table = fromPartial<Table<typeof original>>({
+      getRowModel: () => ({
+        rows: [
+          {
+            id: original.id,
+            original,
+            getVisibleCells: () => [
+              {
+                column: {
+                  id: "image",
+                  columnDef: {
+                    cell: () => <span>Image slot</span>,
+                    meta: { mobile: { slot: "image" } },
+                  },
+                },
+                getContext: () => ({}),
+                getValue: () => null,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const { result, unmount } = renderHook(() => useMobileListModel({ table }));
+    expect(Boolean(result.current[0]?.imageSlot)).toBe(expected);
+    unmount();
+  }
 });

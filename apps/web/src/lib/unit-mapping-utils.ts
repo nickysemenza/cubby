@@ -168,12 +168,11 @@ export const getAllUnitMappingsFromProduct = (product: {
   food: FoodSummary | null;
   labelNutrition: ProductLabelNutrition | null;
   price: number | null;
-  pricing?: { effectivePrice: number | null };
 }): UnitMapping[] =>
   wasm
     .product_unit_mappings({
       id: product.id,
-      price: product.pricing?.effectivePrice ?? product.price,
+      price: product.price,
       ...productWasmInputs(product),
     })
     .map(toUnitMapping);
@@ -190,7 +189,6 @@ export const getIngredientMappings = <
       food: FoodSummary | null;
       labelNutrition: ProductLabelNutrition | null;
       price: number | null;
-      pricing?: { effectivePrice: number | null };
     }>;
   },
 >(

@@ -1,5 +1,6 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
-import { mealOut, type MealOut } from "@cubby/schemas/meal";
+import { mealOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
   type MealKind,
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 
 import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
@@ -149,6 +151,11 @@ export function AddToMeal({
     (): ComboboxItem[] => [
       { id: NEW_MEAL, name: "Create a new meal" },
       ...(existingMeals.data?.map((meal) => {
+        const mealKind = fieldValueOf(meal.fields.mealKind);
+        const mealLabel = mealListLabel({
+          ...meal,
+          mealType: fieldValueOf(meal.fields.mealType),
+        });
         // The picture only: the day is already chosen, so the row's date
         // projection would repeat it.
         const { id, shortcode, thumb } = buildRecordComboboxItem("meal", meal);
@@ -159,9 +166,9 @@ export function AddToMeal({
           // The kind rides the label for non-cooked meals so the consequence
           // is visible before selecting, not only after.
           name:
-            meal.mealKind === "cooked"
-              ? `${mealListLabel(meal)} (${countLabel(meal.recipes.length, "recipe")})`
-              : `${mealListLabel(meal)} — ${MEAL_KIND_LABELS[meal.mealKind]}`,
+            mealKind === "cooked"
+              ? `${mealLabel} (${countLabel(meal.recipes.length, "recipe")})`
+              : `${mealLabel} — ${mealKind ? MEAL_KIND_LABELS[mealKind] : "Updating…"}`,
         };
       }) ?? []),
     ],
@@ -175,7 +182,8 @@ export function AddToMeal({
   // Planning a recipe into a meal you aren't cooking is contradictory, and it
   // loses the ingredients silently: only `cooked` meals feed the shopping list.
   const targetNotCooked =
-    selectedMeal != null && selectedMeal.mealKind !== "cooked";
+    selectedMeal != null &&
+    fieldValueOf(selectedMeal.fields.mealKind) !== "cooked";
 
   const onSuccess = (meal: { id: string; date: string }) => {
     invalidate();
@@ -368,8 +376,10 @@ export function AddToMeal({
                 <WarningIcon className="size-3 shrink-0" />
                 <span className="font-medium">
                   This is a{" "}
-                  {MEAL_KIND_LABELS[selectedMeal.mealKind].toLowerCase()} meal,
-                  so its recipes aren't added to the shopping list.
+                  {MEAL_KIND_LABELS[
+                    fieldValueOf(selectedMeal.fields.mealKind) ?? "cooked"
+                  ].toLowerCase()}{" "}
+                  meal, so its recipes aren't added to the shopping list.
                 </span>
               </Row>
               <Row gap="xs" align="center" className="text-muted-foreground">
@@ -391,3 +401,5 @@ export function AddToMeal({
     </>
   );
 }
+
+type MealOut = ListRowOf<"meal">;

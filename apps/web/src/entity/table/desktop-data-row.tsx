@@ -18,7 +18,7 @@ import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { cn } from "~/lib/utils";
 import { DenseCellContext } from "~/ui/common/stacked-value";
-import { DerivedRecordValue } from "~/ui/derived/sidecar-context";
+import { FieldRecordValue } from "~/ui/derived/record-value";
 import { WhyValue } from "~/ui/derived/why-value";
 import { Button } from "~/ui/primitives/button";
 import { TableCell, TableRow } from "~/ui/primitives/table";
@@ -124,12 +124,12 @@ function explainedCellContent<TItem extends RowData>(
   // Every rail overlays the active row; a derived value reads muted, and an
   // inherited one keeps its marker visible without hovering.
   const value = (
-    <DerivedRecordValue
+    <FieldRecordValue
       record={cell.row.original}
       field={explanation?.field ?? cell.column.id}
     >
       {content}
-    </DerivedRecordValue>
+    </FieldRecordValue>
   );
   return explanation && rowIdentity.success ? (
     <CellFrame

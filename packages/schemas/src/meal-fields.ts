@@ -7,7 +7,7 @@ import {
 } from "./identifier-fields";
 import { mealScale, mealYieldGrams } from "./meal-shared";
 import { nutritionTotals } from "./nutrition";
-import { recipeTotals, recipeYieldSchema } from "./recipe-shared";
+import { rawRecipeTopLevel, recipeTotals } from "./recipe-shared";
 
 export const mealRecipeInput = z.object({
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
@@ -25,19 +25,20 @@ export const scaledTotals = nutritionTotals;
 export type ScaledTotals = z.infer<typeof scaledTotals>;
 
 /** A recipe as summarized inside a meal (no ingredient graph). */
-export const mealRecipeSummary = z.object({
-  id: recipeShortcode,
-  name: z.string(),
-  servings: z.number().nullish(),
-  yield: recipeYieldSchema.nullish(),
-  totals: recipeTotals.nullish(),
-});
+export const rawMealRecipeSummary = rawRecipeTopLevel
+  .pick({
+    id: true,
+    name: true,
+    servings: true,
+    yield: true,
+  })
+  .extend({ totals: recipeTotals.nullish() });
 
-export const mealRecipeOut = z.object({
+export const rawMealRecipeOut = z.object({
   id: mealRecipeId,
   mealId: mealShortcode,
   recipeId: recipeShortcode,
-  recipe: mealRecipeSummary,
+  recipe: rawMealRecipeSummary,
   scale: mealScale,
   sortOrder: z.number().int().nullable(),
   estimatedYieldGrams: mealYieldGrams.nullable(),
@@ -46,7 +47,7 @@ export const mealRecipeOut = z.object({
   scaledTotals,
   ...timestampedFields,
 });
-export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
+export type RawMealRecipeOut = z.infer<typeof rawMealRecipeOut>;
 
 export const mealTotals = nutritionTotals;
 export type MealTotals = z.infer<typeof mealTotals>;

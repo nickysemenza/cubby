@@ -1,12 +1,13 @@
 import type { SubRecipeBlockReason } from "@cubby/schemas/availability";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { RecipeShortcode } from "@cubby/schemas/identifiers";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type {
   RecipeGraphOut,
-  RecipeOut,
   SectionIngredientOut,
 } from "@cubby/schemas/recipe";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 
 import {
@@ -18,10 +19,11 @@ type RecipeTreeRecipe = RecipeOut | RecipeGraphOut;
 
 export const recipeTreeDisplayImage = (
   recipe: RecipeTreeRecipe,
-): ImageUrlSummary | null =>
-  "displayImage" in recipe
+): ImageUrlSummary | null => {
+  return "displayImage" in recipe
     ? recipe.displayImage
-    : (recipe.displayImages?.[0] ?? null);
+    : (fieldValueOf(recipe.fields.displayImages)?.[0] ?? null);
+};
 
 // Inject wasm ports so recipe export remains wasm-free. Root costing is already
 // UI-scaled, so its cumulativeFactor is 1. Sub-recipes are costed at their
@@ -399,3 +401,5 @@ export const fullBatchCostByComponent = (root: RecipeTreeNode) => {
   }
   return { byComponent, total, totalUpper };
 };
+
+type RecipeOut = DetailRecordOf<"recipe">;

@@ -4,6 +4,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectShortcode } from "@cubby/schemas/identifiers";
 import {
   attachableImageEntity,
+  projectImageSummarySchema,
   type createFileUploadInput,
   type getImageByIdSchema,
   type imageAttachExistingInput,
@@ -41,6 +42,8 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { AppError, createAppError } from "~/server/errors/app-error";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -274,7 +277,26 @@ export const imageHandlers = implementOperationDomain(imageContract, {
       input.projectIds,
     );
     const imagesByEntityId = await getImagesByProjectIds(context.db, entityIds);
-    return projectImageSummaries(input.projectIds, entityIds, imagesByEntityId);
+    const rows = Object.values(imagesByEntityId).flat();
+    const publicRows = await publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "image",
+      schema: projectImageSummarySchema,
+      rows,
+    });
+    let offset = 0;
+    const publicImagesByEntityId = Object.fromEntries(
+      Object.entries(imagesByEntityId).map(([entityId, images]) => {
+        const group = publicRows.slice(offset, offset + images.length);
+        offset += images.length;
+        return [entityId, group];
+      }),
+    );
+    return projectImageSummaries(
+      input.projectIds,
+      entityIds,
+      publicImagesByEntityId,
+    );
   },
   hashIndex: (context) => getImageHashIndex(context.db),
   setPerceptualHashes: (context, input) =>
@@ -284,8 +306,13 @@ export const imageHandlers = implementOperationDomain(imageContract, {
 export const imageUploadHandlers = implementOperationDomain(
   imageUploadContract,
   {
-    markUploaded: (context, input) =>
-      markImageUploadedWorkflow(context.db, input),
+    markUploaded: async (context, input) =>
+      readPublicEntityRow({
+        db: context.db,
+        entity: "image",
+        projection: "detail",
+        row: await markImageUploadedWorkflow(context.db, input),
+      }),
     uploadImage: async (context, input) =>
       translateImageFailure(
         async () =>

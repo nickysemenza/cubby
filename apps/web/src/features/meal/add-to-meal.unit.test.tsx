@@ -1,9 +1,12 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import {
-  type MealCreateInput,
-  type MealOut,
-  mealAddRecipeInput,
-  mealOut,
-} from "@cubby/schemas/meal";
+  entityReadFixture,
+  fieldValueFixture,
+} from "~/entity/fields/field-envelope.fixtures";
+const mealOut = entityFieldEnvelopeSchemas.meal.list;
+import { type MealCreateInput, mealAddRecipeInput } from "@cubby/schemas/meal";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -30,38 +33,78 @@ const emptyTotals = withMacros({
   })),
 });
 
-const tuesdayDinner = mealOut.parse({
+const tuesdayDinner = entityReadFixture(mealOut, {
+  fields: {
+    mealType: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["mealType"],
+      "dinner",
+    ),
+    mealKind: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["mealKind"],
+      "cooked",
+    ),
+    images: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["images"],
+      [],
+    ),
+    recipeNames: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["recipeNames"],
+      [],
+    ),
+    dataQuality: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["dataQuality"],
+      testCompleteDataQuality(),
+    ),
+  },
   id: testShortcode("meal", "MEL-4K7M"),
   name: "Tuesday dinner",
   date: "2026-06-16",
   sortOrder: null,
-  mealType: "dinner",
-  mealKind: "cooked",
+
   recipes: [],
-  images: [],
+
   totals: emptyTotals,
   displayName: "Tuesday dinner",
-  recipeNames: [],
+
   createdAt: new Date("2026-06-16T12:00:00Z"),
   updatedAt: new Date("2026-06-16T12:00:00Z"),
-  dataQuality: testCompleteDataQuality(),
 });
 
-const cornerDeli = mealOut.parse({
+const cornerDeli = entityReadFixture(mealOut, {
+  fields: {
+    mealType: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["mealType"],
+      "lunch",
+    ),
+    mealKind: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["mealKind"],
+      "eating_out",
+    ),
+    images: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["images"],
+      [],
+    ),
+    recipeNames: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["recipeNames"],
+      [],
+    ),
+    dataQuality: fieldValueFixture(
+      entityFieldEnvelopeSchemas.meal.detail.shape.fields.shape["dataQuality"],
+      testCompleteDataQuality(),
+    ),
+  },
   id: testShortcode("meal", "MEL-9Q2X"),
   name: "Corner Deli",
   date: "2026-06-16",
   sortOrder: null,
-  mealType: "lunch",
-  mealKind: "eating_out",
+
   recipes: [],
-  images: [],
+
   totals: emptyTotals,
   displayName: "Corner Deli",
-  recipeNames: [],
+
   createdAt: new Date("2026-06-16T12:00:00Z"),
   updatedAt: new Date("2026-06-16T12:00:00Z"),
-  dataQuality: testCompleteDataQuality(),
 });
 
 const meals: MealOut[] = [tuesdayDinner, cornerDeli];
@@ -91,7 +134,7 @@ const testOperations: AddToMealOperations = {
         item: {
           id: tuesdayDinner.id,
           date: tuesdayDinner.date,
-          mealType: tuesdayDinner.mealType,
+          fields: { mealType: tuesdayDinner.fields.mealType },
         },
         appliedFields: [],
         sideEffects: {},
@@ -201,3 +244,5 @@ describe("AddToMeal", () => {
     ]);
   });
 });
+
+type MealOut = ListRowOf<"meal">;

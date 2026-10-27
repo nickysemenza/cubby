@@ -31,13 +31,15 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
+import {
+  serviceProductIdSql,
+  serviceProductSqlText,
+} from "~/server/domains/product/repo/service-category";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   deriveProductQuantitySummary,
   hasComparableQuantityHistory,
 } from "~/server/lib/product-quantity-summary";
-
-import { serviceProductIdSql, serviceProductSqlText } from "./service-category";
 
 export type QuantityLedger = ProductQuantityLedgerOut;
 

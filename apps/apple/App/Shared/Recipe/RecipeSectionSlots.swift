@@ -60,7 +60,10 @@ struct IngredientNutritionProductSlot: View {
 /// A book in the retired format has no readable report, as on web.
 struct CookbookContentsSlot: View {
     let cookbookID: String
-    var hasReadableExtraction = true
+    let extraction: FieldEnvelope?
+    private var hasReadableExtraction: Bool? {
+        extraction?.effectiveValue?.boolValue.map { !$0 }
+    }
     @Environment(AppModel.self) private var appModel
     @State private var usage: IngredientUsage?
     @State private var error: String?
@@ -74,16 +77,27 @@ struct CookbookContentsSlot: View {
             } else {
                 LoadingIndicator(label: "Loading contents")
             }
-            if hasReadableExtraction {
+            if hasReadableExtraction == true {
                 OpenDetailGroup(title: "Extraction report") {
                     ReportDetailSlot(slot: .cookbookExtractionReport, id: cookbookID)
                         .transformPreference(DetailSectionEmpty.self) { $0 = false }
                 }
                 .accessibilityIdentifier("cookbook.extractionReport")
-            } else {
+            } else if hasReadableExtraction == false {
                 OpenDetailGroup(title: "Extraction report") {
                     Text("Empty").font(.caption).foregroundStyle(.secondary)
                     Text("No readable extraction report").foregroundStyle(.secondary)
+                }
+            } else {
+                OpenDetailGroup(title: "Extraction report") {
+                    if let field = EntityCatalog[.cookbook].field("needsReextract") {
+                        Text(extraction?.emptyLabel(field: field) ?? "Unavailable")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let failure = extraction?.failure {
+                        Text(failure).foregroundStyle(FieldGuideTokens.destructive)
+                            .textSelection(.enabled)
+                    }
                 }
             }
         }
@@ -143,25 +157,51 @@ struct CookbookImportProgressSlot: View {
     @State private var open = false
 
     var body: some View {
-        let imported = row.raw["recipeCount"]?.doubleValue ?? 0
-        let source = row.raw["sourceRecipeCount"]?.doubleValue ?? 0
-        let retired = row.raw["needsReextract"]?.boolValue == true
+        let imported = row.raw.recordValue("recipeCount")?.doubleValue
+        let source = row.raw.recordValue("sourceRecipeCount")?.doubleValue
+        let retired = row.raw.recordValue("needsReextract")?.boolValue
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            if retired {
+            if retired == true {
                 Label(
                     "Extracted with a retired format. Re-extract from the EPUB on web to restore the source, its run report, and sub-recipe links.",
                     systemImage: "exclamationmark.triangle"
                 )
                 .font(.caption).foregroundStyle(FieldGuideTokens.warning)
             }
-            if source > 0 {
-                ProgressView(value: min(imported, source), total: source)
+            if let imported, let source {
+                if source > 0 {
+                    ProgressView(value: min(imported, source), total: source)
+                }
+                Text(
+                    "\(ValueFormat.number(imported)) of \(ValueFormat.number(source)) source recipes imported."
+                )
+                .font(.caption).foregroundStyle(.secondary)
             }
-            Text(
-                "\(ValueFormat.number(imported)) of \(ValueFormat.number(source)) source recipes imported."
-            )
-            .font(.caption).foregroundStyle(.secondary)
-            if !retired {
+            ForEach(["recipeCount", "sourceRecipeCount", "needsReextract"], id: \.self) { key in
+                if let field = EntityCatalog[.cookbook].field(key) {
+                    let envelope = FieldEnvelope.of(row.raw, key: key)
+                    let value = row.raw.recordValue(key)
+                    if value == nil || value == .null || envelope?.isUpdating == true
+                        || envelope?.failure != nil || envelope?.unsupportedKinds.isEmpty == false
+                    {
+                        HStack {
+                            if value == nil || value == .null {
+                                LabeledContent(
+                                    field.label, value: envelope?.emptyLabel(field: field) ?? "Unavailable"
+                                )
+                                .font(.caption).foregroundStyle(.secondary)
+                            }
+                            FieldValueStatus(raw: row.raw, field: field)
+                        }
+                    }
+                    if let failure = envelope?.failure {
+                        Text(failure).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            // An unavailable format decision cannot enable reprocessing.
+            if retired == false {
                 DisclosureGroup("Add or reprocess recipes", isExpanded: $open) {
                     if open {
                         ReportDetailSlot(slot: .cookbookImportProgress, id: row.id)

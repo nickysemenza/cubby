@@ -14,10 +14,14 @@ struct FieldDetailDisplayTests {
 
     @Test func allocatedValuesRemainReadableWhenAssignmentIsRefused() throws {
         let category = try field(.expense, "spendingCategoryId")
-        let raw: JSONValue = [
-            "lineKind": "shipping",
-            "fieldResolutions": ["spendingCategoryId": ["mode": "allocated"]],
-        ]
+        let raw = FieldEnvelopeFixture.row(
+            ["lineKind": "shipping"],
+            fields: [
+                "spendingCategoryId": FieldEnvelopeFixture.envelope(
+                    controls: FieldEnvelopeFixture.readonly("allocated"),
+                    result: FieldEnvelopeFixture.live(
+                        FieldEnvelopeFixture.emptyDecision("mixed", provenance: ["kind": "allocated"])))
+            ])
         #expect(category.applicabilityRefusal(in: raw) != nil)
         #expect(category.displayApplicabilityRefusal(in: raw) == nil)
         #expect(category.displayApplicabilityRefusal(in: ["lineKind": "shipping"]) != nil)
@@ -37,18 +41,17 @@ struct FieldDetailDisplayTests {
                     "basis": "positive", "incomplete": false,
                 ],
             ],
-            "fieldResolutions": [
-                "projectId": [
-                    "mode": "allocated", "storedValue": .null, "value": .null, "fallbackValue": .null,
-                    "source": "Principal items", "sourceEntity": .null, "matchesFallback": false,
-                    "canReset": false,
-                ]
+            "fields": [
+                "projectId": FieldEnvelopeFixture.envelope(
+                    controls: FieldEnvelopeFixture.readonly("allocated"),
+                    result: FieldEnvelopeFixture.live(
+                        FieldEnvelopeFixture.emptyDecision("mixed", provenance: ["kind": "allocated"])))
             ],
         ]
         #expect(project.applicabilityRefusal(in: raw) != nil)
         #expect(project.displayApplicabilityRefusal(in: raw) == nil)
         #expect(
-            FieldResolutionPresentation.allocatedReferenceLabel(in: raw, field: project)
+            FieldEnvelopePresentation.allocatedReferenceLabel(in: raw, field: project)
                 == "Synthetic first project, Synthetic second project")
     }
 

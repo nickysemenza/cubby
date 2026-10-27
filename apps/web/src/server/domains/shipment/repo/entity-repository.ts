@@ -3,11 +3,13 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
-  shipmentOut,
   type ShipmentFilters,
-  type ShipmentOut,
   type ShipmentUpdateData,
 } from "@cubby/schemas/shipment";
+import {
+  rawShipmentOut,
+  type RawShipmentOut,
+} from "@cubby/schemas/shipment-raw-read";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -66,7 +68,7 @@ const shipmentRead = {
     );
     return [
       summaries.fields(
-        shipmentOut.pick({
+        rawShipmentOut.pick({
           firstEventDate: true,
           lastEventDate: true,
           eventSpanHours: true,
@@ -106,11 +108,11 @@ export const listShipmentsRead = (
     { read: shipmentRead },
   );
 
-const listShipments = completeListReader(shipmentOut, listShipmentsRead);
+const listShipments = completeListReader(rawShipmentOut, listShipmentsRead);
 const reader = createEntityCrud<
   typeof shipment,
   ShipmentRow,
-  ShipmentOut,
+  RawShipmentOut,
   ShipmentUpdateData,
   "shipment"
 >({
@@ -118,7 +120,7 @@ const reader = createEntityCrud<
   entity: "shipment",
   fetchById: createEntityRowFetcher(shipment),
   fromDB: async (db, row) =>
-    shipmentOut.parse(
+    rawShipmentOut.parse(
       (await plan.read(db, [row], { kind: "full" }, undefined, "live"))[0],
     ),
   toUpdate: (data) => buildPartialUpdateValues(data),

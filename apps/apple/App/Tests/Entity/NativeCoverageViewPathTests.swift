@@ -42,6 +42,29 @@ struct NativeCoverageViewPathTests {
                 == ["Review reconciliation on web"])
     }
 
+    @Test func receivingUsesTheCanonicalExpenseProductDecision() {
+        func expense(_ result: JSONValue) -> EntityRow {
+            EntityRow(
+                id: "EXP-4K7M", title: "Synthetic purchase line", subtitle: nil, imageURL: nil,
+                raw: [
+                    "id": "EXP-4K7M", "productId": "PRD-OLD2",
+                    "fields": ["productId": ["result": result]],
+                ])
+        }
+        let linked = expense([
+            "kind": "live",
+            "decision": ["outcome": ["kind": "value", "value": "PRD-4K7M"]],
+        ])
+        let empty = expense([
+            "kind": "live", "decision": ["outcome": ["kind": "empty", "reason": "unset"]],
+        ])
+        let missing = expense(["kind": "missing"])
+
+        #expect(DetailSlotRegistry.supplement(for: .expense, row: linked) != nil)
+        #expect(DetailSlotRegistry.supplement(for: .expense, row: empty) == nil)
+        #expect(DetailSlotRegistry.supplement(for: .expense, row: missing) == nil)
+    }
+
     /// A handoff slot draws its row only where web's slot predicate would draw the slot.
     @Test func importAgentHandoffFollowsTheRunsPurposeAndLiveness() throws {
         func run(_ purpose: String, _ status: String) -> EntityRow {

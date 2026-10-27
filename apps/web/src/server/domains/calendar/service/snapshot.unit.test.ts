@@ -3,6 +3,11 @@ import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  plantingCalendarSourceFixture,
+  mealCalendarSourceFixture,
+  taskCalendarSourceFixture,
+} from "~/features/calendar/calendar-source.fixtures";
 import { createDatabase } from "~/server/db/database-runtime";
 import type { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
 
@@ -22,10 +27,13 @@ const meal = (title = "Dinner"): CalendarItem => ({
   endDateExclusive: "2026-09-04",
   interaction: "move",
   sortOrder: null,
-  mealType: "dinner",
-  mealKind: "cooked",
-  recipeNames: ["Soup"],
-  displayImages: [],
+  source: mealCalendarSourceFixture({
+    id: testShortcode("meal", "MEL-4K7M"),
+    date: "2026-09-03",
+    mealType: "dinner",
+    mealKind: "cooked",
+    recipeNames: ["Soup"],
+  }),
   mealTotals: withMacros({
     cost: {
       status: "complete",
@@ -55,15 +63,14 @@ const task = (): CalendarItem => ({
   interaction: "move",
   due: { start: "2026-09-04", end: null },
   status: "not_started",
-  trade: "other",
+  source: taskCalendarSourceFixture(testShortcode("task", "TSK-9H64")),
   projectName: null,
   subjectProductName: null,
-  displayImages: [],
 });
 
 const planting = (): CalendarItem => ({
   kind: "planting",
-  displayImages: [],
+  source: plantingCalendarSourceFixture(testShortcode("planting", "PLT-3B2C")),
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",

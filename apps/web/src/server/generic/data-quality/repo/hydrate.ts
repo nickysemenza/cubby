@@ -11,10 +11,8 @@ import {
   dataCheckMessage,
   dataCheckWeight,
   dataCheckScoreCap,
-  dataCheckExemptible,
   DEFAULT_UNRESOLVED_SCORE_CAP,
   dataExceptionReasonLabel,
-  dataQualityFacets,
   relatedDataQualityEntities,
   type QualityScore,
   type QualityTerm,
@@ -22,7 +20,7 @@ import {
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
 import { qualityBreakdown } from "@cubby/schemas/field-explanation";
-import { type EntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { type EntityId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
@@ -30,6 +28,11 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exception-reasons";
+import {
+  qualityTerms,
+  isExpected,
+  evaluateRow,
+} from "~/server/generic/data-quality/repo/presentation";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
 import { storedEntryFor } from "./entries";
@@ -40,38 +43,8 @@ import {
   type StoredEvaluation,
 } from "./stored";
 
-type CheckState = QualityTerm["state"];
-
 const effectiveScoreCap = (check: DataCheck): number =>
   dataCheckScoreCap[check] ?? DEFAULT_UNRESOLVED_SCORE_CAP;
-
-/**
- * One term per distinct expected check: a gap unless an active exception
- * covers it. A gap or exception on a check that is not expected is ignored,
- * so unrelated (rolled-up) gaps never touch this record's score.
- */
-const qualityTerms = (
-  expectedChecks: readonly DataCheck[],
-  unresolvedChecks: readonly DataCheck[],
-  activeExceptions: readonly DataCheck[],
-): Array<QualityTerm & { check: DataCheck }> => {
-  const gaps = new Set(unresolvedChecks);
-  const exceptions = new Set(activeExceptions);
-  return [...new Set(expectedChecks)].map((check) => {
-    const state: CheckState = gaps.has(check)
-      ? "gap"
-      : exceptions.has(check)
-        ? "excepted"
-        : "satisfied";
-    return {
-      check,
-      weight: dataCheckWeight[check],
-      scoreCap: dataCheckScoreCap[check],
-      defect: dataCheckKind[check] === "defect",
-      state,
-    };
-  });
-};
 
 /**
  * A target's score is independent of related entities: a Purchase can be
@@ -235,9 +208,6 @@ export const loadQualityBreakdown = async (
   );
 };
 
-const isExpected = (row: StoredEvaluation, check: DataCheck): boolean =>
-  row.checks[check] !== undefined && row.checks[check] !== "not_applicable";
-
 /** Published rows for list pages, or the same TypeScript checks evaluated live. */
 const loadEvaluations = async (
   db: Database | DrizzleTransaction,
@@ -249,61 +219,10 @@ const loadEvaluations = async (
     ? evaluateLiveQuality(db, storedEntryFor(entity), ids)
     : loadPublishedQuality(db, entity, ids);
 
-type Evaluated = Omit<DataQuality, "relatedGaps" | "relatedExceptions">;
+type Evaluated = ReturnType<typeof evaluateRow>;
 
 const targetKey = (target: { targetType: string; targetId: string }) =>
   `${target.targetType}:${target.targetId}`;
-
-const evaluateRow = (
-  entity: ScoredEntity,
-  row: StoredEvaluation & { score?: number | null },
-): Evaluated => {
-  const checks = checksOf(entity);
-  const targetId = parseShortcodeFor(entity, row.shortcode);
-  const expectedChecks: DataCheck[] = [];
-  const gaps: Array<Omit<DataQualityGap, "check"> & { check: DataCheck }> = [];
-  checks.forEach((check) => {
-    if (isExpected(row, check)) expectedChecks.push(check);
-    if (row.checks[check] !== "gap") return;
-    gaps.push({
-      check,
-      facet: dataCheckFacet[check],
-      kind: dataCheckKind[check],
-      targetType: entity,
-      targetId,
-      message: dataCheckMessage[check],
-    });
-  });
-  // Waivers never reopen: every recorded decision on an exemptible check holds.
-  const exceptions: DataQualityException[] = row.exceptions.map(
-    (exception) => ({
-      ...exception,
-      targetType: entity,
-      targetId,
-      state: dataCheckExemptible[exception.check] ? "active" : "stale",
-    }),
-  );
-  // Stored outcomes remain authoritative until publication, including a waiver
-  // added or withdrawn since the last pass. Live evaluation carries the same states.
-  const activeChecks = new Set(
-    checks.filter((check) => row.checks[check] === "waived"),
-  );
-  const terms = qualityTerms(
-    expectedChecks,
-    gaps.map((gap) => gap.check),
-    [...activeChecks].map((check) => dataCheck.parse(check)),
-  );
-  const facets = dataQualityFacets[entity].map((name) => ({
-    name,
-    status: scoreQualityTerms(
-      terms.filter((term) => dataCheckFacet[term.check] === name),
-    ).status,
-    gaps: gaps.filter((gap) => gap.facet === name),
-  }));
-  const calculated = scoreQualityTerms(terms);
-  const score = row.score === undefined ? calculated.score : row.score;
-  return { status: calculated.status, score, facets, gaps, exceptions };
-};
 
 /** `(ownerId, relatedId)` pairs for every declared roll-up relation. */
 const loadRelatedIds = async (

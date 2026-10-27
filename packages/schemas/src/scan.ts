@@ -8,9 +8,22 @@
  */
 
 import { z } from "zod";
-import { locationRefOut } from "./location-fields";
+import {
+  rawScanStray,
+  rawScanProduct,
+  rawScanAtLocation,
+} from "./scan-raw-read";
+import { withFieldEnvelopes } from "./field-envelope";
+import {
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+} from "./generated/entity-field-envelope-fields.product.gen";
+import {
+  inventoryFieldEnvelopeFields,
+  inventoryPublicReadFields,
+} from "./generated/entity-field-envelope-fields.inventory.gen";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
-import { amount, positiveAmount } from "./codec";
+import { positiveAmount } from "./codec";
 import {
   inventoryShortcode,
   locationShortcode,
@@ -45,40 +58,23 @@ export type ScanAtLocationInput = z.infer<typeof scanAtLocationInput>;
  * never acted on mid-sweep — the whole point of deferring is that the camera
  * does not stop.
  */
-export const scanStrayOut = z.object({
-  entryId: inventoryShortcode,
-  location: locationRefOut,
-  amount,
-  ambiguousQuantity: z
-    .boolean()
-    .describe(
-      "The source row holds more than one unit, so moving it whole would relocate stock the scan never accounted for. Needs an explicit move-one-or-all choice.",
-    ),
-});
-export type ScanStrayOut = z.infer<typeof scanStrayOut>;
-
-export const scanAtLocationOut = z.object({
-  outcome: z
-    .enum(["added", "confirmed", "queued"])
-    .describe(
-      "`added` created a row here; `confirmed` stamped an existing row as seen, leaving its amount alone; `queued` wrote nothing because the product only lives elsewhere.",
-    ),
-  product: z.object({
-    id: productShortcode,
-    name: z.string(),
-    created: z.boolean(),
-    /**
-     * Enough to decide whether the scan is worth a curation prompt, without a
-     * second fetch on the hot path. A brand-new UPC product often lands with a
-     * placeholder name, no price, and no ingredient link — the last of which
-     * makes it invisible to recipe costing.
-     */
-    brandName: z.string().nullable(),
-    hasPrice: z.boolean(),
-  }),
-  strays: z.array(scanStrayOut),
-  sideEffects: mutationSideEffectsSchema,
-});
+export const scanStrayOut = withFieldEnvelopes(
+  rawScanStray,
+  inventoryFieldEnvelopeFields,
+  inventoryPublicReadFields,
+);
+export type ScanStrayOut = z.output<typeof scanStrayOut>;
+export const scanProductOut = withFieldEnvelopes(
+  rawScanProduct,
+  productFieldEnvelopeFields,
+  productPublicReadFields,
+);
+export const scanAtLocationOut = rawScanAtLocation
+  .omit({ product: true, strays: true })
+  .extend({
+    product: scanProductOut,
+    strays: z.array(scanStrayOut),
+  });
 export type ScanAtLocationOut = z.infer<typeof scanAtLocationOut>;
 
 export const resolveScanStraysInput = z.object({

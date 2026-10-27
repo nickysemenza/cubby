@@ -5,7 +5,8 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { buildNutrition } from "@cubby/schemas/nutrition";
-import type { ProblemArrays } from "@cubby/schemas/problems";
+import { problemsFastSchema } from "@cubby/schemas/problems";
+import type { ProblemArrays } from "@cubby/schemas/problems-raw-read";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -25,6 +26,11 @@ import {
   publishAllQualityFixtures,
   publishQualityFixtures,
 } from "~/server/testing/quality.fixtures";
+
+import {
+  publicProblemGroups,
+  publicProblemSlice,
+} from "../operations/problem-public-read";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -838,6 +844,35 @@ describe("problems — charges not reconciling", () => {
       statedTotal: 100,
       expenseTotal: 85,
       expenseCount: 1,
+    });
+    const selected = await publicProblemGroups(
+      ctx.db,
+      { purchasesNotReconciling },
+      problemsFastSchema.pick({ purchasesNotReconciling: true }),
+    );
+    const page = await publicProblemSlice(
+      ctx.db,
+      {
+        type: "purchasesNotReconciling",
+        total: 2,
+        items: [purchasesNotReconciling[0], { id: 42 }],
+      },
+      { pageIndex: 0, pageSize: 1 },
+    );
+    expect(page.total).toBe(2);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({ id: purchasesNotReconciling[0]?.id });
+    const publicRow = selected.purchasesNotReconciling[1];
+    expect(publicRow).not.toHaveProperty("expenseTotal");
+    expect(publicRow).not.toHaveProperty("expenseCount");
+    expect(publicRow).not.toHaveProperty("vendorId");
+    expect(publicRow).toMatchObject({
+      observation: { expenseTotal: 85, expenseCount: 1 },
+      fields: {
+        expenseTotal: { result: { kind: expect.any(String) } },
+        expenseCount: { result: { kind: expect.any(String) } },
+        vendorId: { current: { controls: { kind: expect.any(String) } } },
+      },
     });
   });
 

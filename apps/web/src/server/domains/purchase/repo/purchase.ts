@@ -16,15 +16,12 @@ import {
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { ExpenseOut } from "@cubby/schemas/project";
 import type {
   LinkExpensesToPurchaseInput,
   MergePurchasesInput,
   MergePurchasesOut,
   PurchaseCreateInput,
   PurchaseFilters,
-  PurchaseListItemOut,
-  PurchaseOut,
   PurchaseUpdateData,
   ReclassifyPurchaseDocumentInput,
   SplitExpenseInput,
@@ -32,15 +29,20 @@ import type {
 import {
   purchaseExpenseStatus,
   purchaseFinancialReconciliation,
-  purchaseListItemOut,
-  purchaseOut,
   purchaseReconciliation,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
   splitExpenseDelta,
 } from "@cubby/schemas/purchase";
+import {
+  type RawPurchaseListItemOut,
+  type RawPurchaseOut,
+  rawPurchaseListItemOut,
+  rawPurchaseOut,
+} from "@cubby/schemas/purchase-raw-read";
 import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { parseShortcode, cents } from "@cubby/shared";
 import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -118,6 +120,10 @@ import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import {
+  purchaseCoverageSql,
+  purchaseEvidenceFieldResolutionsSql,
+} from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
   type PurchaseFinancialAggregate,
@@ -176,11 +182,6 @@ import {
   findOrCreateWithShortcode,
   insertWithShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import {
-  purchaseCoverageSql,
-  purchaseEvidenceFieldResolutionsSql,
-} from "./purchase-evidence-policy";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
   "Shipment.purchaseId": {
@@ -437,16 +438,16 @@ type PurchaseRow = Pick<
   | "createdAt"
   | "updatedAt"
 > & {
-  purchaserId: PurchaseOut["purchaserId"];
+  purchaserId: RawPurchaseOut["purchaserId"];
   purchaserOverrideId: string | null;
-  coverage: PurchaseOut["coverage"];
-  fieldResolutions: PurchaseOut["fieldResolutions"];
+  coverage: RawPurchaseOut["coverage"];
+  fieldResolutions: RawPurchaseOut["fieldResolutions"];
   spendingCategoryOrigin: string;
   spendingCategoryShortcode: string | null;
-  spendingCategoryName: PurchaseOut["spendingCategoryName"];
-  itemizationExpectation: PurchaseOut["itemizationExpectation"];
+  spendingCategoryName: RawPurchaseOut["spendingCategoryName"];
+  itemizationExpectation: RawPurchaseOut["itemizationExpectation"];
   defaultProjectShortcode: string | null;
-  defaultTrade: PurchaseOut["defaultTrade"];
+  defaultTrade: RawPurchaseOut["defaultTrade"];
   vendorName: string | null;
   vendorShortcode: string;
   vendorAccountShortcode: string | null;
@@ -465,11 +466,11 @@ type PurchaseRow = Pick<
 
 const dbPurchaseToAPI = (
   row: PurchaseRow,
-  dataQuality: PurchaseOut["dataQuality"],
-  images: PurchaseOut["images"] = [],
+  dataQuality: RawPurchaseOut["dataQuality"],
+  images: RawPurchaseOut["images"] = [],
   financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
   spendingCategorySummary: SpendingCategorySummary = emptySpendingCategorySummary(),
-): PurchaseOut => ({
+): RawPurchaseOut => ({
   purchaserId: row.purchaserId,
   purchaserOverrideId: row.purchaserOverrideId
     ? parseShortcodeFor("ledgerParty", row.purchaserOverrideId)
@@ -482,7 +483,7 @@ const dbPurchaseToAPI = (
   defaultProjectId: row.defaultProjectShortcode
     ? parseShortcodeFor("project", row.defaultProjectShortcode)
     : null,
-  spendingCategoryOrigin: purchaseOut.shape.spendingCategoryOrigin.parse(
+  spendingCategoryOrigin: rawPurchaseOut.shape.spendingCategoryOrigin.parse(
     row.spendingCategoryOrigin,
   ),
   spendingCategoryId: row.spendingCategoryShortcode
@@ -542,7 +543,7 @@ const dbPurchaseToAPI = (
 const loadPurchaseImages = async (
   db: Database | DrizzleTransaction,
   id: PurchaseId,
-): Promise<PurchaseOut["images"]> => {
+): Promise<RawPurchaseOut["images"]> => {
   const rows = await unwrapDb(db)
     .select({
       shortcode: image.shortcode,
@@ -724,7 +725,7 @@ export const purchaseListRead = async (
             ),
           );
           return [
-            bind(purchaseOut.pick({ displayName: true }), (row) => ({
+            bind(rawPurchaseOut.pick({ displayName: true }), (row) => ({
               displayName: purchaseLabel({
                 orderId: row.orderId,
                 displayLabel: row.displayLabel,
@@ -732,7 +733,7 @@ export const purchaseListRead = async (
                 date: row.date,
               }),
             })),
-            bind(purchaseOut.pick({ spendingCategoryId: true }), (row) => ({
+            bind(rawPurchaseOut.pick({ spendingCategoryId: true }), (row) => ({
               spendingCategoryId: row.spendingCategoryShortcode
                 ? parseShortcodeFor(
                     "spendingCategory",
@@ -741,7 +742,7 @@ export const purchaseListRead = async (
                 : null,
             })),
             bind(
-              purchaseOut.pick({
+              rawPurchaseOut.pick({
                 vendorId: true,
                 vendorAccountId: true,
                 defaultProjectId: true,
@@ -769,7 +770,7 @@ export const purchaseListRead = async (
               },
             ),
             bind(
-              purchaseOut.pick({ images: true, vendorLogo: true }),
+              rawPurchaseOut.pick({ images: true, vendorLogo: true }),
               (row) => ({
                 images: [],
                 vendorLogo: row.vendorLogoKey
@@ -778,7 +779,7 @@ export const purchaseListRead = async (
               }),
             ),
             bind(
-              purchaseOut.pick({
+              rawPurchaseOut.pick({
                 coverage: true,
                 bookingCoverage: true,
                 documentCoverage: true,
@@ -809,14 +810,14 @@ export const purchaseListRead = async (
               },
             ),
             categories.fields(
-              purchaseOut.pick({ spendingCategorySummary: true }),
+              rawPurchaseOut.pick({ spendingCategorySummary: true }),
               (row, loaded) => ({
                 spendingCategorySummary:
                   loaded.get(row.id) ?? emptySpendingCategorySummary(),
               }),
             ),
             financials.fields(
-              purchaseOut.pick({
+              rawPurchaseOut.pick({
                 reconciliation: true,
                 financialReconciliation: true,
                 reconciliationLabel: true,
@@ -932,7 +933,7 @@ export const purchaseList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ): Promise<{
-  data: PurchaseListItemOut[];
+  data: RawPurchaseListItemOut[];
   count: number;
   sums?: { expenseTotal: number; expenseCount: number };
 }> => {
@@ -942,7 +943,7 @@ export const purchaseList = async (
   ]);
   const result = {
     ...page,
-    data: page.data.map((row) => purchaseListItemOut.parse(row)),
+    data: page.data.map((row) => rawPurchaseListItemOut.parse(row)),
   };
   if (sums) Object.assign(result, { sums });
   return result;
@@ -951,7 +952,7 @@ export const purchaseList = async (
 export const getPurchaseByID = async (
   db: Database,
   id: PurchaseId,
-): Promise<PurchaseOut> => {
+): Promise<RawPurchaseOut> => {
   const [rows, images, financialByPurchase, dataQualities, categorySummaries] =
     await Promise.all([
       getDb(db)
@@ -985,11 +986,11 @@ type PurchaseFinanceProjection = {
 };
 type PurchaseFinanceRead = {
   reconciliation?: Pick<
-    PurchaseOut,
+    RawPurchaseOut,
     "statedTotal" | "expenseTotal" | "reconciliation"
   >;
-  allocation?: Pick<PurchaseOut, "id" | "expenseTotal">;
-  settlement?: Pick<PurchaseOut, "id" | "financialReconciliation">;
+  allocation?: Pick<RawPurchaseOut, "id" | "expenseTotal">;
+  settlement?: Pick<RawPurchaseOut, "id" | "financialReconciliation">;
 };
 
 /** Select the union of this batch's finance inputs, without detail hydration. */
@@ -1081,7 +1082,7 @@ export const getPurchaseFinanceByID = async (
 };
 
 export type PurchaseLinkIdentity = Pick<
-  PurchaseOut,
+  RawPurchaseOut,
   "id" | "orderId" | "displayLabel" | "date" | "vendorId" | "vendorName"
 >;
 
@@ -1117,7 +1118,7 @@ export const getPurchaseLinkIdentityByID = async (
 export const getPurchaseByShortcode = async (
   db: Database,
   shortcode: string,
-): Promise<PurchaseOut | null> => {
+): Promise<RawPurchaseOut | null> => {
   const id = await resolveLiveShortcode(db, shortcode, "purchase");
   return id ? getPurchaseByID(db, parseEntityId("purchase", id)) : null;
 };
@@ -1126,7 +1127,7 @@ export const reclassifyPurchaseDocument = async (
   db: Database,
   input: ReclassifyPurchaseDocumentInput,
   actor: ActorContext,
-): Promise<PurchaseOut> => {
+): Promise<RawPurchaseOut> => {
   const id = await resolveOrThrow(db, "purchase", input.purchaseId);
   const imageId = await resolveOrThrow(db, "image", input.imageId);
   await withTransaction(db, async (tx) => {
@@ -1168,7 +1169,7 @@ export const reclassifyPurchaseDocument = async (
 export const getPurchaseExpenses = async (
   db: Database,
   id: PurchaseId,
-): Promise<ExpenseOut[]> => {
+): Promise<RawExpenseOut[]> => {
   const rows = await getDb(db).query.expense.findMany({
     where: and(eq(expense.purchaseId, id), notDeleted(expense)),
     orderBy: [asc(expense.date), asc(expense.name)],
@@ -1471,7 +1472,7 @@ export const linkExpensesToPurchase = async (
   db: Database,
   input: LinkExpensesToPurchaseInput,
   actor: ActorContext,
-): Promise<PurchaseOut> => {
+): Promise<RawPurchaseOut> => {
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
 
   // Resolve INCLUDING soft-deleted rows. A live-only lookup here would throw
@@ -1571,7 +1572,7 @@ export const splitExpense = async (
   actor: ActorContext,
   classifyLineRole?: ExpenseLineRoleClassifier,
 ): Promise<{
-  items: ExpenseOut[];
+  items: RawExpenseOut[];
   priceAffectedProductIds: ProductId[];
 }> => {
   const { attributionPolicy, parts: requestedParts } = input;
@@ -2485,7 +2486,9 @@ export const mergePurchases = async (
   db: Database,
   input: MergePurchasesInput,
   actor: ActorContext,
-): Promise<MergePurchasesOut> => {
+): Promise<
+  Omit<MergePurchasesOut, "purchase"> & { purchase: RawPurchaseOut }
+> => {
   const { keepId, loserIds: losers } = await resolveMergeTargets(db, {
     entity: "purchase",
     keepId: input.keepId,

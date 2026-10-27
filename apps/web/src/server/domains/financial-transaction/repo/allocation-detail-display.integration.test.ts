@@ -1,4 +1,5 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -58,8 +59,10 @@ describe("allocation detail display", () => {
         id: transaction.output.id,
         missing: "error",
       });
-      expect(result.item).toMatchObject({
-        allocationItems: expect.arrayContaining(
+      if (!result.item) throw new Error("expected transaction");
+      const allocationItems = fieldValueOf(result.item.fields.allocationItems);
+      expect(allocationItems).toEqual(
+        expect.arrayContaining(
           allocations.map((allocation, index) => ({
             entity: "purchase",
             id: allocation.purchaseId,
@@ -68,11 +71,8 @@ describe("allocation detail display", () => {
             trailing: formatted[index],
           })),
         ),
-      });
-      expect(result.item).toHaveProperty(
-        "allocationItems.length",
-        amounts.length,
       );
+      expect(allocationItems).toHaveLength(amounts.length);
       expect(
         entityFieldModels.financialTransaction.fields.find(
           (field) => field.key === "allocations",

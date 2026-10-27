@@ -1,10 +1,11 @@
 import type { DecisionStep } from "@cubby/schemas/decision-step";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   InventoryShortcode,
-  LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ProductListItem } from "@cubby/schemas/product";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 /**
  * ProductDiscardDialog — record that units were thrown away or written off.
@@ -63,15 +64,7 @@ type DiscardValues = z.infer<typeof formSchema>;
 interface ProductDiscardDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product: {
-    id: ProductShortcode;
-    name: string;
-    inventoryEntry: ReadonlyArray<{
-      id: InventoryShortcode;
-      amount: { value: number; unit: string };
-      location: { id: LocationShortcode; name: string };
-    }>;
-  };
+  product: Pick<ProductListItem, "id" | "name" | "inventoryEntry">;
   /**
    * Pre-select the shelf being discarded from, for callers that opened this
    * from a specific inventory row. Seeds the form's defaults, so a caller that
@@ -184,10 +177,15 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
 
   const entryOptions = useMemo(
     () =>
-      entries.map((entry) => ({
-        value: entry.id,
-        label: `${entry.location.name} — ${entry.amount.value} ${entry.amount.unit}`,
-      })),
+      entries.map((entry) => {
+        const amount = fieldValueOf(entry.fields.amount);
+        return {
+          value: entry.id,
+          label: amount
+            ? `${entry.location.name} — ${amount.value} ${amount.unit}`
+            : entry.location.name,
+        };
+      }),
     [entries],
   );
 

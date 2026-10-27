@@ -1,3 +1,4 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { expenseShortcode } from "@cubby/schemas/identifiers";
 import {
   confirmInventoryExpenseBeneficiaryInput,
@@ -17,7 +18,7 @@ export const expenseContract = defineContract(
   {
     chartData: query({
       input: schemas.expenseFiltersSchema,
-      output: z.array(schemas.expenseOut),
+      output: z.array(entityFieldEnvelopeSchemas.expense.detail),
     }),
     analytics: query({
       exposure: "capability",
@@ -61,7 +62,12 @@ export const expenseContract = defineContract(
     }),
     chargeContext: query({
       input: expenseShortcode,
-      output: schemas.expenseChargeContextOut,
+      output: schemas.expenseChargeContextOut
+        .unwrap()
+        .extend({
+          siblings: z.array(entityFieldEnvelopeSchemas.expense.detail),
+        })
+        .nullable(),
     }),
     inventoryOwnershipContext: query({
       exposure: "capability",

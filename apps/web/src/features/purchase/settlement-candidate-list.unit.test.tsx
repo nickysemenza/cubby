@@ -1,9 +1,12 @@
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import type { PurchaseSettlementSuggestOut } from "@cubby/schemas/purchase";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
+
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
   SettlementCandidateList,
@@ -14,8 +17,15 @@ const code = (suffix: string) =>
   financialTransactionShortcode.parse(`FTX-${suffix}`);
 const candidate = (id: string, merchant: string): SettlementCandidate => ({
   transaction: fromPartial<FinancialTransactionOut>({
+    fields: {
+      merchant: fieldValueFixture(
+        entityFieldEnvelopeSchemas.financialTransaction.detail.shape.fields
+          .shape["merchant"],
+        merchant,
+      ),
+    },
     id,
-    merchant,
+
     displayName: merchant,
     kind: "purchase",
     amount: 42.5,
@@ -121,3 +131,5 @@ describe("SettlementCandidateList", () => {
     ).toBeEnabled();
   });
 });
+
+type FinancialTransactionOut = DetailRecordOf<"financialTransaction">;

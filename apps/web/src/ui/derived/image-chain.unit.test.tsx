@@ -49,11 +49,10 @@ it("loads the dedicated image chain and preserves precedence, cover, and source 
     entityKind: "inventory",
     entityId: "INV-4K7M",
   });
-  expect(
-    within(chain)
-      .getAllByRole("heading")
-      .map((heading) => heading.textContent),
-  ).toEqual(["Own", "From product PRD-4K7M"]);
+  const levels = within(chain).getAllByRole("listitem");
+  expect(levels).toHaveLength(2);
+  expect(levels[0]).toHaveTextContent("Own");
+  expect(levels[1]).toHaveTextContent("From product PRD-4K7M");
   expect(within(chain).getAllByText("Cover")).toHaveLength(1);
   expect(
     within(chain).getByRole("img", { name: "Chosen cover" }),

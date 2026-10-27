@@ -1,9 +1,10 @@
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { EntityRef } from "@cubby/schemas/entity";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { plantingGuides } from "@cubby/schemas/garden-guides";
 import { useCallback, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
@@ -12,7 +13,9 @@ import type { ScheduleRow } from "~/features/schedule/schedule-grid";
 
 export function usePlantingScheduleLabel(
   rows: readonly ScheduleRow[],
-  plantings: readonly { id: string; displayImages: DisplayImageSummary[] }[],
+  plantings: readonly (Pick<ListRowOf<"planting">, "id"> & {
+    fields: Pick<ListRowOf<"planting">["fields"], "displayImages">;
+  })[],
 ) {
   const seeded = useMemo(
     () =>
@@ -22,7 +25,7 @@ export function usePlantingScheduleLabel(
             entityKind: "planting",
             entityId: planting.id,
           }),
-          planting.displayImages[0] ?? null,
+          fieldValueOf(planting.fields.displayImages)?.[0] ?? null,
         ]),
       ),
     [plantings],

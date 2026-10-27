@@ -3,17 +3,18 @@ import {
   type CostType,
   costTypeValues,
 } from "@cubby/schemas/expense-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
   FinancialBookingPreview,
   FinancialBookingInput,
 } from "@cubby/schemas/financial-booking";
-import type { FinancialTransactionOut } from "@cubby/schemas/financial-transaction";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import { TRADE_LABELS } from "@cubby/schemas/project";
 import { type Trade, tradeSchema } from "@cubby/schemas/task-fields";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { WithVendorShortcodeSearch } from "~/entity/picker/with-vendor-search";
@@ -36,8 +37,13 @@ const COST_TYPE_OPTIONS: readonly PickerOption[] = costTypeValues.map(
 );
 
 function expectsBookingReview(transaction: FinancialTransactionOut) {
+  const effectiveTransactionCoverage = fieldValueOf(
+    transaction.fields.coverage,
+  );
+
   return (
-    ["missing", "partial"].includes(transaction.coverage.booking) ||
+    (effectiveTransactionCoverage !== null &&
+      ["missing", "partial"].includes(effectiveTransactionCoverage.booking)) ||
     (transaction.kind === "income" &&
       transaction.amount < 0 &&
       transaction.allocations.length === 0)
@@ -243,3 +249,5 @@ export function FinancialBookingReview({
     </Stack>
   );
 }
+
+type FinancialTransactionOut = DetailRecordOf<"financialTransaction">;

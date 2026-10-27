@@ -644,7 +644,6 @@ const getMealPreparationsRaw = async (
           id: parseShortcodeFor("meal", portion.targetMealShortcode),
           date: portion.targetMealDate,
           name: portion.targetMealName,
-          mealKind: portion.targetMealKind,
         },
         eater: {
           id: parseShortcodeFor("ledgerParty", portion.ledgerPartyShortcode),

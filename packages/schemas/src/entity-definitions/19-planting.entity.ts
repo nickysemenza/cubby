@@ -1,5 +1,4 @@
 import { imageDescriptionInputs } from "./image-description-inputs";
-import { automaticFields } from "./automatic-fields";
 import { dateRangeSchema, storedDateRangeSchema } from "../date-range";
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
@@ -162,7 +161,6 @@ export default defineEntity({
     },
   },
   model: {
-    stored: { automaticFields: automaticFields("planting", "Planting") },
     fields: [
       {
         key: "plantId",
@@ -630,8 +628,14 @@ export default defineEntity({
       export: "plantingCreateInput",
     },
     update: { module: "@cubby/schemas/planting", export: "plantingUpdateData" },
-    output: { module: "@cubby/schemas/planting", export: "plantingOut" },
-    list: { module: "@cubby/schemas/planting", export: "plantingListItemOut" },
+    output: {
+      module: "@cubby/schemas/planting-raw-read",
+      export: "rawPlantingOut",
+    },
+    list: {
+      module: "@cubby/schemas/planting-raw-read",
+      export: "rawPlantingListItemOut",
+    },
   },
   storage: {
     indexes: [{ on: ["status"] }],

@@ -1,3 +1,4 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
@@ -57,10 +58,14 @@ function ReextractNotice() {
 export const CookbookContents: DetailSlotComponent<"cookbook"> = ({
   record: cookbook,
 }) => {
+  const effectiveCookbookNeedsReextract = fieldValueOf(
+    cookbook.fields.needsReextract,
+  );
+
   return (
     <Stack gap="md">
       <IngredientUsagePanel cookbookId={cookbook.id} />
-      {!cookbook.needsReextract && (
+      {!effectiveCookbookNeedsReextract && (
         <Disclosure summary="Extraction report">
           <EntityReportSlot
             slot="cookbook.extraction-report"
@@ -79,6 +84,13 @@ export const CookbookContents: DetailSlotComponent<"cookbook"> = ({
 export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
   record: cookbook,
 }) => {
+  const effectiveCookbookSourceRecipeCount = fieldValueOf(
+    cookbook.fields.sourceRecipeCount,
+  );
+  const effectiveCookbookRecipeCount = fieldValueOf(
+    cookbook.fields.recipeCount,
+  );
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const reprocess = useBulkStream<
@@ -86,7 +98,8 @@ export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
     { reprocessed: number; importableExtras: string[] }
   >();
   const notImported = Math.max(
-    cookbook.sourceRecipeCount - cookbook.recipeCount,
+    (effectiveCookbookSourceRecipeCount ?? 0) -
+      (effectiveCookbookRecipeCount ?? 0),
     0,
   );
   const runReprocess = (id: CookbookShortcode) =>
@@ -149,15 +162,26 @@ export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
 
 export const CookbookImportProgress: DetailSlotComponent<"cookbook"> = ({
   record: cookbook,
-}) => (
-  <Stack gap="sm">
-    {cookbook.needsReextract && <ReextractNotice />}
-    <DetailAction>
-      <CookbookActions record={cookbook} />
-    </DetailAction>
-    <Description size="xs">
-      {cookbook.recipeCount} of {cookbook.sourceRecipeCount} source recipes
-      imported.
-    </Description>
-  </Stack>
-);
+}) => {
+  const effectiveCookbookNeedsReextract = fieldValueOf(
+    cookbook.fields.needsReextract,
+  );
+  const effectiveCookbookRecipeCount = fieldValueOf(
+    cookbook.fields.recipeCount,
+  );
+  const effectiveCookbookSourceRecipeCount = fieldValueOf(
+    cookbook.fields.sourceRecipeCount,
+  );
+  return (
+    <Stack gap="sm">
+      {effectiveCookbookNeedsReextract && <ReextractNotice />}
+      <DetailAction>
+        <CookbookActions record={cookbook} />
+      </DetailAction>
+      <Description size="xs">
+        {effectiveCookbookRecipeCount} of {effectiveCookbookSourceRecipeCount}{" "}
+        source recipes imported.
+      </Description>
+    </Stack>
+  );
+};

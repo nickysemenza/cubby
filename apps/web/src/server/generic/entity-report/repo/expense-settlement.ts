@@ -1,7 +1,7 @@
 import { expenseShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ExpenseOut } from "@cubby/schemas/project";
 import { SPLIT_NEEDS_PURCHASE_REASON } from "@cubby/schemas/purchase";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { cents } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 
@@ -26,7 +26,7 @@ type ChargeContext = Awaited<ReturnType<typeof expenseChargeContextWorkflow>>;
  * never moves inventory on its own.
  */
 export const composeExpenseSettlementSection = (
-  expense: Pick<ExpenseOut, "cost" | "purchaseId" | "productId">,
+  expense: Pick<RawExpenseOut, "cost" | "purchaseId" | "productId">,
   context: ChargeContext,
 ) => {
   const actions = [

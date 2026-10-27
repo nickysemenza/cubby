@@ -26,7 +26,20 @@ const explanation = mock(fieldExplanationOutput, {
     subject: { entityKind: "product", entityId: productId },
     field: "dataQuality",
     label: "Quality",
-    value: 80,
+    envelope: {
+      current: {
+        assignment: null,
+        controls: { kind: "readonly", reason: "computed" },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "value", value: 80 },
+          provenance: { kind: "computed" },
+        },
+      },
+      work: { kind: "idle" },
+    },
     evaluatedAt: "2026-09-01T12:00:00Z",
     rule: {
       id: "product.data-quality",
@@ -34,7 +47,6 @@ const explanation = mock(fieldExplanationOutput, {
       description: "Synthetic weighted quality",
     },
     interpretation: undefined,
-    resolution: null,
     resolutionEvidence: null,
     qualityBreakdown: {
       score: 80,
@@ -161,17 +173,30 @@ it("compares the published stored value with the live value on demand", async ()
     ok: true,
     data: {
       ...explanation,
-      value: 18,
       qualityBreakdown: undefined,
       sources: [],
-      derived: {
-        meta: {
-          state: "stale",
-          decidedBy: { level: "computed" },
-          asOf: "2026-10-25T12:00:00Z",
+      envelope: {
+        ...explanation.envelope,
+        result: {
+          kind: "cached",
+          decision: {
+            outcome: { kind: "value", value: 18 },
+            provenance: { kind: "computed" },
+          },
+          computedAt: "2026-10-25T12:00:00Z",
+          freshness: "stale",
         },
-        stored: 18,
-        live: 24,
+        work: { kind: "pending" },
+      },
+      comparison: {
+        kind: "available",
+        result: {
+          kind: "live",
+          decision: {
+            outcome: { kind: "value", value: 24 },
+            provenance: { kind: "computed" },
+          },
+        },
       },
     },
   }));

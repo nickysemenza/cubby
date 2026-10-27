@@ -1,8 +1,9 @@
 import {
+  productShortcode,
   inventoryShortcode,
   locationShortcode,
-  productShortcode,
 } from "@cubby/schemas/identifiers";
+import { productListItemOut } from "@cubby/schemas/product";
 import { Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -81,16 +82,10 @@ function useRecordSaleAction(): EntityActionHandles {
  * row, a foreign subject) gets no verb rather than a dialog that cannot
  * answer that question.
  */
-const discardableProduct = z.object({
-  id: productShortcode,
-  name: z.string(),
-  inventoryEntry: z.array(
-    z.object({
-      id: inventoryShortcode,
-      amount: z.object({ value: z.number(), unit: z.string() }),
-      location: z.object({ id: locationShortcode, name: z.string() }),
-    }),
-  ),
+const discardableProduct = productListItemOut.pick({
+  id: true,
+  name: true,
+  inventoryEntry: true,
 });
 type DiscardableProduct = z.infer<typeof discardableProduct>;
 

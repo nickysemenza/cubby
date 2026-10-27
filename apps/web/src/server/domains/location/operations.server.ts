@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { locationFiltersSchema } from "@cubby/schemas/location";
+import { locationWithParentNameOut } from "@cubby/schemas/location";
 import type { z } from "zod";
 
 import { locationContract } from "~/contracts/location.contract";
@@ -16,6 +17,11 @@ import {
 } from "~/server/domains/location/repo/tree";
 import { getLocationValuationSummary } from "~/server/domains/location/repo/valuation";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import {
+  readPublicEntityRows,
+  readPublicEntityRow,
+} from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -54,22 +60,43 @@ const ensureGlobalUnknownWorkflow = bindWorkflow(
 );
 
 export const locationHandlers = implementOperationDomain(locationContract, {
-  makeTree: (context) => buildLocationTree(context.db),
+  makeTree: async (context) =>
+    readPublicEntityRows({
+      db: context.db,
+      entity: "location",
+      projection: "detail",
+      rows: await buildLocationTree(context.db),
+    }),
   valuationSummary: (context) => getLocationValuationSummary(context.db),
   subtree: async (context, input) =>
-    buildLocationTree(
-      context.db,
-      await shortcodes.one(context.db, input.shortcode),
-    ),
+    readPublicEntityRows({
+      db: context.db,
+      entity: "location",
+      projection: "detail",
+      rows: await buildLocationTree(
+        context.db,
+        await shortcodes.one(context.db, input.shortcode),
+      ),
+    }),
   inventoryBreakdown: async (context, input) =>
     getLocationInventoryBreakdown(
       context.db,
       await shortcodes.one(context.db, input.shortcode),
     ),
-  ensureGlobalUnknown: (context) =>
-    ensureGlobalUnknownWorkflow(context, undefined),
-  getByShortcodes: (context, input) =>
-    getLocationsByShortcodes(context.db, input.shortcodes),
+  ensureGlobalUnknown: async (context) =>
+    readPublicEntityRow({
+      db: context.db,
+      entity: "location",
+      projection: "detail",
+      row: await ensureGlobalUnknownWorkflow(context, undefined),
+    }),
+  getByShortcodes: async (context, input) =>
+    publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "location",
+      schema: locationWithParentNameOut,
+      rows: await getLocationsByShortcodes(context.db, input.shortcodes),
+    }),
   search: (context, input) =>
     locationSearch(
       context.db,

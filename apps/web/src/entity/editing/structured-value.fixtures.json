@@ -87,27 +87,103 @@
                   "equipment": null,
                   "page": null
                 },
-                "source": {
-                  "type": "other"
-                },
                 "yield": null,
-                "servings": null,
-                "fieldResolutions": {
-                  "servings": {
-                    "mode": "inherit",
-                    "storedValue": null,
-                    "value": null,
-                    "fallbackValue": null,
-                    "source": "No serving yield",
-                    "sourceEntity": null,
-                    "matchesFallback": true,
-                    "canReset": false
-                  }
-                },
-                "tags": [],
                 "notes": null,
                 "forkedFromRecipeId": null,
-                "forkedFromRecipeName": null
+                "forkedFromRecipeName": null,
+                "fields": {
+                  "servings": {
+                    "current": {
+                      "assignment": {
+                        "kind": "inherit"
+                      },
+                      "controls": {
+                        "kind": "editable",
+                        "canSetNone": false,
+                        "canConfirm": false,
+                        "reset": {
+                          "kind": "unavailable"
+                        }
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "empty",
+                          "reason": "unset"
+                        },
+                        "provenance": null
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "tags": {
+                    "current": {
+                      "assignment": {
+                        "kind": "value",
+                        "value": [],
+                        "ownership": {
+                          "kind": "record"
+                        }
+                      },
+                      "controls": {
+                        "kind": "editable",
+                        "canSetNone": false,
+                        "canConfirm": false,
+                        "reset": {
+                          "kind": "unavailable"
+                        }
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "value",
+                          "value": []
+                        },
+                        "provenance": {
+                          "kind": "own",
+                          "ownership": {
+                            "kind": "record"
+                          }
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  },
+                  "source": {
+                    "current": {
+                      "assignment": null,
+                      "controls": {
+                        "kind": "readonly",
+                        "reason": "computed"
+                      }
+                    },
+                    "result": {
+                      "kind": "live",
+                      "decision": {
+                        "outcome": {
+                          "kind": "value",
+                          "value": {
+                            "type": "other"
+                          }
+                        },
+                        "provenance": {
+                          "kind": "computed"
+                        }
+                      }
+                    },
+                    "work": {
+                      "kind": "idle"
+                    }
+                  }
+                }
               },
               "ingredient": null
             }
@@ -287,9 +363,63 @@
           "recipe": {
             "id": "RCP-2222",
             "name": "Vector stew",
-            "servings": null,
             "yield": null,
-            "totals": null
+            "fields": {
+              "servings": {
+                "current": {
+                  "assignment": {
+                    "kind": "inherit"
+                  },
+                  "controls": {
+                    "kind": "editable",
+                    "canSetNone": false,
+                    "canConfirm": false,
+                    "reset": {
+                      "kind": "unavailable"
+                    }
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              },
+              "totals": {
+                "current": {
+                  "assignment": null,
+                  "controls": {
+                    "kind": "readonly",
+                    "reason": "computed"
+                  }
+                },
+                "result": {
+                  "kind": "live",
+                  "decision": {
+                    "outcome": {
+                      "kind": "empty",
+                      "reason": "unset"
+                    },
+                    "provenance": {
+                      "kind": "computed"
+                    }
+                  }
+                },
+                "work": {
+                  "kind": "idle"
+                }
+              }
+            }
           },
           "scale": 2,
           "sortOrder": 1,

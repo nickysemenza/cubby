@@ -1,4 +1,3 @@
-import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import { hasKnownEstimate, nutrientKey } from "@cubby/schemas/nutrition";
 import {
   TIER1_NUTRIENT_KEYS,
@@ -15,6 +14,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatNumberRange } from "~/lib/format-range";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
+import type { RecipeCostingIngredient } from "~/lib/recipe-costing";
 import type {
   CostingRow,
   IngredientDataItem,
@@ -96,7 +96,7 @@ const NUTRIENT_OPTIONS: PickerOption[] = TIER1_NUTRIENT_KEYS.map((key) => ({
 
 export const RecipeIngredientList: React.FC<{
   ingredients: CostingRow[];
-  ingMap: Record<string, IngredientWithFoodLeanOut> | undefined;
+  ingMap: Record<string, RecipeCostingIngredient> | undefined;
   /**
    * The unified engine result (computed by the parent — RecipeDetail — with
    * sub-recipe rollups, usage estimates, and baker percentages applied). Rows

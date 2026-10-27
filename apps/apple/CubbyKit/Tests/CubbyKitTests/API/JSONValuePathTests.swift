@@ -35,6 +35,47 @@ struct JSONValuePathTests {
         #expect(row.pathText("recipes[].missing") == nil)
     }
 
+    @Test func canonicalResultsOwnScalarAndNestedPaths() {
+        let governed: JSONValue = [
+            "price": 99,
+            "fields": [
+                "price": ["result": ["kind": "missing"]],
+                "cost": [
+                    "result": [
+                        "kind": "cached",
+                        "decision": [
+                            "outcome": ["kind": "value", "value": ["amount": 13]]
+                        ],
+                    ]
+                ],
+                "tags": [
+                    "result": [
+                        "kind": "live",
+                        "decision": [
+                            "outcome": ["kind": "value", "value": ["a", "b"]]
+                        ],
+                    ]
+                ],
+                "categoryId": [
+                    "result": [
+                        "kind": "live",
+                        "decision": [
+                            "outcome": ["kind": "empty", "reason": "explicit_none"]
+                        ],
+                    ]
+                ],
+                "unknown": ["result": ["kind": "future"]],
+            ],
+        ]
+        #expect(governed.pathValue("price", preservingNull: true) == .null)
+        #expect(governed.pathText("price") == nil)
+        #expect(governed.pathText("cost.amount") == "13")
+        #expect(governed.pathText("tags[]") == "a, b")
+        #expect(governed.pathValue("categoryId", preservingNull: true) == .null)
+        #expect(governed.pathValue("unknown", preservingNull: true) == nil)
+        #expect(governed.pathText("fields.price.result.kind") == "missing")
+    }
+
     @Test func emptyTextIsAbsent() {
         let blank: JSONValue = ["label": ""]
         #expect(blank.pathText("label") == nil)

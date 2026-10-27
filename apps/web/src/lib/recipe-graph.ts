@@ -2,18 +2,23 @@ import type {
   IngredientShortcode,
   RecipeShortcode,
 } from "@cubby/schemas/identifiers";
-import type {
-  RecipeOut,
-  SectionIngredient,
-  SectionIngredientOut,
-} from "@cubby/schemas/recipe";
+import type { SectionIngredient } from "@cubby/schemas/recipe";
 import { match } from "ts-pattern";
 
-type RecipeGraphRecipe = Pick<RecipeOut, "id" | "sections">;
+type IngredientLine = Extract<SectionIngredient, { type: "ingredient" }>;
+type SubRecipeLine = Extract<SectionIngredient, { type: "recipe" }>;
+type GraphLine =
+  | (Pick<IngredientLine, "type"> & {
+      ingredient: Pick<IngredientLine["ingredient"], "id" | "name">;
+    })
+  | (Pick<SubRecipeLine, "type"> & {
+      recipe: Pick<SubRecipeLine["recipe"], "id" | "name">;
+    });
+export type RecipeGraphRecipe = Pick<SubRecipeLine["recipe"], "id"> & {
+  sections: { ingredients: GraphLine[] }[];
+};
 
-export const getRecipeIngredientName = (
-  ingredient: SectionIngredient | SectionIngredientOut,
-): string =>
+export const getRecipeIngredientName = (ingredient: GraphLine): string =>
   match(ingredient)
     .with({ type: "ingredient" }, (i) => i.ingredient.name)
     .with({ type: "recipe" }, (i) => i.recipe.name)
@@ -47,9 +52,7 @@ export const collectIngredientIds = (
   return [...ids];
 };
 
-const recipeIngredientLinkSignature = (
-  ingredient: SectionIngredient | SectionIngredientOut,
-): string =>
+const recipeIngredientLinkSignature = (ingredient: GraphLine): string =>
   ingredient.type === "ingredient"
     ? ingredient.ingredient.id
     : `r${ingredient.recipe.id}`;

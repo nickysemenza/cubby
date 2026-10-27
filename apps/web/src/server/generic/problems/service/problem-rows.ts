@@ -1,5 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import type { problemRowSchema } from "@cubby/schemas/problems";
+import type { problemRowSchema } from "@cubby/schemas/problems-raw-read";
 import type { z } from "zod";
 
 export type ProblemRowInput = z.input<typeof problemRowSchema>;

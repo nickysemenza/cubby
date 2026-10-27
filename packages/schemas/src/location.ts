@@ -1,4 +1,13 @@
-import locationDefinition from "./entity-definitions/04-location.entity";
+import {
+  locationFieldEnvelopeSchemas,
+  locationDetailNode,
+} from "./generated/entity-field-envelopes.location.gen";
+import { withFieldEnvelopes, type fieldValueOf } from "./field-envelope";
+import {
+  locationFieldEnvelopeFields,
+  locationPublicReadFields,
+} from "./generated/entity-field-envelope-fields.location.gen";
+import { rawLocationPickerReference } from "./location-raw-read";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { numericRangeFields } from "./base-entity";
@@ -6,11 +15,10 @@ import { money } from "./money";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { locationShortcode } from "./identifiers";
 import { imageOut } from "./image";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import { presenceFilter } from "./pagination";
 import {
   locationRefOut,
   locationListRefOut,
-  locationIdentityProductOut,
   locationType,
   locationValuation,
 } from "./location-fields";
@@ -24,11 +32,7 @@ export {
   type LocationUpdateInput,
 } from "./generated/location.gen";
 
-export {
-  locationIdentityProductOut,
-  locationType,
-  locationValuation,
-} from "./location-fields";
+export { locationType, locationValuation } from "./location-fields";
 
 export type LocationType = z.infer<typeof locationType>;
 
@@ -109,13 +113,15 @@ export type LocationValuationSummaryOut = z.infer<
  * display images own the location thumbnail. `price` is
  * what the container-valuation bucket rolls up.
  */
-export type LocationIdentityProductOut = z.infer<
-  typeof locationIdentityProductOut
+export type LocationIdentityProductOut = NonNullable<
+  ReturnType<
+    typeof fieldValueOf<
+      z.output<typeof locationFieldEnvelopeSchemas.output>["fields"]["product"]
+    >
+  >
 >;
 
-export const locationOutFields = locationDefinition.readSchemas.output.shape;
-
-export const locationOut = locationDefinition.readSchemas.output;
+export const locationOut = locationFieldEnvelopeSchemas.output;
 
 export type LocationOut = z.infer<typeof locationOut>;
 
@@ -141,7 +147,6 @@ export type LocationPathRefOut = z.infer<typeof locationPathRefOut>;
 export type LocationInventoryBreakdownOut = {
   id: z.infer<typeof locationShortcode>;
   name: string;
-  type: LocationType | null;
   directItemCount: number;
   totalItemCount: number;
   children: LocationInventoryBreakdownOut[];
@@ -150,7 +155,7 @@ export type LocationInventoryBreakdownOut = {
 export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdownOut> =
   z.lazy(() =>
     z.object({
-      ...locationListRefOut.shape,
+      ...locationListRefOut.pick({ id: true, name: true }).shape,
       directItemCount: z.number().int().nonnegative(),
       totalItemCount: z.number().int().nonnegative(),
       children: z.array(locationInventoryBreakdownOut),
@@ -182,23 +187,23 @@ export const locationOptionItemOut = z.object(locationOptionItemFields);
  * per row, and a `null` that meant "not requested" as well as "no photo" would
  * be the kind of ambiguity a reader can't resolve.
  */
-export const locationPickerItemOut = z.object({
-  ...locationOptionItemFields,
-  /**
-   * Resolved display cover: the location's first displayable image by
-   * `imageOrder`, then its identity product's first displayable cover. This is
-   * presentation-only; product imagery is never treated as a LocationImage.
-   */
+export const locationPickerAncestorOut = withFieldEnvelopes(
+  rawLocationPickerReference,
+  { type: locationFieldEnvelopeFields.type },
+  locationPublicReadFields,
+);
+export const locationPickerItemOut = locationPickerAncestorOut.extend({
+  aliases: z.array(z.string()).default([]),
+  ancestors: z.array(locationPickerAncestorOut),
+  /** Compact resolved cover artifact, separate from editable Image records. */
   coverImage: imageOut.nullable(),
 });
 export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;
 
-export const locationListItemOut = locationDefinition.readSchemas.list;
-const locationListItemFields = locationListItemOut.shape;
+export const locationListItemOut = locationFieldEnvelopeSchemas.list;
 export type LocationListItemOut = z.infer<typeof locationListItemOut>;
 
-export const locationWithParentNameOut = z.object({
-  ...locationOutFields,
+export const locationWithParentNameOut = locationOut.extend({
   parentName: z.string().nullable(),
 });
 export type LocationWithParentNameOut = z.infer<
@@ -207,12 +212,13 @@ export type LocationWithParentNameOut = z.infer<
 
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
 
-export const infLocation = locationDefinition.readSchemas.detail;
+export const infLocation = locationFieldEnvelopeSchemas.detail;
 export type InfLocation = z.output<typeof infLocation>;
-export {
-  inventoryItemForTree,
-  type InventoryItemForTree,
-} from "./location-fields";
+export const locationTreeNodeOut = locationDetailNode;
+export type LocationTreeNode = z.output<typeof locationTreeNodeOut>;
+export const inventoryItemForTree =
+  infLocation.shape.inventoryItems.unwrap().element;
+export type InventoryItemForTree = z.output<typeof inventoryItemForTree>;
 
 export const infLocationListOut = z.array(infLocation);
 
@@ -231,14 +237,3 @@ export const locationShortcodesInput = z.object({
 export const locationShortcodeInput = z.object({
   shortcode: locationShortcode,
 });
-
-export const locationMcpOut = z.object({
-  id: locationListItemFields.id,
-  name: locationListItemFields.name,
-  type: locationListItemFields.type,
-  parent: locationListItemFields.parent,
-  children: locationListItemFields.children,
-});
-export type LocationMcpOut = z.infer<typeof locationMcpOut>;
-
-export const locationMcpListOut = createPaginatedResponseSchema(locationMcpOut);

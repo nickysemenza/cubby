@@ -1,8 +1,17 @@
+import type { RawPhotoProductOwnPhoto } from "@cubby/schemas/photo-import-raw-read";
+import {
+  photoCandidateGroupResult,
+  photoRunCandidatesResponse,
+  photoProductEvidence,
+  photoProductCandidate,
+  photoProductOwnPhoto,
+} from "@cubby/schemas/photo-import-run";
 import type { photoRunContextImage } from "@cubby/schemas/photo-import-run";
 import type { z } from "zod";
 
 import { photoImportContract } from "~/contracts/photo-import.contract";
 import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
+import type { Database } from "~/server/db";
 import {
   photoRunCandidates,
   rejectPhotoProductCandidate,
@@ -49,8 +58,28 @@ import {
   startPhotoInventoryRun,
 } from "~/server/domains/purchase-import/repo/run-service";
 import { getRunByShortcode } from "~/server/domains/run/repo/run";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
+
+/** Serialize every selected own-photo Image once per operation response. */
+async function publicOwnPhotos<
+  T extends { ownPhotos?: readonly RawPhotoProductOwnPhoto[] },
+>(db: Database, rows: readonly T[]) {
+  const photos = await publicFieldEnvelopeRows({
+    db,
+    entity: "image",
+    schema: photoProductOwnPhoto,
+    rows: rows.flatMap((row) => row.ownPhotos ?? []),
+  });
+  let offset = 0;
+  return rows.map(({ ownPhotos, ...row }) => {
+    const count = ownPhotos?.length ?? 0;
+    const group = photos.slice(offset, offset + count);
+    offset += count;
+    return { ...row, ownPhotos: ownPhotos === undefined ? undefined : group };
+  });
+}
 
 export const photoImportHandlers = implementOperationDomain(
   photoImportContract,
@@ -101,7 +130,12 @@ export const photoImportHandlers = implementOperationDomain(
         },
         decideProductVariantComparisons,
       );
-      return result.groups[0]!;
+      const group = result.groups[0];
+      if (!group) throw new Error("Photo candidate group was not found");
+      return photoCandidateGroupResult.parse({
+        ...group,
+        candidates: await publicOwnPhotos(context.db, group.candidates),
+      });
     },
     candidatesBatch: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -113,7 +147,7 @@ export const photoImportHandlers = implementOperationDomain(
         listPhotoGroupProposals(context.db, input.runId),
         listPhotoRunImages(context.db, input.runId),
       ]);
-      return photoRunCandidates(
+      const result = await photoRunCandidates(
         context.db,
         review,
         images,
@@ -124,6 +158,21 @@ export const photoImportHandlers = implementOperationDomain(
         decideProductVariantComparisons,
         input.groupKeys,
       );
+      const candidates = await publicOwnPhotos(
+        context.db,
+        result.groups.flatMap((group) => group.candidates),
+      );
+      let offset = 0;
+      return photoRunCandidatesResponse.parse({
+        groups: result.groups.map((group) => {
+          const rows = candidates.slice(
+            offset,
+            offset + group.candidates.length,
+          );
+          offset += group.candidates.length;
+          return { ...group, candidates: rows };
+        }),
+      });
     },
     productEvidence: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -136,7 +185,8 @@ export const photoImportHandlers = implementOperationDomain(
         await loadPhotoProductEvidence(context.db, [id], context.actorContext)
       ).get(id);
       if (!evidence) throw new Error("Product was not found");
-      return evidence;
+      const [result] = await publicOwnPhotos(context.db, [evidence]);
+      return photoProductEvidence.parse(result);
     },
     rejectCandidate: async (context, input) => {
       await assertPhotoRunReviewer(
@@ -348,12 +398,17 @@ export const photoImportHandlers = implementOperationDomain(
       };
     },
     productCandidates: async (context, input) => ({
-      candidates: await findPhotoProductCandidates(
-        context.db,
-        input,
-        context.actorContext,
-        decideProductVariantComparisons,
-      ),
+      candidates: (
+        await publicOwnPhotos(
+          context.db,
+          await findPhotoProductCandidates(
+            context.db,
+            input,
+            context.actorContext,
+            decideProductVariantComparisons,
+          ),
+        )
+      ).map((row) => photoProductCandidate.parse(row)),
     }),
     proposals: (context, input) =>
       listPhotoGroupProposals(context.db, input.runId),

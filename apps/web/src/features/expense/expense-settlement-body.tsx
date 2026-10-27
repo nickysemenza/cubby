@@ -1,3 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { Description } from "~/ui/primitives/description";
@@ -12,21 +14,24 @@ import { ExpensePurchaseSection } from "./expense-purchase-section";
  */
 export const ExpenseSettlement: DetailSlotComponent<"expense"> = ({
   record: expense,
-}) => (
-  <EntityReportSlot
-    slot="expense.settlement"
-    id={expense.id}
-    record={expense}
-    entity="expense"
-    recordsList={(block) =>
-      expense.purchaseId ? (
-        <ExpensePurchaseSection
-          expense={expense}
-          summaryLine={block.footer ?? null}
-        />
-      ) : (
-        <Description size="xs">{block.empty}</Description>
-      )
-    }
-  />
-);
+}) => {
+  const effectiveExpensePurchaseId = fieldValueOf(expense.fields.purchaseId);
+  return (
+    <EntityReportSlot
+      slot="expense.settlement"
+      id={expense.id}
+      record={expense}
+      entity="expense"
+      recordsList={(block) =>
+        effectiveExpensePurchaseId ? (
+          <ExpensePurchaseSection
+            expense={expense}
+            summaryLine={block.footer ?? null}
+          />
+        ) : (
+          <Description size="xs">{block.empty}</Description>
+        )
+      }
+    />
+  );
+};

@@ -10,7 +10,7 @@ import type {
 } from "@cubby/schemas/nutrition";
 import type { ProductQuantityLedgerOut } from "@cubby/schemas/product";
 import type { PurchaseReconciliation } from "@cubby/schemas/purchase";
-import type { RecipeTimes } from "@cubby/schemas/recipe";
+import { type RecipeTimes } from "@cubby/schemas/recipe";
 
 import {
   formatCount,

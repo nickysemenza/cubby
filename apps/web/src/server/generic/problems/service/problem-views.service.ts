@@ -7,12 +7,12 @@ import type {
   ProblemsViewsOut,
   SectionTotals,
   ProblemItem,
-} from "@cubby/schemas/problems";
+} from "@cubby/schemas/problems-raw-read";
 import {
   emptyLocationSchema,
   problemsViewsSchema,
   productWithoutMappingsSchema,
-} from "@cubby/schemas/problems";
+} from "@cubby/schemas/problems-raw-read";
 import { getMiscDisplayName } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
@@ -23,7 +23,6 @@ import {
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
-import { selectListReadRows } from "~/entity/model/list-read-schema";
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
@@ -88,6 +87,7 @@ import {
 } from "~/server/domains/vendor/repo/vendor";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import {
   type DiagnosticRunOptions,
   diagnosticAdapters,

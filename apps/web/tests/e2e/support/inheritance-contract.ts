@@ -1,3 +1,4 @@
+import { fieldEnvelope } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
 
 import { seedInheritancePrerequisite } from "../fixtures/finance";
@@ -9,9 +10,8 @@ import {
 import { expect, test } from "./e2e-test";
 
 const assignment = z.object({
-  projectId: z.string().nullable(),
-  fieldResolutions: z.object({
-    projectId: z.object({ mode: z.string(), matchesFallback: z.boolean() }),
+  fields: z.object({
+    projectId: fieldEnvelope(z.string().nullable(), z.string()),
   }),
 });
 
@@ -36,22 +36,48 @@ export function inheritanceContract() {
     expect(
       await readExpense(page, fixture.expense.id, assignment),
     ).toMatchObject({
-      fieldResolutions: {
-        projectId: { mode: "explicit", matchesFallback: true },
+      fields: {
+        projectId: {
+          current: {
+            assignment: { kind: "value", value: fixture.project.id },
+            controls: { kind: "editable", reset: { kind: "available" } },
+          },
+          result: {
+            decision: { outcome: { kind: "value", value: fixture.project.id } },
+          },
+        },
       },
     });
+    const panel = page.getByRole("dialog");
+    await expect(
+      panel
+        .getByText("With inherited values:", { exact: true })
+        .locator("..")
+        .locator(`a[href="/projects/${fixture.project.id}"]`),
+    ).toBeVisible();
     await useInherited.click();
     await expect
       .poll(() => readExpense(page, fixture.expense.id, assignment))
       .toMatchObject({
-        projectId: fixture.project.id,
-        fieldResolutions: { projectId: { mode: "inherit" } },
+        fields: {
+          projectId: {
+            current: {
+              assignment: { kind: "inherit" },
+              controls: { kind: "editable", reset: { kind: "unavailable" } },
+            },
+            result: {
+              decision: {
+                outcome: { kind: "value", value: fixture.project.id },
+                provenance: { kind: "inherited" },
+              },
+            },
+          },
+        },
       });
     await expect(
-      page
-        .getByRole("dialog")
-        .getByText("Inherited · Decides this value", { exact: true }),
+      panel.getByRole("heading", { name: "Effective result", exact: true }),
     ).toBeVisible();
+    await expect(useInherited).toHaveCount(0);
     await expectViewportBounded(page);
   });
 }

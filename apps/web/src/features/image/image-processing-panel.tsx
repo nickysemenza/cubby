@@ -1,5 +1,5 @@
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageShortcode } from "@cubby/schemas/identifiers";
-import type { ImageWithEntity } from "@cubby/schemas/image";
 import {
   imageProcessingStatusOutput,
   scheduleImageProcessingInput,
@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
@@ -256,6 +257,9 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
 export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   const id = imageShortcode.parse(image.id);
   const status = useImageProcessingStatus(id);
+  const transparent = status.data
+    ? fieldValueOf(status.data.fields.representations)?.transparent
+    : undefined;
   const queryClient = useQueryClient();
   useEffect(() => {
     if (!status.data) return;
@@ -292,7 +296,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               ? workStateLabel(status.data.status.cutout)
               : "Not processed"}
           </p>
-          {!status.data.representations.transparent ? (
+          {!transparent ? (
             <p className="text-muted-foreground">
               Transparent image unavailable
             </p>
@@ -362,6 +366,9 @@ export const ImageDetailActions: DetailSlotComponent<"image"> = ({
 function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
   const id = imageShortcode.parse(image.id);
   const status = useImageProcessingStatus(id);
+  const transparent = status.data
+    ? fieldValueOf(status.data.fields.representations)?.transparent
+    : undefined;
   const [compareOpen, setCompareOpen] = useState(false);
   const schedule = useActionMutation({
     mutationFn: imageProcessing.schedule.mutationOptions,
@@ -395,23 +402,23 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
       <div className="flex flex-wrap gap-2 text-sm">
         <a
           className={buttonVariants({ variant: "outline" })}
-          href={image.url}
+          href={fieldValueOf(image.fields.url) ?? undefined}
           target="_blank"
           rel="noreferrer"
         >
           View original
         </a>
-        {status.data?.representations.transparent ? (
+        {transparent ? (
           <a
             className={buttonVariants({ variant: "outline" })}
-            href={status.data.representations.transparent}
+            href={transparent}
             target="_blank"
             rel="noreferrer"
           >
             View transparent PNG
           </a>
         ) : null}
-        {status.data?.representations.transparent ? (
+        {transparent ? (
           <Button
             type="button"
             size="sm"
@@ -488,9 +495,13 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
             <figcaption className="mb-2 text-sm font-medium">
               Original
             </figcaption>
-            <a href={image.url} target="_blank" rel="noreferrer">
+            <a
+              href={fieldValueOf(image.fields.url) ?? undefined}
+              target="_blank"
+              rel="noreferrer"
+            >
               <Image
-                src={image.url}
+                src={fieldValueOf(image.fields.url) ?? undefined}
                 alt="Original image"
                 displayWidth={640}
                 className="max-h-[60vh] w-full object-contain"
@@ -502,12 +513,12 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
               Transparent result
             </figcaption>
             <a
-              href={status.data?.representations.transparent ?? image.url}
+              href={transparent ?? fieldValueOf(image.fields.url) ?? undefined}
               target="_blank"
               rel="noreferrer"
             >
               <Image
-                src={status.data?.representations.transparent ?? image.url}
+                src={transparent ?? fieldValueOf(image.fields.url) ?? undefined}
                 alt="Processed image"
                 displayWidth={640}
                 className="max-h-[60vh] w-full object-contain"
@@ -525,3 +536,5 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
     </>
   );
 }
+
+type ImageWithEntity = DetailRecordOf<"image">;

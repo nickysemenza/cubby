@@ -7,8 +7,11 @@ import { z } from "zod";
 
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
-import { selectListReadRows } from "~/entity/model/list-read-schema";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
+import {
+  publicFieldEnvelopeRows,
+  selectedFieldEnvelopeSchema,
+} from "~/server/generic/derived/repo/public-read";
 import { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
 import {
   listFacetCounter,
@@ -16,6 +19,7 @@ import {
 } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { validateListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { withListReadTracing } from "~/server/observability/list-read-tracing";
 import { withTrace } from "~/server/observability/tracing";
 
@@ -136,22 +140,24 @@ export function defineListOperations<
               ),
             )
         : result.data;
+      const selected = validateListReadRows(binding.entity, rows, fields);
+      const enveloped = await publicFieldEnvelopeRows({
+        db: context.db,
+        entity: binding.entity,
+        schema: selectedFieldEnvelopeSchema(binding.schemas.list, fields),
+        rows: selected,
+        contexts: result.fieldReads,
+      });
       return {
         action: "list" as const,
         entity: binding.entity,
-        ...buildPaginatedResponse(
-          pagination,
-          selectListReadRows(binding.entity, rows, fields),
-          result.count,
-          {
-            derived: result.derived ?? {},
-            sums,
-            totalLabels: listTotalLabels(binding.entity, sums),
-            groups: result.groups,
-            memberships: result.memberships,
-            membershipCount: result.membershipCount,
-          },
-        ),
+        ...buildPaginatedResponse(pagination, enveloped, result.count, {
+          sums,
+          totalLabels: listTotalLabels(binding.entity, sums),
+          groups: result.groups,
+          memberships: result.memberships,
+          membershipCount: result.membershipCount,
+        }),
       };
     },
     /**

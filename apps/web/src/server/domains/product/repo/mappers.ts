@@ -9,20 +9,24 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { ImageAnalysisSummary } from "@cubby/schemas/image";
 import type {
-  InventoryListProductOut,
-  ProductInventoryEmbedOut,
-} from "@cubby/schemas/inventory";
-import {
-  type ProductListItem,
-  type ProductPickerItemOut,
-  type ProductTopLevelOut,
-  productListItemOut,
-  productPickerItemOut,
-  productTopLevelOut,
-  productWithIngredientAndInventoryAndMappingsOut,
-} from "@cubby/schemas/product";
+  RawInventoryListProduct,
+  RawProductInventoryEmbed,
+} from "@cubby/schemas/inventory-fields";
+import { productWithIngredientAndInventoryAndMappingsOut } from "@cubby/schemas/product";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
-import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import {
+  rawProductPickerItem,
+  type RawProductPickerItem,
+} from "@cubby/schemas/product-raw-read";
+import {
+  rawProductList,
+  rawProductOutput,
+} from "@cubby/schemas/product-raw-read";
+import type {
+  RawProductList,
+  RawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import type { z } from "zod";
 
 import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
@@ -40,7 +44,6 @@ import type {
   productUnitMappings,
 } from "~/server/db/schema";
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
-import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
@@ -128,13 +131,13 @@ type ProductTopLevelDB = Omit<typeof product.$inferSelect, "growsPlantId"> & {
   brandName: string | null;
   brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
   classificationEvidence: string;
-  category: ProductCategorySummary | null;
+  category: RawProductCategorySummary | null;
   /** The category decision a Product without its own inherits (ADR 0013). */
   categoryStockTracking: CategoryStockTracking | null;
   growsPlantId?: (typeof product.$inferSelect)["growsPlantId"];
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
-  dataQuality: ProductTopLevelOut["dataQuality"];
+  dataQuality: RawProductOutput["dataQuality"];
   pricing?: ProductPricing;
   // Batch-resolved by the caller via `getProductCoverImageUrlsByProductIds`
   // (same rule the picker uses). Optional: callers that never asked for it
@@ -186,7 +189,7 @@ export const mapProductExternalIds = (
     });
 
 export const mapProductUnitMappings = (
-  productId: ProductTopLevelOut["id"],
+  productId: RawProductOutput["id"],
   unitMappings: Array<typeof productUnitMappings.$inferSelect>,
 ) =>
   unitMappings
@@ -225,7 +228,7 @@ export const productFieldResolutions = (
 
 export const mapDbProductToTopLevel = (
   productData: ProductTopLevelDB,
-): ProductTopLevelOut => {
+): RawProductOutput => {
   const imageGroups = splitProductImages(productData.images);
   const pricing = isServiceProductCategory(productData.category)
     ? {
@@ -246,6 +249,7 @@ export const mapDbProductToTopLevel = (
     notes: productData.notes,
     expectedQuantity: productData.expectedQuantity,
     category: productData.category,
+    categoryFeature: productData.category?.feature ?? null,
     categoryId: productData.category?.id ?? null,
     classificationEvidence: productData.classificationEvidence,
     growsPlantId: productData.growsPlant
@@ -277,10 +281,10 @@ export const mapDbProductToTopLevel = (
 
 export const dbProductToTopLevelAPI = (
   productData: ProductTopLevelDB,
-): ProductTopLevelOut => {
+): RawProductOutput => {
   const result = mapDbProductToTopLevel(productData);
 
-  return parseWithContext(productTopLevelOut, result, {
+  return parseWithContext(rawProductOutput, result, {
     entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
@@ -293,18 +297,19 @@ const mapDbProductToPickerItem = (
   > & {
     brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
     brandName: string | null;
-    category: ProductCategorySummary | null;
-    coverImageUrl: ProductPickerItemOut["coverImageUrl"];
-    price: ProductPickerItemOut["price"];
-    quantityLedger: ProductPickerItemOut["quantityLedger"];
-    onHand: ProductPickerItemOut["onHand"];
+    category: RawProductCategorySummary | null;
+    coverImageUrl: RawProductPickerItem["coverImageUrl"];
+    price: RawProductPickerItem["price"];
+    quantityLedger: RawProductPickerItem["quantityLedger"];
+    onHand: RawProductPickerItem["onHand"];
   },
-): ProductPickerItemOut => ({
+): RawProductPickerItem => ({
   id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   brandId: productData.brandCode,
   brandName: productData.brandName,
   category: productData.category,
+  categoryFeature: productData.category?.feature ?? null,
   price: productData.price,
   coverImageUrl: productData.coverImageUrl,
   quantityLedger: productData.quantityLedger,
@@ -318,16 +323,16 @@ export const dbProductToPickerItemAPI = (
   > & {
     brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
     brandName: string | null;
-    category: ProductCategorySummary | null;
-    coverImageUrl: ProductPickerItemOut["coverImageUrl"];
-    price: ProductPickerItemOut["price"];
-    quantityLedger: ProductPickerItemOut["quantityLedger"];
-    onHand: ProductPickerItemOut["onHand"];
+    category: RawProductCategorySummary | null;
+    coverImageUrl: RawProductPickerItem["coverImageUrl"];
+    price: RawProductPickerItem["price"];
+    quantityLedger: RawProductPickerItem["quantityLedger"];
+    onHand: RawProductPickerItem["onHand"];
   },
-): ProductPickerItemOut => {
+): RawProductPickerItem => {
   const result = mapDbProductToPickerItem(productData);
 
-  return parseWithContext(productPickerItemOut, result, {
+  return parseWithContext(rawProductPickerItem, result, {
     entityKind: "Product",
     identifier: { id: productData.id, name: productData.name },
   });
@@ -336,11 +341,11 @@ export const dbProductToPickerItemAPI = (
 export const mapDbProductToInventoryEmbed = (
   productData: typeof product.$inferSelect & {
     brandName: string | null;
-    category: ProductCategorySummary | null;
+    category: RawProductCategorySummary | null;
     effectivePrice: number | null;
     primaryGtin: string | null;
   },
-): ProductInventoryEmbedOut => ({
+): RawProductInventoryEmbed => ({
   id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   primaryGtin: productData.primaryGtin,
@@ -350,6 +355,7 @@ export const mapDbProductToInventoryEmbed = (
   notes: productData.notes,
   expectedQuantity: productData.expectedQuantity,
   category: productData.category,
+  categoryFeature: productData.category?.feature ?? null,
   price: productData.effectivePrice,
   usdaUnavailable: productData.usdaUnavailable,
   createdAt: productData.createdAt,
@@ -359,17 +365,18 @@ export const mapDbProductToInventoryEmbed = (
 export const mapDbProductToInventoryList = (
   productData: typeof product.$inferSelect & {
     brandName: string | null;
-    category: ProductCategorySummary | null;
+    category: RawProductCategorySummary | null;
     effectivePrice: number | null;
     primaryGtin: string | null;
   },
-): InventoryListProductOut => ({
+): RawInventoryListProduct => ({
   id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
   brandName: productData.brandName,
   primaryGtin: productData.primaryGtin,
   fdc_id: productData.fdc_id,
   category: productData.category,
+  categoryFeature: productData.category?.feature ?? null,
   expectedQuantity: productData.expectedQuantity,
   model: productData.model,
   price: productData.effectivePrice,
@@ -392,7 +399,6 @@ const mapDbLocationToProductListInventory = (
 ) => ({
   id: parseShortcodeFor("location", locationData.shortcode),
   name: locationData.name,
-  type: parseLocationType(locationData.type),
 });
 
 /**
@@ -426,7 +432,7 @@ export const mapProductListInventoryEntries = (
 export const dbProductToListAPI = (
   productData: ProductListDB,
   displayImages: DisplayImageSummary[],
-): ProductListItem => {
+): RawProductList => {
   const inventoryEntry = mapProductListInventoryEntries(
     productData.inventoryEntry,
   );
@@ -462,7 +468,7 @@ export const dbProductToListAPI = (
   };
 
   return parseWithContext(
-    productListItemOut,
+    rawProductList,
     {
       ...result,
       ...productStockContext({
@@ -494,7 +500,7 @@ export const dbProductToListAPI = (
  */
 export const dbProductToAPI = (
   productData: ProductDeepDB,
-  dataQuality: ProductTopLevelOut["dataQuality"],
+  dataQuality: RawProductOutput["dataQuality"],
   analysisSummaries?: Map<string, ImageAnalysisSummary>,
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { ingredient, unitMappings, inventoryEntry, images } = productData;
@@ -518,23 +524,6 @@ export const dbProductToAPI = (
       location: {
         id: parseShortcodeFor("location", entry.location.shortcode),
         name: entry.location.name,
-        aliases: entry.location.aliases,
-        notes: entry.location.notes ?? null,
-        type: parseLocationType(entry.location.type),
-        product: mapLocationIdentityProduct(entry.location),
-        lastBulkInventory: entry.location.lastBulkInventory,
-        // Like `valuation` below: a lightweight identity reference, not the
-        // place callers read a location's AI description from.
-        aiDescription: null,
-        images: mapImages(entry.location.images),
-        displayImage: entry.location.displayImage ?? null,
-        // Valuation is a whole-tree rollup; this movement-timeline embed is a
-        // lightweight identity reference, not a place callers read this
-        // location's own aggregate value from.
-        valuation: null,
-        ancestors: entry.location.ancestors ?? [],
-        createdAt: entry.location.createdAt,
-        updatedAt: entry.location.updatedAt,
       },
     }),
   );
@@ -560,6 +549,7 @@ export const dbProductToAPI = (
     classificationEvidence: productData.classificationEvidence,
     categoryId: productData.category?.id ?? null,
     category: productData.category,
+    categoryFeature: productData.category?.feature ?? null,
     growsPlantId: productData.growsPlant
       ? parseShortcodeFor("plant", productData.growsPlant.shortcode)
       : null,
@@ -606,14 +596,11 @@ export const dbProductToAPI = (
     // Counts edges, not units: a 4-pack held as one edge with `quantity: 4`
     // reads as 1. Non-zero is what makes this product a kit.
     componentCount: Number(productData.componentCount ?? 0),
-    // A product may be the physical copy for many cookbooks. The query filters
-    // both cookbook and recipe rows, while mapRelation remains a defensive
-    // backstop for callers that construct ProductDeepDB directly.
+    // The linked books are identities; their owning report reads recipe counts.
+    // mapRelation also protects callers that construct ProductDeepDB directly.
     cookbooks: mapRelation(productData.cookbooks ?? [], (cb) => ({
       id: parseShortcodeFor("cookbook", cb.shortcode),
       name: cb.name,
-      recipeCount:
-        cb.recipes?.filter((recipe) => isNotDeleted(recipe)).length ?? 0,
     })),
     primaryPlacement: productData.primaryPlacement ?? null,
     ...deriveProductQuantitySummary(

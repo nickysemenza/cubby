@@ -1,8 +1,8 @@
 import type { ReportSlot } from "@cubby/schemas/entity-report";
-import type { RunOut } from "@cubby/schemas/run";
 import { Link } from "@tanstack/react-router";
 
 import { AuditLogList } from "~/entity/audit-log/audit-log-list";
+import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
 import { Stack } from "~/ui/layout";
@@ -56,3 +56,5 @@ export function RunSuggestions({ record }: { record: RunOut }) {
 export function RunChanges({ record }: { record: RunOut }) {
   return <AuditLogList runId={record.id} />;
 }
+
+type RunOut = DetailRecordOf<"run">;

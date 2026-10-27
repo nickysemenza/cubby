@@ -1,4 +1,8 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import { lifecycleRows } from "./default-timeline";
 
@@ -69,4 +73,33 @@ describe("lifecycleRows", () => {
     const rows = lifecycleRows("planting", [record({})], lifecycle, window);
     expect(rows).toEqual([]);
   });
+});
+
+it("uses governed preferred lifecycle covers and never revives a retired URL", () => {
+  const snapshot = [
+    {
+      id: "IMG-4K7M",
+      url: "https://example.test/original.jpg",
+      representations: {
+        original: "https://example.test/original.jpg",
+        transparent: "https://example.test/cutout.png",
+        preferred: "https://example.test/cutout.png",
+        preferredKind: "transparent",
+      },
+    },
+  ];
+  const schema = computedFieldEnvelope(displayImagesField);
+  for (const [value, expected] of [
+    [snapshot, "https://example.test/cutout.png"],
+    [[], null],
+    [undefined, null],
+  ]) {
+    const input = {
+      ...record({ season: { start: "2026-03-01", end: "2026-06-01" } }),
+      displayImages: snapshot,
+      fields: { displayImages: fieldValueFixture(schema, value) },
+    };
+    const [row] = lifecycleRows("planting", [input], lifecycle, window);
+    expect(row?.imageUrl).toBe(expected);
+  }
 });

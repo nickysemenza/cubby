@@ -44,14 +44,34 @@ describe("account cardholder inheritance", () => {
       });
     };
     expect(await update({ ledgerPartyId: second.output.id })).toMatchObject({
-      item: { primaryCardholderId: second.output.id },
+      item: {
+        fields: {
+          primaryCardholderId: {
+            result: {
+              decision: { outcome: { kind: "value", value: second.output.id } },
+            },
+          },
+        },
+      },
     });
     expect(
       await update({ primaryCardholderId: first.output.id }),
     ).toMatchObject({
       item: {
-        primaryCardholderId: first.output.id,
-        fieldResolutions: { primaryCardholderId: { mode: "explicit" } },
+        fields: {
+          primaryCardholderId: {
+            result: {
+              decision: { outcome: { kind: "value", value: first.output.id } },
+            },
+            current: {
+              assignment: {
+                kind: "value",
+                value: first.output.id,
+                ownership: { kind: "record" },
+              },
+            },
+          },
+        },
       },
     });
     expect(
@@ -61,8 +81,12 @@ describe("account cardholder inheritance", () => {
       }),
     ).toMatchObject({
       item: {
-        primaryCardholderId: null,
-        fieldResolutions: { primaryCardholderId: { mode: "none" } },
+        fields: {
+          primaryCardholderId: {
+            result: { decision: { outcome: { kind: "empty" } } },
+            current: { assignment: { kind: "none" } },
+          },
+        },
       },
     });
     expect(
@@ -70,7 +94,17 @@ describe("account cardholder inheritance", () => {
         primaryCardholderId: null,
         primaryCardholderMode: "inherit",
       }),
-    ).toMatchObject({ item: { primaryCardholderId: second.output.id } });
+    ).toMatchObject({
+      item: {
+        fields: {
+          primaryCardholderId: {
+            result: {
+              decision: { outcome: { kind: "value", value: second.output.id } },
+            },
+          },
+        },
+      },
+    });
     const filtered = await listFinancialAccounts(
       ctx.db,
       { primaryCardholderId: [second.output.id] },

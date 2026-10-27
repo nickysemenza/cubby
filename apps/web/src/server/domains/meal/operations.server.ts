@@ -11,7 +11,12 @@ import type {
   mealUpdateRecipeInput,
   ShoppingListContribution,
 } from "@cubby/schemas/meal";
-import { contributesToShoppingList } from "@cubby/schemas/meal-classification";
+import { upcomingMealSummaryOut } from "@cubby/schemas/meal";
+import {
+  contributesToShoppingList,
+  mealKindSchema,
+  MEAL_KIND_LABELS,
+} from "@cubby/schemas/meal-classification";
 import {
   type MeasureEstimate,
   nutrientKey,
@@ -21,7 +26,6 @@ import {
 import { sumBy } from "es-toolkit";
 import type { z } from "zod";
 
-import { slimMeal } from "~/contracts/mcp-projections";
 import {
   type addRecipeNutritionDetail,
   type compactEstimate,
@@ -54,6 +58,8 @@ import type {
   PlannedLine,
 } from "~/server/domains/recipe/service/availability.service";
 import { recordChange } from "~/server/generic/changes/repo/change";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -228,7 +234,10 @@ const selectShoppingRequirements = (
       id: m.id,
       name: m.name,
       date: m.date,
-      mealKind: m.mealKind,
+      omission: {
+        reason: mealKindSchema.exclude(["cooked"]).parse(m.mealKind),
+        label: MEAL_KIND_LABELS[m.mealKind],
+      },
     }));
   const excluded = new Set(input.excludedMealIds ?? []);
   for (const m of cookedMeals.filter((meal) => !excluded.has(meal.id)))
@@ -341,6 +350,18 @@ export async function getShoppingListWorkflow(
   });
 }
 
+async function readMeals(
+  db: Database,
+  rows: Awaited<ReturnType<typeof getMealsByDateRange>>,
+) {
+  return readPublicEntityRows({
+    db,
+    entity: "meal",
+    projection: "list",
+    rows,
+  });
+}
+
 export const mealHandlers = implementOperationDomain(mealContract, {
   getNutrition: (context, input) =>
     getMealNutrition(context.db, input, context.usdaClient),
@@ -348,20 +369,32 @@ export const mealHandlers = implementOperationDomain(mealContract, {
     saveMealFood(context.db, input, context.actorContext),
   removeFood: (context, input) =>
     removeMealFood(context.db, input, context.actorContext),
-  getByDateRange: (context, input) =>
-    getMealsByDateRange(context.db, input.from, input.to),
-  upcomingSummary: (context, input) =>
-    getUpcomingMealSummary(context.db, input.from, input.to),
+  getByDateRange: async (context, input) =>
+    readMeals(
+      context.db,
+      await getMealsByDateRange(context.db, input.from, input.to),
+    ),
+  upcomingSummary: async (context, input) =>
+    publicFieldEnvelopeRows({
+      db: context.db,
+      entity: "meal",
+      schema: upcomingMealSummaryOut.element,
+      rows: await getUpcomingMealSummary(context.db, input.from, input.to),
+    }),
   getPreparations: (context, input) => getMealPreparations(context.db, input),
   getShoppingList: (context, input) =>
     getShoppingListWorkflow(context.db, input, context.services.availability),
   addRecipe: async (context, input) =>
-    (await addRecipeToMealWorkflow(context, input)).meal,
+    (
+      await readMeals(context.db, [
+        (await addRecipeToMealWorkflow(context, input)).meal,
+      ])
+    )[0]!,
   duplicate: async (context, input) => {
     const copied = await duplicateMealWorkflow(context, input);
     const created = await getMealByID(context.db, copied.mealIds[0]!);
     if (!created) throw new Error("Duplicated meal could not be reloaded");
-    return created;
+    return (await readMeals(context.db, [created]))[0]!;
   },
   copyRange: async (context, input) => {
     const copied = await copyMealRangeWorkflow(context, input);
@@ -371,8 +404,18 @@ export const mealHandlers = implementOperationDomain(mealContract, {
       skippedPortions: copied.skippedPortions,
     };
   },
-  updateRecipe: (context, input) => updateMealRecipeWorkflow(context, input),
-  removeRecipe: (context, input) => removeMealRecipeWorkflow(context, input),
+  updateRecipe: async (context, input) =>
+    (
+      await readMeals(context.db, [
+        await updateMealRecipeWorkflow(context, input),
+      ])
+    )[0]!,
+  removeRecipe: async (context, input) =>
+    (
+      await readMeals(context.db, [
+        await removeMealRecipeWorkflow(context, input),
+      ])
+    )[0]!,
   savePreparation: (context, input) =>
     saveMealRecipePreparationWorkflow(context, input),
   dailyIntake: async (context, input) =>
@@ -512,7 +555,7 @@ export function addedMealRecipe(
   result: Awaited<ReturnType<typeof addRecipeToMealWorkflow>>,
   nutrition: z.output<typeof addRecipeNutritionDetail>,
 ) {
-  const meal = slimMeal(result.meal);
+  const { meal } = result;
   const keys =
     nutrition === "full"
       ? nutrientKey.options

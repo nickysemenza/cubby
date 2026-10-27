@@ -154,7 +154,11 @@ extension UpcLookupOutputValue {
 extension NutritionMeal {
     public var displayName: String {
         if let name, !name.isEmpty { return name }
-        if let mealType { return mealType.rawValue.capitalized }
+        if let raw = try? JSONValue(encoding: self),
+            let mealType = FieldEnvelope.of(raw, key: "mealType")?.effectiveValue?.stringValue
+        {
+            return mealType.capitalized
+        }
         return "Meal"
     }
 }
@@ -280,14 +284,56 @@ extension InitiateUploadWithoutEntity {
 }
 
 extension ImageOut {
-    public var imageURL: URL? { URL(string: url) }
+    public var imageURL: URL? {
+        switch fields.url.result {
+        case .live(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            return URL(string: outcome.value)
+        case .cached(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            return URL(string: outcome.value)
+        case .missing, .unrecognized: return nil
+        }
+    }
 }
 
 extension ImageWithEntity {
-    /// The server owns original-versus-derived selection; every native image surface follows it.
-    public var imageURL: URL? { URL(string: representations?.preferred ?? url) }
-    public var originalImageURL: URL? { URL(string: representations?.original ?? url) }
-    public var transparentImageURL: URL? { representations?.transparent.flatMap(URL.init(string:)) }
+    /// Read only the selected envelope snapshots; image access never re-encodes the record.
+    private var representationURLs: (preferred: URL?, original: URL?, transparent: URL?)? {
+        switch fields.representations.result {
+        case .live(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            let value = outcome.value
+            return (
+                URL(string: value.preferred), URL(string: value.original),
+                value.transparent.flatMap(URL.init(string:))
+            )
+        case .cached(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            let value = outcome.value
+            return (
+                URL(string: value.preferred), URL(string: value.original),
+                value.transparent.flatMap(URL.init(string:))
+            )
+        case .missing, .unrecognized: return nil
+        }
+    }
+
+    private var selectedURL: URL? {
+        switch fields.url.result {
+        case .live(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            return URL(string: outcome.value)
+        case .cached(let result):
+            guard case .value(let outcome) = result.decision.outcome else { return nil }
+            return URL(string: outcome.value)
+        case .missing, .unrecognized: return nil
+        }
+    }
+
+    public var imageURL: URL? { representationURLs?.preferred ?? selectedURL }
+    public var originalImageURL: URL? { representationURLs?.original ?? selectedURL }
+    public var transparentImageURL: URL? { representationURLs?.transparent }
 }
 
 extension ImageAssociation: Identifiable {

@@ -1,4 +1,4 @@
-import type { InfLocation } from "@cubby/schemas/location";
+import type { LocationTreeNode } from "@cubby/schemas/location";
 import { QuestionIcon } from "@phosphor-icons/react/dist/csr/Question";
 
 import { cn } from "~/lib/utils";
@@ -11,8 +11,8 @@ import { useArrangeDropTarget } from "./use-arrange-drop-target";
 
 function noopDrill() {}
 interface UnknownDockProps {
-  unknownRoot: InfLocation | null;
-  roots: InfLocation[];
+  unknownRoot: LocationTreeNode | null;
+  roots: LocationTreeNode[];
 }
 
 /** A deliberately separate staging destination, rather than the board's default view. */

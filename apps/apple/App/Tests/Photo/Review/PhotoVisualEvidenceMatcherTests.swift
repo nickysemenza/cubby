@@ -5,6 +5,19 @@ import Testing
 @testable import Cubby
 
 struct PhotoVisualEvidenceMatcherTests {
+    private func field(_ value: JSONValue) -> JSONValue {
+        [
+            "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
+            "result": [
+                "kind": "live",
+                "decision": [
+                    "outcome": ["kind": "value", "value": value], "provenance": ["kind": "computed"],
+                ],
+            ],
+            "work": ["kind": "idle"],
+        ]
+    }
+
     @Test func choosesOnlyAClearBoundedVisualWinner() throws {
         let winner = try #require(
             PhotoVisualEvidenceMatcher.clearWinner([
@@ -32,14 +45,20 @@ struct PhotoVisualEvidenceMatcherTests {
                 "attachments": [
                     [
                         "role": "attachment", "purpose": "item", "status": "UPLOADED",
-                        "url": "https://gallery.example/item.jpg",
+                        "fields": ["url": field("https://gallery.example/item.jpg")],
                     ],
                     [
                         "role": "attachment", "purpose": "label", "status": "UPLOADED",
-                        "url": "https://gallery.example/label.jpg",
+                        "fields": ["url": field("https://gallery.example/label.jpg")],
                     ],
-                    ["role": "cover", "status": "UPLOADED", "url": "https://cover.example/c.jpg"],
-                    ["role": "attachment", "status": "PENDING", "url": "https://p.example/x.jpg"],
+                    [
+                        "role": "cover", "status": "UPLOADED",
+                        "fields": ["url": field("https://cover.example/c.jpg")],
+                    ],
+                    [
+                        "role": "attachment", "status": "PENDING",
+                        "fields": ["url": field("https://p.example/x.jpg")],
+                    ],
                 ]
             ])
 
@@ -59,15 +78,15 @@ struct PhotoVisualEvidenceMatcherTests {
                 "attachments": [
                     [
                         "role": "cover", "status": "UPLOADED",
-                        "url": "https://cover.example/should-not-match.jpg",
+                        "fields": ["url": field("https://cover.example/should-not-match.jpg")],
                     ],
                     [
                         "role": "attachment", "status": "PENDING",
-                        "url": "https://pending.example/should-not-match.jpg",
+                        "fields": ["url": field("https://pending.example/should-not-match.jpg")],
                     ],
                     [
                         "role": "attachment", "status": "UPLOADED",
-                        "url": "https://gallery.example/direct.jpg",
+                        "fields": ["url": field("https://gallery.example/direct.jpg")],
                     ],
                 ],
             ])
@@ -76,4 +95,27 @@ struct PhotoVisualEvidenceMatcherTests {
             PhotoVisualEvidenceMatcher.directGalleryURLs(in: row)
                 == [URL(string: "https://gallery.example/direct.jpg")!])
     }
+    @Test func unavailableAndEmptyImageResultsNeverReviveStaleURLs() {
+        let missing: JSONValue = ["result": ["kind": "missing"]]
+        let empty: JSONValue = [
+            "result": ["kind": "live", "decision": ["outcome": ["kind": "empty", "reason": "unset"]]]
+        ]
+        let row = EntityRow(
+            id: "PRD-1", title: "Synthetic jar", subtitle: nil, imageURL: nil,
+            raw: [
+                "attachments": [
+                    [
+                        "role": "attachment", "status": "UPLOADED",
+                        "url": "https://stale.example/missing.jpg", "fields": ["url": missing],
+                    ],
+                    [
+                        "role": "cover", "status": "UPLOADED", "url": "https://stale.example/empty.jpg",
+                        "fields": ["url": empty],
+                    ],
+                ]
+            ])
+        #expect(PhotoVisualEvidenceMatcher.ownImageURLs(in: row).isEmpty)
+        #expect(PhotoVisualEvidenceMatcher.directGalleryURLs(in: row).isEmpty)
+    }
+
 }

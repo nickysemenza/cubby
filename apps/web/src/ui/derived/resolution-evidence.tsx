@@ -4,6 +4,7 @@ import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
 import { Disclosure } from "~/ui/layout/disclosure";
 
+import { SourceStack } from "./source-stack";
 import {
   ExplanationEntityLink,
   WhyValue,
@@ -23,10 +24,11 @@ export function ResolutionEvidence({
   const contributors = evidence.contributors ?? [];
   return (
     <section className="grid min-w-0 gap-2 border-t border-border pt-3">
-      <h3 className={sectionLabelClassName}>
-        {evidence.chain.title ?? "Resolution order"}
-      </h3>
-      <ResolutionChain block={{ ...evidence.chain, title: undefined }} />
+      <h3 className={sectionLabelClassName}>Current source evidence</h3>
+      <ResolutionChain
+        block={{ ...evidence.chain, title: undefined }}
+        steps={evidence.steps}
+      />
       <FieldEvaluationInputs evidence={evidence} />
       {contributors.length > 0 ? (
         <>
@@ -79,7 +81,10 @@ function Contributor({
       }
       className="border-t border-border pt-2"
     >
-      <ResolutionChain block={{ ...block, title: undefined }} />
+      <ResolutionChain
+        block={{ ...block, title: undefined }}
+        steps={contributor.steps}
+      />
       <FieldEvaluationInputs
         evidence={{
           chain: block,
@@ -92,23 +97,50 @@ function Contributor({
   );
 }
 
-function ResolutionChain({ block }: { block: Chain }) {
+function ResolutionChain({
+  block,
+  steps,
+}: {
+  block: Chain;
+  steps?: Evidence["steps"];
+}) {
   return (
     <>
-      <RecordsBlockView block={{ ...block, rows: block.rows.slice(0, 6) }} />
-      {block.rows.length > 6 ? (
-        <Disclosure
-          summary={`Show ${block.rows.length - 6} more resolution steps`}
-        >
-          <RecordsBlockView
-            block={{
-              ...block,
-              title: undefined,
-              footer: undefined,
-              rows: block.rows.slice(6),
-            }}
-          />
-        </Disclosure>
+      {block.rows.length === 0 ? (
+        <RecordsBlockView block={{ ...block, footer: undefined }} />
+      ) : (
+        <SourceStack
+          label={block.title ?? "Resolution order"}
+          rows={block.rows.map((row, index) => {
+            const step = steps?.find(
+              (candidate) => candidate.rowIndex === index,
+            );
+            return {
+              key: `${index}:${row.title}`,
+              status:
+                step?.effect === "blocked"
+                  ? "blocked"
+                  : step?.effect === "used" || step?.effect === "fallback"
+                    ? "deciding"
+                    : "skipped",
+              // The report row owns its linked title and all supporting values.
+              title: null,
+              children: (
+                <RecordsBlockView
+                  block={{
+                    ...block,
+                    title: undefined,
+                    footer: undefined,
+                    rows: [row],
+                  }}
+                />
+              ),
+            };
+          })}
+        />
+      )}
+      {block.footer ? (
+        <p className="text-xs text-muted-foreground">{block.footer}</p>
       ) : null}
     </>
   );

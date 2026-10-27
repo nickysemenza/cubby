@@ -3,7 +3,6 @@ export type ProductCategory = {
   id: string;
   name: string;
   path: readonly { id: string; name: string }[];
-  feature: string | null;
 };
 
 /**
@@ -36,10 +35,6 @@ export const getFeatureColor = (feature: string | null | undefined): string =>
   Object.entries(featureColors).find(([key]) => key === feature)?.[1] ??
   "var(--chart-neutral)";
 
-export const getCategoryColor = (
-  category: ProductCategory | null | undefined,
-): string => getFeatureColor(category?.feature);
-
 export const formatCategoryLabel = (
   category: ProductCategory | null | undefined,
 ): string => {
@@ -49,5 +44,5 @@ export const formatCategoryLabel = (
 };
 
 export const isNonFoodCategory = (
-  category: ProductCategory | null | undefined,
+  category: { feature: string | null } | null | undefined,
 ): boolean => category != null && category.feature !== "food";

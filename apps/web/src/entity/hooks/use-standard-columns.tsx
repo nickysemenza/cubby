@@ -1,7 +1,8 @@
-import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import { displayImagesField } from "@cubby/schemas/display-images";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { CellData } from "@tanstack/react-table";
 import type { ReactNode } from "react";
@@ -54,8 +55,6 @@ interface BaseListRow {
   id: string;
   name?: string | null;
   createdAt?: string | Date;
-  /** Universal server-resolved entity identity imagery. */
-  displayImages?: DisplayImageSummary[];
 }
 
 const titleValueSchema = z.string().nullish().catch(null);
@@ -233,7 +232,13 @@ export function useStandardColumns<TData extends BaseListRow>({
     return {
       image: createImageColumn(columnHelper, {
         entity,
-        getImages: (row) => row.displayImages ?? [],
+        getImages: (row) => {
+          const envelope = fieldEnvelopeFor(row, "displayImages");
+          return envelope
+            ? (displayImagesField.nullable().parse(fieldValueOf(envelope)) ??
+                [])
+            : [];
+        },
         provenance: imageField?.provenance ?? null,
       }),
       identity: createNameColumn(columnHelper, entity, undefined, {

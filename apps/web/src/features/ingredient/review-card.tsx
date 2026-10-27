@@ -1,4 +1,3 @@
-import type { EnrichmentRow } from "@cubby/schemas/ingredient";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { countLabel } from "@cubby/shared/pluralize";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
@@ -6,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import pluralize from "pluralize";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
+import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { verbDef } from "~/entity/actions/action-verbs";
 import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { UsdaFoodResultRow } from "~/entity/presentation/usda-food-result-row";
@@ -183,7 +183,7 @@ function QueueUsdaPicker({
 }
 
 interface ReviewCardProps {
-  row: EnrichmentRow;
+  row: IngredientEnrichmentRead;
   proposal: EnrichmentProposal | undefined;
   /** Cache still working and this row hasn't a proposal yet. */
   proposalPending: boolean;

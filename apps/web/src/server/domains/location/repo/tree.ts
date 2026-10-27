@@ -10,10 +10,10 @@ import {
   productId as productIdSchema,
 } from "@cubby/schemas/identifiers";
 import type {
-  InfLocation,
   LocationAncestorOut,
   LocationInventoryBreakdownOut,
 } from "@cubby/schemas/location";
+import type { RawLocationDetail } from "@cubby/schemas/location-raw-read";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -39,7 +39,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
 import { buildLocationWithChildren } from "./helpers";
 import { loadStockItemsByLocation } from "./stock-items";
-import { computeLocationValuations } from "./valuation";
+import { loadStoredLocationValuations } from "./valuation";
 
 const locationTreeRowSchema = z.object({
   id: locationIdSchema,
@@ -77,7 +77,7 @@ const breakdownLocationRowSchema = z.object({
 });
 
 /**
- * Build the location hierarchy as `InfLocation` roots.
+ * Build the location hierarchy as `RawLocationDetail` roots.
  *
  * With no `rootId` this is the whole forest (every parentless location).
  * With one, the CTE is anchored at that location and the return value is its
@@ -168,7 +168,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     // The same loader supplies both inventory rows and directItemCount.
     loadStockItemsByLocation(db, locationIds),
     // An anchored subtree still needs the whole-tree valuation rollup.
-    computeLocationValuations(db),
+    loadStoredLocationValuations(db, locationIds),
     loadDataQualities(db, "location", locationIds),
     resolveEntityDisplayImageLists(
       db,
@@ -228,7 +228,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     ? (locationsMap.get(rootId)?.children ?? [])
     : rootLocations;
 
-  const tree: InfLocation[] = roots.map((x) => {
+  const tree: RawLocationDetail[] = roots.map((x) => {
     return buildLocationWithChildren(
       x,
       undefined,
@@ -263,18 +263,18 @@ export const getLocationInventoryBreakdown = async (
   const dbClient = getDb(db);
   const treeResult = await dbClient.execute(sql`
     WITH RECURSIVE location_tree AS (
-      SELECT l."id", l."parentId", l."shortcode", l."name", l."type", 0 AS depth
+      SELECT l."id", l."parentId", l."shortcode", l."name", 0 AS depth
       FROM ${location} l
       WHERE l."id" = ${rootId} AND l."deletedAt" IS NULL
 
       UNION ALL
 
-      SELECT l."id", l."parentId", l."shortcode", l."name", l."type", lt.depth + 1
+      SELECT l."id", l."parentId", l."shortcode", l."name", lt.depth + 1
       FROM ${location} l
       INNER JOIN location_tree lt ON l."parentId" = lt."id"
       WHERE l."deletedAt" IS NULL AND lt.depth < ${MAX_TREE_DEPTH}
     )
-    SELECT "id", "parentId", "shortcode", "name", "type"
+    SELECT "id", "parentId", "shortcode", "name"
     FROM location_tree
   `);
   const rows = z.array(breakdownLocationRowSchema).parse(treeResult.rows);
@@ -316,7 +316,6 @@ export const getLocationInventoryBreakdown = async (
     byId.set(row.id, {
       id: parseShortcodeFor("location", row.shortcode),
       name: row.name,
-      type: parseLocationType(row.type),
       directItemCount: countsByLocationId.get(row.id) ?? 0,
       totalItemCount: 0,
       children: [],
@@ -338,7 +337,6 @@ export const getLocationInventoryBreakdown = async (
     return {
       id: node.id,
       name: node.name,
-      type: node.type,
       directItemCount: node.directItemCount,
       totalItemCount:
         node.directItemCount +

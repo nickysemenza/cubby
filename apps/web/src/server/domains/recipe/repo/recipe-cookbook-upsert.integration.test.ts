@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { RecipeCreateInput } from "@cubby/schemas/recipe";
+import { type RecipeCreateInput } from "@cubby/schemas/recipe";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";

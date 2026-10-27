@@ -7,7 +7,7 @@ import Testing
 struct ReconcileBodyTests {
     @Test func rowsCarryBarcodesAndTheCanonicalCover() throws {
         let rows = try Fixtures.decode(
-            [InventoryWithLocationAndProductOut].self, from: "inventory-by-location.json"
+            [InventoryDetail].self, from: "inventory-by-location.json"
         )
         .map(RecountRow.init)
         #expect(rows.count == 2)
@@ -20,6 +20,20 @@ struct ReconcileBodyTests {
         #expect(first.locationID == LocationCode("LOC-5678"))
         #expect(rows[1].product.barcodes.isEmpty)
         #expect(rows[1].product.coverImageURL == nil)
+    }
+
+    @Test func missingAmountCannotBecomeARecountQuantity() throws {
+        let rows = try Fixtures.decode([JSONValue].self, from: "inventory-by-location.json")
+        var row = try #require(rows.first?.objectValue)
+        var fields = try #require(row["fields"]?.objectValue)
+        var amount = try #require(fields["amount"]?.objectValue)
+        amount["result"] = ["kind": "missing"]
+        fields["amount"] = .object(amount)
+        row["fields"] = .object(fields)
+        let detail = try JSONValue.object(row).decoded(InventoryDetail.self)
+        #expect(throws: DecodingError.self) {
+            try RecountRow(detail)
+        }
     }
 
     @Test func bodyEncodesEachArmAndPreservesCompleteSnapshotToken() throws {

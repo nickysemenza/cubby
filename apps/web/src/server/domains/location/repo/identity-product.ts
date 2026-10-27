@@ -8,7 +8,7 @@
  */
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { LocationIdentityProductOut } from "@cubby/schemas/location";
+import type { LocationIdentityProductOut } from "@cubby/schemas/location-fields";
 
 import { isNotDeleted } from "~/server/db/helpers/query";
 
@@ -25,6 +25,7 @@ export const mapLocationIdentityProduct = (
     brandName: product.brandName,
     model: product.model ?? null,
     category: product.category ?? null,
+    categoryFeature: product.category?.feature ?? null,
     price: product.price ?? null,
   };
 };

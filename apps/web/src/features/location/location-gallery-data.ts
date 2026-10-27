@@ -1,5 +1,5 @@
 import type {
-  InfLocation,
+  LocationTreeNode,
   InventoryItemForTree,
 } from "@cubby/schemas/location";
 import { uniq } from "es-toolkit";
@@ -11,10 +11,10 @@ const NO_INVENTORY_ITEMS: InventoryItemForTree[] = [];
  * the id list the canonical display-image provider needs to resolve identities.
  * The selected-place browser hydrates only its disclosed contents instead.
  */
-export function collectTreeProductIds(locations: InfLocation[]): string[] {
+export function collectTreeProductIds(locations: LocationTreeNode[]): string[] {
   const productIds: string[] = [];
 
-  const visit = (nodes: InfLocation[]) => {
+  const visit = (nodes: LocationTreeNode[]) => {
     for (const location of nodes) {
       for (const item of location.inventoryItems ?? NO_INVENTORY_ITEMS) {
         productIds.push(item.productId);

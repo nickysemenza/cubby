@@ -2,7 +2,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import type { ProductOwnershipEvidenceOut } from "@cubby/schemas/product";
 import {
   isServiceProductCategory,
-  type ProductCategorySummary,
+  type RawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
 
 import type { ProductOwnershipTimeline } from "~/lib/tool-timeline";
@@ -15,7 +15,7 @@ import { loadProductOwnershipQuantityEvidence } from "./quantity-ledger";
 export async function loadProductOwnershipEvidence(
   db: Database,
   id: ProductId,
-  category: ProductCategorySummary | null,
+  category: RawProductCategorySummary | null,
 ): Promise<ProductOwnershipEvidenceOut> {
   if (isServiceProductCategory(category))
     return {

@@ -3,9 +3,9 @@ import { mealRecipeId as mealRecipeIdSchema } from "@cubby/schemas/identifiers";
 import {
   getMealPreparationsOut,
   mealNutritionOut,
-  mealOut,
   nutritionMeal,
 } from "@cubby/schemas/meal";
+import { rawMealOutput } from "@cubby/schemas/meal-raw-read";
 import {
   buildNutrition,
   type NutritionTotals,
@@ -29,9 +29,8 @@ import {
 import {
   buildRecipeNutrition,
   costingExplanation,
-  effectiveRecipeServings,
 } from "~/server/domains/recipe/operations/recipe.server";
-import { pageProblemTypeSlice } from "~/server/generic/problems/operations/problems.server";
+import { projectProblemTypeSlice } from "~/server/generic/problems/operations/problems.server";
 
 import { callMcpTool } from "../testing/mcp-test-utils";
 import { createMcpServer, MCP_SERVER_INSTRUCTIONS } from "./server";
@@ -111,17 +110,10 @@ describe("MCP workflow tools", () => {
         },
       ],
     });
-    expect(effectiveRecipeServings({ servings: null, yield: null })).toBeNull();
-    expect(
-      effectiveRecipeServings({ yield: { value: 1, unit: "loaf" } }),
-    ).toBeNull();
-    expect(
-      effectiveRecipeServings({ yield: { value: 8, unit: "servings" } }),
-    ).toBe(8);
   });
 
   it("nutrition.plan_recipe defaults to compact coverage and opts into nutrition", () => {
-    const meal = mock(mealOut, {
+    const meal = mock(rawMealOutput, {
       overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
     });
     const mealRecipeId = mealRecipeIdSchema.parse(
@@ -270,42 +262,14 @@ describe("MCP workflow tools", () => {
     });
   });
 
-  it("pages an explicit problem type report", () => {
-    const slice = {
-      type: "orphanedProducts" as const,
-      items: [{ id: "synthetic-1" }, { id: "synthetic-2" }],
-      total: 2,
-    };
-    expect(pageProblemTypeSlice(slice, { pageIndex: 0, pageSize: 1 })).toEqual({
-      ...slice,
-      items: [{ id: "synthetic-1" }],
-      meta: { pageIndex: 0, pageSize: 1, totalCount: 2 },
-    });
-    expect(
-      pageProblemTypeSlice(slice, { pageIndex: 1, pageSize: 1 }),
-    ).toMatchObject({
-      items: [{ id: "synthetic-2" }],
-      meta: { pageIndex: 1, pageSize: 1, totalCount: 2 },
-    });
-    expect(
-      pageProblemTypeSlice(slice, { pageIndex: 3, pageSize: 1 }),
-    ).toMatchObject({
-      items: [],
-      meta: { pageIndex: 3, pageSize: 1, totalCount: 2 },
-    });
-  });
-
   it("projects internal diagnostic ids out of problem slices", () => {
     const diagnostic = mock(referentialLivenessViolationSchema);
     const serialized = JSON.stringify(
-      pageProblemTypeSlice(
-        {
-          type: "referentialLivenessViolations",
-          items: [diagnostic],
-          total: 1,
-        },
-        { pageIndex: 0, pageSize: 25 },
-      ),
+      projectProblemTypeSlice({
+        type: "referentialLivenessViolations",
+        items: [diagnostic],
+        total: 1,
+      }),
     );
 
     expect(serialized).not.toContain(diagnostic.targetId);

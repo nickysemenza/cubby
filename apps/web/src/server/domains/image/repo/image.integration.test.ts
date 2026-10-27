@@ -1,4 +1,5 @@
 import { buildActorContext } from "@cubby/schemas/context";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
@@ -13,9 +14,11 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import * as s3 from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import {
   associatePendingImages,
@@ -38,8 +41,12 @@ import {
   deleteCookbook,
   upsertCookbook,
 } from "~/server/domains/cookbook/repo/cookbook";
-import { markImageUploadedWorkflow } from "~/server/domains/image/operations/image.server";
+import {
+  imageUploadHandlers,
+  markImageUploadedWorkflow,
+} from "~/server/domains/image/operations/image.server";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   makeCookbookExtraction,
@@ -340,9 +347,85 @@ describe("image repository", () => {
       .where(eq(image.id, newer.id));
     const index = await getImageHashIndex(ctx.db);
     const ids = new Set([older.shortcode, newer.shortcode]);
+    const repair = index.repair.find((row) => row.id === newer.shortcode);
+    expect(repair?.originalUrl).toMatch(/\.jpg$/);
+    expect(repair).not.toHaveProperty("url");
     expect(
       index.repair.filter(({ id }) => ids.has(id)).map(({ id }) => id),
     ).toEqual([newer.shortcode, older.shortcode]);
+  });
+
+  it("returns a canonical Image from markUploaded while retaining stored source evidence", async () => {
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.png`,
+      filename: "synthetic-upload.png",
+      contentType: "image/png",
+      size: ONE_PIXEL_PNG.byteLength,
+      source: "catalog",
+      sourcePageUrl: "https://supplier.example.test/products/synthetic-item",
+    });
+    const evidence = imageSourceEvidence.parse({
+      basis: "decision",
+      feature: "image-provenance-classification",
+      promptVersion: "2026-10-14.1",
+      model: "synthetic-test-model",
+      runId: testShortcode("run", "4K7M"),
+      confidence: "high",
+      probability: 0.98,
+      evidenceFingerprint: "a".repeat(64),
+      value: "catalog",
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sourceEvidence: evidence })
+      .where(eq(image.id, pending.id));
+    const readStored = vi
+      .spyOn(s3, "getS3Object")
+      .mockImplementation(stored(ONE_PIXEL_PNG, "image/png"));
+    try {
+      const result = await imageUploadHandlers.operations.markUploaded({
+        data: getImageByIdSchema.parse({ id: pending.shortcode }),
+        request: {
+          principal: systemPrincipal(
+            buildKernelContext(ctx.db, ctx.actor.userId),
+          ),
+          headers: new Headers({ "cf-ray": "0123456789abcdef-SJC" }),
+          signal: new AbortController().signal,
+        },
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(result.error.message);
+      const row = result.data;
+      const raw = await getImageById(ctx.db, pending.id);
+      expect(row.status).toBe("UPLOADED");
+      expect(row.source).toBe("catalog");
+      expect(row.sourcePageUrl).toBe(
+        "https://supplier.example.test/products/synthetic-item",
+      );
+      expect(row.sourceEvidence).toEqual(evidence);
+      expect(fieldValueOf(row.fields.url)).toBe(raw.url);
+      expect(fieldValueOf(row.fields.representations)).toEqual(
+        raw.representations,
+      );
+      expect(fieldValueOf(row.fields.sightings)).toEqual(raw.sightings);
+      expect(row.fields.dataQuality.current).toMatchObject({
+        assignment: null,
+        controls: { kind: "readonly", reason: "computed" },
+      });
+      for (const key of [
+        "url",
+        "representations",
+        "sightings",
+        "capturedByName",
+        "provenanceEvidenceLabel",
+        "dataQuality",
+        "fieldResolutions",
+        "derived",
+      ])
+        expect(row).not.toHaveProperty(key);
+    } finally {
+      readStored.mockRestore();
+    }
   });
 
   // A standalone upload (a Mac browser screenshot) had no content hash, so

@@ -1,10 +1,10 @@
-import type { DerivedSidecar } from "@cubby/schemas/derived-value";
 import type {
   ListGroupSummary,
   ListGroupMembership,
 } from "@cubby/schemas/pagination";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
+import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
 
 export type { ListProjection } from "~/entity/model/list-read-fields";
 
@@ -18,7 +18,7 @@ export type ListBindingGroup = "media" | "quality" | "relations" | "derived";
 export interface ListReadPage<T = ListReadRow> {
   data: T[];
   count: number;
-  derived?: Record<string, DerivedSidecar>;
+  fieldReads?: PageFieldReadContexts;
   sums?: Record<string, number>;
   groups?: ListGroupSummary[];
   memberships?: ListGroupMembership[];

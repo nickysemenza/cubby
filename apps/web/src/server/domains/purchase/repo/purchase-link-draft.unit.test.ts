@@ -1,10 +1,14 @@
+import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import {
   expenseShortcode,
   productShortcode,
   purchaseShortcode,
   vendorShortcode,
 } from "@cubby/schemas/identifiers";
+import { purchaseLinkProductCandidate } from "@cubby/schemas/purchase";
 import { describe, expect, it } from "vitest";
+
+import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
 import {
   checkLinkExpenses,
@@ -89,6 +93,26 @@ describe("composeLinkExpenseCandidates", () => {
       ["Sample Supply", true],
       ["another purchase", true],
     ]);
+  });
+
+  it("retains original allocated decisions for the public serialization boundary", () => {
+    const fieldResolutions = fieldResolutionsSchema.parse({
+      projectId: {
+        mode: "allocated",
+        storedValue: null,
+        value: null,
+        emptyReason: "mixed",
+        fallbackValue: null,
+        source: "Synthetic principal allocations",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
+    });
+    const result = composeLinkExpenseCandidates(pur("PUR-4K7M"), [
+      row({ fieldResolutions }),
+    ]);
+    expect(result.candidates[0]?.fieldResolutions).toBe(fieldResolutions);
   });
 
   it("leaves an unknown cost unknown", () => {
@@ -196,8 +220,16 @@ describe("composeLinkProductCandidates", () => {
   const product = (id: string) => ({
     id: prd(id),
     name: id,
-    brandName: "Sample",
-    price: null,
+    fields: {
+      brandName: fieldValueFixture(
+        purchaseLinkProductCandidate.shape.fields.shape.brandName,
+        "Sample",
+      ),
+      price: fieldValueFixture(
+        purchaseLinkProductCandidate.shape.fields.shape.price,
+        null,
+      ),
+    },
     coverImageUrl: null,
   });
 
@@ -228,6 +260,11 @@ describe("composeLinkProductCandidates", () => {
       1,
     );
     expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]?.fields).toEqual(
+      product(prd("PRD-BBBB")).fields,
+    );
+    expect(result.candidates[0]).not.toHaveProperty("brandName");
+    expect(result.candidates[0]).not.toHaveProperty("price");
   });
 
   it("says the link carries no money or quantity", () => {

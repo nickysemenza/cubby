@@ -13,8 +13,8 @@ import {
   type ImageStorageStatus,
   isDisplayableImageFile,
 } from "@cubby/schemas/image";
-import type { ExpenseOut } from "@cubby/schemas/project";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import {
@@ -107,12 +107,12 @@ export type ExpenseRow = {
   spendingCategoryName?: string | null;
   storedSpendingCategoryShortcode?: string | null;
   fallbackSpendingCategoryShortcode?: string | null;
-  economicRole?: ExpenseOut["economicRole"];
+  economicRole?: RawExpenseOut["economicRole"];
   bookingTransactionCode?: string | null;
-  lineKind: ExpenseOut["lineKind"];
-  lineBasis: ExpenseOut["lineBasis"];
-  costType: ExpenseOut["costType"];
-  trade: ExpenseOut["trade"];
+  lineKind: RawExpenseOut["lineKind"];
+  lineBasis: RawExpenseOut["lineBasis"];
+  costType: RawExpenseOut["costType"];
+  trade: RawExpenseOut["trade"];
   url: string | null;
   notes: string | null;
   future: boolean;
@@ -120,9 +120,9 @@ export type ExpenseRow = {
   effectiveProjectId?: ProjectId | null;
   effectiveProjectShortcode?: string | null;
   effectiveProjectName?: string | null;
-  effectiveTrade?: ExpenseOut["trade"];
+  effectiveTrade?: RawExpenseOut["trade"];
   fallbackProjectShortcode?: string | null;
-  fallbackTrade?: ExpenseOut["trade"];
+  fallbackTrade?: RawExpenseOut["trade"];
   projectResolutionSource?: string;
   tradeResolutionSource?: string;
   projectAllocations?: ExpenseProjectAllocationRow[];
@@ -174,7 +174,7 @@ export type ExpenseRow = {
     source: string;
     sourceKey: string;
     sourceKeyVersion: number;
-    normalizedEvidence: ExpenseOut["sourceClaims"][number]["normalizedEvidence"];
+    normalizedEvidence: RawExpenseOut["sourceClaims"][number]["normalizedEvidence"];
     targetAmountAtClaim: number;
     reconciliationDecision: "amounts_match" | "accept_target_amount";
     reconciliationNote: string | null;
@@ -186,7 +186,7 @@ export type ExpenseRow = {
 
 const purchaseVendorLogo = (
   purchaseRow: ExpenseRow["purchase"],
-): ExpenseOut["vendorLogo"] => {
+): RawExpenseOut["vendorLogo"] => {
   const vendor = purchaseRow?.vendor;
   const logo = singularAttachment(vendor);
   if (vendor?.deletedAt !== null || logo?.deletedAt !== null) return null;
@@ -197,7 +197,7 @@ const purchaseVendorLogo = (
 const expenseAttributions = (
   row: Pick<ExpenseRow, "attributions">,
   role: "beneficiary" | "funder",
-): ExpenseOut["beneficiaries"] =>
+): RawExpenseOut["beneficiaries"] =>
   row.attributions
     .filter((value) => value.deletedAt === null && value.role === role)
     .map((value) => ({
@@ -210,7 +210,7 @@ const expenseAttributions = (
 
 const expenseSourceClaims = (
   row: Pick<ExpenseRow, "sourceClaims">,
-): ExpenseOut["sourceClaims"] =>
+): RawExpenseOut["sourceClaims"] =>
   row.sourceClaims
     .filter((value) => value.deletedAt === null)
     .map((value) => ({
@@ -251,7 +251,7 @@ const expenseSpendingCategoryAllocationSource = (
 const expenseSpendingCategoryFieldResolution = (
   row: ExpenseComputationRow,
   purchaseRow: ExpenseRow["purchase"],
-): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+): NonNullable<RawExpenseOut["fieldResolutions"]>[string] => {
   if (
     isPurchaseAdjustmentExpense({ lineKind: row.lineKind }) &&
     row.spendingCategoryAllocations?.length
@@ -271,6 +271,9 @@ const expenseSpendingCategoryFieldResolution = (
       mode: "allocated",
       storedValue: null,
       value: categories.length === 1 ? categories[0]! : null,
+      ...(categories.length !== 1
+        ? { emptyReason: categories.length === 0 ? "unset" : "mixed" }
+        : {}),
       fallbackValue: null,
       source: expenseSpendingCategoryAllocationSource(
         categories.length === 1,
@@ -346,7 +349,7 @@ const expenseProjectFieldResolution = (
   purchaseRow: ExpenseRow["purchase"],
   storedProjectShortcode: string | null,
   effectiveProjectShortcode: string | null,
-): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+): NonNullable<RawExpenseOut["fieldResolutions"]>[string] => {
   let mode: "allocated" | "explicit" | "inherit" | "none" = "inherit";
   if (row.lineKind === "unclassified") mode = "none";
   else if (isPurchaseAdjustmentExpense({ lineKind: row.lineKind }))
@@ -359,8 +362,13 @@ const expenseProjectFieldResolution = (
     storedProjectShortcode,
     effectiveProjectShortcode,
   );
+  const allocatedProjects = new Set(
+    row.projectAllocations?.flatMap((allocation) =>
+      allocation.projectShortcode ? [allocation.projectShortcode] : [],
+    ),
+  );
   let sourceEntity: NonNullable<
-    ExpenseOut["fieldResolutions"]
+    RawExpenseOut["fieldResolutions"]
   >[string]["sourceEntity"] = effectiveProjectShortcode
     ? {
         entityKind: "project" as const,
@@ -379,6 +387,9 @@ const expenseProjectFieldResolution = (
     mode,
     storedValue: storedProjectShortcode,
     value: effectiveProjectShortcode,
+    ...(mode === "allocated" && effectiveProjectShortcode === null
+      ? { emptyReason: allocatedProjects.size > 1 ? "mixed" : "unset" }
+      : {}),
     fallbackValue: row.fallbackProjectShortcode ?? null,
     source,
     sourceEntity,
@@ -396,7 +407,7 @@ const expenseProjectFieldResolution = (
 const allocatedShareResolution = <K extends "trades" | "costTypes">(
   row: ExpenseComputationRow,
   key: K,
-): NonNullable<ExpenseOut["fieldResolutions"]>[string] | null => {
+): NonNullable<RawExpenseOut["fieldResolutions"]>[string] | null => {
   if (
     !isPurchaseAdjustmentExpense({ lineKind: row.lineKind }) ||
     row.trade !== null
@@ -413,6 +424,9 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
     // Every Expense keeps a stored cost type; editors seed from it.
     storedValue: key === "costTypes" ? row.costType : null,
     value: values.length === 1 ? values[0]! : null,
+    ...(values.length !== 1
+      ? { emptyReason: values.length === 0 ? "unset" : "mixed" }
+      : {}),
     fallbackValue: null,
     // Purchases carry no trade or cost-type default to name as a source.
     source: expenseSpendingCategoryAllocationSource(values.length === 1, false),
@@ -424,7 +438,7 @@ const allocatedShareResolution = <K extends "trades" | "costTypes">(
 
 const expenseCostTypeFieldResolution = (
   row: ExpenseComputationRow,
-): NonNullable<ExpenseOut["fieldResolutions"]>[string] =>
+): NonNullable<RawExpenseOut["fieldResolutions"]>[string] =>
   allocatedShareResolution(row, "costTypes") ?? {
     mode: "explicit",
     storedValue: row.costType,
@@ -440,8 +454,8 @@ const expenseTradeFieldResolution = (
   row: ExpenseComputationRow,
   purchaseRow: ExpenseRow["purchase"],
   effectiveProjectShortcode: string | null,
-  effectiveTrade: ExpenseOut["trade"],
-): NonNullable<ExpenseOut["fieldResolutions"]>[string] => {
+  effectiveTrade: RawExpenseOut["trade"],
+): NonNullable<RawExpenseOut["fieldResolutions"]>[string] => {
   const allocated = allocatedShareResolution(row, "trades");
   if (allocated) return allocated;
   const source =
@@ -484,7 +498,7 @@ const expenseTradeFieldResolution = (
 
 const expenseProjectAllocations = (
   row: ExpenseComputationRow,
-): ExpenseOut["projectAllocations"] =>
+): RawExpenseOut["projectAllocations"] =>
   row.projectAllocations
     ?.filter(
       (
@@ -647,7 +661,7 @@ export const expenseMediaFields = (row: Pick<ExpenseRow, "purchase">) => ({
 export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
   row: ExpenseRow,
   dataQuality: Q,
-): Omit<ExpenseOut, "dataQuality"> & { dataQuality: Q } => ({
+): Omit<RawExpenseOut, "dataQuality"> & { dataQuality: Q } => ({
   id: parseShortcodeFor("expense", row.shortcode),
   name: row.name,
   cost: row.cost,

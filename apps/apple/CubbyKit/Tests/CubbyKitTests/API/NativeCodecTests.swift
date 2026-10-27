@@ -5,6 +5,98 @@ import Testing
 
 @Suite("Direct native codecs")
 struct NativeCodecTests {
+    @Test(arguments: [false, true])
+    func imageURLsUseCanonicalRepresentationSnapshots(cached: Bool) throws {
+        let missing: JSONValue = [
+            "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
+            "result": ["kind": "missing"], "work": ["kind": "idle"],
+        ]
+        var representation = try #require(missing.objectValue)
+        var result: [String: JSONValue] = [
+            "kind": .string(cached ? "cached" : "live"),
+            "decision": [
+                "outcome": [
+                    "kind": "value",
+                    "value": [
+                        "original": "https://example.com/original.png",
+                        "preferred": "https://example.com/transparent.png",
+                        "transparent": "https://example.com/transparent.png", "preferredKind": "transparent",
+                    ],
+                ], "provenance": ["kind": "computed"],
+            ],
+        ]
+        if cached {
+            result["computedAt"] = "2026-10-01T00:00:00Z"
+            result["freshness"] = "stale"
+        }
+        representation["result"] = .object(result)
+        var fields = Dictionary(
+            uniqueKeysWithValues: [
+                "representations", "url", "capturedByName", "sightings", "provenanceEvidenceLabel",
+                "dataQuality", "displayImages",
+            ].map { ($0, missing) })
+        fields["representations"] = .object(representation)
+        var row = Dictionary(
+            uniqueKeysWithValues: [
+                "width", "height", "detectedContentType", "sha256", "renderStatus", "storageStatus",
+                "sourcePageUrl", "sourceAssetUrl", "sourceName", "verifiedAt", "capturedAt",
+                "capturedAtOffsetMinutes", "captureLocation", "capturePlaceName", "captureDeviceLabel",
+                "capturedByPartyId", "provenanceEvidence", "sourceEvidence", "redirectedFrom",
+            ].map { ($0, JSONValue.null) })
+        row.merge(
+            [
+                "id": "IMG-2345", "key": "synthetic-image", "filename": "synthetic.png", "size": 1,
+                "contentType": "image/png", "status": "UPLOADED", "source": "upload",
+                "useOriginal": false, "captureAttribution": "none", "associations": [], "attachments": [],
+                "previousShortcodes": [], "createdAt": "2026-10-01T00:00:00Z",
+                "updatedAt": "2026-10-01T00:00:00Z",
+                "fields": .object(fields),
+            ], uniquingKeysWith: { _, next in next })
+        let image: ImageWithEntity = try JSONValue.object(row).decoded()
+        #expect(image.imageURL?.absoluteString == "https://example.com/transparent.png")
+        #expect(image.originalImageURL?.absoluteString == "https://example.com/original.png")
+        #expect(image.transparentImageURL?.absoluteString == "https://example.com/transparent.png")
+    }
+
+    @Test func recursiveLocationParentsRoundTripWithValueSemantics() throws {
+        let missing: JSONValue = [
+            "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
+            "result": ["kind": "missing"], "work": ["kind": "idle"],
+        ]
+        let fields = JSONValue.object(
+            Dictionary(
+                uniqueKeysWithValues: [
+                    "type", "product", "aiDescription", "images", "valuationLabel", "valuation",
+                    "dataQuality", "dataGaps", "displayImages",
+                ].map { ($0, missing) }))
+        func node(_ id: String, _ name: String, parent: JSONValue? = nil) -> [String: JSONValue] {
+            var row: [String: JSONValue] = [
+                "id": .string(id), "name": .string(name), "aliases": [], "notes": .null,
+                "lastBulkInventory": .null, "createdAt": "2026-10-01T00:00:00.000Z",
+                "updatedAt": "2026-10-01T00:00:00.000Z", "fields": fields, "children": [],
+            ]
+            if let parent { row["parent"] = parent }
+            return row
+        }
+        let ancestor = JSONValue.object(node("LOC-2345", "Synthetic ancestor"))
+        let parent = JSONValue.object(node("LOC-3456", "Synthetic parent", parent: ancestor))
+        var root = node("LOC-4567", "Synthetic location", parent: parent)
+        root["attachments"] = []
+        root["redirectedFrom"] = .null
+        root["previousShortcodes"] = []
+        root["children"] = [.object(node("LOC-5678", "Synthetic child"))]
+        let original: InfLocation = try JSONValue.object(root).decoded()
+        #expect(original.parent?.parent?.name == "Synthetic ancestor")
+        #expect(original.children?.first?.name == "Synthetic child")
+        var changed = original
+        changed.parent?.parent?.name = "Synthetic changed ancestor"
+        #expect(original.parent?.parent?.name == "Synthetic ancestor")
+        #expect(changed.parent?.parent?.name == "Synthetic changed ancestor")
+        #expect(Set([original, changed]).count == 2)
+        let roundTrip: InfLocation = try JSONValue(encoding: changed).decoded()
+        #expect(roundTrip == changed)
+    }
+
     @Test func retainedStatementSweepPreservesCollectionAndIntersectingScope() throws {
         let wire: JSONValue = [
             "families": [
@@ -166,13 +258,13 @@ struct NativeCodecTests {
 
     @Test func generatedMutationPayloadsRequireEffectsAndIgnoreAdditions() throws {
         let data = Data(#"{"items":[],"sideEffects":{},"future":true}"#.utf8)
-        let task = try JSONDecoder.cubby().decode(TaskBulkMutationOut.self, from: data)
+        let task = try JSONDecoder.cubby().decode(TaskBulkReorderOutput.self, from: data)
         let inventory = try JSONDecoder.cubby().decode(
-            InventoryWithLocationAndProductListAndSideEffectsOut.self, from: data)
+            InventoryReconcileSessionOutput.self, from: data)
         #expect(task.items.isEmpty)
         #expect(inventory.items.isEmpty)
         #expect(throws: DecodingError.self) {
-            _ = try JSONDecoder.cubby().decode(TaskBulkMutationOut.self, from: Data(#"{"items":[]}"#.utf8))
+            _ = try JSONDecoder.cubby().decode(TaskBulkReorderOutput.self, from: Data(#"{"items":[]}"#.utf8))
         }
     }
 

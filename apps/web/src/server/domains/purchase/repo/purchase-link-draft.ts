@@ -1,17 +1,18 @@
 import type {
   ExpenseShortcode,
   ProductShortcode,
-  ProjectShortcode,
   PurchaseShortcode,
   VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ExpenseFilters, Trade } from "@cubby/schemas/project";
+import type { ExpenseFilters } from "@cubby/schemas/project";
+import type { rawPurchaseLinkExpenseCandidate } from "@cubby/schemas/purchase";
 import type {
   LinkExpenseScope,
   purchaseLinkExpensesCandidatesOut,
   purchaseLinkExpensesCheckOut,
   purchaseLinkProductsCandidatesOut,
 } from "@cubby/schemas/purchase";
+import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { cents, dollars } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import type { z } from "zod";
@@ -63,30 +64,41 @@ export const expenseFiltersForScope = (
 };
 
 /** The expense list's fields an attach candidate is worded from. */
-export interface LinkExpenseRow {
-  id: ExpenseShortcode;
-  name: string;
-  date: string | null;
-  cost: number | null;
-  trade: Trade | null;
-  projectId: ProjectShortcode | null;
-  projectName: string | null;
-  purchaseId: PurchaseShortcode | null;
-  vendor: string | null;
-}
+export type LinkExpenseRow = Pick<
+  RawExpenseOut,
+  | "id"
+  | "name"
+  | "date"
+  | "cost"
+  | "trade"
+  | "projectId"
+  | "projectName"
+  | "purchaseId"
+  | "vendor"
+  | "fieldResolutions"
+>;
 
 type CandidatesOut = z.output<typeof purchaseLinkExpensesCandidatesOut>;
 
 const CAUTION =
   "A payment schedule is not one Purchase — separate transactions stay separate Purchases. Attaching an already-filed expense moves it off its current purchase.";
 
+type LinkExpenseCandidates = {
+  candidates: Array<
+    z.output<typeof rawPurchaseLinkExpenseCandidate> &
+      Pick<LinkExpenseRow, "fieldResolutions">
+  >;
+  message: CandidatesOut["message"];
+  caution: CandidatesOut["caution"];
+};
+
 export function composeLinkExpenseCandidates(
   purchaseId: PurchaseShortcode,
   rows: readonly LinkExpenseRow[],
-): Pick<CandidatesOut, "candidates" | "message" | "caution"> {
+): LinkExpenseCandidates {
   const candidates = rows
     .filter((row) => row.purchaseId !== purchaseId)
-    .map((row): CandidatesOut["candidates"][number] => {
+    .map((row) => {
       const filed = row.purchaseId !== null;
       const current = filed ? (row.vendor ?? "another purchase") : "unattached";
       return {
@@ -97,6 +109,7 @@ export function composeLinkExpenseCandidates(
         trade: row.trade,
         projectId: row.projectId,
         projectName: row.projectName,
+        fieldResolutions: row.fieldResolutions,
         current,
         filed,
         summary: [
@@ -213,11 +226,10 @@ export function composeLinkProductCandidates(
     .filter((item) => !attachedIds.has(item.id))
     .slice(0, limit)
     // Only what the picker shows: the search rows carry more than a client should receive here.
-    .map(({ id, name, brandName, price, coverImageUrl }) => ({
+    .map(({ id, name, fields, coverImageUrl }) => ({
       id,
       name,
-      brandName,
-      price,
+      fields: { brandName: fields.brandName, price: fields.price },
       coverImageUrl,
     }));
   return {

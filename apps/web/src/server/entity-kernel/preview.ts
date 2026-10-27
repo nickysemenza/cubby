@@ -160,7 +160,6 @@ async function applyPreviewSuggestions(args: {
       result[field.key] = basisValueOf(raw);
       return result;
     }, {});
-  basis.__resolutionContext = JSON.stringify(args.fieldResolutions);
   const suggestedTargets = args.targets.filter((field) => {
     const resolution = args.fieldResolutions[field];
     return (

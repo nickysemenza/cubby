@@ -8,7 +8,7 @@ import {
   purchaseSettlementSignSatisfiedExpression,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { ProblemItem } from "@cubby/schemas/problems";
+import { ProblemItem } from "@cubby/schemas/problems-raw-read";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";

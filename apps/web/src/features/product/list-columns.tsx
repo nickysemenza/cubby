@@ -1,12 +1,10 @@
-import {
-  type ProductFilters,
-  type ProductListItem,
-  type ProductPricingOut,
-} from "@cubby/schemas/product";
-import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
+import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { type ProductFilters } from "@cubby/schemas/product";
+
+import { ProductCostValue } from "~/entity/display/product-cost-value";
+type ProductListItem = EntityFieldEnvelopeRead<"product", "list">;
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
-import { countLabel } from "@cubby/shared/pluralize";
-import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -50,11 +48,6 @@ import {
 } from "~/ui/data-table/table-features";
 import { useTagOptions } from "~/ui/hooks/use-entity-options";
 import { NoneValue } from "~/ui/primitives/none-value";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/ui/primitives/tooltip";
 
 import { useStableIds } from "../../entity/list-columns/stable-ids";
 import {
@@ -142,7 +135,10 @@ function useProductFilterOptions() {
     tags: tagOptions,
     productCategories: treePickerItems(categories, {
       idOf: (category) => category.id,
-      parentIdOf: (category) => category.path.at(-2)?.id ?? null,
+      parentIdOf: (category) => {
+        const effectiveCategoryPath = fieldValueOf(category.fields.path);
+        return effectiveCategoryPath?.at(-2)?.id ?? null;
+      },
       labelOf: (category) => category.name,
     }).map((item) => ({
       value: item.id,
@@ -151,16 +147,17 @@ function useProductFilterOptions() {
       depth: item.presentation?.depth,
       rowLabel: item.presentation?.rowLabel,
     })),
-    productCategoryFamilies: categories.flatMap((category) =>
-      category.feature
+    productCategoryFamilies: categories.flatMap((category) => {
+      const effectiveCategoryFeature = fieldValueOf(category.fields.feature);
+      return effectiveCategoryFeature
         ? [
             {
-              value: category.feature,
+              value: effectiveCategoryFeature,
               label: category.name,
             },
           ]
-        : [],
-    ),
+        : [];
+    }),
     productVendors: vendorOptions,
     project: projectOptions,
     productLocations: locationOptions,
@@ -205,34 +202,39 @@ export const productListOverride = defineListOverride<
       () =>
         createCubbyColumnCollection<ProductTreeRow>((add) => {
           add(
-            columnHelper.accessor("primaryGtin", {
-              header: "Barcode / ISBN",
-              meta: {
-                className: "w-24",
-                mono: true,
-                code: true,
-                mobile: { interactive: true },
+            columnHelper.accessor(
+              (row) => fieldValueOf(row.fields.primaryGtin),
+              {
+                id: "primaryGtin",
+                header: "Barcode / ISBN",
+                meta: {
+                  readFields: ["primaryGtin"],
+                  className: "w-24",
+                  mono: true,
+                  code: true,
+                  mobile: { interactive: true },
+                },
+                cell: (info) => {
+                  const value = info.getValue();
+                  return (
+                    <EditableCell
+                      value={value}
+                      onSave={async (newValue) => {
+                        await updateProduct({
+                          id: info.row.original.id,
+                          data: { barcode: newValue },
+                        });
+                      }}
+                      config={{ type: "text" }}
+                      trigger="pencil"
+                      renderValue={(current) =>
+                        current ? <ProductGtin gtin={current} /> : <NoneValue />
+                      }
+                    />
+                  );
+                },
               },
-              cell: (info) => {
-                const value = info.getValue();
-                return (
-                  <EditableCell
-                    value={value}
-                    onSave={async (newValue) => {
-                      await updateProduct({
-                        id: info.row.original.id,
-                        data: { barcode: newValue },
-                      });
-                    }}
-                    config={{ type: "text" }}
-                    trigger="pencil"
-                    renderValue={(current) =>
-                      current ? <ProductGtin gtin={current} /> : <NoneValue />
-                    }
-                  />
-                );
-              },
-            }),
+            ),
           );
           add(
             createExternalLinkColumn(columnHelper, "fdc_id", "/usda/$id", {
@@ -274,13 +276,12 @@ export const productListOverride = defineListOverride<
           );
           add(
             columnHelper.accessor(
-              (product) =>
-                product.pricing.cost?.amount ?? product.pricing.effectivePrice,
+              (product) => fieldValueOf(product.fields.cost)?.amount,
               {
-                id: "price",
+                id: "cost",
                 header: () => "Cost",
                 meta: {
-                  readFields: ["price", "pricing", "category"],
+                  readFields: ["cost", "price"],
                   numeric: true,
                   className: "w-32",
                   mobile: { slot: "trailing", priority: 10, interactive: true },
@@ -299,11 +300,16 @@ export const productListOverride = defineListOverride<
                 },
                 cell: (info) => {
                   const product = info.row.original;
-                  if (isServiceProductCategory(product.category))
-                    return renderProductChargeCost(product.pricing.cost);
+                  const price = product.fields.price;
+                  if (price.current.controls.kind === "readonly")
+                    return <ProductCostValue envelope={product.fields.cost} />;
                   return (
                     <EditableCell
-                      value={product.price}
+                      value={
+                        price.current.assignment?.kind === "value"
+                          ? price.current.assignment.value
+                          : null
+                      }
                       onSave={async (price) => {
                         await updateProduct({
                           id: product.id,
@@ -312,13 +318,11 @@ export const productListOverride = defineListOverride<
                       }}
                       config={{
                         type: "currency",
-                        clearable: {
-                          label: productPriceClearLabel(product.pricing),
-                        },
+                        clearable: { label: "Use inherited" },
                       }}
-                      renderValue={() =>
-                        renderProductPriceValue(product.pricing)
-                      }
+                      renderValue={() => (
+                        <ProductCostValue envelope={product.fields.cost} />
+                      )}
                     />
                   );
                 },
@@ -378,6 +382,7 @@ export const productListOverride = defineListOverride<
           place("dataQuality");
           place("dataGaps");
           place("externalIds");
+          place("cost");
           place("price");
           place("unitPrice");
           place("expenseTotal");
@@ -392,11 +397,11 @@ export const productListOverride = defineListOverride<
               columnHelper,
               "inventoryEntry",
               "location",
-              (e) => e.location,
+              (e: ProductListItem["inventoryEntry"][number]) => e.location,
               {
                 id: "location",
                 columnGroup: "Stock",
-                context: (product) => product.stockStatus,
+                context: (product) => fieldValueOf(product.fields.stockStatus),
                 contextReadFields: ["stockStatus"],
                 explanation: {
                   entity: "product",
@@ -530,105 +535,15 @@ function ProductListHydration({
   children: ReactNode;
 }) {
   const kitCandidates = useMemo(
-    () => data.filter((product) => product.componentCount > 0).map((p) => p.id),
+    () =>
+      data
+        .filter(
+          (product) => (fieldValueOf(product.fields.componentCount) ?? 0) > 0,
+        )
+        .map((p) => p.id),
     [data],
   );
   const stableKitIds = useStableIds(kitCandidates);
   useEffect(() => onKitIds([...stableKitIds]), [onKitIds, stableKitIds]);
   return children;
-}
-
-/**
- * `Product.pricing.source` in prose — the one place this ternary is spelled
- * out, so the detail-page caption and the cell tooltip (below) can't drift
- * apart on what "explicit" / "derived" / "none" mean to a reader.
- */
-export function describeProductPricingSource(
-  pricing: Pick<ProductPricingOut, "source" | "knownExpenseCount" | "partial">,
-): string {
-  switch (pricing.source) {
-    case "explicit":
-      return "Manual override";
-    case "derived":
-      return `Derived from ${countLabel(pricing.knownExpenseCount, "expense")}${pricing.partial ? " · partial history" : ""}`;
-    case "none":
-      return "No override or quantified purchase history";
-  }
-}
-
-/**
- * `Product.price`'s `EditableCell` edits the manual override, but *displays*
- * `pricing.effectivePrice` — the override OR the Expense-derived fallback.
- * Both render as a plain number, so without a cue an override and a derived
- * price (and a cleared override that happens to land on the same digits as
- * the old one) are visually identical. The pin marks the exception (a manual
- * override); the derived norm stays unmarked, and the tooltip names either
- * source. This is that cue;
- * shared by the detail page and the list column so the two surfaces can't
- * disagree about what the cell means.
- */
-export function renderProductPriceValue(
-  pricing: Pick<
-    ProductPricingOut,
-    "effectivePrice" | "source" | "knownExpenseCount" | "partial"
-  >,
-): ReactNode {
-  if (pricing.effectivePrice === null) return <NoneValue />;
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<span className="inline-flex items-center gap-1" />}
-      >
-        {pricing.source === "explicit" ? (
-          <PushPinIcon
-            aria-hidden
-            className="size-3 shrink-0 text-muted-foreground"
-          />
-        ) : null}
-        {formatCurrency(pricing.effectivePrice)}
-      </TooltipTrigger>
-      <TooltipContent side="top">
-        {describeProductPricingSource(pricing)}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/** Charge averages are read-only evidence, never a manual valuation editor. */
-export function renderProductChargeCost(
-  cost: ProductPricingOut["cost"],
-): ReactNode {
-  const explanation = cost
-    ? `${cost.explanation} ${countLabel(cost.chargeCount, "charge")}. Latest dated charge: ${cost.latestCharge === null ? "not recorded" : formatCurrency(cost.latestCharge)}.`
-    : "No positive actual charges recorded.";
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            aria-label={`${cost?.label ?? "Not recorded"}. ${explanation}`}
-          />
-        }
-      >
-        {cost?.label ?? <NoneValue />}
-      </TooltipTrigger>
-      <TooltipContent side="top">{explanation}</TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
- * Label for `Product.price`'s currency-clear control: names the state
- * clearing the override lands on, so the button reads as "go back to the
- * derived price" rather than an unlabelled "clear". Shared by the detail
- * page and the list column so a clear affordance can't say something
- * different on one surface than the other.
- */
-export function productPriceClearLabel(
-  pricing: Pick<ProductPricingOut, "derivedPrice">,
-): string {
-  return pricing.derivedPrice !== null
-    ? `Revert to ${formatCurrency(pricing.derivedPrice)} (derived)`
-    : "Clear override (no derived price on record)";
 }

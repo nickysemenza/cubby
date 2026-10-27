@@ -1,7 +1,7 @@
 import {
   withEntityListMedia,
   withEntityDetailMedia,
-} from "@cubby/schemas/entity-read-media";
+} from "@cubby/schemas/entity-media-raw-read";
 import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import { resolveFieldDisplay, schemaAtReadPath } from "./presentation.ts";
 import { deriveBulkUpdateFields } from "./bulk.ts";
@@ -79,6 +79,7 @@ const entityPorts = (
 ): EntityPorts => {
   return {
     repository: ports.repository,
+    fieldEnvelope: ports.fieldEnvelope,
     references: {
       label: ports.references.label,
       resolver: ports.references.resolver,
@@ -620,6 +621,7 @@ const compileFieldModel = (
             ? null
             : key
           : field.readKey,
+      storedKey: field.storedKey ?? null,
       reference: field.reference,
       provenance,
       // Left undefined (so not emitted) unless declared, like detailLabelPath.
@@ -877,6 +879,17 @@ const compileFieldModel = (
     }
     return values;
   };
+  for (const field of fields) {
+    if (!field.storedKey) continue;
+    const declaration = model.derived[field.storedKey];
+    if (
+      model.stored[field.storedKey]?.publishes !== "derivedValue" &&
+      !(declaration && "stored" in declaration && declaration.stored)
+    )
+      throw new EntityDeclarationError(
+        `${context}.${field.key}.storedKey must name a published stored derived value: ${field.storedKey}.`,
+      );
+  }
   const derived = compileDerived(model.derived, storageKeys, context);
   const hierarchy = compileHierarchy(
     model.hierarchy,
@@ -2444,6 +2457,7 @@ export const compileEntity = (
             mcpList: contractValue.mcpList ?? list,
             mcpDetail:
               contractValue.mcpDetail ?? contractValue.mcpOutput ?? detail,
+            embedded: contractValue.embedded ?? [],
           };
         })();
 
