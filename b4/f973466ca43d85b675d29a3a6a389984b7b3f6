@@ -1,0 +1,47 @@
+.oxlintrc.json
+  s_0abfa2ff49bbb9::t_1c214738cf9825 216-222
+apps/apple/App/Tests/AppShell/DiagnosticsTests.swift
+  s_0abfa2ff49bbb9::t_5551d9bd458bd0 88
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/NativeCodecTests.swift
+  s_0abfa2ff49bbb9::t_71eea16f4cf2a6 44,51
+apps/web/src/contracts/entity-graph.contract.ts
+  s_0abfa2ff49bbb9::t_c6993b920e63c4 97
+apps/web/src/server/entity-kernel/repo/entity-identity.integration.test.ts
+  s_0abfa2ff49bbb9::t_f57e06fcaaef8f 210,219-221,225
+apps/web/src/server/generic/entity-links/repo/entity-edge-source.integration.test.ts
+  s_0abfa2ff49bbb9::t_ea412b8f432aa3 76,287,299-301
+docs/agents/domain-rules.md
+  s_0abfa2ff49bbb9::t_a81992f6a3f227 25-26
+docs/agents/generic-paths.md
+  s_0abfa2ff49bbb9::t_40f0ced2805d6f 84-89,111,116-117
+docs/entities.md
+  s_0abfa2ff49bbb9::t_47524813316256 142,1825,2084-2089,3725-3726,4579
+docs/guide/terminology.md
+  s_0abfa2ff49bbb9::t_ff4c01ad3a64fe 67-68
+tools/oxlint/cubby/index.ts
+  s_0abfa2ff49bbb9::t_863c7147d9856d 22,63
+tools/oxlint/cubby/no-entity-roster-baseline.json
+  s_0abfa2ff49bbb9::t_19949adf2bd036 1-13
+tools/oxlint/cubby/no-entity-roster.test.ts
+  s_0abfa2ff49bbb9::t_552697f051187f 1-53
+tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json
+  s_0abfa2ff49bbb9::t_d552b17f75463f 100
+tools/oxlint/cubby/rules/no-entity-roster.ts
+  s_0abfa2ff49bbb9::t_1bcb845b926dea 1-163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b4f973466ca43d85b675d29a3a6a389984b7b3f6",
+  "prompts": {},
+  "sessions": {
+    "s_0abfa2ff49bbb9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17ef8-b18b-7333-88f1-179c19d9f56f",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
