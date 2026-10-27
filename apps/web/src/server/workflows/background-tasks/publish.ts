@@ -106,14 +106,12 @@ export async function publishBackgroundTasks(
         continue;
       }
       if (task.kind === "entity-embedding.refresh") {
-        const { enqueueEmbeddingRefs, productionEmbeddingRefreshPort } =
-          await import("./embedding");
+        const { enqueueEmbeddingRefs } = await import("./embedding");
         const { prepareSearchDocuments } =
           await import("~/server/generic/search/repo/search-document");
         await enqueueEmbeddingRefs(
           tx,
           await prepareSearchDocuments(tx, [task]),
-          productionEmbeddingRefreshPort.config(),
         );
         continue;
       }

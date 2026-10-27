@@ -22,7 +22,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { settleEmbeddingProjectionJobs } from "./embedding-job.fixtures";
+import { settleEmbeddingProjectionJobs } from "./embedding-drain.fixtures";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,

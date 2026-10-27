@@ -22,13 +22,13 @@ import {
   derivedReconcileHandler,
 } from "~/server/generic/derived/service/drain-job";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
+import { embeddingRefreshHandler } from "~/server/generic/embedding/service/embedding-refresh";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   defineJobHandler,
   drainDueJobs,
 } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
-import { embeddingJobHandler } from "~/server/workflows/background-tasks/embedding";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
 import {
   runJobHandler,
@@ -70,7 +70,7 @@ export const productionJobHandlers: JobHandlers = {
   "derived.drain": derivedDrainHandler(derivedComputes),
   "derived.reconcile": derivedReconcileHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
-  "embedding.refresh": embeddingJobHandler(),
+  "embedding.refresh": embeddingRefreshHandler(),
   "embedding.cleanup": embeddingCleanupHandler(),
   // `image.device` has no server handler: Apple devices claim it by pull.
   "image.cloud": imageProcessingJobHandler,
