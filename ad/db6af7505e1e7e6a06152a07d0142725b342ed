@@ -1,0 +1,69 @@
+apps/web/src/server/ai/repo/ai-evaluation.ts
+  s_b5f2d60d9120a2::t_5a3c63be09963b 691-696
+apps/web/src/server/ai/repo/evaluation-page-transport.integration.test.ts
+  s_b5f2d60d9120a2::t_845463a1898709 29,35,181-186,188,239-240
+apps/web/src/server/ai/repo/evaluation-page.integration.test.ts
+  s_b5f2d60d9120a2::t_184affdf4a1f28 6,8,13-14,31-34,37-38,82,85-90,106-113,115,127-131,134,136-138,140-156,159-160,162-165,167,174,222-223,239-240,247,252-261
+apps/web/src/server/domains/connection/service/connection-preparation.integration.test.ts
+  s_b5f2d60d9120a2::t_3d4e2ad842aa80 27-30,123,169-174,179-189,191-199,221
+apps/web/src/server/domains/connection/service/connection-query-budget.integration.test.ts
+  s_b5f2d60d9120a2::t_028c70ae0cb935 14,87-89,91-93
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassify-recovery.integration.test.ts
+  s_b5f2d60d9120a2::t_c190524c7ae353 135-136,138,143
+apps/web/src/server/domains/purchase-import/service/gmail/reclassify.integration.test.ts
+  s_b5f2d60d9120a2::t_f4d80934e6ebea 42,1054-1058
+apps/web/src/server/domains/purchase-import/service/gmail/refresh-evaluation.integration.test.ts
+  s_b5f2d60d9120a2::t_a6d7d37e5769b2 18-21,71-96,360
+apps/web/src/server/domains/run/repo/ai-refresh-scheduling.integration.test.ts
+  s_b5f2d60d9120a2::t_ce777d8fb5a705 6,11,19-20,33-52,310,418,453-454,465,488,498,505-506,513-514,554,563
+apps/web/src/server/domains/run/repo/ai-work-state.ts
+  s_b5f2d60d9120a2::t_3089734a181c4b 189-206
+apps/web/src/server/domains/run/repo/connection-refresh.integration.test.ts
+  s_b5f2d60d9120a2::t_f637e9b7ff83f8 7,28,31,381-385
+apps/web/src/server/domains/run/service/ai-evaluation-drain.fixtures.ts
+  s_b5f2d60d9120a2::t_8ee17f8efed5da 1-128
+apps/web/src/server/domains/run/service/ai-evaluation-drain.ts
+  s_b5f2d60d9120a2::t_95c2c9cbcf208b 31,41,52,92-101,117,144,271-275,357,361-380,382-386
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_b5f2d60d9120a2::t_42384da0554964 22-23,46-49,73-75,101-103,106-107,1222-1254,1367-1397
+apps/web/src/server/domains/run/service/connection-evaluation-page.integration.test.ts
+  s_b5f2d60d9120a2::t_8160f2bcd31cfa 19,27,131-132,134,332-334
+apps/web/src/server/domains/run/service/sweep.integration.test.ts
+  s_b5f2d60d9120a2::t_1150434c407f5d 400,569-572,613-614,703,721
+apps/web/src/server/generic/assessment/repo/assessment-product.integration.test.ts
+  s_b5f2d60d9120a2::t_d55e234d14a419 15,56-60,774-788,825-827,829-830,832-833,1117-1121,1132-1134,1142-1143
+apps/web/src/server/generic/assessment/repo/correction-propagation.integration.test.ts
+  s_b5f2d60d9120a2::t_b45ae3f491a407 42-43,1326-1328
+apps/web/src/server/generic/entity-links/repo/relationship-coverage.integration.test.ts
+  s_b5f2d60d9120a2::t_73e3533ae2c888 8
+apps/web/src/server/generic/jobs/repo/jobs.integration.test.ts
+  s_b5f2d60d9120a2::t_f2847a338d1e88 13-18,224-228,232-233,235-236,244,259,296,299,304
+apps/web/src/server/generic/jobs/repo/work-activity.ts
+  s_b5f2d60d9120a2::t_4ee1e9baf3727f 55-57,82-89
+apps/web/src/server/workflows/runs/control-cancel.integration.test.ts
+  s_b5f2d60d9120a2::t_ef761f81b9f40a 1,7,9,19,23,66-124
+apps/web/src/server/workflows/runs/lifecycle.integration.test.ts
+  s_b5f2d60d9120a2::t_7e8b582fff119e 16
+apps/web/tooling/ai-work.ts
+  s_b5f2d60d9120a2::t_b3447639ac3c8e 92-93,96-107,109-111
+apps/web/tooling/checks/ai-evaluation-throughput.integration.test.ts
+  s_b5f2d60d9120a2::t_2f3aeab4709c70 5,10,50-51,420-433,467,490,535,580
+apps/web/tooling/checks/batch-evaluation-profile.integration.test.ts
+  s_b5f2d60d9120a2::t_a62f25fb19d233 3,52,268-269,275-276,280,283,287-288,296,299,306-312
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "addb6af7505e1e7e6a06152a07d0142725b342ed",
+  "prompts": {},
+  "sessions": {
+    "s_b5f2d60d9120a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dffdbf53-fa71-4d15-b8b0-381d918ace21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
