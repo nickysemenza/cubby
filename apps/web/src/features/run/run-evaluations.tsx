@@ -22,6 +22,7 @@ import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
+import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
 import {
   Progress,
@@ -98,23 +99,28 @@ function OutcomeGlyph({ outcome }: { outcome: Outcome }) {
 export function RunEvaluations({ record }: { record: RunOut }) {
   const [failedOnly, setFailedOnly] = useState(false);
   // Active statuses include pauses for polling; only running work has a live pace.
-  const moving = record.status === "running";
   const polling = live(record.status) ? LIVE_POLL_MS : false;
   const result = useQuery({
     ...runDetail.evaluations.queryOptions({ runId: record.id, failedOnly }),
     refetchInterval: polling,
   });
   const data = result.data;
+  const now = useDisplayNow() ?? Date.now();
+  const stale = Boolean(
+    data && now - Date.parse(data.measuredAt) > 3 * LIVE_POLL_MS,
+  );
+  const moving = record.status === "running" && !stale;
   const totals = (data?.byKind ?? []).reduce(
     (sum, kind) => ({
       settled: sum.settled + kind.completed + kind.failed + kind.obsolete,
       waiting: sum.waiting + kind.waiting + kind.running,
       failed: sum.failed + kind.failed,
+      cancelled: sum.cancelled + kind.cancelled,
     }),
-    { settled: 0, waiting: 0, failed: 0 },
+    { settled: 0, waiting: 0, failed: 0, cancelled: 0 },
   );
-  useSectionCount(data ? totals.settled + totals.waiting : undefined);
-  const now = result.dataUpdatedAt || Date.now();
+  const total = totals.settled + totals.waiting + totals.cancelled;
+  useSectionCount(data ? total : undefined);
   const pace = moving ? (data?.pace.completedPerMinute ?? 0) : 0;
   const minutesLeft =
     pace > 0 && totals.waiting > 0 ? totals.waiting / pace : null;
@@ -134,6 +140,7 @@ export function RunEvaluations({ record }: { record: RunOut }) {
     );
 
   const facts = [
+    stale ? `Data measured ${formatRelative(data.measuredAt, now)}` : null,
     pace > 0
       ? `${formatPace(pace)} over ${data.pace.windowMinutes} min`
       : moving
@@ -146,6 +153,7 @@ export function RunEvaluations({ record }: { record: RunOut }) {
       ? `last finished ${formatRelative(data.pace.lastCompletedAt, now)}`
       : null,
     totals.failed ? `${formatCount(totals.failed)} failed` : null,
+    totals.cancelled ? `${formatCount(totals.cancelled)} cancelled` : null,
   ].filter(Boolean);
 
   return (
@@ -167,14 +175,12 @@ export function RunEvaluations({ record }: { record: RunOut }) {
         ) : null}
         <Progress
           value={totals.settled}
-          max={totals.settled + totals.waiting}
+          max={total}
           paused={!moving || pace === 0}
         >
           <ProgressLabel>Evaluations settled</ProgressLabel>
           <ProgressValue>
-            {() =>
-              `${formatCount(totals.settled)} of ${formatCount(totals.settled + totals.waiting)}`
-            }
+            {() => `${formatCount(totals.settled)} of ${formatCount(total)}`}
           </ProgressValue>
         </Progress>
         {facts.length ? (
@@ -204,6 +210,7 @@ export function RunEvaluations({ record }: { record: RunOut }) {
                 ["running", "Running"],
                 ["failed", "Failed"],
                 ["obsolete", "Skipped"],
+                ["cancelled", "Cancelled"],
               ] as const
             ).map(([key, header]) => ({
               id: key,

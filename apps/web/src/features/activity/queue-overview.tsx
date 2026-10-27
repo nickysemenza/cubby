@@ -280,9 +280,8 @@ const JOB_DETAIL = {
 const DERIVED_BREAKDOWN_AFTER_SECONDS = 60;
 
 /**
- * The per-record-type breakdown of waiting derived values, shown only while
- * some value has waited over a minute. "Now" reports the routine pace, so a
- * backlog that drains between reads no longer flashes a table in and out.
+ * The breakdown appears after a minute of waiting. Loading and read failures
+ * stay visible independently of that threshold; "Now" owns routine pace.
  */
 function DerivedBacklogSection() {
   const backlog = useQuery({
@@ -290,6 +289,8 @@ function DerivedBacklogSection() {
     refetchInterval: 15_000,
   });
   if (
+    !backlog.isPending &&
+    !backlog.isError &&
     (backlog.data?.oldestWaitingSeconds ?? 0) < DERIVED_BREAKDOWN_AFTER_SECONDS
   )
     return null;
@@ -334,6 +335,9 @@ export function QueueOverview({
       <DeviceBacklogNotice />
       <WorkFeed
         health={health.data?.snapshot}
+        healthUnknown={
+          health.isPending || health.isError || !health.data?.snapshot
+        }
         onShowJobs={(kind) =>
           onSearchChange({
             kind,

@@ -56,7 +56,9 @@ Today/Home titles itself with the household day and keeps Log meal and New task 
 Background refetches use one reserved status line at the bottom of the desktop
 sidebar: a small spinner and muted “Syncing…” after 300ms of continuous activity.
 The collapsed rail and mobile BottomNav show only the spinner. The sidebar slot
-accepts shared shell status content; feedback never inserts progress rows above
+accepts shared shell status content and keeps its idle content mounted while
+Syncing is visible so derived backlog observations survive slow refreshes;
+feedback never inserts progress rows above
 headers, in tables, or in previews. Retained-data refresh errors and Retry stay
 inline. Native workspace routes have no shell feedback.
 
@@ -526,7 +528,12 @@ The observation window is local to the mounted view, not a durable workload tota
 Activity leads with one flat Now feed: plain work names, explicit states,
 measured pace and waiting context. Working streams light a small info dot beside
 Now; reduced motion keeps it still. With no outstanding work the caption reads
-All quiet. Internal drain, retention and device-wake Jobs never become separate
+All quiet only when all feed reads are known, fresh and successful. Derived
+loading and read failures retain their row and Retry independently of the
+one-minute threshold for showing the detailed backlog breakdown. Streams with
+only recent failures read Failed with a destructive glyph, their failure count
+over 60 minutes, and the Jobs action; they sort with problems.
+Internal drain, retention and device-wake Jobs never become separate
 feed rows. Derived drain alerts belong to Derived values. Watchdog conditions
 make the affected stream Not moving and explain why below its name; raw codes
 and evidence stay in the quiet Watchdog details disclosure. Queue snapshots do
@@ -538,3 +545,9 @@ pace never reserves the label's width.
 Run Evaluation progress uses shared Progress labels and values for Records
 checked and Evaluations settled. Paused and stopped Runs retain their counts
 with a paused bar and suppress historical rates and remaining-time estimates.
+Cancelled evaluations stay in the population denominator and appear in the
+facts and record-kind table. Activity and Evaluation reads age on the shared
+display clock independently of refetching: after three polling intervals,
+cached observations show their measurement age and suppress live indicators,
+pace and ETA. Derived backlog has no payload timestamp, so its successful read
+time supplies the age. The minute display clock also refreshes on focus and wake.

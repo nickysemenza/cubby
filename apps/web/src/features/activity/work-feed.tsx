@@ -4,6 +4,7 @@ import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { HourglassIcon } from "@phosphor-icons/react/dist/csr/Hourglass";
 import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
@@ -15,6 +16,7 @@ import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
@@ -36,6 +38,8 @@ const STATUS_LABEL = {
   working: "Working",
   waiting: "Waiting",
   stuck: "Not moving",
+  failed: "Failed",
+  stale: "Data out of date",
   backing_off: "Backing off",
   paused: "Paused",
   done: "Done",
@@ -45,6 +49,13 @@ function StatusGlyph({ status }: { status: WorkStreamStatus }) {
   const label = STATUS_LABEL[status];
   const className = "size-3.5 shrink-0";
   switch (status) {
+    case "failed":
+      return (
+        <WarningCircleIcon
+          aria-label={label}
+          className={cn(className, "text-destructive")}
+        />
+      );
     case "working":
       return <Spinner size="sm" aria-label={label} className="text-info" />;
     case "stuck":
@@ -124,7 +135,7 @@ function streamPace(
   now: number,
 ) {
   const { stream } = view;
-  if (view.status === "paused" || view.status === "stuck") return null;
+  if (["paused", "stuck", "failed", "stale"].includes(view.status)) return null;
   if (stream.completedPerMinute > 0)
     return [
       formatPace(stream.completedPerMinute),
@@ -146,12 +157,15 @@ function streamPace(
  * whether it moves, how fast, and what it waits on. Pace is measured over
  * the last few minutes; time left is that pace applied to what remains.
  */
+// eslint-disable-next-line complexity -- Feed freshness, caption and row states must use the same query snapshots.
 export function WorkFeed({
   onShowJobs,
   health,
+  healthUnknown = false,
 }: {
   onShowJobs: (kind: string) => void;
   health?: QueueHealthSnapshot | null;
+  healthUnknown?: boolean;
 }) {
   const activity = useQuery({
     ...job.activity.queryOptions({}),
@@ -161,12 +175,30 @@ export function WorkFeed({
     ...derived.backlog.queryOptions({}),
     refetchInterval: POLL_MS,
   });
-  const now = activity.dataUpdatedAt || Date.now();
+  const now = useDisplayNow() ?? Date.now();
+  const activityStale = Boolean(
+    activity.data && now - Date.parse(activity.data.measuredAt) > 3 * POLL_MS,
+  );
+  // Backlog has no measurement timestamp; age its last successful read instead.
+  const backlogStale = Boolean(
+    backlog.data && now - backlog.dataUpdatedAt > 3 * POLL_MS,
+  );
+  const unknown =
+    !activity.data ||
+    activity.isError ||
+    activityStale ||
+    !backlog.data ||
+    backlog.isError ||
+    backlogStale ||
+    healthUnknown;
   const views = activity.data
     ? orderWorkStreams(
-        activity.data.streams
-          .filter(isVisibleWorkStream)
-          .map((stream) => workStreamView(stream, now, health)),
+        activity.data.streams.filter(isVisibleWorkStream).map((stream) => {
+          const view = workStreamView(stream, now, health);
+          return activityStale
+            ? { ...view, status: "stale" as const, minutesLeft: null }
+            : view;
+        }),
       )
     : [];
   const live = views.filter((view) => view.status !== "done");
@@ -182,23 +214,25 @@ export function WorkFeed({
     0,
   );
   const derivedAlert = watchdogReason("derived.drain", health);
-  const derivedStatus: WorkStreamStatus = derivedAlert
-    ? "stuck"
-    : derivedWaiting === 0
-      ? "done"
-      : derivedPace > 0
-        ? "working"
-        : (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
-          ? "stuck"
-          : "waiting";
+  const derivedStatus: WorkStreamStatus = backlogStale
+    ? "stale"
+    : derivedAlert
+      ? "stuck"
+      : derivedWaiting === 0
+        ? "done"
+        : derivedPace > 0
+          ? "working"
+          : (backlog.data?.oldestWaitingSeconds ?? 0) >= 600
+            ? "stuck"
+            : "waiting";
   const working =
-    views.some((view) => view.status === "working") ||
-    derivedStatus === "working";
+    (!activity.isError && views.some((view) => view.status === "working")) ||
+    (!backlog.isError && derivedStatus === "working");
   const activeCount =
     live.filter((view) => view.status !== "paused").length +
     (derivedWaiting > 0 || derivedAlert ? 1 : 0);
-  const caption = !activity.data
-    ? undefined
+  const caption = unknown
+    ? "Current work status unavailable"
     : activeCount
       ? `${countLabel(activeCount, "kind")} of work in progress · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`
       : `All quiet · ${formatCount(completedTotal + derivedUpdated)} finished in the last ${windows?.completedMinutes ?? 15} min`;
@@ -236,10 +270,36 @@ export function WorkFeed({
                 }
               : { status: "success" }
         }
-        empty={<span>All quiet · Nothing running or waiting.</span>}
+        empty={
+          <span>
+            {unknown
+              ? "Current work status unavailable"
+              : "All quiet · Nothing running or waiting."}
+          </span>
+        }
       >
-        {(backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
-        derivedAlert ? (
+        {backlog.isPending || backlog.isError ? (
+          <RecordRow
+            primary="Derived values"
+            clip={false}
+            detail={
+              <RecordList
+                state={
+                  backlog.isPending
+                    ? { status: "pending", rows: 1 }
+                    : {
+                        status: "error",
+                        error: backlog.error,
+                        title: "derived values",
+                        onRetry: () => void backlog.refetch(),
+                      }
+                }
+              />
+            }
+          />
+        ) : (backlog.data && (derivedWaiting > 0 || derivedUpdated > 0)) ||
+          derivedAlert ||
+          backlogStale ? (
           <FeedRow
             testId="work-stream-derived"
             status={derivedStatus}
@@ -249,20 +309,25 @@ export function WorkFeed({
               </a>
             }
             facts={
-              derivedAlert ??
-              (derivedWaiting
-                ? `${formatCount(derivedWaiting)} waiting${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
-                : "Up to date")
+              backlogStale
+                ? `Data read ${formatRelative(backlog.dataUpdatedAt, now)}`
+                : (derivedAlert ??
+                  (derivedWaiting
+                    ? `${formatCount(derivedWaiting)} waiting${(backlog.data?.oldestWaitingSeconds ?? 0) >= 60 ? ` · oldest waiting ${duration(backlog.data?.oldestWaitingSeconds ?? 0)}` : ""}`
+                    : "Up to date"))
             }
             pace={
-              backlog.data
+              backlog.data && !backlogStale
                 ? `${formatCount(derivedUpdated)} updated in ${backlog.data.recent.windowMinutes} min`
                 : null
             }
           />
         ) : null}
         {[...live, ...finished].map((view) => {
-          const facts = streamFacts(view, windows?.failedMinutes ?? 60);
+          const facts =
+            activityStale && activity.data
+              ? `Data measured ${formatRelative(activity.data.measuredAt, now)}`
+              : streamFacts(view, windows?.failedMinutes ?? 60);
           return (
             <FeedRow
               key={view.key}

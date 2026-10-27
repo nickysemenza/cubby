@@ -39,14 +39,21 @@ export function BackgroundRefreshStatus({
       query.state.data !== undefined && Boolean(query.meta?.cacheTags?.length),
   });
   const visible = useDelayedRefresh(fetching > 0);
-  if (!visible) return idle;
   return (
-    <output
-      aria-label="Syncing"
-      className="flex items-center gap-1.5 text-xs text-muted-foreground"
-    >
-      <Spinner size="sm" aria-hidden="true" />
-      {!compact && <span>Syncing…</span>}
-    </output>
+    <>
+      {/* Keep view-local backlog observations alive while refresh feedback wins the slot. */}
+      <div hidden={visible} className="w-full min-w-0">
+        {idle}
+      </div>
+      {visible && (
+        <output
+          aria-label="Syncing"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+        >
+          <Spinner size="sm" aria-hidden="true" />
+          {!compact && <span>Syncing…</span>}
+        </output>
+      )}
+    </>
   );
 }

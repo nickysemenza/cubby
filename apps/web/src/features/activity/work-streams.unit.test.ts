@@ -91,14 +91,20 @@ describe("work streams", () => {
         stream({ kind: "b", running: 1, due: 5 }),
         stream({ kind: "c", due: 1, oldestDueAt: ago(3600) }),
         stream({ kind: "d", backingOff: 2 }),
+        stream({ kind: "e", failed: 3 }),
       ].map((entry) => workStreamView(entry, NOW)),
     );
     expect(ordered.map((view) => view.stream.kind)).toEqual([
       "c",
+      "e",
       "b",
       "d",
       "a",
     ]);
+  });
+
+  it("keeps failure-only streams actionable rather than done", () => {
+    expect(workStreamView(stream({ failed: 3 }), NOW).status).toBe("failed");
   });
 
   it("formats time left for a household reader", () => {

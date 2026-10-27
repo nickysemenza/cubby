@@ -43,6 +43,8 @@ export type WorkStreamStatus =
   | "working"
   | "waiting"
   | "stuck"
+  | "failed"
+  | "stale"
   | "backing_off"
   | "paused"
   | "done";
@@ -90,7 +92,9 @@ export function workStreamView(
             ? "paused"
             : remaining > 0
               ? "waiting"
-              : "done";
+              : stream.failed > 0
+                ? "failed"
+                : "done";
   return {
     key: `${stream.kind}:${stream.feature ?? ""}`,
     label: workStreamLabel(stream),
@@ -108,6 +112,8 @@ export function workStreamView(
 
 const STATUS_ORDER = {
   stuck: 0,
+  failed: 0,
+  stale: 0,
   working: 1,
   backing_off: 2,
   waiting: 3,

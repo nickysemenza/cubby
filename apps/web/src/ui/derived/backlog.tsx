@@ -108,7 +108,7 @@ export function DerivedBacklogOverview() {
               ? {
                   status: "error",
                   error: result.error,
-                  title: "Couldn't load derived values",
+                  title: "derived values",
                   onRetry: () => void result.refetch(),
                 }
               : { status: "success" }
