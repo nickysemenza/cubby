@@ -24,12 +24,12 @@ import {
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import { JOB_HEARTBEAT_MS } from "~/server/generic/jobs/limits";
 import {
-  enqueueJob,
   claimJob,
   renewJob,
   publishJobPage,
-  publishCompletedJobPages,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { publishCompletedJobPages } from "~/server/generic/jobs/repo/queue";
 import { drainDueJobs } from "~/server/generic/jobs/service/jobs";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import {

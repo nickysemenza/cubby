@@ -37,12 +37,14 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import * as kindPolicy from "~/server/generic/jobs/kind-policy";
 import {
   claimJob,
-  claimJobPage,
-  enqueueJob,
-  renewJobPage,
   jobRunOwned,
+} from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import {
+  claimJobPage,
+  renewJobPage,
   dueJobs,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/queue";
 import {
   drainDueJobs,
   defineJobHandler,

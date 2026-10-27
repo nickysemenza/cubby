@@ -8,11 +8,11 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import {
   claimJob,
-  dueJobs,
   renewJob,
-  pauseJob,
   publishJobPage,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/external-claim";
+import { pauseJob } from "~/server/generic/jobs/repo/operator";
+import { dueJobs } from "~/server/generic/jobs/repo/queue";
 
 import { controlWorkflowRun } from "./control";
 import {

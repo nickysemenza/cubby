@@ -27,7 +27,7 @@ import {
   aiEvaluationRequest,
   run,
 } from "~/server/db/retained-tables";
-import { enqueueJobs } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJobs } from "~/server/generic/jobs/repo/producer";
 
 /** Matches AiEvaluation's generated SQL key, including UTF-8 length prefixes. */
 export const evaluationSlotKey = ({

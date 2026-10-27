@@ -11,7 +11,7 @@ import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import {
   jobDue,
   unobservedJobInvalidation,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/queue";
 
 /** Thresholds that raise a watchdog alert; each alert carries its raw numbers. */
 const QUEUE_ALERT_THRESHOLDS = {

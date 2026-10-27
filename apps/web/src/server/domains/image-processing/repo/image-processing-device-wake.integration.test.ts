@@ -13,7 +13,7 @@ import {
 } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { dueJobs } from "~/server/generic/jobs/repo/jobs";
+import { dueJobs } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { productionJobHandlers } from "~/server/workflows/jobs";
 

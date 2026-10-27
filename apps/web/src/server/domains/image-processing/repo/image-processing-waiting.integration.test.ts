@@ -12,7 +12,7 @@ import {
 import { job as durableJob } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { dueJobs } from "~/server/generic/jobs/repo/jobs";
+import { dueJobs } from "~/server/generic/jobs/repo/queue";
 import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 
 import { imageJobDisplayStateSql } from "./image-job-state";

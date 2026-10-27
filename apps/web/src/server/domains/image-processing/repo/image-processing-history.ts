@@ -29,7 +29,7 @@ import {
 import {
   externalJobClaim,
   releaseJobClaim,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/external-claim";
 
 import { armDeviceWake } from "./image-processing-ring";
 

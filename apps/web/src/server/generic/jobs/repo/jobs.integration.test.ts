@@ -13,6 +13,24 @@ import {
 import { aiEvaluation, job, entityIdentity } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
+  claimJob,
+  failJob,
+  publishJobPage,
+  renewJob,
+} from "~/server/generic/jobs/repo/external-claim";
+import {
+  cancelJob,
+  pauseJob,
+  retryJob,
+} from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import {
+  dueJobs,
+  dueJobsAhead,
+  lockJobProgress,
+  recordJobInvalidation,
+} from "~/server/generic/jobs/repo/queue";
+import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -25,20 +43,6 @@ import { setJobStepKey, withJobExecution } from "../context";
 import { JobDeferredError, JobSupersededError } from "../errors";
 import { advanceJob, drainDueJobs } from "../service/jobs";
 import { assertCurrentJob } from "./execution";
-import {
-  cancelJob,
-  claimJob,
-  enqueueJob,
-  dueJobs,
-  dueJobsAhead,
-  failJob,
-  lockJobProgress,
-  pauseJob,
-  publishJobPage,
-  renewJob,
-  recordJobInvalidation,
-  retryJob,
-} from "./jobs";
 
 // A database intent survives lost queue wakes; leases and generations prevent
 // interrupted or superseded workers from acknowledging somebody else's work.

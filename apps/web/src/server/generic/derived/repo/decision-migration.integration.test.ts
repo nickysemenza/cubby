@@ -61,12 +61,12 @@ describe("field decision cache migration", () => {
       provenance: { kind: "own", ownership: { kind: "record" } },
     };
     const liveBefore = await getDb(ctx.db).execute(
-      sql`SELECT * FROM "DerivedDirty" WHERE target = 'product.quantityVariance' AND ref = ${valued.entityId}`,
+      sql`SELECT * FROM "WorkItem" WHERE target = 'product.quantityVariance' AND ref = ${valued.entityId}`,
     );
     expect(liveBefore.rows).toHaveLength(1);
     await withTransaction(ctx.db, async (tx) => {
       await tx.execute(
-        sql`ALTER TABLE "DerivedDirty" DROP CONSTRAINT "DerivedDirty_no_retired_automatic_fields"`,
+        sql`ALTER TABLE "WorkItem" DROP CONSTRAINT "WorkItem_no_retired_automatic_fields"`,
       );
       await tx.execute(
         sql`ALTER TABLE "DerivedValue" DROP CONSTRAINT "DerivedValue_no_retired_automatic_fields"`,
@@ -74,7 +74,7 @@ describe("field decision cache migration", () => {
       // Isolate the migration's scheduling from fixture-write fanout. Pending
       // family fanout truthfully marks every retained price snapshot stale.
       await tx.execute(
-        sql`DELETE FROM "DerivedDirty" WHERE target = 'product.price' OR starts_with(target, 'product.price@')`,
+        sql`DELETE FROM "WorkItem" WHERE target = 'product.price' OR starts_with(target, 'product.price@')`,
       );
       await tx.execute(sql`
       INSERT INTO "DerivedValue" ("entityId", kind, key, value, "sortNumber", "decidedBy", "inputHash", "computedAt") VALUES
@@ -84,7 +84,7 @@ describe("field decision cache migration", () => {
       (${empty.entityId}, ${entitySchema.enum.product}, ${priceDeclaration.key}, 'null'::jsonb, NULL, NULL, 'synthetic-empty-hash', '2026-10-01'),
       (${typed.entityId}, ${entitySchema.enum.product}, ${priceDeclaration.key}, 'null'::jsonb, NULL, ${JSON.stringify(typedDecision)}::jsonb, 'synthetic-typed-hash', '2026-10-01')`);
       await tx.execute(sql`
-      INSERT INTO "DerivedDirty" (target, ref, priority, attempts, "lastError", "readyAt")
+      INSERT INTO "WorkItem" (target, ref, priority, attempts, "lastError", "readyAt")
       VALUES ('product.price', ${empty.entityId}, 2, 3, 'Synthetic previous refresh failure', now() + interval '1 minute'),
       ('product.automaticFields', ${valued.entityId}, 0, 0, NULL, now()),
       ('product.automaticFields@0', ${valued.entityId}, 0, 0, NULL, now())`);
@@ -140,28 +140,28 @@ describe("field decision cache migration", () => {
       legacy,
     });
     const work = await getDb(ctx.db).execute(
-      sql`SELECT attempts, "lastError" FROM "DerivedDirty" WHERE target = 'product.price' AND ref = ${empty.entityId}`,
+      sql`SELECT attempts, "lastError" FROM "WorkItem" WHERE target = 'product.price' AND ref = ${empty.entityId}`,
     );
     expect(work.rows[0]).toMatchObject({
       attempts: 3,
       lastError: "Synthetic previous refresh failure",
     });
     const liveAfter = await getDb(ctx.db).execute(
-      sql`SELECT * FROM "DerivedDirty" WHERE target = 'product.quantityVariance' AND ref = ${valued.entityId}`,
+      sql`SELECT * FROM "WorkItem" WHERE target = 'product.quantityVariance' AND ref = ${valued.entityId}`,
     );
     expect(liveAfter.rows).toEqual(liveBefore.rows);
     const retired = await getDb(ctx.db)
       .execute(sql`SELECT key FROM "DerivedValue" WHERE key = 'automaticFields'
-      UNION ALL SELECT target FROM "DerivedDirty" WHERE split_part(target, '@', 1) LIKE '%.automaticFields'`);
+      UNION ALL SELECT target FROM "WorkItem" WHERE split_part(target, '@', 1) LIKE '%.automaticFields'`);
     expect(retired.rows).toEqual([]);
     const lateMark = await getDb(ctx.db)
       .execute(
-        sql`INSERT INTO "DerivedDirty" (target, ref) VALUES ('product.automaticFields@0', ${valued.entityId})`,
+        sql`INSERT INTO "WorkItem" (target, ref) VALUES ('product.automaticFields@0', ${valued.entityId})`,
       )
       .then(() => null, findPgError);
     expect(lateMark).toMatchObject({
       code: "23514",
-      constraint: "DerivedDirty_no_retired_automatic_fields",
+      constraint: "WorkItem_no_retired_automatic_fields",
     });
     const lateValue = await getDb(ctx.db)
       .execute(

@@ -18,7 +18,10 @@ import {
   productionVectorStore,
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob, publishJobPage } from "~/server/generic/jobs/repo/jobs";
+import {
+  claimJob,
+  publishJobPage,
+} from "~/server/generic/jobs/repo/external-claim";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";

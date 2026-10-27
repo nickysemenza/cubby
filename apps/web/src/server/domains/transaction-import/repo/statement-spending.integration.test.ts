@@ -30,7 +30,7 @@ import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automat
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import * as changes from "~/server/generic/changes/repo/change";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";

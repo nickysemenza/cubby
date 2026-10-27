@@ -21,7 +21,7 @@ import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { lockJobProgress } from "~/server/generic/jobs/repo/jobs";
+import { fenceJob } from "~/server/generic/jobs/repo/external-claim";
 import {
   assertWorkflowEffect,
   hasWorkflowExecution,
@@ -125,20 +125,9 @@ export async function recordRunStepPage(
   if (!hasWorkflowExecution()) return writeRunStepPage(db, runId, key, page);
   return withTransactionDatabase(db, async (tx) => {
     const owner = currentJobExecution();
-    const progress = owner
-      ? await lockJobProgress(tx, owner.claim)
-      : async () => {};
+    if (owner) await fenceJob(tx, owner.claim);
     await assertWorkflowEffect(tx);
-    const result = await writeRunStepPage(tx, runId, key, page);
-    // Population counters advance only for settled inputs; unfinished waits have no delta.
-    if (
-      (page.delta?.done ?? 0) +
-        (page.delta?.skipped ?? 0) +
-        (page.delta?.failed ?? 0) >
-      0
-    )
-      await progress();
-    return result;
+    return writeRunStepPage(tx, runId, key, page);
   });
 }
 

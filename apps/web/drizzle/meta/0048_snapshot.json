@@ -1,6 +1,11 @@
 {
+<<<<<<<< HEAD:apps/web/drizzle/meta/0046_snapshot.json
   "id": "38ab698d-6eeb-4dbd-b49e-cfea4eb574dc",
   "prevId": "382c3ea9-3f8c-4de1-baae-ebcbf2ea6878",
+========
+  "id": "98ef391d-24a5-49b7-b901-8ae843f466e3",
+  "prevId": "6e0eb661-74f1-43b1-95ae-5da763d83f62",
+>>>>>>>> a850d9cede (Make the Job queue core coarse: WorkItem drains and one executor shape):apps/web/drizzle/meta/0048_snapshot.json
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1198,6 +1203,7 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+<<<<<<<< HEAD:apps/web/drizzle/meta/0046_snapshot.json
     "public.DerivedDirty": {
       "name": "DerivedDirty",
       "schema": "",
@@ -1299,6 +1305,8 @@
       },
       "isRLSEnabled": false
     },
+========
+>>>>>>>> a850d9cede (Make the Job queue core coarse: WorkItem drains and one executor shape):apps/web/drizzle/meta/0048_snapshot.json
     "public.DerivedValue": {
       "name": "DerivedValue",
       "schema": "",
@@ -1795,7 +1803,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'legacy'"
+          "default": "'prepared'"
         },
         "artifactHash": {
           "name": "artifactHash",
@@ -2708,20 +2716,8 @@
           "name": "maxAttempts",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "default": 3
-        },
-        "recoveryTimeoutMs": {
-          "name": "recoveryTimeoutMs",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lastUsefulProgressAt": {
-          "name": "lastUsefulProgressAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
         },
         "availableAt": {
           "name": "availableAt",
@@ -2732,12 +2728,6 @@
         },
         "leaseToken": {
           "name": "leaseToken",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "admissionToken": {
-          "name": "admissionToken",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -2931,6 +2921,7 @@
           "with": {},
           "method": "btree",
           "concurrently": false
+<<<<<<<< HEAD:apps/web/drizzle/meta/0046_snapshot.json
         },
         "Job_kind_position_idx": {
           "name": "Job_kind_position_idx",
@@ -2970,6 +2961,8 @@
           "with": {},
           "method": "btree",
           "concurrently": false
+========
+>>>>>>>> a850d9cede (Make the Job queue core coarse: WorkItem drains and one executor shape):apps/web/drizzle/meta/0048_snapshot.json
         }
       },
       "foreignKeys": {
@@ -3018,40 +3011,11 @@
           "name": "Job_subject_check",
           "value": "(\"Job\".\"subjectKind\" IS NULL) = (\"Job\".\"subjectId\" IS NULL)"
         },
-        "Job_kind_retired_check": {
-          "name": "Job_kind_retired_check",
-          "value": "\"Job\".\"kind\" NOT IN ('image.processing', 'refresh.family')"
-        },
         "Job_attempts_check": {
           "name": "Job_attempts_check",
-          "value": "\"Job\".\"attempts\" >= 0 AND \"Job\".\"maxAttempts\" > 0"
+          "value": "\"Job\".\"attempts\" >= 0 AND coalesce(\"Job\".\"maxAttempts\", 1) > 0"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.JobInvalidation": {
-      "name": "JobInvalidation",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "restartsPass": {
-          "name": "restartsPass",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.JobInvalidationCapture": {
@@ -5417,6 +5381,115 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.WorkItem": {
+      "name": "WorkItem",
+      "schema": "",
+      "columns": {
+        "drain": {
+          "name": "drain",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'derived:drain'"
+        },
+        "target": {
+          "name": "target",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ref": {
+          "name": "ref",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ticket": {
+          "name": "ticket",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nextval('\"WorkTicket\"')"
+        },
+        "priority": {
+          "name": "priority",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "dirtiedAt": {
+          "name": "dirtiedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "readyAt": {
+          "name": "readyAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lastError": {
+          "name": "lastError",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "WorkItem_ready_idx": {
+          "name": "WorkItem_ready_idx",
+          "columns": [
+            {
+              "expression": "drain",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "priority",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "readyAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "WorkItem_target_ref_pk": {
+          "name": "WorkItem_target_ref_pk",
+          "columns": [
+            "target",
+            "ref"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.AiEvaluation": {
       "name": "AiEvaluation",
       "schema": "",
@@ -5548,7 +5621,11 @@
           "isUnique": true,
           "with": {},
           "method": "btree",
+<<<<<<<< HEAD:apps/web/drizzle/meta/0046_snapshot.json
           "where": "\"AiEvaluation\".\"state\" IN ('queued','retry_wait')",
+========
+          "where": "\"AiEvaluation\".\"state\" = 'queued'",
+>>>>>>>> a850d9cede (Make the Job queue core coarse: WorkItem drains and one executor shape):apps/web/drizzle/meta/0048_snapshot.json
           "concurrently": false
         },
         "AiEvaluation_slot_history_idx": {
@@ -5606,7 +5683,11 @@
           "isUnique": false,
           "with": {},
           "method": "btree",
+<<<<<<<< HEAD:apps/web/drizzle/meta/0046_snapshot.json
           "where": "\"AiEvaluation\".\"shareKey\" IS NOT NULL AND \"AiEvaluation\".\"state\" IN ('queued','running','result_ready','retry_wait')",
+========
+          "where": "\"AiEvaluation\".\"shareKey\" IS NOT NULL AND \"AiEvaluation\".\"state\" IN ('queued','result_ready')",
+>>>>>>>> a850d9cede (Make the Job queue core coarse: WorkItem drains and one executor shape):apps/web/drizzle/meta/0048_snapshot.json
           "concurrently": false
         },
         "AiEvaluation_admission_idx": {
@@ -5692,7 +5773,7 @@
         },
         "AiEvaluation_state_check": {
           "name": "AiEvaluation_state_check",
-          "value": "\"AiEvaluation\".\"state\" IN ('queued','running','result_ready','retry_wait','completed','blocked','failed','obsolete','cancelled')"
+          "value": "\"AiEvaluation\".\"state\" IN ('queued','result_ready','completed','blocked','failed','obsolete','cancelled')"
         }
       },
       "isRLSEnabled": false
@@ -22575,8 +22656,13 @@
     }
   },
   "sequences": {
+<<<<<<<< HEAD:apps/web/drizzle/meta/0046_snapshot.json
     "public.DerivedTicket": {
       "name": "DerivedTicket",
+========
+    "public.WorkTicket": {
+      "name": "WorkTicket",
+>>>>>>>> a850d9cede (Make the Job queue core coarse: WorkItem drains and one executor shape):apps/web/drizzle/meta/0048_snapshot.json
       "increment": "1",
       "minValue": "1",
       "maxValue": "9223372036854775807",

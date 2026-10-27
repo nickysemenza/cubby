@@ -32,7 +32,8 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeProductAiRefreshPage } from "~/server/domains/run/service/ai-refresh";
 import { withJobExecution } from "~/server/generic/jobs/context";
-import { claimJob, enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { claimJob } from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   createProductIdentityFixture,
   makeProductInput,

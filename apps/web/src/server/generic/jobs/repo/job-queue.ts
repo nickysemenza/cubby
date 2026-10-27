@@ -32,7 +32,8 @@ import {
 } from "~/server/generic/jobs/kind-policy";
 import { jobEntityWhere } from "~/server/generic/jobs/repo/entity-list";
 import { imageLeasesByExecutor } from "~/server/generic/jobs/repo/image-leases";
-import { retryJobsNow, type JobRow } from "~/server/generic/jobs/repo/jobs";
+import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
+import { type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
   jobWaitingOnReasonSql,
   loadJobWaitingOn,

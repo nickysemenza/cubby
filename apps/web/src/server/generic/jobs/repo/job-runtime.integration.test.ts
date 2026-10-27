@@ -6,16 +6,18 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-
 import {
-  cancelJobsWhere,
   claimJob,
-  dueJobs,
-  enqueueJob,
   failJob,
   releaseJobClaim,
+} from "~/server/generic/jobs/repo/external-claim";
+import {
+  cancelJobsWhere,
   retryJobsNow,
-} from "./jobs";
+} from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { dueJobs } from "~/server/generic/jobs/repo/queue";
+
 import {
   deriveJobWaitingOn,
   jobWaitingOnReasonSql,

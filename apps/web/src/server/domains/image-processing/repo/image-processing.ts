@@ -85,24 +85,24 @@ import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobSupersededError } from "~/server/generic/jobs/errors";
 import {
   deviceBackfillTurn,
   lockDeviceAdmission,
   type DeviceAdmission,
 } from "~/server/generic/jobs/repo/device-admission";
 import {
-  enqueueJob,
   claimJob,
   externalJobClaim,
   publishJobPage,
   failJob,
   releaseJobClaim,
-  retryJobsNow,
   assertJobClaim,
   jobRunOwned,
-  JobSupersededError,
   type JobClaim,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/external-claim";
+import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { imageJobDisplayStateSql } from "./image-job-state";

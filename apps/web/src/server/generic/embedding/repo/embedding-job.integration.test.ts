@@ -4,12 +4,9 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
-import {
-  claimJob,
-  enqueueJob,
-  failJob,
-  retryJob,
-} from "~/server/generic/jobs/repo/jobs";
+import { claimJob, failJob } from "~/server/generic/jobs/repo/external-claim";
+import { retryJob } from "~/server/generic/jobs/repo/operator";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 // A delayed delete of an interrupted physical upload must never delete a retry.
 // Retrying uses a new ID while keeping the old error and cleanup receipt intact.

@@ -8,19 +8,18 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  claimJob,
+  releaseJobClaim,
+  type JobClaim,
+} from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { claimJobPage, dueJobs } from "~/server/generic/jobs/repo/queue";
 
 import { jobKindPolicy } from "../kind-policy";
 import { JOB_DRAIN } from "../limits";
 import { drainDueJobs } from "../service/jobs";
 import type { JobHandlers } from "../types";
-import {
-  claimJob,
-  claimJobPage,
-  dueJobs,
-  enqueueJob,
-  releaseJobClaim,
-  type JobClaim,
-} from "./jobs";
 import { loadJobWaitingOn } from "./waiting-on";
 
 /** Deterministic drain rounds: each selected Job is claimed, then finished. */

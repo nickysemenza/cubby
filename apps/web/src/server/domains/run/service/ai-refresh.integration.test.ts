@@ -59,10 +59,10 @@ import {
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { withJobExecution } from "~/server/generic/jobs/context";
 import {
-  enqueueJob,
   externalJobClaim,
   claimJob,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {

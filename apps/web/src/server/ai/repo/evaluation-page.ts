@@ -4,7 +4,7 @@ import type { z } from "zod";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import type { aiEvaluation } from "~/server/db/retained-tables";
-import type { JobClaim } from "~/server/generic/jobs/repo/jobs";
+import type { JobClaim } from "~/server/generic/jobs/repo/external-claim";
 
 /** Pages are transient; each slot keeps its own Job claim and frozen evidence. */
 export type EvaluationPageTarget = {

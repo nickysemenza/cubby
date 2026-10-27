@@ -33,7 +33,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";

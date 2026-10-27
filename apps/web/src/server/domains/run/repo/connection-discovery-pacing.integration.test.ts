@@ -14,7 +14,7 @@ import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, job, run, task } from "~/server/db/schema";
 import { claimDerivedDiscovery } from "~/server/domains/run/repo/derived-discovery";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
-import { claimJob } from "~/server/generic/jobs/repo/jobs";
+import { claimJob } from "~/server/generic/jobs/repo/external-claim";
 
 import { SUPERSEDED_RUN_FAILURE } from "./ai-refresh-state";
 import * as discoveryRepo from "./connection-refresh";

@@ -17,7 +17,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 const boundEvaluation = new AsyncLocalStorage<{
   runId: RunId;

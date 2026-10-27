@@ -2,17 +2,15 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import {
-  JOB_BACKFILL_SHARE,
-  jobRunOwned,
-} from "~/server/generic/jobs/repo/jobs";
+import { jobRunOwned } from "~/server/generic/jobs/repo/external-claim";
 
 /**
  * Device pulls claim a bounded batch but keep the drain's two classes: an
  * active, member-visible Run's parked work (`jobRunOwned`) leads, and after
  * this many run-owned device services in a row backfill is owed the next.
  */
-const DEVICE_OWNED_STREAK = Math.ceil(1 / JOB_BACKFILL_SHARE) - 1;
+export const DEVICE_BACKFILL_SHARE = 0.2;
+const DEVICE_OWNED_STREAK = Math.ceil(1 / DEVICE_BACKFILL_SHARE) - 1;
 
 const DEVICE_LANE = "image.device";
 

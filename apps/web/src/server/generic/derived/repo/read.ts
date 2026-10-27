@@ -221,7 +221,7 @@ export async function loadStoredDerived(
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
       LEFT JOIN "DerivedValue" v ON v."entityId" = i.id AND v.key = k.key
-      LEFT JOIN "DerivedDirty" d ON d.target = k.target AND d.ref = i.id`);
+      LEFT JOIN "WorkItem" d ON d.target = k.target AND d.ref = i.id`);
   for (const row of z.array(valueRow).parse(result.rows)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);

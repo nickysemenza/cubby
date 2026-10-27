@@ -5,7 +5,7 @@ import { and, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { entityEmbedding } from "~/server/db/retained-tables";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 /** Physical IDs are never selected again after retirement, including explicit retries. */
 async function prepareEmbeddingCleanupPage(

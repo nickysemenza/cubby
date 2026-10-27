@@ -22,7 +22,7 @@ import {
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
-import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/jobs";
+import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { derivedComputes } from "~/server/workflows/derived-computes";
@@ -69,8 +69,8 @@ export async function derivedMarkTickets(
 ): Promise<number[]> {
   const rows = await getDb(db).execute(
     ref
-      ? sql`SELECT ticket FROM "DerivedDirty" WHERE target = ${target} AND ref = ${ref}`
-      : sql`SELECT ticket FROM "DerivedDirty" WHERE target = ${target} OR target LIKE ${`${target}@%`}`,
+      ? sql`SELECT ticket FROM "WorkItem" WHERE target = ${target} AND ref = ${ref}`
+      : sql`SELECT ticket FROM "WorkItem" WHERE target = ${target} OR target LIKE ${`${target}@%`}`,
   );
   return z
     .array(z.object({ ticket: z.coerce.number() }))
@@ -193,8 +193,9 @@ export async function withJobFixtureExecution<T>(
   work: () => Promise<T>,
   options: { releaseClaim?: true } = {},
 ) {
-  const { enqueueJob, externalJobClaim, claimJob, releaseJobClaim } =
-    await import("~/server/generic/jobs/repo/jobs");
+  const { enqueueJob } = await import("~/server/generic/jobs/repo/producer");
+  const { externalJobClaim, claimJob, releaseJobClaim } =
+    await import("~/server/generic/jobs/repo/external-claim");
   const saved = await enqueueJob(db, input);
   const existing = await externalJobClaim(db, saved.key);
   const claim = existing ?? (await claimJob(db, saved.id));

@@ -13,7 +13,7 @@ import {
   countStrandedImageProcessing,
   repairImageProcessingExecution,
 } from "~/server/domains/image-processing/repo/image-processing";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   measureQueueHealth,
   pruneFinishedJobs,

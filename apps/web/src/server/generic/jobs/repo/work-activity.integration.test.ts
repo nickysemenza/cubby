@@ -19,9 +19,9 @@ import {
   run,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { readRunEvaluations } from "~/server/generic/run-detail/repo/run-evaluations";
 
-import { enqueueJob } from "./jobs";
 import { readWorkActivity } from "./work-activity";
 
 // Failure mode: Activity showed lanes ("Cloud AI · Due 268") rather than the

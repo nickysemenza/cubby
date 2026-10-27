@@ -1,7 +1,7 @@
 import { job } from "~/server/db/retained-tables";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
-import { pauseJob } from "~/server/generic/jobs/repo/jobs";
+import { pauseJob } from "~/server/generic/jobs/repo/operator";
 import { aiEvaluationJobInput } from "~/server/generic/jobs/inputs";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { RunId } from "@cubby/schemas/identifiers";

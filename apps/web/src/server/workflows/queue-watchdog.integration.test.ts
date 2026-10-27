@@ -27,19 +27,19 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { NEVER_EXHAUSTED_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
+import { claimJob } from "~/server/generic/jobs/repo/external-claim";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import {
   readJobQueue,
   readRunRollups,
   retryJobSet,
 } from "~/server/generic/jobs/repo/job-queue";
+import { enqueueJob, repeatJob } from "~/server/generic/jobs/repo/producer";
 import {
-  claimJob,
-  enqueueJob,
   jobDue,
-  repeatJob,
   recordJobInvalidation,
-} from "~/server/generic/jobs/repo/jobs";
+} from "~/server/generic/jobs/repo/queue";
+import { productionJobHandlers } from "~/server/generic/jobs/repo/queue";
 import {
   JOB_RETENTION_MS,
   measureQueueHealth,
@@ -49,7 +49,6 @@ import {
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 import { explainWaiting } from "./job-explain";
-import { productionJobHandlers } from "./jobs";
 import { enrollQueueMaintenance, readQueueHealth } from "./queue-watchdog";
 
 describe("queue watchdog, explain and retention", () => {

@@ -34,8 +34,8 @@ import {
   JobTargetError,
 } from "~/server/generic/jobs/errors";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
-import type { JobClaim } from "~/server/generic/jobs/repo/jobs";
+import type { JobClaim } from "~/server/generic/jobs/repo/external-claim";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { JobHandler, PreparedJobPage } from "~/server/generic/jobs/types";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import {

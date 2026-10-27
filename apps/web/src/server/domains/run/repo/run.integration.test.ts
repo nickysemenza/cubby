@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { job, run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readRunCatalogActivity } from "./catalog-activity";

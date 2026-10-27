@@ -379,7 +379,7 @@ export async function resumeFundingPausedRuns(
   );
   const moved = anyWindow
     ? await (
-        await import("~/server/generic/jobs/repo/jobs")
+        await import("~/server/generic/jobs/repo/operator")
       ).bringQueuedJobsForward(db, now)
     : [];
   await (

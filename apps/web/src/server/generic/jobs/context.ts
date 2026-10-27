@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Database } from "~/server/db/database";
 
-import type { JobClaim } from "./repo/jobs";
+import type { JobClaim } from "./repo/queue";
 
 export type JobExecutionDetails = {
   stepKey: string | null;
@@ -54,10 +54,4 @@ export async function withJobPhase<T>(
   }
 }
 
-// A shared provider call has no single publication owner. Cache contention
-// still defers the page rather than polling as an interactive request does.
-const batchExecution = new AsyncLocalStorage<boolean>();
-export const inJobExecution = () =>
-  !!execution.getStore() || !!batchExecution.getStore();
-export const withJobBatchExecution = <T>(work: () => Promise<T>) =>
-  batchExecution.run(true, work);
+export const inJobExecution = () => !!execution.getStore();

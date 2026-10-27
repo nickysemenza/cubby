@@ -125,9 +125,8 @@ export const enqueueJobInput = z.object({
   subjectKind: z.string().min(1).nullable().optional(),
   subjectId: z.string().min(1).nullable().optional(),
   priority: z.number().int().optional(),
-  maxAttempts: z.number().int().positive().optional(),
-  /** Opt-in inactivity budget; useful domain commits, not waits, renew it. */
-  recoveryTimeoutMs: z.number().int().positive().optional(),
+  /** Defaults to the kind policy; null never exhausts. */
+  maxAttempts: z.number().int().positive().nullable().optional(),
   availableAt: z.date().optional(),
   /** Explicit new input or member retry; routine recovery never revives failures. */
   invalidate: z.boolean().optional(),
