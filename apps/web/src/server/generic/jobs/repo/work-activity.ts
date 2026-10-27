@@ -52,8 +52,9 @@ export async function readWorkActivity(
     runs: string[] | null;
   }>(sql`
     WITH activity_jobs AS MATERIALIZED (
-      SELECT "Job".*, e.feature, e.id AS "evaluationId" FROM "Job"
-      LEFT JOIN "AiEvaluation" e ON "Job".kind = 'ai.evaluation' AND e.id = ("Job".input->>'evaluationId')::uuid
+      SELECT "Job".*,
+        CASE WHEN "Job".kind = 'ai.evaluation' THEN substr("Job".key, length('ai-evaluation:') + 1) END AS feature
+      FROM "Job"
       WHERE (${live} OR "Job"."lastClaimedAt" > ${since(RECENT_MINUTES.failed)})
         AND "Job".kind NOT IN (${sql.join(
           INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
@@ -78,8 +79,14 @@ export async function readWorkActivity(
         CROSS JOIN LATERAL (
           SELECT stream."runId" AS id WHERE stream."runId" IS NOT NULL
           UNION
-          SELECT request."runId" FROM "AiEvaluationRequest" request
-          WHERE request."evaluationId" = stream."evaluationId" AND request."cancelledAt" IS NULL
+          SELECT e."runId" FROM "WorkItem" item
+          JOIN "AiEvaluation" e ON e.id = item.ref
+          WHERE item.drain = stream.key AND item.target = 'ai.evaluation'
+          UNION
+          SELECT request."runId" FROM "WorkItem" item
+          JOIN "AiEvaluationRequest" request ON request."evaluationId" = item.ref
+          WHERE item.drain = stream.key AND item.target = 'ai.evaluation'
+            AND request."cancelledAt" IS NULL
         ) demand
         JOIN "Run" r ON r.id = demand.id
         WHERE stream.kind = "Job".kind AND stream.feature IS NOT DISTINCT FROM "Job".feature

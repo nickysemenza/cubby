@@ -3,11 +3,12 @@ import {
   aiProvenance,
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   enqueueAiEvaluation,
@@ -15,17 +16,12 @@ import {
 } from "~/server/ai/repo/ai-evaluation-requests";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, job, product, run } from "~/server/db/schema";
-import { currentJobExecution } from "~/server/generic/jobs/context";
-import {
-  captureBackgroundQueue,
-  withJobFixtureExecution,
-} from "~/server/testing/background-queue";
+import { aiEvaluation, product, run } from "~/server/db/schema";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import {
-  recordAiRefreshAttemptFailure,
   insertEvaluationTargets,
   scheduleEvaluationRun,
 } from "./ai-refresh-state";
@@ -34,6 +30,26 @@ import { ensureRun, systemActor } from "./ensure-run";
 // Real transactions expose races between shared Jobs and their requesters.
 describe("AI refresh scheduling admission", () => {
   const ctx = withTestDb();
+  const evaluationItems = async () =>
+    z
+      .object({ count: z.coerce.number() })
+      .parse(
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT count(*) AS count FROM "WorkItem" WHERE target = 'ai.evaluation'`,
+          )
+        ).rows[0],
+      ).count;
+  const aiEvaluationTicket = async (id: string) =>
+    z
+      .array(z.object({ ticket: z.coerce.number() }))
+      .parse(
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT ticket FROM "WorkItem" WHERE target = 'ai.evaluation' AND ref = ${id}::uuid`,
+          )
+        ).rows,
+      )[0]?.ticket;
   const target = (recordId = crypto.randomUUID()) => ({
     target: aiEvaluationTarget.parse({
       kind: "email",
@@ -291,12 +307,7 @@ describe("AI refresh scheduling admission", () => {
       }),
     ]);
     expect(rows).toHaveLength(1);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(job)
-        .where(eq(job.kind, "ai.evaluation")),
-    ).toHaveLength(1);
+    expect(await evaluationItems()).toBe(1);
   });
 
   // Catalog and pair targets have distinct slots, even for the same Product.
@@ -404,11 +415,7 @@ describe("AI refresh scheduling admission", () => {
         }),
       },
     ]);
-    const jobs = await getDb(ctx.db)
-      .select({ state: job.state })
-      .from(job)
-      .where(eq(job.kind, "ai.evaluation"));
-    expect(jobs.filter((row) => row.state === "queued")).toHaveLength(1);
+    expect(await evaluationItems()).toBe(1);
   });
 
   it("bounds declined attempts of the same input without linking receipts", async () => {
@@ -443,8 +450,8 @@ describe("AI refresh scheduling admission", () => {
     ).toBe(1);
   });
 
-  it("retains running input and one queued successor, and creates a new row on a settled revert", async () => {
-    const owner = await ensureRun(ctx.db, systemActor(), input("running-slot"));
+  it("retains a paid result, updates one queued successor in place, and creates a new row on a settled revert", async () => {
+    const owner = await ensureRun(ctx.db, systemActor(), input("ready-slot"));
     const item = target();
     const changed = {
       ...item,
@@ -455,7 +462,7 @@ describe("AI refresh scheduling admission", () => {
     const [first] = await getDb(ctx.db).select().from(aiEvaluation);
     await getDb(ctx.db)
       .update(aiEvaluation)
-      .set({ state: "running" })
+      .set({ state: "result_ready", result: { input: "synthetic-first" } })
       .where(eq(aiEvaluation.id, first!.id));
     expect(await insertEvaluationTargets(ctx.db, owner, [item])).toBe(0);
     expect(await insertEvaluationTargets(ctx.db, owner, [changed])).toBe(1);
@@ -473,12 +480,12 @@ describe("AI refresh scheduling admission", () => {
     await getDb(ctx.db)
       .update(aiEvaluation)
       .set({
-        state: "retry_wait",
         result: { input: "synthetic-next" },
         receipt: { reason: "synthetic-old-input" },
         error: "Synthetic earlier failure",
       })
       .where(eq(aiEvaluation.id, queued!.id));
+    const before = await aiEvaluationTicket(queued!.id);
     await insertEvaluationTargets(ctx.db, owner, [third]);
     expect(
       (
@@ -488,50 +495,23 @@ describe("AI refresh scheduling admission", () => {
           .where(eq(aiEvaluation.id, queued!.id))
       )[0],
     ).toMatchObject({
+      state: "queued",
       snapshot: changed.snapshot,
       provenance: third.provenance,
       result: null,
       receipt: null,
       error: null,
     });
+    // Re-input supersedes any attempt holding the previous input's ticket.
+    expect(await aiEvaluationTicket(queued!.id)).toBeGreaterThan(before!);
     expect(
       (
         await getDb(ctx.db)
           .select()
           .from(aiEvaluation)
           .where(eq(aiEvaluation.id, first!.id))
-      )[0]?.provenance,
-    ).toEqual(item.provenance);
-    await withJobFixtureExecution(
-      ctx.db,
-      {
-        key: `ai-evaluation:${first!.id}`,
-        kind: "ai.evaluation",
-        input: { evaluationId: first!.id },
-      },
-      async () => {
-        const token = currentJobExecution()?.claim.leaseToken;
-        if (!token) throw new Error("Expected synthetic evaluation lease");
-        await recordAiRefreshAttemptFailure(ctx.db, first!.id, token, {
-          state: "retry_wait",
-          error: "Synthetic provider failure",
-        });
-      },
-    );
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, first!.id))
-      )[0]?.state,
-    ).toBe("obsolete");
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(inArray(aiEvaluation.state, ["queued", "retry_wait"])),
-    ).toHaveLength(1);
+      )[0],
+    ).toMatchObject({ state: "result_ready", provenance: item.provenance });
     await getDb(ctx.db).update(aiEvaluation).set({ state: "completed" });
     expect(await insertEvaluationTargets(ctx.db, owner, [third])).toBe(0);
     expect(await insertEvaluationTargets(ctx.db, owner, [item])).toBe(1);
@@ -571,7 +551,7 @@ describe("AI refresh scheduling admission", () => {
             inputFingerprint: "synthetic-other",
           },
           snapshot: {},
-          state: "retry_wait",
+          state: "queued",
         })
         .onConflictDoNothing()
         .returning(),
@@ -580,7 +560,7 @@ describe("AI refresh scheduling admission", () => {
       await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
-        .where(inArray(aiEvaluation.state, ["queued", "retry_wait"])),
+        .where(eq(aiEvaluation.state, "queued")),
     ).toHaveLength(1);
   });
 

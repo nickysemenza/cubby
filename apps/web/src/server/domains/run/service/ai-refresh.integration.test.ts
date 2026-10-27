@@ -4,7 +4,6 @@ import {
   aiProvenance,
   suggestionAcceptanceReceipt,
 } from "@cubby/schemas/ai-evaluation";
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
@@ -14,16 +13,14 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   dependencyStamps,
   fieldDependencyKeys,
   compiledRefreshManifest,
 } from "~/server/ai/policy/refresh-manifest";
 import {
-  claimAiEvaluation as claimAiEvaluationImplementation,
-  guardAiEvaluation as guardAiEvaluationImplementation,
-  publishAiEvaluation as publishAiEvaluationImplementation,
+  guardAiEvaluation,
+  publishAiEvaluation,
 } from "~/server/ai/repo/ai-evaluation";
 import {
   producingAiManifest,
@@ -33,7 +30,6 @@ import {
 } from "~/server/ai/repo/ai-refresh";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { getDb } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
 import {
   aiEvaluation,
   assessmentState as suggestion,
@@ -47,6 +43,10 @@ import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import {
+  drainAiEvaluations,
+  withClaimedAiEvaluation,
+} from "~/server/domains/run/service/ai-evaluation-drain.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -57,13 +57,6 @@ import {
   acceptSuggestion,
   canAutomaticallyFillField,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import {
-  externalJobClaim,
-  claimJob,
-} from "~/server/generic/jobs/repo/external-claim";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   drainDerivedRefreshFrontier,
@@ -77,15 +70,9 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
-import {
-  recordAiRefreshAttemptFailure,
-  settleAppliedFieldRefresh,
-} from "../repo/ai-refresh-state";
-import { scheduleConnectionRefresh } from "../repo/connection-refresh";
-import {
-  discoverAiRefresh,
-  executeAiRefreshTarget as executeAiRefreshTargetImplementation,
-} from "./ai-refresh";
+import { settleAppliedFieldRefresh } from "../repo/ai-refresh-state";
+import type { AiEvaluationPorts } from "./ai-evaluation-drain";
+import { discoverAiRefresh } from "./ai-refresh";
 import {
   categoryPorts,
   PRIMARY_MODEL,
@@ -111,81 +98,13 @@ const productFixture = async (
     ctx.actor,
   );
 
-const evaluationExecution = <T>(
+// One drain page per call: a single execution attempt. False when the
+// evaluation no longer has drain work.
+const executeAiRefreshTarget = async (
   db: import("~/server/db").Database,
   id: string,
-  work: () => Promise<T>,
-) =>
-  withJobFixtureExecution(
-    db,
-    {
-      key: `ai-evaluation:${id}`,
-      kind: "ai.evaluation",
-      input: { evaluationId: id },
-    },
-    work,
-  );
-const claimAiEvaluation = (
-  ...args: Parameters<typeof claimAiEvaluationImplementation>
-) =>
-  evaluationExecution(args[0], args[1], () =>
-    claimAiEvaluationImplementation(...args),
-  );
-const guardAiEvaluation = (
-  ...args: Parameters<typeof guardAiEvaluationImplementation>
-) =>
-  evaluationExecution(args[0], args[1], () =>
-    guardAiEvaluationImplementation(...args),
-  );
-const publishAiEvaluation: typeof publishAiEvaluationImplementation = (
-  db,
-  id,
-  token,
-  work,
-  settlement,
-) =>
-  evaluationExecution(db, id, () =>
-    publishAiEvaluationImplementation(db, id, token, work, settlement),
-  );
-const executeAiRefreshTarget = async (
-  ...args: Parameters<typeof executeAiRefreshTargetImplementation>
-) => {
-  const [db, id] = args;
-  const saved = await enqueueJob(db, {
-    key: `ai-evaluation:${id}`,
-    kind: "ai.evaluation",
-    input: { evaluationId: id },
-  });
-  await getDb(db)
-    .update(job)
-    .set({ availableAt: new Date(0) })
-    .where(
-      and(eq(job.id, saved.id), inArray(job.state, ["queued", "retry_wait"])),
-    );
-  let executed = false;
-  await advanceJob(db, saved.id, {
-    "ai.evaluation": {
-      prepare: async () => {
-        executed = true;
-        await executeAiRefreshTargetImplementation(...args);
-        const [settled] = await getDb(db)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, id));
-        return {
-          page: {
-            done:
-              !settled ||
-              !["queued", "running", "retry_wait", "result_ready"].includes(
-                settled.state,
-              ),
-          },
-        };
-      },
-    },
-  });
-  return executed;
-};
+  ports: AiEvaluationPorts = {},
+) => (await drainAiEvaluations(db, [id], ports, { pages: 1 })).length > 0;
 
 // Real database/publication boundaries; only the external decision model is scripted.
 const writeRunningAttemptProgress = (
@@ -1300,81 +1219,43 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(fieldRefreshTarget);
-    // A cutover preserves the domain's in-flight state; its queued Job must
-    // claim it afresh, and a pre-cutover receipt has no publication authority.
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "running" })
-      .where(eq(aiEvaluation.id, evaluation!.id));
-    const legacyToken = crypto.randomUUID();
-    await expect(
-      withTransactionDatabase(ctx.db, (tx) =>
-        guardAiEvaluationImplementation(tx, evaluation!.id, legacyToken),
-      ),
-    ).rejects.toThrow("AI evaluation attempt is obsolete");
-    const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
-    expect(claimed?.state).toBe("running");
-    expect(claimed?.attemptToken).not.toBe(legacyToken);
-    const changed = {
-      ...manifest,
-      "field-suggestion": {
-        ...manifest["field-suggestion"]!,
-        promptVersion: "synthetic-next",
-      },
-    };
-    const next = await activateAiRefresh(ctx.db, "synthetic-b", {
-      enabled: true,
-      manifest: changed,
+    await withClaimedAiEvaluation(ctx.db, evaluation!.id, async (claimed) => {
+      // A token from another lease has no publication authority.
+      await expect(
+        withTransactionDatabase(ctx.db, (tx) =>
+          guardAiEvaluation(tx, evaluation!.id, `${crypto.randomUUID()}/1`),
+        ),
+      ).rejects.toThrow("AI evaluation attempt is obsolete");
+      const changed = {
+        ...manifest,
+        "field-suggestion": {
+          ...manifest["field-suggestion"]!,
+          promptVersion: "synthetic-next",
+        },
+      };
+      const next = await activateAiRefresh(ctx.db, "synthetic-b", {
+        enabled: true,
+        manifest: changed,
+      });
+      expect(next.manifest["mailbox-triage"]).toEqual(
+        active.manifest["mailbox-triage"],
+      );
+      const rollback = await activateAiRefresh(ctx.db, "synthetic-rollback", {
+        enabled: true,
+        manifest,
+      });
+      expect(rollback.manifest["field-suggestion"]!.generation).toBe(
+        active.manifest["field-suggestion"]!.generation + 2,
+      );
+      await expect(
+        withTransactionDatabase(ctx.db, (tx) =>
+          guardAiEvaluation(tx, evaluation!.id, claimed.attemptToken),
+        ),
+      ).rejects.toThrow("obsolete");
     });
-    expect(next.manifest["mailbox-triage"]).toEqual(
-      active.manifest["mailbox-triage"],
-    );
-    const rollback = await activateAiRefresh(ctx.db, "synthetic-rollback", {
-      enabled: true,
-      manifest,
-    });
-    expect(rollback.manifest["field-suggestion"]!.generation).toBe(
-      active.manifest["field-suggestion"]!.generation + 2,
-    );
-    await expect(
-      withTransactionDatabase(ctx.db, (tx) =>
-        guardAiEvaluation(tx, evaluation!.id, claimed!.attemptToken!),
-      ),
-    ).rejects.toThrow("obsolete");
     expect((await getDb(ctx.db).select().from(suggestion))[0]?.status).toBe(
       "pending",
     );
-    // Even when invalidation retains the old token until its worker exits,
-    // that worker cannot publish a terminal failure into the new generation.
-    const oldExecution = await externalJobClaim(
-      ctx.db,
-      `ai-evaluation:${evaluation!.id}`,
-    );
-    if (!oldExecution) throw new Error("Expected live evaluation Job");
-    await enqueueJob(ctx.db, {
-      key: oldExecution.key,
-      kind: oldExecution.kind,
-      input: oldExecution.input,
-      invalidate: true,
-    });
-    await expect(
-      withJobExecution(ctx.db, oldExecution, () =>
-        recordAiRefreshAttemptFailure(
-          ctx.db,
-          evaluation!.id,
-          claimed!.attemptToken!,
-          { state: "failed", error: "Synthetic late failure" },
-        ),
-      ),
-    ).rejects.toThrow("Job generation or lease is obsolete");
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, evaluation!.id))
-      )[0]?.state,
-    ).toBe("running");
   });
 
   it("publishes catalog pairs and records their receipt", async () => {
@@ -1523,8 +1404,6 @@ describe("targeted prompt refresh", () => {
       .select()
       .from(aiEvaluation)
       .where(fieldRefreshTarget);
-    const claimed = await claimAiEvaluation(ctx.db, evaluation!.id);
-    expect(claimed?.attemptToken).toBeTruthy();
     let callbackRan = false;
     const [stored] = await getDb(ctx.db)
       .select({ id: product.id, name: product.name })
@@ -1533,35 +1412,37 @@ describe("targeted prompt refresh", () => {
     expect(stored).toBeDefined();
     let probeError: unknown;
     await expect(
-      publishAiEvaluation(
-        ctx.db,
-        evaluation!.id,
-        claimed!.attemptToken!,
-        async (tx) => {
-          callbackRan = true;
-          await getDb(tx)
-            .update(product)
-            .set({ name: "Synthetic tentative publication" })
-            .where(eq(product.id, stored!.id));
-          // A second connection must acquire activation immediately while publication is paused.
-          try {
-            await withTransactionDatabase(ctx.db, async (probe) => {
-              await getDb(probe)
-                .select({ id: appSettings.id })
-                .from(appSettings)
-                .for("update", { noWait: true });
-              await activateAiRefresh(
-                probe,
-                "synthetic-disabled-during-publication",
-                { enabled: false },
-              );
-            });
-          } catch (error) {
-            probeError = error;
-            throw error;
-          }
-          return { synthetic: true };
-        },
+      withClaimedAiEvaluation(ctx.db, evaluation!.id, (claimed) =>
+        publishAiEvaluation(
+          ctx.db,
+          evaluation!.id,
+          claimed.attemptToken,
+          async (tx) => {
+            callbackRan = true;
+            await getDb(tx)
+              .update(product)
+              .set({ name: "Synthetic tentative publication" })
+              .where(eq(product.id, stored!.id));
+            // A second connection must acquire activation immediately while publication is paused.
+            try {
+              await withTransactionDatabase(ctx.db, async (probe) => {
+                await getDb(probe)
+                  .select({ id: appSettings.id })
+                  .from(appSettings)
+                  .for("update", { noWait: true });
+                await activateAiRefresh(
+                  probe,
+                  "synthetic-disabled-during-publication",
+                  { enabled: false },
+                );
+              });
+            } catch (error) {
+              probeError = error;
+              throw error;
+            }
+            return { synthetic: true };
+          },
+        ),
       ),
     ).rejects.toMatchObject({ cause: { code: "40001" } });
     expect(probeError).toBeUndefined();
@@ -1579,72 +1460,6 @@ describe("targeted prompt refresh", () => {
         (row) => row.metadata?.enabled === false,
       ),
     ).toBe(true);
-  });
-
-  it("defers a locked Job without occupying a waiting connection or changing queued work", async () => {
-    const item = await productFixture(ctx, "Synthetic contended refresh");
-    await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: [item.id] },
-      },
-      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
-    );
-    await activateAiRefresh(ctx.db, "synthetic-contended-refresh", {
-      enabled: true,
-    });
-    await discoverAiRefresh(ctx.db, {
-      context: kernelCtx(ctx),
-      suggestPorts: categoryPorts(0.6).suggestPorts,
-    });
-    const [evaluation] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(fieldRefreshTarget);
-    if (!evaluation) throw new Error("Expected synthetic queued evaluation");
-    const [execution] = await getDb(ctx.db)
-      .select()
-      .from(job)
-      .where(eq(job.key, `ai-evaluation:${evaluation.id}`));
-    if (!execution) throw new Error("Expected synthetic evaluation Job");
-    await withTransactionDatabase(ctx.db, async (holder) => {
-      await getDb(holder)
-        .select({ id: job.id })
-        .from(job)
-        .where(eq(job.id, execution.id))
-        .for("update");
-      await withTransactionDatabase(ctx.db, async (contender) => {
-        // This timeout makes any wait behind the other connection fail here.
-        await getDb(contender).execute(sql`SET LOCAL lock_timeout = '100ms'`);
-        expect(await claimJob(contender, execution.id)).toBeNull();
-        expect(
-          (
-            await getDb(contender)
-              .select()
-              .from(job)
-              .where(eq(job.id, execution.id))
-          )[0],
-        ).toEqual(execution);
-        expect(
-          (
-            await getDb(contender)
-              .select()
-              .from(aiEvaluation)
-              .where(eq(aiEvaluation.id, evaluation.id))
-          )[0],
-        ).toEqual(evaluation);
-      });
-    });
-    const claimed = await claimJob(ctx.db, execution.id);
-    if (!claimed) throw new Error("Expected unlocked evaluation claim");
-    expect(
-      await withJobExecution(ctx.db, claimed, () =>
-        claimAiEvaluationImplementation(ctx.db, evaluation.id),
-      ),
-    ).toMatchObject({ state: "running" });
-    expect(await claimJob(ctx.db, execution.id)).toBeNull();
   });
 
   it("freezes 201 eligible Emails into 200-item Runs, reports missing authorization and leaves confident decisions alone", async () => {

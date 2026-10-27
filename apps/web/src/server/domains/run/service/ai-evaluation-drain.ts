@@ -28,6 +28,7 @@ import {
   markAiEvaluationWork,
   readAiEvaluations,
   settleAiEvaluations,
+  withAiEvaluationSavepoint,
 } from "~/server/ai/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
@@ -37,7 +38,7 @@ import type {
 } from "~/server/ai/repo/evaluation-page";
 import type { Database } from "~/server/db";
 import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { JobDeferredError, JobTargetError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import type { WorkItem } from "~/server/generic/jobs/repo/work-items";
 import { defineDrain } from "~/server/generic/jobs/service/drain";
@@ -48,6 +49,7 @@ import {
   pauseRunForAiWork,
   readAiEvaluation,
   readRunStatus,
+  resumeFundingStoppedRuns,
 } from "../repo/ai-work-state";
 import {
   executeAiRefreshTarget,
@@ -87,6 +89,16 @@ type Prepared = {
 const OBSOLETE =
   /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists|Connection (discovery )?source changed/;
 
+const errorMessage = (error: unknown) =>
+  scrubErrorMessage(error instanceof Error ? error.message : String(error));
+
+const evidenceObsolete = (error: unknown) =>
+  !!findErrorCause(
+    error,
+    (cause): cause is ConnectionEvidenceInvalidatedError =>
+      cause instanceof ConnectionEvidenceInvalidatedError,
+  ) || OBSOLETE.test(errorMessage(error));
+
 /**
  * Domain failures at the drain seam: evidence changes settle obsolete,
  * capacity and funding stop the page without spending attempts, and a
@@ -102,9 +114,7 @@ async function mapFailure(
   if (is(AiEvaluationAttemptObsoleteError)) return { entry: { kind: "skip" } };
   if (is(AiEvaluationUnauthorizedError)) return { entry: { kind: "park" } };
   if (stopsPage(classifyJobFailure(error))) return { failed: error };
-  const message = scrubErrorMessage(
-    error instanceof Error ? error.message : String(error),
-  );
+  const message = errorMessage(error);
   const budget = is(AiBudgetExhaustedError);
   if (budget)
     return {
@@ -131,7 +141,7 @@ async function mapFailure(
         "rate_limit",
       ),
     };
-  if (is(ConnectionEvidenceInvalidatedError) || OBSOLETE.test(message))
+  if (evidenceObsolete(error))
     return { entry: { kind: "obsolete", reason: message } };
   const { evaluation } = target;
   if (evaluation.executionKind !== "ai_refresh") {
@@ -258,6 +268,11 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
         }
       }
       const current = live.filter((entry) => !entries.has(entry.item.ref));
+      // The drain deferred until the funding window, so running again is the
+      // window opening for the Runs a budget stop paused.
+      await resumeFundingStoppedRuns(db, [
+        ...new Set(current.map((entry) => entry.evaluation.runId)),
+      ]);
       const authorization = await aiEvaluationAuthorizations(
         db,
         current.map((entry) => entry.evaluation),
@@ -339,16 +354,36 @@ function aiEvaluationDrainSpec(ports: AiEvaluationPorts, paged: boolean) {
       const current = written.filter(({ target }) =>
         validIds.has(target.evaluation.id),
       );
-      const ready = current.filter(({ entry }) => entry.kind === "outcome");
+      let ready = current.filter(({ entry }) => entry.kind === "outcome");
       const publications: EvaluationPagePublication[] = [];
       if (ready.length) {
         const ids = ready.map(({ target }) => target.evaluation.id);
-        const published = await prepared.page!.publish(tx, ids);
+        let published: EvaluationPagePublication[];
+        try {
+          published = await withAiEvaluationSavepoint(tx, (savepoint) =>
+            prepared.page!.publish(savepoint, ids),
+          );
+        } catch (error) {
+          // Evidence that changed during inference settles obsolete. The
+          // drain splits a chunk on target errors, so a change obsoletes only
+          // its own evaluation and its siblings still publish.
+          if (!evidenceObsolete(error)) throw error;
+          if (ids.length > 1)
+            throw new JobTargetError(errorMessage(error), { cause: error });
+          published = [];
+          publications.push({
+            evaluationId: ids[0]!,
+            state: "obsolete",
+            receipt: { reason: errorMessage(error) },
+          });
+          ready = [];
+        }
         if (
-          published.length !== ids.length ||
-          new Set(published.map((entry) => entry.evaluationId)).size !==
-            ids.length ||
-          published.some((entry) => !validIds.has(entry.evaluationId))
+          ready.length &&
+          (published.length !== ids.length ||
+            new Set(published.map((entry) => entry.evaluationId)).size !==
+              ids.length ||
+            published.some((entry) => !validIds.has(entry.evaluationId)))
         )
           throw new Error(
             "AI page adapter returned an unexpected publication set",

@@ -186,6 +186,24 @@ export async function pauseRunForAiWork(
     );
 }
 
+/** A funding stop ends when its evaluations' drain runs again after the wait. */
+export async function resumeFundingStoppedRuns(
+  db: Database,
+  runIds: readonly RunRow["id"][],
+) {
+  if (!runIds.length) return;
+  await getDb(db)
+    .update(run)
+    .set({ status: "running" })
+    .where(
+      and(
+        inArray(run.id, [...runIds]),
+        eq(run.status, "paused_auth"),
+        eq(run.failureCode, "execution_limit"),
+      ),
+    );
+}
+
 export async function readAiEvaluationReceipt(db: Database, id: string) {
   const [row] = await getDb(db)
     .select({ receipt: aiEvaluation.receipt })
