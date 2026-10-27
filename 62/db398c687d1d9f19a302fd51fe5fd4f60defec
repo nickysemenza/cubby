@@ -1,0 +1,159 @@
+apps/web/src/server/domains/cookbook/repo/cookbook.ts
+  s_9fb58b1f0c0012::t_be7dfc7bc3e52f 62,88,304-305
+apps/web/src/server/domains/cookbook/repo/search-read-cookbook.ts
+  s_9fb58b1f0c0012::t_14f50ecc2e97fa 1-54
+apps/web/src/server/domains/device/repo/device.ts
+  s_9fb58b1f0c0012::t_bbc7ba7e61cfe5 34,80
+apps/web/src/server/domains/email/repo/email.ts
+  s_9fb58b1f0c0012::t_5afa9a618e1a11 49,478-482
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_9fb58b1f0c0012::t_1004cdf88189a8 22,29,210-211
+apps/web/src/server/domains/expense/repo/search-read-expense.ts
+  s_9fb58b1f0c0012::t_113bc0e18520fe 1-81
+apps/web/src/server/domains/financial-account/repo.ts
+  s_9fb58b1f0c0012::t_4e541e62005305 42,63,159-160
+apps/web/src/server/domains/financial-account/search-read-financial-account.ts
+  s_9fb58b1f0c0012::t_e28f6e5ed1d401 1-105
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_9fb58b1f0c0012::t_29740e4f8ab03b 59,87,135-136
+apps/web/src/server/domains/financial-transaction/repo/search-read-financial-transaction.ts
+  s_9fb58b1f0c0012::t_8535605154cc24 1-102
+apps/web/src/server/domains/garden/repo/garden.ts
+  s_9fb58b1f0c0012::t_f44dde161b4449 53-54,74-75,787-788,875-876
+apps/web/src/server/domains/garden/repo/search-read-garden-entry.ts
+  s_9fb58b1f0c0012::t_0d95a8f677bea3 1-126
+apps/web/src/server/domains/garden/repo/search-read-planting.ts
+  s_9fb58b1f0c0012::t_9cb233c2aeaf6d 1-69
+apps/web/src/server/domains/image-job/repo.ts
+  s_9fb58b1f0c0012::t_d63f201acdc500 28,301-305
+apps/web/src/server/domains/image/repo/image.ts
+  s_9fb58b1f0c0012::t_d2ad771a6fbc06 149,166,1370-1371
+apps/web/src/server/domains/image/repo/search-read-image.ts
+  s_9fb58b1f0c0012::t_8eb2e951eb37da 1-50
+apps/web/src/server/domains/ingredient/repo/search-read-ingredient.ts
+  s_9fb58b1f0c0012::t_1ac38116ee79ca 1-54
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_9fb58b1f0c0012::t_6f8e6880ddebcb 62,78,624-625
+apps/web/src/server/domains/inventory/repo/crud.ts
+  s_9fb58b1f0c0012::t_98bc4e3325da5e 41,72,177-181,195-196
+apps/web/src/server/domains/inventory/repo/search-read-inventory.ts
+  s_9fb58b1f0c0012::t_c92bd0f377ca44 1-99
+apps/web/src/server/domains/ledger-party/repo/ledger-party.ts
+  s_9fb58b1f0c0012::t_fc175d241e260a 49,313
+apps/web/src/server/domains/ledger-transfer/repo.ts
+  s_9fb58b1f0c0012::t_02f852acf5a03d 49,106
+apps/web/src/server/domains/location/repo/crud.ts
+  s_9fb58b1f0c0012::t_1b05d2d327c1af 74,95,761-762
+apps/web/src/server/domains/location/repo/search-read-location.ts
+  s_9fb58b1f0c0012::t_fb479c0f519d20 1-63
+apps/web/src/server/domains/meal/repo/crud.ts
+  s_9fb58b1f0c0012::t_a49312bbe839cd 37,45,117-121,125-126
+apps/web/src/server/domains/meal/repo/search-read-meal.ts
+  s_9fb58b1f0c0012::t_a2505668dbcb1d 1-69
+apps/web/src/server/domains/plant/repo/plant.ts
+  s_9fb58b1f0c0012::t_725fdea5b50e82 25,39,109-114
+apps/web/src/server/domains/plant/repo/search-read-plant.ts
+  s_9fb58b1f0c0012::t_83d514a200b631 1-64
+apps/web/src/server/domains/product-category/repo/product-category.ts
+  s_9fb58b1f0c0012::t_fbba6386be7183 67,407
+apps/web/src/server/domains/product/repo/crud.ts
+  s_9fb58b1f0c0012::t_39ee9c4defed39 147,161,453-454
+apps/web/src/server/domains/product/repo/search-read-product.ts
+  s_9fb58b1f0c0012::t_a849fe44445072 1-87
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_9fb58b1f0c0012::t_9f782fe4551cf0 24,26,133-134
+apps/web/src/server/domains/project/repo/search-read-project.ts
+  s_9fb58b1f0c0012::t_b841047351eb72 1-65
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_9fb58b1f0c0012::t_a6375eb0b045a3 128,146,472,485-486
+apps/web/src/server/domains/purchase/repo/search-read-purchase.ts
+  s_9fb58b1f0c0012::t_8971d4267a97d6 1-63
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_9fb58b1f0c0012::t_cea30a6e09800b 59,80,461-462
+apps/web/src/server/domains/recipe/repo/search-read-recipe.ts
+  s_9fb58b1f0c0012::t_7ed9635f8b8c60 1-74
+apps/web/src/server/domains/run/repo/run.ts
+  s_9fb58b1f0c0012::t_a8fedb4e7af35b 26,262
+apps/web/src/server/domains/shipment/repo/entity-repository.ts
+  s_9fb58b1f0c0012::t_572ed6325d87fd 13,21,27-28
+apps/web/src/server/domains/shipment/repo/search-read-shipment.ts
+  s_9fb58b1f0c0012::t_9ac59d930ab975 1-52
+apps/web/src/server/domains/spending-category/repo/spending-category.ts
+  s_9fb58b1f0c0012::t_59a68724d025d7 49,173
+apps/web/src/server/domains/task/repo/lookup.ts
+  s_9fb58b1f0c0012::t_c16221e5744ce8 21-22,49-50
+apps/web/src/server/domains/task/repo/search-read-task.ts
+  s_9fb58b1f0c0012::t_266d046817b63a 1-67
+apps/web/src/server/domains/transaction-import/repo/entity-repositories.ts
+  s_9fb58b1f0c0012::t_833a31a18d7a3d 14-15,196,205-209
+apps/web/src/server/domains/transaction-import/repo/search-read-source-transaction-record.ts
+  s_9fb58b1f0c0012::t_2b96b9bc63107d 1-72
+apps/web/src/server/domains/transaction-import/repo/search-read-transaction-import.ts
+  s_9fb58b1f0c0012::t_c1ca5905d6feb7 1-60
+apps/web/src/server/domains/vendor/repo/search-read-vendor.ts
+  s_9fb58b1f0c0012::t_ae73129fc1cbb2 1-49
+apps/web/src/server/domains/vendor/repo/vendor.ts
+  s_9fb58b1f0c0012::t_2c8b4c4ebd9459 87,106,489-490
+apps/web/src/server/domains/wish/repo.ts
+  s_9fb58b1f0c0012::t_4107464561ae55 27,40,210
+apps/web/src/server/domains/wish/search-read-wish.ts
+  s_9fb58b1f0c0012::t_7ee58ca573a714 1-81
+apps/web/src/server/entity-kernel/bindings.unit.test.ts
+  s_9fb58b1f0c0012::t_e5e061268f6005 2,4-5,43-60
+apps/web/src/server/entity-kernel/repo/entity-records.ts
+  s_9fb58b1f0c0012::t_0cde2d80e08080 26
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_9fb58b1f0c0012::t_e9ce009afe5ed0 49
+apps/web/src/server/generic/data-quality/repo/entry.ts
+  s_9fb58b1f0c0012::t_5d5f90cebba224 3,5,9-14
+apps/web/src/server/generic/data-quality/repo/exceptions.ts
+  s_9fb58b1f0c0012::t_a971f352bbc6c3 29
+apps/web/src/server/generic/data-quality/repo/hydrate.ts
+  s_9fb58b1f0c0012::t_fbb291f0af517a 38
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_9fb58b1f0c0012::t_73186510e06f2c 27,166-169
+apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
+  s_9fb58b1f0c0012::t_d6195afb84817e 13
+apps/web/src/server/generic/data-quality/repo/stored.ts
+  s_9fb58b1f0c0012::t_154fcae31d5f18 23,109
+apps/web/src/server/generic/derived/repo/public-read.ts
+  s_9fb58b1f0c0012::t_01aa89fa14c8a7 33-38,182
+apps/web/src/server/generic/embedding/repo/embedding-load-options.ts
+  s_9fb58b1f0c0012::t_2a99c142e9755e 1-4
+apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts
+  s_9fb58b1f0c0012::t_939a5016367ec4 6,13,16,18-19,133-137
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_dd1c2e9964f613 9,100,105,125,1706-1707,3121-3122
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_9fb58b1f0c0012::t_ef6722c5c03d83 2,31,194-199,208,216-220,234,248,259
+apps/web/src/server/generic/search/repo/search-document.unit.test.ts
+  s_9fb58b1f0c0012::t_aba2743523b14e 1-38
+apps/web/src/server/generic/search/repo/search-read-port.ts
+  s_9fb58b1f0c0012::t_301a246f0f0426 1-33
+apps/web/src/server/testing/quality.fixtures.ts
+  s_9fb58b1f0c0012::t_e87b55768cbd84 1,7,16,26
+docs/agents/generic-paths.md
+  s_9fb58b1f0c0012::t_cb1355dc47aa3b 128-131
+docs/entities.md
+  s_9fb58b1f0c0012::t_7372b2b11d285d 2701-2704,3163-3164
+tools/oxlint/cubby/no-raw-deleted-at-predicate-baseline.json
+  s_9fb58b1f0c0012::t_91c24e9351d71d 144
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_9fb58b1f0c0012::t_2faf6b7540df0b 31,57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "62db398c687d1d9f19a302fd51fe5fd4f60defec",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
