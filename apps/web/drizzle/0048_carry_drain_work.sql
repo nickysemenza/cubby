@@ -83,11 +83,13 @@ DELETE FROM "Job" WHERE id IN (SELECT id FROM "retired_embedding_job_ids");--> s
 DELETE FROM "Entity" WHERE kind = 'job' AND id IN (SELECT id FROM "retired_embedding_job_ids");--> statement-breakpoint
 DROP TABLE "retired_embedding_job_ids";--> statement-breakpoint
 -- The watchdog and retention merge into jobs.maintenance, which the minute
--- cron creates; their old Jobs and identities go.
+-- cron creates; their old Jobs and identities go. No build produces
+-- image-processing.result any more; an unadopted device result's image job
+-- is reprocessed by its own retry.
 DELETE FROM "JobInvalidationCapture" c USING "Job" j
- WHERE c.key = j.key AND j.kind IN ('queue.watchdog', 'jobs.retention');--> statement-breakpoint
+ WHERE c.key = j.key AND j.kind IN ('queue.watchdog', 'jobs.retention', 'image-processing.result');--> statement-breakpoint
 CREATE TEMP TABLE "retired_maintenance_job_ids" ON COMMIT DROP AS
-SELECT id FROM "Job" WHERE kind IN ('queue.watchdog', 'jobs.retention');--> statement-breakpoint
+SELECT id FROM "Job" WHERE kind IN ('queue.watchdog', 'jobs.retention', 'image-processing.result');--> statement-breakpoint
 DELETE FROM "Job" WHERE id IN (SELECT id FROM "retired_maintenance_job_ids");--> statement-breakpoint
 DELETE FROM "Entity" WHERE kind = 'job' AND id IN (SELECT id FROM "retired_maintenance_job_ids");--> statement-breakpoint
 DROP TABLE "retired_maintenance_job_ids";--> statement-breakpoint
