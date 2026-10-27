@@ -316,6 +316,10 @@ const columnPredicate = (
     ? presenceFilter.parse(values[descriptor.nullable.field])
     : undefined;
   switch (descriptor.kind) {
+    case "text": {
+      const term = optionalText.parse(value)?.trim();
+      return term ? textPredicate(first, term) : undefined;
+    }
     case "boolean":
       return booleanPredicate(first, optionalBoolean.parse(value));
     case "multiselect":

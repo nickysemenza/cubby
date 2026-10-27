@@ -94,3 +94,12 @@ export const splitExcluded = (values: readonly string[]) => {
   }
   return { included, excluded };
 };
+
+/** Whether a filter kind gets a generated Exclude ("is not") key: the
+ * multi-value kinds, for entity and relation lists alike. */
+export const excludableFilterKind = (kind: string): boolean =>
+  kind === "multiselect" || kind === "idMulti";
+
+/** The generated Exclude key of a filter column. */
+export const filterExcludeField = (columnId: string): string =>
+  `${columnId}Exclude`;
