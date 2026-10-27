@@ -1,0 +1,77 @@
+apps/web/src/server/generic/embedding/repo/embedding-cleanup.ts
+  s_ce489f1349f097::t_e9f37a5cf21461 2,7,9-15,21-36,39-45,49,56,64-100,104-105,107-118,132-133,136-139
+apps/web/src/server/generic/embedding/repo/embedding-drain.fixtures.ts
+  s_ce489f1349f097::t_88ce218e9f4861 6-7,11-12,16,21-26,30-38,46-60,62,65
+apps/web/src/server/generic/embedding/repo/embedding-drain.integration.test.ts
+  s_ce489f1349f097::t_305172c61180c5 1-4,6-7,10-19,21-23,30-32,36-166,168,171-172,174,177-181,183-191,193-222,225-226,228,231-264,266,270,272,275-278,281-282,284,287,289-290,292-299,301-308,311,315,317,320-325,329-342,344-347,350-384,387-391,393-394,396-413,417-418,420-441,444-445,447,450-466,468-471,473-482
+apps/web/src/server/generic/embedding/repo/embedding-drain.ts
+  s_ce489f1349f097::t_70e24adc05a547 1-9,12-16,18-22,24-28,31-33,35-36,39-53,55-110,112-113,115-129,131-142,144-153,155,157-166,169-170,172-178,180-209,211-232,234-235,237-279,281-297,300,302-303,305-311,313-329,331-347,349-355,357-366,368-416,418-419,421-442,444-463,465-509,511-531,535-574
+apps/web/src/server/generic/embedding/repo/entity-embedding-search.integration.test.ts
+  s_9607b89cdf7e1e::t_c0e88c86b09d67 25
+apps/web/src/server/generic/embedding/service/embedding-cleanup.ts
+  s_ce489f1349f097::t_2d2a31b30c2ad2 1,4,6,10-79,84-98,100-102,104
+apps/web/src/server/generic/embedding/service/embedding-refresh.ts
+  s_ce489f1349f097::t_6c620cb31cc5c8 1-240
+apps/web/src/server/generic/embedding/service/semantic-search.service.integration.test.ts
+  s_ce489f1349f097::t_25ec37143a2c0f 12,50,105,111-128,195,197-201,334,347,357,362,364,374-377,379,383-389,411,416,442-452,460,479-480,483
+apps/web/src/server/generic/jobs/service/drain.ts
+  s_77bdb89dbc0fc6::t_21b1b5375c62e7 32-36,51-55,134-145
+apps/web/src/server/workflows/background-tasks/embedding.ts
+  s_ce489f1349f097::t_571a4b417205e5 2,5,14,16-21,29,37,39,44-54,57,71
+apps/web/src/server/workflows/background-tasks/publish.ts
+  s_1f133ace598a93::t_3dc6492cf123a6 109
+apps/web/src/server/workflows/derived-computes.ts
+  s_ce489f1349f097::t_4802d5afe3bf69 57
+apps/web/src/server/workflows/jobs.ts
+  s_1f133ace598a93::t_6688ee6fe2b3d3 25,73
+apps/web/tooling/typecheck-repositories.ts
+  s_c680bf687386f9::t_e2019dbf575134 84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e3559c6cad527403e11df13800e5e76fe8b32af2",
+  "prompts": {},
+  "sessions": {
+    "s_1f133ace598a93": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17e76-9ad0-7f23-bcd2-2d324cb8765b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9607b89cdf7e1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f56125d7-a4fa-4fe4-a445-81d11b32c3e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c680bf687386f9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e2d5160f-df5c-477d-8b87-30b90ba63287",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_ce489f1349f097": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17e86-75d1-7b53-9e54-4b3fca6aea13",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
