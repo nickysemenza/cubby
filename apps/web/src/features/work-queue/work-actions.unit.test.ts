@@ -5,8 +5,9 @@ import { problemActionsFor } from "~/entity/problems/problem-actions";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { installFeatures } from "~/features/registry";
 
-// Failure mode: a Problem declares a remediation the queue renders nothing
-// for, because no feature performs its namespaced action id.
+// Failure modes: a Problem declares a remediation the queue renders nothing
+// for, because no feature performs its namespaced action id; or a handler
+// outlives its declaration and nothing can surface it.
 describe("workActions", () => {
   it("performs every declared Problem action", () => {
     installFeatures();
@@ -18,5 +19,10 @@ describe("workActions", () => {
     expect(declared.length).toBeGreaterThan(0);
     const handlers = featureRegistry().workActions;
     expect(declared.filter((id) => !(id in handlers))).toEqual([]);
+    expect(
+      Object.keys(handlers).filter(
+        (id) => id.includes(":") && !declared.includes(id),
+      ),
+    ).toEqual([]);
   });
 });

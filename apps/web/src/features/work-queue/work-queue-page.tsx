@@ -435,10 +435,15 @@ export function WorkQueuePage() {
   );
 }
 
+const PROBLEMS_VIEW = "problems";
+
 function WorkQueue() {
   const navigate = useNavigate({ from: "/work-queue" });
   const search = route.useSearch();
-  const group = search.group;
+  // Problems opens grouped by Reason, where its group actions (Delete all,
+  // backfills, Open in list) live; `none` keeps an explicit ungrouping.
+  const group =
+    search.group ?? (search.view === PROBLEMS_VIEW ? "reason" : undefined);
   const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);
   const tableState = useTableState({
     initialSort: workQueueList.defaultSort.orderBy,
@@ -502,7 +507,10 @@ function WorkQueue() {
     (next: string | null) =>
       void navigate({
         to: ".",
-        search: (prev) => ({ ...prev, group: next ?? undefined }),
+        search: (prev) => ({
+          ...prev,
+          group: next ?? (prev.view === PROBLEMS_VIEW ? "none" : undefined),
+        }),
         replace: true,
       }),
     [navigate],

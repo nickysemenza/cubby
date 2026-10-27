@@ -4,15 +4,11 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import type { WorkActionProps } from "~/entity/work-queue/work-actions";
-import {
-  WorkActionTrigger,
-} from "~/entity/work-queue/work-actions";
-import { BACKFILL } from "~/features/maintenance/backfill-registry";
+import { WorkActionTrigger } from "~/entity/work-queue/work-actions";
 import { useBackfill } from "~/features/maintenance/backfill-button";
+import { BACKFILL } from "~/features/maintenance/backfill-registry";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { recommendations } from "~/integrations/tanstack-query/generated/catalog/recommendations.gen";
-import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -155,37 +151,5 @@ export function FetchProductImagesAction(props: WorkActionProps) {
       pending={backfill.running}
       onRun={backfill.start}
     />
-  );
-}
-
-/** `productsWithBetterUpcData:apply`: write the UPC database's better facts
- * (price, size, image) onto each Product the detector lists. */
-export function ApplyUpcDataAction(props: WorkActionProps) {
-  return (
-    <ProblemItemsAction {...props} problemKey="productsWithBetterUpcData">
-      {(product) => <UpcApply product={product} />}
-    </ProblemItemsAction>
-  );
-}
-
-function UpcApply({
-  product,
-}: {
-  product: ProblemItem<"productsWithBetterUpcData">;
-}) {
-  const apply = useActionMutation({
-    mutationFn: productOperations.applyUpcData.mutationOptions,
-    success: `Updated ${product.name} from UPC`,
-    onSuccess: (result) => toastMutationWarnings(result.sideEffects),
-  });
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      onClick={() => apply.mutate({ id: product.id, upc: product.upc })}
-      disabled={apply.isPending}
-    >
-      {apply.isPending ? "Applying…" : `Apply UPC data to ${product.name}`}
-    </Button>
   );
 }

@@ -147,9 +147,7 @@ export const entityProblemSources = (
     const filters = definition.source.filters;
     const source: WorkSource = {
       id: definition.key,
-      family: ["purchase", "expense", "financialTransaction"].includes(entity)
-        ? "reconciliation"
-        : "problem",
+      family: "problem",
       executor: "human",
       entity,
       link: { kind: "record" },

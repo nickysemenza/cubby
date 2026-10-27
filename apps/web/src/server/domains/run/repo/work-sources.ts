@@ -40,7 +40,8 @@ const execution: WorkSource = {
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       owners: workRunReviewRead().owners,
       date: householdDaySql(sql`"Run"."startedAt"`),
-      executor: sql`CASE WHEN "Run".status = ${runStatus.enum.running} THEN ${workExecutor.enum.automatic} ELSE ${workExecutor.enum.external} END`,
+      // A Run stopped at its execution limit waits for a member to resume it.
+      executor: sql`CASE WHEN "Run".status = ${runStatus.enum.running} THEN ${workExecutor.enum.automatic} WHEN "Run".status = ${runStatus.enum.needs_review} THEN ${workExecutor.enum.human} ELSE ${workExecutor.enum.external} END`,
       reason: execution.reasons[0]!.label,
       reasonKeys: [execution.id],
     })

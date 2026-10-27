@@ -78,16 +78,13 @@ const source: WorkSource = {
   executor: "human",
   entity: null,
   link: { kind: "suggestions" },
-  reasons: [
-    "field",
-    "image_description",
-    "recommendation",
-    "statement_transaction",
-    "transfer_pair",
-  ].map((family) => ({
-    key: `suggestions:${family}`,
-    label: "Pending suggestions",
-  })),
+  reasons: Object.entries({
+    field: "Pending field suggestions",
+    image_description: "Pending image descriptions",
+    recommendation: "Pending connection suggestions",
+    statement_transaction: "Pending statement transactions",
+    transfer_pair: "Pending transfer pairs",
+  }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
     const target = (field: "entityId" | "entityKind") =>
       sql`prediction.target->>${field}`;
