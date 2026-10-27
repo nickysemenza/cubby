@@ -93,7 +93,15 @@ test("RTable connection review commits the chosen Expense", async ({
   ).toMatchObject([
     { ok: true, assessmentId: proposal.review.assessmentId, applied: true },
   ]);
-  await expect.poll(saved).toMatchObject({ productId: item.id, cost: 24 });
+  await expect
+    .poll(async () => {
+      const expense = await saved();
+      return {
+        productId: fieldValueOf(expense.fields.productId),
+        cost: expense.cost,
+      };
+    })
+    .toMatchObject({ productId: item.id, cost: 24 });
 });
 
 test("Purchase title column exposes inverse acquisition review", async ({

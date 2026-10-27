@@ -55,23 +55,27 @@ test("unclassified Expense explains its role gap and resolution preserves money"
     lineKind: "principal",
   });
   expect(resolved.ok(), await resolved.text()).toBe(true);
-  const stored = await readExpense(
-    page,
-    item.id,
-    expenseOut.pick({ cost: true }).extend({
-      fields: expenseOut.shape.fields.pick({
-        lineKind: true,
-        dataQuality: true,
+  const readStored = () =>
+    readExpense(
+      page,
+      item.id,
+      expenseOut.pick({ cost: true }).extend({
+        fields: expenseOut.shape.fields.pick({
+          lineKind: true,
+          dataQuality: true,
+        }),
       }),
-    }),
-  );
+    );
+  const stored = await readStored();
   expect(stored.cost).toBe(-2.13);
   expect(fieldValueOf(stored.fields.lineKind)).toBe("principal");
-  const quality = fieldValueOf(stored.fields.dataQuality);
-  if (!quality) throw new Error("Updated Expense quality result missing");
-  expect(quality.gaps.map((gap) => gap.check)).not.toContain(
-    "expense_receipt_role",
-  );
+  await expect
+    .poll(async () => {
+      const quality = fieldValueOf((await readStored()).fields.dataQuality);
+      if (!quality) throw new Error("Updated Expense quality result missing");
+      return quality.gaps.map((gap) => gap.check);
+    })
+    .not.toContain("expense_receipt_role");
 });
 
 // Pending inference must not block the Product assignment that establishes principal.
