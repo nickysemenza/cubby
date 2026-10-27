@@ -84,7 +84,13 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`server/entity-kernel/repo/repository.ts`). `createEntityRowFetcher(table)`
   owns full stored-row reads by ID with the live-row predicate; audited updates
   use the same selection. Keep custom projections and relation-loaded fetches
-  in their owning repository. `declaredFilterPredicates` /
+  in their owning repository. `compileDeclaredFilters`
+  (`server/generic/list/repo/declared-filters.ts`) compiles any declared
+  list's filters over a column resolver; a list over a SQL relation declares
+  itself with `defineRelationList` (`@cubby/schemas/relation-list`) and its
+  route search with `relationListSearch`. Work queue rows come from a domain's
+  `WorkSource` (`server/generic/work-queue/repo/work-source.ts`,
+  `selectWorkCandidates`). `declaredFilterPredicates` /
   `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
   explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined

@@ -2324,26 +2324,28 @@ There are no per-filter meta-options (`all`, `either`), boolean AND/OR/NOT
 trees, cross-filter OR, or typed search syntax: any-of, Match all, and Exclude
 cover household questions, and a rare cross-filter one is a second query or
 the agent's. Calendar sources reuse their entity list scaffolds, including
-prepared derived predicates and related scopes. Work queue declares its
-computed-row filters and grouping through `defineSourceList`; it retains its
-staged SQL population rather than inventing a storage entity.
-`defineSourceList` declares static choice options and named declaration rosters
-alongside each filter; cell labels and filter choices consume the same owners.
+prepared derived predicates and related scopes.
 A filter whose column differs from its request key declares `field`; `urlKey`
 controls only the URL codec and does not rename the compiled input.
-Its multiselects declare `<columnId>Exclude` by default and use the ordinary
-`FILTER_NOT_PREFIX` URL codec. Work queue compiles include/exclude through one
-predicate helper, negating exclusions with `NOT COALESCE((…), false)`.
-Reason uses each row's `reasonKeys`: branch keys, Problem definition keys, or
-one membership per failing gap check. The routed population applies Reason
-before counts and paging, without trimming displayed gap messages. Only an
-include composed entirely of gap-view checks prunes gap views and skips
-non-gap branches; mixed includes and exclusions retain the combined population.
-The former `check` input and URL key are removed without an alias. Awaiting
-posting has distinct branch keys prefixed with `awaiting_posting:`. Type's
-no-value choice selects Problem rows through `entityPresence`.
 RTable checks a bounded loaded sample in development for multiselect values
 missing from declared choices, skipping deferred and record-backed rosters.
+
+### Declared lists over a relation
+
+A list over a SQL relation rather than one entity table — the Work queue's
+union of Work sources, each Suggestion family — declares itself with
+`defineRelationList` (`packages/schemas/src/relation-list.ts`): filters
+(`text`, `multiselect`, `idMulti`, `boolean`, `range`; a `text[]` column with
+`array: true` compiles to overlap), sorts, Group by choices, saved views and
+page size ([ADR 0023](adr/0023-lists-are-declared-over-a-relation.md)). It
+derives the same URL codec specs as an entity declaration (`<col>Exclude`,
+`<col>Presence`, range bounds, `@me`), a strict typed input schema, and the
+compiler descriptors that `compileDeclaredFilters`
+(`server/generic/list/repo/declared-filters.ts`) turns into Drizzle predicates
+over any column resolver; entity lists compile through the same function. A
+web route derives its search schema with `relationListSearch(list)`, so no
+route hand-lists filter params. A reference filter's options come from the
+generic entity roster; static options live on the declaration.
 
 ### Calendar list presentations
 
@@ -3383,32 +3385,32 @@ The Research queue ([terminology](guide/terminology.md#purchase-research)) is no
 `dataGaps` to the checks research can close and sort by `dataQuality`
 ascending. A durable `DataException` closes the gap until explicitly cleared.
 
-The dedicated `/work-queue` page combines those predicates with interactive
-Problems, Email attention, findings and account work. It derives a filterable
-Waiting for column from current source/account authority, with Either for
-shared research and unresolved for missing private ownership. Its filter is
-any-of: Me (mine or Either), Either, a member (routed to them only), and No
-value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity_read.for_member`
-uses the connected member implicitly and filters eligibility before counts
-and paging; the household UI's routing filters do not grant private access.
+The dedicated `/work-queue` page composes those predicates with Problems,
+Email attention, findings, Suggestions and account work as Work sources
+([work queue](guide/work-queue.md)). Each domain exports its sources from
+`server/domains/<domain>/repo/work-sources.ts`; `server/domains/work` composes
+them explicitly (ADR 0019 forbids a registry) and `server/generic/work-queue`
+imports no domain module. A source's candidate select projects the shared row
+shape through `selectWorkCandidates` (`source`, `entity`, `id`, `name`, `key`,
+`family`, `executor`, `reason`, `reason_keys`, `owners`, `shared`, `amount`,
+`date`), with any shared CTEs it reads deduplicated by name. This is a read
+projection, not a new entity or assignment ledger. An MCP read fences to
+shared work and work owned only by the connected member before counts and
+paging; the household UI's Owner filter grants no private access.
 
-`workQueueList` owns the computed source's filter and grouping declarations.
-Type, Waiting for, Source, Kind, Vendor and Next action can group; Check, Date
-and Amount carry unsupported reasons. Group keys are filter values, with absent
-values last. Filter to this uses the declared filter when it selects exactly the
-section; Next action and member-specific routing sections have no exact filter
-adapter. Grouping never moves source filters, routing, or the view predicate
-across the population stages: view counts are computed before the active view.
+`workQueueList` is the queue's [relation list](#declared-lists-over-a-relation):
+Type, Owner, Family, Executor and Reason filter it; Type, Owner, Family,
+Executor and Reason group it; Date and Amount carry unsupported reasons. Group
+keys are filter values with absent values last, and Owner sections have no
+exact filter because a member's filter also matches shared work. Saved views
+(Automatic, Agent, Review, Waiting, Problems) are `{key, label, filters}` over
+those filters (ADR 0022); view counts are computed in the same pass before the
+active view applies.
 
-The shared population query materializes routed candidates within each SQL
-statement, after source/kind/vendor narrowing and before eligibility/search. This keeps
-search selectivity from turning bulk quality joins into repeated nested-loop
-work; it is not a cache across requests. Only typed facts required by the
-requested sorts or vendor filter are projected across the population. Other amount/date/vendor facts use
-the same record-fact declarations after page selection. Full eligible counts
-remain independent of the page; the correct filter and stable sort precede
-LIMIT/OFFSET, and only selected rows receive the window position used for JSON
-order. Quality and display-image hydration remain page-scoped.
+The engine materializes the admitted sources' union once per statement, after
+pruning sources a reason filter or record scope cannot admit and before
+filters, search and the view. The correct filter and stable sort precede
+LIMIT/OFFSET; quality gaps and display images are hydrated for the page only.
 
 Run attention candidates join their current member and source account once in
 the candidate relation. They share the same authority expression with scalar

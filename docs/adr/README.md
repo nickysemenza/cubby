@@ -30,3 +30,4 @@ rewriting its decision.
 | [0020](0020-cache-routed-ci.md)                               | Start every Linux lane and let the cache route                         |
 | [0021](0021-derived-values.md)                                | Derived values: one declaration, one cache, one drain                  |
 | [0022](0022-named-groupings-are-saved-views.md)               | Named groupings use saved views and Locations                          |
+| [0023](0023-lists-are-declared-over-a-relation.md)            | Lists are declared over a relation                                     |

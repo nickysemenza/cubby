@@ -36,6 +36,13 @@ or this other member".
   layer leaves `@me` in place and the Work queue repository reads it, while
   a member code, including the reader's own, stays member-only.
 
+- Amended (ADR 0023): no filter is exempt from kernel resolution. The Work
+  queue's `waitingFor` is renamed `owner`, and shared work lists every member
+  as an owner, so `owner: [@me]` resolved to the reader's shortcode already
+  matches shared work. The `repositoryCurrentMember` registry, the `either`
+  token and the queue's member-only read path are deleted; an MCP read is
+  fenced to shared work and the connected member's own work.
+
 ## Consequences
 
 - A saved view stays active and portable: each member applying it gets their
