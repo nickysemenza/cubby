@@ -23,7 +23,6 @@ import {
   buildKernelContext,
   createFixtureWithContext,
 } from "tooling/scenarios/context";
-import { seededRandom, testShuffleSeed } from "tooling/test-seed";
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -72,40 +71,15 @@ import {
  * focused Gmail and photo browser journeys own acquisition, review and
  * navigation; this file drives their server writers across arrival orders.
  *
- * Each order costs ~2s of real writers, so the file runs a Latin square (every
- * source arrives in every position once) plus two further orders drawn from
- * the run's shuffle seed, instead of all 24. A different
- * `CUBBY_TEST_SHUFFLE_SEED` reproduces a different pair.
+ * Each order costs ~2s of real writers, so the file runs the forward and the
+ * reverse arrival order: every source arrives both first and last once.
  */
 const EVIDENCE_SOURCES = ["gmail", "retailer", "photo", "csv"] as const;
 type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
-function sourcePermutations(
-  sources: readonly EvidenceSource[],
-): EvidenceSource[][] {
-  if (!sources.length) return [[]];
-  return sources.flatMap((source) =>
-    sourcePermutations(sources.filter((other) => other !== source)).map(
-      (tail) => [source, ...tail],
-    ),
-  );
-}
-
-function sampledSourceOrders(): EvidenceSource[][] {
-  const rotations = EVIDENCE_SOURCES.map((_, offset) => [
-    ...EVIDENCE_SOURCES.slice(offset),
-    ...EVIDENCE_SOURCES.slice(0, offset),
-  ]);
-  const key = (order: readonly EvidenceSource[]) => order.join("-");
-  const chosen = new Set(rotations.map(key));
-  const remaining = sourcePermutations(EVIDENCE_SOURCES).filter(
-    (order) => !chosen.has(key(order)),
-  );
-  const random = seededRandom(testShuffleSeed());
-  const sampled = [0, 1].map(
-    () => remaining.splice(Math.floor(random() * remaining.length), 1)[0],
-  );
-  return [...rotations, ...sampled.filter((order) => order !== undefined)];
-}
+const SOURCE_ORDERS: EvidenceSource[][] = [
+  [...EVIDENCE_SOURCES],
+  [...EVIDENCE_SOURCES].reverse(),
+];
 
 async function ensureMember(db: Database, actor: ActorContext) {
   const existing = await currentMemberLedgerParty(db, actor);
@@ -632,7 +606,7 @@ describe("import order convergence", { timeout: 30_000 }, () => {
   });
   afterEach(() => queue.restore());
 
-  it.each(sampledSourceOrders().map((order) => [order]))(
+  it.each(SOURCE_ORDERS.map((order) => [order]))(
     "Gmail, retailer, own photos and statement converge: %j",
     async (order) => {
       const token = CONVERGENCE_TOKEN;

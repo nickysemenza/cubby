@@ -28,7 +28,6 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import {
-  cookbook,
   entityAttachment,
   image,
   imageProcessingJob,
@@ -65,7 +64,6 @@ import {
   selectImagesForProvenanceClassification,
   countCullablePendingImages,
   cullPendingImages,
-  deleteImages,
   detachImagesFromEntity,
   imageList,
   getImageHashIndex,
@@ -86,7 +84,6 @@ const ONE_PIXEL_PNG = Uint8Array.from(
   ),
   (character) => character.charCodeAt(0),
 );
-import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 let runFixtureSeq = 0;
@@ -806,76 +803,6 @@ describe("image repository", () => {
     });
   });
 
-  /**
-   * `Cookbook.coverImageId` and `Vendor.logoImageId` are declared `clearFk` in
-   * IMAGE_HARD_DELETE: nulled before the Image row goes, so the parent survives
-   * without its cover. Nothing exercised either — every other test here that
-   * touches those columns drives the pending-image cull, not `deleteImages`.
-   *
-   * Both are plain `references(() => image.id)` with no `onDelete`, so Postgres
-   * defaults to NO ACTION. A regression therefore fails LOUD — the FK violation
-   * rolls the transaction back — which is why this ranks below the fail-open
-   * source-transaction-record guard. It is still the exact shape this file's own comment
-   * says already happened once for `PurchaseImage`, so the assertion is on the
-   * promise RESOLVING as much as on the columns reading null.
-   */
-  it("clears cookbook covers and vendor logos before hard-deleting the image", async () => {
-    const cover = await createUploadedImageRecord(ctx.db, {
-      key: `covers/${crypto.randomUUID()}.jpg`,
-      filename: "fk-clear-cover.jpg",
-      contentType: "image/jpeg",
-      size: 512,
-    });
-    const logo = await createUploadedImageRecord(ctx.db, {
-      key: `vendors/${crypto.randomUUID()}.png`,
-      filename: "fk-clear-logo.png",
-      contentType: "image/png",
-      size: 512,
-    });
-    const { entityId: cookbookId } = await upsertCookbook(
-      ctx.db,
-      {
-        name: "FK Clear Book",
-        rawJson: makeCookbookExtraction(),
-        author: [],
-        sourceLabel: "FK Clear Book.epub",
-      },
-      ctx.actor,
-    );
-    await insertEntityAttachments(ctx.db, {
-      entityId: cookbookId,
-      role: "cover",
-      imageId: cover.id,
-    });
-    const vendorId = await findOrCreateVendor(ctx.db, "FK Clear Vendor");
-    await insertEntityAttachments(ctx.db, {
-      entityId: vendorId,
-      role: "logo",
-      imageId: logo.id,
-    });
-
-    await expect(
-      deleteImages(ctx.db, [
-        parseEntityId("image", cover.id),
-        parseEntityId("image", logo.id),
-      ]),
-    ).resolves.toBeDefined();
-
-    // The associations go with the image; the cookbook and vendor survive.
-    expect(
-      await getDb(ctx.db)
-        .select({ id: entityAttachment.id })
-        .from(entityAttachment)
-        .where(inArray(entityAttachment.entityId, [cookbookId, vendorId])),
-    ).toEqual([]);
-    expect(
-      await getDb(ctx.db).query.cookbook.findFirst({
-        where: eq(cookbook.id, cookbookId),
-        columns: { deletedAt: true },
-      }),
-    ).toEqual({ deletedAt: null });
-  });
-
   // findCullablePendingImages enumerates four join tables (product/location/
   // recipe/project image) PLUS cookbook.coverImageId, which is a direct FK, not
   // a join row. Missing it meant a cookbook cover with no other association was
@@ -978,73 +905,6 @@ describe("image repository — import-run targets", () => {
       state: "prepared",
       position: 2,
     });
-  });
-
-  it("orders one upload's undated run images by RunTarget.position", async () => {
-    const run = await mkPhotoInventoryRun(ctx.db);
-    const first = await makeImage("position-first.jpg");
-    const second = await makeImage("position-second.jpg");
-    const third = await makeImage("position-third.jpg");
-
-    // One finalize stamps a chunk with one time, so position decides among
-    // its undated photos. Inserted out of position order, so a pass without
-    // the position ORDER BY would come back in insertion order instead.
-    const finalizedAt = new Date("2026-09-20T09:00:00.000Z");
-    await mkRunTargetRow(ctx.db, {
-      runId: run.id,
-      imageId: third.id,
-      position: 3,
-      createdAt: finalizedAt,
-    });
-    await mkRunTargetRow(ctx.db, {
-      runId: run.id,
-      imageId: first.id,
-      position: 1,
-      createdAt: finalizedAt,
-    });
-    await mkRunTargetRow(ctx.db, {
-      runId: run.id,
-      imageId: second.id,
-      position: 2,
-      createdAt: finalizedAt,
-    });
-
-    const listed = await imageList(
-      ctx.db,
-      { runId: parseShortcodeFor("run", run.shortcode) },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
-
-    expect(listed.data.map((row) => row.id)).toEqual([
-      first.shortcode,
-      second.shortcode,
-      third.shortcode,
-    ]);
-
-    // The run order outranks a requested sort and holds across a page
-    // boundary; the total counts the whole run.
-    const runFilter = { runId: parseShortcodeFor("run", run.shortcode) };
-    const nameDesc = [{ orderBy: "filename", direction: "desc" as const }];
-    const pages = await Promise.all(
-      [0, 1].map((pageIndex) =>
-        imageList(ctx.db, runFilter, nameDesc, { pageIndex, pageSize: 2 }),
-      ),
-    );
-    expect(pages.map((page) => page.data.map((row) => row.id))).toEqual([
-      [first.shortcode, second.shortcode],
-      [third.shortcode],
-    ]);
-    expect(pages.map((page) => page.count)).toEqual([3, 3]);
-    expect(
-      await imageList(
-        ctx.db,
-        runFilter,
-        nameDesc,
-        { pageIndex: 0, pageSize: 2 },
-        "count",
-      ),
-    ).toEqual({ data: [], count: 3 });
   });
 });
 

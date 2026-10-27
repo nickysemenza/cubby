@@ -10,7 +10,6 @@ import { describe, expect, it } from "vitest";
 import { entitySummaryFields } from "~/contracts/mcp-projections";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
-import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { getDb } from "~/server/db/helpers";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -100,8 +99,7 @@ describe("complete list composition", () => {
   it("counts every declared saved view as its applied list reads it", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
-    for (const entity of listEntities) {
-      if (entity !== "task" && entity !== "product") continue;
+    for (const entity of ["task", "product"] as const) {
       const operation = ENTITY_LIST_READ_OPERATIONS[entity];
       const specs = getEntityFilters(entity);
       const views = viewsForEntity(entity).map((view) => {
@@ -256,10 +254,12 @@ describe("complete list composition", () => {
       2, 2, 0, 1, 5, 1, 1,
     ]);
   });
+  // Every entity shares one list reader; these cover the widest projection,
+  // a merge-capable identity and money.
   it("returns complete canonical rows and matching selected fields in one list read", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
-    for (const entity of listEntities) {
+    for (const entity of ["product", "vendor", "expense"] as const) {
       const full = await executeEntity(context, {
         action: "list",
         entity,

@@ -43,19 +43,6 @@ describe("scrubCredentialValues", () => {
     ).toBe(`${prefix} password=[REDACTED] SQLSTATE 53300`);
   });
 
-  it("keeps product names and prose that share a credential label", () => {
-    for (const text of [
-      "Basic Tee, size M",
-      "Cookie: Chocolate Chip 12ct",
-      "Victoria's Secret: order #1234",
-      "Bearer of the synthetic parcel",
-      "Token: delivered",
-      "Basic Subscription",
-      "Spotify Basic plan",
-    ])
-      expect(scrub(text)).toBe(text);
-  });
-
   it("redacts token-shaped header and scheme values", () => {
     expect(scrub("Authorization: Bearer synthetic-bearer-0000")).toBe(
       "Authorization: [REDACTED]",

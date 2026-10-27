@@ -38,7 +38,6 @@
   "apps/web/src/server/domains/vendor/repo/vendor.ts": 1,
   "apps/web/src/server/generic/search/service/search-grouping.service.ts": 5,
   "apps/web/tooling/convergence-harness.ts": 2,
-  "apps/web/tooling/database-socket-lifecycle.integration.test.ts": 4,
   "apps/web/src/server/domains/vendor-account/repo/vendor-account.ts": 1,
   "apps/web/src/server/domains/product/repo/upc-lookup-cache.ts": 1,
   "apps/web/src/server/domains/cookbook/repo/cookbook-source-count.ts": 2,

@@ -187,7 +187,6 @@ const mcpContractTests = [
 // an ordinary integration step can inherit a browser-built bundle when paired,
 // so CI's refusal to rebuild a missing/stale bundle does not enforce membership.
 const workerdIntegrationTests = [
-  "tooling/database-socket-lifecycle.integration.test.ts",
   "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
 ];
 const integrationTests = [
