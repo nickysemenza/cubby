@@ -1,0 +1,19 @@
+apps/web/src/entity/filters.unit.test.ts
+  s_77bdb89dbc0fc6::t_9ddad93365bf58 2,4-6,40-41,50,53,57,62-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "fd78d992617f4d50d18f059d508907e1097fafbb",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
