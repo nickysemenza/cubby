@@ -59,7 +59,7 @@ import {
 import { findPgError } from "~/server/errors/db-errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { JobSupersededError } from "../errors";
+import { JobRetryableError, JobSupersededError } from "../errors";
 import {
   jobKindPolicy,
   neverExhaustedRetryDelayMs,
@@ -491,8 +491,11 @@ async function admitJobKind(
   if (!admission.rows[0]?.locked) return false;
   const [live] = await getDb(tx)
     .select({
-      count: sql<number>`count(*)::int`,
-      otherPages: sql<number>`(count(DISTINCT ${job.leaseToken}) FILTER (WHERE ${job.leaseToken} <> ${pageToken ?? null}::uuid))::int`,
+      count:
+        kind === "ai.evaluation"
+          ? sql<number>`count(DISTINCT coalesce(${job.admissionToken}, ${job.leaseToken})) FILTER (WHERE coalesce(${job.admissionToken}, ${job.leaseToken}) IS DISTINCT FROM ${pageToken ?? null}::uuid)::int`
+          : sql<number>`count(*)::int`,
+      otherPages: sql<number>`(count(DISTINCT coalesce(${job.admissionToken}, ${job.leaseToken})) FILTER (WHERE coalesce(${job.admissionToken}, ${job.leaseToken}) <> ${pageToken ?? null}::uuid))::int`,
     })
     .from(job)
     .where(
@@ -592,8 +595,8 @@ const fairlyOrderedDueJobs = (
     FROM due GROUP BY kind
   ), capacity AS MATERIALIZED (
     SELECT backlog.kind,
-      CASE WHEN policy.cap IS NULL THEN NULL ELSE greatest(0, policy.cap - count("Job".id)) END AS remaining,
-      count(DISTINCT "Job"."leaseToken") < coalesce(policy.pages, ${JOB_BACKGROUND_SHARE.maxInFlightPages}) AS page_available
+      CASE WHEN policy.cap IS NULL THEN NULL ELSE greatest(0, policy.cap - CASE WHEN backlog.kind = 'ai.evaluation' THEN count(DISTINCT coalesce("Job"."admissionToken", "Job"."leaseToken")) ELSE count("Job".id) END) END AS remaining,
+      count(DISTINCT coalesce("Job"."admissionToken", "Job"."leaseToken")) < coalesce(policy.pages, ${JOB_BACKGROUND_SHARE.maxInFlightPages}) AS page_available
     FROM backlog LEFT JOIN (VALUES ${sql.join(
       kindLimits.map(
         ({ kind, cap, pages }) =>
@@ -638,7 +641,9 @@ const fairlyOrderedDueJobs = (
         AND due.run_owned = lane.run_owned AND due.cap_exempt = lane.cap_exempt
       ORDER BY priority DESC, "updatedAt", "availableAt", id
       LIMIT CASE WHEN lane.cap_exempt THEN ${perKind}
-        WHEN NOT capacity.page_available THEN 0 ELSE least(${perKind}, capacity.remaining) END
+        WHEN NOT capacity.page_available THEN 0
+        WHEN backlog.kind = 'ai.evaluation' AND capacity.remaining > 0 THEN ${perKind}
+        ELSE least(${perKind}, capacity.remaining) END
     ) candidate
   ), feature_ranked AS (
     SELECT *, row_number() OVER (
@@ -652,7 +657,9 @@ const fairlyOrderedDueJobs = (
         AND feature_ranked.run_owned=lane.run_owned AND feature_ranked.cap_exempt=lane.cap_exempt
       ORDER BY feature_position, feature_last_served NULLS FIRST, priority DESC, "updatedAt", "availableAt", id
       LIMIT CASE WHEN lane.cap_exempt THEN ${perKind}
-        WHEN NOT capacity.page_available THEN 0 ELSE least(${perKind}, capacity.remaining) END
+        WHEN NOT capacity.page_available THEN 0
+        WHEN backlog.kind = 'ai.evaluation' AND capacity.remaining > 0 THEN ${perKind}
+        ELSE least(${perKind}, capacity.remaining) END
     ) candidate
   ), ranked AS (
     SELECT *, row_number() OVER (
@@ -675,37 +682,6 @@ const backfillReserve = (limit: number, backfill: number) =>
   Math.min(backfill, Math.ceil(limit * JOB_BACKFILL_SHARE));
 
 /**
- * Where the `classPosition`-th Job (1-based) of its class lands in the drain's
- * successive batches, as the number of Jobs served before it. Each batch is
- * selected like `dueJobs`: backfill keeps its reserve, run-owned work fills
- * the rest first, then backfill takes what run-owned work left.
- */
-export function drainSelectionIndex(
-  job: { runOwned: boolean; classPosition: number },
-  totals: { owned: number; backfill: number },
-  batch = JOB_DRAIN.batch,
-): number {
-  let owned = 0;
-  let backfill = 0;
-  while (owned < totals.owned || backfill < totals.backfill) {
-    const reserved = backfillReserve(batch, totals.backfill - backfill);
-    const takeOwned = Math.min(totals.owned - owned, batch - reserved);
-    const takeBackfill = Math.min(
-      totals.backfill - backfill,
-      batch - takeOwned,
-    );
-    const served = owned + backfill;
-    if (job.runOwned && job.classPosition <= owned + takeOwned)
-      return served + (job.classPosition - owned - 1);
-    if (!job.runOwned && job.classPosition <= backfill + takeBackfill)
-      return served + takeOwned + (job.classPosition - backfill - 1);
-    owned += takeOwned;
-    backfill += takeBackfill;
-  }
-  return owned + backfill;
-}
-
-/**
  * One fair batch: run-owned Jobs first, but backfill keeps
  * `JOB_BACKFILL_SHARE` of the batch whenever it has due work.
  */
@@ -715,14 +691,13 @@ export async function dueJobs(
   selection: DueJobSelection = {},
 ) {
   await stopStalledJobs(db);
-  return (await readDrainDueJobs(db, limit, selection)).selected;
+  return readDrainDueJobs(db, limit, selection);
 }
 
 async function readDrainDueJobs(
   db: Database,
   limit: number,
   selection: DueJobSelection,
-  positionIds: readonly string[] = [],
 ) {
   const seedLimit = selection.batchSizes
     ? Math.min(JOB_DRAIN.batch, limit)
@@ -739,56 +714,21 @@ async function readDrainDueJobs(
     cap_exempt: boolean;
     service_key: string;
     class_position: number;
-    owned_total: number;
-    backfill_total: number;
-    projected: boolean;
   }>(sql`${fairlyOrderedDueJobs(new Date(), perKind, selection)}
-    ${
-      positionIds.length
-        ? sql`, projection_ranked AS (
-      SELECT due.*, served.last_served, backlog.weight,
-        row_number() OVER (
-          PARTITION BY run_owned, kind ORDER BY priority DESC, "updatedAt", "availableAt", id
-        ) AS position
-      FROM due JOIN backlog USING (kind) JOIN served USING (kind)
-    ), projection_ordered AS (
-      SELECT *, row_number() OVER (
-        PARTITION BY run_owned ORDER BY ceil(position / weight), last_served NULLS FIRST, kind, position
-      ) AS class_position,
-      count(*) FILTER (WHERE run_owned) OVER () AS owned_total,
-      count(*) FILTER (WHERE NOT run_owned) OVER () AS backfill_total
-      FROM projection_ranked
-    )`
-        : sql``
-    }
-    SELECT id, kind, run_owned, cap_exempt, service_key, class_position::int,
-      0 AS owned_total, 0 AS backfill_total, false AS projected, overall
+    SELECT id, kind, run_owned, cap_exempt, service_key, class_position::int, overall
     FROM ordered
-    ${
-      positionIds.length
-        ? sql`UNION ALL
-      SELECT id, kind, run_owned, cap_exempt, service_key, class_position::int,
-        owned_total::int, backfill_total::int, true AS projected, 0 AS overall
-      FROM projection_ordered WHERE id IN (${sql.join(
-        positionIds.map((id) => sql`${parseEntityId("job", id)}::uuid`),
-        sql`, `,
-      )})`
-        : sql``
-    }
-    ORDER BY projected, overall`);
-  const pool = result.rows
-    .filter((row) => !row.projected)
-    .map((row) => ({
-      id: parseEntityId("job", row.id),
-      kind: row.kind,
-      runOwned: row.run_owned,
-      capExempt: row.cap_exempt,
-      pageKey:
-        row.kind === "ai.evaluation"
-          ? JSON.stringify([row.service_key, row.run_owned, row.cap_exempt])
-          : null,
-      classPosition: row.class_position,
-    }));
+    ORDER BY overall`);
+  const pool = result.rows.map((row) => ({
+    id: parseEntityId("job", row.id),
+    kind: row.kind,
+    runOwned: row.run_owned,
+    capExempt: row.cap_exempt,
+    pageKey:
+      row.kind === "ai.evaluation"
+        ? JSON.stringify([row.service_key, row.run_owned, row.cap_exempt])
+        : null,
+    classPosition: row.class_position,
+  }));
   const anchors = new Set<string>();
   const services = pool.filter((row) => {
     if (!row.pageKey) return true;
@@ -814,7 +754,7 @@ async function readDrainDueJobs(
       pageKey,
     }),
   );
-  return { selected, projected: result.rows.filter((row) => row.projected) };
+  return selected;
 }
 
 /** Fair seeds choose page turns; filling a batch never consumes another kind's seed. */
@@ -894,48 +834,55 @@ function widenDrainSeeds(
 }
 
 /**
- * Visible positions share the drain's candidate snapshot. The admitted selection
- * is exact; later rounds project the uncapped backlog with backfill's reserve.
+ * Page-local waiting positions: earlier due work of the same kind and Run class.
+ * Other kinds are interleaved by the drain, so this remains an estimate rather
+ * than running its global fair-order projection on every list read.
  */
 export async function dueJobPositions(
   db: Database,
   ids: readonly string[],
 ): Promise<Map<string, number>> {
   if (!ids.length) return new Map();
-  const batchSizes = new Map(
-    Object.keys(JOB_KIND_POLICY).flatMap((kind) => {
-      const size = jobKindPolicy(kind).batchSize;
-      return size === undefined ? [] : [[kind, size] as const];
-    }),
+  const result = await getDb(db).execute<{ id: string; ahead: number }>(
+    dueJobPositionsQuery(ids),
   );
-  const { selected, projected } = await readDrainDueJobs(
-    db,
-    JOB_DRAIN.pageLimit,
-    { batchSizes },
-    ids,
-  );
-  const batchSize = Math.max(
-    JOB_DRAIN.batch,
-    ...selected.map((row) => jobKindPolicy(row.kind).batchSize ?? 1),
-  );
-  const admittedPositions = new Map(
-    selected.map((row, index) => [row.id, index]),
-  );
-  return new Map(
-    projected.map((row) => [
-      row.id,
-      admittedPositions.get(parseEntityId("job", row.id)) ??
-        Math.max(
-          batchSize,
-          drainSelectionIndex(
-            { runOwned: row.run_owned, classPosition: row.class_position },
-            { owned: row.owned_total, backfill: row.backfill_total },
-            batchSize,
-          ),
-        ),
-    ]),
-  );
+  return new Map(result.rows.map((row) => [row.id, row.ahead]));
 }
+
+/**
+ * The list position statement, also used for EXPLAIN evidence. Probe the first
+ * ordered key before counting: PostgreSQL can choose a kind-only scan for the
+ * count's predicates even when the visible Job has no possible predecessors.
+ * CASE keeps that scan unexecuted at the front of the indexed kind range.
+ */
+export const dueJobPositionsQuery = (
+  ids: readonly string[],
+  now = new Date(),
+) => sql`
+    WITH visible AS MATERIALIZED (
+      SELECT id, kind, priority, "updatedAt", "availableAt", ${jobRunOwned()} AS run_owned
+      FROM "Job" WHERE ${inArray(
+        job.id,
+        ids.map((id) => parseEntityId("job", id)),
+      )}
+        AND ${drainedDue(now)}
+    )
+    SELECT visible.id, CASE
+      WHEN (-first.priority, first."updatedAt", first."availableAt", first.id)
+        >= (-visible.priority, visible."updatedAt", visible."availableAt", visible.id)
+      THEN 0 ELSE (
+      SELECT count(*)::int FROM "Job"
+      WHERE "Job".kind = visible.kind AND ${due(now)}
+        -- One row comparison in Job_kind_position_idx order is an index range
+        -- bound; the equivalent OR chain let the planner walk every same-kind Job.
+        AND (-"Job".priority, "Job"."updatedAt", "Job"."availableAt", "Job".id)
+          < (-visible.priority, visible."updatedAt", visible."availableAt", visible.id)
+        AND ${jobRunOwned()} = visible.run_owned
+    ) END AS ahead FROM visible CROSS JOIN LATERAL (
+      SELECT id, priority, "updatedAt", "availableAt" FROM "Job"
+      WHERE kind = visible.kind
+      ORDER BY -priority, "updatedAt", "availableAt", id LIMIT 1
+    ) first`;
 
 export async function dueJobsAhead(db: Database, id: string) {
   return (await dueJobPositions(db, [id])).get(id) ?? 0;
@@ -1027,6 +974,7 @@ export async function claimJob(
         waitReason: null,
         waitUntil: null,
         leaseToken: token,
+        admissionToken: token,
         leaseExpiresAt: expires,
         // A never-exhausted kind counts only reported failures: a claim, or
         // reclaiming a vanished executor's expired lease, is not an attempt.
@@ -1077,6 +1025,8 @@ export async function claimJobPage(
   if (!Number.isFinite(leaseMs) || leaseMs <= 0)
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();
+  // Admission is page-scoped; publication authority remains per target.
+  const admissionToken = crypto.randomUUID();
   return withTransactionDatabase(db, async (tx) => {
     const selected = await getDb(tx)
       .select({
@@ -1165,6 +1115,7 @@ export async function claimJobPage(
         waitReason: null,
         waitUntil: null,
         leaseToken: sql`page.token`,
+        admissionToken,
         leaseExpiresAt: new Date(now.getTime() + leaseMs),
         attempts: sql`page.attempts`,
         generation: sql`${job.generation} + CASE WHEN page.restart THEN 1 ELSE 0 END`,
@@ -1525,6 +1476,94 @@ export async function publishJobPage(
   });
 }
 
+/** Completed batch pages share source publication and retain every individual lease fence. */
+export async function publishCompletedJobPages(
+  db: Database,
+  entries: readonly { claim: JobClaim; page: JobPage }[],
+  publish: (tx: Database, ids: ReadonlySet<string>) => Promise<void>,
+): Promise<ReadonlySet<string>> {
+  for (const { page } of entries)
+    if (!jobPage.parse(page).done)
+      throw new Error("Batch publication requires completed pages");
+  return withTransactionDatabase(db, async (tx) => {
+    const read = () =>
+      getDb(tx)
+        .select({
+          row: job,
+          invalidated: sql<boolean>`EXISTS (SELECT 1 FROM ${jobInvalidationCapture} c
+        JOIN ${jobInvalidation} i ON i.key=c.key
+        WHERE c.key=${outer(job.key)} AND NOT c.observed AND i."restartsPass")`,
+        })
+        .from(job)
+        .where(
+          inArray(
+            job.id,
+            entries.map(({ claim }) => claim.id),
+          ),
+        )
+        .orderBy(job.id)
+        .for("update");
+    const current = new Map(
+      (await read()).map(({ row, invalidated }) => [
+        row.id,
+        { row, invalidated },
+      ]),
+    );
+    const active = entries.filter(({ claim }) => {
+      const found = current.get(claim.id);
+      if (!found || !ownsLease(found.row, claim)) return false;
+      if (found.row.generation !== claim.generation || found.invalidated)
+        throw new JobSupersededError();
+      return true;
+    });
+    const ids = new Set(active.map(({ claim }) => claim.id));
+    if (!ids.size) return ids;
+    await publish(tx, ids);
+    await repositoryBeforeCommit(
+      tx,
+      async (commit) => {
+        const latest = new Map(
+          (await read()).map(({ row, invalidated }) => [
+            row.id,
+            { row, invalidated },
+          ]),
+        );
+        for (const { claim } of active) {
+          const found = latest.get(claim.id);
+          if (
+            !found ||
+            !ownsLease(found.row, claim) ||
+            found.row.generation !== claim.generation ||
+            found.invalidated
+          )
+            throw new JobSupersededError();
+        }
+        const records = JSON.stringify(
+          active.map(({ claim, page }) => ({
+            id: claim.id,
+            cursor: page.cursor ?? null,
+            result: page.result ?? null,
+            availableAt: (
+              page.waitUntil ??
+              page.availableAt ??
+              new Date()
+            ).toISOString(),
+          })),
+        );
+        await commit.execute(sql`UPDATE "Job" j SET state=${jobState.enum.completed}, cursor=p.cursor,
+        result=CASE WHEN jsonb_typeof(j.result)='object' AND jsonb_typeof(p.result)='object'
+          THEN j.result || p.result ELSE coalesce(p.result,j.result) END,
+        "availableAt"=p."availableAt", "waitReason"=NULL, "waitUntil"=NULL,
+        "leaseToken"=NULL, "leaseExpiresAt"=NULL, attempts=0, error=NULL, "updatedAt"=now()
+        FROM jsonb_to_recordset(${records}::jsonb) p(id uuid,cursor jsonb,result jsonb,"availableAt" timestamp)
+        WHERE j.id=p.id`);
+      },
+      { phase: "publication" },
+    );
+    return ids;
+  });
+}
+
 export async function failJob(
   db: Database,
   claim: JobClaim,
@@ -1560,18 +1599,24 @@ export async function failJob(
     return;
   }
   const { retry } = jobKindPolicy(claim.kind);
+  const transient = error instanceof JobRetryableError;
   // A never-exhausted kind counts this reported failure here, not at claim.
   const failures = retry.exhaust ? claim.attempts : claim.attempts + 1;
   await getDb(db)
     .update(job)
     .set({
       state:
+        !transient &&
         retry.exhaust &&
         claim.recoveryTimeoutMs === null &&
         claim.attempts >= claim.maxAttempts
           ? "failed"
           : "retry_wait",
       attempts: failures,
+      // Claims enforce the budget too; a transient failure reserves its next attempt.
+      ...(transient
+        ? { maxAttempts: Math.max(claim.maxAttempts, failures + 1) }
+        : {}),
       availableAt: new Date(
         Date.now() +
           (retry.exhaust

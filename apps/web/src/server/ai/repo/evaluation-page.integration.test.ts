@@ -380,6 +380,7 @@ describe("finite AI evaluation pages", () => {
     const badPreparation = targets[0]!.evaluation.id;
     const stale = targets[1]!.evaluation.id;
     const adapter: EvaluationPageAdapter<null, null> = {
+      operation: "product-identity",
       prepare: async (_db, entries) =>
         entries.map((target) =>
           target.evaluation.id === badPreparation
@@ -498,6 +499,7 @@ describe("finite AI evaluation pages", () => {
     const waiting = targets[0]!;
     const until = new Date(Date.now() + 60_000);
     const adapter: EvaluationPageAdapter<null, null> = {
+      operation: "product-identity",
       prepare: async (_db, entries) =>
         entries.map((target) => ({
           kind: "ready",

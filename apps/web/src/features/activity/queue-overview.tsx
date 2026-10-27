@@ -10,30 +10,26 @@ import {
 } from "@cubby/schemas/job";
 import { jobFilters, jobOut } from "@cubby/schemas/job-entity";
 import { countLabel } from "@cubby/shared/pluralize";
-import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { toast } from "sonner";
 
-import type {
-  JobSetFilter,
-  QueueHealthSnapshot,
-} from "~/contracts/job.contract";
+import type { JobSetFilter } from "~/contracts/job.contract";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import type {
   BaseListRow,
   UseEntityListReturn,
 } from "~/entity/hooks/use-entity-list";
+import { WorkFeed } from "~/features/activity/work-feed";
 import { JobLogPanel } from "~/features/job/job-diagnostics";
+import { derived } from "~/integrations/tanstack-query/generated/catalog/derived.gen";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
-import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { roundTo } from "~/lib/round-to";
 import { DerivedBacklogOverview } from "~/ui/derived/backlog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Badge } from "~/ui/primitives/badge";
 import { Button } from "~/ui/primitives/button";
 import { StatusText } from "~/ui/primitives/status-text";
 
@@ -46,37 +42,6 @@ export type QueueSearch = {
   attention?: boolean | undefined;
   page?: number | undefined;
 };
-function QueueHealthNotice({
-  health,
-}: {
-  health: QueueHealthSnapshot | null | undefined;
-}) {
-  if (!health?.alerts.length) return null;
-  return (
-    <div className="grid gap-1.5" data-testid="queue-health">
-      <Row gap="sm" align="center" wrap>
-        <Badge variant="destructive">
-          <WarningIcon aria-hidden className="size-3" />
-          Queue unhealthy · {countLabel(health.alerts.length, "alert")}
-        </Badge>
-        <span className="text-xs text-muted-foreground">
-          Measured {formatRelative(health.measuredAt)}
-          {health.imageDisagreement
-            ? ` · ${formatCount(health.imageDisagreement)} image rows disagree with their Job`
-            : ""}
-        </span>
-      </Row>
-      <ul className="grid gap-0.5 font-mono text-xs/4.5 text-destructive">
-        {health.alerts.map((alert) => (
-          <li key={`${alert.kind ?? "all"}:${alert.code}`}>
-            {alert.kind ?? "all kinds"} · {alert.code}: {alert.evidence}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 const formatEta = (seconds: number) => {
   const minutes = Math.max(1, Math.round(seconds / 60));
   if (minutes < 60) return `${minutes} min`;
@@ -270,6 +235,7 @@ function JobActions({ list }: { list: UseEntityListReturn<BaseListRow> }) {
 
 const RUN_COLUMNS = [
   "name",
+  "workProgress",
   "purpose",
   "status",
   "waitingOn",
@@ -310,6 +276,31 @@ const JOB_DETAIL = {
   ),
 };
 
+/** Values that waited this long are worth a breakdown; a burst that clears sooner is not. */
+const DERIVED_BREAKDOWN_AFTER_SECONDS = 60;
+
+/**
+ * The breakdown appears after a minute of waiting. Loading and read failures
+ * stay visible independently of that threshold; "Now" owns routine pace.
+ */
+function DerivedBacklogSection() {
+  const backlog = useQuery({
+    ...derived.backlog.queryOptions({}),
+    refetchInterval: 15_000,
+  });
+  if (
+    !backlog.isPending &&
+    !backlog.isError &&
+    (backlog.data?.oldestWaitingSeconds ?? 0) < DERIVED_BREAKDOWN_AFTER_SECONDS
+  )
+    return null;
+  return (
+    <Section headingAs="h2" title="Derived values" id="derived-values">
+      <DerivedBacklogOverview />
+    </Section>
+  );
+}
+
 export function QueueOverview({
   search,
   onSearchChange,
@@ -341,12 +332,22 @@ export function QueueOverview({
   );
   return (
     <Stack gap="lg">
-      <QueueHealthNotice health={health.data?.snapshot} />
       <DeviceBacklogNotice />
-      <QueueSummary search={search} onSearchChange={onSearchChange} />
-      <Section headingAs="h2" title="Derived values" id="derived-values">
-        <DerivedBacklogOverview />
-      </Section>
+      <WorkFeed
+        health={health.data?.snapshot}
+        healthUnknown={
+          health.isPending || health.isError || !health.data?.snapshot
+        }
+        onShowJobs={(kind) =>
+          onSearchChange({
+            kind,
+            lane: undefined,
+            reason: undefined,
+            page: undefined,
+          })
+        }
+      />
+      <DerivedBacklogSection />
       <Section headingAs="h2" title="Runs needing attention">
         <EmbeddedEntityList
           entity="run"
@@ -359,6 +360,7 @@ export function QueueOverview({
         />
       </Section>
       <Section headingAs="h2" title="Jobs" id="queue-jobs">
+        <QueueSummary search={search} onSearchChange={onSearchChange} />
         <EmbeddedEntityList
           key={JSON.stringify(filters)}
           entity="job"

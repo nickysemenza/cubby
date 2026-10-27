@@ -356,6 +356,9 @@ export function settleDecisionWorkItems<T, V>(
   work: (item: T) => Promise<V>,
   concurrency = 4,
 ) {
+  // Nested pair evaluations must join the owning page's wave; opening another
+  // batch here dispatches one request per source despite shared usage groups.
+  if (decisionWork.getStore()) return Promise.allSettled(items.map(work));
   return settleDecisionWork<
     T,
     {

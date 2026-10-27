@@ -19,17 +19,23 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { z } from "zod";
 
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { PENDING_AI_STATES } from "~/server/ai/repo/ai-evaluation-requests";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import { entityIdentity, run, aiEvaluation } from "~/server/db/schema";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
+import { entityIdentity, job, run, aiEvaluation } from "~/server/db/schema";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
 import {
   connectionDiscoveryFingerprint,
   connectionDiscoveryFingerprints,
+  connectionDiscoveryFingerprintsOrMissing,
 } from "~/server/domains/connection/repo/discovery-fingerprint";
 
 import {
@@ -221,43 +227,75 @@ export async function prepareConnectionDiscoveryRoster(
     createRun: (tx: Database, replacing: RunId | null) => Promise<RunId>;
   },
 ) {
-  const page = await connectionRosterTargets(db, input);
-  // A cancelled or failed Run in the cursor never receives more work.
-  const current = input.runId && (await runIsActive(db, input.runId));
-  // Keep the stopped owner's identity across pages that admit nothing, or a
-  // later page would reopen the original key and resolve the stopped Run.
-  let stopped = current ? null : (input.runId ?? input.replacing ?? null);
-  let runId = current ? input.runId : null;
-  if (!runId && (await hasAdmissibleTarget(db, page.targets)))
-    // An idempotent open can return a Run stopped since it was created, also
-    // one the cursor never saved; continue after it under its next key.
-    for (let open = 0; open < 3 && !runId; open++) {
-      const opened = await input.createRun(db, stopped);
-      if (await runIsActive(db, opened)) runId = opened;
-      else if (opened === stopped) break;
-      else stopped = opened;
-    }
-  const inserted = runId
-    ? await insertEvaluationTargets(db, runId, page.targets)
-    : 0;
-  return {
-    scanned: page.scanned,
-    inserted,
-    next: page.next,
-    runId,
-    replacing: runId ? null : stopped,
-  };
+  return withTransactionDatabase(db, async (db) => {
+    const ownerIds = [
+      ...new Set([input.runId, input.replacing].filter((id) => id != null)),
+    ];
+    const owners = ownerIds.length
+      ? await getDb(db)
+          .select({ id: run.id, failureCode: run.failureCode })
+          .from(run)
+          .where(inArray(run.id, ownerIds))
+          .orderBy(run.id)
+          .for("update")
+      : [];
+    const stoppedByMember = () => ({
+      outcome: "member-stopped" as const,
+      scanned: 0,
+      inserted: 0,
+      next: input.after,
+      runId: null,
+      replacing: input.runId ?? input.replacing ?? null,
+    });
+    if (owners.some((owner) => owner.failureCode === "user_cancelled"))
+      return stoppedByMember();
+    const page = await connectionRosterTargets(db, input);
+    // A cancelled or failed Run in the cursor never receives more work.
+    const current = input.runId && (await runIsActive(db, input.runId));
+    // Keep the stopped owner's identity across pages that admit nothing, or a
+    // later page would reopen the original key and resolve the stopped Run.
+    let stopped = current ? null : (input.runId ?? input.replacing ?? null);
+    let runId = current ? input.runId : null;
+    if (!runId && (await hasAdmissibleTarget(db, page.targets)))
+      // An idempotent open can return a Run stopped since it was created, also
+      // one the cursor never saved; continue after it under its next key.
+      for (let open = 0; open < 3 && !runId; open++) {
+        const opened = await input.createRun(db, stopped);
+        const [owner] = await getDb(db)
+          .select({ failureCode: run.failureCode })
+          .from(run)
+          .where(eq(run.id, opened))
+          .for("update");
+        if (owner?.failureCode === "user_cancelled") return stoppedByMember();
+        if (await runIsActive(db, opened)) runId = opened;
+        else if (opened === stopped) break;
+        else stopped = opened;
+      }
+    const inserted = runId
+      ? await insertEvaluationTargets(db, runId, page.targets)
+      : 0;
+    return {
+      outcome: "admitted" as const,
+      scanned: page.scanned,
+      inserted,
+      next: page.next,
+      runId,
+      replacing: runId ? null : stopped,
+    };
+  });
 }
 
-/** Records one connection roster page queues, for Sweeps and routine discovery alike. */
-export const CONNECTION_ROSTER_PAGE = 25;
+/** Records one connection roster page queues, for Sweeps and routine discovery alike; one evaluation page. */
+export const CONNECTION_ROSTER_PAGE = 100;
 
 /**
  * Routine discovery pauses while this many connection evaluations wait, so a
- * first pass over every record (~55k once) drains at queue pace instead of
- * flooding it. The pass keeps its cursor and resumes when the backlog drops.
+ * full pass over every record (~55k) drains at queue pace instead of flooding
+ * it. Evaluation pages clear about ten pages of backlog per minute, so the cap
+ * keeps several pages queued; the pass keeps its cursor and resumes when the
+ * backlog drops.
  */
-export const CONNECTION_DISCOVERY_PENDING_CAP = 250;
+export const CONNECTION_DISCOVERY_PENDING_CAP = 1_000;
 
 export async function pendingConnectionEvaluations(db: Database) {
   const [row] = await getDb(db)
@@ -309,8 +347,51 @@ const sweepKinds = (entityKinds?: readonly string[]) =>
     ? discoveryEntities.filter((kind) => entityKinds.includes(kind))
     : [...discoveryEntities];
 
+/**
+ * How far the routine pass that owns `runId` has walked its roster, newest
+ * first: records at or after its cursor, of every record it covers. Null when
+ * no live pass cursor names the Run (a finished pass or another Run).
+ */
+export async function connectionDiscoveryPosition(db: Database, runId: string) {
+  const [pass] = await getDb(db)
+    .select({ cursor: job.cursor })
+    .from(job)
+    .where(
+      and(
+        eq(job.key, "discovery:connections"),
+        sql`${job.cursor}->>'runId' = ${runId}`,
+      ),
+    )
+    .limit(1);
+  const after = z
+    .object({ after: z.string().nullable() })
+    .safeParse(pass?.cursor);
+  if (!after.success) return null;
+  const total = await countConnectionSweepSources(db);
+  const [afterCreatedAt, afterId] = after.data.after?.split("|") ?? [];
+  if (!afterCreatedAt || !afterId) return { walked: 0, total };
+  const [row] = await getDb(db)
+    .select({ remaining: count() })
+    .from(entityIdentity)
+    .where(
+      and(
+        sourcePredicate(),
+        or(
+          sql`${entityIdentity.createdAt} < ${afterCreatedAt}::timestamp`,
+          and(
+            sql`${entityIdentity.createdAt} = ${afterCreatedAt}::timestamp`,
+            sql`${entityIdentity.id} < ${afterId}::uuid`,
+          ),
+        ),
+      ),
+    );
+  return { walked: Math.max(0, total - (row?.remaining ?? 0)), total };
+}
+
 export const connectionSourceFingerprint = connectionDiscoveryFingerprint;
 export const connectionSourceFingerprints = connectionDiscoveryFingerprints;
+export const connectionSourceFingerprintsOrMissing =
+  connectionDiscoveryFingerprintsOrMissing;
 
 /** Cursor coverage includes records without stock or prior acquisition. */
 async function connectionDiscoveryRecords(

@@ -9,6 +9,7 @@ import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import { getVectorIndex } from "~/server/cf-env";
+import { JobRetryableError } from "~/server/generic/jobs/errors";
 
 interface VectorizeMutation {
   mutationId: string;
@@ -85,17 +86,32 @@ const requireIndex = (): VectorizeIndexBinding => {
   return index;
 };
 
+async function vectorizeRequest<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /\b429\b|Too Many Requests/i.test(error.message)
+    )
+      throw new JobRetryableError(error.message, { cause: error });
+    throw error;
+  }
+}
+
 export const productionVectorStore: VectorStorePort = {
   configured: () => getVectorIndex() !== undefined,
   async upsert(vectors) {
     const receipts = new Map<string, string>();
     for (const batch of chunk(vectors, MUTATION_BATCH)) {
-      const receipt = await requireIndex().upsert(
-        batch.map(({ id, values, entityKind }) => ({
-          id,
-          values,
-          metadata: { entityType: entityKind },
-        })),
+      const receipt = await vectorizeRequest(() =>
+        requireIndex().upsert(
+          batch.map(({ id, values, entityKind }) => ({
+            id,
+            values,
+            metadata: { entityType: entityKind },
+          })),
+        ),
       );
       for (const vector of batch) receipts.set(vector.id, receipt.mutationId);
     }
@@ -104,7 +120,9 @@ export const productionVectorStore: VectorStorePort = {
   async deleteByIds(ids) {
     const receipts = new Map<string, string>();
     for (const batch of chunk(ids, MUTATION_BATCH)) {
-      const receipt = await requireIndex().deleteByIds(batch);
+      const receipt = await vectorizeRequest(() =>
+        requireIndex().deleteByIds(batch),
+      );
       for (const id of batch) receipts.set(id, receipt.mutationId);
     }
     return receipts;
@@ -112,7 +130,9 @@ export const productionVectorStore: VectorStorePort = {
   async getByIds(ids) {
     const vectors = [];
     for (const batch of chunk(ids, VECTOR_GET_BATCH)) {
-      const observed = await requireIndex().getByIds(batch);
+      const observed = await vectorizeRequest(() =>
+        requireIndex().getByIds(batch),
+      );
       vectors.push(
         ...z.array(observationSchema).parse(
           observed.map((vector) => ({

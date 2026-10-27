@@ -34,6 +34,8 @@ import {
 import { captureConnectionBasis } from "./connection-evidence";
 import {
   publishEntityConnection,
+  prepareEntityConnectionEvidence,
+  publishPreparedEntityConnections,
   readEntityConnections,
   applyEntityConnection,
 } from "./entity-connections";
@@ -69,6 +71,32 @@ describe("stored connection evidence", () => {
     const proposal = await publishEntityConnection(ctx.db, candidate);
     return { item, charge, candidate, proposal };
   }
+
+  it("keeps the last edge publication active when page owners retrieve different evidence for the same pair", async () => {
+    const { candidate, proposal } = await fixture();
+    const changed = {
+      ...candidate,
+      evidence: {
+        ...candidate.evidence,
+        reasons: ["Synthetic second retrieval"],
+      },
+    };
+    const prepared = await prepareEntityConnectionEvidence(ctx.db, [
+      candidate,
+      changed,
+    ]);
+    const [first, last] = await publishPreparedEntityConnections(
+      ctx.db,
+      prepared,
+    );
+    expect(first?.review.assessmentId).toBe(proposal.review.assessmentId);
+    expect(last).toBeDefined();
+    expect(
+      (await readEntityConnections(ctx.db, candidate.source)).map(
+        (entry) => entry.review.assessmentId,
+      ),
+    ).toEqual([last?.review.assessmentId]);
+  });
 
   // Stored basis snapshots can dwarf the candidate. Transferring them before
   // queue pagination exhausts Worker memory; freshness must still reread facts.

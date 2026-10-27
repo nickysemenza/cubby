@@ -56,7 +56,9 @@ Today/Home titles itself with the household day and keeps Log meal and New task 
 Background refetches use one reserved status line at the bottom of the desktop
 sidebar: a small spinner and muted “Syncing…” after 300ms of continuous activity.
 The collapsed rail and mobile BottomNav show only the spinner. The sidebar slot
-accepts shared shell status content; feedback never inserts progress rows above
+accepts shared shell status content and keeps its idle content mounted while
+Syncing is visible so derived backlog observations survive slow refreshes;
+feedback never inserts progress rows above
 headers, in tables, or in previews. Retained-data refresh errors and Retry stay
 inline. Native workspace routes have no shell feedback.
 
@@ -509,3 +511,43 @@ While Activity is open, it samples the backlog every 15 seconds and shows an
 approximate remaining time after a minute of net decrease, using up to five
 minutes of observations. A gap over a minute resets the estimate. Flat or growing
 work has no ETA; new dependency work can change the estimate.
+
+Progress uses `ui/primitives/progress.tsx`, following ReUI's Base UI pattern with
+`ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
+values stack on phone widths so long Job kinds retain their own line. Run detail and
+Activity Work cells show the current phase's known processed/total counts;
+unknown totals remain text. The expanded sidebar's large derived backlog (100 or more observed values)
+shows net depletion from the
+view's high-water mark, never lifetime completion. Incoming work can reduce the
+fill. Idle work or an observation gap over a minute resets the baseline; the
+sidebar samples every 15 seconds and its collapsed rail retains the status dot.
+The observation window is local to the mounted view, not a durable workload total.
+
+### Activity and evaluation progress
+
+Activity leads with one flat Now feed: plain work names, explicit states,
+measured pace and waiting context. Working streams light a small info dot beside
+Now; reduced motion keeps it still. With no outstanding work the caption reads
+All quiet only when all feed reads are known, fresh and successful. Derived
+loading and read failures retain their row and Retry independently of the
+one-minute threshold for showing the detailed backlog breakdown. Streams with
+only recent failures read Failed with a destructive glyph, their failure count
+over 60 minutes, and the Jobs action; they sort with problems.
+Internal drain, retention and device-wake Jobs never become separate
+feed rows. Derived drain alerts belong to Derived values. Watchdog conditions
+make the affected stream Not moving and explain why below its name; raw codes
+and evidence stay in the quiet Watchdog details disclosure. Queue snapshots do
+not establish finite totals, so Activity has no separate per-kind depletion bars.
+Run links have visible gaps, show at most three codes and a +N remainder.
+Phone rows put pace below identity and keep commands together below the facts;
+pace never reserves the label's width.
+
+Run Evaluation progress uses shared Progress labels and values for Records
+checked and Evaluations settled. Paused and stopped Runs retain their counts
+with a paused bar and suppress historical rates and remaining-time estimates.
+Cancelled evaluations stay in the population denominator and appear in the
+facts and record-kind table. Activity and Evaluation reads age on the shared
+display clock independently of refetching: after three polling intervals,
+cached observations show their measurement age and suppress live indicators,
+pace and ETA. Derived backlog has no payload timestamp, so its successful read
+time supplies the age. The minute display clock also refreshes on focus and wake.

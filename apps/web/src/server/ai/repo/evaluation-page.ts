@@ -59,4 +59,13 @@ export interface EvaluationPageAdapter<P, O> {
     tx: Database,
     outcomes: readonly EvaluationPageOutcome<O>[],
   ): Promise<EvaluationPagePublication[]>;
+  /** AI usage attribution for evaluate's shared decision wave. */
+  readonly operation: string;
+  /** Targets evaluated at once; defaults to the decision wave's bound. */
+  readonly concurrency?: number;
+  /**
+   * Publication cost of one outcome, so a chunk's transaction stays bounded
+   * when outcomes carry many writes. Chunks fill to 25 targets or 25 weight.
+   */
+  weight?(outcome: EvaluationPageOutcome<O>): number;
 }

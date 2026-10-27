@@ -3,7 +3,7 @@ import { connectionDiscoveryRunInput } from "@cubby/schemas/run-fields";
 import { and, eq, inArray } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   activateAiRefresh,
@@ -17,6 +17,7 @@ import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/deri
 import { claimJob } from "~/server/generic/jobs/repo/jobs";
 
 import { SUPERSEDED_RUN_FAILURE } from "./ai-refresh-state";
+import * as discoveryRepo from "./connection-refresh";
 import {
   CONNECTION_DISCOVERY_PENDING_CAP,
   pendingConnectionEvaluations,
@@ -59,6 +60,7 @@ async function connectionEvaluations(db: Database, recordId: string) {
 
 describe("connection discovery pacing", () => {
   const ctx = withTestDb();
+  afterEach(() => vi.restoreAllMocks());
 
   async function tasks(names: string[]) {
     await activateAiRefresh(ctx.db, "synthetic-discovery-pacing", {
@@ -202,7 +204,7 @@ describe("connection discovery pacing", () => {
     expect(inStopped).toEqual([]);
   });
 
-  it("continues a stopped Run under its own key when the open is idempotent", async () => {
+  it("stops at roster admission when the owning Run was member-cancelled", async () => {
     await tasks(["Synthetic keyed continuation task"]);
     // Production opens the pass Run with a key per Job claim; reopening with
     // the same key returns the stopped Run, which must not receive work.
@@ -234,9 +236,11 @@ describe("connection discovery pacing", () => {
       newestFirst: true,
       createRun: keyed,
     });
-    expect(page.runId).not.toBeNull();
-    expect(page.runId).not.toBe(stopped);
-    expect(page.inserted).toBe(1);
+    expect(page).toMatchObject({
+      outcome: "member-stopped",
+      runId: null,
+      inserted: 0,
+    });
     const inStopped = await getDb(ctx.db)
       .select({ id: aiEvaluation.id })
       .from(aiEvaluation)
@@ -264,7 +268,7 @@ describe("connection discovery pacing", () => {
     const stopped = await keyed(ctx.db, null);
     await getDb(ctx.db)
       .update(run)
-      .set({ status: "failed", failureCode: "user_cancelled" })
+      .set({ status: "failed", failureCode: SUPERSEDED_RUN_FAILURE })
       .where(eq(run.id, stopped));
     // A page with nothing admissible right after the stop.
     const empty = await prepareConnectionDiscoveryRoster(ctx.db, {
@@ -313,7 +317,7 @@ describe("connection discovery pacing", () => {
     const stopped = await keyed(ctx.db, null);
     await getDb(ctx.db)
       .update(run)
-      .set({ status: "failed", failureCode: "user_cancelled" })
+      .set({ status: "failed", failureCode: SUPERSEDED_RUN_FAILURE })
       .where(eq(run.id, stopped));
     const replay = await prepareConnectionDiscoveryRoster(ctx.db, {
       runId: null,
@@ -446,5 +450,43 @@ describe("connection discovery pacing", () => {
         ),
       );
     expect(admitted).toHaveLength(CONNECTION_DISCOVERY_PENDING_CAP);
+  });
+  it("stops the pass for a day when a member cancels its Run", async () => {
+    await tasks(["Synthetic member-stopped task"]);
+    const cancelled = await createDiscoveryRun(ctx.db);
+    // The member cancels after the handler began, before roster admission.
+    // An earlier out-of-transaction stop check cannot observe this cancellation.
+    const pending = discoveryRepo.pendingConnectionEvaluations;
+    vi.spyOn(
+      discoveryRepo,
+      "pendingConnectionEvaluations",
+    ).mockImplementationOnce(async (db) => {
+      await getDb(db)
+        .update(run)
+        .set({ status: "failed", failureCode: "user_cancelled" })
+        .where(eq(run.id, cancelled));
+      return pending(db);
+    });
+    const saved = await claimDerivedDiscovery(ctx.db);
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Synthetic discovery Job was not claimable");
+    const before = Date.now();
+    const prepared = await connectionDiscoveryJobHandler.prepare(ctx.db, {
+      ...claim,
+      cursor: { after: null, runId: cancelled },
+    });
+    expect(prepared.page).toMatchObject({
+      done: false,
+      cursor: { after: null, runId: null, replacing: null },
+    });
+    const page = prepared.page as { waitUntil?: Date };
+    expect(page.waitUntil?.getTime()).toBeGreaterThanOrEqual(
+      before + 23 * 60 * 60_000,
+    );
+    const opened = await getDb(ctx.db)
+      .select({ id: run.id })
+      .from(run)
+      .where(eq(run.purpose, "connection_discovery"));
+    expect(opened.map((row) => row.id)).toEqual([cancelled]);
   });
 });

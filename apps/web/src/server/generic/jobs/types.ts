@@ -11,6 +11,10 @@ export type PreparedJobPage = {
   awaitExternal?: true;
   /** Only database writes; network and model work belongs in prepare. */
   publish?: (tx: Database) => Promise<void | JobPage["result"]>;
+  /** Completed pages sharing this object publish under one set of lease fences. */
+  publicationGroup?: {
+    publish(tx: Database, ids: ReadonlySet<string>): Promise<void>;
+  };
 };
 export type JobHandler = {
   /** Optional finite set executor; the drain admits one service turn per fair round. */

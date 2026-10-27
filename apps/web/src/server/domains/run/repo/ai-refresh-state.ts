@@ -38,6 +38,7 @@ import {
 } from "~/server/db/helpers";
 import {
   aiEvaluation,
+  aiEvaluationRequest,
   product,
   email,
   emailClassificationObservation,
@@ -265,6 +266,16 @@ export async function insertEvaluationTargets(
           ),
         )
         .returning({ id: aiEvaluation.id });
+      if (written.length)
+        await getDb(tx)
+          .insert(aiEvaluationRequest)
+          .values(
+            written.map((entry) => ({
+              runId: runEntityId.parse(runId),
+              evaluationId: entry.id,
+            })),
+          )
+          .onConflictDoNothing();
       changed += written.length;
     }
     const fresh = prepared.filter((entry) => entry.kind === "insert");
@@ -290,6 +301,16 @@ export async function insertEvaluationTargets(
         )
         .onConflictDoNothing()
         .returning();
+      if (inserted.length)
+        await getDb(tx)
+          .insert(aiEvaluationRequest)
+          .values(
+            inserted.map((entry) => ({
+              runId: runEntityId.parse(runId),
+              evaluationId: entry.id,
+            })),
+          )
+          .onConflictDoNothing();
       await enqueueJobs(
         tx,
         inserted

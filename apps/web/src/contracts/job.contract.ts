@@ -47,7 +47,7 @@ const jobFacts = z.object({
   subject: z.object({ kind: z.string(), id: z.string() }).nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
-  /** Due Jobs the fair drain serves first; null when not due. */
+  /** Earlier due Jobs of the same kind and Run class; null when not due. */
   ahead: z.number().int().nonnegative().nullable(),
   lane: jobLane,
   /** What the Job waits on now (`generic/jobs/repo/waiting-on.ts`); null when terminal. */
@@ -230,6 +230,39 @@ const deviceBacklog = z.object({
 });
 export type DeviceBacklog = z.infer<typeof deviceBacklog>;
 
+/**
+ * One kind of work (a Job kind; AI evaluations per feature): what runs and
+ * waits now, recent completions and failures, and the active Runs it serves.
+ * `completedPerMinute` averages the pace window; it is a measurement, not a
+ * forecast, so a stream without recent completions reports 0.
+ */
+const workStream = z.object({
+  kind: z.string(),
+  feature: z.string().nullable(),
+  running: z.number().int().nonnegative(),
+  due: z.number().int().nonnegative(),
+  backingOff: z.number().int().nonnegative(),
+  scheduled: z.number().int().nonnegative(),
+  paused: z.number().int().nonnegative(),
+  completedPerMinute: z.number().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  lastCompletedAt: z.iso.datetime().nullable(),
+  oldestDueAt: z.iso.datetime().nullable(),
+  runIds: z.array(runShortcode),
+});
+export type WorkStream = z.infer<typeof workStream>;
+const workActivity = z.object({
+  measuredAt: z.iso.datetime(),
+  windows: z.object({
+    paceMinutes: z.number().int().positive(),
+    completedMinutes: z.number().int().positive(),
+    failedMinutes: z.number().int().positive(),
+  }),
+  streams: z.array(workStream),
+});
+export type WorkActivity = z.infer<typeof workActivity>;
+
 /** Records whose single-item Jobs carry them as `subjectKind`/`subjectId`. */
 const jobSubjectEntity = z.enum(["image", "location"]);
 export type JobSubjectEntity = z.infer<typeof jobSubjectEntity>;
@@ -340,6 +373,13 @@ export const jobContract = defineContract(
       input: z.strictObject({}),
       output: deviceBacklog,
       cache: { tags: [["run"], ["image"]], profile: "live-status" },
+    }),
+    activity: query({
+      description:
+        "Live work by kind (AI evaluations by feature): running, due, backing off, scheduled and paused counts, completions per minute over the last 5 minutes, completions in 15 minutes, failures in 60 minutes, the last completion, the oldest due Job and the active Runs it serves. Internal maintenance kinds are omitted.",
+      input: z.strictObject({}),
+      output: workActivity,
+      cache: { tags: [["run"]], profile: "live-status" },
     }),
     health: query({
       description:

@@ -53,6 +53,8 @@ export const derivedValue = pgTable(
     index("DerivedValue_kind_key_number_idx").on(t.kind, t.key, t.sortNumber),
     index("DerivedValue_kind_key_date_idx").on(t.kind, t.key, t.sortDate),
     index("DerivedValue_kind_key_text_idx").on(t.kind, t.key, t.sortText),
+    // Activity's per-minute publication count reads the last 15 minutes.
+    index("DerivedValue_computed_idx").on(t.computedAt),
   ],
 );
 

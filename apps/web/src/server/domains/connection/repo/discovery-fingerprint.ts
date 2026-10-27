@@ -19,15 +19,31 @@ export async function connectionDiscoveryFingerprints(
   db: Database,
   sources: readonly EntityRef[],
 ): Promise<string[]> {
+  const fingerprints = await connectionDiscoveryFingerprintsOrMissing(
+    db,
+    sources,
+  );
+  return fingerprints.map((fingerprint, index) => {
+    if (fingerprint === null)
+      throw new Error(
+        `Connection ${sources[index]!.entityKind} no longer exists`,
+      );
+    return fingerprint;
+  });
+}
+
+/** One read per entity kind; a deleted or merged source reads `null`. */
+export async function connectionDiscoveryFingerprintsOrMissing(
+  db: Database,
+  sources: readonly EntityRef[],
+): Promise<(string | null)[]> {
   const records = await connectionRecords(db, sources);
-  const fingerprints: string[] = [];
-  for (const source of sources) {
-    const record = records.get(connectionRecordKey(source));
-    if (!record)
-      throw new Error(`Connection ${source.entityKind} no longer exists`);
-    fingerprints.push(await fingerprintRecord(source, record));
-  }
-  return fingerprints;
+  return Promise.all(
+    sources.map((source) => {
+      const record = records.get(connectionRecordKey(source));
+      return record ? fingerprintRecord(source, record) : null;
+    }),
+  );
 }
 
 export async function connectionDiscoveryFingerprint(

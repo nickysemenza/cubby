@@ -81,12 +81,13 @@ Reads rank only the queues needed by the displayed statuses: device work does
 not rank the server drain, and leased or backing-off work needs no queue rank.
 `jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
 
-- `due`: claimable now; `aheadCount` in the drain's own selection order (the
-  fair service order per class, interleaved per batch with backfill's reserve:
-  `drainSelectionIndex`) and `etaSeconds` from claims over the last 30
-  minutes. Only the next batch is exact: later batches re-rank kinds by their
-  last service, so beyond `JOB_DRAIN.batch` the position is a projection and
-  `aheadIsEstimate` is true (shown as "behind about N").
+- `due`: claimable now; `aheadCount` counts earlier due Jobs of the same kind
+  and active member-Run class, ordered by priority then update/availability time
+  and identity. The list performs one batched indexed count for its visible IDs;
+  unrelated kinds never enter its ranking. This is always an estimate of service
+  order (shown as "behind about N"): the drain interleaves other kinds and
+  reserves backfill capacity. `etaSeconds` uses observed claims over the last
+  30 minutes; it is not a completion promise.
 - `waiting_device`: parked device work; position in device claim order
   (`deviceSelectionIndex`, with backfill's turn), exact apart from a
   device's preference for work another device last ran.
@@ -154,10 +155,9 @@ compute the logarithmic weight once per kind. Each kind and ownership/exemption
 class contributes a bounded priority prefix before window ranking; an exempt routine Run cannot hide
 ordinary siblings needed to widen another selected page. The latest claim comes
 from the existing `(kind, lastClaimedAt)` index, including completed Jobs so that
-finishing a page never erases its service history. Queue positions reuse the same
-due snapshot and admitted selection; only their later-round projection ranks the
-full due backlog. Claim-time admission remains authoritative across concurrent
-drains.
+finishing a page never erases its service history. List positions use their own
+visible-kind counts rather than rerunning selection. Claim-time admission remains
+authoritative across concurrent drains.
 
 Job source writes also respect the derived drain's member-first ordering:
 root transactions in Job execution (including shared evaluation batches) mark
@@ -461,7 +461,20 @@ compact lane/reason counts, Runs needing attention, then Jobs.
 Navigable counts use the Job entity population, hiding internal work with the
 table; queue health continues to measure internal kinds. Every supplied retry
 restriction intersects, including mixed entity filters, row IDs and Run scope.
-Count chips scope the Job table; web records that scope in Activity's URL.
+Count chips scope the Job table; web records that scope in Activity's URL. AI
+stream Run links resolve through uncancelled `AiEvaluationRequest` demand,
+without multiplying Job counts. Run evaluation summaries scope through the
+Run/request unique index and apply `requestedAiEvaluations` cancellation and
+receipt precedence: a withdrawn request is cancelled and never inherits a
+later shared receipt if it has none. Roster enrollment records requests for
+new and updated slots; migration `0044` backfills existing owner demand. A disposable synthetic
+EXPLAIN probe with 3,000 historical Jobs and 3,000 unrelated evaluations/requests
+used `Job_due_idx`/`Job_claimed_idx` for Activity, then
+`AiEvaluationRequest_evaluation_idx` for its request links. Run summaries used
+`AiEvaluationRequest_run_item_key`, `AiEvaluation_pkey` and `Job_key_unique`;
+recent outcomes also used `Entity_pkey`. PostgreSQL reported 0.148 ms for
+Activity and 0.016–0.038 ms per Run query in that local seed. These are query-plan
+evidence, not production latency claims.
 Runs use the generic `attention` saved view: member-visible stopped Runs that
 have no successor, plus stalled Runs, ordered stalled first then newest.
 The embed shows ten rows and links to all matching Runs. AI cost is the Run's
@@ -512,12 +525,20 @@ A producer must not enqueue faster than the drain can serve. One unbounded
 connection-discovery pass once enqueued an evaluation for every household
 record (~55k), which starved every other kind for days.
 
-- Routine connection discovery (`discovery.connections`) holds its cursor while
-  `CONNECTION_DISCOVERY_PENDING_CAP` connection evaluations wait (`rate_limit`),
-  walks the newest records first, and never appends to a stopped Run. A changed
+- Routine connection discovery (`discovery.connections`) queues one
+  evaluation page (`CONNECTION_ROSTER_PAGE`, 100 records) per pass and holds
+  its cursor for 30 s while `CONNECTION_DISCOVERY_PENDING_CAP` (1,000)
+  connection evaluations wait (`rate_limit`). A full pass over ~55k records
+  is meant to finish within an hour; a longer wait idled the pass, not the
+  queue. It walks the newest records first, and never appends to a stopped Run. A changed
   record updates its queued slot in place, retaining its Job. Cancelled work whose Run
   failed with `failureCode = "superseded"` (a cleared backlog, not a member's
-  decision) is re-admitted at that pace; a member's cancel stays final.
+  decision) is re-admitted at that pace; a member's cancel stays final. A
+  member's cancel of the pass's Run also stops the pass: it resets its cursor
+  and waits a day rather than continuing under a new Run. The roster admission
+  transaction locks the cursor's owning/replaced Runs before reading status or
+  opening a continuation. A member-stopped result resets the cursor and persists
+  the one-day wait; superseded Runs can still continue.
 - Publication correction work is one `assessment.correction` Job per
   publication commit (`targetAssessmentIds`), not one per assessment; sources are
   still resolved after commit under serializable isolation.
@@ -557,10 +578,10 @@ New work still uses canonical Job admission; a completed upload no longer select
 physical identity when its text returns.
 
 `embedding.refresh` uses the shared drain's kind-level batch handler. When a
-normal fair selection includes embedding work, the drain reselects up to 64
+normal fair selection includes embedding work, the drain reselects up to 100
 Jobs with the same run-first, backfill-reserve and weighted kind ordering.
 Run-owned and backfill embedding Jobs form separate batches. Each batch occupies
-one of the existing three execution lanes; claims, lease renewals and publication stay serial within that lane;
+one of the existing three execution lanes; claims and lease renewals stay serial within that lane;
 freshness and visibility use bounded shared lookups, so widening embeddings
 does not multiply database sockets or change other kinds' concurrency.
 
@@ -585,7 +606,7 @@ An expired claim cannot renew or publish after reclamation, and completed
 checkpoints leave the heartbeat set immediately.
 
 Fresh submissions with the same stored provider/model/dimensions share one
-embedding call and Vectorize upload. Requests contain at most 64 texts, below
+embedding call and Vectorize upload. Requests contain at most 100 texts, below
 OpenAI's 2,048-input limit, and at most 300,000 UTF-8 bytes, a conservative bound
 on its 300,000-token request limit. Inputs over 8,192 bytes run alone, preserving
 provider validation of the 8,192-token input limit without failing neighbors.
@@ -596,9 +617,23 @@ keeping content addressing and selected-vector provenance consistent across chan
 
 Every Job retains its own claim, generation, retry budget, physical vector ID,
 upload hash and visibility receipt. Stale sources settle alone; a failed provider
-or upload chunk retries only its member Jobs under the existing policy. Visibility
-checks and final source/input checks still run per Job, and publication rejects
-revoked claims. A shared call has no single Job publication owner; cache contention
+or upload chunk retries only its member Jobs under the existing policy. Visibility checks share bounded Vectorize lookups. Completed selections publish
+as a page: sorted source locks followed by identity locks, one current search
+preparation, one retirement update, one multi-row selection insert and one
+reader notification. Job locks, invalidation checks and completion updates are
+also set-based, with the same lease and generation fences checked again before
+commit. The healthy path's statement count is independent of page size for a
+fixed set of source kinds. Source removal, changed inputs or a database data
+exception (SQLSTATE classes 22, 23, 54) rolls back the shared transaction and
+retries publication individually; only the rejected targets fail or back off.
+Transaction-level failures retry the page. Retired selections and terminal
+unselected uploads remain eligible for the existing artifact cleanup.
+Vectorize rate limits (including `VECTOR_DELETE_ERROR` 40041 with `Too Many
+Requests`) and upload visibility deadlines use the existing Job exponential
+backoff. These transient errors reserve another attempt even at the normal
+attempt limit; other failures retain their attempt budget. Visibility retries
+retain the physical ID and upload receipt so late visibility can finish without
+another upload. Publication rejects revoked claims. A shared call has no single Job publication owner; cache contention
 defers it as background work instead of polling. `AiUsage` keeps one row per
 provider call (plus existing application-cache-hit rows), attributes a shared
 call to the daily background Run without choosing an arbitrary entity, and records
@@ -607,9 +642,10 @@ the provider's total tokens once. Embeddings remain outside frontier funding cap
 ## AI evaluation pages
 
 `ai.evaluation` keeps its existing `{evaluationId}` Job input and per-target
-slot, input hash, history, token and generation. Product and canonical
-`product_pair` refresh work run as transient pages of up to 100 compatible
-slots: one feature, preparation shape, execution kind and priority class.
+slot, input hash, history, token and generation. Product, canonical
+`product_pair` and connection refresh work run as transient pages of up to 100
+compatible slots: one feature, preparation shape, execution kind and priority
+class.
 `claimJobPage` locks eligible Jobs with `FOR UPDATE SKIP LOCKED`, assigns
 independent tokens, then `claimAiEvaluationPage` rechecks live authorization,
 activation and pending/result-ready state before adopting the claims. Claim
@@ -618,8 +654,13 @@ Queued obsolete generations retire in sets before inference; paused authority
 parks its Jobs without spending attempts. No model work holds a claim
 transaction open. Page and single claims use the same `job-kind:<kind>`
 nonblocking admission lock and fresh live-lease count when `maxInFlight` is
-configured. With a cap of one, a page enters once and its per-target leases
-keep the kind occupied until the last live target settles. Active Run
+configured. AI evaluation capacity counts distinct page admission tokens in
+both drain selection and claim admission. Every admitted page shares one
+`Job.admissionToken`; each target retains an independent `leaseToken` and
+generation for publication fencing. A single claim consumes one admission
+unit. Any surviving live target keeps its page occupied, so a connection page
+leaves the second AI unit available to another feature. Pre-cutover running
+Jobs without admission tokens count individually until their leases end. Active Run
 exemptions follow the shared kind policy. Heartbeats renew the exact token/generation set in one
 statement; replaced tokens are reported separately and cannot publish.
 
@@ -633,14 +674,19 @@ removes duplicate anchors, and then reselects. Other features and Job kinds
 keep their turns and backfill retains its reserve. Queue and Run counts still
 count target Jobs; AI ahead positions are estimates because one page can
 capture many targets before the next selection. Ordinary ahead positions count
-page services; target counts remain unchanged.
+page services; target counts remain unchanged. Visible position reads first probe
+the earliest indexed key of that kind. If no earlier key can exist, they
+return zero without executing the count; this avoids PostgreSQL choosing a
+kind-only scan and filtering thousands of later Jobs. Other positions retain
+the same due-work and Run-class count.
 
 `EvaluationPageAdapter` in `ai/repo/evaluation-page.ts` owns finite feature
 preparation, decision evaluation and publication results. Every target carries
 its own evidence digest. Each preparation/provider continuation retains its
 own Job/workflow execution context. The executor interns one usage context
-per compatible Run/feature/operation/force/funding group; Product pages use
-`product-identity` with default force/funding policy. The shared context carries
+per compatible Run/feature/operation/force/funding group; each adapter names
+its operation (`product-identity`, `entity-connections`) and uses default
+force/funding policy. The shared context carries
 no target Job/entity id. Distinct Runs remain separate usage groups.
 `settleDecisionWorkItems` supplies finite waves; `DecisionRequestBatch` packs
 up to 64 questions/32,000 text bytes, with four request chunks in flight.
@@ -648,7 +694,47 @@ Routing, response-cache keys and per-question avoided usage stay unchanged.
 An oversized question fails visibly. Page evidence is limited to 4 MiB; an
 unadmitted suffix stays due rather than completing its enumeration receipt.
 
-Publication commits at most 25 outcomes per SERIALIZABLE transaction, using
+Connection pages evaluate 8 sources at once (a Worker invocation holds five
+strong connections). Expense Project recommendation inputs and
+FinancialTransaction settlement/transfer retrieval load for the page before
+provider work. Evidence capture normally shares the page's reads; if one
+candidate becomes unreadable, capture retries per source and returns that
+source's failure without rejecting healthy sources. Nearby purchases retain their per-transaction top ten and each
+Purchase retains its original ranked settlement limit before allocation and
+conflict filtering. Acquisition search still captures each newly retrieved
+candidate before subsequent provider waits. Compatible Product identity and
+field questions share operation-specific usage objects and the page's decision
+wave; nested pair evaluation joins that wave instead of dispatching per source.
+Distinct Runs, features, models and operations remain separate accounting groups.
+Duplicate questions inside one wave await its own cache claim's completion;
+Jobs still defer when another invocation owns the claim.
+
+One batched fingerprint read fences the page before evaluation and each chunk
+before writes; a changed or deleted source is obsolete without writes.
+Incomplete candidate coverage retries the source before any of its candidates
+publish. Candidate publication locks live endpoints in the shared
+`orderedEntityLockKinds` order (parents before dependent kinds, then alphabetical),
+which embedding publication also uses. Connection chunks prelock the union of
+candidate endpoints, Product pairs and field callback endpoints before any
+callback runs. Retained Email evidence keeps its Purchase → original → Email
+order after the chunk's Purchase locks. Candidate publication
+recomputes dependency bases and acquisition eligibility in sets, and compares
+each locked basis against its original retrieval evidence. Invalidated connection
+or retained Email evidence raises `ConnectionEvidenceInvalidatedError` and
+settles that source obsolete, including on its final allowed attempt. It then uses one
+immutable Assessment batch and one supersession transition for the chunk.
+Supersession first scopes indexed live subjects, then joins the chunk's slots
+to immutable Assessment evidence once, rather than scanning history per slot.
+Repeated edges retain the last publication's active fingerprint, preserving
+sequential publication semantics; member suppression and review are unchanged.
+Canonical Product pairs retrieved by multiple source owners publish once per
+chunk through the existing pair batch writer, before those owners settle.
+The single-target path shares the candidate publisher in batches of 16 while
+retaining its existing publication authority and incomplete-coverage behavior.
+
+Publication commits at most 25 outcomes per SERIALIZABLE transaction (an
+adapter may weight outcomes, so a connection with many candidates fills its
+chunk sooner), using
 the existing bounded snapshot-write retries. Locks follow Run, slot, item,
 then Job order, compatible with cancellation and admission. The explicit
 claim-set guard authorizes each target without borrowing a sibling's AsyncLocal

@@ -12,6 +12,11 @@ import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
 import { totalCell } from "~/ui/matrix/matrix-chrome";
 import { Button } from "~/ui/primitives/button";
+import {
+  Progress,
+  ProgressLabel,
+  ProgressValue,
+} from "~/ui/primitives/progress";
 
 import { type BacklogMatrix, pivotDerivedBacklog } from "./backlog-matrix";
 import {
@@ -19,6 +24,7 @@ import {
   type BacklogSample,
   sampleBacklog,
 } from "./backlog-progress";
+import { useBacklogProgress } from "./use-backlog-progress";
 
 /** The shell status slot's derived backlog: shown only while values are updating. */
 export function DerivedBacklogStatus({
@@ -26,18 +32,34 @@ export function DerivedBacklogStatus({
 }: {
   compact?: boolean;
 }) {
-  const { data } = useQuery(derived.backlog.queryOptions({}));
+  const { data, dataUpdatedAt } = useQuery({
+    ...derived.backlog.queryOptions({}),
+    refetchInterval: 15_000,
+  });
+  const progress = useBacklogProgress(data?.total, dataUpdatedAt);
   if (!data?.total) return null;
-  const label = `Updating ${data.total} values`;
+  const label = `Updating ${formatCount(data.total)} values`;
   return (
     <Link
       to="/activity"
       hash="derived-values"
       aria-label={compact ? label : undefined}
-      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+      className="grid w-full min-w-0 gap-1 text-xs text-muted-foreground hover:text-foreground"
     >
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-info" />
-      {!compact && <span>{label}</span>}
+      {compact ? (
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-info" />
+      ) : progress.peak >= 100 ? (
+        <Progress
+          value={progress.drained}
+          max={progress.peak}
+          aria-valuetext={`${label}; ${formatCount(progress.drained)} fewer since opened`}
+        >
+          <ProgressLabel>{label}</ProgressLabel>
+          <ProgressValue />
+        </Progress>
+      ) : (
+        <span>{label}</span>
+      )}
     </Link>
   );
 }
@@ -86,7 +108,7 @@ export function DerivedBacklogOverview() {
               ? {
                   status: "error",
                   error: result.error,
-                  title: "Couldn't load derived values",
+                  title: "derived values",
                   onRetry: () => void result.refetch(),
                 }
               : { status: "success" }

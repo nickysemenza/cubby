@@ -36,6 +36,7 @@ import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
+  orderedEntityLockKinds,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
 
@@ -258,6 +259,7 @@ export async function connectionRecord(
 
 /** Dependency payloads several unlocked captures can share. */
 export type PreparedConnectionBases = {
+  locked: boolean;
   records: Map<string, Awaited<ReturnType<typeof connectionRecord>>>;
   expenseProject: Map<string, unknown>;
   settlementCandidates: Map<string, unknown>;
@@ -278,13 +280,15 @@ export const connectionRecordKey = (ref: EntityRef) =>
 export async function connectionRecords(
   db: Database,
   refs: readonly EntityRef[],
+  lock = false,
 ) {
   const records: PreparedConnectionBases["records"] = new Map();
   const kinds = z.enum(shortcodeEntities);
   const unique = uniqBy(refs, connectionRecordKey);
-  for (const kind of new Set(
+  const ordered = orderedEntityLockKinds(
     unique.map((ref) => kinds.parse(ref.entityKind)),
-  )) {
+  );
+  for (const kind of ordered) {
     const kindRefs = unique.filter((ref) => ref.entityKind === kind);
     const codes = new Map(
       kindRefs.flatMap((ref) => {
@@ -294,7 +298,7 @@ export async function connectionRecords(
     );
     if (codes.size === 0) continue;
     const table: ShortcodeTable = SHORTCODE_TABLE[kind];
-    const rows = await getDb(db)
+    const query = getDb(db)
       .select({
         id: table.id,
         shortcode: table.shortcode,
@@ -306,7 +310,9 @@ export async function connectionRecords(
           inArray(table.shortcode, [...new Set(codes.values())]),
           notDeleted(table),
         ),
-      );
+      )
+      .orderBy(table.id);
+    const rows = lock ? await query.for("update") : await query;
     const byShortcode = new Map(rows.map((row) => [row.shortcode, row]));
     for (const [code, shortcode] of codes) {
       const value = byShortcode.get(shortcode);
@@ -331,6 +337,7 @@ export async function prepareConnectionBases(
   expenseProjects?: Awaited<
     ReturnType<typeof prepareExpenseProjectRecommendationContexts>
   >,
+  lock = false,
 ): Promise<PreparedConnectionBases> {
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
   const records = await connectionRecords(
@@ -338,6 +345,7 @@ export async function prepareConnectionBases(
     candidates
       .filter((candidate) => candidate.relation !== "email-purchase")
       .flatMap((candidate) => [candidate.source, candidate.target]),
+    lock,
   );
   const expenses = candidates
     .filter((candidate) => candidate.relation === "expense-project")
@@ -438,6 +446,7 @@ export async function prepareConnectionBases(
           ?.expenses.push(row);
   }
   return {
+    locked: lock,
     records,
     allocations,
     purchaseProducts,
@@ -472,6 +481,8 @@ export async function captureConnectionEvidence(
   lock = false,
   prepared?: PreparedConnectionBases,
 ): Promise<{ basis: ConnectionJson; sourceId: string | null }> {
+  // An unlocked batch can never satisfy a transaction-time evidence fence.
+  if (lock && !prepared?.locked) prepared = undefined;
   const candidate = connectionCandidate.parse(raw);
   if (candidate.relation === "email-purchase")
     return {
@@ -483,11 +494,12 @@ export async function captureConnectionEvidence(
   // Domain parent locks precede dependent payloads: Purchase before financial
   // rows, Project before Product, and Location before moving Inventory.
   const targetFirst =
-    candidate.target.entityKind === "purchase" ||
-    candidate.target.entityKind === "project" ||
-    candidate.target.entityKind === "location";
+    orderedEntityLockKinds([
+      candidate.source.entityKind,
+      candidate.target.entityKind,
+    ])[0] === candidate.target.entityKind;
   const record = async (ref: EntityRef) =>
-    (!lock && prepared?.records.get(connectionRecordKey(ref))) ||
+    prepared?.records.get(connectionRecordKey(ref)) ||
     (await connectionRecord(db, ref, lock));
   const first = await record(targetFirst ? candidate.target : candidate.source);
   const second = await record(
@@ -500,7 +512,7 @@ export async function captureConnectionEvidence(
     case "expense-project": {
       const expenseId = parseShortcodeFor("expense", candidate.source.entityId);
       dependencies = snapshotJson(
-        !lock && prepared?.expenseProject.has(expenseId)
+        prepared?.expenseProject.has(expenseId)
           ? prepared.expenseProject.get(expenseId)
           : await expenseProjectRecommendationContext(db, expenseId),
       );
@@ -531,12 +543,11 @@ export async function captureConnectionEvidence(
         candidate.target.entityId,
       );
       dependencies = snapshotJson({
-        candidates:
-          !lock && prepared?.settlementCandidates.has(purchaseId)
-            ? prepared.settlementCandidates.get(purchaseId)
-            : await listPurchaseSettlementCandidates(db, purchaseId),
+        candidates: prepared?.settlementCandidates.has(purchaseId)
+          ? prepared.settlementCandidates.get(purchaseId)
+          : await listPurchaseSettlementCandidates(db, purchaseId),
         allocations:
-          (!lock && prepared?.allocations.get(source.id)) ||
+          prepared?.allocations.get(source.id) ||
           (await getDb(db)
             .select()
             .from(financialTransactionAllocation)
@@ -568,8 +579,9 @@ export async function captureConnectionEvidence(
       );
       break;
     case "product-purchase": {
-      const prepared_ =
-        !lock && prepared?.purchaseProducts.get(pairKey(target.id, source.id));
+      const prepared_ = prepared?.purchaseProducts.get(
+        pairKey(target.id, source.id),
+      );
       if (prepared_) {
         dependencies = snapshotJson(prepared_);
         break;

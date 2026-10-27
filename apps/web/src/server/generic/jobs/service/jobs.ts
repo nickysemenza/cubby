@@ -2,6 +2,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { findPgError } from "~/server/errors/db-errors";
 import {
   withJobExecution,
   withJobBatchExecution,
@@ -11,6 +12,7 @@ import {
   JobPausedError,
   JobDeferredError,
   JobSupersededError,
+  JobTargetError,
 } from "~/server/generic/jobs/errors";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import {
@@ -24,6 +26,7 @@ import {
   failJob,
   pauseClaimedJob,
   publishJobPage,
+  publishCompletedJobPages,
   renewJob,
   releaseJobClaim,
   type JobClaim,
@@ -229,7 +232,61 @@ async function advanceBatch(
   const checkpoint: Parameters<
     NonNullable<JobHandler["batch"]>["execute"]
   >[2]["checkpoint"] = async (results) => {
-    for (const [id, result] of results) {
+    const remaining = new Map(results);
+    const groups = new Set(
+      [...results.values()].flatMap((result) =>
+        result.status === "fulfilled" && result.value.publicationGroup
+          ? [result.value.publicationGroup]
+          : [],
+      ),
+    );
+    for (const group of groups) {
+      const entries = [...results].flatMap(([id, result]) => {
+        const claim = pending.get(id);
+        if (!claim)
+          throw new Error("Batch checkpoint included an unclaimed Job");
+        return result.status === "fulfilled" &&
+          result.value.publicationGroup === group
+          ? [{ claim, page: result.value.page }]
+          : [];
+      });
+      try {
+        const publicationStartedAt = Date.now();
+        const started = performance.now();
+        const published = await publishCompletedJobPages(
+          db,
+          entries,
+          group.publish,
+        );
+        for (const { claim } of entries) {
+          log.info("publish", {
+            runId: claim.runId,
+            jobId: claim.id,
+            kind: claim.kind,
+            jobKey: claim.key,
+            generation: claim.generation,
+            attempt: claim.attempts,
+            published: published.has(claim.id),
+            done: true,
+            waitReason: null,
+            publicationStartedAt,
+            publicationDurationMs: Math.round(performance.now() - started),
+          });
+          outcomes.push(published.has(claim.id) ? "succeeded" : "superseded");
+          pending.delete(claim.id);
+          remaining.delete(claim.id);
+        }
+      } catch (error) {
+        // Data failures roll back the whole page before individual recovery.
+        if (
+          !(error instanceof JobTargetError) &&
+          !(error instanceof JobSupersededError) &&
+          !/^(22|23|54)/.test(findPgError(error)?.code ?? "")
+        )
+          throw error;
+      }
+    }
+    for (const [id, result] of remaining) {
       const claim = pending.get(id);
       if (!claim) throw new Error("Batch checkpoint included an unclaimed Job");
       outcomes.push(

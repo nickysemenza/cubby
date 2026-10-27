@@ -33,7 +33,7 @@ import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { publishAssessments } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { assessmentCandidateKey } from "~/server/generic/assessment/repo/assessment-state";
 import {
@@ -54,6 +54,7 @@ import {
   connectionReadEvidence,
   connectionReadEvidenceSql,
   forEachConnectionBasis,
+  prepareConnectionBases,
 } from "./connection-evidence";
 import { applyEmailConnection } from "./email-connections";
 import { readExistingConnectionAssessments } from "./existing-assessments";
@@ -67,42 +68,31 @@ const keyFor = (candidate: ConnectionCandidate) =>
     sourceKey(candidate.target),
   ]);
 
-/** Capture candidate evidence before later inference; no proposal is published here. */
-async function prepareEntityConnection(db: Database, raw: ConnectionCandidate) {
-  const [publish] = await prepareEntityConnections(db, [raw]);
-  return publish!;
-}
+/** Fresh retrieval may be retried; it must never exhaust an execution attempt. */
+export class ConnectionEvidenceInvalidatedError extends Error {}
 
-/**
- * `prepareEntityConnection` for a candidate set: records, dependencies and
- * eligibility load per kind for the whole set rather than per candidate, so
- * preparation cost does not grow by round trips with the candidate count.
- */
-export async function prepareEntityConnections(
+export type PreparedEntityConnection = z.infer<
+  typeof connectionAssessmentEvidence
+>;
+
+/** Capture immutable retrieval evidence before any subsequent provider wait. */
+export async function prepareEntityConnectionEvidence(
   db: Database,
   raws: readonly ConnectionCandidate[],
-) {
-  if (raws.length === 0) return [];
+): Promise<PreparedEntityConnection[]> {
   const candidates = raws.map((raw) => connectionCandidate.parse(raw));
-  const publishers: ((
-    transactionDb: Database,
-  ) => Promise<ConnectionProposal>)[] = [];
+  const prepared: PreparedEntityConnection[] = [];
   await forEachConnectionBasis(
     db,
     candidates.map((candidate) => ({ candidate })),
     async ({ candidate }, basis) => {
-      const prepared = connectionAssessmentEvidence.parse({
-        version: 1,
-        candidate,
-        basis,
-      });
-      publishers.push((transactionDb) =>
-        publishPreparedEntityConnection(transactionDb, prepared),
+      prepared.push(
+        connectionAssessmentEvidence.parse({ version: 1, candidate, basis }),
       );
     },
   );
   await assertAcquisitionConnectionsEligible(db, candidates);
-  return publishers;
+  return prepared;
 }
 
 /** Immediate callers still capture their basis before entering publication locks. */
@@ -110,90 +100,156 @@ export async function publishEntityConnection(
   db: Database,
   raw: ConnectionCandidate,
 ): Promise<ConnectionProposal> {
-  const publish = await prepareEntityConnection(db, raw);
-  return publish(db);
+  const prepared = await prepareEntityConnectionEvidence(db, [raw]);
+  const [proposal] = await publishPreparedEntityConnections(db, prepared);
+  return proposal!;
 }
 
-async function publishPreparedEntityConnection(
+/** Locked evidence, eligibility, immutable publications and supersession share a chunk. */
+export async function publishPreparedEntityConnections(
   db: Database,
-  prepared: z.infer<typeof connectionAssessmentEvidence>,
-): Promise<ConnectionProposal> {
-  const { candidate } = prepared;
+  prepared: readonly PreparedEntityConnection[],
+): Promise<ConnectionProposal[]> {
+  if (!prepared.length) return [];
   return withTransactionDatabase(db, async (db) => {
-    const { basis, sourceId } = await captureConnectionEvidence(
+    const candidates = prepared.map((entry) => entry.candidate);
+    // Capture again under endpoint locks. Never reuse the unlocked retrieval basis.
+    const locked = await prepareConnectionBases(
       db,
-      candidate,
+      candidates,
+      undefined,
       true,
     );
-    if (canonicalJson(basis) !== canonicalJson(prepared.basis))
-      throw new Error(
-        "Connection evidence changed after candidate retrieval; discover again before publishing",
+    await assertAcquisitionConnectionsEligible(db, candidates);
+    const entries = [];
+    for (const original of prepared) {
+      const { candidate } = original;
+      const { basis, sourceId } = await captureConnectionEvidence(
+        db,
+        candidate,
+        true,
+        locked,
       );
-    await assertAcquisitionConnectionEligible(db, candidate);
-    if (
-      candidate.relation === "email-purchase" &&
-      !z
-        .object({ dependencies: z.object({ eventId: z.string() }) })
-        .safeParse(basis).success
-    )
-      throw new Error(
-        "Retained Email evidence changed; discover again before publishing",
-      );
-    const evidence = connectionAssessmentEvidence.parse({
-      version: 1,
-      candidate,
-      basis,
-    });
-    const fingerprint = await sha256Hex(canonicalJson(evidence));
-    const candidateKey = await keyFor(candidate);
-    const scope = scopeFor(candidate);
-    const entity = z.enum(shortcodeEntities).parse(candidate.source.entityKind);
-    // The locked basis already read the live source row.
-    const recordId =
-      sourceId ?? (await resolveOrThrow(db, entity, candidate.source.entityId));
-    const prediction = await publishAssessment(
-      db,
-      {
-        publicationKey: `connection:${recordId}:${candidateKey}:${fingerprint}`,
-        family: "recommendation",
-        subject: {
-          kind: "recommendation",
-          entity,
-          recordId,
-          scope,
-          candidateKey,
-        },
-        judgment: { candidateKey },
+      if (canonicalJson(basis) !== canonicalJson(original.basis))
+        throw new ConnectionEvidenceInvalidatedError(
+          "Connection evidence changed after candidate retrieval; discover again before publishing",
+        );
+      if (
+        candidate.relation === "email-purchase" &&
+        !z
+          .object({ dependencies: z.object({ eventId: z.string() }) })
+          .safeParse(basis).success
+      )
+        throw new ConnectionEvidenceInvalidatedError(
+          "Retained Email evidence changed; discover again before publishing",
+        );
+      const evidence = connectionAssessmentEvidence.parse({
+        version: 1,
+        candidate,
+        basis,
+      });
+      const fingerprint = await sha256Hex(canonicalJson(evidence));
+      const candidateKey = await keyFor(candidate);
+      const scope = scopeFor(candidate);
+      const entity = z
+        .enum(shortcodeEntities)
+        .parse(candidate.source.entityKind);
+      const recordId =
+        sourceId ??
+        (await resolveOrThrow(db, entity, candidate.source.entityId));
+      entries.push({
+        candidate,
         fingerprint,
-        producer: null,
+        candidateKey,
+        scope,
+        entity,
+        recordId,
         evidence,
-      },
-      // Queue counts need only this reference, not the full immutable basis.
-      { data: { connection: true, connectionTarget: candidate.target } },
+      });
+    }
+    const predictions = await publishAssessments(
+      db,
+      entries.map((entry) => ({
+        input: {
+          publicationKey: `connection:${entry.recordId}:${entry.candidateKey}:${entry.fingerprint}`,
+          family: "recommendation",
+          subject: {
+            kind: "recommendation",
+            entity: entry.entity,
+            recordId: entry.recordId,
+            scope: entry.scope,
+            candidateKey: entry.candidateKey,
+          },
+          judgment: { candidateKey: entry.candidateKey },
+          fingerprint: entry.fingerprint,
+          producer: null,
+          evidence: entry.evidence,
+        },
+        // Queue counts need only this reference, not the full immutable basis.
+        projection: {
+          data: { connection: true, connectionTarget: entry.candidate.target },
+        },
+      })),
+    );
+    // Several page owners may retrieve the same edge. Sequential publication
+    // leaves the last fingerprint active; the set write must do the same.
+    const latest = new Map(
+      entries.map((entry, index) => [
+        `${entry.entity}:${entry.recordId}:${entry.scope}:${entry.candidateKey}`,
+        { entry, index },
+      ]),
+    );
+    const slots = [...latest.values()];
+    const wanted = sql.join(
+      slots.map(
+        ({ entry, index }) =>
+          sql`(${entry.entity}::text, ${entry.recordId}::uuid, ${entry.scope}::text, ${entry.candidateKey}::text, ${predictions[index]!.id}::uuid)`,
+      ),
+      sql`, `,
     );
     await transitionAssessmentStates(
       db,
       and(
         eq(assessmentState.family, "recommendation"),
-        eq(assessmentState.entity, entity),
-        eq(assessmentState.recordId, recordId),
         eq(assessmentState.active, true),
         sql`${assessmentState.suppression} IS NULL`,
-        sql`${assessmentState.id} <> ${prediction.id}`,
-        sql`${assessmentState.id} IN (SELECT prior.id FROM "Assessment" prior WHERE prior.subject->>'scope'=${scope} AND prior.subject->>'candidateKey'=${candidateKey})`,
+        inArray(assessmentState.entity, [
+          ...new Set(entries.map((entry) => entry.entity)),
+        ]),
+        inArray(assessmentState.recordId, [
+          ...new Set(entries.map((entry) => entry.recordId)),
+        ]),
+        // Scope the indexed live subjects first, then join immutable evidence
+        // once. An OR of per-slot Assessment subqueries replans/scans history
+        // for every candidate and dominated production-copy publication time.
+        sql`EXISTS (
+          SELECT 1 FROM (VALUES ${wanted}) wanted(entity, record_id, scope, candidate_key, current_id)
+          JOIN "Assessment" prior ON prior.id = ${assessmentState.id}
+          WHERE wanted.entity = ${assessmentState.entity}
+            AND wanted.record_id = ${assessmentState.recordId}
+            AND prior.id <> wanted.current_id
+            AND prior.subject->>'scope' = wanted.scope
+            AND prior.subject->>'candidateKey' = wanted.candidate_key
+        )`,
       ),
       { active: false, status: "superseded" },
       { kind: "superseded_by_publication" },
     );
-    return connectionProposal.parse({
-      ...candidate,
-      fingerprint,
-      review: {
-        assessmentId: prediction.id,
-        suppression: { scope, candidateKey, fingerprint: null },
-      },
-      integration: { kind: "connection-review" },
-    });
+    return entries.map((entry, index) =>
+      connectionProposal.parse({
+        ...entry.candidate,
+        fingerprint: entry.fingerprint,
+        review: {
+          assessmentId: predictions[index]!.id,
+          suppression: {
+            scope: entry.scope,
+            candidateKey: entry.candidateKey,
+            fingerprint: null,
+          },
+        },
+        integration: { kind: "connection-review" },
+      }),
+    );
   });
 }
 

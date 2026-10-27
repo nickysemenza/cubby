@@ -216,6 +216,32 @@ describe("AI response cache", () => {
   );
 
   // A full group's pair reads must be bounded by shards/chunks, not candidate count.
+  it("awaits its own duplicate claim inside a Job wave instead of deferring a sibling", async () => {
+    const batch = new AiResponseCacheBatch(2);
+    const keyInput = input(`synthetic-owned-duplicate-${crypto.randomUUID()}`);
+    const release = Promise.withResolvers<void>();
+    const compute = vi.fn(async () => {
+      await release.promise;
+      return { choice: "one" };
+    });
+    const results = await withJobBatchExecution(() =>
+      Promise.all(
+        [0, 1].map((index) =>
+          withAiResponseCache({
+            enabled: true,
+            batch: { batch, index },
+            keyInput,
+            validate,
+            compute,
+            onWait: () => release.resolve(),
+          }),
+        ),
+      ),
+    );
+    expect(results).toEqual([{ choice: "one" }, { choice: "one" }]);
+    expect(compute).toHaveBeenCalledOnce();
+  });
+
   it("batches 240 cache lookups and reuses hits while handling misses", async () => {
     const { getAiResponseCacheNamespace } = await import("~/server/cf-env");
     const namespace = getAiResponseCacheNamespace();

@@ -7,7 +7,7 @@ import {
   type AiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
-import { entityRefKey } from "@cubby/schemas/entity";
+import { entityRefKey, type EntityRef } from "@cubby/schemas/entity";
 import {
   basisValueOf,
   fieldSuggestionContextKeys,
@@ -71,9 +71,11 @@ import type {
   EvaluationPageTarget,
   EvaluationPagePreparation,
   EvaluationPageOutcome,
+  EvaluationPagePublication,
 } from "~/server/ai/repo/evaluation-page";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
 import { productIdentityEvidenceFences } from "~/server/domains/product/repo/match/product-identity-fence";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
@@ -134,6 +136,7 @@ import {
 } from "../repo/ai-work-state";
 import {
   connectionSourceFingerprint,
+  connectionSourceFingerprintsOrMissing,
   countConnectionSweepSources,
 } from "../repo/connection-refresh";
 import { systemActor } from "../repo/ensure-run";
@@ -833,7 +836,31 @@ export async function executeAiRefreshTarget(
       // Units publish a few per transaction: each transaction's guard and
       // fences cost about ten statements, while one transaction over every
       // unit held activation and a pooled connection for 100+ statements (#2819).
-      const units = preparation.publications;
+      const { publishPreparedEntityConnections } =
+        await import("~/server/domains/connection/repo/entity-connections");
+      const units = [
+        ...Array.from(
+          { length: Math.ceil(preparation.connections.length / 16) },
+          (_, index) => async (tx: Database) => {
+            await publishPreparedEntityConnections(
+              tx,
+              preparation.connections.slice(index * 16, index * 16 + 16),
+            );
+          },
+        ),
+        ...Array.from(
+          { length: Math.ceil(preparation.productPairs.length / 16) },
+          (_, index) => async (tx: Database) => {
+            const results = await publishProductPairPublications(
+              tx,
+              preparation.productPairs.slice(index * 16, index * 16 + 16),
+            );
+            if (results.some((result) => !result.valid))
+              throw new Error("Product pair evidence changed during inference");
+          },
+        ),
+        ...preparation.publications,
+      ];
       for (
         let offset = 0;
         offset < units.length;
@@ -851,6 +878,19 @@ export async function executeAiRefreshTarget(
               id,
               token,
               async (transactionDb) => {
+                // A single unit owns its ordered locks. Combined legacy units
+                // must acquire their union before any later callback runs.
+                if (chunk.length > 1) {
+                  const { connectionRecords } =
+                    await import("~/server/domains/connection/repo/connection-evidence");
+                  await connectionRecords(
+                    transactionDb,
+                    preparation.lockRefs.filter(
+                      (ref) => ref.entityKind !== "email",
+                    ),
+                    true,
+                  );
+                }
                 for (const publish of chunk) await publish(transactionDb);
                 await fenceSource(transactionDb);
                 return null;
@@ -1294,6 +1334,7 @@ function productEvaluationPageAdapter(
   ports: AiRefreshPorts = {},
 ): EvaluationPageAdapter<ProductPagePreparation, ProductPageOutcome> {
   return {
+    operation: "product-identity",
     async prepare(db, targets) {
       const byId = new Map(
         targets.map((entry) => [entry.evaluation.id, entry]),
@@ -1518,6 +1559,11 @@ function pageFailure(
     error instanceof Error ? error.message : String(error),
   );
   const obsolete =
+    !!findErrorCause(
+      error,
+      (cause): cause is ConnectionEvidenceInvalidatedError =>
+        cause instanceof ConnectionEvidenceInvalidatedError,
+    ) ||
     /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists/.test(
       message,
     );
@@ -1640,7 +1686,7 @@ export async function executeAiRefreshPage<P, O>(
     const key = JSON.stringify([
       target.evaluation.runId,
       target.evaluation.feature,
-      "product-identity",
+      adapter.operation,
       false,
       "default",
     ]);
@@ -1649,19 +1695,22 @@ export async function executeAiRefreshPage<P, O>(
       usage = {
         db,
         runId: target.evaluation.runId,
-        operation: "product-identity",
+        operation: adapter.operation,
       };
       groups.set(key, usage);
     }
     return usage;
   };
   const outcomes: EvaluationPageOutcome<O>[] = [];
-  const settled = await settleDecisionWorkItems(ready, (entry) =>
-    inEvaluationContext(db, entry.target, async () => ({
-      target: entry.target,
-      evidenceDigest: entry.evidenceDigest,
-      outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
-    })),
+  const settled = await settleDecisionWorkItems(
+    ready,
+    (entry) =>
+      inEvaluationContext(db, entry.target, async () => ({
+        target: entry.target,
+        evidenceDigest: entry.evidenceDigest,
+        outcome: await adapter.evaluate(db, entry, usageFor(entry.target)),
+      })),
+    adapter.concurrency,
   );
   settled.forEach((result, index) => {
     if (result.status === "fulfilled") outcomes.push(result.value);
@@ -1693,8 +1742,20 @@ export async function executeAiRefreshPage<P, O>(
       } else failures.push(pageFailure(chunk[0]!.target, error));
     }
   };
-  for (let offset = 0; offset < outcomes.length; offset += 25)
-    await publishChunk(outcomes.slice(offset, offset + 25));
+  const chunks: EvaluationPageOutcome<O>[][] = [];
+  let weight = 0;
+  for (const outcome of outcomes) {
+    const cost = Math.max(1, adapter.weight?.(outcome) ?? 1);
+    const last = chunks.at(-1);
+    if (last && last.length < 25 && weight + cost <= 25) {
+      last.push(outcome);
+      weight += cost;
+    } else {
+      chunks.push([outcome]);
+      weight = cost;
+    }
+  }
+  for (const chunk of chunks) await publishChunk(chunk);
   await failAiEvaluationPage(db, failures);
   log.info("evaluation page", {
     claimedSlots: targets.length,
@@ -1705,7 +1766,7 @@ export async function executeAiRefreshPage<P, O>(
         outcomes.some((outcome) => outcome.target === entry.target),
       ).length,
     failed: failures.length,
-    publicationChunks: Math.ceil(outcomes.length / 25),
+    publicationChunks: chunks.length,
     usageGroups: groups.size,
     preparedBytes,
   });
@@ -1900,4 +1961,259 @@ export async function executeProductAiRefreshPage(
         : entry;
     });
   });
+}
+
+type ConnectionPagePreparation = {
+  source: EntityRef;
+  initialConnections?: Awaited<
+    ReturnType<
+      typeof import("~/server/domains/connection/service/entity-connections").prepareEntityConnections
+    >
+  >["connections"];
+};
+type ConnectionPageOutcome = {
+  source: EntityRef;
+  lockRefs: EntityRef[];
+  productPairs: readonly PreparedProductPairPublication[];
+  connections: Awaited<
+    ReturnType<
+      typeof import("~/server/domains/connection/service/entity-connections").prepareEntityConnections
+    >
+  >["connections"];
+  publications: readonly ((transactionDb: Database) => Promise<void>)[];
+};
+
+/**
+ * Connection sources evaluated at once. A Worker invocation holds five strong
+ * connections, so more database-bound sources only queue; the margin overlaps
+ * provider waits such as query embeddings.
+ */
+const CONNECTION_PAGE_CONCURRENCY = 8;
+
+/**
+ * A connection evaluation's cost was its own claim, guard and settlement
+ * (about 30 round trips for a source with no candidates); a page shares them.
+ * Heavy deterministic retrieval shares page inputs; source-local provider
+ * continuations join decision waves and publication shares locked evidence.
+ */
+function connectionEvaluationPageAdapter(
+  ports: AiRefreshPorts = {},
+): EvaluationPageAdapter<ConnectionPagePreparation, ConnectionPageOutcome> {
+  const changed = () =>
+    new Error("Connection discovery source changed during evaluation");
+  const usageGroups = new Map<AiRunContext, Map<string, AiRunContext>>();
+  const operationUsage = (
+    page: AiRunContext,
+    operation: string,
+    recordUsage = true,
+  ) => {
+    let operations = usageGroups.get(page);
+    if (!operations) {
+      operations = new Map();
+      usageGroups.set(page, operations);
+    }
+    let usage = operations.get(operation);
+    if (!usage) {
+      usage = {
+        ...page,
+        operation,
+        force: ports.suggestPorts?.force ?? page.force,
+        ...(recordUsage ? {} : { db: undefined }),
+      };
+      operations.set(operation, usage);
+    }
+    return usage;
+  };
+  return {
+    operation: "entity-connections",
+    concurrency: CONNECTION_PAGE_CONCURRENCY,
+    async prepare(db, targets) {
+      const { entityGraphRootSchema } =
+        await import("@cubby/schemas/entity-graph");
+      const sources = targets.map((entry) => {
+        const parsed = entityGraphRootSchema.safeParse(
+          entry.evaluation.snapshot,
+        );
+        return parsed.success &&
+          entry.target.kind === "connection" &&
+          parsed.data.entityKind === entry.target.entity
+          ? parsed.data
+          : null;
+      });
+      const present = sources.flatMap((source) => (source ? [source] : []));
+      const fingerprints = await connectionSourceFingerprintsOrMissing(
+        db,
+        present,
+      );
+      const current = new Map(
+        present.map((source, index) => [
+          entityRefKey(source.entityKind, source.entityId),
+          fingerprints[index],
+        ]),
+      );
+      const { prepareEntityConnectionSources } =
+        await import("~/server/domains/connection/service/entity-connections");
+      const eligible = present.filter((source) => {
+        const index = sources.indexOf(source);
+        return (
+          current.get(entityRefKey(source.entityKind, source.entityId)) ===
+          targets[index]?.evaluation.provenance.inputFingerprint
+        );
+      });
+      const initial = await prepareEntityConnectionSources(db, eligible);
+      return targets.map((entry, index) => {
+        const source = sources[index];
+        const fingerprint = source
+          ? current.get(entityRefKey(source.entityKind, source.entityId))
+          : null;
+        const captured = source ? initial.get(source.entityId) : undefined;
+        if (captured?.status === "rejected")
+          return {
+            kind: "failed" as const,
+            target: entry,
+            error: captured.reason,
+          };
+        return source &&
+          fingerprint === entry.evaluation.provenance.inputFingerprint
+          ? {
+              kind: "ready" as const,
+              target: entry,
+              evidenceDigest: fingerprint,
+              prepared: {
+                source,
+                initialConnections:
+                  captured?.status === "fulfilled" ? captured.value : undefined,
+              },
+            }
+          : { kind: "failed" as const, target: entry, error: changed() };
+      });
+    },
+    async evaluate(db, ready, usage) {
+      const { prepareEntityConnections } =
+        await import("~/server/domains/connection/service/entity-connections");
+      const { source } = ready.prepared;
+      const preparation = await prepareEntityConnections(
+        db,
+        kernel(db, ports, ready.target.evaluation.runId),
+        source,
+        {
+          initialConnections: ready.prepared.initialConnections,
+          suggestPorts: {
+            ...ports.suggestPorts,
+            usageFor:
+              ports.suggestPorts?.usageFor ??
+              ((operation) =>
+                operationUsage(
+                  usage,
+                  operation,
+                  ports.suggestPorts?.recordUsage !== false,
+                )),
+          },
+          productIdentityPorts: {
+            ...ports.productIdentityPorts,
+            usage:
+              ports.productIdentityPorts?.usage ??
+              operationUsage(usage, "product-identity"),
+          },
+        },
+      );
+      // Incomplete coverage retries the whole source rather than publishing
+      // part of its candidates.
+      if (!preparation.complete)
+        throw new Error(
+          `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
+        );
+      return {
+        source,
+        lockRefs: preparation.lockRefs,
+        connections: preparation.connections,
+        productPairs: preparation.productPairs,
+        publications: preparation.publications,
+      };
+    },
+    weight: (entry) =>
+      1 +
+      entry.outcome.publications.length +
+      entry.outcome.connections.length +
+      entry.outcome.productPairs.length,
+    async publish(tx, outcomes) {
+      const fingerprints = await connectionSourceFingerprintsOrMissing(
+        tx,
+        outcomes.map((entry) => entry.outcome.source),
+      );
+      const { publishPreparedEntityConnections } =
+        await import("~/server/domains/connection/repo/entity-connections");
+      const valid = outcomes.filter(
+        (entry, index) => fingerprints[index] === entry.evidenceDigest,
+      );
+      // Prelock the entire publication, including later field callbacks. A
+      // callback must not acquire a parent after an earlier child was locked.
+      const { connectionRecords } =
+        await import("~/server/domains/connection/repo/connection-evidence");
+      await connectionRecords(
+        tx,
+        valid.flatMap((entry) =>
+          entry.outcome.lockRefs.filter((ref) => ref.entityKind !== "email"),
+        ),
+        true,
+      );
+      await publishPreparedEntityConnections(
+        tx,
+        valid.flatMap((entry) => entry.outcome.connections),
+      );
+      const pairs = [
+        ...new Map(
+          valid
+            .flatMap((entry) => entry.outcome.productPairs)
+            .map((pair) => [pair.key, pair]),
+        ).values(),
+      ];
+      for (let offset = 0; offset < pairs.length; offset += 25) {
+        const results = await publishProductPairPublications(
+          tx,
+          pairs.slice(offset, offset + 25),
+        );
+        if (results.some((result) => !result.valid))
+          throw new Error("Product pair evidence changed during inference");
+      }
+
+      const published: EvaluationPagePublication[] = [];
+      for (const [index, entry] of outcomes.entries()) {
+        if (fingerprints[index] !== entry.evidenceDigest) {
+          published.push({
+            evaluationId: entry.target.evaluation.id,
+            state: "obsolete",
+            receipt: { reason: changed().message },
+          });
+          continue;
+        }
+        for (const publish of entry.outcome.publications) await publish(tx);
+        published.push({
+          evaluationId: entry.target.evaluation.id,
+          state: "completed",
+          receipt: jsonSnapshot({
+            source: entry.outcome.source,
+            discovered: true,
+            candidates:
+              entry.outcome.publications.length +
+              entry.outcome.connections.length +
+              entry.outcome.productPairs.length,
+          }),
+        });
+      }
+      return published;
+    },
+  };
+}
+
+export async function executeConnectionAiRefreshPage(
+  db: Database,
+  targets: readonly EvaluationPageTarget[],
+  ports: AiRefreshPorts = {},
+) {
+  await executeAiRefreshPage(
+    db,
+    targets,
+    connectionEvaluationPageAdapter(ports),
+  );
 }

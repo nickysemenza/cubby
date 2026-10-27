@@ -462,6 +462,10 @@ export const nativeCoverage = {
       { section: "spending-classification", label: "Classify spending on web" },
       "A category's spending mapping changes only after a historical-impact review, which web draws.",
     ),
+    "run.evaluations": handoff(
+      { section: "evaluations", label: "Open evaluation progress on web" },
+      "Records checked, pace and outcomes by record are web-only for now; native shows the Run's progress and steps reports.",
+    ),
   },
   /**
    * Finance verbs a report's `records` block offers. `RecordsBlockView.verbButton` switches over

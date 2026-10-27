@@ -74,12 +74,66 @@ const runDecisionsOut = z.object({
 });
 export type RunDecisionsOut = z.infer<typeof runDecisionsOut>;
 
+/** One record kind's AI evaluations within a Run. */
+const runEvaluationKind = z.object({
+  entity: z.string().nullable(),
+  feature: z.string(),
+  waiting: z.number().int().nonnegative(),
+  running: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  obsolete: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+  /** Mean claim-to-settlement time of completed evaluations. */
+  averageSeconds: z.number().nonnegative().nullable(),
+});
+/** One settled evaluation: its record, outcome and duration. */
+const runEvaluationOutcome = z.object({
+  id: z.uuid(),
+  entity: z.string().nullable(),
+  recordCode: z.string().nullable(),
+  feature: z.string(),
+  state: z.string(),
+  /** Suggestions a connection evaluation published; null when not recorded. */
+  candidates: z.number().int().nonnegative().nullable(),
+  reason: z.string().nullable(),
+  error: z.string().nullable(),
+  seconds: z.number().nonnegative().nullable(),
+  settledAt: z.iso.datetime(),
+});
+const runEvaluationsOut = z.object({
+  measuredAt: z.iso.datetime(),
+  pace: z.object({
+    windowMinutes: z.number().int().positive(),
+    completedPerMinute: z.number().nonnegative(),
+    lastCompletedAt: z.iso.datetime().nullable(),
+  }),
+  /** A discovery pass's walk through its roster; null for other Runs. */
+  roster: z
+    .object({
+      walked: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+    })
+    .nullable(),
+  byKind: z.array(runEvaluationKind),
+  recent: z.array(runEvaluationOutcome),
+});
+export type RunEvaluationsOut = z.infer<typeof runEvaluationsOut>;
+
 export const runDetailContract = defineContract(
   "runDetail",
   {
     steps: query({
       input: z.strictObject({ runId: runShortcode }),
       output: runDetailStepsOut,
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    evaluations: query({
+      input: z.strictObject({
+        runId: runShortcode,
+        failedOnly: z.boolean().default(false),
+      }),
+      output: runEvaluationsOut,
       cache: { tags: [["run"]], profile: "live-status" },
     }),
     decisions: query({

@@ -63,11 +63,10 @@ export async function discoverAcquisitionCandidateScan(
     .join(" ")
     .trim()
     .slice(0, 500);
+  const identityQuery = basisValueOf(record.name) ?? identity;
   const queries = [
     ...new Set(
-      [basisValueOf(record.name) ?? identity, description || identity].filter(
-        (q) => q.length >= 3,
-      ),
+      [identityQuery, description || identity].filter((q) => q.length >= 3),
     ),
   ].slice(0, 2);
   const kinds: SearchableEntity[] =
@@ -85,15 +84,22 @@ export async function discoverAcquisitionCandidateScan(
       : basisValueOf(record.name);
   // The searches are independent; run them together, then filter every hit
   // in the original kind/query/list order with batched eligibility.
+  // Lexical search takes only the identity query. A description-length query
+  // ANDs dozens of prefix terms and trigram-compares the whole string, which
+  // took 150-400 ms per search on production data and matched only records
+  // its semantic search already finds.
+  const lexicalQuery = identityQuery.length >= 3 ? identityQuery : null;
   const searches = await Promise.all(
     kinds.flatMap((kind) =>
       queries.map(async (query) => {
         const [lexical, semantic] = await Promise.all([
-          findLexicalSearchCandidates(
-            db,
-            { query, entityKinds: [kind], limit: 10 },
-            10,
-          ),
+          query === lexicalQuery
+            ? findLexicalSearchCandidates(
+                db,
+                { query, entityKinds: [kind], limit: 10 },
+                10,
+              )
+            : [],
           semanticEntityCandidateScan(db, query, 10, kind, options.runId),
         ]);
         return { kind, lexical, semantic };

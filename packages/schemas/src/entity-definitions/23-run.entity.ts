@@ -237,6 +237,12 @@ export default defineEntity({
         // Workspaces put review tools before execution evidence.
         {
           kind: "slot",
+          id: "evaluations",
+          workspace: "work",
+          title: "Evaluation progress",
+        },
+        {
+          kind: "slot",
           id: "photo-batch",
           workspace: "work",
           title: "Photos",
