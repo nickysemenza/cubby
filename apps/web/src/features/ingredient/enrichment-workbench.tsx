@@ -29,7 +29,7 @@ import {
   createNameColumn,
 } from "~/entity/table/column-helpers";
 import { ListWorkbench } from "~/entity/table/list-workbench";
-import { CoverageChips } from "~/features/problems/components/unit-coverage-fix";
+import { CoverageChips } from "~/features/units/coverage-chips";
 import {
   createManyProductsStream,
   markProductsUsdaUnavailableStream,

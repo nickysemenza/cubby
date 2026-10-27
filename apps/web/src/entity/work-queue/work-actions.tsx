@@ -1,9 +1,13 @@
 import type { WorkAction, WorkQueueRow } from "@cubby/schemas/work-queue";
-import { type ComponentType, Suspense, useState } from "react";
-import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
+import {
+  type ComponentType,
+  type ReactNode,
+  Suspense,
+  useState,
+} from "react";
 
 import { featureRegistry } from "~/entity/feature-registry";
-import { showErrorToast } from "~/ui/feedback/error-details";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,60 +27,34 @@ import { Button } from "~/ui/primitives/button";
  */
 export type WorkActionTarget =
   | { readonly scope: "item"; readonly row: WorkQueueRow }
-  | {
-      readonly scope: "group";
-      readonly reason: string;
-      readonly count: number;
-    };
+  | { readonly scope: "group"; readonly reason: string; readonly count: number };
 
-/**
- * How the client performs a declared action. `run` resolves to the summary
- * toast (null for none); `dialog` opens the owning domain's guided flow.
- */
-export type WorkActionHandler =
-  | {
-      readonly kind: "run";
-      readonly run: (target: WorkActionTarget) => Promise<string | null>;
-    }
-  | {
-      readonly kind: "dialog";
-      readonly Dialog: ComponentType<{
-        target: WorkActionTarget;
-        onClose: () => void;
-      }>;
-    };
+export interface WorkActionProps {
+  readonly action: WorkAction;
+  readonly target: WorkActionTarget;
+}
 
 /**
  * The client half of every work source's declared actions, keyed by the
- * action's id. Sources declare what a row or group offers; the owning
- * feature fills this table (`features/registry.tsx`) with what performs it.
+ * action's id: a component that performs it, built from the triggers below.
+ * Sources declare what a row or group offers; the owning feature fills this
+ * table (`features/registry.tsx`) lazily.
  */
-export type WorkActionTable = Readonly<Record<string, WorkActionHandler>>;
+export type WorkActionTable = Readonly<
+  Record<string, ComponentType<WorkActionProps>>
+>;
 
-function WorkActionButton({
+const stop = (event: { stopPropagation: () => void }) =>
+  event.stopPropagation();
+
+/** A declared action that runs at once; destructive ones confirm first. */
+export function WorkActionTrigger({
   action,
   target,
-}: {
-  action: WorkAction;
-  target: WorkActionTarget;
-}) {
-  const handler = featureRegistry().workActions[action.id];
+  pending,
+  onRun,
+}: WorkActionProps & { pending: boolean; onRun: () => void }) {
   const [confirming, setConfirming] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-  if (!handler) return null;
-  const run = async () => {
-    if (handler.kind === "dialog") return setOpen(true);
-    setRunning(true);
-    try {
-      const summary = await handler.run(target);
-      if (summary) toast.success(summary);
-    } catch (error) {
-      showErrorToast(error, action.label);
-    } finally {
-      setRunning(false);
-    }
-  };
   return (
     <>
       <Button
@@ -84,18 +62,18 @@ function WorkActionButton({
         variant="ghost"
         size="xs"
         className={action.destructive ? "text-destructive" : undefined}
-        disabled={running}
+        disabled={pending}
         onClick={(event) => {
-          event.stopPropagation();
+          stop(event);
           if (action.destructive) setConfirming(true);
-          else void run();
+          else onRun();
         }}
       >
         {action.label}
       </Button>
       {action.destructive ? (
         <AlertDialog open={confirming} onOpenChange={setConfirming}>
-          <AlertDialogContent>
+          <AlertDialogContent onClick={stop}>
             <AlertDialogHeader>
               <AlertDialogTitle>{action.label}</AlertDialogTitle>
               <AlertDialogDescription>
@@ -110,7 +88,7 @@ function WorkActionButton({
                 variant="destructive"
                 onClick={() => {
                   setConfirming(false);
-                  void run();
+                  onRun();
                 }}
               >
                 {action.label}
@@ -119,16 +97,59 @@ function WorkActionButton({
           </AlertDialogContent>
         </AlertDialog>
       ) : null}
-      {open && handler.kind === "dialog" ? (
-        <Suspense fallback={null}>
-          <handler.Dialog target={target} onClose={() => setOpen(false)} />
-        </Suspense>
-      ) : null}
     </>
   );
 }
 
-/** A row's or group header's declared actions. */
+/** A declared guided flow: the button opens the domain's dialog. */
+export function WorkActionDialogTrigger({
+  action,
+  children,
+}: {
+  action: WorkAction;
+  children: (close: () => void) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        onClick={(event) => {
+          stop(event);
+          setOpen(true);
+        }}
+      >
+        {action.label}
+      </Button>
+      {open ? children(() => setOpen(false)) : null}
+    </>
+  );
+}
+
+/** A declared action that continues in another page. */
+export function WorkActionLink({
+  action,
+  href,
+}: {
+  action: WorkAction;
+  href: string;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      nativeButton={false}
+      onClick={stop}
+      render={<Link to={href} />}
+    >
+      {action.label}
+    </Button>
+  );
+}
+
+/** A row's or group header's declared actions that have a handler. */
 export function WorkActions({
   actions,
   target,
@@ -136,12 +157,19 @@ export function WorkActions({
   actions: readonly WorkAction[];
   target: WorkActionTarget;
 }) {
-  if (actions.length === 0) return null;
+  const handlers = featureRegistry().workActions;
+  const performed = actions.flatMap((action) => {
+    const Handler = handlers[action.id];
+    return Handler ? [{ action, Handler }] : [];
+  });
+  if (performed.length === 0) return null;
   return (
     <span className="flex items-center justify-end gap-1">
-      {actions.map((action) => (
-        <WorkActionButton key={action.id} action={action} target={target} />
-      ))}
+      <Suspense fallback={null}>
+        {performed.map(({ action, Handler }) => (
+          <Handler key={action.id} action={action} target={target} />
+        ))}
+      </Suspense>
     </span>
   );
 }

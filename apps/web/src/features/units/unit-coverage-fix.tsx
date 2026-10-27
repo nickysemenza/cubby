@@ -18,18 +18,6 @@ import type { UnitCoverageItem } from "./unit-coverage-items";
 type ProductDetail = NonNullable<EntityDetailByEntity["product"]>;
 const updateProduct = entityMutationOptionsFactory("product", "update");
 
-// CoverageChips moved to the units folder (lean deps — Badge/Row/BASE_KINDS only)
-// so list/detail bundles that show coverage don't pull in this file's mutation
-// hooks + transport. Re-exported here for existing problems-page callers.
-export { CoverageChips } from "~/features/units/coverage-chips";
-// Re-export the pure core (defined in unit-coverage-items.ts so it stays
-// unit-testable) so the registry can import everything from one place.
-export {
-  buildUnitCoverageItems,
-  type UnitCoverageItem,
-  unitCoverageGroup,
-} from "./unit-coverage-items";
-
 /** The recurring number input in these fixes, with its shared defaults. */
 function NumberInput({ step = "any", ...props }: ComponentProps<typeof Input>) {
   return (

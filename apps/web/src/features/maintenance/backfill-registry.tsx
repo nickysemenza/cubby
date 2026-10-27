@@ -4,7 +4,7 @@ import { backfillProductUpcImagesStream } from "~/features/product/product-strea
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
 
-import type { BackfillButtonProps } from "./problem-backfill-action";
+import type { BackfillButtonProps } from "./backfill-button";
 
 /**
  * Identity helper that pins each entry's result type explicitly, so its
@@ -14,11 +14,10 @@ import type { BackfillButtonProps } from "./problem-backfill-action";
 const def = <TResult,>(config: BackfillButtonProps<TResult>) => config;
 
 /**
- * The batch backfills that appear on BOTH surfaces: a section's "fix all" header
- * button on the Problems page, and a force-run row in Settings → Maintenance.
- * The mutation, invalidation, toast wording, and button labels live here once,
- * so the two surfaces can't drift; each surface keeps only its own display copy
- * (Problems: the section title/description; Maintenance: the row label + count).
+ * The batch backfills that appear on BOTH surfaces: a Problems reason group's
+ * declared action in the Work queue, and a force-run row in Settings →
+ * Maintenance. The mutation, invalidation, toast wording, and button labels
+ * live here once, so the two surfaces can't drift.
  *
  * Recompute and the two WASM parse-sweeps (re-parse lines, prune unused aliases)
  * are intentionally absent — they're Maintenance-only dry-run/fix-all actions

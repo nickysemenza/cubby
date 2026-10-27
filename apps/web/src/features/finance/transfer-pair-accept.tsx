@@ -3,7 +3,10 @@ import { financialTransactionShortcode } from "@cubby/schemas/identifiers";
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import type { WorkActionTarget } from "~/entity/work-queue/work-actions";
+import {
+  WorkActionDialogTrigger,
+  type WorkActionProps,
+} from "~/entity/work-queue/work-actions";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/catalog/financialTransaction.gen";
 import { householdContribution } from "~/integrations/tanstack-query/generated/catalog/householdContribution.gen";
 import { formatCurrency } from "~/lib/number-format";
@@ -45,26 +48,24 @@ export function TransferPairAccept({
 }
 
 /** The transfer reconciliation row's guided flow: pick the other leg. */
-export function TransferPairDialog({
-  target,
-  onClose,
-}: {
-  target: WorkActionTarget;
-  onClose: () => void;
-}) {
+export function TransferPairAction({ action, target }: WorkActionProps) {
   const transactionId = target.scope === "item" ? target.row.id : null;
   if (!transactionId) return null;
   return (
-    <Overlay
-      open
-      onOpenChange={(open) => !open && onClose()}
-      title="Pair transfer"
-      description="Accept the counterpart leg of this account transfer."
-      size="lg"
-      cancelLabel="Done"
-    >
-      <TransferPairAccept transactionId={transactionId} />
-    </Overlay>
+    <WorkActionDialogTrigger action={action}>
+      {(close) => (
+        <Overlay
+          open
+          onOpenChange={(open) => !open && close()}
+          title="Pair transfer"
+          description="Accept the counterpart leg of this account transfer."
+          size="lg"
+          cancelLabel="Done"
+        >
+          <TransferPairAccept transactionId={transactionId} />
+        </Overlay>
+      )}
+    </WorkActionDialogTrigger>
   );
 }
 

@@ -4,10 +4,10 @@ import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
 
 /**
- * The header "fix all" button shared across Problems sections: a small button
+ * The run button shared by maintenance tools: a small button
  * that swaps to a spinner + pending label while its mutation runs.
  */
-export function ProblemActionButton({
+export function PendingButton({
   onClick,
   isPending,
   idleLabel,

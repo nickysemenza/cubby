@@ -13,7 +13,7 @@ import type { BulkProgressEvent } from "~/lib/bulk-progress";
 import { Stack } from "~/ui/layout";
 import { Progress } from "~/ui/primitives/progress";
 
-import { ProblemActionButton } from "./problem-action-button";
+import { PendingButton } from "./pending-button";
 
 /**
  * Result-driven toast: which sonner variant to fire and with what message. The
@@ -47,43 +47,47 @@ export type BackfillButtonProps<TResult> = {
   foreground?: boolean;
 };
 
-/**
- * The shared "fix all" button for a Problems section, driven entirely by props.
- * The backfill runs server-side in ONE streamed mutation (see `useBulkStream`);
- * this owns the stream and renders a live `<Progress>` bar beneath the button
- * while it runs, then fires the result-derived toast + invalidations on done.
- * `TResult` is the mutation's final summary (pinned per registry entry).
- */
-export function BackfillButton<TResult>({
+/** Starts a backfill's stream, then toasts and invalidates when it ends. */
+export function useBackfill<TResult>({
   run,
   invalidateTags,
   toastResult,
-  idleLabel,
-  pendingLabel,
-  foreground,
-}: BackfillButtonProps<TResult>): ReactNode {
+}: Pick<BackfillButtonProps<TResult>, "run" | "invalidateTags" | "toastResult">) {
   const queryClient = useQueryClient();
   const { start, running, progress } = useBulkStream<unknown, TResult>();
+  return {
+    running,
+    progress,
+    start: () =>
+      void start(run, {
+        onDone: (data) => {
+          const { tone, message } = toastResult(data);
+          toast[tone](message);
+          void invalidateOperationTags(
+            queryClient,
+            rippleWithProblems(invalidateTags ?? ripple.none),
+          );
+        },
+      }),
+  };
+}
 
-  const onClick = () =>
-    void start(run, {
-      onDone: (data) => {
-        const { tone, message } = toastResult(data);
-        toast[tone](message);
-        void invalidateOperationTags(
-          queryClient,
-          rippleWithProblems(invalidateTags ?? ripple.none),
-        );
-      },
-    });
-
+/**
+ * A maintenance backfill's run button, driven entirely by props. The backfill
+ * runs server-side in ONE streamed mutation (see `useBulkStream`); this
+ * renders a live `<Progress>` bar beneath the button while it runs.
+ */
+export function BackfillButton<TResult>(
+  props: BackfillButtonProps<TResult>,
+): ReactNode {
+  const { start, running, progress } = useBackfill(props);
   return (
     <Stack gap="xs">
-      <ProblemActionButton
-        onClick={onClick}
+      <PendingButton
+        onClick={start}
         isPending={running}
-        idleLabel={idleLabel}
-        pendingLabel={pendingLabel}
+        idleLabel={props.idleLabel}
+        pendingLabel={props.pendingLabel}
       />
       {running && (
         <Progress
@@ -92,7 +96,7 @@ export function BackfillButton<TResult>({
           indeterminate={!progress}
         />
       )}
-      {running && foreground && (
+      {running && props.foreground && (
         <span className="text-2xs text-warning-ink">
           Keep this page open — this runs here, not in the background.
         </span>

@@ -1,3 +1,4 @@
+import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type {
   ClassifyImageProvenanceOut,
   SearchIndexRepairCounters,
@@ -11,10 +12,12 @@ import { useState, type ReactNode } from "react";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,
-} from "~/features/problems/problems-streams";
-import { openSearchIndexRepairStream } from "~/features/problems/search-streams";
+} from "./maintenance-streams";
+import { openSearchIndexRepairStream } from "./search-streams";
 import { openRecipeRecomputeAllStream } from "~/features/recipe/recipe-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog/maintenance.gen";
 import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { recipe } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
@@ -24,7 +27,8 @@ import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
 import { BACKFILL } from "./backfill-registry";
-import { BackfillButton } from "./problem-backfill-action";
+import { BackfillButton } from "./backfill-button";
+import { PendingButton } from "./pending-button";
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
 function MaintenanceRow({
@@ -150,6 +154,26 @@ function RecomputeAction() {
           })}
         />
       }
+    />
+  );
+}
+
+function CullPendingImagesAction() {
+  const cull = useActionMutation({
+    mutationFn: imageUpload.cullPendingImages.mutationOptions,
+    success: (r) =>
+      r.count
+        ? `Culled ${countLabel(r.count, "pending image")}`
+        : "No abandoned uploads.",
+  });
+  return (
+    <PendingButton
+      onClick={() =>
+        cull.mutate({ olderThanHours: CULL_PENDING_IMAGES_DEFAULT_HOURS })
+      }
+      isPending={cull.isPending}
+      idleLabel="Run"
+      pendingLabel="Culling…"
     />
   );
 }
@@ -399,6 +423,12 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
     group: "Images",
     tools: [
       {
+        label: "Cull abandoned uploads",
+        description: `Remove pending images whose upload never finished after ${CULL_PENDING_IMAGES_DEFAULT_HOURS} hours.`,
+        count: (c) => c.cullablePendingImages,
+        action: <CullPendingImagesAction />,
+      },
+      {
         label: "Classify provenance",
         description:
           "Review still-unknown image sources using bounded evidence and seed a missing capture date from on-device photo analysis. Preview first — Apply writes only high-confidence classifications.",
@@ -423,8 +453,8 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
 ];
 
 /**
- * Exceptional repair tools live on Problems; routine upkeep runs automatically.
- * The Problems page supplies the heading.
+ * One-off repair tools in Settings → Maintenance; routine upkeep runs
+ * automatically. Settings supplies the heading.
  */
 export function MaintenanceTools() {
   // Always-on "N to do" figures — one cheap DB query (no USDA/UPC network).
