@@ -1,0 +1,43 @@
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_77bdb89dbc0fc6::t_a95c32e055da06 5
+apps/apple/App/Shared/DesignSystem/WebHandoff.swift
+  s_77bdb89dbc0fc6::t_4338aa5250dafe 16
+apps/apple/App/Shared/Today/TodayView.swift
+  s_77bdb89dbc0fc6::t_979a34002ce946 500
+apps/apple/App/Tests/DesignSystem/WebHandoffTests.swift
+  s_77bdb89dbc0fc6::t_6b11c0f5586cd5 25
+apps/apple/App/Tests/Previews/PreviewFixturesDecodingTests.swift
+  s_77bdb89dbc0fc6::t_38401d7935dbb8 13
+apps/apple/App/Shared/Previews/Fixtures/sampleMealNutrition.json
+  s_7324fcc8514c3f::t_29b1919a55fe02 1-1856
+apps/apple/App/Shared/Previews/Fixtures/sampleTimeline.json
+  s_7324fcc8514c3f::t_df80086b85b3a6 1-83
+apps/apple/App/Shared/Previews/Fixtures/sampleTodayMeals.json
+  s_7324fcc8514c3f::t_d485099bbb24f5 1-994
+apps/apple/App/Shared/Previews/Fixtures/sampleTodayTasks.json
+  s_7324fcc8514c3f::t_edd7d1b3c836c2 1-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "05cb0228efdbfbdce9ae6db0207cb4e13dac6e9b",
+  "prompts": {},
+  "sessions": {
+    "s_7324fcc8514c3f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ebfbc39f-d883-4fe5-9726-938b9d81148f",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
