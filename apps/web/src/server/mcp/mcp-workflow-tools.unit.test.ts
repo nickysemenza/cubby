@@ -30,7 +30,7 @@ import {
   buildRecipeNutrition,
   costingExplanation,
 } from "~/server/domains/recipe/operations/recipe.server";
-import { pageProblemTypeSlice } from "~/server/generic/problems/operations/problems.server";
+import { projectProblemTypeSlice } from "~/server/generic/problems/operations/problems.server";
 
 import { callMcpTool } from "../testing/mcp-test-utils";
 import { createMcpServer, MCP_SERVER_INSTRUCTIONS } from "./server";
@@ -262,42 +262,14 @@ describe("MCP workflow tools", () => {
     });
   });
 
-  it("pages an explicit problem type report", () => {
-    const slice = {
-      type: "orphanedProducts" as const,
-      items: [{ id: "synthetic-1" }, { id: "synthetic-2" }],
-      total: 2,
-    };
-    expect(pageProblemTypeSlice(slice, { pageIndex: 0, pageSize: 1 })).toEqual({
-      ...slice,
-      items: [{ id: "synthetic-1" }],
-      meta: { pageIndex: 0, pageSize: 1, totalCount: 2 },
-    });
-    expect(
-      pageProblemTypeSlice(slice, { pageIndex: 1, pageSize: 1 }),
-    ).toMatchObject({
-      items: [{ id: "synthetic-2" }],
-      meta: { pageIndex: 1, pageSize: 1, totalCount: 2 },
-    });
-    expect(
-      pageProblemTypeSlice(slice, { pageIndex: 3, pageSize: 1 }),
-    ).toMatchObject({
-      items: [],
-      meta: { pageIndex: 3, pageSize: 1, totalCount: 2 },
-    });
-  });
-
   it("projects internal diagnostic ids out of problem slices", () => {
     const diagnostic = mock(referentialLivenessViolationSchema);
     const serialized = JSON.stringify(
-      pageProblemTypeSlice(
-        {
-          type: "referentialLivenessViolations",
-          items: [diagnostic],
-          total: 1,
-        },
-        { pageIndex: 0, pageSize: 25 },
-      ),
+      projectProblemTypeSlice({
+        type: "referentialLivenessViolations",
+        items: [diagnostic],
+        total: 1,
+      }),
     );
 
     expect(serialized).not.toContain(diagnostic.targetId);

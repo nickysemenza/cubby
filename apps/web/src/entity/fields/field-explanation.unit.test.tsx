@@ -1,10 +1,11 @@
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { DecisionChain } from "~/ui/derived/decision-chain";
 import {
   ReadableExplanationValue,
   WhyValueContents,
@@ -112,3 +113,66 @@ it.each(["fresh", "stale"] as const)(
     ).not.toHaveTextContent("deciding");
   },
 );
+
+it("renders resolved rollup values with one linked label per item", () => {
+  render(
+    <ReadableExplanationValue
+      value={[
+        {
+          label: "Synthetic owner",
+          ref: { entityKind: "ledgerParty", entityId: "LPY-4K7M" },
+          inherited: false,
+        },
+      ]}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  expect(screen.getAllByText("Synthetic owner", { exact: true })).toHaveLength(
+    1,
+  );
+  expect(screen.getByRole("link", { name: "Synthetic owner" })).toHaveAttribute(
+    "href",
+    "/ledger-parties/LPY-4K7M",
+  );
+  expect(screen.queryByText("Entity Kind")).not.toBeInTheDocument();
+  expect(screen.queryByText("Inherited")).not.toBeInTheDocument();
+});
+
+it("uses the declared Household label for an explicit None result and assignment", () => {
+  const data = fromPartial<FieldExplanationOutput>({
+    subject: { entityKind: "inventory", entityId: "INV-4K7M" },
+    field: "ownerLedgerPartyId",
+    envelope: {
+      current: {
+        assignment: { kind: "none" },
+        controls: {
+          kind: "editable",
+          canSetNone: false,
+          canConfirm: false,
+          reset: { kind: "unavailable" },
+        },
+      },
+      result: {
+        kind: "live",
+        decision: {
+          outcome: { kind: "empty", reason: "explicit_none" },
+          provenance: { kind: "own", ownership: { kind: "record" } },
+        },
+      },
+      work: { kind: "idle" },
+    },
+  });
+  render(<DecisionChain data={data} />, { wrapper: harness.wrapper });
+  expect(
+    within(screen.getByRole("region", { name: "Effective result" })).getByText(
+      "Household",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "Your choice" })).getByText(
+      "Household",
+      { exact: true },
+    ),
+  ).toBeVisible();
+});

@@ -19,6 +19,14 @@ import {
 } from "./fixtures/core";
 
 // Real HTTP, editor and reference rendering verify reviewed identity persistence.
+const categoryEmoji = entityFieldEnvelopeSchemas.productCategory.detail
+  .pick({})
+  .extend({
+    fields: entityFieldEnvelopeSchemas.productCategory.detail.shape.fields.pick(
+      { emoji: true },
+    ),
+  });
+
 test("accepts a suggestion, saves compound emoji, and clears it", async ({
   page,
 }) => {
@@ -92,9 +100,7 @@ test("accepts a suggestion, saves compound emoji, and clears it", async ({
   );
   expect(
     fieldValueOf(
-      entityFieldEnvelopeSchemas.productCategory.detail.parse(
-        await beforeAcceptance.json(),
-      ).fields.emoji,
+      categoryEmoji.parse(await beforeAcceptance.json()).fields.emoji,
     ),
   ).toBeNull();
   await dialog.getByRole("button", { name: "Accept", exact: true }).click();
@@ -106,7 +112,7 @@ test("accepts a suggestion, saves compound emoji, and clears it", async ({
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
   const read = async () =>
-    entityFieldEnvelopeSchemas.productCategory.detail.parse(
+    categoryEmoji.parse(
       await (
         await entityApi(page.request).get("productCategory", root, {})
       ).json(),

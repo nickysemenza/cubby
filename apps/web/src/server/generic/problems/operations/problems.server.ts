@@ -155,7 +155,7 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
   },
 });
 
-function projectProblemTypeSlice(
+export function projectProblemTypeSlice(
   slice: z.output<typeof problemsTypeSliceOut>,
 ): z.output<typeof problemsTypeSliceOut> {
   switch (slice.type) {
@@ -167,24 +167,6 @@ function projectProblemTypeSlice(
     default:
       return slice;
   }
-}
-
-/** One page of a problem-type report, with internal diagnostic ids projected out. */
-export function pageProblemTypeSlice(
-  value: unknown,
-  page: { pageIndex: number; pageSize: number },
-) {
-  const slice = projectProblemTypeSlice(problemsTypeSliceOut.parse(value));
-  const start = page.pageIndex * page.pageSize;
-  return {
-    ...slice,
-    items: slice.items.slice(start, start + page.pageSize),
-    meta: {
-      pageIndex: page.pageIndex,
-      pageSize: page.pageSize,
-      totalCount: slice.total,
-    },
-  };
 }
 
 export const integrityProblemsHandlers = implementOperationDomain(

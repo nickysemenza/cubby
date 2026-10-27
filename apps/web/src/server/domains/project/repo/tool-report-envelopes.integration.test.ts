@@ -173,8 +173,8 @@ describe("live tool report field envelopes", () => {
       data: { productId: product.id },
       request: request(),
     });
-    expect(uses.ok).toBe(true);
     if (!uses.ok) throw new Error(uses.error.message);
+    expect(uses.ok).toBe(true);
     expect(fieldValueOf(uses.data.fields.brandName)).toBe(
       "Synthetic report brand",
     );

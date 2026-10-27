@@ -1,7 +1,7 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { expenseOut } from "@cubby/schemas/project";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -53,7 +53,7 @@ const savedExpense: ExpenseOut = buildFieldEnvelopeRow({
     displayImages: [],
     redirectedFrom: null,
     previousShortcodes: [],
-    ...expenseOut.parse({
+    ...rawExpenseOut.parse({
       id: expense.id,
       name: "Large freezer tray",
       cost: 79,

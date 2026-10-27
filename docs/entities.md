@@ -157,7 +157,7 @@ current conversion facts. Selected reads retain these already-loaded inputs unti
 the public projection removes unrequested fields. They carry that valuation's pending/failure work; they
 do not claim its cached provenance or computation time as their own. Repository/compiler
 `Raw*` read schemas retain internal resolver evidence outside the declared field roster;
-public manifests never publish a `fieldResolutions` descriptor or explanation path. Private work and settlement composition imports explicitly named raw read modules; public façade exports and specialist containers use canonical envelopes.
+public manifests never publish a `fieldResolutions` descriptor or explanation path. Private work and settlement composition imports explicitly named raw read modules; public façade exports and specialist containers use canonical envelopes. Cross-entity `entity.records` and Work Queue digests retain compact cover display snapshots; these readonly summaries provide no alternate entity assignment or control facts.
 Public entity and specialist `*Out`
 exports expose the canonical envelope, including nested Ingredient and Inventory products and
 Recipe section snapshots. Inventory holding Locations expose their name and

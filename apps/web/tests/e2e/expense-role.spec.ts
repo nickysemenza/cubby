@@ -58,7 +58,12 @@ test("unclassified Expense explains its role gap and resolution preserves money"
   const stored = await readExpense(
     page,
     item.id,
-    expenseOut.pick({ cost: true, fields: true }),
+    expenseOut.pick({ cost: true }).extend({
+      fields: expenseOut.shape.fields.pick({
+        lineKind: true,
+        dataQuality: true,
+      }),
+    }),
   );
   expect(stored.cost).toBe(-2.13);
   expect(fieldValueOf(stored.fields.lineKind)).toBe("principal");
@@ -120,10 +125,11 @@ test("capture keeps pending role controls available and saves an explicitly sele
   const rows = z
     .object({
       items: z.array(
-        expenseOut.pick({
-          name: true,
-          fields: true,
-          cost: true,
+        expenseOut.pick({ name: true, cost: true }).extend({
+          fields: expenseOut.shape.fields.pick({
+            lineKind: true,
+            productId: true,
+          }),
         }),
       ),
     })

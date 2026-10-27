@@ -34,7 +34,7 @@ enum DetailSlotRegistry {
             return AnyView(
                 CookbookContentsSlot(
                     cookbookID: row.id,
-                    hasReadableExtraction: row.raw["needsReextract"]?.boolValue != true))
+                    extraction: FieldEnvelope.of(row.raw, key: "needsReextract")))
         case .cookbookImportProgress:
             return AnyView(CookbookImportProgressSlot(row: row))
         case .mealComposition:
@@ -198,7 +198,7 @@ enum DetailSlotRegistry {
     static func supplement(for key: EntityKey, row: EntityRow) -> AnyView? {
         switch key {
         case .expense:
-            guard let productID = row.raw["productId"]?.stringValue else { return nil }
+            guard let productID = row.raw.recordValue("productId")?.stringValue else { return nil }
             return AnyView(ReceiveExpenseButton(expenseID: row.id, productID: productID))
         // Booking a charge into the Expense ledger, and correcting a recorded booking, are web's:
         // both sit with the allocations in the transaction's Record section.

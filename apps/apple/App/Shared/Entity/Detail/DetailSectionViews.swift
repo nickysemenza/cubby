@@ -474,7 +474,7 @@ struct FieldsSectionView: View {
                 return field
             }
             if field.detailRenderer == .recipeSource {
-                return RecipeSourcePresentation.parse(row.raw[field.key]) == nil ? nil : field
+                return RecipeSourcePresentation.parse(row.raw.recordValue(field.key)) == nil ? nil : field
             }
             if field.itemsPath != nil {
                 return field.detailItems(in: row.raw).isEmpty ? nil : field
@@ -523,7 +523,7 @@ struct FieldsSectionView: View {
         } else if field.detailRenderer == .expenseSpendingCategory {
             ExpenseSpendingCategoryView(row: row)
         } else if field.detailRenderer == .recipeSource,
-            let source = RecipeSourcePresentation.parse(row.raw[field.key])
+            let source = RecipeSourcePresentation.parse(row.raw.recordValue(field.key))
         {
             recipeSourceRow(field, source: source)
         } else if let items = EntityFieldValue.resolvedItems(in: row.raw, field: field, surface: "detail") {

@@ -324,13 +324,11 @@ const LocationOverview = memo(function LocationOverview({
                 formatCurrency(valuation.totalValuation)
               )}
             </FieldRecordValue>
-            <FieldRecordValue record={location} field="dataQuality">
-              <EntityQualityFact
-                entity="location"
-                id={location.id}
-                quality={fieldValueOf(location.fields.dataQuality) ?? undefined}
-              />
-            </FieldRecordValue>
+            <EntityQualityFact
+              entity="location"
+              id={location.id}
+              envelope={location.fields.dataQuality}
+            />
           </div>
         </div>
         <Link

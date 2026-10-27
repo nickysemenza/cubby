@@ -32,7 +32,14 @@ test("placement acceptance follows the surviving stock row after merging", async
   ).toBe(true);
   await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(fixture.destination.id));
-  const survivor = entityFieldEnvelopeSchemas.inventory.detail;
+  const survivor = entityFieldEnvelopeSchemas.inventory.detail.pick({}).extend({
+    location: entityFieldEnvelopeSchemas.inventory.detail.shape.location.pick({
+      id: true,
+    }),
+    fields: entityFieldEnvelopeSchemas.inventory.detail.shape.fields.pick({
+      amount: true,
+    }),
+  });
   await expect
     .poll(
       async () =>

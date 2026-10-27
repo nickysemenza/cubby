@@ -107,7 +107,7 @@ function ResolutionChain({
   return (
     <>
       {block.rows.length === 0 ? (
-        <RecordsBlockView block={block} />
+        <RecordsBlockView block={{ ...block, footer: undefined }} />
       ) : (
         <SourceStack
           label={block.title ?? "Resolution order"}

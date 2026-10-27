@@ -5,7 +5,10 @@ import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { FieldResolutionEntityActions } from "~/entity/fields/field-resolution";
+import {
+  FieldResolutionEntityActions,
+  resolutionPolicyFor,
+} from "~/entity/fields/field-resolution";
 import { compactFieldText } from "~/entity/fields/field-text";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
@@ -49,6 +52,7 @@ function DecisionResult({
   field: string;
 }) {
   const decision = fieldDecisionOf({ result });
+  const labels = resolutionPolicyFor(entity, field)?.labels;
   if (!decision)
     return <span className="text-xs text-muted-foreground">Updating…</span>;
   if (decision.outcome.kind === "empty")
@@ -56,8 +60,8 @@ function DecisionResult({
       <span className="text-xs text-muted-foreground">
         {
           {
-            explicit_none: "None",
-            unset: "Not set",
+            explicit_none: labels?.none ?? "None",
+            unset: labels?.unresolved ?? "Not set",
             blocked: "Blocked",
             mixed: "Mixed",
             not_applicable: "Not applicable",
@@ -86,6 +90,9 @@ export function DecisionChain({
   onSet?: () => void;
 }) {
   const decision = fieldDecisionOf(data.envelope);
+  const noneLabel =
+    resolutionPolicyFor(data.subject.entityKind, data.field)?.labels?.none ??
+    "None";
   const provenance = decision?.provenance;
   const source =
     provenance?.kind === "inherited" || provenance?.kind === "default"
@@ -159,7 +166,7 @@ export function DecisionChain({
             ) : (
               <span className="text-muted-foreground">
                 {data.envelope.current.assignment?.kind === "none"
-                  ? "None"
+                  ? noneLabel
                   : "Following inherited values"}
               </span>
             )}

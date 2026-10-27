@@ -531,10 +531,31 @@ struct PhotoImportFlowTests {
         let predicate = try #require(conditional.route.primaryWhen)
         let bedRow = EntityRow(
             id: "LOC-0001", title: "Bed", subtitle: nil, imageURL: nil,
-            raw: ["id": "LOC-0001", "type": .string(predicate.values[0])])
+            raw: [
+                "id": "LOC-0001", "type": "shelf",
+                "fields": [
+                    "type": [
+                        "result": [
+                            "kind": "live",
+                            "decision": [
+                                "outcome": ["kind": "value", "value": .string(predicate.values[0])]
+                            ],
+                        ]
+                    ]
+                ],
+            ])
         let shelfRow = EntityRow(
             id: "LOC-0002", title: "Shelf", subtitle: nil, imageURL: nil,
-            raw: ["id": "LOC-0002", "type": "a-non-predicate-value"])
+            raw: [
+                "id": "LOC-0002", "type": .string(predicate.values[0]),
+                "fields": [
+                    "type": [
+                        "result": [
+                            "kind": "live", "decision": ["outcome": ["kind": "value", "value": "shelf"]],
+                        ]
+                    ]
+                ],
+            ])
         let client = try routeClient(gardenEntries: [])
 
         let bedResolution = await bedManifest.chooseSourceRecord(type, row: bedRow, client: client)

@@ -1,12 +1,17 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
-import { scoredEntities } from "@cubby/schemas/data-quality";
+import { dataQuality, scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import {
+  fieldValueOf,
+  type ReadableFieldEnvelope,
+} from "@cubby/schemas/field-envelope";
 import { AsteriskSimpleIcon } from "@phosphor-icons/react/dist/csr/AsteriskSimple";
 import { z } from "zod";
 
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { cn } from "~/lib/utils";
 import { useDenseCell } from "~/ui/common/stacked-value";
+import { FieldValueMark } from "~/ui/derived/value-mark";
 import { WhyValue } from "~/ui/derived/why-value";
 
 const METER_BARS = 5;
@@ -97,22 +102,28 @@ export function DataQualityValue({
   );
 }
 
-/** Card and specialist lists share the table's value and lazy explanation. */
+/** Card and specialist lists share the value and lazy explanation.
+ * Missing-result marks never hide the explanation trigger. */
 export function EntityQualityFact({
   entity,
   id,
-  quality,
+  envelope,
 }: {
   entity: Entity;
   id: string;
-  quality?: DataQuality;
+  envelope?: ReadableFieldEnvelope;
 }) {
+  const quality = envelope
+    ? dataQuality.safeParse(fieldValueOf(envelope)).data
+    : undefined;
   return (
     <div className="flex items-center gap-1.5 text-xs">
-      <DataQualityValue
-        quality={quality}
-        scored={z.enum(scoredEntities).safeParse(entity).success}
-      />
+      <FieldValueMark envelope={envelope}>
+        <DataQualityValue
+          quality={quality}
+          scored={z.enum(scoredEntities).safeParse(entity).success}
+        />
+      </FieldValueMark>
       <WhyValue
         entity={entity}
         id={id}

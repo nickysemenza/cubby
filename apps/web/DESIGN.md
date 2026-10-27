@@ -512,8 +512,11 @@ retain inline Accept. Pending suggestion evidence and review actions remain avai
 while the explanation query loads or fails; their enabled state follows the
 current suggestion. Forms place inheritance and explicit None controls inside
 Why this value. Structured resolution evidence renders the resolved rollup once,
+using the same linked labels and inherited markers as ordinary field values;
+contributor summaries retain their individual values. Wire reference keys stay
+in technical details. Empty chains render their footer once,
 and allocated results retain their Mixed or Allocated label. Quality checks and their exception controls share this
-explanation. Interpretations retain their readable result, caveats and next steps.
+explanation. Quality cards keep the explanation trigger available beside missing or failed results. Interpretations retain their readable result, caveats and next steps.
 The footer compares stored and live values and shows computation
 age and Updating. `ui/derived` is the app-aware generic composition boundary:
 it may reuse entity links, evidence and existing mutation actions.

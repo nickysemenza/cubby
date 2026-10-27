@@ -120,9 +120,14 @@ test("a planting opens from its list inspector and saves an edited status", asyn
     existingPlanting.id,
     {},
   );
-  const saved = entityFieldEnvelopeSchemas.planting.detail.parse(
-    await updated.json(),
-  );
+  const saved = entityFieldEnvelopeSchemas.planting.detail
+    .pick({})
+    .extend({
+      fields: entityFieldEnvelopeSchemas.planting.detail.shape.fields.pick({
+        status: true,
+      }),
+    })
+    .parse(await updated.json());
   expect(fieldValueOf(saved.fields.status)).toBe("finished");
 });
 

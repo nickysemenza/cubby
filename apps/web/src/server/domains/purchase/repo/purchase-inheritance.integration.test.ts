@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { expenseHandlers } from "~/server/domains/expense/operations.server";
-import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/charge-context";
 import {
   getExpenseByShortcode,
   updateExpense,
@@ -270,9 +269,18 @@ describe("purchase inheritance lifecycle", () => {
       purchaseId: source.id,
     });
     const code = parseShortcodeFor("expense", item.shortcode);
-    const result = expenseChargeContextOut.parse(
-      await expenseChargeContextWorkflow(ctx.db, code),
-    );
+    const chargeContext = await expenseHandlers.operations.chargeContext({
+      data: code,
+      request: {
+        principal: systemPrincipal(
+          buildKernelContext(ctx.db, ctx.actor.userId),
+        ),
+        headers: new Headers(),
+        signal: new AbortController().signal,
+      },
+    });
+    if (!chargeContext.ok) throw new Error(chargeContext.error.message);
+    const result = expenseChargeContextOut.parse(chargeContext.data);
     expect(result?.siblings).toHaveLength(2);
     await expect(
       getEntityRecommendations(ctx.db, {

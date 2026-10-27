@@ -320,21 +320,41 @@ struct EntityRowPresentationTests {
             id: "RCP-1001", title: "Soup", subtitle: nil, imageURL: nil,
             raw: [
                 "id": "RCP-1001", "name": "Soup",
-                "source": ["type": "book", "book": "The Big Book", "cookbookId": "CBK-1"],
+                "fields": ["source": field(["type": "book", "book": "The Big Book", "cookbookId": "CBK-1"])],
             ])
         let website = EntityRow(
             id: "RCP-1002", title: "Soup", subtitle: nil, imageURL: nil,
             raw: [
                 "id": "RCP-1002", "name": "Soup",
-                "source": ["type": "website", "url": "https://www.example.com/recipe"],
+                "source": ["type": "other"],
+                "fields": ["source": field(["type": "website", "url": "https://www.example.com/recipe"])],
             ])
 
-        #expect(RecipeSourcePresentation.parse(book.raw["source"])?.label == "The Big Book")
-        #expect(RecipeSourcePresentation.parse(website.raw["source"])?.label == "example.com")
+        #expect(RecipeSourcePresentation.parse(book.raw.recordValue("source"))?.label == "The Big Book")
+        #expect(RecipeSourcePresentation.parse(website.raw.recordValue("source"))?.label == "example.com")
         #expect(
             EntityRowPresentation.resolve(descriptor: recipe, row: website, columns: ["source"])
                 .facts.contains { $0.id == "source" && $0.value == "example.com" }
         )
+    }
+
+    @Test func purchaseCategorySummaryUsesTheCanonicalResult() {
+        let row = EntityRow(
+            id: "PUR-4K7M", title: "Synthetic order", subtitle: nil, imageURL: nil,
+            raw: [
+                "id": "PUR-4K7M",
+                "fields": [
+                    "spendingCategorySummary": field([
+                        "state": "single",
+                        "categories": [["id": "SPC-4K7M", "name": "Synthetic supplies", "amount": 12]],
+                        "lineCount": 1, "categorizedLineCount": 1, "uncategorizedLineCount": 0,
+                        "complete": true, "amountsKnown": true,
+                    ])
+                ],
+            ])
+        let fact = EntityRowPresentation.fact(
+            "spendingCategorySummary", descriptor: EntityCatalog[.purchase], row: row)
+        #expect(fact?.value.contains("Synthetic supplies") == true)
     }
 
     @Test func photoRowsPromoteTheEntitySemanticDateNotThePhotoDate() throws {

@@ -179,9 +179,13 @@ test("linked Expense categories display their readable label and transaction exp
   await page.keyboard.press("Escape");
   await openCellExplanation(row, "How itemization is determined");
   await expect(popover).toContainText("Technical details");
-  await expect(
-    popover.getByRole("link", { name: "Confirmed allocations 1", exact: true }),
-  ).toBeVisible();
+  const allocationEvidence = popover
+    .getByRole("listitem")
+    .filter({ hasText: "Confirmed allocations 1" });
+  await expect(allocationEvidence.getByRole("link")).toHaveAttribute(
+    "href",
+    `/purchases/${purchaseId}`,
+  );
   await expect(
     popover.getByText("Confirmed allocations", { exact: true }),
   ).toHaveCount(0);

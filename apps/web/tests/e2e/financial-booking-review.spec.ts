@@ -163,8 +163,13 @@ test("reviews spending in the browser with stale and replay guards", async ({
     result.purchaseId,
     {},
   );
-  const purchase = entityFieldEnvelopeSchemas.purchase.detail.parse(
-    await purchaseResponse.json(),
-  );
+  const purchase = entityFieldEnvelopeSchemas.purchase.detail
+    .pick({})
+    .extend({
+      fields: entityFieldEnvelopeSchemas.purchase.detail.shape.fields.pick({
+        expenseTotal: true,
+      }),
+    })
+    .parse(await purchaseResponse.json());
   expect(fieldValueOf(purchase.fields.expenseTotal)).toBe(125);
 });

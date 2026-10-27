@@ -142,7 +142,6 @@
                 "value": [
                   {
                     "id": "IMG-2345",
-                    "url": "https://images.example/pending.jpg",
                     "key": "k1",
                     "filename": "a.jpg",
                     "size": 10,
@@ -166,16 +165,109 @@
                     "capturePlaceName": null,
                     "captureDeviceLabel": null,
                     "capturedByPartyId": null,
-                    "capturedByName": null,
                     "captureAttribution": "none",
                     "provenanceEvidence": null,
                     "sourceEvidence": null,
                     "createdAt": "2026-01-01T00:00:00.000Z",
-                    "updatedAt": "2026-01-01T00:00:00.000Z"
+                    "updatedAt": "2026-01-01T00:00:00.000Z",
+                    "fields": {
+                      "representations": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "url": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": "https://images.example/pending.jpg"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "capturedByName": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "empty",
+                              "reason": "unset"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "sightings": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "provenanceEvidenceLabel": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      }
+                    }
                   },
                   {
                     "id": "IMG-3456",
-                    "url": "https://images.example/cover.jpg",
                     "key": "k2",
                     "filename": "b.jpg",
                     "size": 10,
@@ -199,12 +291,106 @@
                     "capturePlaceName": null,
                     "captureDeviceLabel": null,
                     "capturedByPartyId": null,
-                    "capturedByName": null,
                     "captureAttribution": "none",
                     "provenanceEvidence": null,
                     "sourceEvidence": null,
                     "createdAt": "2026-01-01T00:00:00.000Z",
-                    "updatedAt": "2026-01-01T00:00:00.000Z"
+                    "updatedAt": "2026-01-01T00:00:00.000Z",
+                    "fields": {
+                      "representations": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "url": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "value",
+                              "value": "https://images.example/cover.jpg"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "capturedByName": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "live",
+                          "decision": {
+                            "outcome": {
+                              "kind": "empty",
+                              "reason": "unset"
+                            },
+                            "provenance": {
+                              "kind": "computed"
+                            }
+                          }
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "sightings": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      },
+                      "provenanceEvidenceLabel": {
+                        "current": {
+                          "assignment": null,
+                          "controls": {
+                            "kind": "readonly",
+                            "reason": "computed"
+                          }
+                        },
+                        "result": {
+                          "kind": "missing"
+                        },
+                        "work": {
+                          "kind": "idle"
+                        }
+                      }
+                    }
                   }
                 ]
               },

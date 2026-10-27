@@ -29,7 +29,7 @@ import { fieldValueOf, fieldDecisionOf } from "@cubby/schemas/field-envelope";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { flexRender } from "@tanstack/react-table";
 import prettyBytes from "pretty-bytes";
-import { Fragment, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { z } from "zod";
 
 import {
@@ -61,7 +61,6 @@ import {
 } from "~/entity/table/editable-cell";
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { formatCurrency } from "~/lib/number-format";
-import { cn } from "~/lib/utils";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -119,7 +118,6 @@ import {
 } from "../entity-references";
 import {
   fieldResolutionFor,
-  InheritedMarker,
   resolutionPolicyFor,
 } from "../fields/field-resolution";
 import { CategoryLabelById } from "../presentation/category-label";
@@ -132,6 +130,7 @@ import {
   enumFieldSuggestSource,
 } from "./enum-field-display";
 import { listRendererColumns } from "./list-field-renderers";
+import { ResolvedListValue } from "./resolved-list-value";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
@@ -367,30 +366,16 @@ function renderFormattedScalar(
       return parsed.data.length === 0 ? (
         (context?.field.display.emptyLabel ?? <NoneValue />)
       ) : (
-        <span className="inline-flex max-w-full min-w-0 items-center overflow-hidden whitespace-pre">
-          {parsed.data.map((item, index) => (
-            <Fragment key={item.ref?.entityId ?? item.label}>
-              {index > 0 ? <span aria-hidden="true">, </span> : null}
-              <span
-                className={cn(
-                  "inline-flex min-w-0 items-center gap-1",
-                  item.inherited && "text-muted-foreground",
-                )}
-              >
-                {item.inherited ? <InheritedMarker /> : null}
-                {item.ref ? (
-                  referenceLink(
-                    item.ref.entityKind,
-                    { id: item.ref.entityId, name: item.label },
-                    true,
-                  )
-                ) : (
-                  <span className="truncate">{item.label}</span>
-                )}
-              </span>
-            </Fragment>
-          ))}
-        </span>
+        <ResolvedListValue
+          items={parsed.data}
+          renderReference={(ref, label) =>
+            referenceLink(
+              ref.entityKind,
+              { id: ref.entityId, name: label },
+              true,
+            )
+          }
+        />
       );
     }
     case null:

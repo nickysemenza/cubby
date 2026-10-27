@@ -1,4 +1,5 @@
-import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
 import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 import { and, eq } from "drizzle-orm";
@@ -56,8 +57,8 @@ test("RTable connection review commits the chosen Expense", async ({
       page,
       line.id,
       z.object({
-        fields: z.object({
-          productId: fieldEnvelope(z.string().nullable(), z.string()),
+        fields: entityFieldEnvelopeSchemas.expense.detail.shape.fields.pick({
+          productId: true,
         }),
         cost: z.number(),
       }),

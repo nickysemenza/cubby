@@ -1297,7 +1297,7 @@ struct EntityListView: View {
                         Circle().fill(FieldGuideTokens.warning).frame(width: 6, height: 6)
                         Text("Needs data")
                     }
-                } else if let status = row.raw["dataQuality"]?["status"]?.stringValue {
+                } else if let status = row.raw.recordValue("dataQuality")?["status"]?.stringValue {
                     Text(field.valueOptions?.first { $0.value == status }?.label ?? status)
                 }
             } else if let reference = EntityFieldValue.reference(

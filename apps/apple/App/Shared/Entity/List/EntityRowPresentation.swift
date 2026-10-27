@@ -212,7 +212,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             return Fact(id: key, label: field.label, value: text)
         }
         if field.listRenderer == .spendingCategorySummary,
-            let value = row.raw[key],
+            let value = row.raw.recordValue(key),
             let summary = try? value.decoded(SpendingCategorySummary.self)
         {
             let names = summary.categories.map(\.name).joined(separator: ", ")
@@ -232,7 +232,7 @@ struct EntityRowPresentation: Sendable, Hashable {
         }
         if let renderer = field.listRenderer,
             case .implemented = NativePresentationCoverage.list(renderer),
-            let source = RecipeSourcePresentation.parse(row.raw[key])
+            let source = RecipeSourcePresentation.parse(row.raw.recordValue(key))
         {
             return Fact(id: key, label: field.label, value: source.label)
         }

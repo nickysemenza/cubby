@@ -12,7 +12,6 @@ struct OpenResponseDecodingTests {
         let body = """
             {
               "id": "IMG-4K7M",
-              "url": "https://example.test/i/4K7M",
               "key": "images/4K7M",
               "filename": "photo.jpeg",
               "size": 1024,
@@ -39,13 +38,28 @@ struct OpenResponseDecodingTests {
               "capturePlaceName": null,
               "captureDeviceLabel": null,
               "capturedByPartyId": null,
-              "capturedByName": null,
               "provenanceEvidence": null,
               "sourceEvidence": null,
               "fieldFromAFutureServer": {"nested": true}
             }
             """
-        let image = try JSONDecoder.cubby().decode(ImageOut.self, from: Data(body.utf8))
+        let ordinary = try JSONDecoder.cubby().decode([String: JSONValue].self, from: Data(body.utf8))
+        let payload = FieldEnvelopeFixture.row(
+            ordinary,
+            fields: [
+                "representations": FieldEnvelopeFixture.envelope(result: FieldEnvelopeFixture.missing),
+                "url": FieldEnvelopeFixture.envelope(
+                    result: FieldEnvelopeFixture.live(
+                        FieldEnvelopeFixture.decision(
+                            "https://example.test/i/4K7M", provenance: ["kind": "computed"]))),
+                "capturedByName": FieldEnvelopeFixture.envelope(
+                    result: FieldEnvelopeFixture.live(
+                        FieldEnvelopeFixture.emptyDecision("unset", provenance: ["kind": "computed"]))),
+                "sightings": FieldEnvelopeFixture.envelope(result: FieldEnvelopeFixture.missing),
+                "provenanceEvidenceLabel": FieldEnvelopeFixture.envelope(
+                    result: FieldEnvelopeFixture.missing),
+            ])
+        let image = try JSONDecoder.cubby().decode(ImageOut.self, from: JSONEncoder().encode(payload))
         #expect(image.filename == "photo.jpeg")
         #expect(image.width == nil)
     }

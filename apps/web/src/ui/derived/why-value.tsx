@@ -4,7 +4,7 @@ import {
   dataQualityGap,
   dataQualityException,
 } from "@cubby/schemas/data-quality";
-import type { Entity } from "@cubby/schemas/entity";
+import { entitySchema, type Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
@@ -12,6 +12,7 @@ import {
   fieldExplanationSource,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
+import { resolvedListSchema } from "@cubby/schemas/field-resolution";
 import { humanize, parseShortcode } from "@cubby/shared";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { useQuery } from "@tanstack/react-query";
@@ -19,6 +20,7 @@ import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ResolvedListValue } from "~/entity/display/resolved-list-value";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
@@ -60,6 +62,7 @@ import { SourceStack } from "./source-stack";
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 type ExplanationValue = ExplanationSource["value"];
 const explanationScalar = z.union([z.string(), z.number(), z.boolean()]);
+const explanationResolvedList = z.array(resolvedListSchema.element.strict());
 const explanationRecord = z.record(z.string(), z.json());
 
 export function ReadableExplanationValue({
@@ -105,6 +108,25 @@ export function ReadableExplanationValue({
   }
   if (Array.isArray(value)) {
     if (value.length === 0) return <NoneValue />;
+    const resolved = explanationResolvedList.safeParse(value);
+    if (resolved.success)
+      return (
+        <ResolvedListValue
+          items={resolved.data}
+          renderReference={(ref, label) => {
+            const entity = entitySchema.safeParse(ref.entityKind);
+            return entity.success ? (
+              <ExplanationEntityLink
+                entity={entity.data}
+                id={ref.entityId}
+                name={label}
+              />
+            ) : (
+              <span>{label}</span>
+            );
+          }}
+        />
+      );
     const occurrences = new Map<string, number>();
     return (
       <ul className="grid gap-2 pl-4 text-xs">

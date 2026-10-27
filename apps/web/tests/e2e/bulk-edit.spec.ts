@@ -69,9 +69,14 @@ test("task board multi-select bulk-edits status without touching other fields", 
 
   for (const task of tasks) {
     const updated = await entityApi(page.request).get("task", task.id, {});
-    const saved = entityFieldEnvelopeSchemas.task.detail.parse(
-      await updated.json(),
-    );
+    const saved = entityFieldEnvelopeSchemas.task.detail
+      .pick({ status: true })
+      .extend({
+        fields: entityFieldEnvelopeSchemas.task.detail.shape.fields.pick({
+          trade: true,
+        }),
+      })
+      .parse(await updated.json());
     expect(saved.status).toBe("done");
     // The untouched seeded trade verifies that only dirty fields were written.
     expect(fieldValueOf(saved.fields.trade)).toBe("other");
@@ -138,9 +143,14 @@ test("plantings list bulk-edits status finished plus a date in one write", async
     planting.id,
     {},
   );
-  const saved = entityFieldEnvelopeSchemas.planting.detail.parse(
-    await updated.json(),
-  );
+  const saved = entityFieldEnvelopeSchemas.planting.detail
+    .pick({ season: true })
+    .extend({
+      fields: entityFieldEnvelopeSchemas.planting.detail.shape.fields.pick({
+        status: true,
+      }),
+    })
+    .parse(await updated.json());
   expect(fieldValueOf(saved.fields.status)).toBe("finished");
   expect(saved.season).toMatchObject({ start: null, end: "2026-06-01" });
 });
@@ -160,8 +170,10 @@ async function openBulkEdit(page: Page, rowNames: string[]) {
   return page.getByRole("dialog", { name: /^Bulk edit \d+ / });
 }
 
-const stockTrackedOut = entityFieldEnvelopeSchemas.product.detail.pick({
-  fields: true,
+const stockTrackedOut = z.object({
+  fields: entityFieldEnvelopeSchemas.product.detail.shape.fields.pick({
+    stockTracked: true,
+  }),
 });
 const locationOut = z.object({ locationId: z.string().nullable() });
 

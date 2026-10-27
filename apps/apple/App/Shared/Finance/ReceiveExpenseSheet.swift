@@ -37,7 +37,7 @@ struct PurchaseReceivingSlot: View {
     @State private var error: String?
 
     private var productLines: [EntityRow] {
-        (lines ?? []).filter { $0.raw["productId"]?.stringValue != nil }
+        (lines ?? []).filter { $0.raw.recordValue("productId")?.stringValue != nil }
     }
 
     var body: some View {
@@ -62,7 +62,7 @@ struct PurchaseReceivingSlot: View {
                             }
                         }
                         Spacer()
-                        if let productID = line.raw["productId"]?.stringValue {
+                        if let productID = line.raw.recordValue("productId")?.stringValue {
                             ReceiveExpenseButton(expenseID: line.id, productID: productID)
                                 .labelStyle(.titleOnly)
                                 .buttonStyle(.borderless)

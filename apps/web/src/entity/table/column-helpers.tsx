@@ -474,13 +474,9 @@ interface CreateImageColumnOptions<T> {
   rowEntity?: (row: T) => Entity | undefined;
   /** Field-key id when an entity declares an images column. */
   id?: string;
-  /** How this row resolves its thumbnail. Defaults to `row.displayImages` —
-   *  the server-resolved list contract (own gallery/cover, or a borrowed
-   *  entity's photos) that every `displayImages` manifest entity's list row
-   *  carries. Pass `getImages` only for a table of a non-list shape whose rows
-   *  still carry their own `images[]` (purchase products, kit components,
-   *  project tools) — name `rowImages` at the call site for those, or a
-   *  cascade resolver when the row borrows a linked entity's cover. */
+  /** Defaults to the canonical `displayImages` envelope: the server selects
+   *  the row's own or borrowed cover. Supply `getImages` for non-entity display
+   *  snapshots or an explicit media projection, not a retired entity slot. */
   getImages?: (row: T) => Array<{ id: string; url: string; filename?: string }>;
   /** The record a row is about, when the row carries no images of its own (a
    *  Suggestion, a recipe line): its cover comes from the table's batched

@@ -1825,9 +1825,10 @@ export async function listProductProjectUses(
   const [result] = await publicFieldEnvelopeRows({
     db,
     entity: "product",
-    schema: productProjectUsesOut,
+    // This scalar is the report's resource role, not Product.category's reference.
+    schema: productProjectUsesOut.omit({ category: true }),
     rows: [{ ...raw, id: raw.productId, projects }],
   });
   if (!result) throw new Error("Product project uses produced no row");
-  return result;
+  return { ...result, category: raw.category };
 }
