@@ -1,0 +1,21 @@
+apps/web/src/server/domains/run/repo/run.ts
+  s_c81fa1fa9c6ff3::t_60b85c3f5260e4 37,70-88,181,183-187
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_c81fa1fa9c6ff3::t_e2f6741637d5c2 518-520,558,629
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "732d5bfeb6c83a51a6c441ca1654637ddd9b5619",
+  "prompts": {},
+  "sessions": {
+    "s_c81fa1fa9c6ff3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17efe-c0d6-7951-a8bf-3644b355faa9",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
