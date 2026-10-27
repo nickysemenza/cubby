@@ -2211,7 +2211,9 @@ comparisons show gains without regressions or recurring cost.
 using a plain `{ operation, input }` or `{ batch: [...] }` request. Only
 registered queries are admitted; the harness serializes and decodes the existing
 SuperJSON and operation contracts. Use a single request for one query, or an
-explicit batch of 2–20 queries. Each sample is one transport attempt, without
+explicit batch of 2–20 queries. The request codec header must match the
+SuperJSON body; without it, dispatch rejects the wrapper before running the query.
+Each sample is one transport attempt, without
 browser retries or fallback. The schema-5 artifact separates HTTP, transport,
 dispatch rejection, protocol and RPC failures, and reports successful per-operation settlement times
 as results arrive, separately from complete-response timing. Both batch

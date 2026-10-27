@@ -59,6 +59,36 @@ async function serve<T>(
 }
 
 describe("operation performance evidence", () => {
+  it.each([false, true])(
+    "declares the serialized request codec (batch=%s)",
+    async (batch) => {
+      let codec: string | string[] | undefined;
+      const headers = new Headers({ "x-cubby-value-codec": "json" });
+      const sample = await serve(
+        (response, request) => {
+          codec = request.headers["x-cubby-value-codec"];
+          if (batch) {
+            response.setHeader("content-type", "application/x-ndjson");
+            response.end(
+              line(0, { ok: true, value: success }) +
+                line(1, { ok: true, value: success }),
+            );
+          } else response.end(JSON.stringify(superjson.serialize(success)));
+        },
+        (origin) =>
+          measureOperationRead(
+            batch ? { batch: [item, item] } : item,
+            origin,
+            headers,
+          ),
+      );
+      // The dispatcher defaults to plain JSON without this header and rejects
+      // the SuperJSON wrapper before any operation can settle.
+      expect(codec).toBe("superjson");
+      expect(sample.success).toBe(true);
+      expect(headers.get("x-cubby-value-codec")).toBe("json");
+    },
+  );
   it("retains duplicate query positions without repeating sample metadata", async () => {
     const request = {
       operation,

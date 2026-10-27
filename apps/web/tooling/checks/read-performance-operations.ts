@@ -113,6 +113,7 @@ export async function measureOperationRead(
   try {
     const requestHeaders = new Headers(headers);
     requestHeaders.set("content-type", "application/json");
+    requestHeaders.set("x-cubby-value-codec", "superjson");
     response = await fetch(
       new URL(
         browserOperationPath(
