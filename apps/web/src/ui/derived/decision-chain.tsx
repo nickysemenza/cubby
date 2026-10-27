@@ -5,10 +5,8 @@ import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
-import { enumFieldLabel } from "~/entity/display/enum-field-display";
 import { FieldResolutionEntityActions } from "~/entity/fields/field-resolution";
-import { readPathValue } from "~/entity/read-path";
-import { formatCurrency } from "~/lib/number-format";
+import { compactFieldText } from "~/entity/fields/field-text";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -31,16 +29,9 @@ export function DecisionValue({
           (candidate) => candidate.key === field,
         )
       : null;
-  if (model?.display.format === "currency") {
-    const amount = readPathValue(
-      { [model.key]: value },
-      model.display.readPath ?? model.key,
-    );
-    if (typeof amount === "number") return formatCurrency(amount);
-  }
   const label =
-    entity && field && typeof value === "string"
-      ? enumFieldLabel(entity, field, value)
+    entity && model
+      ? compactFieldText(entity, { [model.key]: value }, model)
       : null;
   return label && label !== value ? (
     <span className="break-words">{label}</span>
