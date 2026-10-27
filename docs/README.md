@@ -18,6 +18,8 @@ the repository.
 - [CI](ci.md), [Infrastructure](infrastructure.md), and the operational
   runbooks cover operations. Check the relevant code and deployed
   state before following an operational procedure.
+- [Tester Army](tester-army.md) covers optional web outcome journeys, their
+  isolated runtime, model credentials, evidence and recovered coverage.
 - [Sentry triage](runbooks/sentry-triage.md) links to error views, GitHub-linked
   issues, Release Health, and ingestion statistics.
 - [GitHub Issues](https://github.com/nickysemenza/cubby/issues) is the active backlog;

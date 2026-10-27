@@ -1,3 +1,4 @@
+import { AUTHENTICATED_SHELL_READY } from "./browser-bootstrap";
 import { entityApi } from "./entity-api";
 import { getErrorMessage, SHORTCODE_BODY_PATTERN } from "@cubby/shared";
 import {
@@ -135,11 +136,8 @@ export async function waitForAppHydration(page: Page) {
     // readiness marker in the browser so a hydrated shell does not wait for
     // the next Node-side retry before the journey can interact with it.
     const ready = await page.waitForFunction(
-      () =>
-        document.querySelector(
-          '[data-app-shell="authenticated"][data-hydrated="true"]',
-        ) !== null,
-      undefined,
+      (selector) => document.querySelector(selector) !== null,
+      AUTHENTICATED_SHELL_READY,
       { polling: "raf", timeout: 15000 },
     );
     await ready.dispose();

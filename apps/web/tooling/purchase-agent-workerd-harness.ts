@@ -24,6 +24,7 @@ export type ScriptedScenario = {
   extractions?: Array<{ match: string; output: unknown }>;
   audit?: unknown;
   decisions?: GatewayFixture["decisions"];
+  imageDescription?: GatewayFixture["imageDescription"];
 };
 
 type JsonPost = {
@@ -72,10 +73,11 @@ export function scenarioControls(harness: TestHarness) {
       });
       const gatewayFixture: Pick<
         ScriptedScenario,
-        "extractions" | "audit" | "decisions"
+        "extractions" | "audit" | "decisions" | "imageDescription"
       > = {
         extractions: scenario.extractions ?? [],
         decisions: scenario.decisions,
+        imageDescription: scenario.imageDescription,
       };
       if (scenario.audit) gatewayFixture.audit = scenario.audit;
       await post(toGateway, "https://gateway.test/configure", gatewayFixture);

@@ -16,7 +16,7 @@ on:
         type: boolean
         default: false
       fresh-tests:
-        description: Execute Vitest and Playwright without remote passes; retain cached build prerequisites
+        description: Execute Vitest, Playwright and Tester Army fresh; retain cached build prerequisites
         type: boolean
         default: false
       purchase-import:
@@ -535,3 +535,60 @@ jobs:
       - run: MAIL_PROMPT_BASELINE_ONLY=1 pnpm --dir apps/web eval:mail-prompts
         env:
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+
+  tester-army:
+    name: Tester Army web journeys (optional)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services: *test-databases
+    env: *web-lane-env
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Check model credential availability
+        id: credential
+        env:
+          TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN || secrets.AI_GATEWAY_API_KEY }}
+        shell: bash
+        run: |
+          if [[ -n "$TESTER_ARMY_CF_API_TOKEN" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Tester Army is incomplete: no model credential is configured. No pass was established." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: ./.github/actions/setup-node-with-deps
+        if: steps.credential.outputs.available == 'true'
+        with:
+          wasm: restore
+      - uses: ./.github/actions/setup-playwright
+        if: steps.credential.outputs.available == 'true'
+      - name: Run outcome-focused web journeys
+        if: steps.credential.outputs.available == 'true'
+        env:
+          TESTER_ARMY_CF_API_TOKEN: ${{ secrets.TESTER_ARMY_CF_API_TOKEN || secrets.AI_GATEWAY_API_KEY }}
+          TESTER_ARMY_FRESH: ${{ (inputs.fresh || inputs.fresh-tests) && '1' || '0' }}
+        run: |
+          if [[ "$TESTER_ARMY_FRESH" == "1" ]]; then
+            pnpm exec nx run @cubby/web:tester-army --skip-nx-cache --outputStyle=stream
+          else
+            pnpm exec nx run @cubby/web:tester-army --outputStyle=stream
+          fi
+      - name: Publish journey summary
+        if: always() && steps.credential.outputs.available == 'true'
+        shell: bash
+        run: |
+          if [[ -f apps/web/artifacts/tester-army/summary.md ]]; then
+            cat apps/web/artifacts/tester-army/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Tester Army did not reach its runner. Check dependency, build and runtime setup logs; no pass was established." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload synthetic journey evidence
+        if: always() && steps.credential.outputs.available == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tester-army-${{ github.sha }}-${{ github.run_attempt }}
+          path: apps/web/artifacts/tester-army/**
+          if-no-files-found: warn
+          retention-days: 7

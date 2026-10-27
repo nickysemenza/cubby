@@ -529,6 +529,10 @@ the first authenticated request without a gateway ID recreates `default` even
 after it is deleted
 ([manage gateways](https://developers.cloudflare.com/ai-gateway/configuration/manage-gateway/#default-gateway)).
 
+[Web Tester Army](tester-army.md) driver inference also uses this gateway,
+attributed to the `tester-army` feature. Its usage is recorded in SDK reports
+rather than household `AiUsage` rows; app-side model peers stay scripted.
+
 Gateway metadata has three stable dimensions: `environment` (`production`,
 `ci`, or `development`), `feature`, and `operation`, with optional `entityKind`.
 The outbound transport filters to that contract. Model/provider, input counts,
