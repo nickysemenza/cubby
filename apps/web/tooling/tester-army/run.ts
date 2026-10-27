@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnToExit } from "cubby/tooling/run";
 import { localSecret } from "../local-secret";
 import { writeJourneySummary } from "./report";
+import { writeStartupHtml } from "./html";
 import { holdLock, WORKTREE_HARNESS_LOCK } from "../dev-services/harness-lock";
 import { prepareE2EProcessEnvironment } from "../e2e-process-env";
 
@@ -41,7 +42,15 @@ try {
   phase = "journeys";
   const status = await spawnToExit(
     "pnpm",
-    ["exec", "e2e", "run", ...process.argv.slice(2)],
+    [
+      "exec",
+      "e2e",
+      "run",
+      ...(process.env.CUBBY_TESTER_ARMY_SHARD
+        ? ["--shard", process.env.CUBBY_TESTER_ARMY_SHARD]
+        : []),
+      ...process.argv.slice(2),
+    ],
     {
       cwd: webRoot,
       stdio: "inherit",
@@ -71,6 +80,7 @@ try {
       elapsedMs: Math.round(performance.now() - started),
     }),
   );
+  await writeStartupHtml(output, phase, message);
   await writeFile(
     path.join(output, "summary.md"),
     `## Tester Army web journeys (informational)\n\n**Failed / incomplete** during ${phase}. No passing result was established. See startup-failure.json and SDK artifacts.\n`,

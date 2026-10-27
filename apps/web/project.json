@@ -166,7 +166,8 @@
       "inputs": [
         "webGate",
         { "env": "TESTER_ARMY_FRESH" },
-        { "env": "TESTER_ARMY_WRONG" }
+        { "env": "TESTER_ARMY_WRONG" },
+        { "env": "CUBBY_TESTER_ARMY_SHARD" }
       ],
       "outputs": ["{projectRoot}/artifacts/tester-army"]
     },

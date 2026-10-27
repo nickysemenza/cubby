@@ -190,6 +190,9 @@ overrides:
 
 packageExtensionsChecksum: sha256-/Zv3Rqp7UgbxD9Nkz3hA/Ae+bxgyflDvvwDxf/pPpGU=
 
+patchedDependencies:
+  '@e2e-dev/decision@0.3.0': bbd029b11edadc14d3cb6c406546b3fc658c62199ef6780b1246c97ef6733334
+
 importers:
 
   .:
@@ -594,7 +597,7 @@ importers:
         version: 2.1.2
       '@e2e-dev/decision':
         specifier: 0.3.0
-        version: 0.3.0(ai@7.0.154(zod@4.6.7))(e2e@0.21.3(@ai-sdk/openai@4.0.103(zod@4.6.7))(ai@7.0.154(zod@4.6.7)))
+        version: 0.3.0(patch_hash=bbd029b11edadc14d3cb6c406546b3fc658c62199ef6780b1246c97ef6733334)(ai@7.0.154(zod@4.6.7))(e2e@0.21.3(@ai-sdk/openai@4.0.103(zod@4.6.7))(ai@7.0.154(zod@4.6.7)))
       '@e2e-dev/web':
         specifier: 0.15.3
         version: 0.15.3(e2e@0.21.3(@ai-sdk/openai@4.0.103(zod@4.6.7))(ai@7.0.154(zod@4.6.7)))
@@ -12659,7 +12662,7 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@e2e-dev/decision@0.3.0(ai@7.0.154(zod@4.6.7))(e2e@0.21.3(@ai-sdk/openai@4.0.103(zod@4.6.7))(ai@7.0.154(zod@4.6.7)))':
+  '@e2e-dev/decision@0.3.0(patch_hash=bbd029b11edadc14d3cb6c406546b3fc658c62199ef6780b1246c97ef6733334)(ai@7.0.154(zod@4.6.7))(e2e@0.21.3(@ai-sdk/openai@4.0.103(zod@4.6.7))(ai@7.0.154(zod@4.6.7)))':
     dependencies:
       ai: 7.0.154(zod@4.6.7)
       e2e: 0.21.3(@ai-sdk/openai@4.0.103(zod@4.6.7))(ai@7.0.154(zod@4.6.7))

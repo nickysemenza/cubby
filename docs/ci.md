@@ -446,11 +446,13 @@ CI records a Playwright trace only for the retry of a failed test
 failure traces. Each browser job uploads Playwright's HTML report and those
 traces for seven days, named by commit SHA and shard, and a blob report.
 
-`Test report` waits for Validation and the test lanes (not Rust or Apple),
+`Test report` waits for Validation, the test lanes and the optional Tester Army
+shards (not Rust or Apple),
 downloads the Vitest and Playwright blobs,
-and merges each runner's shards into one HTML report (`vitest --merge-reports`,
-`playwright merge-reports`). It publishes both to the Nx cache Worker, which
-serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright}/`, and
+and merges Vitest and Playwright shards into HTML reports (`vitest --merge-reports`,
+`playwright merge-reports`). It also assembles the Tester Army SDK documents,
+rejecting missing or overlapping shard coverage. It publishes the reports to the Nx cache Worker, which
+serves them publicly at `/reports/{run}/{attempt}/{vitest|playwright|tester-army}/`, and
 also uploads them as 14-day artifacts. The workflows set `NX_CACHE_URL`, the
 Worker's public origin, as a plain value rather than a secret: Actions withholds
 step outputs containing a secret, which would drop the report links. Only
@@ -461,7 +463,11 @@ summary (`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's
 result and duration from the Actions API, shard balance, per-runner totals, failures,
 tests that passed only on retry, and the slowest tests. It is informative and
 outside `CI passed`, so merging never delays or fails the gate. CI runs use only
-synthetic data and test credentials, so the report is safe to publish. Local
+synthetic data and test credentials, so the report is safe to publish. Tester Army
+runs three independently cached CI shards. Its hosted report includes every
+journey's video and end-state screenshot, steps, timing and failure boundary,
+with links to raw SDK and Worker diagnostics. The combined reporting job remains
+outside the merge gate. Local
 runs, including the manually dispatched native simulator E2E, keep their
 reports, traces, and run bundles local because they may contain household data
 or credentials.

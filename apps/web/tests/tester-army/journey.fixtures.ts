@@ -138,6 +138,8 @@ function journeyTest(imports: boolean) {
   }>({
     data: async ({ browser, app }, provide) => {
       const started = performance.now();
+      const startedAt = new Date().toISOString();
+      let origin: string | undefined;
       let phase = "Worker startup";
       let setupMs: number | undefined;
       let journeyMs: number | undefined;
@@ -150,6 +152,7 @@ function journeyTest(imports: boolean) {
             objectStorage: imports ? { publicUrl: IMAGE_ORIGIN } : {},
           },
           async (scope) => {
+            origin = scope.runtime.baseURL;
             const originalFetch = globalThis.fetch;
             try {
               if (imports) {
@@ -191,6 +194,7 @@ function journeyTest(imports: boolean) {
                     ).toBeVisible();
                   },
                 });
+                await app.screenshot("outcome");
               } finally {
                 journeyMs = performance.now() - executionStarted;
               }
@@ -212,6 +216,8 @@ function journeyTest(imports: boolean) {
             path.join(output, `${crypto.randomUUID()}.json`),
             JSON.stringify({
               phase,
+              startedAt,
+              origin,
               setupMs: setupMs ?? performance.now() - started,
               journeyMs: journeyMs ?? null,
               logs,

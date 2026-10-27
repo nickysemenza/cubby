@@ -22,8 +22,10 @@ Playwright; Tester Army adds the browser goals, not a separate application
 bootstrap. Cloudflare's
 [test harness](https://developers.cloudflare.com/workers/testing/test-harness/)
 owns Worker execution. Both browser fixtures share Sentry disabling, the
-authenticated-shell readiness marker, stale keep-alive retries and the offline
-derived-refresh pump.
+authenticated-shell readiness marker, stale keep-alive retries and the same
+derived-refresh pump in every profile. The local harness runs queues but not
+the scheduled dispatcher that wakes derived Jobs; the pump uses the production
+paged frontier so public projections settle in both browser suites.
 
 Starting entities live in the synthetic `tooling/scenarios/web-journeys.ts`
 scenario, seeded through the existing kernel fixture helpers. Journeys read
@@ -69,6 +71,7 @@ Run from the repository root:
 pnpm --filter @cubby/web test:e2e:agent:web
 pnpm --filter @cubby/web test:e2e:agent:web --grep 'wardrobe upload'
 TESTER_ARMY_FRESH=1 pnpm --filter @cubby/web test:e2e:agent:web
+CUBBY_TESTER_ARMY_SHARD=1/3 pnpm --filter @cubby/web test:e2e:agent:web
 ```
 
 The shared test-service manager prepares PostgreSQL and IntegreSQL. The normal
@@ -76,12 +79,14 @@ build ensure verifies the Worker before startup. Local credentials use the
 existing `localSecret` lookup for `TESTER_ARMY_CF_API_TOKEN` or
 `AI_GATEWAY_API_KEY`; only that key is loaded, never household database settings.
 Missing credentials are incomplete setup, not a passing or silently skipped
-test.
+test. The gateway’s TypeSafe BYOK organization also needs available Jev credits;
+HTTP 402 is a provider failure. The runner retains the redacted upstream status
+and error body rather than substituting another model.
 
 Two caches have different meanings:
 
 - Nx's `@cubby/web:tester-army` target can replay a whole successful result for
-  identical source, toolchain and execution inputs. This is evidence from the
+  identical source, toolchain and execution inputs, including the shard selector. This is evidence from the
   original run, not fresh agent execution. Failed/incomplete runs do not publish
   a passing cache result.
 - Tester Army's local action replay can reuse navigation while still executing
@@ -91,19 +96,37 @@ Two caches have different meanings:
 The direct command bypasses whole-suite Nx results. `TESTER_ARMY_FRESH=1` also
 disables action replay. CI's existing manual `fresh` or `fresh-tests` options
 force both layers to execute. Ordinary CI keeps this lane nonblocking and
-independent of `CI passed`; same-repository PR updates start it automatically.
+independent of `CI passed`; same-repository PR updates start three independent shards automatically. The SDK
+owns partitioning; the combined report rejects missing or overlapping shard
+coverage. Each shard has a separate Nx result key.
 Fork PRs receive no model credentials and do not run it.
 
-`apps/web/artifacts/tester-army/` holds the SDK report, JUnit, failure traces,
-sanitized Worker logs, setup/scenario timings and a readable summary. Session
-cookies stay inside each fixture's browser and API contexts and are never
-written to an interchange file. The gateway token is registered as an SDK secret. A summary
-classifies the boundary that stopped execution (startup/fixture, provider,
-agent or application/outcome), without claiming an automatic root-cause
-diagnosis. Build/dependency setup remains visible in CI logs; the runner's
-timings record runner lock/build/template preparation and each fixture's Worker startup,
-authentication and seeding separately from journey execution. Cached artifacts
-retain their original execution times.
+`apps/web/artifacts/tester-army/` holds the SDK JSON, JUnit, step traces,
+sanitized Worker logs, setup/scenario timings and a static HTML report. Every
+journey records video and an end-state screenshot; setup failures may have only
+startup diagnostics. Videos are retained for successful flows too. Session
+cookies stay inside each fixture's browser and API contexts, never in an
+interchange file. The gateway token is registered as an SDK secret.
+
+The existing CI `Test report` job assembles the three shard reports, checks
+catalog coverage and publishes HTML, screenshots and videos through the existing
+Nx cache Worker's `/reports/{run}/{attempt}/tester-army/` route. It also adds
+Tester Army counts, failures, slow journeys, shard balance and the report link
+to the combined CI summary. Original execution timestamps remain visible on
+cached evidence. GitHub artifacts remain the fallback when publishing is
+unavailable. Only synthetic CI evidence is published; local reports stay local.
+
+Failure summaries classify startup/fixture, provider, agent and application/
+outcome boundaries without claiming an automatic root-cause diagnosis. Per-case
+HTML shows steps, media, cache decisions and links to Worker diagnostics. Missing
+shard/timing evidence is unknown, never a passing zero. Runner lock/build/template
+preparation and each fixture's startup/authentication/seeding are measured
+separately from journey execution.
+
+The pinned decision executor has a one-line dependency patch reserving the
+`none` target slot inside TypeSafe's 255-choice limit. Upstream 0.3.0 otherwise
+constructs 256 choices on dense Run pages. Remove the patch when an upstream
+release reserves that slot; the real wardrobe journey exercises this boundary.
 
 For the negative acceptance probe, run the product-rename journey with
 `TESTER_ARMY_WRONG=1` and verify the failure occurs at its persisted-outcome

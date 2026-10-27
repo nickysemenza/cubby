@@ -102,11 +102,10 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
     retryStaleKeepAlive(request);
     await provide(request);
   },
-  // Offline lanes omit provider consumers, but user journeys still exercise
-  // eventual SQL projections through the real paged frontier.
+  // Miniflare does not run the scheduled dispatcher that wakes derived Jobs.
+  // Every profile settles projections through the real paged frontier.
   e2eDerivedRefresh: [
-    async ({ workerdProfile, e2eRuntime: _e2eRuntime }, provide) => {
-      if (workerdProfile !== "offline") return provide();
+    async ({ e2eRuntime: _e2eRuntime }, provide) => {
       await withDerivedRefresh(getFixtureDb(), provide);
     },
     { auto: true },

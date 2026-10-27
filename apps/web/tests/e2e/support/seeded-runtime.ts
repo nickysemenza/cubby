@@ -49,7 +49,5 @@ export async function withSeededE2ERuntime<T>(
       userId: session.user.id,
       context: buildKernelContext(db, testUserId(session.user.id)),
     });
-  return await (options.profile === "offline"
-    ? withDerivedRefresh(db, execute)
-    : execute());
+  return await withDerivedRefresh(db, execute);
 }

@@ -1,7 +1,7 @@
 import type { Database } from "~/server/db";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
-/** Offline consumers use the same paged frontier as the production queue. */
+/** Local browser runtimes settle the frontier without the scheduled dispatcher. */
 export async function withDerivedRefresh<T>(
   db: Database,
   run: () => Promise<T>,

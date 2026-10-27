@@ -42,7 +42,15 @@ export function journeyAgent() {
         gateway: { id: CUBBY_AI_GATEWAY_ID, metadata, skipCache: true },
       });
       const response = await fetch(upstream.url, upstream.init);
-      if (!response.ok) return response;
+      if (!response.ok) {
+        // The executor wraps provider errors; retain the upstream diagnostic in CI.
+        console.error("Tester Army decision provider failed", {
+          status: response.status,
+          requestId: response.headers.get("cf-ray"),
+          body: (await response.clone().text()).replaceAll(token, "[redacted]"),
+        });
+        return response;
+      }
       const body: unknown = await response.json();
       const envelope = z.object({ result: z.unknown() }).safeParse(body);
       const payload = envelope.success ? envelope.data.result : body;

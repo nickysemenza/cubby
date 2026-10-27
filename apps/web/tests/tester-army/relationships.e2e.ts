@@ -34,7 +34,9 @@ for (const viewport of [
     );
     await data.open(`/purchases/${purchase.id}`);
     await expect(
-      screen.getByText(`Synthetic Replacement Project ${viewport.width}`),
+      screen
+        .getByText(`Synthetic Replacement Project ${viewport.width}`)
+        .first(),
     ).toBeVisible();
   });
 }
@@ -62,6 +64,7 @@ test("moving a task between board lanes persists its project without changing si
 test("source claim editing preserves canonical identity and money", async ({
   data,
   agent,
+  screen,
 }) => {
   const { expense } = data.world.claim;
   const claims = z.object({
@@ -82,12 +85,12 @@ test("source claim editing preserves canonical identity and money", async ({
   const original = before.sourceClaims[0];
   if (!original) throw new Error("Synthetic claim was not created");
   await data.open(`/expenses/${expense.id}`);
+  await screen.getByRole("button", "Edit Expense").click();
   await agent.act(
-    'Open Edit Expense and Source claims. Set the source claim Description to "Synthetic claim evidence revised". Leave the editor open with that text.',
+    'In the Edit Expense dialog, change the Description of the existing synthetic-provider source claim to "Synthetic claim evidence revised". Keep the existing claim; do not add another row.',
   );
-  await agent.act(
-    "Save changes. Finish on the expense detail page showing the heading Synthetic claim expense.",
-  );
+  await screen.getByRole("button", "Save changes").click();
+  await expect(screen.getByRole("dialog", "Edit Expense")).toBeHidden();
   const after = claims.parse(
     await data.fields("expense", expense.id, ["sourceClaims"]),
   );

@@ -1,50 +1,17 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { readJourneyEvidence, writeJourneyHtml } from "./html.ts";
 import { z } from "zod";
 
-const failure = z.object({
-  code: z.string(),
-  category: z.string(),
-  phase: z.string().optional(),
-});
-const report = z.object({
-  run: z.object({
-    status: z.string(),
-    startedAt: z.string(),
-    finishedAt: z.string(),
-    summary: z.object({
-      selected: z.number(),
-      executed: z.number(),
-      passed: z.number(),
-      failed: z.number(),
-      skipped: z.number(),
-      flaky: z.number(),
-    }),
-    results: z.array(
-      z.object({
-        titlePath: z.array(z.string()),
-        selected: z.boolean(),
-        status: z.string(),
-        attempts: z.array(
-          z.object({ durationMs: z.number(), error: failure.optional() }),
-        ),
-      }),
-    ),
-    errors: z.array(z.unknown()),
-  }),
-});
-
-function boundary(error: z.infer<typeof failure> | undefined) {
-  if (!error) return "unclassified";
-  if (/MODEL|PROVIDER|INFERENCE/u.test(error.code)) return "provider";
-  if (error.phase && error.phase !== "body") return "startup / fixture";
-  if (/AGENT|AUTOMATION|BUDGET|STEP_LIMIT/u.test(error.code)) return "agent";
-  return "application / outcome";
-}
+import {
+  journeyReportSchema,
+  journeyFailureBoundary,
+  journeyPassed,
+} from "../ci-report/records.ts";
 
 /** Only parsed test results can establish a pass; missing reports remain startup failures. */
 export async function writeJourneySummary(output: string, setupMs: number) {
-  const { run } = report.parse(
+  const { run } = journeyReportSchema.parse(
     JSON.parse(await readFile(path.join(output, "run/report.json"), "utf8")),
   );
   const durationMs = Date.parse(run.finishedAt) - Date.parse(run.startedAt);
@@ -64,15 +31,7 @@ export async function writeJourneySummary(output: string, setupMs: number) {
     (sum, fixture) => sum + (fixture.journeyMs ?? 0),
     0,
   );
-  const validPass =
-    run.status === "passed" &&
-    run.summary.selected > 0 &&
-    run.summary.executed === run.summary.selected &&
-    run.summary.failed === 0 &&
-    run.summary.skipped === 0 &&
-    run.summary.flaky === 0 &&
-    run.errors.length === 0 &&
-    fixtures.length === run.summary.executed;
+  const validPass = journeyPassed(run, fixtures.length);
   const text = [
     "## Tester Army web journeys (informational)",
     "",
@@ -91,7 +50,7 @@ export async function writeJourneySummary(output: string, setupMs: number) {
           ? "not executed"
           : result.status === "passed"
             ? "—"
-            : `${boundary(last.error)}${last.error ? ` (${last.error.code})` : ""}`;
+            : `${journeyFailureBoundary(last.error)}${last.error ? ` (${last.error.code})` : ""}`;
         return `| ${result.titlePath.join(" / ").replaceAll("|", "\\|")} | ${result.status} | ${last ? (last.durationMs / 1000).toFixed(1) : "—"} | ${stoppedAt} |`;
       }),
     "",
@@ -110,5 +69,6 @@ export async function writeJourneySummary(output: string, setupMs: number) {
       summary: run.summary,
     }),
   );
+  await writeJourneyHtml(output, [await readJourneyEvidence(output)]);
   return validPass;
 }

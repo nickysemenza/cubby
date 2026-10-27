@@ -135,11 +135,12 @@ test("saved order import preserves source identity, dates, money and the unselec
     .parse(await data.fields("email", mail.emailId, ["checksum"]));
   await data.open(`/emails/${mail.emailId}`);
   await agent.act(
-    "Import this Email, then open the Run link for the started import.",
+    "Import the displayed saved order Email. Stop once its import is started.",
   );
   const importedEmail = z
     .object({ runId: z.string() })
     .parse(await data.fields("email", mail.emailId, ["runId"]));
+  await data.open(`/runs/${importedEmail.runId}`);
   await pollUntil(
     async () => {
       const run = z
@@ -204,10 +205,19 @@ test("saved order import preserves source identity, dates, money and the unselec
       ],
     },
   );
-  const links = z
-    .object({ purchaseLinks: z.array(emailPurchaseLink) })
-    .parse(await data.fields("email", mail.emailId, ["purchaseLinks"]))
-    .purchaseLinks.filter((link) => link.accepted);
+  // Run completion precedes asynchronous publication of materialized Email facts.
+  const links = await pollUntil(
+    async () => {
+      const current = z
+        .object({ purchaseLinks: z.array(emailPurchaseLink) })
+        .parse(await data.fields("email", mail.emailId, ["purchaseLinks"]))
+        .purchaseLinks.filter((link) => link.accepted);
+      return current.some((link) => link.purchaseId === purchase.id)
+        ? current
+        : undefined;
+    },
+    { label: "published accepted Email purchase links", timeoutMs: 60_000 },
+  );
   outcome(
     { count: links.length, links },
     {
