@@ -1,0 +1,43 @@
+apps/web/src/contracts/work-queue.contract.ts
+  s_77bdb89dbc0fc6::t_bc7c8816c19910 19-20
+apps/web/src/features/work-queue/work-actions.unit.test.ts
+  s_77bdb89dbc0fc6::t_fe24f4483d6f71 4-5,14-16
+apps/web/src/lib/request-id.unit.test.ts
+  s_77bdb89dbc0fc6::t_099094c5fd6312 24,26,48,50,74-75,82,99-100
+apps/web/src/server/generic/assessment/repo/suggestion-list.integration.test.ts
+  s_77bdb89dbc0fc6::t_3242aecc2d1296 317
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_77bdb89dbc0fc6::t_e986c99ed9b0c2 507-510
+apps/web/src/server/generic/work-queue/repo/work-declarations.ts
+  s_77bdb89dbc0fc6::t_c310e1ba2b3621 157-171
+apps/web/tests/e2e/work-queue.spec.ts
+  s_77bdb89dbc0fc6::t_da0b571bc0da77 15-18,68-76,411-445
+apps/web/vitest.config.ts
+  s_77bdb89dbc0fc6::t_a0e47cae3cbdf4 530
+docs/entities.md
+  s_77bdb89dbc0fc6::t_5260e88b5005d3 3232
+docs/spending-classification.md
+  s_77bdb89dbc0fc6::t_41a29af504559c 107
+packages/schemas/src/relation-list.ts
+  s_77bdb89dbc0fc6::t_f6c8bee9f40c9f 370-373
+packages/schemas/src/suggestion-list-declarations.ts
+  s_77bdb89dbc0fc6::t_54937f01f6f47e 2,257-258,260-267
+packages/schemas/src/suggestion-list.ts
+  s_77bdb89dbc0fc6::t_1c7f5eaa750ed8 206-208,220-222
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2af8b5304b9669782c981eecf441bd1c750690b5",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
