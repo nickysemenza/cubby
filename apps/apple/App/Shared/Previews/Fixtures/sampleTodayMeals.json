@@ -1,0 +1,994 @@
+[
+  {
+    "id": "MEL-5RTX",
+    "date": "2026-09-14",
+    "name": "Dinner",
+    "sortOrder": null,
+    "mealType": "dinner",
+    "mealKind": "cooked",
+    "recipes": [
+      {
+        "id": "81098f74-c10b-4a12-98c7-11e887093b56",
+        "mealId": "MEL-5RTX",
+        "recipeId": "RCP-3PQZ",
+        "recipe": {
+          "id": "RCP-3PQZ",
+          "name": "Braised Short Ribs",
+          "servings": null,
+          "yield": null,
+          "totals": null
+        },
+        "scale": 1,
+        "sortOrder": 0,
+        "estimatedYieldGrams": null,
+        "actualYieldGrams": null,
+        "scaledTotals": {
+          "cost": {
+            "status": "unavailable",
+            "reason": "no_data"
+          },
+          "nutrition": {
+            "protein": {
+              "status": "complete",
+              "lower": 269.37,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "fat": {
+              "status": "complete",
+              "lower": 809.7,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "carbs": {
+              "status": "complete",
+              "lower": 238.32,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "fiber": {
+              "status": "complete",
+              "lower": 690.78,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "kcal": {
+              "status": "complete",
+              "lower": 563.99,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "calcium": {
+              "status": "complete",
+              "lower": 714.83,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "iron": {
+              "status": "complete",
+              "lower": 90.38,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "magnesium": {
+              "status": "complete",
+              "lower": 326.18,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "potassium": {
+              "status": "complete",
+              "lower": 981.81,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "sodium": {
+              "status": "complete",
+              "lower": 624.54,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "zinc": {
+              "status": "complete",
+              "lower": 884.25,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "selenium": {
+              "status": "complete",
+              "lower": 420.75,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_a": {
+              "status": "complete",
+              "lower": 610.37,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_d": {
+              "status": "complete",
+              "lower": 221.29,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_e": {
+              "status": "complete",
+              "lower": 401.42,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_k": {
+              "status": "complete",
+              "lower": 344.3,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_c": {
+              "status": "complete",
+              "lower": 988.87,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_b6": {
+              "status": "complete",
+              "lower": 32.68,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_b12": {
+              "status": "complete",
+              "lower": 815.1,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "folate": {
+              "status": "complete",
+              "lower": 598.7,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "cholesterol": {
+              "status": "complete",
+              "lower": 112.12,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "saturated_fat": {
+              "status": "complete",
+              "lower": 837.27,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            }
+          },
+          "macros": {
+            "calories": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "protein": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "carbs": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "fat": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "partial": false
+          }
+        },
+        "createdAt": "2026-09-14T10:00:00.000Z",
+        "updatedAt": "2026-09-14T10:00:00.000Z"
+      },
+      {
+        "id": "4c3b9b15-f9e6-4936-85f0-d91d00867898",
+        "mealId": "MEL-5RTX",
+        "recipeId": "RCP-6NJT",
+        "recipe": {
+          "id": "RCP-6NJT",
+          "name": "Roasted Carrots",
+          "servings": null,
+          "yield": null,
+          "totals": null
+        },
+        "scale": 1,
+        "sortOrder": 1,
+        "estimatedYieldGrams": null,
+        "actualYieldGrams": null,
+        "scaledTotals": {
+          "cost": {
+            "status": "unavailable",
+            "reason": "no_data"
+          },
+          "nutrition": {
+            "protein": {
+              "status": "complete",
+              "lower": 107.3,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "fat": {
+              "status": "complete",
+              "lower": 211.94,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "carbs": {
+              "status": "complete",
+              "lower": 387.86,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "fiber": {
+              "status": "complete",
+              "lower": 365.15,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "kcal": {
+              "status": "complete",
+              "lower": 84.78,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "calcium": {
+              "status": "complete",
+              "lower": 327.62,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "iron": {
+              "status": "complete",
+              "lower": 469.96,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "magnesium": {
+              "status": "complete",
+              "lower": 559.39,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "potassium": {
+              "status": "complete",
+              "lower": 261.4,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "sodium": {
+              "status": "complete",
+              "lower": 782.21,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "zinc": {
+              "status": "complete",
+              "lower": 617.87,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "selenium": {
+              "status": "complete",
+              "lower": 901.74,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_a": {
+              "status": "complete",
+              "lower": 803.47,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_d": {
+              "status": "complete",
+              "lower": 27.49,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_e": {
+              "status": "complete",
+              "lower": 670.73,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_k": {
+              "status": "complete",
+              "lower": 441.89,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_c": {
+              "status": "complete",
+              "lower": 961.08,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_b6": {
+              "status": "complete",
+              "lower": 336.56,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "vitamin_b12": {
+              "status": "complete",
+              "lower": 987.06,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "folate": {
+              "status": "complete",
+              "lower": 420.56,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "cholesterol": {
+              "status": "complete",
+              "lower": 115.52,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            },
+            "saturated_fat": {
+              "status": "complete",
+              "lower": 119.74,
+              "upper": null,
+              "coverage": {
+                "covered": 1,
+                "total": 1
+              }
+            }
+          },
+          "macros": {
+            "calories": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "protein": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "carbs": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "fat": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
+            "partial": false
+          }
+        },
+        "createdAt": "2026-09-14T10:00:00.000Z",
+        "updatedAt": "2026-09-14T10:00:00.000Z"
+      }
+    ],
+    "totals": {
+      "cost": {
+        "status": "unavailable",
+        "reason": "no_data"
+      },
+      "nutrition": {
+        "protein": {
+          "status": "complete",
+          "lower": 89.05,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "fat": {
+          "status": "complete",
+          "lower": 504.38,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "carbs": {
+          "status": "complete",
+          "lower": 958.93,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "fiber": {
+          "status": "complete",
+          "lower": 67.99,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "kcal": {
+          "status": "complete",
+          "lower": 244.42,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "calcium": {
+          "status": "complete",
+          "lower": 66.39,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "iron": {
+          "status": "complete",
+          "lower": 577.02,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "magnesium": {
+          "status": "complete",
+          "lower": 704.98,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "potassium": {
+          "status": "complete",
+          "lower": 606.7,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "sodium": {
+          "status": "complete",
+          "lower": 24.16,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "zinc": {
+          "status": "complete",
+          "lower": 367.2,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "selenium": {
+          "status": "complete",
+          "lower": 104.92,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_a": {
+          "status": "complete",
+          "lower": 905.54,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_d": {
+          "status": "complete",
+          "lower": 2.97,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_e": {
+          "status": "complete",
+          "lower": 690.36,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_k": {
+          "status": "complete",
+          "lower": 701.46,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_c": {
+          "status": "complete",
+          "lower": 500.33,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_b6": {
+          "status": "complete",
+          "lower": 629.32,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_b12": {
+          "status": "complete",
+          "lower": 465.71,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "folate": {
+          "status": "complete",
+          "lower": 174.02,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "cholesterol": {
+          "status": "complete",
+          "lower": 311.66,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "saturated_fat": {
+          "status": "complete",
+          "lower": 777.73,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        }
+      },
+      "macros": {
+        "calories": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "protein": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "carbs": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "fat": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "partial": false
+      }
+    },
+    "cost": null,
+    "calories": null,
+    "images": [],
+    "displayName": "Dinner",
+    "recipeNames": [
+      "Braised Short Ribs",
+      "Roasted Carrots"
+    ],
+    "createdAt": "2026-09-14T10:00:00.000Z",
+    "updatedAt": "2026-09-14T10:00:00.000Z",
+    "dataQuality": {
+      "status": "complete",
+      "score": 100,
+      "facets": [],
+      "gaps": [],
+      "exceptions": [],
+      "relatedGaps": [],
+      "relatedExceptions": []
+    },
+    "displayImages": []
+  },
+  {
+    "id": "MEL-8MKD",
+    "date": "2026-09-14",
+    "name": "Lunch",
+    "sortOrder": null,
+    "mealType": "lunch",
+    "mealKind": "leftovers",
+    "recipes": [],
+    "totals": {
+      "cost": {
+        "status": "unavailable",
+        "reason": "no_data"
+      },
+      "nutrition": {
+        "protein": {
+          "status": "complete",
+          "lower": 256.19,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "fat": {
+          "status": "complete",
+          "lower": 907.81,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "carbs": {
+          "status": "complete",
+          "lower": 380.29,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "fiber": {
+          "status": "complete",
+          "lower": 519.49,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "kcal": {
+          "status": "complete",
+          "lower": 380.96,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "calcium": {
+          "status": "complete",
+          "lower": 523.34,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "iron": {
+          "status": "complete",
+          "lower": 706.57,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "magnesium": {
+          "status": "complete",
+          "lower": 732.77,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "potassium": {
+          "status": "complete",
+          "lower": 77.77,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "sodium": {
+          "status": "complete",
+          "lower": 526.07,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "zinc": {
+          "status": "complete",
+          "lower": 371.53,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "selenium": {
+          "status": "complete",
+          "lower": 182.47,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_a": {
+          "status": "complete",
+          "lower": 268.19,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_d": {
+          "status": "complete",
+          "lower": 546.58,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_e": {
+          "status": "complete",
+          "lower": 403.81,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_k": {
+          "status": "complete",
+          "lower": 595.68,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_c": {
+          "status": "complete",
+          "lower": 547.88,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_b6": {
+          "status": "complete",
+          "lower": 825.76,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "vitamin_b12": {
+          "status": "complete",
+          "lower": 76.73,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "folate": {
+          "status": "complete",
+          "lower": 614.79,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "cholesterol": {
+          "status": "complete",
+          "lower": 107.5,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        },
+        "saturated_fat": {
+          "status": "complete",
+          "lower": 140.47,
+          "upper": null,
+          "coverage": {
+            "covered": 1,
+            "total": 1
+          }
+        }
+      },
+      "macros": {
+        "calories": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "protein": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "carbs": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "fat": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
+        "partial": false
+      }
+    },
+    "cost": null,
+    "calories": null,
+    "images": [],
+    "displayName": "Lunch",
+    "recipeNames": [],
+    "createdAt": "2026-09-14T10:00:00.000Z",
+    "updatedAt": "2026-09-14T10:00:00.000Z",
+    "dataQuality": {
+      "status": "complete",
+      "score": 100,
+      "facets": [],
+      "gaps": [],
+      "exceptions": [],
+      "relatedGaps": [],
+      "relatedExceptions": []
+    },
+    "displayImages": []
+  }
+]

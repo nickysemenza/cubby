@@ -1,0 +1,32 @@
+[
+  {
+    "id": "TSK-4K7M",
+    "name": "Refill pantry staples list",
+    "status": "in_progress",
+    "dueDate": "2026-09-11",
+    "dueEndDate": null,
+    "projectId": "PRJ-3GHT",
+    "projectName": "Kitchen",
+    "projectEmoji": null
+  },
+  {
+    "id": "TSK-7QXN",
+    "name": "Ship the porcelain overhaul PR",
+    "status": "not_started",
+    "dueDate": "2026-09-12",
+    "dueEndDate": null,
+    "projectId": "PRJ-8MNQ",
+    "projectName": "Cubby app",
+    "projectEmoji": null
+  },
+  {
+    "id": "TSK-9VBH",
+    "name": "Call the fridge repair vendor back",
+    "status": "not_started",
+    "dueDate": null,
+    "dueEndDate": null,
+    "projectId": null,
+    "projectName": null,
+    "projectEmoji": null
+  }
+]

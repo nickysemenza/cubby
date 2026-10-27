@@ -42,7 +42,6 @@ import {
 } from "../../src/entity/fields/field-envelope.fixtures";
 import { nutritionEstimate } from "@cubby/schemas/nutrition";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { problemsCountSchema } from "@cubby/schemas/problems";
 import { taskTodayBriefingItemOut } from "@cubby/schemas/project";
 import { completeTaskCommand } from "../../src/server/domains/task/repo/briefing-commands";
 import { taskBriefingReport } from "../../src/server/generic/entity-report/repo/task";
@@ -363,27 +362,6 @@ function buildTodayMeals(): z.infer<typeof mealListItemOut>[] {
 }
 
 // ---------------------------------------------------------------------------
-// sampleTodayProblems: ProblemsCount — `problems/getCounts`, for
-// `TodayView`'s preview; every per-check count is zero. `byType`'s keys are
-// read straight off the schema, so a new check can never drift this preview
-// out of sync with what the server actually counts (the schema itself would
-// then fail `schema.parse` first, at generation time).
-
-function buildProblemsCount(): z.infer<typeof problemsCountSchema> {
-  const byTypeKeys = Object.keys(problemsCountSchema.shape.byType.shape);
-  const zeroByType = Object.fromEntries(byTypeKeys.map((key) => [key, 0]));
-  return mock(problemsCountSchema, {
-    seed: 300,
-    overrides: {
-      total: 14,
-      autoFixTotal: 40,
-      coverageTotal: 3,
-      byType: zeroByType,
-    },
-  });
-}
-
-// ---------------------------------------------------------------------------
 // sampleMealNutrition: MealNutritionOut — two eaters splitting a shared
 // recipe plus one solo food, for the meal nutrition breakdown preview.
 
@@ -543,7 +521,6 @@ const FIXTURES: readonly Fixture[] = [
       }),
   },
   { name: "sampleTodayMeals", build: buildTodayMeals },
-  { name: "sampleTodayProblems", build: buildProblemsCount },
   { name: "sampleMealNutrition", build: buildMealNutrition },
 ];
 

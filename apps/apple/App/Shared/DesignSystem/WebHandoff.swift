@@ -13,7 +13,7 @@ struct WebHandoff {
     enum Target: Equatable {
         /// A record's detail page, optionally at a declared detail section (the web hash).
         case record(key: EntityKey, id: String, section: String? = nil)
-        /// A web route (`/problems`), optionally with list query parameters; never a fragment.
+        /// A web route (`/work-queue`), optionally with list query parameters; never a fragment.
         case route(path: String, query: [String: String] = [:])
     }
 

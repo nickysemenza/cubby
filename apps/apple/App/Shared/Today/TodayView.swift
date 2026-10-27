@@ -497,7 +497,7 @@ struct TodayContent: View {
     }
 
     private var problemsLink: some View {
-        OpenOnWebButton(target: .route(path: "/problems")) {
+        OpenOnWebButton(target: .route(path: "/work-queue", query: ["view": "problems"])) {
             HStack {
                 Label("Problems on web", systemImage: "safari")
                 Spacer()
