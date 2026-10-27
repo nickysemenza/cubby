@@ -1,0 +1,21 @@
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_8f2d1c8e068c12 8,18,21,41,351-354,356,1573-1574
+packages/schemas/src/entity-manifest.ts
+  s_9fb58b1f0c0012::t_bcdc05bbc4ab19 264-267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7102185ddf6f4ef37e28896780daeb7b622219ee",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
