@@ -120,7 +120,8 @@ export function NeedsAttention({
   items: ProjectAttentionItem[];
   incompleteCount?: number;
 }) {
-  if (items.length === 0 && incompleteCount === 0) return null;
+  if (items.length === 0)
+    return <AttentionInputStatus count={incompleteCount} />;
 
   const byType = new Map<ProjectAttentionType, ProjectAttentionItem[]>();
   for (const item of items) {

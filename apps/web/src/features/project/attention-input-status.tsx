@@ -6,7 +6,7 @@ export function AttentionInputStatus({ count }: { count: number }) {
   return (
     <p className="text-sm text-muted-foreground">
       Project attention checks are incomplete for {countLabel(count, "project")}{" "}
-      while derived inputs update. Counts include known findings only.
+      while project totals finish updating. Counts include known findings only.
     </p>
   );
 }

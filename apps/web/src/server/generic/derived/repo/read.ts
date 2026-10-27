@@ -38,6 +38,11 @@ const requireStored = (
   return declaration;
 };
 
+const publishedOutcome = {
+  value: storedFieldDecision.shape.outcome.options[0].shape.kind.value,
+  empty: storedFieldDecision.shape.outcome.options[1].shape.kind.value,
+} satisfies { value: "value"; empty: "empty" };
+
 /** The typed sort projection of a stored value, for ORDER BY, WHERE and SUM. */
 export function storedDerivedSql(
   entity: Entity,
@@ -98,8 +103,8 @@ export function storedFieldAvailableSql(
   return declaration?.publishes === "derivedValue"
     ? sql`EXISTS (
     SELECT 1 FROM "DerivedValue" v WHERE v."entityId" = ${id} AND v.key = ${declaration.key}
-      AND v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${storedFieldDecision.shape.outcome.options[0].shape.kind.value}, ${storedFieldDecision.shape.outcome.options[1].shape.kind.value})
-      ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${storedFieldDecision.shape.outcome.options[1].shape.kind.value})` : sql``}
+      AND v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${publishedOutcome.value}, ${publishedOutcome.empty})
+      ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${publishedOutcome.empty})` : sql``}
   )`
     : null;
 }

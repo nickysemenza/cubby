@@ -53,7 +53,7 @@ export function projectScheduleRow(
     envelope.work.kind !== "idle" ||
     (envelope.result.kind === "cached" && envelope.result.freshness === "stale")
   )
-    row.meta += " · Updating";
+    row.meta += " · Updating…";
   if (!dated)
     row.noDateLabel =
       envelope.result.kind === "missing"
