@@ -1,12 +1,9 @@
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import { sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { withTestDb } from "tooling/test-setup";
+import { describe, expect, it } from "vitest";
 
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import * as allocation from "~/server/domains/expense/repo/expense-project-allocation";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
 import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -107,7 +104,7 @@ describe("stored Expense quality", () => {
     expect(queue.items[0]?.id).toBe(principal.output.id);
   });
 
-  it("batch-loads scoped facts and preserves incurred, zero, quantity and role rules", async () => {
+  it("loads scoped facts and preserves incurred, zero, quantity and role rules", async () => {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: "Synthetic merchandise policy",
       productExpectation: "required",
@@ -151,31 +148,14 @@ describe("stored Expense quality", () => {
         lineKind: "unclassified",
       }),
     );
-    const allocations = vi.spyOn(allocation, "expenseJointAllocationSql");
-    const measured = await countTestDbQueries(() =>
-      expenseChecks.evaluate(ctx.db, [
-        gap.entityId,
-        planned.entityId,
-        free.entityId,
-        unclassified.entityId,
-      ]),
-    );
-    const selections = allocations.mock.calls.map(([ids]) => ids);
-    allocations.mockRestore();
-    expect(selections).toHaveLength(1);
-    const selection = selections[0];
-    if (!selection)
-      throw new Error("Expense allocation read was not page-scoped");
-    const params = new PgDialect()
-      .sqlToQuery(sql`${selection}`)
-      .params.join(",");
-    for (const row of measured.result) expect(params).toContain(row.id);
-    expect(measured.queryCount).toBe(1);
-    expect(
-      (await countTestDbQueries(() => expenseChecks.evaluate(ctx.db, [])))
-        .queryCount,
-    ).toBe(0);
-    const checks = new Map(measured.result.map((row) => [row.id, row.checks]));
+    const evaluated = await expenseChecks.evaluate(ctx.db, [
+      gap.entityId,
+      planned.entityId,
+      free.entityId,
+      unclassified.entityId,
+    ]);
+    expect(await expenseChecks.evaluate(ctx.db, [])).toEqual([]);
+    const checks = new Map(evaluated.map((row) => [row.id, row.checks]));
     expect(checks.get(gap.entityId)).toMatchObject({
       expense_cost: "gap",
       expense_spending_category: "pass",

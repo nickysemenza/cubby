@@ -855,10 +855,7 @@ export async function dueJobPositions(
  * count's predicates even when the visible Job has no possible predecessors.
  * CASE keeps that scan unexecuted at the front of the indexed kind range.
  */
-export const dueJobPositionsQuery = (
-  ids: readonly string[],
-  now = new Date(),
-) => sql`
+const dueJobPositionsQuery = (ids: readonly string[], now = new Date()) => sql`
     WITH visible AS MATERIALIZED (
       SELECT id, kind, priority, "updatedAt", "availableAt", ${jobRunOwned()} AS run_owned
       FROM "Job" WHERE ${inArray(

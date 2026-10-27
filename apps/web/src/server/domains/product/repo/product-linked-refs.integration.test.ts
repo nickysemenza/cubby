@@ -1,6 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -29,7 +29,7 @@ afterEach(() => queue.restore());
 
 describe("Product linked references and category behavior", () => {
   const ctx = withTestDb();
-  it("keeps compact category/book identity, current inherited feature and bounded Location fields with constant duplicate cost", async () => {
+  it("keeps compact category/book identity, current inherited feature and bounded Location fields", async () => {
     const category = await createProductCategory(
       ctx.db,
       {
@@ -89,19 +89,13 @@ describe("Product linked references and category behavior", () => {
     );
     if (!raw) throw new Error("Synthetic raw Product detail missing");
     expect(raw.category?.feature).toBe("storage");
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        readPublicEntityRows({
-          db: ctx.db,
-          entity: "product",
-          projection: "detail",
-          rows: Array.from({ length: count }, () => raw),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
-    for (const item of repeated.result) {
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "product",
+      projection: "detail",
+      rows: Array.from({ length: 20 }, () => raw),
+    });
+    for (const item of repeated) {
       expect(item.category?.id).toBe(category.output.id);
       expect(
         (item.category

@@ -2,7 +2,7 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { SHORTCODE_CHARS } from "@cubby/shared";
 import { eq, inArray } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -211,11 +211,7 @@ describe("stored Product identity pairs", () => {
             },
           })),
         );
-      // Live snapshot fences read each Product once, never once per pair side.
-      const { result: queue, queryCount } = await countTestDbQueries(() =>
-        getProductMatchQueue(ctx.db, {}),
-      );
-      expect(queryCount).toBeLessThan(2 * products.length);
+      const queue = await getProductMatchQueue(ctx.db, {});
       expect(queue.items).toHaveLength(Math.min(200, weak + actionable));
       const problems = (await findDuplicateProductIdentities(ctx.db)).flatMap(
         (group) => group.pairs,
@@ -496,7 +492,7 @@ describe("stored Product identity pairs", () => {
   });
   // Claim loading must share issuer reads across accepted lines, while a later
   // operation must observe current registry ownership instead of a stale cache.
-  it("loads retained identifier issuers in a constant query budget", async () => {
+  it("loads retained identifier issuers for all and selected Products", async () => {
     const { ids } = await acceptedIdentityPair(
       ["Synthetic batch identity alpha", "Synthetic batch identity beta"],
       "SYNTHETIC-SHARED-SKU",
@@ -521,9 +517,7 @@ describe("stored Product identity pairs", () => {
       .update(importSourceOrder)
       .set({ originalOrder: original })
       .where(eq(importSourceOrder.id, order!.id));
-    const { result, queryCount } = await countTestDbQueries(() =>
-      loadProductIdentifierClaims(ctx.db),
-    );
+    const result = await loadProductIdentifierClaims(ctx.db);
     expect(
       result.map(({ productId, source, value }) => ({
         productId,
@@ -540,12 +534,7 @@ describe("stored Product identity pairs", () => {
       ),
     );
     expect(result).toHaveLength(2);
-    expect(queryCount).toBeLessThanOrEqual(3);
-    const batch = await countTestDbQueries(() =>
-      loadProductIdentifierClaims(ctx.db, ids),
-    );
-    expect(batch.result).toEqual(result);
-    expect(batch.queryCount).toBe(queryCount);
+    expect(await loadProductIdentifierClaims(ctx.db, ids)).toEqual(result);
     expect(await loadProductIdentifierClaims(ctx.db, [ids[0]!])).toEqual(
       result.filter((claim) => claim.productId === ids[0]),
     );

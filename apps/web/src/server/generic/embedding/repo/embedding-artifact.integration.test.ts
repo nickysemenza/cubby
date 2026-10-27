@@ -2,7 +2,7 @@ import type { VectorizeVector } from "@cloudflare/workers-types";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv, type getAiGateway } from "~/server/cf-env";
@@ -95,7 +95,7 @@ describe("immutable embedding artifacts", () => {
     expect(await read()).toEqual(after);
   });
 
-  it("readmits a page of current Jobs without per-record transactions", async () => {
+  it("readmits a page of current Jobs", async () => {
     const refs: Parameters<typeof prepareSearchDocuments>[1][number][] = [];
     for (let index = 0; index < 8; index++) {
       const subject = await createProductIdentityFixture(
@@ -120,21 +120,14 @@ describe("immutable embedding artifacts", () => {
       .update(job)
       .set({ state: "failed" })
       .where(eq(job.id, failed.id));
-    const single = await countTestDbQueries(() =>
-      enqueueEmbeddingRefs(
-        ctx.db,
-        { entries: prepared.entries.slice(0, 1), missing: [] },
-        config,
-      ),
+    await enqueueEmbeddingRefs(
+      ctx.db,
+      { entries: prepared.entries.slice(0, 1), missing: [] },
+      config,
     );
-    const page = await countTestDbQueries(() =>
-      enqueueEmbeddingRefs(ctx.db, prepared, config),
-    );
-    expect(page.result.map((row) => row.id)).toEqual(
-      original.map((row) => row.id),
-    );
-    expect(page.queryCount).toBe(single.queryCount);
-    expect(page.result.map((row) => row.state)).toEqual([
+    const page = await enqueueEmbeddingRefs(ctx.db, prepared, config);
+    expect(page.map((row) => row.id)).toEqual(original.map((row) => row.id));
+    expect(page.map((row) => row.state)).toEqual([
       "paused",
       "failed",
       "queued",

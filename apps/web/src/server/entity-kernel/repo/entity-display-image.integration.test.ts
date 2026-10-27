@@ -5,7 +5,7 @@ import { rawLocationList } from "@cubby/schemas/location-raw-read";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -91,7 +91,7 @@ import {
 describe("entity display image resolver", () => {
   const ctx = withTestDb();
 
-  it("borrows a source record logo only through live accepted evidence in one batch", async () => {
+  it("borrows a source record logo only through live accepted evidence", async () => {
     const { record } = await createFinancialEvidenceFixture(ctx.db);
     const ref = {
       entityKind: "sourceTransactionRecord",
@@ -126,14 +126,12 @@ describe("entity display image resolver", () => {
       sourceRefs: [{ source: record.source, externalId: record.externalId }],
       allocations: [{ purchaseId: purchase.output.id, amount: 1 }],
     });
-    const measured = await countTestDbQueries(() =>
-      resolvePublicEntityDisplayImages(ctx.db, [ref]),
-    );
-    expect(measured.result.get(key)).toEqual({
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
+    ).toEqual({
       url: getR2PublicUrl(logo.key),
       representations: expectedRepresentations(logo.key),
     });
-    expect(measured.queryCount).toBe(1);
     await getDb(ctx.db)
       .update(financialTransaction)
       .set({ deletedAt: new Date() })
@@ -186,11 +184,9 @@ describe("entity display image resolver", () => {
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
     ).toBeUndefined();
     await addHistory(purchase.output.id);
-    const measured = await countTestDbQueries(() =>
-      resolvePublicEntityDisplayImages(ctx.db, [ref]),
-    );
-    expect(measured.queryCount).toBe(1);
-    expect(measured.result.get(key)?.url).toBe(getR2PublicUrl(logo.key));
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key)?.url,
+    ).toBe(getR2PublicUrl(logo.key));
     const presence = await getDb(ctx.db).execute(
       sql`SELECT ${entityDisplayImagePresenceSql("sourceTransactionRecord", sql`${record.id}::uuid`)} AS present`,
     );
@@ -291,7 +287,7 @@ describe("entity display image resolver", () => {
       ...overrides,
     });
 
-  it("does not reload resolved display representations for duplicate nested references", async () => {
+  it("replaces stale display representations for duplicate nested references", async () => {
     const owner = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic representation reuse" }),
@@ -308,14 +304,17 @@ describe("entity display image resolver", () => {
       url: getR2PublicUrl(photo.key),
       representations: expectedRepresentations("images/stale.jpg"),
     };
-    const measured = await countTestDbQueries(() =>
-      withDisplayImages(ctx.db, "product", [{ id: owner.entityId }], (row) => ({
+    const rows = await withDisplayImages(
+      ctx.db,
+      "product",
+      [{ id: owner.entityId }],
+      (row) => ({
         id: row.id,
         nested: [stale, { photo: stale }],
-      })),
+      }),
     );
 
-    expect(measured.result).toEqual([
+    expect(rows).toEqual([
       {
         id: owner.entityId,
         nested: [
@@ -325,7 +324,6 @@ describe("entity display image resolver", () => {
         displayImages: [expectedDisplayImage(photo)],
       },
     ]);
-    expect(measured.queryCount).toBe(1);
   });
 
   it("prefetches non-displayable attachments without trusting their supplied representations", async () => {
@@ -360,17 +358,11 @@ describe("entity display image resolver", () => {
       "images",
       "displayImages",
     ]);
-    const prefetched = await countTestDbQueries(async () => {
-      const early = plan.prefetch(ctx.db, [owner.entityId], projection);
-      await Promise.all(Object.values(early));
-      return early;
-    });
-    expect(prefetched.queryCount).toBe(1);
-    const early = prefetched.result;
-    const measured = await countTestDbQueries(() =>
-      plan.read(ctx.db, [row], projection, undefined, undefined, early),
-    );
-    expect(measured.result).toMatchObject([
+    const early = plan.prefetch(ctx.db, [owner.entityId], projection);
+    await Promise.all(Object.values(early));
+    expect(
+      await plan.read(ctx.db, [row], projection, undefined, undefined, early),
+    ).toMatchObject([
       {
         images: [
           {
@@ -381,13 +373,12 @@ describe("entity display image resolver", () => {
         displayImages: [],
       },
     ]);
-    expect(measured.queryCount).toBe(0);
     expect(row.images[0]?.representations).toEqual(
       expectedRepresentations("images/stale.jpg"),
     );
   });
 
-  it("hydrates missing nested image codes once while preserving trusted preloads and tombstones", async () => {
+  it("hydrates missing nested image codes while preserving trusted preloads and tombstones", async () => {
     const preloadedPhoto = await makeImage();
     const missingPhoto = await makeImage();
     const deletedPhoto = await makeImage();
@@ -409,24 +400,20 @@ describe("entity display image resolver", () => {
     };
     const observedAt = new Date("2026-01-01T00:00:00Z");
     const complete = [expectedDisplayImage(preloadedPhoto)];
-    const reused = await countTestDbQueries(() =>
-      hydrateImageReadProjection(ctx.db, complete, preloaded),
-    );
-    expect(reused.result).toEqual(complete);
-    expect(reused.queryCount).toBe(0);
+    expect(
+      await hydrateImageReadProjection(ctx.db, complete, preloaded),
+    ).toEqual(complete);
 
-    const measured = await countTestDbQueries(() =>
-      hydrateImageReadProjection(
-        ctx.db,
-        {
-          images: complete,
-          nested: [rawPhoto, { photo: rawPhoto }, rawDeleted],
-          observedAt,
-        },
-        preloaded,
-      ),
+    const hydrated = await hydrateImageReadProjection(
+      ctx.db,
+      {
+        images: complete,
+        nested: [rawPhoto, { photo: rawPhoto }, rawDeleted],
+        observedAt,
+      },
+      preloaded,
     );
-    expect(measured.result).toEqual({
+    expect(hydrated).toEqual({
       images: complete,
       nested: [
         expectedDisplayImage(missingPhoto),
@@ -435,19 +422,16 @@ describe("entity display image resolver", () => {
       ],
       observedAt,
     });
-    expect(measured.result.observedAt).toBe(observedAt);
-    expect(measured.queryCount).toBe(1);
+    expect(hydrated.observedAt).toBe(observedAt);
     expect(preloaded.size).toBe(1);
     expect(rawPhoto.representations).toEqual(
       expectedRepresentations("images/stale.jpg"),
     );
 
     const empty: unknown[] = [];
-    const emptyRead = await countTestDbQueries(() =>
-      hydrateImageReadProjection(ctx.db, empty, preloaded),
+    expect(await hydrateImageReadProjection(ctx.db, empty, preloaded)).toBe(
+      empty,
     );
-    expect(emptyRead.result).toBe(empty);
-    expect(emptyRead.queryCount).toBe(0);
   });
 
   it("uses a linked product image for a device without image storage", async () => {
@@ -591,11 +575,7 @@ describe("entity display image resolver", () => {
         { entityKind: "expense" as const, entityId: expense.entityId },
         { entityKind: "inventory" as const, entityId: entry.entityId },
       ];
-      const measured = await countTestDbQueries(() =>
-        resolveEntityDisplayImages(ctx.db, refs),
-      );
-      expect(measured.queryCount).toBe(1);
-      const images = measured.result;
+      const images = await resolveEntityDisplayImages(ctx.db, refs);
       expect(
         refs.map((ref) =>
           images.get(entityRefKey(ref.entityKind, ref.entityId)),

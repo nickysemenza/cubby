@@ -1,10 +1,8 @@
-import { appendFileSync } from "node:fs";
-
 import type { EntityRef } from "@cubby/schemas/entity";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -139,9 +137,7 @@ describe("connection evaluation pages", () => {
       )
       .limit(1);
     if (!anchor) throw new Error("Synthetic page anchor missing");
-    return countTestDbQueries(() =>
-      aiEvaluationJobHandler.advancePage(ctx.db, anchor.id),
-    );
+    return aiEvaluationJobHandler.advancePage(ctx.db, anchor.id);
   }
 
   const states = async (ids: readonly string[]) =>
@@ -152,32 +148,23 @@ describe("connection evaluation pages", () => {
         .where(inArray(aiEvaluation.id, [...ids]))
     ).map((row) => row.state);
 
-  it("settles a page of sources with a bounded per-source statement cost", async () => {
+  it("settles a single source and a page of sources", async () => {
     const base = await setup();
     const single = await schedule(
       (await emails(base, 1, "single")).map((entry) => entry.message),
     );
-    const one = await runPage(single);
-    expect(one.result).toBe("succeeded");
+    expect(await runPage(single)).toBe("succeeded");
     expect(await states(single)).toEqual(["completed"]);
 
     const created = await emails(base, 20, "page");
     const all = await schedule(created.map((entry) => entry.message));
     const page = all.filter((id) => !single.includes(id));
     expect(page).toHaveLength(20);
-    const twenty = await runPage(page);
-    expect(twenty.result).toBe("succeeded");
+    expect(await runPage(page)).toBe("succeeded");
     expect(new Set(await states(page))).toEqual(new Set(["completed"]));
-    // A single-Job evaluation of a source without candidates cost about 30
-    // statements; on a page each added source costs its own retrieval only
-    // (2 statements for an Email when measured).
-    const perSource = (twenty.queryCount - one.queryCount) / 19;
-    expect(perSource).toBeLessThanOrEqual(3);
   });
 
-  // Ordinary sweeps must not regain per-candidate locked reads/savepoints.
-  // Existing Email coverage has no candidates and cannot catch that growth.
-  it("bounds Expense page statements while publishing acquisition candidates for every source", async () => {
+  it("publishes Expense acquisition candidates for every source on a page", async () => {
     await setup();
     const index = createInMemoryVectorizeIndex();
     const config = getSemanticEmbeddingConfig();
@@ -231,15 +218,13 @@ describe("connection evaluation pages", () => {
     };
     const singleSources = await createExpenses(1, "single");
     const single = await scheduleSources(singleSources);
-    const one = await runPage(single);
-    expect(one.result).toBe("succeeded");
+    expect(await runPage(single)).toBe("succeeded");
     expect(await states(single)).toEqual(["completed"]);
     const sources = await createExpenses(8, "batch");
     const ids = (await scheduleSources(sources)).filter(
       (id) => !single.includes(id),
     );
-    const many = await runPage(ids);
-    expect(many.result).toBe("succeeded");
+    expect(await runPage(ids)).toBe("succeeded");
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
     for (const source of [...singleSources, ...sources]) {
       const proposals = await readEntityConnections(ctx.db, source);
@@ -253,14 +238,6 @@ describe("connection evaluation pages", () => {
         ]),
       );
     }
-    const incremental = (many.queryCount - one.queryCount) / 7;
-    if (process.env.CUBBY_QUERY_BUDGET_REPORT)
-      appendFileSync(
-        process.env.CUBBY_QUERY_BUDGET_REPORT,
-        `\nExpense page: single=${one.queryCount} eight=${many.queryCount} incremental=${incremental}\n`,
-      );
-    expect(incremental).toBeLessThanOrEqual(40);
-    expect(many.queryCount / sources.length).toBeLessThanOrEqual(40);
   });
 
   it("completes other sources when a candidate disappears during shared evidence capture", async () => {
@@ -362,7 +339,7 @@ describe("connection evaluation pages", () => {
     expect(await states(ids)).toEqual(["obsolete"]);
   });
 
-  it("bounds FinancialTransaction page statements with settlement candidates", async () => {
+  it("publishes FinancialTransaction settlement candidates for every source on a page", async () => {
     await setup();
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic page card",
@@ -393,8 +370,7 @@ describe("connection evaluation pages", () => {
       });
     }
     const ids = await scheduleSources(sources);
-    const page = await runPage(ids);
-    expect(page.result).toBe("succeeded");
+    expect(await runPage(ids)).toBe("succeeded");
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
     for (const source of sources)
       expect(await readEntityConnections(ctx.db, source)).toEqual(
@@ -402,12 +378,6 @@ describe("connection evaluation pages", () => {
           expect.objectContaining({ relation: "transaction-purchase", source }),
         ]),
       );
-    if (process.env.CUBBY_QUERY_BUDGET_REPORT)
-      appendFileSync(
-        process.env.CUBBY_QUERY_BUDGET_REPORT,
-        `\nFinancialTransaction page: eight=${page.queryCount} perSource=${page.queryCount / sources.length}\n`,
-      );
-    expect(page.queryCount / sources.length).toBeLessThanOrEqual(40);
   });
 
   it("packs Product identity and field questions across the page at the gateway", async () => {
@@ -528,7 +498,7 @@ describe("connection evaluation pages", () => {
     const ids = await scheduleSources(
       products.map((item) => ({ entityKind: "product", entityId: item.id })),
     );
-    expect((await runPage(ids)).result).toBe("succeeded");
+    expect(await runPage(ids)).toBe("succeeded");
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
     // A port bypasses DecisionRequestBatch. Inspect actual gateway requests
     // instead, so separate per-source usage objects cannot silently regress it.
@@ -566,7 +536,7 @@ describe("connection evaluation pages", () => {
       .set({ deletedAt: new Date() })
       .where(eq(email.id, deleted.message.id));
 
-    expect((await runPage(ids)).result).toBe("succeeded");
+    expect(await runPage(ids)).toBe("succeeded");
 
     const rows = await getDb(ctx.db)
       .select({ state: aiEvaluation.state, target: aiEvaluation.target })

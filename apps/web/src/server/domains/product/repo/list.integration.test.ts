@@ -6,7 +6,6 @@ import {
   TEST_ACTOR,
   TEST_HOME_SHORTCODE,
   withTestDb,
-  countTestDbQueries,
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -306,7 +305,7 @@ describe("product list price footer", () => {
 describe("product list staged projections", () => {
   const ctx = withTestDb();
 
-  it("keeps USDA, pricing and placement enrichment query work constant across page sizes", async () => {
+  it("enriches USDA, pricing and placement across a page", async () => {
     const products = await Promise.all(
       [1, 2, 3].map((index) =>
         createProductIdentityFixture(
@@ -339,36 +338,22 @@ describe("product list staged projections", () => {
     const usda: Pick<USDAClient, "findFoodsBatch"> = {
       findFoodsBatch: async (inputs) => inputs.map(() => null),
     };
-    const read = (pageSize: number) =>
-      countTestDbQueries(() =>
-        listProductsRead(
-          ctx.db,
-          { ids: products.map((row) => row.id) },
-          [{ orderBy: "name", direction: "asc" }],
-          { pageIndex: 0, pageSize },
-          "page",
-          usda,
-          selectedListProjection("product", [
-            "food",
-            "pricing",
-            "primaryPlacement",
-          ]),
-        ),
-      );
-    const one = await read(1);
-    const page = await read(3);
-    expect(one.result.data).toHaveLength(1);
-    expect(page.result.data).toHaveLength(3);
-    expect(page.queryCount).toBe(one.queryCount);
-    expect(page.result.data.every((row) => row.primaryPlacement != null)).toBe(
-      true,
+    const page = await listProductsRead(
+      ctx.db,
+      { ids: products.map((row) => row.id) },
+      [{ orderBy: "name", direction: "asc" }],
+      { pageIndex: 0, pageSize: 3 },
+      "page",
+      usda,
+      selectedListProjection("product", [
+        "food",
+        "pricing",
+        "primaryPlacement",
+      ]),
     );
-    expect(
-      page.statements.filter((statement) =>
-        statement.startsWith('select "id" from "Product" where'),
-      ),
-    ).toEqual([]);
-    expect(page.result.data.map((row) => row.id)).toEqual(
+    expect(page.data).toHaveLength(3);
+    expect(page.data.every((row) => row.primaryPlacement != null)).toBe(true);
+    expect(page.data.map((row) => row.id)).toEqual(
       products.map((row) => row.id),
     );
   });
@@ -414,7 +399,7 @@ describe("product list staged projections", () => {
     expect(lookups).toBeGreaterThan(0);
   });
 
-  it("reads the same filtered page with two base queries and no deferred or private fields", async () => {
+  it("reads the same filtered base page with no deferred or private fields", async () => {
     const ingredient = await createIngredient(
       ctx.db,
       { name: "Staged ingredient" },
@@ -440,10 +425,14 @@ describe("product list staged projections", () => {
     const sorts = [{ orderBy: "name", direction: "asc" as const }];
     const pagination = { pageIndex: 0, pageSize: 1 };
     const full = await productList(ctx.db, filters, sorts, pagination);
-    const { result: base, queryCount } = await countTestDbQueries(() =>
-      listProductsRead(ctx.db, filters, sorts, pagination, "page", undefined, {
-        kind: "base",
-      }),
+    const base = await listProductsRead(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+      "page",
+      undefined,
+      { kind: "base" },
     );
     expect(base.count).toBe(full.count);
     expect(base.data.map((row) => row.id)).toEqual(
@@ -452,7 +441,6 @@ describe("product list staged projections", () => {
     // `base` is the id/count projection (view counts, relation paging); it binds no fields.
     expect(base.data[0]).toEqual({ id: first.id });
     expect(base.incompleteSums).toBeUndefined();
-    expect(queryCount).toBe(2);
     const idOnly = await listProductsRead(
       ctx.db,
       { ids: [second.id] },

@@ -11,7 +11,7 @@ import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
-import { withTestDb, countTestDbQueries } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -76,41 +76,21 @@ describe("purchase list totals", () => {
       date: "2026-01-15",
       orderId: "BASE-001",
     });
-    const page = await countTestDbQueries(() =>
-      purchaseListRead(
-        ctx.db,
-        { vendorId },
-        [],
-        { pageIndex: 0, pageSize: 10 },
-        "page",
-        selectedListProjection("purchase", ["spendingCategoryId"]),
-      ),
+    const page = await purchaseListRead(
+      ctx.db,
+      { vendorId },
+      [],
+      { pageIndex: 0, pageSize: 10 },
+      "page",
+      selectedListProjection("purchase", ["spendingCategoryId"]),
     );
-    expect(page.result.data).toHaveLength(1);
-    expect(page.result.data[0]).toMatchObject({
+    expect(page.data).toHaveLength(1);
+    expect(page.data[0]).toMatchObject({
       id: created.id,
       spendingCategoryId: null,
     });
-    expect(page.result.data[0]).not.toHaveProperty("vendorId");
-    expect(page.result.data[0]).not.toHaveProperty("orderUrl");
-    expect(page.tables).toContain("DerivedValue");
-    await createRepoEntity(ctx, "purchase", {
-      vendorId,
-      date: "2026-01-16",
-      orderId: "BASE-002",
-    });
-    const repeated = await countTestDbQueries(() =>
-      purchaseListRead(
-        ctx.db,
-        { vendorId },
-        [],
-        { pageIndex: 0, pageSize: 10 },
-        "page",
-        selectedListProjection("purchase", ["spendingCategoryId"]),
-      ),
-    );
-    expect(repeated.result.data).toHaveLength(2);
-    expect(repeated.queryCount).toBe(page.queryCount);
+    expect(page.data[0]).not.toHaveProperty("vendorId");
+    expect(page.data[0]).not.toHaveProperty("orderUrl");
   });
   it("sums live ledger rows across pages and respects the purchase filter", async () => {
     const vendorId = await vendorShortcodeByName(

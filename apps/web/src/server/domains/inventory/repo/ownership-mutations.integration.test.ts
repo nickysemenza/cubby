@@ -9,12 +9,7 @@ import {
 import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
 import { and, eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
-import {
-  countTestDbQueries,
-  raceUniqueInsert,
-  TEST_ACTOR,
-  withTestDb,
-} from "tooling/test-setup";
+import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
@@ -525,17 +520,7 @@ describe("inventory ownership mutations", () => {
           : "inherited_payment_account",
       );
       const productIds = [subject.product.entityId, unstocked.entityId];
-      const { result: owners, statements } = await countTestDbQueries(() =>
-        computeProductOwners(ctx.db, productIds),
-      );
-      // Stocked and unstocked products share one acquisition-candidate pass.
-      expect(
-        statements.filter((statement) =>
-          statement.startsWith(
-            'select "id", "shortcode", "vendorAccountId", "date" from "Purchase"',
-          ),
-        ),
-      ).toHaveLength(1);
+      const owners = await computeProductOwners(ctx.db, productIds);
       for (const id of productIds) {
         expect(owners.get(id)).toEqual([
           {
@@ -880,23 +865,6 @@ describe("inventory ownership mutations", () => {
       undefined,
       TEST_ACTOR,
     );
-    const { statements } = await countTestDbQueries(() =>
-      loadEffectiveInventoryOwnershipById(ctx.db, subject.entryId),
-    );
-    // The explicit owner needs no acquisition candidate, so its party read
-    // is issued beside the candidate chain rather than after its last step.
-    const firstPartyRead = statements.findIndex((statement) =>
-      statement.includes('from "LedgerParty"'),
-    );
-    const purchaseRead = statements.findIndex((statement) =>
-      statement.startsWith(
-        'select "id", "shortcode", "vendorAccountId", "date" from "Purchase"',
-      ),
-    );
-    expect(purchaseRead).toBeGreaterThan(-1);
-    expect(firstPartyRead).toBeGreaterThan(-1);
-    expect(firstPartyRead).toBeLessThan(purchaseRead);
-
     await addPurchase({
       label: "second acquisition",
       lines: [

@@ -536,7 +536,7 @@ selections are not validation evidence. Never raise the retry count.
 Scope artificial CPU throttling to the interaction whose race it guards;
 restore normal speed for unrelated setup and read-back. A shared detail
 renderer's section matrix renders once per entity and checks all declared
-sections together; the continuous-detail browser journey owns hash navigation.
+sections together.
 
 Table record-identity links open an inspector. For full-record assertions,
 follow its Open full details action or navigate directly; clicking the row's

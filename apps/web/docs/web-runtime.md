@@ -348,10 +348,6 @@ the chain short: the id-and-count query starts the page's id-only loads
 displays load beside both queries, awaited at hydration. A repository that
 builds its own context keeps every prepare ahead of its query, because its
 select or footer reads the prepared data.
-For before/after evidence, `CUBBY_LIST_EVIDENCE=<file>` runs
-`entity-kernel/list-round-trips.integration.test.ts`: every entity's default
-page with its statements and query busy intervals beside
-`list-round-trips.baseline.json`. It is a non-blocking report, not a CI gate.
 Production list spans report `db.query.busy_intervals`, a lower bound on
 sequential round trips (a dependent query that starts while another still
 runs joins that interval).

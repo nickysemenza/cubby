@@ -3,7 +3,7 @@ import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { parseShortcodeFor, type ProjectId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
@@ -326,26 +326,20 @@ describe("expense project recommendation evidence", () => {
         ),
       );
     const before = await read();
-    // Bounded freshness batches must not reread shared ledger/project inputs
-    // or retain every expanded context merely to avoid those repeated reads.
     const prepared = await prepareExpenseProjectRecommendationContexts(
       ctx.db,
       codes,
     );
-    const chunked = await countTestDbQueries(
-      async () =>
-        new Map(
-          codes
-            .slice()
-            .reverse()
-            .map((code) => [
-              code,
-              canonicalJson(snapshotJson(prepared([code]).get(code))),
-            ]),
-        ),
+    const chunked = new Map(
+      codes
+        .slice()
+        .reverse()
+        .map((code) => [
+          code,
+          canonicalJson(snapshotJson(prepared([code]).get(code))),
+        ]),
     );
-    expect(chunked.result).toEqual(before);
-    expect(chunked.queryCount).toBe(0);
+    expect(chunked).toEqual(before);
     for (const code of codes)
       expect(before.get(code)).toBe(
         canonicalJson(

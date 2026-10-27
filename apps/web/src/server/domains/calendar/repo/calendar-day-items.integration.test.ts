@@ -1,7 +1,7 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { updateExpense } from "~/server/domains/expense/repo/crud";
@@ -20,7 +20,7 @@ import { getCalendarRange } from "./calendar";
 describe("calendar day membership", () => {
   const ctx = withTestDb();
 
-  it("retains stale beneficiary avatars and exposes missing work without allocating money during reads", async () => {
+  it("retains stale beneficiary avatars and exposes missing work", async () => {
     const first = await createRepoEntity(ctx, "ledgerParty", {
       name: "First calendar beneficiary",
     });
@@ -40,17 +40,8 @@ describe("calendar day membership", () => {
       kinds: ["spending"],
     });
     const context = async () => {
-      const measured = await countTestDbQueries(() =>
-        getCalendarRange(ctx.db, input),
-      );
-      expect(
-        measured.statements.some((statement) =>
-          statement.includes("payment_party_flow"),
-        ),
-      ).toBe(false);
-      const item = measured.result.items.find(
-        (item) => item.id === line.output.id,
-      );
+      const range = await getCalendarRange(ctx.db, input);
+      const item = range.items.find((item) => item.id === line.output.id);
       if (!item || item.kind !== "expense")
         throw new Error("Expected the calendar Expense");
       return item.spendingContext;

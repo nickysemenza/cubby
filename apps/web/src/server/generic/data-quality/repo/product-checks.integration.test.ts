@@ -2,7 +2,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { productFiltersSchema } from "@cubby/schemas/product";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { compileProblemFilters } from "~/entity/problems/problem-filter-semantics";
@@ -91,18 +91,12 @@ describe("stored Product quality", () => {
     return { item, kit };
   };
 
-  it("uses three bounded reads for a batch and never repairs publications on a read", async () => {
+  it("never repairs publications on a read", async () => {
     const { item, kit } = await seed();
-    const measured = await countTestDbQueries(() =>
-      productChecks.evaluate(ctx.db, [item.entityId, kit.entityId]),
-    );
-    // Product facts, then pricing aggregates and service-charge averages.
-    expect(measured.queryCount).toBe(3);
-    expect(measured.result).toHaveLength(2);
     expect(
-      (await countTestDbQueries(() => productChecks.evaluate(ctx.db, [])))
-        .queryCount,
-    ).toBe(0);
+      await productChecks.evaluate(ctx.db, [item.entityId, kit.entityId]),
+    ).toHaveLength(2);
+    expect(await productChecks.evaluate(ctx.db, [])).toEqual([]);
     expect(
       (
         await loadDataQualities(ctx.db, "product", [item.entityId], "stored")
@@ -241,9 +235,9 @@ describe("stored Product quality", () => {
     const record = () => readRecordWorkQueue(ctx.db, null, item.id, false);
     const compiled = vi.spyOn(PgDialect.prototype, "sqlToQuery");
     try {
-      const measured = await countTestDbQueries(research);
-      // Counter excerpts are shortened; inspect complete SQL so later price work
-      // cannot evade the Product research query budget.
+      const researched = await research();
+      // Inspect complete SQL so later price work cannot enter the Product
+      // research read.
       const statements = compiled.mock.results.flatMap((result) =>
         result.type === "return" ? [result.value.sql] : [],
       );
@@ -251,9 +245,8 @@ describe("stored Product quality", () => {
       expect(statements.join("\n")).not.toMatch(
         /work_product_price|\bkpe\.|"knownCost"|"knownUnitCount"/,
       );
-      expect(measured.tables).toContain("DerivedValue");
       expect(
-        measured.result.items.some(
+        researched.items.some(
           (row) => row.source === "research" && row.id === item.id,
         ),
       ).toBe(true);

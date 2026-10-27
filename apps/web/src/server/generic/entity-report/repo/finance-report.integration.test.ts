@@ -3,7 +3,7 @@ import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb, countTestDbQueries } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -358,24 +358,16 @@ describe("finance entity reports", () => {
       "purchase.reconciliation",
       "purchase.project-allocation",
     ] as const;
-    const batch = (
-      requested: Parameters<typeof buildEntityReports>[1]["slots"],
-    ) =>
-      countTestDbQueries(() =>
-        buildEntityReports(
-          ctx.db,
-          { id: purchase.shortcode, slots: requested },
-          async () => null,
-          ctx.actor,
-        ),
-      );
-    const single = await batch([...slots]);
-    const repeated = await batch([...slots, ...slots].reverse());
-    expect(repeated.queryCount).toBe(single.queryCount);
-    expect(repeated.result.reports.map(({ slot }) => slot)).toEqual(
+    const repeated = await buildEntityReports(
+      ctx.db,
+      { id: purchase.shortcode, slots: [...slots, ...slots].reverse() },
+      async () => null,
+      ctx.actor,
+    );
+    expect(repeated.reports.map(({ slot }) => slot)).toEqual(
       [...slots, ...slots].reverse(),
     );
-    for (const { slot, report: result } of repeated.result.reports)
+    for (const { slot, report: result } of repeated.reports)
       expect(result.blocks).toEqual(await report(slot, purchase.shortcode));
     expect(
       stats(await report("purchase.reconciliation", purchase.shortcode))

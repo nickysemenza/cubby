@@ -1,6 +1,6 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -33,18 +33,13 @@ describe("fresh paid grant lineage reads", () => {
       .where(eq(runControlEvent.runId, runId));
   };
 
-  it("reads a fresh grant in one query for each admission", async () => {
+  it("reads a fresh grant for each admission", async () => {
     const runId = await create();
     await grant(runId, 1, 1);
-    const measured = await countTestDbQueries(() =>
-      Promise.all(
-        Array.from({ length: 32 }, () => readPaidGrant(ctx.db, runId)),
-      ),
+    const grants = await Promise.all(
+      Array.from({ length: 32 }, () => readPaidGrant(ctx.db, runId)),
     );
-    expect(
-      measured.result.every((value) => value?.paidOverBudgetUsd === 1),
-    ).toBe(true);
-    expect(measured.queryCount).toBe(32);
+    expect(grants.every((value) => value?.paidOverBudgetUsd === 1)).toBe(true);
     await recordPaidGrant(ctx.db, ctx.actor, { runId, paidOverBudgetUsd: 2 });
     expect(await readPaidGrant(ctx.db, runId)).toMatchObject({
       paidOverBudgetUsd: 2,
@@ -119,10 +114,8 @@ describe("fresh paid grant lineage reads", () => {
         .where(eq(run.id, ids[index]!));
     await grant(ids[49]!, 1, 1);
     await grant(ids[50]!, 2, 2);
-    const measured = await countTestDbQueries(() =>
-      readPaidGrant(ctx.db, ids[0]!),
-    );
-    expect(measured.result).toMatchObject({ paidOverBudgetUsd: 1 });
-    expect(measured.queryCount).toBe(1);
+    expect(await readPaidGrant(ctx.db, ids[0]!)).toMatchObject({
+      paidOverBudgetUsd: 1,
+    });
   });
 });

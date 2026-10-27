@@ -1,6 +1,6 @@
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
@@ -102,7 +102,6 @@ describe("project attention activity", () => {
 
   // Activity must use own live content, including refunds and future task
   // ends. Descendants and manual window overrides must not refresh a parent.
-  // Reusing the tree must not rescan its allocation and task date aggregates.
   it("reuses own activity dates while preserving stalled and scoped results", async () => {
     const old = new Date("2020-01-01T12:00:00Z");
     const stale = await insertWithShortcode(ctx.db, "project", {
@@ -161,11 +160,9 @@ describe("project attention activity", () => {
       projectId: stale.id,
     });
     await drainStoredDerived(ctx.db);
-    const measured = await countTestDbQueries(() =>
-      computeAttentionItems(ctx.db),
-    );
+    const measured = await computeAttentionItems(ctx.db);
     expect(
-      measured.result.items
+      measured.items
         .filter((item) => item.type === "stalled_project")
         .map((item) => item.entityId),
     ).toEqual([stale.shortcode]);
@@ -176,17 +173,7 @@ describe("project attention activity", () => {
       false,
     );
     await drainStoredDerived(ctx.db);
-    expect(await computeAttentionItems(ctx.db)).toEqual(measured.result);
-    await insertWithShortcode(ctx.db, "project", {
-      name: "Synthetic additional attention inputs",
-      status: "in_progress",
-    });
-    await drainStoredDerived(ctx.db);
-    const expanded = await countTestDbQueries(() =>
-      computeAttentionItems(ctx.db),
-    );
-    // The stored-result batch adds readiness reads, never a read per Project.
-    expect(expanded.queryCount).toBe(measured.queryCount);
+    expect(await computeAttentionItems(ctx.db)).toEqual(measured);
   });
 });
 

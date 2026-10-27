@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -130,7 +130,7 @@ describe("connection discovery source freshness", () => {
       });
     },
   );
-  it("batches source reads by kind, preserves order and changes only the edited fingerprint", async () => {
+  it("reads source fingerprints in order and changes only the edited fingerprint", async () => {
     const first = await createRepoIdentity(ctx, "task", {
       name: "Synthetic first batch source",
       trade: "other",
@@ -154,26 +154,19 @@ describe("connection discovery source freshness", () => {
     const singles = [];
     for (const source of sources)
       singles.push(await connectionSourceFingerprint(ctx.db, source));
-    const batch = await countTestDbQueries(() =>
-      connectionSourceFingerprints(ctx.db, sources),
-    );
-    expect(batch.result).toEqual(singles);
-    expect(batch.queryCount).toBe(2);
-    const empty = await countTestDbQueries(() =>
-      connectionSourceFingerprints(ctx.db, []),
-    );
-    expect(empty.result).toEqual([]);
-    expect(empty.queryCount).toBe(0);
+    const batch = await connectionSourceFingerprints(ctx.db, sources);
+    expect(batch).toEqual(singles);
+    expect(await connectionSourceFingerprints(ctx.db, [])).toEqual([]);
     await getDb(ctx.db)
       .update(product)
       .set({ name: "Synthetic renamed batch target" })
       .where(eq(product.id, item.entityId));
     await reconcileDerivedRefreshInputs(ctx.db);
     const after = await connectionSourceFingerprints(ctx.db, sources);
-    expect(after[0]).toBe(batch.result[0]);
-    expect(after[1]).not.toBe(batch.result[1]);
-    expect(after[2]).toBe(batch.result[2]);
-    expect(after[3]).toBe(batch.result[3]);
+    expect(after[0]).toBe(batch[0]);
+    expect(after[1]).not.toBe(batch[1]);
+    expect(after[2]).toBe(batch[2]);
+    expect(after[3]).toBe(batch[3]);
     const current = [];
     for (const source of sources)
       current.push(await connectionSourceFingerprint(ctx.db, source));

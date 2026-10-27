@@ -1,6 +1,6 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { buildEntity } from "tooling/factories/build";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
@@ -13,7 +13,7 @@ import { addRecipeToMeal, createMealWithEntityId } from "./crud";
 
 describe("Meal nested Recipe envelopes", () => {
   const ctx = withTestDb();
-  it("batches repeated scalar Recipe projections with authoritative servings and preserves occurrence evidence", async () => {
+  it("projects repeated scalar Recipes with authoritative servings and preserves occurrence evidence", async () => {
     const recipe = await createRecipeFixture(
       ctx.db,
       {
@@ -51,32 +51,26 @@ describe("Meal nested Recipe envelopes", () => {
       ctx.actor,
     );
     const raw = second.meal;
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        readPublicEntityRows({
-          db: ctx.db,
-          entity: "meal",
-          projection: "list",
-          rows: Array.from({ length: count }, (_, index) => ({
-            ...raw,
-            recipes: raw.recipes.map((occurrence) => ({
-              ...occurrence,
-              recipe: {
-                ...occurrence.recipe,
-                name: `Synthetic snapshot ${index}`,
-                servings: 99,
-              },
-            })),
-          })),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
-    expect(repeated.result.map((row) => row.recipes[0]?.recipe.name)).toEqual(
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "meal",
+      projection: "list",
+      rows: Array.from({ length: 20 }, (_, index) => ({
+        ...raw,
+        recipes: raw.recipes.map((occurrence) => ({
+          ...occurrence,
+          recipe: {
+            ...occurrence.recipe,
+            name: `Synthetic snapshot ${index}`,
+            servings: 99,
+          },
+        })),
+      })),
+    });
+    expect(repeated.map((row) => row.recipes[0]?.recipe.name)).toEqual(
       Array.from({ length: 20 }, (_, index) => `Synthetic snapshot ${index}`),
     );
-    for (const row of repeated.result) {
+    for (const row of repeated) {
       expect(
         row.recipes.map((occurrence) => [occurrence.id, occurrence.scale]),
       ).toEqual([

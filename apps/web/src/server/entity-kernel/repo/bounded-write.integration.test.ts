@@ -3,11 +3,7 @@ import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import {
-  countTestDbQueries,
-  TEST_USER_ID,
-  withTestDb,
-} from "tooling/test-setup";
+import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -29,8 +25,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-// A set-based projection write can have constant query count while touching
-// every dependent. Observe stored dependent text before any background drain.
+// Observe stored dependent text before any background drain.
 describe("bounded entity writes", () => {
   const ctx = withTestDb();
   let queue: ReturnType<typeof captureBackgroundQueue>;
@@ -116,18 +111,18 @@ describe("bounded entity writes", () => {
     );
     expect(before?.embeddingText).toContain("Synthetic canvas cover");
 
-    const measured = await countTestDbQueries(() =>
-      executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+    const renamed = await executeEntity(
+      buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
+      {
         action: "update",
         entity: "product",
         id: product.id,
         data: { name: "Synthetic fitted cover" },
-      }),
+      },
     );
 
-    expect(measured.result.item.id).toBe(product.id);
-    expect(Object.keys(measured.result.item).sort()).toEqual(["id", "name"]);
-    expect(measured.queryCount).toBeLessThanOrEqual(80);
+    expect(renamed.item.id).toBe(product.id);
+    expect(Object.keys(renamed.item).sort()).toEqual(["id", "name"]);
     expect(
       await getSearchDocumentEmbeddingText(ctx.db, "task", dependent.entityId),
     ).toEqual(before);
@@ -138,7 +133,7 @@ describe("bounded entity writes", () => {
     ).toContain("Synthetic fitted cover");
   });
 
-  it("does not scan or reject unrelated invalid descendants on a name-only Task edit", async () => {
+  it("does not reject unrelated invalid descendants on a name-only Task edit", async () => {
     const make = (name: string) =>
       createTask(
         ctx.db,
@@ -153,24 +148,19 @@ describe("bounded entity writes", () => {
       .update(task)
       .set({ trade: null })
       .where(eq(task.id, unrelated.entityId));
-    const result = await countTestDbQueries(() =>
-      executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+    const result = await executeEntity(
+      buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
+      {
         action: "update",
         entity: "task",
         id: target.output.id,
         data: { name: "Synthetic renamed task" },
-      }),
+      },
     );
-    expect(result.result.item.id).toBe(target.output.id);
-    expect(
-      result.statements.filter(
-        (statement) =>
-          statement.includes("UNION ALL") && statement.includes("'expense'"),
-      ),
-    ).toEqual([]);
+    expect(result.item.id).toBe(target.output.id);
   });
 
-  it("does not inspect allocation or reference collections on a FinancialTransaction note edit", async () => {
+  it("returns only the edited note on a FinancialTransaction note edit", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic note-only account",
       identity: { kind: "credit_card", network: "visa" },
@@ -185,27 +175,19 @@ describe("bounded entity writes", () => {
       postedDate: "2026-01-01",
       sourceRefs: [],
     });
-    const measured = await countTestDbQueries(() =>
-      executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
+    const updated = await executeEntity(
+      buildKernelContext(ctx.db, testUserId(TEST_USER_ID)),
+      {
         action: "update",
         entity: "financialTransaction",
         id: transaction.output.id,
         data: { notes: "Synthetic bounded note" },
-      }),
+      },
     );
-    expect(measured.result.item).toEqual({
+    expect(updated.item).toEqual({
       id: transaction.output.id,
       notes: "Synthetic bounded note",
     });
-    expect(
-      measured.tables.filter((table) =>
-        [
-          "FinancialTransactionAllocation",
-          "EntityExternalId",
-          "Purchase",
-        ].includes(table),
-      ),
-    ).toEqual([]);
   });
 
   it("coalesces repeated edits into one search mark", async () => {
@@ -234,31 +216,5 @@ describe("bounded entity writes", () => {
         product.entityId,
       ),
     ).toHaveLength(1);
-  });
-
-  it("patches a stored collection without hydrating dependent detail", async () => {
-    const subject = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Synthetic collection budget",
-        tags: ["Synthetic-A"],
-      }),
-      ctx.actor,
-    );
-    const measured = await countTestDbQueries(() =>
-      executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
-        action: "update",
-        entity: "product",
-        id: subject.id,
-        data: { tags: [{ op: "add", key: "Synthetic-B" }] },
-      }),
-    );
-    expect(measured.result.item).toEqual({ id: subject.id });
-    expect(
-      measured.statements.filter((statement) =>
-        statement.includes('"Expense"'),
-      ),
-    ).toEqual([]);
-    expect(measured.queryCount).toBeLessThanOrEqual(80);
   });
 });

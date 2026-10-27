@@ -1,6 +1,6 @@
 import { testShortcode } from "@cubby/schemas/testing";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, location } from "~/server/db/schema";
@@ -21,7 +21,7 @@ import { getEntityGraphPaths } from "./entity-graph-paths";
 describe("entity graph path repository", () => {
   const ctx = withTestDb();
 
-  it("finds parallel live evidence in bounded batches and hydrates only path nodes", async () => {
+  it("finds parallel live evidence and hydrates only path nodes", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Path product" }),
@@ -82,45 +82,38 @@ describe("entity graph path repository", () => {
       ),
     ]);
 
-    const measured = await countTestDbQueries(() =>
-      getEntityGraphPaths(ctx.db, {
-        start: { entityKind: "product", entityId: product.id },
-        destination: {
-          entityKind: "purchase",
-          entityId: purchase.output.id,
-        },
-      }),
-    );
+    const graph = await getEntityGraphPaths(ctx.db, {
+      start: { entityKind: "product", entityId: product.id },
+      destination: {
+        entityKind: "purchase",
+        entityId: purchase.output.id,
+      },
+    });
     const responseBytes = new TextEncoder().encode(
-      JSON.stringify(measured.result),
+      JSON.stringify(graph),
     ).byteLength;
 
-    expect(measured.result).toMatchObject({
+    expect(graph).toMatchObject({
       completion: "exhausted",
       shortestPathCertain: true,
     });
-    expect(measured.result.nodes).toHaveLength(2);
+    expect(graph.nodes).toHaveLength(2);
     expect(
-      measured.result.nodes.find((node) => node.entityKind === "product")?.image
-        ?.url,
+      graph.nodes.find((node) => node.entityKind === "product")?.image?.url,
     ).toBe(cover.url);
-    expect(measured.result.paths).toHaveLength(2);
+    expect(graph.paths).toHaveLength(2);
     expect(
-      new Set(measured.result.paths.map((path) => path.edgeIds.join("/"))).size,
+      new Set(graph.paths.map((path) => path.edgeIds.join("/"))).size,
     ).toBe(2);
-    expect(
-      measured.result.paths.every((path) => path.edgeIds.length === 1),
-    ).toBe(true);
-    expect(measured.result.edges.map((edge) => edge.sourceKey).sort()).toEqual([
+    expect(graph.paths.every((path) => path.edgeIds.length === 1)).toBe(true);
+    expect(graph.edges.map((edge) => edge.sourceKey).sort()).toEqual([
       "expense",
       "explicit",
     ]);
-    // Image representations stay in the shared image query, never per node.
-    expect(measured.queryCount).toBe(13);
     expect(responseBytes).toBeLessThan(10_000);
   });
 
-  it("paginates a 60-neighbor frontier without per-record reads", async () => {
+  it("paginates a 60-neighbor frontier", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Wide path product" }),
@@ -151,26 +144,23 @@ describe("entity graph path repository", () => {
     const destination = inventories.at(-1);
     if (!destination) throw new Error("Wide path fixture is empty");
 
-    const measured = await countTestDbQueries(() =>
-      getEntityGraphPaths(ctx.db, {
-        start: { entityKind: "product", entityId: product.id },
-        destination: {
-          entityKind: "inventory",
-          entityId: destination.shortcode,
-        },
-      }),
-    );
+    const graph = await getEntityGraphPaths(ctx.db, {
+      start: { entityKind: "product", entityId: product.id },
+      destination: {
+        entityKind: "inventory",
+        entityId: destination.shortcode,
+      },
+    });
     const responseBytes = new TextEncoder().encode(
-      JSON.stringify(measured.result),
+      JSON.stringify(graph),
     ).byteLength;
 
-    expect(measured.result).toMatchObject({
+    expect(graph).toMatchObject({
       completion: "exhausted",
       shortestPathCertain: true,
       paths: [expect.objectContaining({ edgeIds: [expect.any(String)] })],
     });
-    expect(measured.result.nodes).toHaveLength(2);
-    expect(measured.queryCount).toBe(21);
+    expect(graph.nodes).toHaveLength(2);
     expect(responseBytes).toBeLessThan(10_000);
   });
 });

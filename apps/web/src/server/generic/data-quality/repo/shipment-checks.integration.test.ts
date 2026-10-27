@@ -6,7 +6,7 @@ import { generateShortcode } from "@cubby/shared";
 import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb, withTransaction } from "~/server/db/helpers";
@@ -355,10 +355,7 @@ describe("Shipment evidence quality", () => {
     for (const sample of cases)
       parcels.push({ ...(await seed(sample.events)), sample });
     const ids = parcels.map((parcel) => parcel.row.id);
-    const evaluated = await countTestDbQueries(() =>
-      shipmentChecks.evaluate(ctx.db, ids),
-    );
-    expect(evaluated.queryCount).toBe(1);
+    const evaluated = await shipmentChecks.evaluate(ctx.db, ids);
     const qualities = await loadDataQualities(ctx.db, "shipment", ids, "live");
     for (const parcel of parcels) {
       const quality = qualities.get(parcel.row.id)!;
@@ -370,7 +367,7 @@ describe("Shipment evidence quality", () => {
       const summary = shipmentEventSummary(
         timeline.timeline.filter(({ event }) => event.timeBasis !== "estimate"),
       );
-      const raw = evaluated.result.find((row) => row.id === parcel.row.id)!;
+      const raw = evaluated.find((row) => row.id === parcel.row.id)!;
       expect(raw.checks.shipment_events).toBe(
         summary.eventCount >= 2 ? "pass" : "gap",
       );

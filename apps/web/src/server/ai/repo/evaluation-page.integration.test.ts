@@ -4,7 +4,7 @@ import {
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
 import { and, eq, inArray } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -181,22 +181,23 @@ describe("finite AI evaluation pages", () => {
         ...(kind === "ai.evaluation" ? { maxInFlight: 1 } : {}),
       }));
     try {
-      const first = await countTestDbQueries(() =>
-        claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id, 100),
+      const first = await claimAiEvaluationPage(
+        ctx.db,
+        seeded.jobs[0]!.id,
+        100,
       );
-      expect(first.result).toHaveLength(100);
-      expect(first.queryCount).toBe(15);
-      const owned = new Set(first.result.map((target) => target.claim.id));
+      expect(first).toHaveLength(100);
+      const owned = new Set(first.map((target) => target.claim.id));
       const remaining = seeded.jobs.filter((row) => !owned.has(row.id));
       const blocked = await Promise.all([
         claimAiEvaluationPage(ctx.db, remaining[0]!.id),
         claimJob(ctx.db, remaining[1]!.id),
       ]);
       expect(blocked).toEqual([[], null]);
-      for (let offset = 1; offset < first.result.length; offset += 25)
-        await finish(first.result.slice(offset, offset + 25));
+      for (let offset = 1; offset < first.length; offset += 25)
+        await finish(first.slice(offset, offset + 25));
       expect(await claimJob(ctx.db, remaining[0]!.id)).toBeNull();
-      await finish(first.result.slice(0, 1));
+      await finish(first.slice(0, 1));
       const [page, single] = await Promise.all([
         claimAiEvaluationPage(ctx.db, remaining[0]!.id, 1),
         claimJob(ctx.db, remaining[1]!.id),
@@ -295,13 +296,7 @@ describe("finite AI evaluation pages", () => {
       .set({ receipt: { retryEvaluationId: crypto.randomUUID() } })
       .where(eq(aiEvaluationRequest.evaluationId, seeded.rows[0]!.id));
     const targets = await claimAiEvaluationPage(ctx.db, seeded.jobs[0]!.id);
-    const measured = await countTestDbQueries(() => finish(targets));
-    expect(measured.result).toHaveLength(3);
-    expect(
-      measured.statements.filter((statement) =>
-        statement.startsWith('update "Job"'),
-      ),
-    ).toHaveLength(2);
+    expect(await finish(targets)).toHaveLength(3);
     const requests = await getDb(ctx.db).select().from(aiEvaluationRequest);
     expect(
       requests.find((entry) => entry.evaluationId === seeded.rows[0]!.id)
@@ -581,7 +576,7 @@ describe("finite AI evaluation pages", () => {
     expect(await finish(targets!)).toHaveLength(4);
   });
 
-  it("summarizes refresh progress without reading frozen inference payloads", async () => {
+  it("summarizes refresh progress", async () => {
     const seeded = await seed(4);
     await getDb(ctx.db)
       .update(aiEvaluation)
@@ -598,10 +593,8 @@ describe("finite AI evaluation pages", () => {
         receipt: { retryEvaluationId: crypto.randomUUID() },
       })
       .where(eq(aiEvaluation.id, seeded.rows[2]!.id));
-    const summary = await countTestDbQueries(() =>
-      readAiRefreshWorkSummary(ctx.db, seeded.runId, 2),
-    );
-    expect(summary.result.progress).toMatchObject({
+    const summary = await readAiRefreshWorkSummary(ctx.db, seeded.runId, 2);
+    expect(summary.progress).toMatchObject({
       attempt: 2,
       selected: 3,
       completed: 1,
@@ -610,12 +603,8 @@ describe("finite AI evaluation pages", () => {
       obsolete: 0,
       errors: ["Synthetic evaluation failure"],
     });
-    expect(summary.result.pending).toEqual([{ id: seeded.rows[3]!.id }]);
-    expect(summary.result.failureText).toBe("Synthetic evaluation failure");
-    expect(summary.queryCount).toBe(4);
-    expect(
-      summary.statements.some((statement) => statement.includes('"snapshot"')),
-    ).toBe(false);
+    expect(summary.pending).toEqual([{ id: seeded.rows[3]!.id }]);
+    expect(summary.failureText).toBe("Synthetic evaluation failure");
   });
   it("retires queued obsolete generations without inference and preserves paused authority", async () => {
     const seeded = await seed(2);

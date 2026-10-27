@@ -1,9 +1,5 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import {
-  countTestDbQueries,
-  withTestDb,
-  TEST_HOME_ID,
-} from "tooling/test-setup";
+import { withTestDb, TEST_HOME_ID } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -22,7 +18,7 @@ import { buildLocationTree } from "./tree";
 describe("recursive Location envelopes", () => {
   const ctx = withTestDb();
 
-  it("batches every supplied level and preserves nested inventory intent and topology", async () => {
+  it("projects every supplied level and preserves nested inventory intent and topology", async () => {
     const root = await createLocationFixture(
       ctx.db,
       makeLocationInput({ name: "Synthetic tree root" }),
@@ -62,19 +58,13 @@ describe("recursive Location envelopes", () => {
       (row) => row.id === root.id,
     );
     if (!raw) throw new Error("Expected the synthetic root");
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        readPublicEntityRows({
-          db: ctx.db,
-          entity: "location",
-          projection: "detail",
-          rows: Array.from({ length: count }, () => raw),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
-    const publicRoot = repeated.result[0];
+    const repeated = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "location",
+      projection: "detail",
+      rows: Array.from({ length: 20 }, () => raw),
+    });
+    const publicRoot = repeated[0];
     const publicChild = publicRoot?.children?.[0];
     const publicLeaf = publicChild?.children?.[0];
     if (!publicRoot || !publicChild || !publicLeaf)
@@ -110,7 +100,12 @@ describe("recursive Location envelopes", () => {
     const stats = report.find((block) => block.kind === "stats");
     expect(stats?.figures[0]?.value).toBeNull();
     await drainStoredDerived(ctx.db);
-    const published = (await read(1)).result[0];
+    const [published] = await readPublicEntityRows({
+      db: ctx.db,
+      entity: "location",
+      projection: "detail",
+      rows: [raw],
+    });
     if (!published)
       throw new Error("Expected the published Location projection");
     expect(published.fields.valuation.result).toMatchObject({

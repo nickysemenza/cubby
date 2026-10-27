@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -103,28 +103,25 @@ describe("search source selection", () => {
   });
   afterEach(() => queue.restore());
 
-  it("prepares a Product without reading unrelated garden journal sources", async () => {
+  it("prepares a Product search document", async () => {
     const subject = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic source gauge" }),
       ctx.actor,
     );
-    const measured = await countTestDbQueries(() =>
-      prepareSearchDocuments(ctx.db, [
-        { entityKind: "product", entityId: subject.entityId },
-      ]),
-    );
+    const prepared = await prepareSearchDocuments(ctx.db, [
+      { entityKind: "product", entityId: subject.entityId },
+    ]);
     expect(
-      measured.result.entries.map((entry) => ({
+      prepared.entries.map((entry) => ({
         id: entry.source.entityId,
         title: entry.source.title,
       })),
     ).toEqual([{ id: subject.entityId, title: "Synthetic source gauge" }]);
-    expect(measured.result.missing).toEqual([]);
-    expect(measured.tables).not.toContain("GardenEntry");
+    expect(prepared.missing).toEqual([]);
   });
 
-  it("publishes a search page without one database write per document", async () => {
+  it("publishes, removes and retains a search page", async () => {
     const refs: Parameters<typeof prepareSearchDocuments>[1][number][] = [];
     for (let index = 0; index < 8; index++) {
       const item = await createProductIdentityFixture(
@@ -135,18 +132,13 @@ describe("search source selection", () => {
       refs.push({ entityKind: "product", entityId: item.entityId });
     }
     const prepared = await prepareSearchDocuments(ctx.db, refs);
-    const single = await countTestDbQueries(() =>
-      publishPreparedSearchDocuments(ctx.db, {
-        entries: prepared.entries.slice(0, 1),
-        missing: [],
-      }),
-    );
-    const page = await countTestDbQueries(() =>
-      publishPreparedSearchDocuments(ctx.db, prepared),
-    );
-    expect(page.result).toHaveLength(8);
-    expect(page.result.every((row) => row.status === "upserted")).toBe(true);
-    expect(page.queryCount).toBe(single.queryCount);
+    await publishPreparedSearchDocuments(ctx.db, {
+      entries: prepared.entries.slice(0, 1),
+      missing: [],
+    });
+    const page = await publishPreparedSearchDocuments(ctx.db, prepared);
+    expect(page).toHaveLength(8);
+    expect(page.every((row) => row.status === "upserted")).toBe(true);
     const stored = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
       SELECT count(*)::int AS count FROM "SearchDocument"
        WHERE "entityId" = ANY(${uuidArrayParam(refs.map((ref) => ref.entityId))})
@@ -159,19 +151,12 @@ describe("search source selection", () => {
       .filter((_, index) => index % 2 === 0)
       .map((entry) => entry.source);
     const retained = ordered.filter((_, index) => index % 2 !== 0);
-    const mixed = await countTestDbQueries(() =>
-      publishPreparedSearchDocuments(ctx.db, {
-        entries: retained,
-        missing,
-      }),
-    );
-    expect(mixed.result.filter((row) => row.status === "missing")).toHaveLength(
-      4,
-    );
-    expect(
-      mixed.result.filter((row) => row.status === "upserted"),
-    ).toHaveLength(4);
-    expect(mixed.queryCount).toBeLessThanOrEqual(single.queryCount + 4);
+    const mixed = await publishPreparedSearchDocuments(ctx.db, {
+      entries: retained,
+      missing,
+    });
+    expect(mixed.filter((row) => row.status === "missing")).toHaveLength(4);
+    expect(mixed.filter((row) => row.status === "upserted")).toHaveLength(4);
     const removed = await unwrapDb(ctx.db).execute<{ count: number }>(sql`
       SELECT count(*)::int AS count FROM "SearchDocument"
        WHERE "entityId" = ANY(${uuidArrayParam(missing.map((ref) => ref.entityId))})

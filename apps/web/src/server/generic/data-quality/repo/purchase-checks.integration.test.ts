@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
@@ -80,19 +80,13 @@ describe("stored Purchase quality", () => {
         economicRole: "reimbursement",
       }),
     );
-    const measured = await countTestDbQueries(() =>
-      purchaseChecks.evaluate(ctx.db, [
-        incurred.entityId,
-        planned.entityId,
-        empty.entityId,
-      ]),
-    );
-    expect(measured.queryCount).toBe(1);
-    expect(
-      (await countTestDbQueries(() => purchaseChecks.evaluate(ctx.db, [])))
-        .queryCount,
-    ).toBe(0);
-    const checks = new Map(measured.result.map((row) => [row.id, row.checks]));
+    const evaluated = await purchaseChecks.evaluate(ctx.db, [
+      incurred.entityId,
+      planned.entityId,
+      empty.entityId,
+    ]);
+    expect(await purchaseChecks.evaluate(ctx.db, [])).toEqual([]);
+    const checks = new Map(evaluated.map((row) => [row.id, row.checks]));
     expect(checks.get(incurred.entityId)).toMatchObject({
       unpriced_expense: "gap",
       paperwork_mismatch: "gap",

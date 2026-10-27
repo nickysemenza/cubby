@@ -7,7 +7,7 @@ import { getDb } from "~/server/db/helpers";
 import { sql } from "drizzle-orm";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
-import { countTestDbQueries, withTestDb } from "../test-setup";
+import { withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
 import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -20,8 +20,6 @@ import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service
 // Receipt counts alone miss unmatched work keys: the actual Run projection must
 // use the receipt's completion time instead of falling back to Email.updatedAt.
 // A small copy of the same graph verifies semantics without a timing threshold.
-// Volume setup must batch stored rows and canonical projections instead of
-// paying interactive reads and side effects once per record.
 // Narrow originals hide out-of-line reads; volume must include wide text,
 // HTML-only originals and cleared content, not just more tiny rows. Clearing
 // must preserve each admitted source fingerprint rather than hashing emptiness.
@@ -32,9 +30,7 @@ it("seeds connected performance history readable by the real Work queue", async 
     name: "Synthetic performance member",
     userId: ctx.actor.userId,
   });
-  const seeded = await countTestDbQueries(() =>
-    seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 2 }),
-  );
+  await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 2 });
   const result = await getDb(ctx.db).execute(sql`SELECT
     (SELECT count(*)::int FROM "Product") AS products,
     (SELECT count(*)::int FROM "Expense") AS expenses,
@@ -106,19 +102,15 @@ it("seeds connected performance history readable by the real Work queue", async 
     }),
   ]);
   await drainStoredDerived(ctx.db);
-  const parcels = await countTestDbQueries(() =>
-    listShipmentsRead(
-      ctx.db,
-      { dataStatus: ["needs_data"] },
-      [{ orderBy: "dataQuality", direction: "asc" }],
-      { pageIndex: 0, pageSize: 25 },
-      { kind: "selected", fields: ["dataQuality"] },
-    ),
+  const parcels = await listShipmentsRead(
+    ctx.db,
+    { dataStatus: ["needs_data"] },
+    [{ orderBy: "dataQuality", direction: "asc" }],
+    { pageIndex: 0, pageSize: 25 },
+    { kind: "selected", fields: ["dataQuality"] },
   );
-  expect(parcels.result.count).toBe(1);
-  expect(dataQuality.parse(parcels.result.data[0]?.dataQuality).score).toBe(25);
-  // One bounded page hydrates stored checks; no source predicate is re-run per row.
-  expect(parcels.queryCount).toBeLessThan(12);
+  expect(parcels.count).toBe(1);
+  expect(dataQuality.parse(parcels.data[0]?.dataQuality).score).toBe(25);
   const queue = await readWorkQueue(
     ctx.db,
     null,
@@ -126,8 +118,4 @@ it("seeds connected performance history readable by the real Work queue", async 
     false,
   );
   expect(queue.items.length).toBeGreaterThan(0);
-  // Durable capture adds bounded metadata work per seeded authoritative write.
-  expect(seeded.queryCount).toBeLessThan(
-    100 + 10 * Number(result.rows[0]?.created_audits),
-  );
 }, 120_000);

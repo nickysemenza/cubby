@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { eq, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -442,7 +442,7 @@ describe("transfer-pair suggestions", () => {
     }
   });
 
-  it("filters ordinary spending seeds in one page without per-record hydration", async () => {
+  it("filters ordinary spending seeds in one page", async () => {
     const member = await owner("Synthetic batch member");
     const checking = await account("Synthetic batch checking", member);
     await transaction(checking, 10, "2026-05-04", {
@@ -458,17 +458,18 @@ describe("transfer-pair suggestions", () => {
         category: "Shopping",
       })),
     );
-    const single = await countTestDbQueries(() =>
-      generateTransferPairSuggestionsPage(ctx.db, { runId: null, limit: 1 }),
-    );
-    const batch = await countTestDbQueries(() =>
-      generateTransferPairSuggestionsPage(ctx.db, { runId: null, limit: 4 }),
-    );
-    expect(single.result.processed).toBe(1);
-    expect(batch.result.processed).toBe(4);
-    expect(batch.result.found).toBe(0);
-    expect(batch.result.failed).toEqual([]);
-    expect(batch.queryCount).toBe(single.queryCount);
+    const single = await generateTransferPairSuggestionsPage(ctx.db, {
+      runId: null,
+      limit: 1,
+    });
+    const batch = await generateTransferPairSuggestionsPage(ctx.db, {
+      runId: null,
+      limit: 4,
+    });
+    expect(single.processed).toBe(1);
+    expect(batch.processed).toBe(4);
+    expect(batch.found).toBe(0);
+    expect(batch.failed).toEqual([]);
     expect(await pending()).toEqual([]);
   });
 

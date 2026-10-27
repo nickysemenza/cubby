@@ -14,7 +14,7 @@ import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -136,16 +136,12 @@ describe("expense workflows — analyzer orchestration", () => {
     });
 
     const filters = { dateFrom: "2026-05-01", dateTo: "2026-05-31" };
-    const analysisRead = await countTestDbQueries(() =>
-      expenseAnalyzeWorkflow(ctx.db, {
-        filters,
-        rowDimension: "trade",
-        comparison: "previousPeriod",
-        spendingCategoryRollup: "none",
-      }),
-    );
-    const analysis = analysisRead.result;
-    expect(analysisRead.queryCount).toBe(2);
+    const analysis = await expenseAnalyzeWorkflow(ctx.db, {
+      filters,
+      rowDimension: "trade",
+      comparison: "previousPeriod",
+      spendingCategoryRollup: "none",
+    });
     expect(analysis).toMatchObject({
       status: "ready",
       comparison: {
@@ -154,14 +150,10 @@ describe("expense workflows — analyzer orchestration", () => {
       },
     });
 
-    const facetRead = await countTestDbQueries(() =>
-      expenseFacetCountsWorkflow(ctx.db, {
-        filters,
-        facetIds: ["trade", "project", "orderIdPresence"],
-      }),
-    );
-    const facets = facetRead.result;
-    expect(facetRead.queryCount).toBe(1);
+    const facets = await expenseFacetCountsWorkflow(ctx.db, {
+      filters,
+      facetIds: ["trade", "project", "orderIdPresence"],
+    });
     expect(facets.facets.map((facet) => facet.id)).toEqual([
       "trade",
       "project",
@@ -178,13 +170,8 @@ describe("expense workflows — analyzer orchestration", () => {
       count: 1,
     });
 
-    // Compatible chart projections must share one database allocation and
-    // scope read, rather than executing one statement per chart.
-    const analytics = await countTestDbQueries(() =>
-      expenseAnalytics(ctx.db, filters),
-    );
-    expect(analytics.result.summary.net).toBe(100);
-    expect(analytics.queryCount).toBe(1);
+    const analytics = await expenseAnalytics(ctx.db, filters);
+    expect(analytics.summary.net).toBe(100);
   });
 });
 

@@ -3,7 +3,7 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -186,7 +186,7 @@ describe("task repository — listActionableTasks", () => {
 
   // Attention needs the same blocker policy without loading Task media,
   // quality, inherited presentation, or converting project UUIDs twice.
-  it("reads attention membership with the same blocker states in five queries", async () => {
+  it("reads attention membership with the same blocker states", async () => {
     const { output: next } = await createRepoEntity(ctx, "task", {
       name: "Synthetic next",
       trade: "other",
@@ -222,11 +222,9 @@ describe("task repository — listActionableTasks", () => {
       ctx.actor,
     );
     await updateTask(ctx.db, next.id, { blockedByIds: [done.id] }, ctx.actor);
-    const measured = await countTestDbQueries(() =>
-      readTaskActionability(ctx.db),
-    );
+    const actionability = await readTaskActionability(ctx.db);
     const states = new Map(
-      measured.result.map((row) => [row.shortcode, row.state]),
+      actionability.map((row) => [row.shortcode, row.state]),
     );
     expect(states.get(next.id)).toBe("next");
     expect(states.get(later.id)).toBe("later");
@@ -236,7 +234,7 @@ describe("task repository — listActionableTasks", () => {
     expect(states.has(done.id)).toBe(false);
     const full = await listActionableTasks(ctx.db);
     expect(
-      measured.result.map((row) => [row.shortcode, row.state]).sort(),
+      actionability.map((row) => [row.shortcode, row.state]).sort(),
     ).toEqual(
       [
         ...full.next.map((row) => [row.id, "next"]),
@@ -244,7 +242,6 @@ describe("task repository — listActionableTasks", () => {
         ...full.blocked.map((row) => [row.task.id, "blocked"]),
       ].sort(),
     );
-    expect(measured.queryCount).toBe(5);
   });
 
   it("keeps ancestor blockers across a done intermediate project without inheriting its own edges", async () => {

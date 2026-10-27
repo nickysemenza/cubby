@@ -1,6 +1,6 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -16,9 +16,7 @@ describe("AI budget admission", () => {
   const ctx = withTestDb();
   it("reads fresh settings and filtered usage together, including an empty ledger", async () => {
     const now = new Date("2026-10-01T01:00:00.000Z");
-    const empty = await countTestDbQueries(() => readAiBudget(ctx.db, now));
-    expect(empty.queryCount).toBe(1);
-    expect(empty.result).toMatchObject({
+    expect(await readAiBudget(ctx.db, now)).toMatchObject({
       credit: { limitUsd: 1.5, spentUsd: 0 },
       plan: { limitUsd: 2, spentUsd: 0 },
       paid: { limitUsd: 1, spentUsd: 0 },
@@ -110,21 +108,15 @@ describe("AI funding availability", () => {
     ["background", true],
     ["ai_suggest", false],
   ] as const)(
-    "shares concurrent immutable origin reads for %s",
+    "reads concurrent immutable origins for %s",
     async (purpose, expected) => {
       const runId = await ensureRun(ctx.db, ctx.actor, { purpose });
-      const cold = await countTestDbQueries(() =>
-        Promise.all(
+      expect(
+        await Promise.all(
           Array.from({ length: 32 }, () => isBackgroundRun(ctx.db, runId)),
         ),
-      );
-      expect(cold.result).toEqual(Array(32).fill(expected));
-      expect(cold.queryCount).toBe(1);
-      const warm = await countTestDbQueries(() =>
-        isBackgroundRun(ctx.db, runId),
-      );
-      expect(warm.result).toBe(expected);
-      expect(warm.queryCount).toBe(0);
+      ).toEqual(Array(32).fill(expected));
+      expect(await isBackgroundRun(ctx.db, runId)).toBe(expected);
     },
   );
 

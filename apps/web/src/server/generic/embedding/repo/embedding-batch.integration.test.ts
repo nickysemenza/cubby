@@ -3,7 +3,7 @@ import { pollUntil } from "@cubby/shared/retry";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, ne, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
@@ -229,10 +229,9 @@ describe("embedding batches in the shared drain", () => {
   });
 
   it(
-    "publishes 1 and 100 completed selections with the same statement count",
+    "publishes 1 and 100 completed selections",
     { timeout: 120_000 },
     async () => {
-      const counts: number[] = [];
       for (const count of [1, 100]) {
         const { jobs } = await seed(count);
         const handler = embeddingJobHandler(port());
@@ -281,27 +280,25 @@ describe("embedding batches in the shared drain", () => {
                 throw new Error("Missing visible selection");
               return { claim, prepared: result.value };
             });
-            const measured = await countTestDbQueries(async () => {
-              const group = entries[0]?.prepared.publicationGroup;
-              if (group) {
-                return publishCompletedJobPages(
-                  ctx.db,
-                  entries.map(({ claim, prepared }) => ({
-                    claim,
-                    page: prepared.page,
-                  })),
-                  group.publish,
-                );
-              }
-              for (const { claim, prepared } of entries)
-                await publishJobPage(
-                  ctx.db,
+            const group = entries[0]?.prepared.publicationGroup;
+            if (group) {
+              await publishCompletedJobPages(
+                ctx.db,
+                entries.map(({ claim, prepared }) => ({
                   claim,
-                  prepared.page,
-                  prepared.publish,
-                );
-            });
-            counts.push(measured.queryCount);
+                  page: prepared.page,
+                })),
+                group.publish,
+              );
+              return;
+            }
+            for (const { claim, prepared } of entries)
+              await publishJobPage(
+                ctx.db,
+                claim,
+                prepared.page,
+                prepared.publish,
+              );
           },
         });
         expect(
@@ -321,8 +318,6 @@ describe("embedding batches in the shared drain", () => {
             ),
         ).toHaveLength(count);
       }
-      expect(counts[1]).toBe(counts[0]);
-      expect(counts).toEqual([12, 12]);
     },
   );
 

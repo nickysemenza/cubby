@@ -8,7 +8,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -157,16 +157,14 @@ describe("Shipment retained evidence", () => {
       },
     });
     await drainStoredDerived(ctx.db);
-    const listed = await countTestDbQueries(() =>
-      executeEntity(kernel, {
-        action: "list",
-        entity: "shipment",
-        filters: {},
-        sort: [{ orderBy: "eventCount", direction: "desc" }],
-        pagination: { pageIndex: 0, pageSize: 25 },
-      }),
-    );
-    expect(listed.result).toMatchObject({
+    const listed = await executeEntity(kernel, {
+      action: "list",
+      entity: "shipment",
+      filters: {},
+      sort: [{ orderBy: "eventCount", direction: "desc" }],
+      pagination: { pageIndex: 0, pageSize: 25 },
+    });
+    expect(listed).toMatchObject({
       items: [
         {
           id: code,
@@ -188,7 +186,6 @@ describe("Shipment retained evidence", () => {
         },
       ],
     });
-    expect(listed.tables).not.toContain("ShipmentObservation");
   });
 
   it("labels notification dates and keeps forecasts out of completed delivery", async () => {

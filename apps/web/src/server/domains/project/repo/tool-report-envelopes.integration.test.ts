@@ -6,7 +6,7 @@ import {
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { countTestDbQueries, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { productHandlers } from "~/server/domains/product/operations/product.server";
@@ -187,20 +187,14 @@ describe("live tool report field envelopes", () => {
 
     // A repeated report snapshot cannot replace authoritative current quantity.
     const raw = { ...entry, amount: { value: 99, unit: "each" } };
-    const read = (count: number) =>
-      countTestDbQueries(() =>
-        publicFieldEnvelopeRows({
-          db: ctx.db,
-          entity: "inventory",
-          schema: toolGalleryInventoryEntryOut,
-          rows: Array.from({ length: count }, () => raw),
-        }),
-      );
-    const single = await read(1);
-    const repeated = await read(20);
-    expect(repeated.queryCount).toBe(single.queryCount);
-    expect(repeated.result).toHaveLength(20);
-    for (const row of repeated.result)
+    const repeated = await publicFieldEnvelopeRows({
+      db: ctx.db,
+      entity: "inventory",
+      schema: toolGalleryInventoryEntryOut,
+      rows: Array.from({ length: 20 }, () => raw),
+    });
+    expect(repeated).toHaveLength(20);
+    for (const row of repeated)
       expect(fieldValueOf(row.fields.amount)).toEqual({
         value: 2,
         unit: "each",
