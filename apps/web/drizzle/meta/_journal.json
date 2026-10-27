@@ -358,6 +358,13 @@
       "when": 1793128492356,
       "tag": "0049_embedding_selected_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793128661769,
+      "tag": "0050_drop_job_claimed_idx",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+DROP INDEX "Job_claimed_idx";
