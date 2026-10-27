@@ -1,4 +1,5 @@
 import type { ReportBlock, ReportTime } from "@cubby/schemas/entity-report";
+import type { FinancialTransactionFilters } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { financialTransactionCoverage } from "@cubby/schemas/purchase-evidence-policy";
 import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
@@ -10,12 +11,12 @@ import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
-import { listFinancialTransactionsRead } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { readExpense } from "~/server/domains/expense/repo/crud";
+import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
-import { inventoryentryListRead } from "~/server/domains/inventory/repo/crud";
+import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { financialTransactionBookingSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { listSourceTransactionRecordsRead } from "~/server/domains/transaction-import/repo/entity-repositories";
+import { sourceTransactionRecordScaffold } from "~/server/domains/transaction-import/repo/entity-repositories";
 import {
   CHARGE_STATE,
   chargeKeyOf,
@@ -234,14 +235,13 @@ export async function importReconciliationSummary(
   const importId = parseShortcodeFor("transactionImport", code);
   const counts = await Promise.all(
     sourceTransactionRecordMatchState.options.map(async (state) => {
-      const result = await listSourceTransactionRecordsRead(
-        db,
-        { importId: [importId], matchState: [state] },
-        [],
-        { pageIndex: 0, pageSize: 1 },
-        selectedListProjection("sourceTransactionRecord", ["id"]),
-        "count",
-      );
+      const result = await sourceTransactionRecordScaffold.read(db, {
+        filters: { importId: [importId], matchState: [state] },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 1 },
+        projection: selectedListProjection("sourceTransactionRecord", ["id"]),
+        readIntent: "count",
+      });
       return { state, count: result.count };
     }),
   );
@@ -321,13 +321,12 @@ export async function partyHoldingsSummary(
 ): Promise<ReportBlock[]> {
   await resolveOrThrow(db, "ledgerParty", code);
   const owner = parseShortcodeFor("ledgerParty", code);
-  const result = await inventoryentryListRead(
-    db,
-    { ownerLedgerPartyId: [owner] },
-    [],
-    { pageIndex: 0, pageSize: 3 },
-    selectedListProjection("inventory", ["id", "displayName"]),
-  );
+  const result = await inventoryScaffold.read(db, {
+    filters: { ownerLedgerPartyId: [owner] },
+    sorts: [],
+    pagination: { pageIndex: 0, pageSize: 3 },
+    projection: selectedListProjection("inventory", ["id", "displayName"]),
+  });
   const rows = z
     .array(z.object({ id: z.string(), displayName: z.string() }))
     .parse(result.data);
@@ -355,7 +354,7 @@ export async function expenseAttributionSummary(
   code: string,
 ): Promise<ReportBlock[]> {
   await resolveOrThrow(db, "expense", code);
-  const record = await getExpenseByShortcode(db, code);
+  const record = await readExpense(db, code);
   if (!record) throw new Error("Expense is unavailable.");
   const codes = [
     ...new Set(
@@ -404,26 +403,22 @@ export async function accountReviewSummary(
 ): Promise<ReportBlock[]> {
   await resolveOrThrow(db, "financialAccount", code);
   const accountId = parseShortcodeFor("financialAccount", code);
-  const gaps: NonNullable<
-    Parameters<typeof listFinancialTransactionsRead>[1]["dataGap"]
-  > = [
+  const gaps: NonNullable<FinancialTransactionFilters["dataGap"]> = [
     "financial_transaction_booking",
     "financial_transaction_allocation",
     "financial_transaction_classification",
   ];
-  const result = await listFinancialTransactionsRead(
-    db,
-    { accountId: [accountId], dataGap: gaps },
-    [{ orderBy: "transactionDate", direction: "desc" }],
-    { pageIndex: 0, pageSize: 3 },
-    "page",
-    selectedListProjection("financialTransaction", [
+  const result = await financialTransactionScaffold.read(db, {
+    filters: { accountId: [accountId], dataGap: gaps },
+    sorts: [{ orderBy: "transactionDate", direction: "desc" }],
+    pagination: { pageIndex: 0, pageSize: 3 },
+    projection: selectedListProjection("financialTransaction", [
       "id",
       "merchant",
       "amount",
       "transactionDate",
     ]),
-  );
+  });
   const rows = z
     .array(
       z.object({

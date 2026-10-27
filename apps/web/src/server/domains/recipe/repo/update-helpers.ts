@@ -20,7 +20,7 @@ import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  imageJoinBindings,
+  galleryBinding,
   insertAndReturn,
   notDeleted,
   unwrapDb,
@@ -398,7 +398,7 @@ export async function updateRecipeImages(
   const { detachedImageKeys } = await syncEntityImages(
     tx,
     "recipe",
-    imageJoinBindings.recipe,
+    galleryBinding("recipe"),
     recipeId,
     updates,
   );

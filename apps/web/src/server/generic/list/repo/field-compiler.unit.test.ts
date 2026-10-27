@@ -224,7 +224,7 @@ describe("list field compiler", () => {
     const skipped = await scaffold.context(db, {
       filters: {},
       sorts: [{ orderBy: "createdAt", direction: "desc" }],
-      projection: { kind: "base" },
+      projection: ["id"],
     });
     expect(loads).toBe(0);
     expect(skipped.has(valuations)).toBe(false);
@@ -241,7 +241,7 @@ describe("list field compiler", () => {
     const context = await scaffold.context(db, {
       filters,
       sorts: [{ orderBy: "valuation", direction: "asc" }],
-      projection: { kind: "full" },
+      projection: ["valuation"],
     });
     expect(loads).toBe(1);
     expect(
@@ -285,7 +285,7 @@ describe("list field compiler", () => {
       scaffold.context(db, {
         filters: { valuationStatus: status },
         sorts: [{ orderBy: "valuation", direction: "asc" }],
-        projection: { kind: "full" },
+        projection: ["valuation"],
         preparation: scope,
       });
     const contexts = await Promise.all([read("valued"), read("unvalued")]);
@@ -321,7 +321,10 @@ describe("list field compiler", () => {
         },
       });
       const filters = { ownerLedgerPartyIdExclude: ["LP-2345"] };
-      const context = await scaffold.context(db, { filters });
+      const context = await scaffold.context(db, {
+        filters,
+        projection: ["id"],
+      });
       return whereSql(and(...scaffold.filterPredicates(filters, context)));
     };
     // Exclusion negates possible membership: an unknown owner cannot become

@@ -3,6 +3,7 @@ import type {
   FinancialAccountId,
   PurchaseId,
 } from "@cubby/schemas/identifiers";
+import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
@@ -46,9 +47,9 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   mergePurchases,
-  getPurchaseByID,
+  readPurchaseById,
   updatePurchase,
-  purchaseList,
+  purchaseScaffold,
 } from "./purchase";
 
 // Failures: shared funding must not identify the shopper; date corrections must
@@ -146,7 +147,7 @@ describe("dated card attribution", () => {
       transactionDate: "2026-04-30",
       postedDate: "2026-05-02",
     });
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBe(alex.id);
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBe(alex.id);
     const funder = async () =>
       (await loadExpenseAllocations(ctx.db, { expenseIds: [lineId] })).find(
         (row) => row.role === "funder",
@@ -169,7 +170,7 @@ describe("dated card attribution", () => {
       },
       ctx.actor,
     );
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBe(
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBe(
       morgan.id,
     );
     expect(await funder()).toMatchObject({ allocationKey: household.id });
@@ -179,7 +180,7 @@ describe("dated card attribution", () => {
       { vendorAccountId: null, date: "2026-05-01" },
       ctx.actor,
     );
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBeNull();
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBeNull();
     await updateFinancialAccount(
       ctx.db,
       account.id,
@@ -195,9 +196,9 @@ describe("dated card attribution", () => {
       ctx.actor,
     );
     await updatePurchase(ctx.db, order.id, { date: "2026-05-31" }, ctx.actor);
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBeNull();
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBeNull();
     await updatePurchase(ctx.db, order.id, { date: "2026-06-01" }, ctx.actor);
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBe(alex.id);
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBe(alex.id);
     await updatePurchase(
       ctx.db,
       order.id,
@@ -216,16 +217,20 @@ describe("dated card attribution", () => {
       { authorizedUsers: [], fundingPeriods: [] },
       ctx.actor,
     );
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBe(alex.id);
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBe(alex.id);
     expect(await funder()).toMatchObject({
       allocationKey: alex.id,
       basis: "recorded",
     });
     expect(
       (
-        await purchaseList(ctx.db, { vendorId: vendor.id }, [], {
-          pageIndex: 0,
-          pageSize: 10,
+        await purchaseScaffold.read(ctx.db, {
+          filters: { vendorId: vendor.id },
+          sorts: [],
+          pagination: {
+            pageIndex: 0,
+            pageSize: 10,
+          },
         })
       ).data[0]?.purchaserId,
     ).toBe(alex.id);
@@ -235,7 +240,7 @@ describe("dated card attribution", () => {
       { purchaserOverrideId: null, date: null, vendorAccountId: null },
       ctx.actor,
     );
-    expect((await getPurchaseByID(ctx.db, orderId)).purchaserId).toBeNull();
+    expect((await readPurchaseById(ctx.db, orderId)).purchaserId).toBeNull();
   });
   it("rejects invalid memberships and preserves live history references through party lifecycle actions", async () => {
     const { output: primary } = await createRepoEntity(ctx, "ledgerParty", {
@@ -380,7 +385,7 @@ describe("dated card attribution", () => {
         });
       }),
     );
-    expect((await getPurchaseByID(ctx.db, purchaseId)).purchaserId).toBeNull();
+    expect((await readPurchaseById(ctx.db, purchaseId)).purchaserId).toBeNull();
     const link = (eventId: string) =>
       seedEmailLinkDecision(ctx.db, {
         eventId,
@@ -391,7 +396,7 @@ describe("dated card attribution", () => {
         proposedBy: "member",
       });
     await link(events[0]!.id);
-    expect((await getPurchaseByID(ctx.db, purchaseId)).purchaserId).toBe(
+    expect((await readPurchaseById(ctx.db, purchaseId)).purchaserId).toBe(
       morgan.id,
     );
     const { output: vendorAccount } = await createRepoEntity(
@@ -399,14 +404,14 @@ describe("dated card attribution", () => {
       "vendorAccount",
       { vendorId: vendor.id, ledgerPartyId: alex.id },
     );
-    const order = await getPurchaseByID(ctx.db, purchaseId);
+    const order = await readPurchaseById(ctx.db, purchaseId);
     await updatePurchase(
       ctx.db,
       order.id,
       { vendorAccountId: vendorAccount.id },
       ctx.actor,
     );
-    expect((await getPurchaseByID(ctx.db, purchaseId)).purchaserId).toBeNull();
+    expect((await readPurchaseById(ctx.db, purchaseId)).purchaserId).toBeNull();
     await updatePurchase(
       ctx.db,
       order.id,
@@ -414,7 +419,7 @@ describe("dated card attribution", () => {
       ctx.actor,
     );
     await link(events[1]!.id);
-    expect((await getPurchaseByID(ctx.db, purchaseId)).purchaserId).toBeNull();
+    expect((await readPurchaseById(ctx.db, purchaseId)).purchaserId).toBeNull();
   });
 
   it("preserves purchaser overrides on merge and refuses conflicting explicit purchasers", async () => {
@@ -440,7 +445,7 @@ describe("dated card attribution", () => {
       { keepId: keeper.id, mergeIds: [incoming.id] },
       ctx.actor,
     );
-    expect((await getPurchaseByID(ctx.db, keeperId)).purchaserOverrideId).toBe(
+    expect((await readPurchaseById(ctx.db, keeperId)).purchaserOverrideId).toBe(
       alex.id,
     );
     const { output: conflicting } = await createRepoEntity(ctx, "purchase", {
@@ -676,11 +681,23 @@ describe("purchaser filter", () => {
       .where(eq(financialTransaction.id, removed.id));
 
     const page = { pageIndex: 0, pageSize: 50 };
-    const ids = async (filters: Parameters<typeof purchaseList>[1]) =>
-      (await purchaseList(ctx.db, filters, [], page)).data
+    const ids = async (filters: PurchaseFilters) =>
+      (
+        await purchaseScaffold.read(ctx.db, {
+          filters,
+          sorts: [],
+          pagination: page,
+        })
+      ).data
         .map((row) => row.id)
         .sort();
-    const displayed = (await purchaseList(ctx.db, {}, [], page)).data;
+    const displayed = (
+      await purchaseScaffold.read(ctx.db, {
+        filters: {},
+        sorts: [],
+        pagination: page,
+      })
+    ).data;
     const shownFor = (party: string) =>
       displayed
         .filter((row) => row.purchaserId === party)

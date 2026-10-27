@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { listFinancialTransactions } from "./financial-transaction";
+import { financialTransactionScaffold } from "./financial-transaction";
 
 // The processor filter derives from the raw descriptor in SQL; it must agree
 // with `parseBankDescriptor`, which reads the same patterns.
@@ -53,9 +53,13 @@ describe("financial transaction descriptor processor filter", () => {
     }
     const listed = async (descriptorProcessor: DescriptorProcessor[]) =>
       (
-        await listFinancialTransactions(ctx.db, { descriptorProcessor }, [], {
-          pageIndex: 0,
-          pageSize: 50,
+        await financialTransactionScaffold.read(ctx.db, {
+          filters: { descriptorProcessor },
+          sorts: [],
+          pagination: {
+            pageIndex: 0,
+            pageSize: 50,
+          },
         })
       ).data
         .map((row) => charges.get(row.id))

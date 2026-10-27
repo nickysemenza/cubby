@@ -7,24 +7,22 @@ import type {
   PlantShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type PlantCreateInput,
-  type PlantFilters,
   type PlantUpdateData,
   type ResolvePlantsInput,
   type ResolvePlantsOutput,
 } from "@cubby/schemas/plant";
-import { type RawPlantOut, rawPlantOut } from "@cubby/schemas/plant-raw-read";
-import { eq, inArray } from "drizzle-orm";
+import { rawPlantOut } from "@cubby/schemas/plant-raw-read";
+import { eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { plant } from "~/server/db/schema";
+import { plantSearch } from "~/server/domains/plant/repo/search-read-plant";
 import {
   guideWindowsFor,
   plantDisplayName,
@@ -35,19 +33,11 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import {
-  createEntityCrud,
-  createEntityRowFetcher,
-} from "~/server/entity-kernel/repo/repository";
+import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import {
   finalizeMerge,
   mergeNotes,
@@ -87,8 +77,6 @@ export const PLANT_MERGE_EDGE_POLICY = {
 
 type PlantRow = typeof plant.$inferSelect;
 
-const scaffold = listScaffold("plant", plant);
-
 const plantReadOptions = {
   bindings: (bind) => [
     bind(
@@ -116,32 +104,13 @@ const plantReadOptions = {
     ),
   ],
 } satisfies ListReadOptions<PlantRow>;
-const plantRead = listReadPlan<PlantRow>("plant", plantReadOptions);
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: PlantRow[],
-): Promise<RawPlantOut[]> =>
-  (await plantRead.read(db, rows, { kind: "full" })).map((row) =>
-    rawPlantOut.parse(row),
-  );
-
-export const listPlantsRead = (
-  db: Database,
-  filters: PlantFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      read: plantReadOptions,
-    },
-  );
-
-export const listPlants = completeListReader(rawPlantOut, listPlantsRead);
+export const plantScaffold = listScaffold("plant", plant, {
+  read: {
+    ...plantReadOptions,
+    title: sql`${plant.name}`,
+    search: plantSearch,
+  },
+});
 
 type PlantWrite = Omit<Partial<PlantUpdateData>, "ingredientId"> & {
   ingredientId?: IngredientId | null;
@@ -150,13 +119,14 @@ type PlantWrite = Omit<Partial<PlantUpdateData>, "ingredientId"> & {
 const plantCrud = createEntityCrud({
   table: plant,
   entity: "plant",
-  fetchById: createEntityRowFetcher(plant),
-  fromDB: async (db, row: PlantRow) => (await hydrate(db, [row]))[0]!,
+  scaffold: plantScaffold,
+  output: rawPlantOut,
   toUpdate: (data: PlantWrite) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.plant.audit],
 });
 
-export const getPlantByShortcode = plantCrud.getByShortcode;
+/** One live Plant by public code, or null. */
+export const readPlant = plantCrud.getByShortcode;
 
 const resolveIngredient = async (
   db: Database | DrizzleTransaction,

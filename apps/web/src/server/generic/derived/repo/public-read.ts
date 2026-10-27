@@ -4,16 +4,15 @@ import { entityFieldEnvelopeNested } from "@cubby/schemas/entity-field-envelopes
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
+import { repositoryReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { entityFieldEnvelopeProjectors } from "~/server/generated/entity-field-envelope-projectors.gen";
-import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/automatic-fields";
 import { presentPublishedQuality } from "~/server/generic/data-quality/repo/presentation";
-import { loadCurrentAssignmentFacts } from "~/server/generic/derived/repo/assignment-read";
 import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
 import {
-  loadPageStoredMeta,
   projectStoredResult,
   projectStoredValue,
 } from "~/server/generic/derived/repo/read";
@@ -21,18 +20,21 @@ import type {
   FieldReadContext,
   PageFieldReadContexts,
 } from "~/server/generic/derived/repo/read-context";
-import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 const rowRecord = z.record(z.string(), z.unknown());
 const rowArray = z.array(z.unknown());
 type ReadRow = z.output<typeof rowRecord>;
 type ReadContainer = ReadRow | z.output<typeof rowArray>;
 const publicIdentity = z.object({ id: z.string() });
+const canonicalCode = (code: string) => parseShortcode(code)?.shortcode ?? code;
 
 type EmbeddedBinding =
   (typeof entityFieldEnvelopeNested)[keyof typeof entityFieldEnvelopeNested][number];
-const embeddedBindings: Readonly<
-  Partial<Record<ShortcodeEntity, readonly EmbeddedBinding[]>>
-> = entityFieldEnvelopeNested;
+const embeddedBindings = (
+  entity: ShortcodeEntity,
+): readonly EmbeddedBinding[] =>
+  Object.entries(entityFieldEnvelopeNested).find(
+    ([key]) => key === entity,
+  )?.[1] ?? [];
 
 /** A projection tree retains duplicate snapshots; only its fact reads deduplicate. */
 type ReadNode = {
@@ -176,7 +178,7 @@ function prepareReadNode(
     const record = rowRecord.parse(child);
     visit(target, next, record[key], rest, [...path, key]);
   };
-  for (const binding of embeddedBindings[entity] ?? [])
+  for (const binding of embeddedBindings(entity))
     visit(binding.entity, schema, row, binding.path, []);
   return { entity, schema, row, children: nestedReadChildren(children) };
 }
@@ -198,31 +200,6 @@ function replaceNestedRead(
     ...record,
     [key]: replaceNestedRead(record[key], rest, replacement),
   };
-}
-
-/** Get reads start identity/metadata work beside the repository/media read. */
-export async function loadPublicFieldReadContexts(
-  db: RepositoryQueryInput,
-  entity: ShortcodeEntity,
-  codes: readonly string[],
-): Promise<PageFieldReadContexts> {
-  const identities = await resolveLiveShortcodes(db, codes, entity);
-  const ids = [...new Set(identities.values())];
-  const [stored, ownership, assignments] = await Promise.all([
-    loadPageStoredMeta(db, entity, ids),
-    loadCurrentFieldOwnership(db, entity, ids),
-    loadCurrentAssignmentFacts(db, entity, ids),
-  ]);
-  return new Map(
-    [...identities].map(([code, id]) => [
-      code,
-      {
-        raw: assignments.get(id) ?? {},
-        stored: stored.get(id) ?? new Map(),
-        ownership: ownership.get(id) ?? {},
-      },
-    ]),
-  );
 }
 
 /** Stored reference ids and modes are retained; outward ids use existing hydration. */
@@ -371,7 +348,7 @@ export async function publicFieldEnvelopeBatch({
     const fields = node.schema.shape.fields;
     if (fields instanceof z.ZodObject && Object.keys(fields.shape).length > 0) {
       const codes = requested.get(node.entity) ?? new Set<string>();
-      codes.add(publicIdentity.parse(node.row).id);
+      codes.add(canonicalCode(publicIdentity.parse(node.row).id));
       requested.set(node.entity, codes);
     }
     for (const child of node.children) collect(child.node);
@@ -380,12 +357,20 @@ export async function publicFieldEnvelopeBatch({
   const facts = new Map<ShortcodeEntity, PageFieldReadContexts>();
   await Promise.all(
     [...requested].map(async ([kind, codes]) => {
-      const existing = contexts?.get(kind);
-      const missing = [...codes].filter((code) => !existing?.has(code));
-      const loaded = missing.length
-        ? await loadPublicFieldReadContexts(db, kind, missing)
-        : new Map<string, FieldReadContext>();
-      facts.set(kind, new Map([...(existing ?? []), ...loaded]));
+      const existing = new Map(
+        [...(contexts?.get(kind) ?? [])].map(([code, context]) => [
+          canonicalCode(code),
+          context,
+        ]),
+      );
+      const missing = [...codes].filter((code) => !existing.has(code));
+      let loaded: PageFieldReadContexts | undefined;
+      if (missing.length) {
+        const read = repositoryReadPorts(kind);
+        if (!read) throw new Error(`No repository read ports for ${kind}`);
+        loaded = await read.fieldReads(db, missing);
+      }
+      facts.set(kind, new Map([...existing, ...(loaded ?? [])]));
     }),
   );
   const serialize = (node: ReadNode): ReadRow => {
@@ -394,7 +379,9 @@ export async function publicFieldEnvelopeBatch({
       row = rowRecord.parse(
         replaceNestedRead(row, child.path, serialize(child.node)),
       );
-    const current = facts.get(node.entity)?.get(publicIdentity.parse(row).id);
+    const current = facts
+      .get(node.entity)
+      ?.get(canonicalCode(publicIdentity.parse(row).id));
     const fields = node.schema.shape.fields;
     // An explicitly compact identity projection has no governed values or action facts.
     // Validate that leaf as declared rather than inventing an empty field envelope.

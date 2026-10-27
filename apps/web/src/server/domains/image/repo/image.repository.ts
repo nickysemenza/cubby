@@ -1,33 +1,19 @@
-import { rawImageList } from "@cubby/schemas/image-raw-read";
-
-import {
-  defineRepository,
-  listReadOn,
-} from "~/server/entity-kernel/repo/repository";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   deleteImages,
-  getImageById,
   IMAGE_HARD_DELETE,
-  imageListRead,
+  imageScaffold,
   updateImage,
 } from "./image";
 
-const listImages = completeListReader(rawImageList, imageListRead);
 const imageShortcodes = bindShortcodeResolver("image");
 
 /** Images are created by the upload workflow, never as a row CRUD action. */
 export const imageRepository = defineRepository("image", {
   lifecycle: { delete: IMAGE_HARD_DELETE },
-  get: async (ctx, shortcode) =>
-    getImageById(ctx.db, await imageShortcodes.one(ctx.db, shortcode)),
-  // The full list is the progressive read's complete projection, so every
-  // client's row carries the same display images (an image displays itself).
-  list: (ctx, filters, sorts, pagination) =>
-    listImages(ctx.db, filters, sorts, pagination),
-  listRead: listReadOn(imageListRead),
+  scaffold: imageScaffold,
   update: async (ctx, shortcode, data) => {
     const entityId = await imageShortcodes.one(ctx.db, shortcode);
     return { output: await updateImage(ctx.db, entityId, data), entityId };

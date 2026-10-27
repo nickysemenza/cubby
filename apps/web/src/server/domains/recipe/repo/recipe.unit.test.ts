@@ -4,19 +4,13 @@ import {
   rawRecipeGraph as recipeGraphOut,
   rawRecipeOutput as recipeOut,
 } from "@cubby/schemas/recipe-raw-read";
-import {
-  testCompleteDataQuality,
-  testEntityId,
-  testShortcode,
-} from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
-
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 
 import { computeRecipeUsages } from "./helpers";
 import {
-  dbRecipeToAPI,
   dbRecipeToAPIGraph,
+  mapRecipeSections,
   recipeProvenanceFields,
   recipeTotalsFields,
 } from "./helpers";
@@ -38,7 +32,6 @@ const SECTION_ID = "423e4567-e89b-12d3-a456-426614174000";
 const INGREDIENT_ROW_ID = "523e4567-e89b-12d3-a456-426614174000";
 const RECIPE_ROW_ID = "623e4567-e89b-12d3-a456-426614174000";
 const IMAGE_SHORTCODE = "IMG-2345";
-const IMAGE_ID = testShortcode("image", IMAGE_SHORTCODE);
 const DELETED_IMAGE_SHORTCODE = "IMG-6789";
 const CREATED_AT = new Date("2023-01-01T00:00:00.000Z");
 const UPDATED_AT = new Date("2023-01-02T00:00:00.000Z");
@@ -197,57 +190,45 @@ describe("recipe repository helpers", () => {
     expect(value.source).toEqual({ type: "other" });
   });
 
-  it("maps full recipe detail rows exactly and filters soft-deleted relations", () => {
-    const result = dbRecipeToAPI(fullRecipeRow, testCompleteDataQuality());
+  it("maps recipe sections exactly and filters soft-deleted relations", () => {
+    const sections = mapRecipeSections(fullRecipeRow.sections);
 
-    expect(result).toMatchObject({
-      id: testShortcode("recipe", "RCP-A3F2"),
-      name: "Test Recipe",
-      images: [{ id: IMAGE_ID, url: getR2PublicUrl(image.key) }],
-      sections: [
-        {
-          id: SECTION_ID,
-          name: "Dough",
-          instructions: [{ instruction: "Mix." }],
-          ingredients: [
-            {
-              id: INGREDIENT_ROW_ID,
-              type: "ingredient",
-              recipe: null,
-              ingredient: {
-                id: testShortcode("ingredient", "ING-TEST"),
-                name: "Flour",
-                aliases: ["all-purpose flour"],
-              },
+    expect(sections).toMatchObject([
+      {
+        id: SECTION_ID,
+        name: "Dough",
+        instructions: [{ instruction: "Mix." }],
+        ingredients: [
+          {
+            id: INGREDIENT_ROW_ID,
+            type: "ingredient",
+            recipe: null,
+            ingredient: {
+              id: testShortcode("ingredient", "ING-TEST"),
+              name: "Flour",
+              aliases: ["all-purpose flour"],
             },
-            {
-              id: RECIPE_ROW_ID,
-              type: "recipe",
-              ingredient: null,
-              recipe: {
-                id: testShortcode("recipe", "RCP-SUB7"),
-                name: "Sub Recipe",
-              },
+          },
+          {
+            id: RECIPE_ROW_ID,
+            type: "recipe",
+            ingredient: null,
+            recipe: {
+              id: testShortcode("recipe", "RCP-SUB7"),
+              name: "Sub Recipe",
             },
-          ],
-        },
-      ],
-    });
-    expect(result).not.toHaveProperty("deletedAt");
-    expect(result).not.toHaveProperty("sourceType");
-    expect(result.images).toHaveLength(1);
-    expect(result.sections[0]).not.toHaveProperty("recipeId");
-    expect(result.sections[0]).not.toHaveProperty("sortOrder");
-    expect(result.sections[0]?.ingredients[0]).not.toHaveProperty(
-      "recipeSectionId",
-    );
-    expect(result.sections[0]?.ingredients[0]).not.toHaveProperty(
-      "ingredientId",
-    );
-    expect(result.sections[0]?.ingredients[0]?.ingredient).not.toHaveProperty(
+          },
+        ],
+      },
+    ]);
+    expect(sections[0]).not.toHaveProperty("recipeId");
+    expect(sections[0]).not.toHaveProperty("sortOrder");
+    expect(sections[0]?.ingredients[0]).not.toHaveProperty("recipeSectionId");
+    expect(sections[0]?.ingredients[0]).not.toHaveProperty("ingredientId");
+    expect(sections[0]?.ingredients[0]?.ingredient).not.toHaveProperty(
       "deletedAt",
     );
-    expect(recipeOut.parse(result)).toEqual(result);
+    expect(recipeOut.shape.sections.parse(sections)).toEqual(sections);
   });
 
   it("maps graph rows without media", () => {

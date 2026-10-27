@@ -16,15 +16,15 @@ import {
   updateProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
 import {
-  getProductByShortcode,
-  listProductsRead,
-  productList,
+  productScaffold,
+  readProduct,
 } from "~/server/domains/product/repo/crud";
 import { bulkStockTrackedThroughKernel as setProductsStockTracked } from "~/server/testing/entity-kernel";
 import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture as createProduct,
+  listProductsFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -193,23 +193,18 @@ describe("effective Product stock tracking", () => {
     const ids = [inherited.id, overridden.id, undecided.id, uncategorized.id];
 
     const read = async (id: (typeof ids)[number]) => {
-      const detail = stockTrackingRead.parse(
-        await getProductByShortcode(ctx.db, id),
-      );
-      const list = await productList(ctx.db, { ids: [id] }, [], {
+      const detail = stockTrackingRead.parse(await readProduct(ctx.db, id));
+      const list = await listProductsFixture(ctx.db, { ids: [id] }, [], {
         pageIndex: 0,
         pageSize: 10,
       });
       expect(stockTrackingRead.parse(list.data[0])).toEqual(detail);
-      const deferred = await listProductsRead(
-        ctx.db,
-        { ids: [id] },
-        [],
-        { pageIndex: 0, pageSize: 10 },
-        "page",
-        undefined,
-        { kind: "selected", fields: ["fieldResolutions"] },
-      );
+      const deferred = await productScaffold.read(ctx.db, {
+        filters: { ids: [id] },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 10 },
+        projection: ["fieldResolutions"],
+      });
       expect(
         stockTrackingRead
           .pick({ fieldResolutions: true })
@@ -281,10 +276,15 @@ describe("effective Product stock tracking", () => {
     const filtered = async (stockTrackedPresenceFilter: "has" | "none") =>
       new Set(
         (
-          await productList(ctx.db, { ids, stockTrackedPresenceFilter }, [], {
-            pageIndex: 0,
-            pageSize: 10,
-          })
+          await listProductsFixture(
+            ctx.db,
+            { ids, stockTrackedPresenceFilter },
+            [],
+            {
+              pageIndex: 0,
+              pageSize: 10,
+            },
+          )
         ).data.map((row) => row.id),
       );
     expect(await filtered("none")).toEqual(

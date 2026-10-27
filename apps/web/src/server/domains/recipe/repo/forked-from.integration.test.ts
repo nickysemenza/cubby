@@ -14,7 +14,7 @@ import {
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 
-import { deleteRecipes, getRecipeByShortcode, updateRecipe } from "./crud";
+import { deleteRecipes, readRecipe, updateRecipe } from "./crud";
 
 describe("Recipe.forkedFromRecipeId", () => {
   const ctx = withTestDb();
@@ -99,7 +99,7 @@ describe("Recipe.forkedFromRecipeId", () => {
 
     await deleteRecipes(ctx.db, [parent.entityId], ctx.actor);
 
-    const afterDelete = await getRecipeByShortcode(ctx.db, child.id);
+    const afterDelete = await readRecipe(ctx.db, child.id);
     expect(afterDelete).not.toBeNull();
     expect(afterDelete?.forkedFromRecipeId).toBeNull();
     expect(afterDelete?.forkedFromRecipeName).toBeNull();

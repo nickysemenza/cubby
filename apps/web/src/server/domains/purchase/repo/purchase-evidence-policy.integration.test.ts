@@ -15,7 +15,7 @@ import {
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { loadDataQualities as readDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -27,7 +27,7 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
-import { mergePurchases, getPurchaseByID } from "./purchase";
+import { mergePurchases, readPurchaseById } from "./purchase";
 import {
   financialTransactionCoverageSql,
   purchaseCoverageSql,
@@ -327,7 +327,7 @@ describe("purchase evidence policy", () => {
       { keepId: keeper.shortcode, mergeIds: [donor.shortcode] },
       ctx.actor,
     );
-    expect(await getPurchaseByID(ctx.db, keeper.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, keeper.id)).toMatchObject({
       itemizationExpectation: "required",
       spendingCategoryId: category.shortcode,
     });
@@ -672,7 +672,7 @@ describe("vendor itemization default from order evidence", () => {
     "derives %s order evidence as %s",
     async (orderEvidence, expected) => {
       const vendor = await vendorWith(orderEvidence);
-      const read = await getVendorByID(ctx.db, vendor.id);
+      const read = await readVendorById(ctx.db, vendor.id);
       expect(read.itemizationExpectation).toBeNull();
       expect(read.fieldResolutions?.itemizationExpectation).toMatchObject({
         mode: "inherit",
@@ -686,7 +686,7 @@ describe("vendor itemization default from order evidence", () => {
 
   it("keeps an explicit Vendor value over its order evidence", async () => {
     const vendor = await vendorWith("online_account", "not_expected");
-    const read = await getVendorByID(ctx.db, vendor.id);
+    const read = await readVendorById(ctx.db, vendor.id);
     expect(read.fieldResolutions?.itemizationExpectation).toMatchObject({
       mode: "explicit",
       storedValue: "not_expected",
@@ -749,7 +749,7 @@ describe("vendor itemization default from order evidence", () => {
       purchase: "unknown",
       transaction: "unknown",
     });
-    const unknownRead = await getVendorByID(ctx.db, explicitUnknown.id);
+    const unknownRead = await readVendorById(ctx.db, explicitUnknown.id);
     expect(unknownRead.fieldResolutions?.itemizationExpectation).toMatchObject({
       mode: "explicit",
       fallbackValue: null,
@@ -763,7 +763,7 @@ describe("vendor itemization default from order evidence", () => {
 
     const matchingOverride = await vendorWith("online_account", "required");
     const matchingPolicy = await downstream(matchingOverride.id);
-    const matchingRead = await getVendorByID(ctx.db, matchingOverride.id);
+    const matchingRead = await readVendorById(ctx.db, matchingOverride.id);
     expect(matchingRead.fieldResolutions?.itemizationExpectation).toMatchObject(
       { mode: "explicit", fallbackValue: "required", matchesFallback: true },
     );
@@ -788,7 +788,7 @@ describe("vendor itemization default from order evidence", () => {
     const onlinePurchase = await purchaseFor(online.id);
     const receiptPurchase = await purchaseFor(receiptOnly.id);
 
-    const onlineRead = await getPurchaseByID(ctx.db, onlinePurchase.id);
+    const onlineRead = await readPurchaseById(ctx.db, onlinePurchase.id);
     expect(onlineRead.fieldResolutions?.itemizationExpectation).toMatchObject({
       mode: "inherit",
       value: "required",
@@ -799,7 +799,7 @@ describe("vendor itemization default from order evidence", () => {
       }),
     });
     // Receipt-only implies nothing, so the category's policy still decides.
-    const receiptRead = await getPurchaseByID(ctx.db, receiptPurchase.id);
+    const receiptRead = await readPurchaseById(ctx.db, receiptPurchase.id);
     expect(receiptRead.fieldResolutions?.itemizationExpectation).toMatchObject({
       value: "not_expected",
       source: "spending category policy",

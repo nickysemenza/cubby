@@ -9,7 +9,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 
 import { listEntities } from "~/entity/generated/entity-lists.gen";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 
 /** Reuse the canonical selected-field readers for money, quantities, enums, and progress. */
@@ -40,7 +40,7 @@ export async function withGraphPreviews<
         .filter((key) => allowed.has(key))
         .slice(0, 12);
       if (!keys.length) return;
-      const result = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
+      const result = await listOperations(entity).listFields(
         context,
         {
           filters: { ids: nodes.map((node) => node.entityId) },

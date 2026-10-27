@@ -40,7 +40,7 @@ import { executeWorkflow, workflow } from "~/server/workflows/runtime";
 import {
   createIngredient,
   findOrCreateIngredient,
-  getIngredientByID,
+  readIngredientById,
   updateIngredient,
 } from "./crud";
 import { deleteIngredients } from "./deletion";
@@ -48,7 +48,7 @@ import { mergeIngredients } from "./merge";
 import {
   enrichmentWorkbenchIngredients,
   getIngredientsByIDsLean,
-  ingredientList,
+  ingredientScaffold,
 } from "./search";
 
 const updateIngredientsUsuallyOnHand = bulkUpdateFor("ingredient");
@@ -77,7 +77,17 @@ describe("ingredient", () => {
     );
     const live = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Live fixture", ingredientId: item.id }),
+      makeProductInput({
+        name: "Live fixture",
+        ingredientId: item.id,
+        unitMappings: [
+          {
+            a: { value: 1, unit: "cup" },
+            b: { value: 120, unit: "g" },
+            source: null,
+          },
+        ],
+      }),
       ctx.actor,
     );
     const removed = await createProductIdentityFixture(
@@ -99,10 +109,19 @@ describe("ingredient", () => {
       "ingredient",
       (await resolveLiveShortcode(ctx.db, item.id, "ingredient"))!,
     );
-    const detail = await getIngredientByID(ctx.db, id);
+    const detail = await readIngredientById(ctx.db, id);
     expect(detail?.product.map((linked) => linked.id)).toEqual([live.id]);
     const lean = await getIngredientsByIDsLean(ctx.db, [id]);
     expect(lean[0]?.product.map((linked) => linked.id)).toEqual([live.id]);
+    for (const record of [
+      rows.find((row) => row.id === item.id),
+      detail,
+      lean[0],
+    ]) {
+      expect(record?.product[0]?.unitMappings).toMatchObject([
+        { sourceMetadata: { type: "product", productId: live.id } },
+      ]);
+    }
     await getDb(ctx.db)
       .update(product)
       .set({ deletedAt: new Date() })
@@ -152,7 +171,7 @@ describe("ingredient", () => {
     );
     expect(updated.product.map((linked) => linked.id)).toEqual([live.id]);
     expect(updated.aliases).toEqual(["dead product alias"]);
-    expect((await getIngredientByID(ctx.db, keeperId))?.aliases).toEqual([
+    expect((await readIngredientById(ctx.db, keeperId))?.aliases).toEqual([
       "dead product alias",
     ]);
 
@@ -185,7 +204,7 @@ describe("ingredient", () => {
       { keepId: keeper.id, mergeIds: [absorbed.id] },
       ctx.actor,
     );
-    const merged = await getIngredientByID(ctx.db, keeperId);
+    const merged = await readIngredientById(ctx.db, keeperId);
     expect(merged?.product.map((linked) => linked.id)).toEqual([live.id]);
     expect(merged?.aliases).toContain("Absorbed with dead product");
   });
@@ -312,7 +331,7 @@ describe("ingredient", () => {
     const id = await resolveLiveShortcode(ctx.db, created, "ingredient");
     if (!id) throw new Error("Expected a live resolved ingredient");
     expect(
-      (await getIngredientByID(ctx.db, parseEntityId("ingredient", id)))
+      (await readIngredientById(ctx.db, parseEntityId("ingredient", id)))
         .usuallyOnHand,
     ).toBe(false);
   });
@@ -338,7 +357,9 @@ describe("ingredient", () => {
         throw new Error("abort outer operation");
       }),
     ).rejects.toThrow("abort outer operation");
-    expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(false);
+    expect((await readIngredientById(ctx.db, row.id)).usuallyOnHand).toBe(
+      false,
+    );
     expect(await audits()).toEqual(before);
 
     expect(
@@ -357,7 +378,7 @@ describe("ingredient", () => {
         name: "not permitted",
       }),
     ).rejects.toThrow("Undeclared ingredient patch field");
-    expect((await getIngredientByID(ctx.db, row.id)).name).toBe(
+    expect((await readIngredientById(ctx.db, row.id)).name).toBe(
       "scalar patch fixture",
     );
   });
@@ -380,7 +401,7 @@ describe("ingredient", () => {
       .effect("observe", async ({ context, signal, scope }, { input }) => {
         expect(signal.aborted).toBe(false);
         expect(scope).toBe("afterCommit");
-        observed.push((await getIngredientByID(context, input)).usuallyOnHand);
+        observed.push((await readIngredientById(context, input)).usuallyOnHand);
       })
       .output(({ mark }) => mark);
     await expect(
@@ -395,7 +416,7 @@ describe("ingredient", () => {
       effectsPending: false,
     });
     expect(observed).toEqual([true]);
-    expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(true);
+    expect((await readIngredientById(ctx.db, row.id)).usuallyOnHand).toBe(true);
   });
 
   it("persists pantry assumptions separately from aliases, merges, and inventory", async () => {
@@ -442,7 +463,7 @@ describe("ingredient", () => {
       { name: "pantry staple renamed" },
       ctx.actor,
     );
-    expect((await getIngredientByID(ctx.db, stapleId)).usuallyOnHand).toBe(
+    expect((await readIngredientById(ctx.db, stapleId)).usuallyOnHand).toBe(
       true,
     );
 
@@ -456,9 +477,10 @@ describe("ingredient", () => {
     const afterInventory = await getDb(ctx.db).select().from(inventoryEntry);
     expect(afterInventory).toEqual(beforeInventory);
 
-    const filtered = await ingredientList(ctx.db, { usuallyOnHand: true }, [], {
-      pageIndex: 0,
-      pageSize: 50,
+    const filtered = await ingredientScaffold.read(ctx.db, {
+      filters: { usuallyOnHand: true },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
     });
     expect(filtered.data.map((row) => row.id)).toEqual(
       expect.arrayContaining([plain.id, staple.id, distinct.id]),
@@ -482,7 +504,7 @@ describe("ingredient", () => {
       "ingredient",
       (await resolveLiveShortcode(ctx.db, keeper.id, "ingredient"))!,
     );
-    expect((await getIngredientByID(ctx.db, keeperId)).usuallyOnHand).toBe(
+    expect((await readIngredientById(ctx.db, keeperId)).usuallyOnHand).toBe(
       true,
     );
   });
@@ -704,7 +726,7 @@ describe("ingredient repository — transactional update", () => {
       }),
     ).rejects.toThrow("caller failed after the update");
 
-    expect((await getIngredientByID(ctx.db, createdId)).name).toBe(original);
+    expect((await readIngredientById(ctx.db, createdId)).name).toBe(original);
 
     const audit = await getAuditLog(ctx.db, {
       entityKind: "ingredient",

@@ -3,54 +3,51 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InventoryId,
   LocationId,
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { inventoryDisplayName } from "@cubby/schemas/inventory";
-import type {
-  InventoryPlacement,
-  inventoryFiltersSchema,
-} from "@cubby/schemas/inventory";
+import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import { inventoryValuationStatus } from "@cubby/schemas/inventory-fields";
-import { rawInventoryList } from "@cubby/schemas/inventory-raw-read";
 import {
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
-import {
-  and,
-  asc,
-  getTableColumns,
-  count,
-  desc,
-  eq,
-  inArray,
-  not,
-  sql,
-  sum,
-} from "drizzle-orm";
-import { z } from "zod";
+  rawInventoryDetail,
+  rawInventoryList,
+} from "@cubby/schemas/inventory-raw-read";
+import { and, eq, inArray, not, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  liveProductAndLocation,
+  placementCondition,
+  stockOnly,
+} from "~/server/db/computed/inventory-placement";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountFromColumns,
   parseInventoryAmount,
   amountToColumns,
-  buildOrderBy,
   buildPartialUpdateValues,
   getDb,
-  type ListReadIntent,
   notDeleted,
   relations,
+  unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
-import { inventoryEntry, location, product } from "~/server/db/schema";
+import { inventoryEntry, product } from "~/server/db/schema";
+import { inventorySearch } from "~/server/domains/inventory/repo/search-read-inventory";
+import {
+  assertValidRawInventoryOwnership,
+  inventoryOwnershipSlotCondition,
+  type InventoryRawOwnership,
+} from "~/server/domains/inventory/repo/slot";
+import type {
+  CreateInventoryEntryData,
+  UpdateInventoryEntryData,
+} from "~/server/domains/inventory/repo/types";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import {
   mapDbProductToInventoryList,
@@ -64,63 +61,41 @@ import {
 import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  dataQualitySortResolver,
-  gapCondition,
-} from "~/server/generic/data-quality/repo/sql";
+import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import {
   loadStoredDerived,
   storedDerivedSql,
 } from "~/server/generic/derived/repo/read";
-import { ListContext } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
-import { lexicalRelevance } from "~/server/generic/search/repo/search-lexical";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+
+import { assertLiveTargets, inventoryAuditRow } from "./helpers";
+import {
+  inventoryDetailProduct,
+  inventoryEntryOwnershipFields,
+  requireLoadedProductPricing,
+} from "./mappers";
+import {
+  assertIndividualOwner,
+  inventoryOwnerFilterSql,
+  loadStoredInventoryOwnershipTraces,
+} from "./ownership";
+import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
 
 // InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
 // so a newly introduced reference must be classified before kernel deletion
 // can remain registered.
 export const INVENTORY_DELETE_EDGE_POLICY =
   {} as const satisfies IncomingEdgePolicy<"inventory", OperationDisposition>;
-
-import {
-  liveProductAndLocation,
-  placementCondition,
-  stockOnly,
-} from "~/server/db/computed/inventory-placement";
-import {
-  assertValidRawInventoryOwnership,
-  inventoryOwnershipSlotCondition,
-  type InventoryRawOwnership,
-} from "~/server/domains/inventory/repo/slot";
-import type {
-  CreateInventoryEntryData,
-  InventoryEntryDeepDB,
-  UpdateInventoryEntryData,
-} from "~/server/domains/inventory/repo/types";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import { assertLiveTargets, inventoryAuditRow } from "./helpers";
-import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
-import {
-  assertIndividualOwner,
-  inventoryOwnerFilterSql,
-  loadStoredInventoryOwnershipTraces,
-  loadInventoryOwnershipTraces,
-} from "./ownership";
-import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
-import { loadStoredInventoryValuations } from "./valuation";
 
 export const checkUniqueProductDuplicate = async (
   db: Database,
@@ -161,58 +136,7 @@ export const checkUniqueProductDuplicate = async (
   return null;
 };
 
-const fetchInventoryById = async (
-  db: Database,
-  id: InventoryId,
-): Promise<InventoryEntryDeepDB | undefined> => {
-  const row = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
-    ...relations.inventory.full,
-  });
-  return row;
-};
-
-// Read path through the shared reader. The write path stays hand-rolled: create/
-// update guard live targets and slot collisions.
-const inventoryReader = createEntityReader({
-  entity: "inventory",
-  fetchById: fetchInventoryById,
-  fromDB: async (db, row: InventoryEntryDeepDB) => {
-    const [pricing, ownership, dataQualities, valuations, productImages] =
-      await Promise.all([
-        loadProductPricing(db, [row.product]),
-        loadStoredInventoryOwnershipTraces(db, [row]),
-        loadDataQualities(db, "inventory", [row.id]),
-
-        loadStoredInventoryValuations(db, [row.id]),
-        resolveEntityDisplayImageLists(
-          db,
-          [row].map((entry) => ({
-            entityKind: "product",
-            entityId: entry.product.id,
-          })),
-        ),
-      ]);
-    return dbInventoryEntryToAPI(
-      row,
-      valuations.get(row.id) ?? null,
-      requireLoadedProductPricing(pricing, row.product.id),
-      // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-      dataQualities.get(row.id)!,
-      ownership.get(row.id),
-      productImages.get(entityRefKey("product", row.product.id)) ?? [],
-    );
-  },
-});
-
-export const getInventoryEntryByShortcode = (db: Database, shortcode: string) =>
-  inventoryReader.getByShortcode(db, shortcode);
-
-type InventoryFilters = z.output<typeof inventoryFiltersSchema> & {
-  searchQuery?: string;
-};
-
-/** The stored valuation (ADR 0021): rows, sort, filter and footer read one figure. */
+/** The stored valuation (ADR 0021): rows, sort, filter and totals read one figure. */
 const storedValuation = storedDerivedSql(
   "inventory",
   "valuation",
@@ -221,7 +145,25 @@ const storedValuation = storedDerivedSql(
 
 // The ownership resolver runs once per request, only when it filters by owner.
 
-const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
+/** The declared read's row: stored columns plus the names `displayName` reads. */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- matches listScaffold's default Row; bindings read declared keys by name.
+type InventoryReadRow = typeof inventoryEntry.$inferSelect & {
+  readonly productName: string;
+  readonly locationName: string;
+  readonly [key: string]: unknown;
+};
+
+/**
+ * The Inventory read, stated once: list pages, selected projections, totals
+ * and the single-record read all select through it. {@link liveProductAndLocation}
+ * is the population: rows, counts and totals narrow to live products and
+ * locations without joining them.
+ */
+export const inventoryScaffold = listScaffold<
+  "inventory",
+  typeof inventoryEntry,
+  InventoryReadRow
+>("inventory", inventoryEntry, {
   population: liveProductAndLocation,
   derived: {
     effectiveOwner: (value) =>
@@ -231,7 +173,11 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
             value.values.map((owner) => sql`${owner}`),
             sql`, `,
           )})`,
-    locationRole: gapCondition("inventory", "inventory_unknown_location"),
+    locationRole: gapCondition(
+      "inventory",
+      "inventory_unknown_location",
+      inventoryEntry,
+    ),
     valuation: storedValuation,
     // Amount is stored as a unit + value pair: group by unit, then by size.
     amount: [
@@ -243,245 +189,158 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
         WHEN (SELECT ${sql.raw(effectiveProductPriceSql("vs_p"))} FROM "Product" vs_p WHERE vs_p."id" = ${inventoryEntry.productId}) IS NOT NULL THEN ${inventoryValuationStatus.enum.priceable}::text
         ELSE ${inventoryValuationStatus.enum.unpriceable}::text END`,
   },
-});
-const inventoryScoreSort = dataQualitySortResolver("inventory", inventoryEntry);
-
-const inventoryListOrderBy = (
-  sorts: SortParams[],
-  filters: InventoryFilters,
-  context: ListContext,
-) => {
-  if (filters.searchQuery?.trim() && sorts.length === 0) {
-    return [
-      asc(
-        lexicalRelevance("inventory", inventoryEntry.id, filters.searchQuery),
-      ),
-      desc(inventoryEntry.updatedAt),
-      asc(inventoryEntry.shortcode),
-    ];
-  }
-  return buildOrderBy(
-    inventoryEntry,
-    sorts,
-    [...generatedEntitySort.inventory.fields],
-    {
-      resolve: (sort) =>
-        inventoryScoreSort(sort) ??
-        inventoryScaffold.derivedSort(sort, context),
-      tieBreaker: desc(inventoryEntry.createdAt),
+  read: {
+    title: sql<string>`(SELECT p."name" || CASE WHEN l."name" IS NOT NULL THEN ' · ' || l."name" ELSE '' END FROM "Product" p INNER JOIN "Location" l ON l."id" = "InventoryEntry"."locationId" WHERE p."id" = "InventoryEntry"."productId")`,
+    search: inventorySearch,
+    columns: {
+      productName: sql<string>`(SELECT p."name" FROM "Product" p WHERE p."id" = ${inventoryEntry.productId})`,
+      locationName: sql<string>`(SELECT l."name" FROM "Location" l WHERE l."id" = ${inventoryEntry.locationId})`,
     },
-  );
-};
-
-/**
- * The complete WHERE for an inventory list. `getEntityCounts` calls it with
- * `{}` — see repo/dashboard.ts.
- *
- * Includes {@link liveProductAndLocation}, the predicate form of the two
- * `INNER JOIN`s the list reads: rows, count, and the valuation aggregate all
- * narrow the same way, and a caller with no joins gets the same population.
- */
-export const buildInventoryWhere = async (
-  db: Database,
-  filters: InventoryFilters,
-  // `inventoryentryListRead` passes the context it already prepared; other
-  // callers prepare what these filters read.
-  prepared?: ListContext,
-) => {
-  // Filter-only: dashboard counts and work-queue predicates load valuations
-  // and owners only when a filter asks.
-  const context =
-    prepared ??
-    (await inventoryScaffold.context(db, { filters, readIntent: "count" }));
-  return inventoryScaffold.where(filters, { context });
-};
-
-export const inventoryentryListRead = async (
-  db: Database,
-  filters: InventoryFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection,
-  readIntent: ListReadIntent = "page",
-) => {
-  const request = { filters, sorts, pagination, readIntent, projection };
-  const context = await inventoryScaffold.context(db, request);
-  const whereCondition = await buildInventoryWhere(db, filters, context);
-
-  // Count-only consumers deliberately do not request table footers.
-  const withSums = projection.kind === "full" && readIntent === "page";
-  // Count + valuation aggregate share the joins/filters, so the footer's
-  // valuation total covers the FULL filtered set (client only holds a page).
-  // One query serves both: the scaffold's count reads it, the sums reuse it.
-  let aggregate: ReturnType<typeof inventoryListAggregate> | undefined;
-  const readAggregate = () =>
-    (aggregate ??= inventoryListAggregate(db, whereCondition, withSums));
-
-  const page = await inventoryScaffold.read(db, request, {
-    context,
-    where: whereCondition,
-    orderBy:
-      readIntent === "count"
-        ? []
-        : inventoryListOrderBy(sorts, filters, context),
-    // A plain select, not the relational builder: the product and location
-    // text filters read the joined tables.
-    select: (clauses) =>
-      getDb(db)
-        .select({
-          ...getTableColumns(inventoryEntry),
-          productName: product.name,
-          locationName: location.name,
-          valuation: sql<number | null>`${storedValuation}`,
-        })
-        .from(inventoryEntry)
-        .innerJoin(
-          product,
-          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-        )
-        .innerJoin(
-          location,
-          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-        )
-        .where(clauses.where)
-        .orderBy(...clauses.orderBy)
-        .limit(clauses.limit)
-        .offset(clauses.offset),
-    count: () => readAggregate().then((result) => result.count),
-    joins: (query) =>
-      query
-        .innerJoin(
-          product,
-          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-        )
-        .innerJoin(
-          location,
-          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-        ),
-    read: {
-      media: true,
-      bindings: (bind) => {
-        const references = bind.batch(async ({ rows }) => {
-          const [related, prices] = await Promise.all([
-            getDb(db).query.inventoryEntry.findMany({
-              where: inArray(
-                inventoryEntry.id,
-                rows.map((row) => row.id),
-              ),
-              ...relations.inventory.list,
-            }),
-            loadStoredDerived(
-              db,
-              "product",
-              [...new Set(rows.map((row) => row.productId))],
-              ["price"],
-            ),
-          ]);
-          return {
-            byId: new Map(related.map((row) => [row.id, row])),
-            prices,
-          };
+    media: true,
+    tieBreaker: sql`${inventoryEntry.createdAt} desc`,
+    bindings: (bind) => {
+      const inventoryIds = (ids: readonly string[]) =>
+        ids.map((id) => parseEntityId("inventory", id));
+      const ownership = bind.batch(({ db, rows }) =>
+        loadStoredInventoryOwnershipTraces(db, rows),
+      );
+      const references = bind.ids(async ({ db, ids }) => {
+        const related = await unwrapDb(db).query.inventoryEntry.findMany({
+          where: inArray(inventoryEntry.id, inventoryIds(ids)),
+          ...relations.inventory.list,
         });
-        return [
-          bind(rawInventoryList.pick({ amount: true }), (row) => ({
-            amount: parseInventoryAmount(row),
-          })),
-          bind(rawInventoryList.pick({ displayName: true }), (row) => ({
-            displayName: inventoryDisplayName({
-              productName: row.productName,
-              locationName: row.locationName,
-            }),
-          })),
-          bind(rawInventoryList.pick({ valuation: true }), (row) => ({
-            valuation: row.valuation,
-          })),
-          bind(rawInventoryList.pick({ fieldResolutions: true }), () => ({
-            fieldResolutions: {},
-          })),
-          references.fields(
-            rawInventoryList.pick({
-              product: true,
-              location: true,
-              locationId: true,
-            }),
-            (row, loaded) => {
-              const entry = loaded.byId.get(row.id);
-              if (!entry)
-                throw new Error(
-                  "Inventory product/location references were not loaded",
-                );
-              return {
-                locationId: parseShortcodeFor(
-                  "location",
-                  entry.location.shortcode,
-                ),
-                location: {
-                  id: parseShortcodeFor("location", entry.location.shortcode),
-                  name: entry.location.name,
-                  type: parseLocationType(entry.location.type),
-                },
-                product: mapDbProductToInventoryList({
-                  ...entry.product,
-                  effectivePrice: storedEffectivePrice(
-                    loaded.prices,
-                    entry.product,
-                  ),
-                  primaryGtin: primaryGtinOf(entry.product.externalIds),
-                }),
-              };
-            },
+        const prices = await loadStoredDerived(
+          db,
+          "product",
+          [...new Set(related.map((row) => row.productId))],
+          ["price"],
+        );
+        return { byId: new Map(related.map((row) => [row.id, row])), prices };
+      });
+      // A record read embeds the full product: gallery, identifiers, unit
+      // mappings and its display images, priced live.
+      const products = bind.ids(async ({ db, ids }) => {
+        const related = await unwrapDb(db).query.inventoryEntry.findMany({
+          where: inArray(inventoryEntry.id, inventoryIds(ids)),
+          ...relations.inventory.full,
+        });
+        const [pricing, images] = await Promise.all([
+          loadProductPricing(
+            db,
+            related.map((entry) => entry.product),
           ),
-        ];
-      },
+          resolveEntityDisplayImageLists(
+            db,
+            related.map((entry) => ({
+              entityKind: "product" as const,
+              entityId: entry.product.id,
+            })),
+          ),
+        ]);
+        return {
+          byId: new Map(related.map((row) => [row.id, row])),
+          pricing,
+          images,
+        };
+      });
+      return [
+        bind(rawInventoryList.pick({ amount: true }), (row) => ({
+          amount: parseInventoryAmount(row),
+        })),
+        bind(rawInventoryList.pick({ displayName: true }), (row) => ({
+          displayName: inventoryDisplayName({
+            productName: row.productName,
+            locationName: row.locationName,
+          }),
+        })),
+        // Owner and trace are stored projections the plan binds generically; a
+        // page shows no resolution, a record read explains the stored owner.
+        bind(rawInventoryList.pick({ fieldResolutions: true }), () => ({
+          fieldResolutions: {},
+        })),
+        ownership.fields(
+          rawInventoryList.pick({ fieldResolutions: true }),
+          (row, loaded) => {
+            const trace = loaded.get(row.id);
+            return {
+              fieldResolutions: trace
+                ? inventoryEntryOwnershipFields(trace).fieldResolutions
+                : {},
+            };
+          },
+          { scope: "detail" },
+        ),
+        references.fields(
+          rawInventoryList.pick({
+            product: true,
+            location: true,
+            locationId: true,
+          }),
+          (row, loaded) => {
+            const entry = loaded.byId.get(row.id);
+            if (!entry)
+              throw new Error(
+                "Inventory product/location references were not loaded",
+              );
+            return {
+              locationId: parseShortcodeFor(
+                "location",
+                entry.location.shortcode,
+              ),
+              location: {
+                id: parseShortcodeFor("location", entry.location.shortcode),
+                name: entry.location.name,
+                type: parseLocationType(entry.location.type),
+              },
+              product: mapDbProductToInventoryList({
+                ...entry.product,
+                effectivePrice: storedEffectivePrice(
+                  loaded.prices,
+                  entry.product,
+                ),
+                primaryGtin: primaryGtinOf(entry.product.externalIds),
+              }),
+            };
+          },
+        ),
+        products.fields(
+          rawInventoryDetail.pick({ product: true }),
+          (row, loaded) => {
+            const entry = loaded.byId.get(row.id);
+            if (!entry) throw new Error("Inventory product was not loaded");
+            return {
+              product: inventoryDetailProduct(
+                entry.product,
+                requireLoadedProductPricing(loaded.pricing, entry.product.id),
+                loaded.images.get(entityRefKey("product", entry.product.id)) ??
+                  [],
+              ),
+            };
+          },
+          { scope: "detail" },
+        ),
+      ];
     },
-  });
-  const valuationSum = withSums
-    ? Number((await readAggregate()).valuationSum ?? 0)
-    : 0;
-  return {
-    ...page,
-    sums: withSums
-      ? { valuation: Number.isNaN(valuationSum) ? 0 : valuationSum }
-      : undefined,
-  };
-};
+  },
+});
 
-const inventoryListAggregate = async (
-  db: Database,
-  where: Awaited<ReturnType<typeof buildInventoryWhere>>,
-  includeSummary: boolean,
+const inventoryReader = createEntityReader({
+  entity: "inventory",
+  scaffold: inventoryScaffold,
+  output: rawInventoryDetail,
+});
+/** One live Inventory entry by internal id; throws `INVENTORY_NOT_FOUND`. */
+const readInventoryById = inventoryReader.getByID;
+/** One live Inventory entry by public code, or null. */
+export const readInventory = inventoryReader.getByShortcode;
+/** Live Inventory entries by internal id through the declared read, in id order. */
+export const readInventoryEntries = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly InventoryId[],
 ) => {
-  const [result] = await getDb(db)
-    .select({
-      count: count(),
-      valuationSum: includeSummary ? sum(storedValuation) : sql<number>`0`,
-    })
-    .from(inventoryEntry)
-    .innerJoin(
-      product,
-      and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
-    )
-    .innerJoin(
-      location,
-      and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
-    )
-    .where(where);
-  return result ?? { count: 0, valuationSum: 0 };
+  const { data } = await inventoryScaffold.getByIds(db, ids);
+  return data.map((row) => rawInventoryDetail.parse(row));
 };
-export const inventoryentryListSummary = async (
-  db: Database,
-  filters: InventoryFilters,
-) => {
-  // The footer total reads every filtered row's stored valuation.
-  const where = await buildInventoryWhere(db, filters);
-  const result = await inventoryListAggregate(db, where, true);
-  const value = Number(result.valuationSum ?? 0);
-  return { valuation: Number.isNaN(value) ? 0 : value };
-};
-export const inventoryentryList = completeListReader(
-  rawInventoryList,
-  inventoryentryListRead,
-);
 
 type InventoryRow = typeof inventoryEntry.$inferSelect;
 
@@ -572,49 +431,6 @@ const isOwnershipOnlyUpdate = (data: UpdateInventoryEntryData) =>
   ) &&
   (data.ownershipMode !== undefined || data.ownerLedgerPartyId !== undefined);
 
-const hydrateInventoryEntry = async (
-  db: Database,
-  id: InventoryId,
-  after: "creation" | "update",
-) => {
-  const result = await getDb(db).query.inventoryEntry.findFirst({
-    where: eq(inventoryEntry.id, id),
-    ...relations.inventory.full,
-  });
-
-  if (!result) {
-    throw createAppError(
-      "INVENTORY_NOT_FOUND",
-      `Inventory entry ${id} not found after ${after}`,
-    );
-  }
-
-  const [pricing, ownership, dataQualities, valuations, productImages] =
-    await Promise.all([
-      loadProductPricing(db, [result.product]),
-      loadInventoryOwnershipTraces(db, [result]),
-      loadDataQualities(db, "inventory", [result.id]),
-
-      loadStoredInventoryValuations(db, [result.id]),
-      resolveEntityDisplayImageLists(
-        db,
-        [result].map((entry) => ({
-          entityKind: "product",
-          entityId: entry.product.id,
-        })),
-      ),
-    ]);
-  // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
-  return dbInventoryEntryToAPI(
-    result,
-    valuations.get(result.id) ?? null,
-    requireLoadedProductPricing(pricing, result.product.id),
-    dataQualities.get(result.id)!,
-    ownership.get(result.id),
-    productImages.get(entityRefKey("product", result.product.id)) ?? [],
-  );
-};
-
 export const updateInventoryEntry = defineMutationWriter({
   entity: "inventory",
   read: (
@@ -623,7 +439,7 @@ export const updateInventoryEntry = defineMutationWriter({
     _id: InventoryId,
     _data: UpdateInventoryEntryData,
     _actor: ActorContext,
-  ) => hydrateInventoryEntry(db, receipt.entityId, "update"),
+  ) => readInventoryById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
@@ -813,7 +629,7 @@ export const createInventoryEntry = defineMutationWriter({
     db: Database,
     _data: CreateInventoryEntryData,
     _actor: ActorContext,
-  ) => hydrateInventoryEntry(db, receipt.entityId, "creation"),
+  ) => readInventoryById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
@@ -826,10 +642,8 @@ export const createInventoryEntry = defineMutationWriter({
 });
 
 /**
- * Get inventory entries for multiple locations (batch query to avoid N+1).
- * Returns all inventory entries with product and location relations for the given location IDs.
- */
-/**
+ * Inventory entries at these locations through the declared read.
+ *
  * Two callers with opposite needs, so placement is a parameter and the default
  * is "all" rather than the browse default.
  *
@@ -845,52 +659,19 @@ export const getInventoryByLocationIds = async (
   options: { placement?: InventoryPlacement | "all" } = {},
 ) => {
   if (locationIds.length === 0) return [];
-
-  const dbClient = getDb(db);
-  const results = await dbClient.query.inventoryEntry.findMany({
-    where: and(
-      notDeleted(inventoryEntry),
-      placementCondition(options.placement ?? "all"),
-      inArray(inventoryEntry.locationId, locationIds),
-    ),
-    ...relations.inventory.full,
-  });
-
-  const [pricing, ownership, dataQualities, valuations, productImages] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        results.map((entry) => entry.product),
+  const rows = await getDb(db)
+    .select({ id: inventoryEntry.id })
+    .from(inventoryEntry)
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        placementCondition(options.placement ?? "all"),
+        inArray(inventoryEntry.locationId, locationIds),
       ),
-      loadInventoryOwnershipTraces(db, results),
-      loadDataQualities(
-        db,
-        "inventory",
-        results.map((entry) => entry.id),
-      ),
-
-      loadStoredInventoryValuations(
-        db,
-        results.map((row) => row.id),
-      ),
-      resolveEntityDisplayImageLists(
-        db,
-        results.map((entry) => ({
-          entityKind: "product",
-          entityId: entry.product.id,
-        })),
-      ),
-    ]);
-  return results.map((entry) =>
-    dbInventoryEntryToAPI(
-      entry,
-      valuations.get(entry.id) ?? null,
-      requireLoadedProductPricing(pricing, entry.product.id),
-      // SAFETY: `entry` came from `results`, whose Inventory quality was loaded.
-      dataQualities.get(entry.id)!,
-      ownership.get(entry.id),
-      productImages.get(entityRefKey("product", entry.product.id)) ?? [],
-    ),
+    );
+  return readInventoryEntries(
+    db,
+    rows.map((row) => row.id),
   );
 };
 

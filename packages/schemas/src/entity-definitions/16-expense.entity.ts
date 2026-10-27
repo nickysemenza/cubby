@@ -300,13 +300,13 @@ export default defineEntity({
           },
         },
       ],
-      metrics: ["cost"],
       totals: [
         {
           id: "cost",
           label: "Ledger cost",
           keys: ["cost"],
           format: "currency",
+          group: true,
         },
       ],
       views: [

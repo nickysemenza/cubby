@@ -1,4 +1,3 @@
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 /**
  * Structural regression guard for the historical dual-FROM alias bug class.
  *
@@ -39,7 +38,6 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * generated Exclude key must instead keep every row.
  */
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
-import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -50,7 +48,6 @@ import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { ingredientList } from "~/server/domains/ingredient/repo/search";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   ensureRunSteps,
@@ -61,6 +58,7 @@ import type {
   EntityKernelEntity,
   EntityQueryCommand,
 } from "~/server/entity-kernel/contracts";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import {
   buildKernelContext,
   collectShortcodePaths,
@@ -73,7 +71,6 @@ import {
   SKIPPED_ENTITIES,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 /**
@@ -273,9 +270,11 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         >,
       ) => {
         if (listEntity.success) {
-          const page = await ENTITY_LIST_READ_OPERATIONS[
-            listEntity.data
-          ].listFields(kernelCtx, input, ["id"]);
+          const page = await listOperations(listEntity.data).listFields(
+            kernelCtx,
+            input,
+            ["id"],
+          );
           return { items: page.items, meta: page.meta };
         }
         return executeEntity(kernelCtx, { action: "list", entity, ...input });
@@ -373,34 +372,6 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         }
       }),
     );
-
-    // The kernel's `filters.ids` scan and per-entity `list()` both go through
-    // the relational builder, but ingredient's `readIntent: "ids"` bulk-scan
-    // path is a repo-level entry point the kernel never calls — reach it
-    // directly for its two derived (correlated-subquery) sort keys.
-    for (const orderBy of Object.keys(
-      generatedEntityListFields.ingredient.derived,
-    )) {
-      caseCount += 1;
-      try {
-        const result = await ingredientList(
-          ctx.db,
-          ingredientFiltersSchema.parse({}),
-          [{ orderBy, direction: "asc" }],
-          { pageIndex: 0, pageSize: 20 },
-          "ids",
-        );
-        if (!Array.isArray(result.data)) {
-          failures.push(
-            `ingredient ids-intent sort ${orderBy}: data was not an array`,
-          );
-        }
-      } catch (err) {
-        failures.push(
-          `ingredient ids-intent sort ${orderBy}: ${describeError(err)}`,
-        );
-      }
-    }
 
     // A filter the matrix silently skipped is a filter nothing guards, so a
     // new skip has to show up as a test change, not a log line.

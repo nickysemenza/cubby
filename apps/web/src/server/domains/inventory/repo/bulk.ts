@@ -1,6 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   InventoryId,
   LedgerPartyId,
@@ -35,25 +34,18 @@ import {
   type InventoryRawOwnership,
 } from "~/server/domains/inventory/repo/slot";
 import type { InventoryEntryDeepDB } from "~/server/domains/inventory/repo/types";
-import { loadProductPricing } from "~/server/domains/product/repo/pricing";
-import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
   computeChanges,
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { readInventoryEntries } from "./crud";
 import { assertLiveTargets, inventoryAuditRow } from "./helpers";
-import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
-import {
-  assertIndividualOwner,
-  loadInventoryOwnershipTraces,
-} from "./ownership";
-import { loadStoredInventoryValuations } from "./valuation";
+import { assertIndividualOwner } from "./ownership";
 
 export type ResolvedBulkMovePayload = {
   sourceLocationId: LocationId;
@@ -110,25 +102,9 @@ export const getInventoryLocationSnapshotToken = async (
   return await inventorySnapshotToken(rows);
 };
 
-async function batchFetchResults(
-  tx: DrizzleTransaction,
-  resultIds: string[],
-): Promise<InventoryEntryDeepDB[]> {
-  if (resultIds.length === 0) return [];
-  const fetched = await tx.query.inventoryEntry.findMany({
-    where: inArray(
-      inventoryEntry.id,
-      resultIds.map((id) => parseEntityId("inventory", id)),
-    ),
-    ...relations.inventory.full,
-  });
-  const fetchedById = new Map<string, InventoryEntryDeepDB>(
-    fetched.map((r) => [r.id, r]),
-  );
-  return resultIds
-    .map((id) => fetchedById.get(id))
-    .filter((r): r is InventoryEntryDeepDB => r != null);
-}
+/** The written entries, read back through the declared read after commit. */
+const writtenInventoryIds = (resultIds: readonly string[]): InventoryId[] =>
+  resultIds.map((id) => parseEntityId("inventory", id));
 
 const assertInventoryProductsLive = async (
   tx: DrizzleTransaction,
@@ -392,7 +368,7 @@ export const addInventoryEntries = async (
         await logAuditEntries(tx, actor, auditEntries);
       }
 
-      const results = await batchFetchResults(tx, resultIds);
+      const results = writtenInventoryIds(resultIds);
 
       // Deliberately does NOT stamp `location.lastBulkInventory` (see the NOTE
       // on `moveInventoryEntries` below, ~line 730): only an explicit audit
@@ -402,43 +378,8 @@ export const addInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership, dataQualities, valuations, productImages] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        processed.results.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, processed.results),
-      loadDataQualities(
-        db,
-        "inventory",
-        processed.results.map((entry) => entry.id),
-      ),
-
-      loadStoredInventoryValuations(
-        db,
-        processed.results.map((row) => row.id),
-      ),
-      resolveEntityDisplayImageLists(
-        db,
-        processed.results.map((entry) => ({
-          entityKind: "product",
-          entityId: entry.product.id,
-        })),
-      ),
-    ]);
   return {
-    items: processed.results.map((entry) =>
-      dbInventoryEntryToAPI(
-        entry,
-        valuations.get(entry.id) ?? null,
-        requireLoadedProductPricing(pricing, entry.product.id),
-        // SAFETY: `entry` came from `processed.results`, whose Inventory quality was loaded.
-        dataQualities.get(entry.id)!,
-        ownership.get(entry.id),
-        productImages.get(entityRefKey("product", entry.product.id)) ?? [],
-      ),
-    ),
+    items: await readInventoryEntries(db, processed.results),
     createdCount: processed.createdCount,
     mergedCount: processed.mergedCount,
   };
@@ -782,46 +723,11 @@ export const moveInventoryEntries = async (
         resultSlots,
         actor,
       );
-      return await batchFetchResults(tx, resultIds);
+      return writtenInventoryIds(resultIds);
     },
   );
 
-  const [pricing, ownership, dataQualities, valuations, productImages] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        processedItems.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, processedItems),
-      loadDataQualities(
-        db,
-        "inventory",
-        processedItems.map((entry) => entry.id),
-      ),
-
-      loadStoredInventoryValuations(
-        db,
-        processedItems.map((row) => row.id),
-      ),
-      resolveEntityDisplayImageLists(
-        db,
-        processedItems.map((entry) => ({
-          entityKind: "product",
-          entityId: entry.product.id,
-        })),
-      ),
-    ]);
-  return processedItems.map((entry) =>
-    dbInventoryEntryToAPI(
-      entry,
-      valuations.get(entry.id) ?? null,
-      requireLoadedProductPricing(pricing, entry.product.id),
-      // SAFETY: `entry` came from `processedItems`, whose Inventory quality was loaded.
-      dataQualities.get(entry.id)!,
-      ownership.get(entry.id),
-      productImages.get(entityRefKey("product", entry.product.id)) ?? [],
-    ),
-  );
+  return readInventoryEntries(db, processedItems);
 };
 
 /**
@@ -1156,48 +1062,13 @@ export const reconcileLocationSession = async (
         await logAuditEntries(tx, actor, auditEntries);
       }
 
-      const processed = await batchFetchResults(tx, resultIds);
+      const processed = writtenInventoryIds(resultIds);
       return { processed, removedIds, recomputeNeeded };
     },
   );
 
-  const [pricing, ownership, dataQualities, valuations, productImages] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        processed.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, processed),
-      loadDataQualities(
-        db,
-        "inventory",
-        processed.map((entry) => entry.id),
-      ),
-
-      loadStoredInventoryValuations(
-        db,
-        processed.map((row) => row.id),
-      ),
-      resolveEntityDisplayImageLists(
-        db,
-        processed.map((entry) => ({
-          entityKind: "product",
-          entityId: entry.product.id,
-        })),
-      ),
-    ]);
   return {
-    items: processed.map((entry) =>
-      dbInventoryEntryToAPI(
-        entry,
-        valuations.get(entry.id) ?? null,
-        requireLoadedProductPricing(pricing, entry.product.id),
-        // SAFETY: `entry` came from `processed`, whose Inventory quality was loaded.
-        dataQualities.get(entry.id)!,
-        ownership.get(entry.id),
-        productImages.get(entityRefKey("product", entry.product.id)) ?? [],
-      ),
-    ),
+    items: await readInventoryEntries(db, processed),
     removedIds,
     recomputeNeeded,
   };

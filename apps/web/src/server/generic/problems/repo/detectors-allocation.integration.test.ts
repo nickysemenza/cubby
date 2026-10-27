@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
 import { financialTransactionAllocation } from "~/server/db/schema";
-import { listFinancialTransactions } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -90,9 +90,13 @@ const allocate = (
   });
 
 const liveDefects = async (db: Database) =>
-  listFinancialTransactions(db, { allocationIntegrity: "defect" }, [], {
-    pageIndex: 0,
-    pageSize: 100,
+  financialTransactionScaffold.read(db, {
+    filters: { allocationIntegrity: "defect" },
+    sorts: [],
+    pagination: {
+      pageIndex: 0,
+      pageSize: 100,
+    },
   });
 
 describe("findFinancialTransactionAllocationDefects", () => {

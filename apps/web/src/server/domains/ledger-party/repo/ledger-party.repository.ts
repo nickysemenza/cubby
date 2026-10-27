@@ -4,20 +4,16 @@ import { z } from "zod";
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import {
   createLedgerParty,
   deleteLedgerParties,
-  getLedgerPartyByShortcode,
   LEDGER_PARTY_DELETE_EDGE_POLICY,
   LEDGER_PARTY_MERGE_EDGE_POLICY,
-  listLedgerParties,
-  listLedgerPartiesRead,
+  ledgerPartyScaffold,
+  readLedgerParty,
   mergeLedgerParties,
   updateLedgerParty,
 } from "./ledger-party";
@@ -45,9 +41,7 @@ export const ledgerPartyRepository = defineRepository("ledgerParty", {
     delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
     merge: LEDGER_PARTY_MERGE_EDGE_POLICY,
   },
-  get: onDb(getLedgerPartyByShortcode),
-  list: listOn(listLedgerParties),
-  listRead: listReadOn(listLedgerPartiesRead),
+  scaffold: ledgerPartyScaffold,
   create: asActor(createLedgerParty),
   update: asActor(updateLedgerParty),
   delete: asActor(deleteLedgerParties),
@@ -65,7 +59,7 @@ export const ledgerPartyRepository = defineRepository("ledgerParty", {
         input,
         ctx.actorContext,
       );
-      const ledgerParty = await getLedgerPartyByShortcode(ctx.db, input.keepId);
+      const ledgerParty = await readLedgerParty(ctx.db, input.keepId);
       if (!ledgerParty)
         throw new Error("Merged Ledger Party keeper disappeared");
       return {

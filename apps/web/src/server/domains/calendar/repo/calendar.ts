@@ -34,10 +34,15 @@ import {
   mealTypeRank,
 } from "@cubby/schemas/meal-classification";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
-import type { RawCalendarScheduleOut } from "@cubby/schemas/work-raw-read";
+import {
+  type RawCalendarScheduleOut,
+  rawExpenseOut,
+  rawTaskOut,
+} from "@cubby/schemas/work-raw-read";
 import type { SQL } from "drizzle-orm";
 import {
   and,
+  asc,
   eq,
   gte,
   inArray,
@@ -52,14 +57,12 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted, relations } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, project, task, meal, planting } from "~/server/db/schema";
-import { expenseInheritanceReadExtras } from "~/server/domains/expense/repo/expense-inheritance";
-import { dbExpenseToAPI } from "~/server/domains/expense/repo/helpers";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import {
   plantingScaffold,
-  getPlanting,
+  readPlantingById,
 } from "~/server/domains/garden/repo/garden";
 import {
   mealScaffold,
@@ -68,13 +71,10 @@ import {
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { loadPurchaseSpending } from "~/server/domains/purchase/repo/purchase-spending";
-import { getTasksByIDs } from "~/server/domains/task/repo/crud";
+import { readTasksByIds } from "~/server/domains/task/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
-import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
-import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import type { NestedListScaffold } from "~/server/generic/list/repo/list";
 
@@ -192,17 +192,13 @@ const loadCalendarTasks = async (
         lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
         gte(effectiveTaskDueDateSql(), input.startDate),
       ),
-    );
-  if (!ids.length) return [];
-  const rows = await getDb(db).query.task.findMany({
-    where: inArray(
-      task.id,
-      ids.map((row) => row.id),
-    ),
-    orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
-    ...relations.task.withProject,
-  });
-  return hydrateTaskInheritanceRows(db, rows);
+    )
+    .orderBy(asc(task.dueDate), asc(task.name));
+  const read = await taskScaffold.getByIds(
+    db,
+    ids.map((row) => row.id),
+  );
+  return read.data.map((row) => rawTaskOut.parse(row));
 };
 
 const loadCalendarExpenses = async (
@@ -224,19 +220,13 @@ const loadCalendarExpenses = async (
         gte(expense[calendarSources.spending.dates[0]], input.startDate),
         lte(expense[calendarSources.spending.dates[0]], endInclusive),
       ),
-    );
-  if (!ids.length) return [];
-  return getDb(db).query.expense.findMany({
-    where: inArray(
-      expense.id,
-      ids.map((row) => row.id),
-    ),
-    orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
-    ...relations.expense.withProject,
-    extras: {
-      ...expenseInheritanceReadExtras(),
-    },
-  });
+    )
+    .orderBy(asc(expense.date), asc(expense.name));
+  const read = await expenseScaffold.getByIds(
+    db,
+    ids.map((row) => row.id),
+  );
+  return read.data.map((row) => rawExpenseOut.parse(row));
 };
 
 const loadCalendarPurchaseItems = async (
@@ -334,28 +324,17 @@ const mapMealItems = async (
   }));
 };
 
-const mapTaskItems = async (
-  db: Database,
-  rows: Awaited<ReturnType<typeof loadCalendarTasks>>,
-): Promise<RawCalendarItem[]> => {
-  const dataQualities = await loadDataQualities(
-    db,
-    "task",
-    rows.map((row) => row.id),
-  );
-  const values = rows.map((row) =>
-    dbTaskToAPI(row, [], [], 0, 0, dataQualities.get(row.id)!),
-  );
-
-  return rows.flatMap((row, index) => {
-    const value = values[index]!;
+const mapTaskItems = (
+  values: Awaited<ReturnType<typeof loadCalendarTasks>>,
+): RawCalendarItem[] =>
+  values.flatMap((value) => {
     const startDate = value.due?.start ?? value.due?.end;
     const endDate = effectiveTaskDueDate(value) ?? undefined;
     return startDate && endDate
       ? [
           {
             kind: "task" as const,
-            id: parseShortcodeFor("task", row.shortcode),
+            id: value.id,
             title: value.name,
             startDate,
             endDateExclusive: shiftPlainDate(endDate, 1),
@@ -365,7 +344,7 @@ const mapTaskItems = async (
             source: rawCalendarTaskSource.parse(value),
             projectName: value.projectName,
             assignedProjectName:
-              row.fieldResolutions.projectId?.mode === "explicit"
+              value.fieldResolutions?.projectId?.mode === "explicit"
                 ? value.projectName
                 : null,
             subjectProductName: value.subjectProductName,
@@ -374,28 +353,16 @@ const mapTaskItems = async (
         ]
       : [];
   });
-};
 
-const mapExpenseItems = async (
-  db: Database,
-  rows: Awaited<ReturnType<typeof loadCalendarExpenses>>,
-): Promise<RawCalendarItem[]> => {
-  const dataQualities = await loadDataQualities(
-    db,
-    "expense",
-    rows.map((row) => row.id),
-  );
-  const values = rows.map((row) =>
-    dbExpenseToAPI(row, dataQualities.get(row.id)!),
-  );
-
-  return rows.flatMap((row, index) => {
-    const value = values[index]!;
-    return value.date
+const mapExpenseItems = (
+  values: Awaited<ReturnType<typeof loadCalendarExpenses>>,
+): RawCalendarItem[] =>
+  values.flatMap((value) =>
+    value.date
       ? [
           {
             kind: "expense" as const,
-            id: parseShortcodeFor("expense", row.shortcode),
+            id: value.id,
             title: value.name,
             startDate: value.date,
             endDateExclusive: shiftPlainDate(value.date, 1),
@@ -410,9 +377,8 @@ const mapExpenseItems = async (
             displayImages: [],
           },
         ]
-      : [];
-  });
-};
+      : [],
+  );
 
 const mapProjectItems = async (
   rows: Awaited<ReturnType<typeof loadCalendarProjects>>,
@@ -565,8 +531,8 @@ export async function getCalendarRange(
 
   const [mealItems, taskItems, expenseItems, projectItems] = await Promise.all([
     mapMealItems(meals),
-    mapTaskItems(db, taskRows),
-    mapExpenseItems(db, expenseRows),
+    mapTaskItems(taskRows),
+    mapExpenseItems(expenseRows),
     mapProjectItems(projectRows, projectDates, input),
   ]);
   const items = [
@@ -758,13 +724,13 @@ export async function getCalendarSchedule(
       : [],
   ]);
   const [tasks, plantings] = await Promise.all([
-    getTasksByIDs(
+    readTasksByIds(
       db,
       taskIds.map((row) => row.id),
     ),
     Promise.all(
       plantingIds.map((row) =>
-        getPlanting(db, parseEntityId("planting", row.id)),
+        readPlantingById(db, parseEntityId("planting", row.id)),
       ),
     ),
   ]);

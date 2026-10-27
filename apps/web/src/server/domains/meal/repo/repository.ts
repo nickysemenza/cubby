@@ -1,18 +1,14 @@
 import {
   asActor,
   defineRepository,
-  listOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   createMealWithEntityId,
   deleteMeals,
-  getMealByShortcode,
   MEAL_DELETE_EDGE_POLICY,
-  mealList,
-  mealListRead,
+  mealScaffold,
   updateMeal,
 } from "./crud";
 
@@ -20,16 +16,7 @@ const mealShortcodes = bindShortcodeResolver("meal");
 
 export const mealRepository = defineRepository("meal", {
   lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
-  get: onDb(getMealByShortcode),
-  list: listOn(mealList),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-  ) => mealListRead(ctx.db, filters, sorts, pagination, readIntent, projection),
+  scaffold: mealScaffold,
   create: asActor(createMealWithEntityId),
   update: async (ctx, id, data) => {
     const entityId = await mealShortcodes.one(ctx.db, id);

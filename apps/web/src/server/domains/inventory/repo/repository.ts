@@ -5,12 +5,7 @@ import type {
   EntityKernelContext,
   EntityRepository,
 } from "~/server/entity-kernel/adapter";
-import {
-  defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -19,11 +14,8 @@ import {
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntries,
-  getInventoryEntryByShortcode,
   INVENTORY_DELETE_EDGE_POLICY,
-  inventoryentryList,
-  inventoryentryListRead,
-  inventoryentryListSummary,
+  inventoryScaffold,
   updateInventoryEntry,
 } from "./crud";
 
@@ -79,10 +71,7 @@ const resolveUpdate = async (ctx: EntityKernelContext, data: UpdateInput) => {
 
 export const inventoryRepository = defineRepository("inventory", {
   lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
-  get: onDb(getInventoryEntryByShortcode),
-  list: listOn(inventoryentryList),
-  listRead: listReadOn(inventoryentryListRead),
-  listSummary: (ctx, filters) => inventoryentryListSummary(ctx.db, filters),
+  scaffold: inventoryScaffold,
   create: async (ctx, data) =>
     createInventoryEntry(
       ctx.db,

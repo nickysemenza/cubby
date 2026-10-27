@@ -55,8 +55,8 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import {
-  getPurchaseByID,
-  purchaseList,
+  readPurchaseById,
+  purchaseScaffold,
   updatePurchase,
 } from "~/server/domains/purchase/repo/purchase";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
@@ -1007,9 +1007,13 @@ describe("problems — purchase financial settlement mismatches", () => {
       purchaseShortcode,
     ]);
     expect(
-      (await purchaseList(ctx.db, { dataStatus: "defect" }, [], page)).data.map(
-        (row) => row.id,
-      ),
+      (
+        await purchaseScaffold.read(ctx.db, {
+          filters: { dataStatus: "defect" },
+          sorts: [],
+          pagination: page,
+        })
+      ).data.map((row) => row.id),
     ).toContain(purchaseShortcode);
 
     const quality = await setDataException(
@@ -1031,16 +1035,20 @@ describe("problems — purchase financial settlement mismatches", () => {
     );
     expect(await mismatches()).toEqual([]);
     expect(
-      (await purchaseList(ctx.db, { dataStatus: "defect" }, [], page)).data.map(
-        (row) => row.id,
-      ),
+      (
+        await purchaseScaffold.read(ctx.db, {
+          filters: { dataStatus: "defect" },
+          sorts: [],
+          pagination: page,
+        })
+      ).data.map((row) => row.id),
     ).not.toContain(purchaseShortcode);
 
     const purchaseId = parseEntityId(
       "purchase",
       (await resolveLiveShortcode(ctx.db, purchaseShortcode, "purchase"))!,
     );
-    const financial = (await getPurchaseByID(ctx.db, purchaseId))
+    const financial = (await readPurchaseById(ctx.db, purchaseId))
       .financialReconciliation;
     expect(financial.status).toBe("mismatch");
     expect(financial.delta).toBeCloseTo(-0.02);
@@ -1052,7 +1060,7 @@ describe("problems — purchase financial settlement mismatches", () => {
     await updateExpense(ctx.db, mismatched.id, { future: true }, ctx.actor);
     expect(await mismatches()).toEqual([]);
     expect(
-      (await getPurchaseByID(ctx.db, purchaseId)).dataQuality.exceptions,
+      (await readPurchaseById(ctx.db, purchaseId)).dataQuality.exceptions,
     ).toContainEqual(
       expect.objectContaining({
         check: "settlement_mismatch",

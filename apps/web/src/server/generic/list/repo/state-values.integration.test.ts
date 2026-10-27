@@ -1,5 +1,8 @@
+import type { SortParams } from "@cubby/schemas/pagination";
 import type { ProductFilters } from "@cubby/schemas/product";
+import type { ProjectFilters } from "@cubby/schemas/project";
 import {
+  type PurchaseFilters,
   purchaseReconciliation,
   RECONCILIATION_TOLERANCE,
 } from "@cubby/schemas/purchase";
@@ -24,21 +27,19 @@ import {
   vendorExpenseTotal,
   vendorUnpricedExpenseCount,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
-import { inventoryentryList } from "~/server/domains/inventory/repo/crud";
-import { productList } from "~/server/domains/product/repo/crud";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import {
   expectedQuantityReadSql,
   expectedQuantitySql,
   quantityVarianceSql,
 } from "~/server/domains/product/repo/quantity-ledger";
-import { projectList } from "~/server/domains/project/repo/lookup";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import {
   loadProjectDateWindows,
   loadProjectTree,
   projectCompletionYear,
 } from "~/server/domains/project/repo/subtree";
-import { purchaseList } from "~/server/domains/purchase/repo/purchase";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
@@ -50,6 +51,8 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  listInventoryFixture,
+  listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
@@ -121,10 +124,12 @@ describe("state predicates re-declared as values", () => {
             .where(and(inArray(inventoryEntry.shortcode, fixture), condition))
         ).map(({ id }) => id),
       );
-    const listed = async (filters: Parameters<typeof inventoryentryList>[1]) =>
+    const listed = async (
+      filters: Parameters<typeof listInventoryFixture>[1],
+    ) =>
       sorted(
         (
-          await inventoryentryList(
+          await listInventoryFixture(
             ctx.db,
             fromAny({ ...filters, ids: fixture }),
             [],
@@ -155,7 +160,7 @@ describe("state predicates re-declared as values", () => {
     expect(await listed({ valuationStatusExclude: ["valued"] })).toEqual(
       sorted([priceable.id, unpriceable.id]),
     );
-    const grouped = await inventoryentryList(
+    const grouped = await listInventoryFixture(
       ctx.db,
       withListGroupBy(fromAny({ ids: fixture }), [{ key: "valuationStatus" }]),
       [{ orderBy: "valuationStatus", direction: "asc" }],
@@ -239,7 +244,12 @@ describe("state predicates re-declared as values", () => {
     const listed = async (filters: ProductFilters) =>
       sorted(
         (
-          await productList(ctx.db, { ...filters, ids: fixture }, [], page)
+          await listProductsFixture(
+            ctx.db,
+            { ...filters, ids: fixture },
+            [],
+            page,
+          )
         ).data.map(({ id }) => id),
       );
 
@@ -429,15 +439,17 @@ describe("state predicates re-declared as values", () => {
             .where(and(inArray(purchase.shortcode, fixture), condition))
         ).map(({ id }) => id),
       );
-    const listed = async (filters: Parameters<typeof purchaseList>[1]) =>
+    const listed = async (filters: PurchaseFilters) =>
       sorted(
         (
-          await purchaseList(
-            ctx.db,
-            fromAny({ ...filters, ids: fixture }),
-            [],
-            page,
-          )
+          await purchaseScaffold.read(ctx.db, {
+            filters: fromAny<PurchaseFilters, unknown>({
+              ...filters,
+              ids: fixture,
+            }),
+            sorts: [],
+            pagination: page,
+          })
         ).data.map(({ id }) => id),
       );
 
@@ -491,16 +503,12 @@ describe("state predicates re-declared as values", () => {
           .map((row) => row.shortcode),
       );
     await drainStoredDerived(ctx.db);
-    const listed = async (
-      filters: Parameters<typeof projectList>[1],
-      sorts: Parameters<typeof projectList>[2] = [],
-    ) =>
-      await projectList(
-        ctx.db,
-        fromAny({ ...filters, ids: fixture }),
+    const listed = async (filters: ProjectFilters, sorts: SortParams[] = []) =>
+      await projectScaffold.read(ctx.db, {
+        filters: fromAny<ProjectFilters, unknown>({ ...filters, ids: fixture }),
         sorts,
-        page,
-      );
+        pagination: page,
+      });
 
     for (const year of ["2024", "2025"])
       expect(

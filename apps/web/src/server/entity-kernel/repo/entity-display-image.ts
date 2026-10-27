@@ -57,7 +57,6 @@ import {
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { suggestedMerchantVendorCandidatesSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
-import { previousShortcodesFor } from "~/server/entity-kernel/repo/entity-identity";
 import {
   compileTraversal,
   inheritedRelationSql,
@@ -72,8 +71,6 @@ export interface EntityDisplayImageRef {
   entityKind: Entity;
   entityId: string;
 }
-
-const DISPLAY_IMAGE_ENTITIES = new Set<Entity>(entitySchema.options);
 
 type DisplaySource = Readonly<{
   entity: Entity;
@@ -516,7 +513,6 @@ export async function resolveEntityDisplayImageChain(
   db: Database | DrizzleTransaction,
   ref: EntityDisplayImageRef,
 ): Promise<RankedDisplayImage[]> {
-  if (!DISPLAY_IMAGE_ENTITIES.has(ref.entityKind)) return [];
   const key = entityRefKey(ref.entityKind, ref.entityId);
   const { ranked } = await resolveRankedDisplayImages(
     db,
@@ -705,9 +701,7 @@ export async function resolveEntityDisplayMedia(
 ): Promise<EntityDisplayMedia> {
   const supported = [
     ...new Map(
-      refs
-        .filter((ref) => DISPLAY_IMAGE_ENTITIES.has(ref.entityKind))
-        .map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
+      refs.map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
     ).values(),
   ];
   if (supported.length === 0)
@@ -904,8 +898,6 @@ export async function withUniversalEntityMedia<
     PublicEntityRow & {
       displayImages: DisplayImageSummary[];
       attachments?: RawEntityAttachmentRead[];
-      redirectedFrom?: string | null;
-      previousShortcodes?: string[];
     }
   >
 > {
@@ -924,14 +916,11 @@ export async function withUniversalEntityMedia<
     return entityId === undefined ? [] : [{ entityKind, entityId }];
   });
   const entityIds = refs.map((ref) => ref.entityId);
-  const [lists, attachments, previousShortcodes] = await Promise.all([
+  const [lists, attachments] = await Promise.all([
     resolveEntityDisplayImageLists(db, refs),
     detail
       ? resolveEntityAttachments(db, entityKind, entityIds)
       : Promise.resolve(new Map<string, RawEntityAttachmentRead[]>()),
-    detail
-      ? previousShortcodesFor(db, entityIds)
-      : Promise.resolve(new Map<string, string[]>()),
   ]);
   return hydrateImageReadProjection(
     db,
@@ -945,11 +934,6 @@ export async function withUniversalEntityMedia<
         ...row,
         displayImages,
         attachments: entityId ? (attachments.get(entityId) ?? []) : [],
-        // The kernel's get sets this when it followed a merge redirect.
-        redirectedFrom: null,
-        previousShortcodes: entityId
-          ? (previousShortcodes.get(entityId) ?? [])
-          : [],
       };
       // Purchase documents and Product item/label galleries retain attachment
       // metadata in their specialized projections. Generic attachments still

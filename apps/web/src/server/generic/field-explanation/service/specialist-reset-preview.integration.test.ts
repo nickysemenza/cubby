@@ -12,9 +12,9 @@ import {
   vendor as vendorTable,
   financialTransaction as transactionTable,
 } from "~/server/db/schema";
-import { getExpenseByID } from "~/server/domains/expense/repo/crud";
+import { readExpenseById } from "~/server/domains/expense/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
-import { getProductByID } from "~/server/domains/product/repo/crud";
+import { readProductById } from "~/server/domains/product/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -247,7 +247,7 @@ describe("specialist reset previews", () => {
       decision: { outcome: { kind: "value", value: category.shortcode } },
     });
     expect(
-      (await getExpenseByID(ctx.db, expense.entityId)).fieldResolutions
+      (await readExpenseById(ctx.db, expense.entityId)).fieldResolutions
         ?.projectId?.storedValue,
     ).toBe(own.output.id);
   });
@@ -290,7 +290,7 @@ describe("specialist reset previews", () => {
         provenance: { kind: "computed" },
       },
     });
-    const unchanged = await getProductByID(ctx.db, item.entityId);
+    const unchanged = await readProductById(ctx.db, item.entityId);
     expect(unchanged.price).toBe(99);
     const retainedExpenses = await getDb(ctx.db)
       .select({ cost: expenseTable.cost })
@@ -364,7 +364,7 @@ describe("specialist reset previews", () => {
       await specialistResetPreview(ctx.db, "product", "price", item.entityId),
     ).toBeNull();
     expect(
-      (await getProductByID(ctx.db, item.entityId)).fieldResolutions?.price,
+      (await readProductById(ctx.db, item.entityId)).fieldResolutions?.price,
     ).toMatchObject({
       storedValue: 99,
       assignmentAllowed: false,
@@ -424,7 +424,7 @@ describe("specialist reset previews", () => {
         },
       },
     });
-    const unchanged = await getExpenseByID(ctx.db, line.entityId);
+    const unchanged = await readExpenseById(ctx.db, line.entityId);
     expect(unchanged.fieldResolutions?.trade?.storedValue).toBe("electrical");
     expect(unchanged.fieldResolutions?.projectId?.storedValue).toBeNull();
   });
@@ -495,7 +495,7 @@ describe("specialist reset previews", () => {
         .from(expenseTable)
         .where(eq(expenseTable.id, principal.entityId)),
     ).toEqual(before);
-    const unchanged = await getExpenseByID(ctx.db, principal.entityId);
+    const unchanged = await readExpenseById(ctx.db, principal.entityId);
     expect(unchanged.fieldResolutions?.trade).toMatchObject({
       storedValue: "electrical",
       canReset: true,
@@ -526,8 +526,8 @@ describe("specialist reset previews", () => {
       ),
     ).toBeNull();
     expect(
-      (await getExpenseByID(ctx.db, principal.entityId)).fieldResolutions?.trade
-        ?.canReset,
+      (await readExpenseById(ctx.db, principal.entityId)).fieldResolutions
+        ?.trade?.canReset,
     ).toBe(false);
     expect(
       await specialistResetPreview(

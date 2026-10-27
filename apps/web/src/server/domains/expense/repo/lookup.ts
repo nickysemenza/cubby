@@ -1,27 +1,31 @@
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
-import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { type ExpenseId, parseEntityId } from "@cubby/schemas/identifiers";
 import { expenseCostSign } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { rawExpenseListItemOut } from "@cubby/schemas/work-raw-read";
-import { and, inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import type { Database } from "~/server/db";
-import {
-  getDb,
-  type ListReadIntent,
-  notDeleted,
-  relations,
-} from "~/server/db/helpers";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { getDb, notDeleted, relations, unwrapDb } from "~/server/db/helpers";
 import { quotedTable, related } from "~/server/db/helpers/related";
-import { expense, project, spendingCategory } from "~/server/db/schema";
+import {
+  expense,
+  project,
+  purchase,
+  spendingCategory,
+} from "~/server/db/schema";
 import {
   expenseDerivedValueSql,
   expenseSelectionForWhere,
 } from "~/server/domains/expense/repo/expense-derived-read";
+import { expenseSearch } from "~/server/domains/expense/repo/search-read-expense";
 import { disposalPurchaseIds } from "~/server/domains/product/repo/ownership";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import {
+  vendorLogoKeySql,
+  vendorLogoSummary,
+} from "~/server/domains/vendor/repo/vendor-logo";
 import {
   ListContext,
   listFilterValues,
@@ -34,12 +38,6 @@ import {
   listScaffold,
   rowSetFilterKeys,
 } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  type ListReadOptions,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -56,7 +54,6 @@ import {
   expenseRelationFields,
   expenseDerivedFields,
   expenseResolutionFields,
-  expenseMediaFields,
 } from "./helpers";
 
 export const resolveExpenseProjectAllocationScope = async (
@@ -184,6 +181,8 @@ const allocationShares = listPrepare(async (_db, values) => ({
 
 // Allocation-backed sorts use one grouped lookup and retain the plain root
 // FROM; the product and purchase sorts compile from their declared paths.
+const qb = new QueryBuilder();
+
 export const expenseScaffold = listScaffold("expense", expense, {
   derived: rowDerived,
   rows: {
@@ -205,6 +204,128 @@ export const expenseScaffold = listScaffold("expense", expense, {
     ),
   },
   scopes: { projectScope: () => projectScaffold },
+  read: {
+    search: expenseSearch,
+    media: true,
+    columns: {
+      vendorLogoKey: vendorLogoKeySql(
+        sql`(${qb
+          .select({ vendorId: purchase.vendorId })
+          .from(purchase)
+          .where(
+            and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+          )})`,
+      ),
+    },
+    bindings: (bind) => {
+      const joined = bind.ids(({ db, ids }) =>
+        loadExpenseJoinedRows(
+          db,
+          ids.map((id) => parseEntityId("expense", id)),
+        ),
+      );
+      const spending = bind.ids(({ db, ids }) =>
+        loadExpenseSpendingAllocations(
+          db,
+          ids.map((id) => parseEntityId("expense", id)),
+        ),
+      );
+      const projects = bind.ids(async ({ db, ids }) => {
+        const values = await loadExpenseProjectAllocations(
+          db,
+          ids.map((id) => parseEntityId("expense", id)),
+        );
+        const byExpense = new Map<ExpenseId, typeof values>();
+        for (const value of values) {
+          const group = byExpense.get(value.expenseId) ?? [];
+          group.push(value);
+          byExpense.set(value.expenseId, group);
+        }
+        return byExpense;
+      });
+      const allocations = bind.ids(async (page) => {
+        const [rows, projectValues, spendingValues] = await Promise.all([
+          joined.load(page),
+          projects.load(page),
+          spending.load(page),
+        ]);
+        return { rows, projects: projectValues, spending: spendingValues };
+      });
+      const rowOf = (
+        rows: ReadonlyMap<ExpenseId, ExpenseJoinedRow>,
+        id: ExpenseId,
+      ) => {
+        const row = rows.get(id);
+        if (!row) throw new Error(`Expense relations were not loaded: ${id}`);
+        return row;
+      };
+      return [
+        allocations.fields(
+          rawExpenseListItemOut.pick({
+            projectId: true,
+            projectName: true,
+            productId: true,
+            productName: true,
+            purchaseId: true,
+            vendorId: true,
+            vendor: true,
+            beneficiaries: true,
+            funders: true,
+            sourceClaims: true,
+            spendingCategoryId: true,
+            spendingCategoryName: true,
+            projectAllocations: true,
+            spendingCategoryAllocations: true,
+          }),
+          (row, loaded) => {
+            const value = rowOf(loaded.rows, row.id);
+            const attributions = value.attributions.map((attribution) => {
+              if (!("ledgerParty" in attribution))
+                throw new Error("Expense attribution relation was not loaded");
+              return attribution;
+            });
+            return expenseRelationFields({
+              ...value,
+              attributions,
+              projectAllocations: loaded.projects.get(row.id) ?? [],
+              spendingCategoryAllocations: loaded.spending.get(row.id),
+            });
+          },
+        ),
+        bind
+          .ids(async (page) => ({
+            rows: await joined.load(page),
+            spending: await spending.load(page),
+          }))
+          .fields(
+            rawExpenseListItemOut.pick({
+              trade: true,
+              purchaseDate: true,
+              purchaseDisplayLabel: true,
+              orderId: true,
+              orderUrl: true,
+            }),
+            (row, loaded) =>
+              expenseDerivedFields({
+                ...rowOf(loaded.rows, row.id),
+                spendingCategoryAllocations: loaded.spending.get(row.id),
+              }),
+          ),
+        allocations.fields(
+          rawExpenseListItemOut.pick({ fieldResolutions: true }),
+          (row, loaded) =>
+            expenseResolutionFields({
+              ...rowOf(loaded.rows, row.id),
+              projectAllocations: loaded.projects.get(row.id) ?? [],
+              spendingCategoryAllocations: loaded.spending.get(row.id),
+            }),
+        ),
+        bind(rawExpenseListItemOut.pick({ vendorLogo: true }), (row) => ({
+          vendorLogo: vendorLogoSummary(row),
+        })),
+      ];
+    },
+  },
 });
 
 /**
@@ -237,7 +358,7 @@ const filterShareKeys = [...shareKeys].filter(
  * keeps every allocation filter in the where, so the read selects the
  * expenses the list does.
  */
-const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
+export const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
   const values = listFilterValues.parse(filters);
   const unscoped = filterShareKeys.some(
     (key) => !scopedAllocationKeys.has(key) && values[key] !== undefined,
@@ -249,205 +370,46 @@ const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
   return scoped;
 };
 
-/**
- * Shared by list and analytics so identical filter sets select identical
- * expenses. `omitAllocationScope` is for analytics that join the allocation
- * shares themselves (`analyticsFilters`).
- */
-export const buildExpenseWhereClause = async (
-  db: Database,
-  filters: ExpenseFilters,
-  options?: {
-    omitAllocationScope?: boolean;
-    context?: ListContext;
-    readContext?: QualityReadContext;
-  },
-): Promise<SQL | undefined> => {
-  const selected = options?.omitAllocationScope
-    ? analyticsFilters(filters)
-    : filters;
-  const context =
-    options?.context ??
-    (await expenseScaffold.context(db, {
-      filters: selected,
-      readIntent: "count",
-    }));
-  // Standalone totals and callers with their own FROM supply no statement-local evidence.
-  return expenseScaffold.where(selected, {
-    context,
-    readContext: options?.readContext ?? {},
-  });
-};
-
-export const expenseListRead = async (
-  db: Database,
-  filters: ExpenseFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection,
-  readIntent: ListReadIntent = "page",
+// The relation-loaded rows the expense field helpers read, by id.
+const loadExpenseJoinedRows = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly ExpenseId[],
 ) => {
-  const request = { filters, sorts, pagination, readIntent, projection };
-  // One context serves the where and the list, so the allocation membership
-  // resolves once.
-  const context = await expenseScaffold.context(db, request);
-  const where = await buildExpenseWhereClause(db, filters, { context });
-  const page = expenseScaffold.read(db, request, {
-    context,
-    where,
-    load: (where) => loadExpensePage(db, where, projection),
-    read: expenseRead(db),
-  });
-  if (readIntent !== "page" || projection.kind !== "full") return page;
-  const [result, [sum]] = await Promise.all([
-    page,
-    expenseListSums(db, where).then((sums) => [sums]),
-  ]);
-  return { ...result, sums: { cost: sum?.cost ?? 0 } };
-};
-
-const loadExpensePage = (
-  db: Database,
-  where: SQL,
-  projection: ListProjection,
-) => {
-  const references = wantsListGroup(projection, "relations");
-  const derived = wantsListGroup(projection, "derived");
-  const media = wantsListGroup(projection, "media");
   const declared = relations.expense.withProject.with;
-  return getDb(db).query.expense.findMany({
-    where,
-    extras: references || derived ? expenseInheritanceReadExtras() : undefined,
-    with: {
-      project: references || derived ? declared.project : undefined,
-      product: references ? declared.product : undefined,
-      purchase: references || derived || media ? declared.purchase : undefined,
-      attributions: references ? declared.attributions : undefined,
-      sourceClaims: references ? declared.sourceClaims : undefined,
-    },
-  });
-};
-
-type ExpenseListRow = Awaited<ReturnType<typeof loadExpensePage>>[number];
-const expenseJoinedRow = (row: ExpenseListRow) => {
-  if (row.purchase && !("vendor" in row.purchase))
-    throw new Error("Expense vendor relation was not loaded");
-  return {
-    ...row,
-    project: row.project ?? null,
-    product: row.product ?? null,
-    purchase: row.purchase ?? null,
-  };
-};
-const expenseRead = (db: Database): ListReadOptions<ExpenseListRow> => ({
-  media: true,
-  bindings: (bind) => {
-    const spending = bind.ids(({ ids }) =>
-      loadExpenseSpendingAllocations(
-        db,
-        ids.map((id) => parseEntityId("expense", id)),
-      ),
-    );
-    const projects = bind.ids(async ({ ids }) => {
-      const values = await loadExpenseProjectAllocations(
-        db,
-        ids.map((id) => parseEntityId("expense", id)),
-      );
-      const byExpense = new Map<ExpenseListRow["id"], typeof values>();
-      for (const value of values) {
-        const group = byExpense.get(value.expenseId) ?? [];
-        group.push(value);
-        byExpense.set(value.expenseId, group);
-      }
-      return byExpense;
-    });
-    const allocations = bind.ids(async (page) => {
-      const [projectValues, spendingValues] = await Promise.all([
-        projects.load(page),
-        spending.load(page),
-      ]);
-      return { projects: projectValues, spending: spendingValues };
-    });
-    return [
-      allocations.fields(
-        rawExpenseListItemOut.pick({
-          projectId: true,
-          projectName: true,
-          productId: true,
-          productName: true,
-          purchaseId: true,
-          vendorId: true,
-          vendor: true,
-          beneficiaries: true,
-          funders: true,
-          sourceClaims: true,
-          spendingCategoryId: true,
-          spendingCategoryName: true,
-          projectAllocations: true,
-          spendingCategoryAllocations: true,
-        }),
-        (row, loaded) => {
-          if (!row.attributions || !row.sourceClaims)
-            throw new Error("Expense audit children were not loaded");
-          const attributions = row.attributions.map((value) => {
-            if (!("ledgerParty" in value))
-              throw new Error("Expense attribution relation was not loaded");
-            return value;
-          });
-          return expenseRelationFields({
-            ...expenseJoinedRow(row),
-            attributions,
-            sourceClaims: row.sourceClaims,
-            projectAllocations: loaded.projects.get(row.id) ?? [],
-            spendingCategoryAllocations: loaded.spending.get(row.id),
-          });
+  const rows =
+    ids.length === 0
+      ? []
+      : await unwrapDb(db).query.expense.findMany({
+          where: inArray(expense.id, [...ids]),
+          extras: expenseInheritanceReadExtras(),
+          with: {
+            project: declared.project,
+            product: declared.product,
+            purchase: declared.purchase,
+            attributions: declared.attributions,
+            sourceClaims: declared.sourceClaims,
+          },
+        });
+  return new Map(
+    rows.map((row) => {
+      if (row.purchase && !("vendor" in row.purchase))
+        throw new Error("Expense vendor relation was not loaded");
+      return [
+        row.id,
+        {
+          ...row,
+          project: row.project ?? null,
+          product: row.product ?? null,
+          purchase: row.purchase ?? null,
         },
-      ),
-      spending.fields(
-        rawExpenseListItemOut.pick({
-          trade: true,
-          purchaseDate: true,
-          purchaseDisplayLabel: true,
-          orderId: true,
-          orderUrl: true,
-        }),
-        (row, loaded) =>
-          expenseDerivedFields({
-            ...expenseJoinedRow(row),
-            spendingCategoryAllocations: loaded.get(row.id),
-          }),
-      ),
-      allocations.fields(
-        rawExpenseListItemOut.pick({ fieldResolutions: true }),
-        (row, loaded) =>
-          expenseResolutionFields({
-            ...expenseJoinedRow(row),
-            projectAllocations: loaded.projects.get(row.id) ?? [],
-            spendingCategoryAllocations: loaded.spending.get(row.id),
-          }),
-      ),
-      bind(rawExpenseListItemOut.pick({ vendorLogo: true }), (row) =>
-        expenseMediaFields(expenseJoinedRow(row)),
-      ),
-    ];
-  },
-});
-
-export const expenseList = completeListReader(
-  rawExpenseListItemOut,
-  expenseListRead,
-);
-export const expenseListSummary = async (
-  db: Database,
-  filters: ExpenseFilters,
-) => {
-  const where = await buildExpenseWhereClause(db, filters);
-  return expenseListSums(db, where);
+      ] as const;
+    }),
+  );
 };
-const expenseListSums = async (db: Database, where: SQL | undefined) => {
-  const [sum] = await getDb(db)
-    .select({ cost: sql<number>`coalesce(sum(${expense.cost}),0)::float` })
-    .from(expense)
-    .where(where);
-  return { cost: sum?.cost ?? 0 };
-};
+type ExpenseJoinedRow =
+  Awaited<ReturnType<typeof loadExpenseJoinedRows>> extends Map<
+    unknown,
+    infer Row
+  >
+    ? Row
+    : never;

@@ -19,7 +19,7 @@ import type {
 } from "@cubby/schemas/project";
 import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
-import type { RawTaskOut } from "@cubby/schemas/work-raw-read";
+import { rawTaskOut, type RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -32,16 +32,14 @@ import {
   batchUpdateWithCaseWhen,
   buildPartialUpdateValues,
   getDb,
-  imageJoinBindings,
+  galleryBinding,
   notDeleted,
-  relations,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
 import { product, task } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
-import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import {
   createEntityReader,
   createEntityRowFetcher,
@@ -78,8 +76,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { buildTaskWhere } from "./lookup";
-import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
+import { taskScaffold } from "./lookup";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
 type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;
@@ -132,12 +129,6 @@ export type TaskMutationHooks = {
 
 const fetchTaskRow = createEntityRowFetcher(task);
 
-const fetchTaskWithProject = (db: Database, id: TaskId) =>
-  getDb(db).query.task.findFirst({
-    where: and(eq(task.id, id), notDeleted(task)),
-    ...relations.task.withProject,
-  });
-
 /**
  * Blocked-by / blocking id arrays for a set of tasks — thin wrapper over the
  * generic `dependencyIdsFor` (mirrors project/analytics.ts's
@@ -154,7 +145,7 @@ export async function taskDependencyIds(
   const raw = await dependencyIdsFor(db, "task", taskIds);
 
   // The edge VALUES (other tasks' ids) are resolved to shortcodes here, once,
-  // batched — `dbTaskToAPI` (every consumer's eventual destination) takes
+  // batched — the task read takes
   // `blockedByIds`/`blockingIds` as public ids, and a uuid must never reach
   // that far. The KEYS stay the caller's own uuids (that's what every
   // `.get(row.id)` call site keys on).
@@ -319,70 +310,34 @@ async function assertNoLiveSubtasks(
   }
 }
 
-const taskReader = createEntityReader({
-  entity: "task",
-  fetchById: fetchTaskWithProject,
-  fromDB: async (db, row) => {
-    const [deps, subtaskCounts, dataQualities] = await Promise.all([
-      taskDependencyIds(db, [row.id]),
-      taskSubtaskCounts(db, [row.id]),
-      loadDataQualities(db, "task", [row.id]),
-    ]);
-    const counts = subtaskCounts.get(row.id);
-    const [hydrated] = await hydrateTaskInheritanceRows(db, [row]);
-    // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-    return dbTaskToAPI(
-      hydrated!,
-      deps.blockedBy.get(row.id) ?? [],
-      deps.blocking.get(row.id) ?? [],
-      counts?.count ?? 0,
-      counts?.doneCount ?? 0,
-      dataQualities.get(row.id)!,
-    );
-  },
-});
+// Built per read: `./lookup` reaches this module back through project
+// attention, so `taskScaffold` may not exist yet while this one loads.
+const taskReader = () =>
+  createEntityReader({
+    entity: "task",
+    scaffold: taskScaffold,
+    output: rawTaskOut,
+  });
 
-const getTaskByID = (db: Database, id: TaskId): Promise<RawTaskOut> =>
-  taskReader.getByID(db, id);
+const readTaskById = (db: Database, id: TaskId): Promise<RawTaskOut> =>
+  taskReader().getByID(db, id);
 
-export const getTaskByShortcode = (db: Database, shortcode: string) =>
-  taskReader.getByShortcode(db, shortcode);
+/** One live Task by public code, or null. */
+export const readTask = (db: Database, shortcode: string) =>
+  taskReader().getByShortcode(db, shortcode);
 
 /**
- * Batch by-id read for bulk-write results (`reorderTasks`) — the same row
- * shape/joins as `getTaskByID`, fetched with one `inArray` query plus
- * the batched dependency/subtask-count reads instead of N one-by-one calls.
- * Exported for `repo/project/create-from-tasks.ts`'s promotion read-back
- * (its moved-task ids need the same batched shape, not N `getTaskByID` calls).
+ * Batch by-id read for bulk-write results (`reorderTasks`) and
+ * `project/create-from-tasks.ts`'s promotion read-back: one scaffold read
+ * instead of N record reads.
  */
-export const getTasksByIDs = async (
+export const readTasksByIds = async (
   db: Database,
   ids: TaskId[],
-): Promise<RawTaskOut[]> => {
-  if (ids.length === 0) return [];
-  const rawRows = await getDb(db).query.task.findMany({
-    where: and(inArray(task.id, ids), notDeleted(task)),
-    ...relations.task.withProject,
-  });
-  const rows = await hydrateTaskInheritanceRows(db, rawRows);
-  const [deps, subtaskCounts, dataQualities] = await Promise.all([
-    taskDependencyIds(db, ids),
-    taskSubtaskCounts(db, ids),
-    loadDataQualities(db, "task", ids),
-  ]);
-  return rows.map((row) => {
-    const counts = subtaskCounts.get(row.id);
-    return dbTaskToAPI(
-      row,
-      deps.blockedBy.get(row.id) ?? [],
-      deps.blocking.get(row.id) ?? [],
-      counts?.count ?? 0,
-      counts?.doneCount ?? 0,
-      // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-      dataQualities.get(row.id)!,
-    );
-  });
-};
+): Promise<RawTaskOut[]> =>
+  (await taskScaffold.getByIds(db, ids)).data.map((row) =>
+    rawTaskOut.parse(row),
+  );
 
 const createTaskWithOutput = async <TOutput>(
   db: Database,
@@ -440,7 +395,7 @@ const createTaskWithOutput = async <TOutput>(
       );
       await associatePendingImages(
         tx,
-        imageJoinBindings.task,
+        galleryBinding("task"),
         created.id,
         resolvedImageIds,
       );
@@ -460,7 +415,7 @@ export const createTask = (
   data: TaskCreateInput,
   actor: ActorContext,
 ) =>
-  createTaskWithOutput(db, data, actor, (db, row) => getTaskByID(db, row.id));
+  createTaskWithOutput(db, data, actor, (db, row) => readTaskById(db, row.id));
 
 export const createTaskRead = (
   db: Database,
@@ -485,7 +440,7 @@ const readTaskMutationOutput = async (
       (field) => field !== "id" && field !== "name" && field !== "dataQuality",
     )
   )
-    return selectListReadFields(await getTaskByID(db, row.id), fields);
+    return selectListReadFields(await readTaskById(db, row.id), fields);
   const dataQuality = fields.includes("dataQuality")
     ? (await loadDataQualities(db, "task", [row.id])).get(row.id)
     : undefined;
@@ -664,7 +619,7 @@ const updateTaskWithOutput = async <TOutput>(
     ({ detachedImageKeys } = await syncEntityImages(
       tx,
       "task",
-      imageJoinBindings.task,
+      galleryBinding("task"),
       id,
       data,
     ));
@@ -736,7 +691,7 @@ export const updateTask = (
   hooks?: TaskMutationHooks,
 ) =>
   updateTaskWithOutput(db, shortcode, data, actor, hooks, (db, row) =>
-    getTaskByID(db, row.id),
+    readTaskById(db, row.id),
   );
 
 export const updateTaskRead = (
@@ -761,7 +716,7 @@ export const reorderTasks = async (
 ): Promise<RawTaskOut[]> => {
   const { ranks, move, position } = input;
   const placementWhere = position
-    ? await buildTaskWhere(
+    ? await taskScaffold.prepareWhere(
         db,
         taskFiltersSchema.parse({
           topLevelOnly: true,
@@ -908,7 +863,7 @@ export const reorderTasks = async (
     return resolvedRanks.map((r) => r.id);
   });
 
-  return getTasksByIDs(db, updatedIds);
+  return readTasksByIds(db, updatedIds);
 };
 
 /** Either a checked-out transaction or a plain client — reads work the same on both. */

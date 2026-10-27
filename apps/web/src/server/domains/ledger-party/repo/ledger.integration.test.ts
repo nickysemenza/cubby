@@ -31,7 +31,7 @@ import {
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
   createLedgerTransfer,
-  getLedgerTransferByShortcode,
+  readLedgerTransfer,
   updateLedgerTransfer,
 } from "~/server/domains/ledger-transfer/repo";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -863,10 +863,7 @@ describe("consolidated household ledger", () => {
       .set({ deletedAt: new Date() })
       .where(eq(ledgerParty.id, from.entityId));
 
-    const reread = await getLedgerTransferByShortcode(
-      ctx.db,
-      created.output.id,
-    );
+    const reread = await readLedgerTransfer(ctx.db, created.output.id);
     expect(reread?.fromPartyName).toBe(from.output.name);
   });
 });

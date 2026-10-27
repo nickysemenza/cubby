@@ -13,7 +13,7 @@ import {
   inventoryOwnerResolution,
   loadInventoryOwnershipTraces,
 } from "~/server/domains/inventory/repo/ownership";
-import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -176,7 +176,7 @@ it("resolves draft itemization policy against changed vendor and category depend
     fallbackValue: "not_expected",
     canReset: true,
   });
-  expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+  expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
     vendorId: parseShortcodeFor("vendor", vendor.shortcode),
     itemizationExpectation: null,
   });

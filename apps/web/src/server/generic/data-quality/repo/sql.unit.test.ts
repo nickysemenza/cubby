@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
 
-import { dataQualityEntries, storedEntryFor } from "./entries";
+import { storedEntryFor } from "./entry";
 import { calculateDataQualityScore } from "./hydrate";
 import {
   checksOf,
@@ -108,12 +108,6 @@ describe("data-quality registry", () => {
       );
     },
   );
-
-  it("registers every scored entity and nothing else", () => {
-    expect(Object.keys(dataQualityEntries).sort()).toEqual(
-      [...scoredEntities].sort(),
-    );
-  });
 });
 
 describe("calculateDataQualityScore", () => {

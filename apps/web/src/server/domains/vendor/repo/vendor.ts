@@ -1,36 +1,27 @@
 import type { ActorContext } from "@cubby/schemas/context";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type PurchaseId,
-  parseEntityId,
   parseShortcodeFor,
   type VendorId,
   type VendorShortcode,
-  type SpendingCategoryShortcode,
 } from "@cubby/schemas/identifiers";
-import { imageSourceEvidence } from "@cubby/schemas/image-capture-fields";
+import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   scopedPositionState,
   type MailSearchState,
 } from "@cubby/schemas/mailbox-research";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
-import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import type {
   VendorCreateInput,
-  VendorFilters,
   VendorMergeSummaryOut,
   VendorOptionsOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
-import {
-  vendorAgentHints,
-  vendorOrderEvidence,
-} from "@cubby/schemas/vendor-import-fields";
+import { vendorAgentHints } from "@cubby/schemas/vendor-import-fields";
 import {
   rawVendorOut,
   type RawVendorOut,
@@ -49,12 +40,10 @@ import {
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   getDb,
-  type ListReadIntent,
   lockAndValidateForDelete,
   databaseForTransaction,
   isTransaction,
@@ -65,7 +54,6 @@ import {
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import {
-  entityAttachment,
   expense,
   image,
   product,
@@ -74,10 +62,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { reapUnreferencedImages } from "~/server/domains/image/repo/image";
-import {
-  displayableImageSql,
-  displayableImageWhere,
-} from "~/server/domains/image/repo/image-displayability";
+import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import {
   detachVendorIdentifierSources,
   repointVendorIdentifierSources,
@@ -99,11 +84,16 @@ import {
 } from "~/server/domains/shipment/repo/carrier-references";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
+import { vendorSearch } from "~/server/domains/vendor/repo/search-read-vendor";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
-import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import {
+  resolveEntityAttachments,
+  resolveEntityDisplayImages,
+} from "~/server/entity-kernel/repo/entity-display-image";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import {
@@ -113,20 +103,11 @@ import {
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { loadVendorPurchaseEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
-import {
-  ListContext,
-  listPrepare,
-} from "~/server/generic/list/repo/field-compiler";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { declaredRollup } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listGroupFields,
-  wantsListGroup,
-} from "~/server/generic/list/repo/list-projection";
-import { withDisplayImages } from "~/server/generic/list/repo/list-read-adapters";
 import { planSlotCollisions } from "~/server/generic/merge/repo/collisions";
 import {
   finalizeMerge,
@@ -138,10 +119,7 @@ import {
   applyMergePolicy,
   policyDelete,
 } from "~/server/generic/removal/repo/dispositions";
-import {
-  resolveLiveShortcode,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
@@ -324,17 +302,7 @@ const vendorBrandedProducts = () =>
   related(product, (g) => sql`${g.brandId} = ${outer(vendor.id)}`);
 
 // Declared rollups (`vendor.model.derived`); the manifest owns their SQL.
-export const vendorPurchaseCount = declaredRollup(
-  "vendor",
-  "purchaseCount",
-  vendor,
-);
-
-const vendorBrandedProductCount = declaredRollup(
-  "vendor",
-  "brandedProductCount",
-  vendor,
-);
+const vendorPurchaseCount = declaredRollup("vendor", "purchaseCount", vendor);
 
 const role = rawVendorOut.shape.role.enum;
 const vendorRole = sql<RawVendorOut["role"]>`(SELECT CASE
@@ -366,14 +334,6 @@ const vendorBrandSpend = vendorBrandedProducts()
   )
   .sum((e) => e.cost);
 
-const vendorExpenseCount = declaredRollup("vendor", "expenseCount", vendor);
-
-const vendorFirstPurchaseDate = declaredRollup<string | null>(
-  "vendor",
-  "firstPurchaseDate",
-  vendor,
-);
-
 const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
   WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
     AND ${purchaseHasPrimaryDocumentSql("vp")})`;
@@ -382,8 +342,6 @@ const vendorMissingItemizationCount = sql<number>`(SELECT count(*)::int FROM "Pu
   WHERE vp."vendorId"=${outer(vendor.id)} AND vp."deletedAt" IS NULL
     AND ${effectivePurchaseItemizationExpectationSql("vp")}=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
     AND NOT ${purchaseHasItemizationSql("vp")})`;
-
-const vendorSpend = declaredRollup("vendor", "spend", vendor);
 
 const vendorLatestPurchaseDate = vendorPurchases().max<string>((p) => p.date);
 
@@ -464,7 +422,7 @@ export async function getVendorCoverage(
   input: { vendorId: VendorShortcode; from: string; to: string },
 ) {
   const vendorId = await resolveOrThrow(db, "vendor", input.vendorId);
-  const vendorRow = await getVendorByShortcode(db, input.vendorId);
+  const vendorRow = await readVendor(db, input.vendorId);
   if (!vendorRow) {
     throw createAppError(
       "VENDOR_NOT_FOUND",
@@ -503,229 +461,11 @@ const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
     AND ${displayableImageSql("logo")}
 )`;
 
-/** The vendor's live logo attachment, for a left join ahead of `image`. */
-const vendorLogoAttachment = and(
-  eq(entityAttachment.entityId, vendor.id),
-  eq(entityAttachment.role, "logo"),
-  notDeleted(entityAttachment),
-);
-
-const vendorColumns = {
-  id: vendor.id,
-  shortcode: vendor.shortcode,
-  name: vendor.name,
-  website: vendor.website,
-  orderUrlTemplate: vendor.orderUrlTemplate,
-  spendingProfile: vendor.spendingProfile,
-  defaultSpendingCategoryName: sql<
-    string | null
-  >`(SELECT sc.name FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
-  defaultSpendingCategoryEmoji: sql<
-    string | null
-  >`(SELECT sc.emoji FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
-  defaultSpendingCategoryId: sql<SpendingCategoryShortcode | null>`(SELECT sc.shortcode FROM "SpendingCategory" sc WHERE sc.id = ${vendor.defaultSpendingCategoryId} AND sc."deletedAt" IS NULL)`,
-  itemizationExpectation: vendor.itemizationExpectation,
-  fieldResolutions: vendorEvidenceFieldResolutionsSql("Vendor"),
-  orderEvidence: vendor.orderEvidence,
-  aliases: vendor.aliases,
-  orderEmailSenders: vendor.orderEmailSenders,
-  browserDomains: vendor.browserDomains,
-  returnWindowDays: vendor.returnWindowDays,
-  agentHints: vendor.agentHints,
-  notes: vendor.notes,
-  createdAt: vendor.createdAt,
-  updatedAt: vendor.updatedAt,
-  role: vendorRole,
-  purchaseCount: vendorPurchaseCount,
-  brandedProductCount: vendorBrandedProductCount,
-  brandCategoryCount: vendorBrandCategoryCount,
-  purchasedBrandProductCount: vendorPurchasedBrandProductCount,
-  brandSpend: vendorBrandSpend,
-  expenseCount: vendorExpenseCount,
-  firstPurchaseDate: vendorFirstPurchaseDate,
-  documentedPurchaseCount: vendorDocumentedPurchaseCount,
-  missingItemizationCount: vendorMissingItemizationCount,
-  spend: vendorSpend,
-  latestPurchaseDate: vendorLatestPurchaseDate,
-  logo: {
-    id: image.shortcode,
-    key: image.key,
-    filename: image.filename,
-    size: image.size,
-    contentType: image.contentType,
-    status: image.status,
-    width: image.width,
-    height: image.height,
-    detectedContentType: image.detectedContentType,
-    sha256: image.sha256,
-    renderStatus: image.renderStatus,
-    storageStatus: image.storageStatus,
-    useOriginal: image.useOriginal,
-    verifiedAt: image.verifiedAt,
-    source: image.source,
-    sourcePageUrl: image.sourcePageUrl,
-    sourceAssetUrl: image.sourceAssetUrl,
-    sourceName: image.sourceName,
-    capturedAt: image.capturedAt,
-    capturedAtOffsetMinutes: image.capturedAtOffsetMinutes,
-    captureLocation: image.captureLocation,
-    capturePlaceName: image.capturePlaceName,
-    captureDeviceLabel: image.captureDeviceLabel,
-    capturedByPartyId: image.capturedByPartyId,
-    captureAttribution: image.captureAttribution,
-    provenanceEvidence: image.provenanceEvidence,
-    sourceEvidence: image.sourceEvidence,
-    createdAt: image.createdAt,
-    updatedAt: image.updatedAt,
-  },
-} as const;
-
-type VendorRow = {
-  id: VendorId;
-  shortcode: string;
-  name: string;
-  aliases: string[];
-  website: string | null;
-  orderUrlTemplate: string | null;
-  spendingProfile: string;
-  defaultSpendingCategoryId: SpendingCategoryShortcode | null;
-  defaultSpendingCategoryName: string | null;
-  defaultSpendingCategoryEmoji: string | null;
-  itemizationExpectation: RawVendorOut["itemizationExpectation"];
-  fieldResolutions: RawVendorOut["fieldResolutions"];
-  orderEvidence: string | null;
-  orderEmailSenders: string[];
-  browserDomains: string[];
-  returnWindowDays: number | null;
-  agentHints: unknown;
-  notes: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  role: RawVendorOut["role"];
-  purchaseCount: number;
-  brandedProductCount: number;
-  brandCategoryCount: number;
-  purchasedBrandProductCount: number;
-  brandSpend: number;
-  expenseCount: number;
-  firstPurchaseDate: string | null;
-  documentedPurchaseCount: number;
-  missingItemizationCount: number;
-  spend: number;
-  latestPurchaseDate: string | null;
-  mailSearch: MailSearchState | null;
-  logo: {
-    id: string;
-    key: string;
-    filename: string;
-    size: number;
-    contentType: string;
-    status: "PENDING" | "UPLOADED" | "FAILED";
-    width: number | null;
-    height: number | null;
-    detectedContentType: string | null;
-    sha256: string | null;
-    renderStatus: "unverified" | "verified" | "failed" | null;
-    storageStatus:
-      | "unverified"
-      | "available"
-      | "missing"
-      | "metadata_mismatch"
-      | null;
-    useOriginal: boolean;
-    verifiedAt: Date | null;
-    source: "own" | "catalog" | "unknown" | "screenshot" | null;
-    sourcePageUrl: string | null;
-    sourceAssetUrl: string | null;
-    sourceName: string | null;
-    capturedAt: Date | null;
-    capturedAtOffsetMinutes: number | null;
-    captureLocation: {
-      lat: number;
-      lng: number;
-      altitude?: number;
-      horizontalAccuracy?: number;
-    } | null;
-    capturePlaceName: string | null;
-    captureDeviceLabel: string | null;
-    capturedByPartyId: string | null;
-    captureAttribution: "none" | "derived" | "ambiguous" | "confirmed" | null;
-    provenanceEvidence: {
-      basis:
-        | "manual"
-        | "sighting"
-        | "import-url"
-        | "exif"
-        | "analysis"
-        | "filename";
-      ruleId?: string;
-      detail?: string;
-    } | null;
-    sourceEvidence: unknown;
-    createdAt: Date;
-    updatedAt: Date;
-  } | null;
-};
-
-const vendorLogoToAPI = (logo: VendorRow["logo"]) =>
-  logo && {
-    ...logo,
-    source: logo.source ?? "unknown",
-    id: parseShortcodeFor("image", logo.id),
-    url: getR2PublicUrl(logo.key),
-    // Not resolved here: this select has no join to LedgerParty for a
-    // shortcode or a name — a vendor logo is never a member's own photo.
-    capturedByPartyId: null,
-    capturedByName: null,
-    captureAttribution: logo.captureAttribution ?? "none",
-    sourceEvidence: imageSourceEvidence.nullable().parse(logo.sourceEvidence),
-  };
-
-const dbVendorToAPI = (
-  row: VendorRow,
-  dataQuality: DataQuality,
-): RawVendorOut => {
-  const agentHints = vendorAgentHints.parse(row.agentHints);
-  return {
-    id: parseShortcodeFor("vendor", row.shortcode),
-    name: row.name,
-    aliases: row.aliases,
-    defaultSpendingCategoryName: row.defaultSpendingCategoryName,
-    defaultSpendingCategoryEmoji: row.defaultSpendingCategoryEmoji,
-    website: row.website,
-    orderUrlTemplate: row.orderUrlTemplate,
-    spendingProfile: vendorSpendingProfile.parse(row.spendingProfile),
-    defaultSpendingCategoryId: row.defaultSpendingCategoryId,
-    itemizationExpectation: row.itemizationExpectation,
-    fieldResolutions: row.fieldResolutions,
-    orderEvidence: vendorOrderEvidence.nullable().parse(row.orderEvidence),
-    orderEmailSenders: row.orderEmailSenders,
-    browserDomains: row.browserDomains,
-    returnWindowDays: row.returnWindowDays,
-    agentHints,
-    agentHintsLabel: agentHintsLabel(agentHints),
-    notes: row.notes,
-    role: row.role,
-    purchaseCount: Number(row.purchaseCount),
-    brandedProductCount: Number(row.brandedProductCount),
-    brandCategoryCount: Number(row.brandCategoryCount),
-    purchasedBrandProductCount: Number(row.purchasedBrandProductCount),
-    brandSpend: Number(row.brandSpend),
-    expenseCount: Number(row.expenseCount),
-    firstPurchaseDate: row.firstPurchaseDate,
-    documentedPurchaseCount: Number(row.documentedPurchaseCount),
-    missingItemizationCount: Number(row.missingItemizationCount),
-    spend: Number(row.spend),
-    latestPurchaseDate: row.latestPurchaseDate,
-    mailSearch: row.mailSearch,
-    logo: vendorLogoToAPI(row.logo),
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-};
-
-const vendorScaffold = listScaffold("vendor", vendor, {
+/**
+ * The Vendor read, stated once: list pages, selected projections and the
+ * single-record read all select through it.
+ */
+export const vendorScaffold = listScaffold("vendor", vendor, {
   derived: {
     role: vendorRole,
     brandCategoryCount: vendorBrandCategoryCount,
@@ -739,196 +479,72 @@ const vendorScaffold = listScaffold("vendor", vendor, {
     needsClassification: sql`${vendor.defaultSpendingCategoryId} IS NULL`,
     hasLogo: sql`${vendorHasDisplayableLogo}`,
   },
+  read: {
+    optionCount: "purchaseCount",
+    search: vendorSearch,
+    evidence: { purchaseCount: loadVendorPurchaseEvidence },
+    columns: { fieldResolutions: vendorEvidenceFieldResolutionsSql("Vendor") },
+    references: {
+      defaultSpendingCategoryId: {
+        kind: "lookup",
+        name: "defaultSpendingCategoryName",
+        emoji: "defaultSpendingCategoryEmoji",
+        missing: "null",
+      },
+    },
+    bindings: (bind) => [
+      bind(rawVendorOut.pick({ agentHintsLabel: true }), (row) => ({
+        agentHintsLabel: agentHintsLabel(
+          vendorAgentHints.parse(row.agentHints),
+        ),
+      })),
+      bind
+        .ids(({ db, ids }) => resolveEntityAttachments(db, "vendor", ids))
+        .fields(rawVendorOut.pick({ logo: true }), (row, attachments) => ({
+          logo:
+            attachments
+              .get(row.id)
+              ?.find(
+                (attachment) =>
+                  attachment.role === "logo" &&
+                  isDisplayableImageFile(attachment),
+              ) ?? null,
+        })),
+      bind
+        .ids(({ db, ids }) =>
+          Promise.all(
+            ids.map(
+              async (id) =>
+                [id, await loadVendorCategoryEvidence(db, id)] as const,
+            ),
+          ).then((loaded) => new Map(loaded)),
+        )
+        .fields(
+          rawVendorOut.pick({
+            purchasedCategories: true,
+            principalLineCount: true,
+            unknownCategoryLineCount: true,
+          }),
+          (row, evidence) => {
+            const loaded = evidence.get(row.id);
+            if (!loaded) throw new Error(`No category evidence: ${row.id}`);
+            return loaded;
+          },
+          { scope: "detail" },
+        ),
+    ],
+  },
 });
 
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildVendorWhereClause = (
-  filters: VendorFilters,
-  context: ListContext = ListContext.empty,
-) => vendorScaffold.where(filters, { context });
-
-export const vendorListRead = async (
-  db: Database,
-  filters: VendorFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  projection: ListProjection = { kind: "full" },
-) => {
-  const {
-    role,
-    purchaseCount,
-    brandedProductCount,
-    brandCategoryCount,
-    purchasedBrandProductCount,
-    brandSpend,
-    expenseCount,
-    firstPurchaseDate,
-    documentedPurchaseCount,
-    missingItemizationCount,
-    spend,
-    latestPurchaseDate,
-    fieldResolutions,
-    logo,
-    ...core
-  } = vendorColumns;
-  const request = { filters, sorts, pagination, readIntent, projection };
-  const context = await vendorScaffold.context(db, request);
-  return vendorScaffold.read(db, request, {
-    context,
-    where: buildVendorWhereClause(filters, context),
-    select: async (page) => {
-      const query = getDb(db)
-        .select({
-          ...core,
-          ...listGroupFields(projection, "derived", () => ({
-            role,
-            purchaseCount,
-            brandedProductCount,
-            brandCategoryCount,
-            purchasedBrandProductCount,
-            brandSpend,
-            expenseCount,
-            firstPurchaseDate,
-            documentedPurchaseCount,
-            missingItemizationCount,
-            spend,
-            latestPurchaseDate,
-            fieldResolutions,
-            // A selected read prepares mail search only when that field is requested.
-            ...(projection.kind !== "selected" ||
-            projection.fields.includes("mailSearch")
-              ? {
-                  mailSearch: vendorMailSearchSql(
-                    context.get(vendorMailSearch),
-                  ),
-                }
-              : {}),
-          })),
-          ...listGroupFields(projection, "media", () => ({ logo })),
-        })
-        .from(vendor)
-        .where(page.where)
-        .orderBy(...page.orderBy)
-        .limit(page.limit)
-        .offset(page.offset)
-        .$dynamic();
-      if (wantsListGroup(projection, "media"))
-        return query
-          .leftJoin(entityAttachment, vendorLogoAttachment)
-          .leftJoin(
-            image,
-            and(
-              eq(image.id, entityAttachment.imageId),
-              notDeleted(image),
-              displayableImageWhere,
-            ),
-          );
-      return query;
-    },
-    read: {
-      references: { defaultSpendingCategoryId: { kind: "public" } },
-      bindings: (bind) => [
-        bind(rawVendorOut.pick({ agentHintsLabel: true }), (row) => ({
-          agentHintsLabel: agentHintsLabel(
-            vendorAgentHints.parse(row.agentHints),
-          ),
-        })),
-        bind(rawVendorOut.pick({ logo: true }), (row) => ({
-          logo: vendorLogoToAPI(row.logo ?? null),
-        })),
-      ],
-    },
-  });
-};
-
-export const vendorListSummary = async (
-  db: Database,
-  filters: VendorFilters,
-) => {
-  const [totals] = await getDb(db)
-    .select({
-      spend: sql<number>`COALESCE(sum(${vendorSpend}), 0)::double precision`,
-      purchaseCount: sql<number>`COALESCE(sum(${vendorPurchaseCount}), 0)::int`,
-    })
-    .from(vendor)
-    .where(
-      buildVendorWhereClause(
-        filters,
-        await vendorScaffold.context(db, { filters, readIntent: "count" }),
-      ),
-    );
-  return {
-    spend: Number(totals?.spend ?? 0),
-    purchaseCount: Number(totals?.purchaseCount ?? 0),
-  };
-};
-
-export const vendorList = async (
-  db: Database,
-  filters: VendorFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-): Promise<{
-  data: RawVendorOut[];
-  count: number;
-  sums?: { spend: number; purchaseCount: number };
-}> => {
-  const [page, sums] = await Promise.all([
-    vendorListRead(db, filters, sorts, pagination, readIntent),
-    readIntent === "page" ? vendorListSummary(db, filters) : undefined,
-  ]);
-  const result = {
-    ...page,
-    data: withDisplayImages(
-      page.data.map((row) => rawVendorOut.parse(row)),
-      page.data,
-    ),
-  };
-  if (sums) Object.assign(result, { sums });
-  return result;
-};
-
-export const getVendorByID = async (
-  db: Database,
-  id: VendorId,
-): Promise<RawVendorOut> => {
-  const [row] = await getDb(db)
-    .select({
-      ...vendorColumns,
-      mailSearch: vendorMailSearchSql(await loadVendorMailSearch(db, [id])),
-    })
-    .from(vendor)
-    .leftJoin(entityAttachment, vendorLogoAttachment)
-    .leftJoin(
-      image,
-      and(
-        eq(image.id, entityAttachment.imageId),
-        notDeleted(image),
-        displayableImageWhere,
-      ),
-    )
-    .where(and(eq(vendor.id, id), notDeleted(vendor)))
-    .limit(1);
-  if (!row) {
-    throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
-  }
-  const dataQualities = await loadDataQualities(db, "vendor", [row.id]);
-  // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-  return {
-    ...dbVendorToAPI(row, dataQualities.get(row.id)!),
-    ...(await loadVendorCategoryEvidence(db, row.shortcode)),
-  };
-};
-
-export const getVendorByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<RawVendorOut | null> => {
-  const id = await resolveLiveShortcode(db, shortcode, "vendor");
-  return id ? getVendorByID(db, parseEntityId("vendor", id)) : null;
-};
+const vendorReader = createEntityReader({
+  entity: "vendor",
+  scaffold: vendorScaffold,
+  output: rawVendorOut,
+});
+/** One live Vendor by internal id; throws `VENDOR_NOT_FOUND`. */
+export const readVendorById = vendorReader.getByID;
+/** One live Vendor by public code, or null. */
+export const readVendor = vendorReader.getByShortcode;
 
 export const vendorOptions = async (
   db: Database,
@@ -1003,7 +619,7 @@ export const createVendor = defineMutationWriter({
     _data: VendorCreateInput,
     _actor: ActorContext,
   ) => ({
-    output: await getVendorByID(db, receipt.entityId),
+    output: await readVendorById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (
@@ -1054,7 +670,7 @@ export const updateVendor = defineMutationWriter({
     _data: VendorUpdateData,
     _actor: ActorContext,
   ) => ({
-    output: await getVendorByID(db, receipt.entityId),
+    output: await readVendorById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (
@@ -1189,7 +805,7 @@ export const replaceVendorLogo = async (
   );
 
   return {
-    output: await getVendorByID(db, entityId),
+    output: await readVendorById(db, entityId),
     entityId,
     detachedImageKeys,
   };
@@ -1530,7 +1146,7 @@ export const mergeVendors = async (
     return (await reapUnreferencedImages(tx, loserLogos)).deletedKeys;
   });
 
-  const output = await getVendorByID(db, keepId);
+  const output = await readVendorById(db, keepId);
   return {
     vendor: output,
     detachedImageKeys,

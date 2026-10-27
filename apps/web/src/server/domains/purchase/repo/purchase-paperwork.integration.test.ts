@@ -7,7 +7,7 @@ import { loadDataQualities as readDataQualities } from "~/server/generic/data-qu
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
-import { getPurchaseByID, purchaseList, splitExpense } from "./purchase";
+import { purchaseScaffold, readPurchaseById, splitExpense } from "./purchase";
 
 // A friend credit is spending evidence but not a change to the vendor receipt.
 // This boundary guards hydration/filter disagreement and accidental money loss.
@@ -41,15 +41,19 @@ describe("vendor paperwork and household reimbursements", () => {
         trade: "other",
       });
     }
-    const detail = await getPurchaseByID(ctx.db, purchase.id);
+    const detail = await readPurchaseById(ctx.db, purchase.id);
     expect(detail).toMatchObject({
       expenseTotal: 80,
       statedTotal: 120,
       reconciliation: "match",
     });
-    const list = await purchaseList(ctx.db, { reconciliation: "match" }, [], {
-      pageIndex: 0,
-      pageSize: 25,
+    const list = await purchaseScaffold.read(ctx.db, {
+      filters: { reconciliation: "match" },
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 25,
+      },
     });
     expect(list.data.map((row) => row.id)).toContain(detail.id);
     const quality = (
@@ -128,7 +132,7 @@ describe("vendor paperwork and household reimbursements", () => {
         bookingTransactionCode,
         spendingCategoryId: category.shortcode,
       });
-    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+    expect(await readPurchaseById(ctx.db, purchase.id)).toMatchObject({
       expenseTotal: 80,
       reconciliation: "match",
     });

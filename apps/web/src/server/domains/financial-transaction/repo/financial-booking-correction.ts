@@ -25,7 +25,7 @@ import {
 } from "~/server/domains/expense/repo/crud";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
-  getLedgerTransferByShortcode,
+  readLedgerTransfer,
   updateLedgerTransfer,
 } from "~/server/domains/ledger-transfer/repo";
 import { createAppError } from "~/server/errors/app-error";
@@ -175,7 +175,7 @@ export async function previewFinancialBookingCorrection(
       trade,
     } = destination);
   } else {
-    target = await getLedgerTransferByShortcode(db, input.action.transferId);
+    target = await readLedgerTransfer(db, input.action.transferId);
     if (!target) return fail("The selected transfer is no longer live.");
     if (cents(target.amount) !== cents(Math.abs(row.amount)))
       return fail("The transfer amount must match the transaction.");
@@ -296,10 +296,7 @@ export async function commitFinancialBookingCorrection(
           .where(eq(financialTransaction.id, id));
         return result;
       }
-      const target = await getLedgerTransferByShortcode(
-        txDb,
-        review.action.transferId,
-      );
+      const target = await readLedgerTransfer(txDb, review.action.transferId);
       if (!target) return fail("The selected transfer is no longer live.");
       await deleteExpenses(
         txDb,

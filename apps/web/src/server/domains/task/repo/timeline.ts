@@ -1,10 +1,13 @@
 import type { TaskFilters } from "@cubby/schemas/project";
-import type { RawTaskTimelineOut } from "@cubby/schemas/work-raw-read";
+import {
+  rawTaskOut,
+  type RawTaskTimelineOut,
+} from "@cubby/schemas/work-raw-read";
 
 import type { Database } from "~/server/db";
 import { listAll } from "~/server/generic/list/repo/list-all";
 
-import { taskList } from "./lookup";
+import { taskScaffold } from "./lookup";
 
 /** Server-enforced dated-task renderer with an explicit omitted-row count. */
 export async function getTaskTimeline(
@@ -17,28 +20,25 @@ export async function getTaskTimeline(
   const datedPromise = explicitlyUndated
     ? Promise.resolve({ data: [], count: 0 })
     : listAll((pagination) =>
-        taskList(
-          db,
-          { ...filters, duePresenceFilter: "has" },
-          [{ orderBy: "dueDate", direction: "asc" }],
+        taskScaffold.read(db, {
+          filters: { ...filters, duePresenceFilter: "has" },
+          sorts: [{ orderBy: "dueDate", direction: "asc" }],
           pagination,
-          "page",
-        ),
+        }),
       );
   const undatedPromise =
     filters.duePresenceFilter === "has" || dateWindowActive
       ? Promise.resolve({ data: [], count: 0 })
-      : taskList(
-          db,
-          { ...filters, duePresenceFilter: "none" },
-          [],
-          {
-            pageIndex: 0,
-            pageSize: 1,
-          },
-          "page",
-        );
+      : taskScaffold.read(db, {
+          filters: { ...filters, duePresenceFilter: "none" },
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 1 },
+          readIntent: "count",
+        });
 
   const [dated, undated] = await Promise.all([datedPromise, undatedPromise]);
-  return { tasks: dated.data, undatedCount: undated.count };
+  return {
+    tasks: dated.data.map((row) => rawTaskOut.parse(row)),
+    undatedCount: undated.count,
+  };
 }

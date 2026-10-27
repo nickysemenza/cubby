@@ -1,68 +1,31 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { entitySummary } from "@cubby/schemas/entity-summary";
-import { getTableColumns } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import {
-  SHORTCODE_TABLE,
-  TITLE_FIELD_COLUMN,
-} from "~/server/generated/shortcode-tables.gen";
-import { LABEL_COLUMN_OVERRIDES } from "~/server/generic/entity-graph/repo/record-label";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 
-import { resolveTitleFieldColumn } from "./shortcode-resolver";
+const dialect = new PgDialect();
 
-/**
- * `DISPLAY_NAME_COLUMN` names the Drizzle column `lookupEntityLabels` selects
- * as a row's human label: for every entity except the documented
- * `LABEL_COLUMN_OVERRIDES`, it is derived from the storage column behind
- * `presentation.titleField` (`packages/schemas/src/entity-definitions/
- * *.entity.ts`) — see `resolveTitleFieldColumn` and `DISPLAY_NAME_COLUMN`'s
- * construction in `shortcode-resolver.ts`. A non-override entity whose
- * titleField has no derivable column already throws at module init, so this
- * file only checks that the override list stays honest: every override must actually change the outcome, or it is
- * dead documentation nobody would notice going stale.
- */
-describe("DISPLAY_NAME_COLUMN", () => {
-  // A wrong readKey → storage-key projection changes labels across every
-  // reference picker. Compare the small generated lookup to the complete model.
-  it("preserves every entity's declared title storage column", () => {
+describe("repository labels", () => {
+  it("provides a title for every public entity", () => {
     for (const entity of shortcodeEntities) {
-      const model = entityFieldModels[entity];
-      const title = model.fields.find(
-        (field) => field.readKey === entitySummary[entity].titleField,
-      );
-      const storage = title
-        ? model.storage.find((entry) => entry.key === title.key)
-        : undefined;
-      const columns = getTableColumns(SHORTCODE_TABLE[entity]) as Record<
-        string,
-        PgColumn
-      >;
-      expect({ entity, column: TITLE_FIELD_COLUMN[entity] }).toEqual({
+      expect({
         entity,
-        column: storage ? (columns[storage.column] ?? null) : null,
+        title: Boolean(kernelScaffold(entity)?.title()),
+      }).toEqual({
+        entity,
+        title: true,
       });
     }
   });
-  const overrideEntities = Object.keys(LABEL_COLUMN_OVERRIDES) as Array<
-    keyof typeof LABEL_COLUMN_OVERRIDES
-  >;
 
-  it.each(overrideEntities)(
-    "override for %s is not redundant with the titleField derivation",
-    (entity) => {
-      const raw = resolveTitleFieldColumn(entity);
-      const override = LABEL_COLUMN_OVERRIDES[entity].column;
-      // A `null` raw derivation means titleField has no physical column at
-      // all — the override is load-bearing regardless of its own value,
-      // since without it `DISPLAY_NAME_COLUMN`'s construction throws instead
-      // of going quietly to `null`. Only a non-null raw column can make an
-      // override redundant, by restating exactly what titleField already
-      // gives.
-      const redundant = raw !== null && raw === override;
-      expect(redundant).toBe(false);
-    },
-  );
+  it("uses the inventory product and location title for graph labels", () => {
+    const query = dialect.sqlToQuery(labelSql("inventory", "t")).sql;
+    expect(query).toContain('t."id"');
+    expect(query).toContain('FROM "Product" p INNER JOIN "Location" l');
+    expect(query).toContain('l."name"');
+    expect(query).toContain('"InventoryEntry"."productId"');
+    expect(query).toContain('"InventoryEntry"."locationId"');
+  });
 });

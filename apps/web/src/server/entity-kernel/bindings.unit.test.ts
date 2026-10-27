@@ -1,5 +1,8 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { searchableEntities } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
+import { sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -37,6 +40,38 @@ const createOverrides = (entity: Entity) =>
       : undefined;
 
 describe("entity kernel bindings", () => {
+  it.each(searchableEntities)("%s exposes its search source", (entity) => {
+    const source = ENTITY_KERNEL_BINDINGS[entity].repository.scaffold.search;
+    expect(source?.document).toBeTypeOf("function");
+    expect(source?.embedding).toBeTypeOf("function");
+    if (!source) throw new Error(`Missing search source for ${entity}`);
+    const context = {
+      types: sql`${entity}`,
+      requested: () => sql`true`,
+      bounded: () => sql`true`,
+      page: { pageSize: 5 },
+    };
+    const dialect = new PgDialect();
+    expect(dialect.sqlToQuery(source.document(context)).sql).toContain(
+      "SELECT",
+    );
+    if (source.prefix) dialect.sqlToQuery(source.prefix(context));
+  });
+
+  it("loads every read-schema key through each repository's declared read", () => {
+    const failures = Object.values(ENTITY_KERNEL_BINDINGS).flatMap(
+      (binding) => {
+        try {
+          void binding.repository.scaffold.fields;
+          return [];
+        } catch (error) {
+          return [String(error instanceof Error ? error.message : error)];
+        }
+      },
+    );
+    expect(failures).toEqual([]);
+  });
+
   it("preserves unresolved membership in MCP list commands", () => {
     expect(
       entityMcpCommandSchema.parse({

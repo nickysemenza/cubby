@@ -1,11 +1,15 @@
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import type { PurchaseFilters } from "@cubby/schemas/purchase";
+import { rawPurchaseListItemOut } from "@cubby/schemas/purchase-raw-read";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
-import { purchaseList as readPurchaseList } from "./purchase";
+import { purchaseScaffold } from "./purchase";
 
 // The `purchasesNotReconciling` Problem filters `reconciliation=mismatch`. That
 // worklist must be the `paperwork_mismatch` gap (declared binding), so a
@@ -14,9 +18,22 @@ import { purchaseList as readPurchaseList } from "./purchase";
 // line liveness and null-cost counts while waivers remain durable.
 describe("purchase reconciliation=mismatch filter", () => {
   const ctx = withTestDb();
-  const purchaseList: typeof readPurchaseList = async (...args) => {
+  const purchaseList = async (
+    db: Database,
+    filters: PurchaseFilters,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+  ) => {
     await publishQualityFixtures(ctx.db, "purchase");
-    return readPurchaseList(...args);
+    const page = await purchaseScaffold.read(db, {
+      filters,
+      sorts,
+      pagination,
+    });
+    return {
+      ...page,
+      data: page.data.map((row) => rawPurchaseListItemOut.parse(row)),
+    };
   };
 
   const makePurchase = async (
@@ -96,9 +113,22 @@ describe("purchase reconciliation=mismatch filter", () => {
 // (`display.labelPath`) so no client re-derives the verdict.
 describe("purchase list display labels", () => {
   const ctx = withTestDb();
-  const purchaseList: typeof readPurchaseList = async (...args) => {
+  const purchaseList = async (
+    db: Database,
+    filters: PurchaseFilters,
+    sorts: SortParams[],
+    pagination: PaginationParams,
+  ) => {
     await publishQualityFixtures(ctx.db, "purchase");
-    return readPurchaseList(...args);
+    const page = await purchaseScaffold.read(db, {
+      filters,
+      sorts,
+      pagination,
+    });
+    return {
+      ...page,
+      data: page.data.map((row) => rawPurchaseListItemOut.parse(row)),
+    };
   };
 
   it("composes the expense count, reconciliation verdict and settlement status", async () => {

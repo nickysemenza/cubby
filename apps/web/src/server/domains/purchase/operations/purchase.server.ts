@@ -14,7 +14,7 @@ import { withTransactionDatabase } from "~/server/db/helpers";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import {
-  getPurchaseByShortcode,
+  readPurchase as readPurchaseByCode,
   linkExpensesToPurchase,
   reclassifyPurchaseDocument,
   splitExpense,
@@ -134,7 +134,7 @@ async function readSplitExpenses(
 
 export const purchaseHandlers = implementOperationDomain(purchaseContract, {
   settlementCandidates: async (context, input) => {
-    const purchase = await getPurchaseByShortcode(context.db, input.purchaseId);
+    const purchase = await readPurchaseByCode(context.db, input.purchaseId);
     if (!purchase)
       throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
     const candidates = await listPurchaseSettlementCandidates(
@@ -181,7 +181,7 @@ export const purchaseHandlers = implementOperationDomain(purchaseContract, {
     );
   },
   suggestSettlementMatch: async (context, input) => {
-    const purchase = await getPurchaseByShortcode(context.db, input.purchaseId);
+    const purchase = await readPurchaseByCode(context.db, input.purchaseId);
     if (!purchase)
       throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found");
     // Recomputed here, never taken from the client: the tie is a server fact.

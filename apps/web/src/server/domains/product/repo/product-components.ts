@@ -30,7 +30,10 @@ import type {
   KitMembershipPurchaseOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
-import type { RawProductList } from "@cubby/schemas/product-raw-read";
+import {
+  rawProductList,
+  type RawProductList,
+} from "@cubby/schemas/product-raw-read";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq, uniqBy } from "es-toolkit";
@@ -49,8 +52,9 @@ import {
 import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
 import {
   getProductCoverImageUrlsByProductIds,
-  productList,
+  productScaffold,
 } from "~/server/domains/product/repo/crud";
+import { overlayProductFood } from "~/server/domains/product/repo/list-enrichment";
 // `findMergeComponentCycle` is the SAME question `mergeProducts` already
 // answers — "does identifying/adding these edges make a product reach
 // itself" — reused here rather than reimplemented. Called with `loserIds: []`
@@ -142,15 +146,17 @@ export async function listKitComponentRows(
   if (edges.length === 0) return [];
 
   const componentCodes = uniq(edges.map((edge) => edge.componentProductCode));
-  const { data: items } = await listAll((pagination) =>
-    productList(
-      db,
-      { ids: componentCodes },
-      [{ orderBy: "name", direction: "asc" }],
+  const { data: rows } = await listAll((pagination) =>
+    productScaffold.read(db, {
+      filters: { ids: componentCodes },
+      sorts: [{ orderBy: "name", direction: "asc" }],
       pagination,
-      "sample",
-      usdaClient,
-    ),
+      readIntent: "sample",
+    }),
+  );
+  const items = await overlayProductFood(
+    rows.map((row) => rawProductList.parse(row)),
+    usdaClient,
   );
   const byId = new Map(items.map((item) => [item.id, item]));
 

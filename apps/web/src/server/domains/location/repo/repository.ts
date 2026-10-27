@@ -1,6 +1,6 @@
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { registerLocationImageChange } from "~/server/entity-kernel/repo/mutation-side-effects";
-import { defineRepository, onDb } from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -8,11 +8,9 @@ import {
   createLocationRecord,
   deleteLocations,
   LOCATION_DELETE_EDGE_POLICY,
-  locationList,
-  locationListRead,
+  locationScaffold,
   updateLocation,
 } from "./crud";
-import { getLocationByShortcode } from "./lookup";
 
 const locationShortcodes = bindShortcodeResolver("location");
 
@@ -21,25 +19,7 @@ const locationShortcodes = bindShortcodeResolver("location");
  */
 export const locationRepository = defineRepository("location", {
   lifecycle: { delete: LOCATION_DELETE_EDGE_POLICY },
-  get: onDb(getLocationByShortcode),
-  list: (ctx, filters, sorts, pagination) =>
-    locationList(ctx.db, filters, sorts, pagination),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-  ) =>
-    locationListRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      projection,
-      readIntent,
-    ),
+  scaffold: locationScaffold,
   create: (ctx, data) =>
     withTransactionDatabase(ctx.db, async (db) => {
       const { output, entityId } = await createLocationRecord(

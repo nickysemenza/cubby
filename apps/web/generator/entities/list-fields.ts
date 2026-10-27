@@ -1636,7 +1636,7 @@ export const compileListFields = (
       entity.inspector.list.metrics.length
     )
       throw new EntityDeclarationError(
-        `${context}.presentation.list.metrics repeats a field.`,
+        `${context}.presentation.list.totals groups a field twice.`,
       );
     const metrics = entity.inspector.list.metrics.map((key) => {
       const field = entity.fieldModel.fields.find((field) => field.key === key);
@@ -1649,12 +1649,12 @@ export const compileListFields = (
         !(stored && field?.kind === "number")
       )
         throw new EntityDeclarationError(
-          `${context}.presentation.list.metrics ${key} needs a scalar numeric SQL field.`,
+          `${context}.presentation.list.totals group ${key} needs a scalar numeric SQL field.`,
         );
       const format = field?.display.format ?? null;
       if (format === "amount")
         throw new EntityDeclarationError(
-          `${context}.presentation.list.metrics ${key} cannot sum quantities with record-specific units.`,
+          `${context}.presentation.list.totals group ${key} cannot sum quantities with record-specific units.`,
         );
       if (
         (format === "currency" || format === "signedCurrency") &&
@@ -1665,7 +1665,7 @@ export const compileListFields = (
         )
       )
         throw new EntityDeclarationError(
-          `${context}.presentation.list.metrics ${key} must use Expense.cost or an Expense-derived SQL value for money.`,
+          `${context}.presentation.list.totals group ${key} must use Expense.cost or an Expense-derived SQL value for money.`,
         );
       return { key, label: field?.label ?? humanize(key), format };
     });

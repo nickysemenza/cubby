@@ -154,7 +154,7 @@ class MemoryImageStorage {
         };
       },
       findAttachmentByIdempotencyKey: async () => this.existingAttachment,
-      getImageById: async () => {
+      readImageById: async () => {
         if (this.stagedRow instanceof Error) throw this.stagedRow;
         return this.stagedRow;
       },

@@ -36,7 +36,7 @@ import {
 } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { inventoryEntry, location } from "~/server/db/schema";
-import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
+import { readExpense } from "~/server/domains/expense/repo/crud";
 import { loadExpenseSpendingCategoryEvidence } from "~/server/domains/expense/repo/expense-category-resolution";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { expenseJointAllocationSql } from "~/server/domains/expense/repo/expense-project-allocation";
@@ -1040,7 +1040,7 @@ async function allocatedExpenseEvidence(
       empty: "No principal line",
     };
     if (row.shortcode) {
-      const principal = await getExpenseByShortcode(
+      const principal = await readExpense(
         db,
         parseShortcodeFor("expense", row.shortcode),
       );

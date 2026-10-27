@@ -7,10 +7,10 @@ import { expenseChargeContextPurchaseOut } from "@cubby/schemas/project";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { getExpenseByID } from "~/server/domains/expense/repo/crud";
+import { readExpenseById } from "~/server/domains/expense/repo/crud";
 import {
   getPurchaseExpenses,
-  getPurchaseLinkIdentityByID,
+  purchaseScaffold,
 } from "~/server/domains/purchase/repo/purchase";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import {
@@ -32,7 +32,7 @@ export const expenseChargeContextWorkflow = bindWorkflow(
       resolveOrThrow(context, "expense", input),
     )
     .call("loadExpense", ({ context }, { resolveExpense }) =>
-      getExpenseByID(context, resolveExpense),
+      readExpenseById(context, resolveExpense),
     )
     .call("resolvePurchase", async ({ context }, { loadExpense }) => {
       if (!loadExpense.purchaseId) return null;
@@ -49,16 +49,19 @@ export const expenseChargeContextWorkflow = bindWorkflow(
         branch
           .parallel("chargeReads", 2, {
             purchase: async ({ context }, { input: { resolvePurchase } }) => {
-              const purchase = await getPurchaseLinkIdentityByID(
+              const read = await purchaseScaffold.getByIds(
                 context,
-                requirePurchase(resolvePurchase),
+                [requirePurchase(resolvePurchase)],
+                ["orderId", "displayLabel", "date", "vendorId", "vendorName"],
               );
+              const purchase = read.data[0];
               if (!purchase) return null;
               const [result] = await publicFieldEnvelopeRows({
                 db: context,
                 entity: "purchase",
                 schema: expenseChargeContextPurchaseOut,
                 rows: [purchase],
+                contexts: read.fieldReads,
               });
               if (!result)
                 throw new Error("Charge context Purchase read produced no row");

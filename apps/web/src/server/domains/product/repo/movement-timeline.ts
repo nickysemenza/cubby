@@ -16,6 +16,7 @@ import type {
   ProductMovementKind,
 } from "@cubby/schemas/product";
 import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
+import { rawProductDetail } from "@cubby/schemas/product-raw-read";
 import { countLabel } from "@cubby/shared/pluralize";
 import {
   and,
@@ -56,7 +57,15 @@ import {
   type ProductOwnershipInterval,
 } from "~/server/lib/product-movement";
 
-import { buildProductWhere, getProductsByShortcodes } from "./crud";
+import { productScaffold } from "./crud";
+
+const movementProduct = rawProductDetail.pick({
+  id: true,
+  name: true,
+  brandName: true,
+  category: true,
+  coverImageUrl: true,
+});
 
 export interface ProductMovementTimelineInput {
   filters: ProductFilters;
@@ -228,7 +237,13 @@ async function loadCohort(
 }> {
   const scope: SQL | undefined = input.ids
     ? and(notDeleted(product), inArray(product.shortcode, [...input.ids]))
-    : await buildProductWhere(db, input.filters);
+    : productScaffold.where(input.filters, {
+        // Filter-only: owners resolve only when a filter asks.
+        context: await productScaffold.context(db, {
+          filters: input.filters,
+          readIntent: "count",
+        }),
+      });
   const moves = movementDates(db);
   const inWindow = and(
     input.from ? gte(moves.date, input.from) : undefined,
@@ -268,7 +283,17 @@ async function loadCohort(
   ]);
   const codes = page.map((row) => parseShortcodeFor("product", row.shortcode));
   const byCode = new Map(
-    (await getProductsByShortcodes(db, codes)).map((item) => [item.id, item]),
+    (
+      await productScaffold.get(db, codes, [
+        "name",
+        "brandName",
+        "category",
+        "coverImageUrl",
+      ])
+    ).data.map((row) => {
+      const item = movementProduct.parse(row);
+      return [item.id, item];
+    }),
   );
   return {
     data: codes.flatMap((code) => {

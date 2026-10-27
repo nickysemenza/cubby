@@ -1,94 +1,51 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import {
-  type ShipmentFilters,
-  type ShipmentUpdateData,
-} from "@cubby/schemas/shipment";
-import {
-  rawShipmentOut,
-  type RawShipmentOut,
-} from "@cubby/schemas/shipment-raw-read";
+import { type ShipmentUpdateData } from "@cubby/schemas/shipment";
+import { rawShipmentOut } from "@cubby/schemas/shipment-raw-read";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   buildPartialUpdateValues,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { shipment } from "~/server/db/schema";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { shipmentSearch } from "~/server/domains/shipment/repo/search-read-shipment";
 import {
   createEntityCrud,
-  createEntityRowFetcher,
   defineRepository,
   defineMutationWriter,
   asActor,
   type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-type ReaderDb = Database | DrizzleTransaction;
-type ShipmentRow = typeof shipment.$inferSelect;
-
-const scaffold = listScaffold("shipment", shipment);
-export const buildShipmentWhere = (filters: ShipmentFilters = {}) =>
-  scaffold.where(filters);
-const shipmentRead = {
-  media: true,
-  references: {
-    purchaseId: {
-      kind: "lookup",
-      missing: "null",
-      includeDeleted: true,
-    },
-    carrierId: {
-      kind: "lookup",
-      missing: "null",
-      includeDeleted: true,
+export const shipmentScaffold = listScaffold("shipment", shipment, {
+  read: {
+    search: shipmentSearch,
+    media: true,
+    references: {
+      purchaseId: {
+        kind: "lookup",
+        missing: "null",
+        includeDeleted: true,
+      },
+      carrierId: {
+        kind: "lookup",
+        missing: "null",
+        includeDeleted: true,
+      },
     },
   },
-} satisfies ListReadOptions<ShipmentRow>;
-const plan = listReadPlan<ShipmentRow>("shipment", shipmentRead);
+});
 
-export const listShipmentsRead = (
-  db: ReaderDb,
-  filters: ShipmentFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    { read: shipmentRead },
-  );
-
-const listShipments = completeListReader(rawShipmentOut, listShipmentsRead);
-const reader = createEntityCrud<
-  typeof shipment,
-  ShipmentRow,
-  RawShipmentOut,
-  ShipmentUpdateData,
-  "shipment"
->({
+const reader = createEntityCrud({
   table: shipment,
   entity: "shipment",
-  fetchById: createEntityRowFetcher(shipment),
-  fromDB: async (db, row) =>
-    rawShipmentOut.parse(
-      (await plan.read(db, [row], { kind: "full" }, undefined, "live"))[0],
-    ),
-  toUpdate: (data) => buildPartialUpdateValues(data),
+  scaffold: shipmentScaffold,
+  output: rawShipmentOut,
+  toUpdate: (data: ShipmentUpdateData) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.shipment.audit],
 });
 
@@ -123,29 +80,6 @@ const update = defineMutationWriter({
 });
 
 export const shipmentRepository = defineRepository("shipment", {
+  scaffold: shipmentScaffold,
   update: asActor(update),
-  get: (ctx: EntityKernelContext, code: string) =>
-    reader.getByShortcode(ctx.db, code),
-  list: (
-    ctx: EntityKernelContext,
-    filters: ShipmentFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-  ) => listShipments(ctx.db, filters, sorts, pagination),
-  listRead: (
-    ctx: EntityKernelContext,
-    filters: ShipmentFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-    projection: ListProjection,
-    readIntent: ListReadIntent = "page",
-  ) =>
-    listShipmentsRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      projection,
-      readIntent,
-    ),
 });

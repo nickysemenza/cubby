@@ -8,7 +8,10 @@ import {
   type ProjectCreateInput,
   type ProjectUpdateInput,
 } from "@cubby/schemas/project";
-import type { RawProjectOut } from "@cubby/schemas/work-raw-read";
+import {
+  rawProjectOut,
+  type RawProjectOut,
+} from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -43,7 +46,6 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 /**
@@ -63,8 +65,7 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { projectDependencyIds } from "./analytics";
-import { hydrateProjectRow } from "./helpers";
-import { loadStoredProjectRollups, type ProjectTree } from "./subtree";
+import { projectScaffold } from "./lookup";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
   "Purchase.defaultProjectId": {
@@ -128,42 +129,14 @@ type ProjectUpdateData = ProjectUpdateInput["data"];
 
 const fetchProjectById = createEntityRowFetcher(project);
 
-const createProjectReader = (tree?: ProjectTree) =>
-  createEntityReader({
-    entity: "project",
-    fetchById: fetchProjectById,
-    fromDB: async (db: Database, row: typeof project.$inferSelect) => {
-      // Hierarchy/settings stay live; expensive financial/date folds read the
-      // same stored result as list projection and final field envelopes.
-      const [projectContext, deps, dataQualities, [withUrls]] =
-        await Promise.all([
-          loadStoredProjectRollups(db, tree, [row.id]),
-          projectDependencyIds(db, [row.id]),
-          loadDataQualities(db, "project", [row.id]),
-          withProjectExternalUrls(db, [row]),
-        ]);
+const projectReader = createEntityReader({
+  entity: "project",
+  scaffold: projectScaffold,
+  output: rawProjectOut,
+});
 
-      // SAFETY: `row` was just fetched live by id, so its quality was evaluated.
-      return hydrateProjectRow(
-        withUrls!,
-        projectContext,
-        deps,
-        dataQualities.get(row.id)!,
-      );
-    },
-  });
-
-const projectReader = createProjectReader();
-
-export const getProjectByID = (
-  db: Database,
-  id: ProjectId,
-  tree?: ProjectTree,
-): Promise<RawProjectOut> =>
-  (tree ? createProjectReader(tree) : projectReader).getByID(db, id);
-
-export const getProjectByShortcode = (db: Database, shortcode: string) =>
-  projectReader.getByShortcode(db, shortcode);
+/** One live Project by internal id; throws when absent. */
+export const readProjectById = projectReader.getByID;
 
 /**
  * Walk `newParentId`'s ancestor chain (up to `MAX_PROJECT_TREE_DEPTH` hops,
@@ -201,7 +174,7 @@ export const createProject = defineMutationWriter({
     _data: ProjectCreateInput,
     _actor: ActorContext,
   ) => ({
-    output: await getProjectByID(db, receipt.entityId),
+    output: await readProjectById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (
@@ -332,7 +305,7 @@ export const updateProject = defineMutationWriter({
     _data: ProjectUpdateData,
     _actor: ActorContext,
   ) => ({
-    output: await getProjectByID(db, receipt.entityId),
+    output: await readProjectById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (

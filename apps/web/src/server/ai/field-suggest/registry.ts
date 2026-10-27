@@ -61,7 +61,7 @@ import {
   listProductCategoryTreeOptions as loadProductCategoryTreeOptions,
 } from "~/server/domains/product-category/repo/product-category";
 import { projectNameOptions as loadProjectNameOptions } from "~/server/domains/project/repo/lookup";
-import { readSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
+import { spendingCategoryScaffold } from "~/server/domains/spending-category/repo/spending-category";
 import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import {
@@ -362,13 +362,12 @@ async function loadSpendingCategoryRoster(
 ): Promise<SpendingCategoryCandidate[]> {
   const rows: z.infer<typeof spendingRosterRow>[] = [];
   for (let pageIndex = 0; ; pageIndex++) {
-    const page = await readSpendingCategories(
-      db,
-      spendingCategoryFilters.parse({}),
-      [{ orderBy: "name", direction: "asc" }],
-      { pageIndex, pageSize: MAX_PAGE_SIZE },
-      { kind: "selected", fields: ["id", "name", "parentId"] },
-    );
+    const page = await spendingCategoryScaffold.read(db, {
+      filters: spendingCategoryFilters.parse({}),
+      sorts: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex, pageSize: MAX_PAGE_SIZE },
+      projection: ["id", "name", "parentId"],
+    });
     rows.push(...spendingRosterRow.array().parse(page.data));
     if (rows.length >= page.count || page.data.length === 0) break;
   }

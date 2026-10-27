@@ -11,16 +11,12 @@ import type {
   LocationListRefOut,
   LocationValuation,
 } from "@cubby/schemas/location";
-import type {
-  RawLocationDetail,
-  RawLocationOutput,
-} from "@cubby/schemas/location-raw-read";
+import type { RawLocationDetail } from "@cubby/schemas/location-raw-read";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 
 import {
   isNotDeleted,
-  type MappableImageRecord,
   mapImages,
   mapRelation,
   parseInventoryAmount,
@@ -28,7 +24,6 @@ import {
 import type { location } from "~/server/db/schema";
 import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import type {
-  LocationIdentityProductRow,
   LocationListDB,
   LocationWithParentChild,
 } from "~/server/domains/location/repo/internal-types";
@@ -37,39 +32,6 @@ import {
   mapDbProductToInventoryEmbed,
   primaryGtinOf,
 } from "~/server/domains/product/repo/mappers";
-
-/**
- * Transform a location DB record to API format.
- * Handles shortcode branding, type parsing, and image extraction.
- */
-export const dbLocationToAPI = <Q extends DataQuality | undefined>(
-  locationData: typeof location.$inferSelect & {
-    aiDescription?: string | null;
-    product?: LocationIdentityProductRow | null;
-    images?: Array<{
-      image: MappableImageRecord;
-      deletedAt?: Date | null;
-    }>;
-  },
-  valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
-  dataQuality: Q,
-): Omit<RawLocationOutput, "dataQuality"> & { dataQuality: Q } => {
-  return {
-    id: parseShortcodeFor("location", locationData.shortcode),
-    lastBulkInventory: locationData.lastBulkInventory,
-    aiDescription: locationData.aiDescription ?? null,
-    name: locationData.name,
-    aliases: locationData.aliases,
-    tags: locationData.tags,
-    notes: locationData.notes ?? null,
-    type: parseLocationType(locationData.type),
-    product: mapLocationIdentityProduct(locationData),
-    images: mapImages(locationData.images),
-    valuation: valuations?.get(locationData.id) ?? null,
-    dataQuality,
-    ...extractDbTimestampsFromDBRec(locationData),
-  };
-};
 
 const dbLocationToListRef = (
   locationData: typeof location.$inferSelect,
@@ -179,7 +141,7 @@ export const buildLocationWithChildren = (
             displayImages,
           )
         : undefined,
-    // getLocationById queries childCount directly; the tree builder doesn't,
+    // loadLocationTree queries childCount directly; the tree builder doesn't,
     // so fall back to the children it already materialized.
     childCount: x.childCount ?? children.length,
     directItemCount,

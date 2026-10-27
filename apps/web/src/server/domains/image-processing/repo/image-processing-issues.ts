@@ -6,8 +6,8 @@ import {
 } from "@cubby/schemas/image-processing";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { unwrapDb } from "~/server/db/helpers";
 import { image } from "~/server/db/schema";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
@@ -36,12 +36,12 @@ export function imageProcessingIssueExpression(
 }
 
 export async function loadImageProcessingIssues(
-  db: Database,
+  db: Database | DrizzleTransaction,
   shortcodes: readonly string[],
 ) {
   if (!shortcodes.length)
     return new Map<string, "failed" | "review_needed" | null>();
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .select({
       shortcode: image.shortcode,
       issue: imageProcessingIssueExpression(),

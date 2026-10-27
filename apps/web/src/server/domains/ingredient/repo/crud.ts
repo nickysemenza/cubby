@@ -15,7 +15,11 @@ import {
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
-import type { RawIngredientWithRecipesAndProduct as IngredientWithRecipesAndProductOut } from "@cubby/schemas/ingredient-raw-read";
+import {
+  rawIngredientDetail,
+  rawIngredientWithRecipesAndProduct,
+  type RawIngredientWithRecipesAndProduct as IngredientWithRecipesAndProductOut,
+} from "@cubby/schemas/ingredient-raw-read";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -23,7 +27,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   notDeleted,
-  relations,
   unwrapDb,
   updateAndReturn,
   withTransactionOn,
@@ -32,6 +35,7 @@ import { ingredient, product } from "~/server/db/schema";
 import {
   type MutationReceipt,
   createEntityCrud,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -44,41 +48,30 @@ import {
   insertWithShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { buildIngredientWhere, type IngredientDeepDB } from "./internal-types";
-import { dbIngredientToAPI } from "./mappers";
-
-// getByID + update run through the shared CRUD factory (the 404, before-state→
-// audit, re-fetch→map orchestration). create/find-or-create stay hand-rolled:
-// they accept the Database | DrizzleTransaction union and own ingredient-specific
-// alias-dedupe / race semantics.
-const fetchIngredientById = async (
-  // The union, not `Database`: the factory's `update` runs on a transaction and
-  // reads the before-state through this. `dbIngredientToAPI` (the `fromDB`)
-  // already takes the union and ignores the handle, so nothing else widens.
-  db: Database | DrizzleTransaction,
-  id: IngredientId,
-): Promise<IngredientDeepDB | undefined> => {
-  const row = await unwrapDb(db).query.ingredient.findFirst({
-    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
-    ...relations.ingredient.full,
-  });
-  return row;
-};
+import { buildIngredientWhere } from "./internal-types";
+import { ingredientScaffold } from "./search";
 
 const ingredientCrud = createEntityCrud({
   table: ingredient,
   entity: "ingredient",
-  fetchById: fetchIngredientById,
-  fromDB: (db, row: IngredientDeepDB) => dbIngredientToAPI(db, row),
+  scaffold: ingredientScaffold,
+  output: rawIngredientWithRecipesAndProduct,
   toUpdate: (data: z.infer<typeof ingredientUpdateData>) => data,
   auditUpdateFields: [...entityFieldModels.ingredient.audit],
 });
 
-export const getIngredientByID = (
+export const readIngredientById = (
   db: Database | DrizzleTransaction,
   id: IngredientId,
 ): Promise<IngredientWithRecipesAndProductOut> =>
   ingredientCrud.getByID(db, id);
+
+/** One live Ingredient's record read, with its products' USDA foods. */
+export const readIngredientDetail = createEntityReader({
+  entity: "ingredient",
+  scaffold: ingredientScaffold,
+  output: rawIngredientDetail,
+}).getByIDOrNull;
 
 export const createIngredient = defineMutationWriter({
   entity: "ingredient",
@@ -87,7 +80,7 @@ export const createIngredient = defineMutationWriter({
     db: Database | DrizzleTransaction,
     _data: z.input<typeof ingredientCreateInput>,
     _actor: ActorContext,
-  ) => getIngredientByID(db, receipt.entityId),
+  ) => readIngredientById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database | DrizzleTransaction,
@@ -129,7 +122,7 @@ export const updateIngredient = defineMutationWriter({
     _id: IngredientId,
     _data: z.infer<typeof ingredientUpdateData>,
     _actor: ActorContext,
-  ) => getIngredientByID(db, receipt.entityId),
+  ) => readIngredientById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database | DrizzleTransaction,

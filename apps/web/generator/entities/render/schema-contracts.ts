@@ -100,7 +100,7 @@ export const renderEntitySchemaArtifacts = (
   const repositoryListBindings = schemaEntitySpecs
     .map(
       ({ key, contract, inspector }) =>
-        `  ${JSON.stringify(key)}: compileListReadSchema(withEntityListMedia(${contract.list.export})${treeRowExtension(inspector)}),`,
+        `  ${JSON.stringify(key)}: compileListReadSchema(withEntityListMedia(mergeReadSchemas(${contract.list.export}, ${contract.detail.export}))${treeRowExtension(inspector)}),`,
     )
     .join("\n");
   const bindings = entities
@@ -233,7 +233,7 @@ export const renderEntitySchemaArtifacts = (
         'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
         'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
         'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
-        'import { compileListReadSchema } from "~/entity/model/list-read-fields";\n' +
+        'import { compileListReadSchema, mergeReadSchemas } from "~/entity/model/list-read-fields";\n' +
         'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
@@ -241,7 +241,7 @@ export const renderEntitySchemaArtifacts = (
         'import { entitySchema } from "@cubby/schemas/entity-schema-bindings";\n\n' +
         "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
-        `export const ENTITY_REPOSITORY_LIST_READ_SCHEMAS = {\n${repositoryListBindings}\n} as const;\n` +
+        `export const ENTITY_REPOSITORY_READ_SCHEMAS = {\n${repositoryListBindings}\n} as const;\n` +
         "export type EntitySchemaBindingMap = typeof ENTITY_SCHEMA_BINDINGS;\n" +
         "export type EntitySchemaBindingEntity = keyof EntitySchemaBindingMap;\n" +
         "type EntitySchemaBinding = EntitySchemaBindingMap[EntitySchemaBindingEntity];\n" +

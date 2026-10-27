@@ -13,6 +13,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `apps/web/generator/entities/declarations.ts`, the web field-model emitter, and
   the native wire/catalog projection. Generation checks structure; the web/test
   typecheck verifies those contracts agree.
+- Repository SQL titles: `scaffold.title()` reads the stored `titleField`
+  column or the repository's declared computed `read.title` expression; shortcode
+  labels, graph labels and filter options use it. `read.optionCount` names a
+  declared rollup and `read.optionKind` supplies an optional picker kind.
 - Reference names and composed display labels: use the typed `display.labelPath`
   contract in [entities](../entities.md), consumed by `readReferenceField` on
   web and `FieldResolutionPresentation.referenceName` on native. Declare
@@ -81,10 +85,12 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
-  (`server/entity-kernel/repo/repository.ts`). `createEntityRowFetcher(table)`
-  owns full stored-row reads by ID with the live-row predicate; audited updates
-  use the same selection. Keep custom projections and relation-loaded fetches
-  in their owning repository. `declaredFilterPredicates` /
+  (`server/entity-kernel/repo/repository.ts`). The scaffold is the repository
+  read port; get-by-id uses `scaffold.getByIds` (see
+  [ADR 0023](../adr/0023-repository-read-declaration.md)).
+  `createEntityRowFetcher(table)` loads stored rows for audited updates. Keep
+  custom projections and relation-loaded fetches in their owning repository.
+  `declaredFilterPredicates` /
   `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
   explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined
@@ -106,10 +112,27 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   selection/count budget.
   `load(where, projection)` enriches selected IDs only; never pass list predicates
   or pagination into a relational query. The scaffold restores selected order.
-  Complete and progressive reads share one assembly path. Product's
-  `listProductsRead` owns it; `productList` validates complete rows against the
-  canonical schema rather than assembling another copy. Kit component rows
-  reuse that complete reader and add only their parent identity and quantity.
+  Page and detail reads share one assembly path:
+  `scaffold.read` for pages and `scaffold.get` for detail, with detail-only
+  values as `{ scope: "detail" }` bindings. Callers parse complete rows against
+  the canonical schema rather than assembling another copy; a writer returns
+  `scaffold.getByIds` of the row it wrote. Nested Ingredient Products use the
+  Product scaffold and its unit mappings; costing and nutrition graph readers
+  remain separate from entity records. A caller that needs a filter WHERE
+  outside a page (Problems, bulk task moves) uses `scaffold.prepareWhere`,
+  which prepares the request context first. Gallery writes use
+  `galleryBinding(entity)`; a vendor logo beside another row is
+  `vendorLogoKeySql`. Generated entity lists narrow through
+  `entityMembership(list).has`. Kit component rows
+  reuse `productScaffold.read` and add only their parent identity and quantity.
+  `cubby/no-entity-roster` fences new entity-keyed maps in generic server code;
+  its per-file baseline only shrinks.
+- Search source reads: declare `read.search` (document SQL and embedding
+  text) on the owning scaffold. Generic search consumers find the port through
+  `kernelScaffold(entity)`, loaded with `await import` because domain
+  repositories import them. Stored-quality evaluators live in
+  `generic/data-quality/repo/checks/<entity>.ts`; generation wires them into
+  `data-quality-entries.gen.ts`. Neither keeps a hand-written roster.
 - Background execution: `server/generic/jobs/` owns durable scheduling, retries
   and claims; `server/workflows/jobs.ts` composes production handlers. Runs retain
   domain progress and history. Derived refresh records broad family Job intent

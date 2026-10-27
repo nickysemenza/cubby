@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
-  getVendorByID,
+  readVendorById,
   findOrCreateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -73,7 +73,7 @@ describe("collection patches through entity.update", () => {
         data: buildEntity("product", {
           name,
           brandId: (
-            await getVendorByID(
+            await readVendorById(
               ctx.db,
               await findOrCreateVendor(ctx.db, "Synthetic Works"),
             )

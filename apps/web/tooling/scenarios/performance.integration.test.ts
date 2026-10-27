@@ -9,7 +9,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
-import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
+import { shipmentScaffold } from "~/server/domains/shipment/repo/entity-repository";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { run } from "~/server/db/schema";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
@@ -102,13 +102,12 @@ it("seeds connected performance history readable by the real Work queue", async 
     }),
   ]);
   await drainStoredDerived(ctx.db);
-  const parcels = await listShipmentsRead(
-    ctx.db,
-    { dataStatus: ["needs_data"] },
-    [{ orderBy: "dataQuality", direction: "asc" }],
-    { pageIndex: 0, pageSize: 25 },
-    { kind: "selected", fields: ["dataQuality"] },
-  );
+  const parcels = await shipmentScaffold.read(ctx.db, {
+    filters: { dataStatus: ["needs_data"] },
+    sorts: [{ orderBy: "dataQuality", direction: "asc" }],
+    pagination: { pageIndex: 0, pageSize: 25 },
+    projection: ["dataQuality"],
+  });
   expect(parcels.count).toBe(1);
   expect(dataQuality.parse(parcels.data[0]?.dataQuality).score).toBe(25);
   const queue = await readWorkQueue(

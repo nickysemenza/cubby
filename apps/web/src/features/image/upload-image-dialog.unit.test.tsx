@@ -76,8 +76,6 @@ function uploadedImageRow(imageId: ImageShortcode, file: File) {
     entityName: null,
     associations: [],
     attachments: [],
-    redirectedFrom: null,
-    previousShortcodes: [],
   });
 }
 

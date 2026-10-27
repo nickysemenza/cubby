@@ -13,7 +13,7 @@ import {
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { listRunsRead } from "~/server/domains/run/repo/run";
+import { runScaffold } from "~/server/domains/run/repo/run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
@@ -238,16 +238,19 @@ describe("Run data quality", () => {
     const run = await makeRun("running", null);
     await publishQualityFixtures(ctx.db, "run");
     const args = [{}, [], { pageIndex: 0, pageSize: 50 }] as const;
-    const base = await listRunsRead(ctx.db, args[0], [...args[1]], args[2], {
-      kind: "base",
+    const request = {
+      filters: args[0],
+      sorts: [...args[1]],
+      pagination: args[2],
+    };
+    const base = await runScaffold.read(ctx.db, {
+      ...request,
+      projection: ["id"],
     });
-    const enriched = await listRunsRead(
-      ctx.db,
-      args[0],
-      [...args[1]],
-      args[2],
-      { kind: "selected", fields: ["dataQuality"] },
-    );
+    const enriched = await runScaffold.read(ctx.db, {
+      ...request,
+      projection: ["dataQuality"],
+    });
     expect(
       base.data.find((row) => row.id === run.shortcode)?.dataQuality,
     ).toBeUndefined();

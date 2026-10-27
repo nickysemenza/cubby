@@ -4,7 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
-  getVendorByID,
+  readVendorById,
   findOrCreateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { requireActor } from "~/server/http/request-context";
@@ -18,7 +18,7 @@ describe("product bulk workflow", () => {
   it("streams validated progress and its final committed result", async () => {
     const prefix = `Bulk workflow ${Date.now()}`;
     const fixtureBrandId = (
-      await getVendorByID(
+      await readVendorById(
         ctx.db,
         await findOrCreateVendor(ctx.db, "Fixture Brand"),
       )

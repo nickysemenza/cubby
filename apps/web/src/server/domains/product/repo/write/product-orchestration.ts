@@ -44,7 +44,7 @@ import { importImageFromUPC } from "~/server/domains/image/repo/image-import";
 import { findProductsWithNoImages } from "~/server/domains/product/repo/analytics";
 import { findUnbarcodedBookByTitle } from "~/server/domains/product/repo/book-title-match";
 import {
-  getProductByShortcode,
+  readProduct,
   quickCreateProductRecord,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
@@ -619,7 +619,7 @@ const findProductByLabel = async (
   db: Database,
   shortcode: ProductShortcode,
 ): Promise<FindOrCreateByUPCResult> => {
-  const product = await getProductByShortcode(db, shortcode);
+  const product = await readProduct(db, shortcode);
   if (!product)
     throw createAppError(
       "PRODUCT_NOT_FOUND",

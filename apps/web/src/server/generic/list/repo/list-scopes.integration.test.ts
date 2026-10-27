@@ -23,15 +23,15 @@ import {
   expenseDerivedReadSql,
   prepareExpenseDerivedRead,
 } from "~/server/domains/expense/repo/expense-derived-read";
-import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { buildDashboardProjectWhere } from "~/server/domains/project/repo/dashboard-shared";
 import {
   loadProjectDateWindows,
   projectCompletionYear,
 } from "~/server/domains/project/repo/subtree";
-import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -66,7 +66,7 @@ describe("declared list scopes", () => {
     entity: "ingredient" | "task" | "expense",
     filters: ListFilterValues,
   ) => {
-    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
+    const pageResult = await listOperations(entity).listFields(
       context(),
       {
         filters,
@@ -282,7 +282,7 @@ describe("declared list scopes", () => {
         rows: await matching(
           taskTable,
           rows,
-          await buildTaskWhere(db(), { projectScope: scope }),
+          await taskScaffold.prepareWhere(db(), { projectScope: scope }),
         ),
       });
     }
@@ -310,7 +310,7 @@ describe("declared list scopes", () => {
       await matching(
         taskTable,
         rows,
-        await buildTaskWhere(db(), {
+        await taskScaffold.prepareWhere(db(), {
           projectScope: { search: "zqscope yard" },
         }),
       ),
@@ -319,7 +319,9 @@ describe("declared list scopes", () => {
       await matching(
         taskTable,
         rows,
-        await buildTaskWhere(db(), { projectScope: { search: "raised beds" } }),
+        await taskScaffold.prepareWhere(db(), {
+          projectScope: { search: "raised beds" },
+        }),
       ),
     ).toEqual(codes(own, child, grandchild, posts));
     // A scope that selects no live project matches no task: neither one
@@ -346,7 +348,7 @@ describe("declared list scopes", () => {
         rows: await matching(
           taskTable,
           [...rows, stranded],
-          await buildTaskWhere(db(), { projectScope: scope }),
+          await taskScaffold.prepareWhere(db(), { projectScope: scope }),
         ),
       }).toEqual({ scope, rows: [] });
     // End to end, beside an ordinary task filter.
@@ -430,7 +432,7 @@ describe("declared list scopes", () => {
         rows: await matching(
           expenseTable,
           rows,
-          await buildExpenseWhereClause(db(), { projectScope: scope }),
+          await expenseScaffold.prepareWhere(db(), { projectScope: scope }),
         ),
       });
     }

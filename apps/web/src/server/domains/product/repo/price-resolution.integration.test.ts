@@ -11,13 +11,13 @@ import {
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
+  listProductsFixture,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { getProductByShortcode, productList } from "./crud";
-import { listProductsRead } from "./crud";
+import { productScaffold, readProduct } from "./crud";
 
 const priceRead = z.object({
   price: z.number().nullable(),
@@ -54,11 +54,9 @@ describe("Product valuation price resolution on canonical reads", () => {
         productQuantity: 6,
       }),
     );
-    const only = priceRead.parse(
-      await getProductByShortcode(ctx.db, product.id),
-    );
+    const only = priceRead.parse(await readProduct(ctx.db, product.id));
     expect(only.pricing).toEqual({ effectivePrice: null, derivedPrice: null });
-    const pending = await productList(
+    const pending = await listProductsFixture(
       ctx.db,
       { ids: [product.id], pricePresenceFilter: "none" },
       [],
@@ -67,7 +65,7 @@ describe("Product valuation price resolution on canonical reads", () => {
     expect(pending.data).toEqual([]);
     expect(pending.unresolvedCount).toBe(1);
     await drainStoredDerived(ctx.db);
-    const unpriced = await productList(
+    const unpriced = await listProductsFixture(
       ctx.db,
       { pricePresenceFilter: "none" },
       [],
@@ -85,9 +83,7 @@ describe("Product valuation price resolution on canonical reads", () => {
         productQuantity: 4,
       }),
     );
-    const mixed = priceRead.parse(
-      await getProductByShortcode(ctx.db, product.id),
-    );
+    const mixed = priceRead.parse(await readProduct(ctx.db, product.id));
     expect(mixed.pricing.derivedPrice).toBe(5);
   });
 
@@ -109,12 +105,12 @@ describe("Product valuation price resolution on canonical reads", () => {
         productQuantity: 0.41,
       }),
     );
-    const detail = await getProductByShortcode(ctx.db, product.id);
+    const detail = await readProduct(ctx.db, product.id);
     expect(detail?.pricing).toMatchObject({
       knownUnitCount: 0.41,
       derivedPrice: 25,
     });
-    const list = await productList(
+    const list = await listProductsFixture(
       ctx.db,
       { nameFilter: "Synthetic by-weight cheese" },
       [],
@@ -146,25 +142,20 @@ describe("Product valuation price resolution on canonical reads", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
     const read = async () => {
-      const detail = priceRead.parse(
-        await getProductByShortcode(ctx.db, product.id),
-      );
-      const list = await productList(ctx.db, {}, [], {
+      const detail = priceRead.parse(await readProduct(ctx.db, product.id));
+      const list = await listProductsFixture(ctx.db, {}, [], {
         pageIndex: 0,
         pageSize: 50,
       });
       const row = list.data.find((candidate) => candidate.id === product.id);
       expect(priceRead.parse(row)).toEqual(detail);
       expect(row?.expenseTotal).toBe(20);
-      const deferred = await listProductsRead(
-        ctx.db,
-        { ids: [product.id] },
-        [],
-        { pageIndex: 0, pageSize: 50 },
-        "page",
-        undefined,
-        { kind: "selected", fields: Object.keys(priceRead.shape) },
-      );
+      const deferred = await productScaffold.read(ctx.db, {
+        filters: { ids: [product.id] },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 50 },
+        projection: Object.keys(priceRead.shape),
+      });
       expect(deferred.data).toHaveLength(1);
       expect(priceRead.parse(deferred.data[0])).toEqual(detail);
       return detail;
@@ -221,8 +212,8 @@ describe("Product valuation price resolution on canonical reads", () => {
       ctx.actor,
     );
     expect(
-      priceRead.parse(await getProductByShortcode(ctx.db, missing.id))
-        .fieldResolutions.price,
+      priceRead.parse(await readProduct(ctx.db, missing.id)).fieldResolutions
+        .price,
     ).toEqual({
       mode: "inherit",
       storedValue: null,
@@ -241,8 +232,8 @@ describe("Product valuation price resolution on canonical reads", () => {
       data: { price: 7 },
     });
     expect(
-      priceRead.parse(await getProductByShortcode(ctx.db, missing.id))
-        .fieldResolutions.price,
+      priceRead.parse(await readProduct(ctx.db, missing.id)).fieldResolutions
+        .price,
     ).toMatchObject({
       mode: "explicit",
       storedValue: 7,
@@ -258,8 +249,8 @@ describe("Product valuation price resolution on canonical reads", () => {
       data: { price: null },
     });
     expect(
-      priceRead.parse(await getProductByShortcode(ctx.db, missing.id))
-        .fieldResolutions.price.value,
+      priceRead.parse(await readProduct(ctx.db, missing.id)).fieldResolutions
+        .price.value,
     ).toBeNull();
   });
 });

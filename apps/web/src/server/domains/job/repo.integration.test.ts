@@ -37,7 +37,7 @@ describe("Job entity reads and scoped retry", () => {
       kind: "image.device.wake",
       input: {},
     });
-    const page = await jobRepository.repository.list!(
+    const page = await jobRepository.repository.listRead(
       kernelCtx(ctx),
       { kind: ["image.device", "image.device.wake"] },
       [],
@@ -52,12 +52,12 @@ describe("Job entity reads and scoped retry", () => {
     expect(page.data[0]?.runName).toEqual(expect.any(String));
     expect(page.data[0]?.runId).toMatch(/^RUN-/);
     expect(
-      await jobRepository.repository.get!(
+      await jobRepository.repository.get(
         kernelCtx(ctx),
         jobShortcode.parse(work.shortcode),
       ),
     ).toMatchObject({ id: work.shortcode, runName: page.data[0]?.runName });
-    const full = await jobRepository.repository.list!(
+    const full = await jobRepository.repository.listRead(
       kernelCtx(ctx),
       { kind: ["image.device", "image.device.wake"], includeInternal: true },
       [],
@@ -115,7 +115,7 @@ describe("Job entity reads and scoped retry", () => {
         .where(eq(job.id, internal.id)),
     ).toEqual([{ state: "failed", kind: "ai-refresh.activate" }]);
     const read = (includeInternal: boolean) =>
-      jobRepository.repository.list!(
+      jobRepository.repository.listRead(
         kernelCtx(ctx),
         { needsAttention: true, includeInternal },
         [],
@@ -127,7 +127,7 @@ describe("Job entity reads and scoped retry", () => {
     expect((await read(true)).data.map((row) => row.id)).toEqual(
       expect.arrayContaining([failed.shortcode, internal.shortcode]),
     );
-    const outside = await jobRepository.repository.list!(
+    const outside = await jobRepository.repository.listRead(
       kernelCtx(ctx),
       { needsAttention: true, kind: ["synthetic.absent"] },
       [],
@@ -227,10 +227,15 @@ describe("Job entity reads and scoped retry", () => {
       pageIndex: 0,
       pageSize: 1,
     });
-    const rows = await jobRepository.repository.list!(kernelCtx(ctx), {}, [], {
-      pageIndex: 0,
-      pageSize: 25,
-    });
+    const rows = await jobRepository.repository.listRead(
+      kernelCtx(ctx),
+      {},
+      [],
+      {
+        pageIndex: 0,
+        pageSize: 25,
+      },
+    );
     expect(queue).toMatchObject({ total: 0, counts: [], jobs: [] });
     expect(rows.data).toEqual([]);
     const health = await measureQueueHealth(ctx.db, {

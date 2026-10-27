@@ -76,17 +76,17 @@ import {
   run as runTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
-import { buildEmailWhere } from "~/server/domains/email/repo/email";
-import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
-import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { buildProductWhere } from "~/server/domains/product/repo/crud";
+import { emailScaffold } from "~/server/domains/email/repo/email";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
+import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import {
   expectedQuantityReadSql,
   onHandUnitsReadSql,
 } from "~/server/domains/product/repo/quantity-ledger";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
-import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
+import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import {
   awaitingPostingSql,
   purchasePostingStartSql,
@@ -97,7 +97,7 @@ import {
   pendingStatementStateSql,
   suggestionField,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
+import { vendorScaffold } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { pendingImageDescriptionEligibility } from "~/server/generic/assessment/repo/review-families";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
@@ -408,10 +408,7 @@ async function workQueueProjection(
         id: sql`"Product".shortcode`,
         name: sql`"Product".name`,
         owners: sql`ARRAY[]::uuid[]`,
-        where: await buildProductWhere(
-          db,
-          productFiltersSchema.parse(productGaps),
-        ),
+        where: productScaffold.where(productFiltersSchema.parse(productGaps)),
         details: research("product"),
         key: "research:product",
         reasonKeys: gapReasonKeys(scope, "product"),
@@ -428,7 +425,7 @@ async function workQueueProjection(
         id: sql`"Vendor".shortcode`,
         name: sql`"Vendor".name`,
         owners: sql`ARRAY[]::uuid[]`,
-        where: buildVendorWhereClause(vendorFiltersSchema.parse(vendorGaps)),
+        where: vendorScaffold.where(vendorFiltersSchema.parse(vendorGaps)),
         details: research("vendor"),
         key: "research:vendor",
         reasonKeys: gapReasonKeys(scope, "vendor"),
@@ -447,7 +444,7 @@ async function workQueueProjection(
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseSourceOwners(sql`"Purchase".id`),
-        where: buildPurchaseWhereClause(
+        where: purchaseScaffold.where(
           purchaseFiltersSchema.parse(purchaseGaps),
         ),
         details: research("purchase"),
@@ -467,7 +464,7 @@ async function workQueueProjection(
         id: sql`"Expense".shortcode`,
         name: sql`"Expense".name`,
         owners: workExpenseSourceOwners(sql`"Expense".id`),
-        where: await buildExpenseWhereClause(
+        where: await expenseScaffold.prepareWhere(
           db,
           expenseFiltersSchema.parse(expenseGaps),
         ),
@@ -494,7 +491,7 @@ async function workQueueProjection(
         id: sql`"Email".shortcode`,
         name: sql`coalesce("Email".subject, 'Email')`,
         owners: sql`ARRAY["Email"."ledgerPartyId"]`,
-        where: buildEmailWhere(emailGaps),
+        where: emailScaffold.where(emailGaps),
         details: {
           source: "email",
           kind: "review",
@@ -606,7 +603,7 @@ async function workQueueProjection(
         id: sql`"Purchase".shortcode`,
         name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
         owners: workPurchaseOwners(sql`"Purchase".id`),
-        where: sql`(${buildPurchaseWhereClause(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")))})
+        where: sql`(${purchaseScaffold.where(purchaseFiltersSchema.parse(viewFilters("purchase", "unsettled")))})
         AND NOT (${gapCondition("purchase", "settlement_mismatch")})`,
         details: {
           source: "reconciliation",
@@ -663,7 +660,7 @@ async function workQueueProjection(
           id: sql`"Purchase".shortcode`,
           name: sql`coalesce("Purchase"."displayLabel", "Purchase"."orderId", 'Purchase')`,
           owners: workPurchaseOwners(sql`"Purchase".id`),
-          where: buildPurchaseWhereClause(purchaseFiltersSchema.parse(filters)),
+          where: purchaseScaffold.where(purchaseFiltersSchema.parse(filters)),
           details: settlementDetails,
           key: definition.key,
           reasonKeys: sql`ARRAY[${deferred ? sql`CASE WHEN ${deferred} THEN ${"awaiting_posting:" + definition.key} ELSE ${definition.key} END` : sql`${definition.key}::text`}]`,
@@ -677,7 +674,7 @@ async function workQueueProjection(
           id: sql`"Expense".shortcode`,
           name: sql`"Expense".name`,
           owners: workExpenseOwners(sql`"Expense".id`),
-          where: await buildExpenseWhereClause(
+          where: await expenseScaffold.prepareWhere(
             db,
             expenseFiltersSchema.parse(filters),
           ),
@@ -694,8 +691,7 @@ async function workQueueProjection(
           id: sql`"FinancialTransaction".shortcode`,
           name: sql`coalesce("FinancialTransaction".merchant, "FinancialTransaction"."rawDescription", 'Financial transaction')`,
           owners: sql`ARRAY(SELECT account."ledgerPartyId" FROM "FinancialAccount" account WHERE account.id = "FinancialTransaction"."accountId" AND account."deletedAt" IS NULL)`,
-          where: await buildFinancialTransactionWhere(
-            db,
+          where: financialTransactionScaffold.where(
             financialTransactionFiltersSchema.parse(filters),
           ),
           details: settlementDetails,

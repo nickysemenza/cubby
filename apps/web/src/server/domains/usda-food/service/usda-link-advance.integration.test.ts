@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { USDAClient } from "~/server/clients/usda";
 import {
-  getProductByID,
+  readProductById,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
@@ -70,13 +70,13 @@ describe("advanceProductUsdaLinks", () => {
     expect(advanced).toEqual([
       { productId: superseded.entityId, fromFdcId: 9900101, toFdcId: 9900105 },
     ]);
-    expect((await getProductByID(ctx.db, superseded.entityId)).fdc_id).toBe(
+    expect((await readProductById(ctx.db, superseded.entityId)).fdc_id).toBe(
       9900105,
     );
-    expect((await getProductByID(ctx.db, current.entityId)).fdc_id).toBe(
+    expect((await readProductById(ctx.db, current.entityId)).fdc_id).toBe(
       9900200,
     );
-    expect((await getProductByID(ctx.db, vanished.entityId)).fdc_id).toBe(
+    expect((await readProductById(ctx.db, vanished.entityId)).fdc_id).toBe(
       9900300,
     );
     expect(
@@ -105,7 +105,7 @@ describe("advanceProductUsdaLinks", () => {
     expect(
       await advanceProductUsdaLinks(ctx.db, new USDAClient(editingRelease)),
     ).toEqual([]);
-    expect((await getProductByID(ctx.db, edited.entityId)).fdc_id).toBe(
+    expect((await readProductById(ctx.db, edited.entityId)).fdc_id).toBe(
       9900200,
     );
   });

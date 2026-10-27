@@ -96,7 +96,6 @@ function blockingConnections(requestedIds: string[]) {
     return {
       id: input.id,
       kind: "product",
-      redirectedFrom: null,
       groups: [
         {
           direction: "incoming",

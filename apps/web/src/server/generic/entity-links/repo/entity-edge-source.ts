@@ -57,7 +57,10 @@ import {
 } from "~/server/entity-kernel/repo/entity-identity";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/entity-kernel/repo/entity-lifecycle-registry";
 import { createAppError } from "~/server/errors/app-error";
-import { repositoryConnectionRows } from "~/server/generic/list/repo/list";
+import {
+  type EntityListScaffold,
+  repositoryConnectionRows,
+} from "~/server/generic/list/repo/list";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type EdgeSource =
@@ -313,10 +316,16 @@ const readEdges = async (
 const countedEdgeRow = edgeRow.extend({ count: z.number().int().positive() });
 
 /** Connections opt in independently of the physical graph and lifecycle policy. */
+/** Each entity's list scaffold, from the kernel bindings the caller holds. */
+export type ScaffoldOf = (
+  entity: ShortcodeEntity,
+) => EntityListScaffold | undefined;
+
 const readRepositoryConnections = async (
   db: Database | DrizzleTransaction,
   subject: { id: string; kind: ShortcodeEntity },
   limit: number,
+  scaffoldOf: ScaffoldOf,
 ) => {
   const groups = [];
   for (const sourceKind of shortcodeEntities) {
@@ -338,8 +347,12 @@ const readRepositoryConnections = async (
               : sourceKind === subject.kind,
         );
         if (directions.length === 0) continue;
-        // Repositories register during application startup, after this module loads.
-        const relation = repositoryConnectionRows(sourceKind, key, column);
+        const scaffold = scaffoldOf(sourceKind);
+        if (!scaffold)
+          throw new Error(
+            `${sourceKind}.model.rows.${key} declares connections but has no list scaffold`,
+          );
+        const relation = repositoryConnectionRows(scaffold, key, column);
         const edgeKey = `rows:${sourceKind}.${key}.${column}`;
         for (const direction of directions) {
           const subjectColumn =
@@ -388,25 +401,13 @@ const SPECS_BY_TARGET_AND_KEY = new Map(
 const specFor = (targetKind: string, edgeKey: string) =>
   SPECS_BY_TARGET_AND_KEY.get(`${targetKind}:${edgeKey}`);
 
-/** Resolve a read code (following a merge redirect) to a live identity. */
+/** Resolve a read code to a live identity; a merged-away code is not found. */
 const liveSubject = async (
   db: Database | DrizzleTransaction,
   code: string,
-): Promise<{
-  id: string;
-  kind: ShortcodeEntity;
-  shortcode: string;
-  redirectedFrom: string | null;
-}> => {
+): Promise<{ id: string; kind: ShortcodeEntity; shortcode: string }> => {
   const identity = await resolveEntityIdentity(db, code);
-  if (identity.state === "live") return { ...identity, redirectedFrom: null };
-  if (identity.state === "redirected" && identity.canonicalDeletedAt === null)
-    return {
-      id: identity.canonicalId,
-      kind: identity.kind,
-      shortcode: identity.canonicalShortcode,
-      redirectedFrom: identity.requested,
-    };
+  if (identity.state === "live") return identity;
   const kind = identity.state === "missing" ? null : identity.kind;
   throw createAppError(
     kind ? ENTITY_NOT_FOUND_REASON[kind] : "CONSTRAINT_VIOLATION",
@@ -419,6 +420,7 @@ const liveSubject = async (
 export async function getEntityConnections(
   db: Database | DrizzleTransaction,
   rawInput: EntityConnectionsInput,
+  scaffoldOf: ScaffoldOf,
 ): Promise<EntityConnectionsOut> {
   const input = entityConnectionsInput.parse(rawInput);
   const subject = await liveSubject(db, input.id);
@@ -433,7 +435,7 @@ export async function getEntityConnections(
   const [incoming, outgoing, repositoryConnections] = await Promise.all([
     readEdges(db, incomingSpecs, { side: "target", id: subject.id }),
     readEdges(db, outgoingSpecs, { side: "source", id: subject.id }),
-    readRepositoryConnections(db, subject, input.limitPerGroup),
+    readRepositoryConnections(db, subject, input.limitPerGroup, scaffoldOf),
   ]);
   const policy =
     input.operation === undefined
@@ -519,7 +521,6 @@ export async function getEntityConnections(
   return {
     id: subject.shortcode,
     kind: subject.kind,
-    redirectedFrom: subject.redirectedFrom,
     groups: drafts
       .map(({ others, ...group }) => ({ ...group, items: others.map(toItem) }))
       .sort(

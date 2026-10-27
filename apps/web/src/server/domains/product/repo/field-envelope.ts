@@ -55,6 +55,15 @@ export function projectProductFieldEnvelopes({
   const selectedFields = currentReadFacts.parse(built.fields);
   if (cost) selectedFields.cost = projectProductCost(price, cost);
   let output = built;
+  // Selected reads already bind unit quotes against the selected valuation.
+  // Their omitted conversion inputs must not be reconstructed as a full row.
+  if (needsUnitPrice && !Object.hasOwn(row, "unitMappings")) {
+    for (const key of unitFields) {
+      const original = fieldEnvelopeFor(built, key);
+      if (original) selectedFields[key] = { ...original, work: price.work };
+    }
+    return { ...built, fields: selectedFields };
+  }
   if (needsUnitPrice) {
     const selectedPrice = z.number().nullable().parse(fieldValueOf(price));
     const units = projectProductUnitPrices({

@@ -11,26 +11,16 @@ import {
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type RecipeCreateInput,
   type RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
-import { rawRecipeList as recipeListItemOut } from "@cubby/schemas/recipe-raw-read";
+import { rawRecipeList, rawRecipeOutput } from "@cubby/schemas/recipe-raw-read";
 import type {
   RawRecipeGraph as RecipeGraphOut,
   RawRecipeOutput as RecipeOut,
 } from "@cubby/schemas/recipe-raw-read";
-import {
-  and,
-  eq,
-  getTableColumns,
-  inArray,
-  isNotNull,
-  ne,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, type SQL, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
@@ -44,14 +34,15 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   associatePendingImages,
   getDb,
-  imageJoinBindings,
-  type ListReadIntent,
+  galleryBinding,
+  mapImages,
   notDeleted,
   relations,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { recipeSourceRelations } from "~/server/db/helpers/relations";
 import {
   entityAttachment,
   entityExternalId,
@@ -65,10 +56,16 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { recipeHasImages } from "~/server/domains/image/repo/image";
+import { recipeSearch } from "~/server/domains/recipe/repo/search-read-recipe";
 import { resolveRecipeServings } from "~/server/domains/recipe/repo/servings";
+import {
+  recipeCompositionLabel,
+  recipeTotalsLabel,
+} from "~/server/entity-kernel/repo/detail-display-labels";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
@@ -80,21 +77,17 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   ensureExternalSources,
   liveExternalIds,
 } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { loadRecipeMealEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { recipeListLabels } from "~/server/generic/list/repo/list-display-labels";
-import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
-import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
-  resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -140,14 +133,13 @@ export const RECIPE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
 
 import {
-  dbRecipeToAPI,
+  mapRecipeSections,
   dbRecipeToAPIGraph,
   liveMealCountForRecipeSql,
   liveSectionCountForRecipeSql,
   recipeProvenanceFields,
   recipeTotalsFields,
 } from "~/server/domains/recipe/repo/helpers";
-import type { RecipeFilters } from "~/server/domains/recipe/repo/internal-types";
 import { recipeMetaToColumns } from "~/server/domains/recipe/repo/meta";
 import {
   type RecipeProvenance,
@@ -162,20 +154,6 @@ import {
   updateRecipeBasicProperties,
   updateRecipeImages,
 } from "./update-helpers";
-
-export const getRecipeByID = async (
-  db: Database | DrizzleTransaction,
-  id: RecipeId,
-): Promise<RecipeOut | null> => {
-  const res = await unwrapDb(db).query.recipe.findFirst({
-    where: and(eq(recipe.id, id), notDeleted(recipe)),
-    ...relations.recipe.full,
-  });
-  if (res === null || res === undefined) return null;
-  const qualities = await loadDataQualities(db, "recipe", [res.id]);
-  // SAFETY: `res` was just fetched live by id, so its quality was evaluated.
-  return dbRecipeToAPI(res, qualities.get(res.id)!);
-};
 
 export const getRecipesByIDs = async (
   db: Database,
@@ -301,14 +279,6 @@ export const getCookbookRecipeIdsByTitle = async (
     columns: { id: true, name: true },
   });
   return new Map(rows.map((r) => [normalizeTitle(r.name), r.id]));
-};
-
-export const getRecipeByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<RecipeOut | null> => {
-  const id = await resolveLiveShortcode(db, shortcode, "recipe");
-  return id ? getRecipeByID(db, parseEntityId("recipe", id)) : null;
 };
 
 const NOTION_PAGE = { source: NOTION_SOURCE, kind: "page" } as const;
@@ -444,7 +414,34 @@ const subRecipeIds = qb
     ),
   );
 
-const recipeScaffold = listScaffold("recipe", recipe, {
+/** Each recipe's sections, images and source relations, for the record read. */
+const loadRecipeDetail = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) => {
+  const rows = await unwrapDb(db).query.recipe.findMany({
+    where: inArray(
+      recipe.id,
+      ids.map((id) => parseEntityId("recipe", id)),
+    ),
+    with: {
+      ...recipeSourceRelations,
+      sections: relations.recipe.full.with.sections,
+      images: relations.recipe.full.with.images,
+    },
+  });
+  return new Map<string, (typeof rows)[number]>(
+    rows.map((row) => [row.id, row]),
+  );
+};
+
+/**
+ * The Recipe read, stated once: list pages, selected projections and the
+ * single-record read all select through it. Pages read flat rows and scalar
+ * counts, never full graphs; the thumbnail comes from the display-image
+ * resolver, not an images join.
+ */
+export const recipeScaffold = listScaffold("recipe", recipe, {
   derived: {
     costTotal: recipeTotalSql("{cost,lower}"),
     caloriesTotal: recipeTotalSql("{nutrition,kcal,lower}"),
@@ -459,120 +456,115 @@ const recipeScaffold = listScaffold("recipe", recipe, {
     instructions: inArray(recipe.id, recipeIdsWithInstructions),
     subRecipe: inArray(recipe.id, subRecipeIds),
   },
-});
-
-/** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildRecipeWhere = (filters: RecipeFilters) =>
-  recipeScaffold.where(filters);
-
-export const recipeListRead = async (
-  db: Database,
-  filters: RecipeFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  projection: ListProjection = { kind: "full" },
-) => {
-  return recipeScaffold.read(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      tieBreaker: sql`${recipe.name} asc`,
-      // List reads fetch flat rows and scalar counts; never full graphs. The
-      // thumbnail comes from the display-image resolver, not an images join.
-      select: (page, selected) =>
-        getDb(db)
-          .select({
-            ...getTableColumns(recipe),
-            mealCount: wantsListGroup(selected, "relations")
-              ? sql<number | null>`${sql.raw(
-                  liveMealCountForRecipeSql('"Recipe"."id"'),
-                )}`.as("mealCount")
-              : sql<number | null>`NULL::int`.as("mealCount"),
-            sectionCount: wantsListGroup(selected, "derived")
-              ? sql<number | null>`${sql.raw(
-                  liveSectionCountForRecipeSql('"Recipe"."id"'),
-                )}`.as("sectionCount")
-              : sql<number | null>`NULL::int`.as("sectionCount"),
-          })
-          .from(recipe)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      read: {
-        media: true,
-        bindings: (bind) => [
-          bind(
-            recipeListItemOut.pick({ meta: true, source: true }),
-            recipeProvenanceFields,
-          ),
-          // The flat list intentionally carries no fork graph; detail owns its richer provenance.
-          bind(
-            recipeListItemOut.pick({
-              forkedFromRecipeId: true,
-              forkedFromRecipeName: true,
-            }),
-            () => ({ forkedFromRecipeId: null, forkedFromRecipeName: null }),
-          ),
-          bind(recipeListItemOut.pick({ meals: true }), (row) => {
-            if (row.mealCount === null)
-              throw new Error("Recipe meal count was not loaded");
-            return { meals: Number(row.mealCount) };
-          }),
-          bind(recipeListItemOut.pick({ fieldResolutions: true }), (row) => ({
-            fieldResolutions: resolveRecipeServings(row),
-          })),
-          bind(
-            recipeListItemOut.pick({
-              totals: true,
-              cost: true,
-              calories: true,
-              protein: true,
-              carbs: true,
-              fat: true,
-              costTotalLabel: true,
-              caloriesTotalLabel: true,
-              totalMinutesLabel: true,
-              sectionCount: true,
-            }),
-            (row) => {
-              if (row.sectionCount === null)
-                throw new Error("Recipe section count was not loaded");
-              const values = recipeTotalsFields(row);
-              return {
-                ...values,
-                ...recipeListLabels({
-                  totals: values.totals,
-                  meta: recipeProvenanceFields(row).meta,
-                }),
-                sectionCount: Number(row.sectionCount),
-              };
-            },
-          ),
-        ],
+  read: {
+    search: recipeSearch,
+    evidence: { meals: loadRecipeMealEvidence },
+    columns: {
+      // The derived `tags` sorts by the first tag; the read key is the array.
+      tags: recipe.tags,
+      // The derived `meals` filters on planned recipes; the read key counts them.
+      meals: sql<number>`(${sql.raw(liveMealCountForRecipeSql('"Recipe"."id"'))})::int`,
+      sectionCount: sql<number>`(${sql.raw(
+        liveSectionCountForRecipeSql('"Recipe"."id"'),
+      )})::int`,
+    },
+    tieBreaker: sql`${recipe.name} asc`,
+    media: true,
+    references: {
+      forkedFromRecipeId: {
+        kind: "lookup",
+        name: "forkedFromRecipeName",
+        missing: "null",
       },
     },
-  );
-};
+    bindings: (bind) => {
+      const detail = bind.ids(({ db, ids }) => loadRecipeDetail(db, ids));
+      const loaded = (
+        row: { id: string },
+        rows: Awaited<ReturnType<typeof loadRecipeDetail>>,
+      ) => {
+        const value = rows.get(row.id);
+        if (!value) throw new Error(`Recipe detail was not loaded: ${row.id}`);
+        return value;
+      };
+      return [
+        // A page names no cookbook or Notion page; the record read does.
+        bind(
+          rawRecipeList.pick({ meta: true, source: true }),
+          recipeProvenanceFields,
+        ),
+        detail.fields(
+          rawRecipeOutput.pick({ source: true }),
+          (row, rows) => ({
+            source: recipeProvenanceFields({ ...row, ...loaded(row, rows) })
+              .source,
+          }),
+          { scope: "detail" },
+        ),
+        bind(rawRecipeList.pick({ fieldResolutions: true }), (row) => ({
+          fieldResolutions: resolveRecipeServings(row),
+        })),
+        bind(
+          rawRecipeList.pick({
+            totals: true,
+            cost: true,
+            calories: true,
+            protein: true,
+            carbs: true,
+            fat: true,
+            costTotalLabel: true,
+            caloriesTotalLabel: true,
+            totalMinutesLabel: true,
+          }),
+          (row) => {
+            const values = recipeTotalsFields(row);
+            return {
+              ...values,
+              ...recipeListLabels({
+                totals: values.totals,
+                meta: recipeProvenanceFields(row).meta,
+              }),
+            };
+          },
+        ),
+        bind(
+          rawRecipeOutput.pick({ totalsLabel: true }),
+          (row) => ({
+            totalsLabel: recipeTotalsLabel(recipeTotalsFields(row).totals),
+          }),
+          { scope: "detail" },
+        ),
+        detail.fields(
+          rawRecipeOutput.pick({ sections: true, compositionLabel: true }),
+          (row, rows) => {
+            const sections = mapRecipeSections(loaded(row, rows).sections);
+            return {
+              sections,
+              compositionLabel: recipeCompositionLabel(sections),
+            };
+          },
+          { scope: "detail" },
+        ),
+        detail.fields(
+          rawRecipeOutput.pick({ images: true }),
+          (row, rows) => ({ images: mapImages(loaded(row, rows).images) }),
+          { scope: "detail" },
+        ),
+      ];
+    },
+  },
+});
 
-export const recipeList = async (
-  db: Database,
-  filters: RecipeFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const result = await recipeListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    readIntent,
-    { kind: "full" },
-  );
-  return parseCompleteListRead(recipeListItemOut, Promise.resolve(result));
-};
+const recipeReader = createEntityReader<
+  never,
+  RecipeOut,
+  "recipe",
+  Database | DrizzleTransaction
+>({ entity: "recipe", scaffold: recipeScaffold, output: rawRecipeOutput });
+/** One live Recipe by internal id, or null. */
+export const readRecipeById = recipeReader.getByIDOrNull;
+/** One live Recipe by public code, or null. */
+export const readRecipe = recipeReader.getByShortcode;
 
 export type CookbookRef = { id: CookbookId; name: string };
 
@@ -628,7 +620,7 @@ const createRecipeReturningId = async (
       );
       await associatePendingImages(
         tx,
-        imageJoinBindings.recipe,
+        galleryBinding("recipe"),
         createdRecipe.id,
         resolvedImageIds,
       );
@@ -657,7 +649,7 @@ export const createRecipe = defineMutationWriter({
     _actor: ActorContext,
     _provenance?: RecipeProvenance,
   ) => {
-    const output = await getRecipeByID(db, receipt.entityId);
+    const output = await readRecipeById(db, receipt.entityId);
     if (!output)
       throw createAppError(
         "RECIPE_NOT_FOUND",
@@ -741,7 +733,7 @@ export const duplicateRecipe = async (
   id: RecipeId,
   actor: ActorContext,
 ): Promise<RecipeOut> => {
-  const source = await getRecipeByID(db, id);
+  const source = await readRecipeById(db, id);
   if (!source) {
     throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
   }
@@ -794,7 +786,7 @@ export const duplicateRecipe = async (
       // and harmless: Image lifetime is governed by its own reference count
       // (how many join rows still point at it), not by recipe ownership.
       //
-      // `source.images[].id` are public `IMG-` shortcodes (`getRecipeByID`'s
+      // `source.images[].id` are public `IMG-` shortcodes (`readRecipeById`'s
       // own output) — resolved back to uuids here since `RecipeImage.imageId`
       // is the FK. A miss would mean an image `source` just read moments ago
       // vanished mid-duplicate, so this throws rather than silently cloning a
@@ -818,7 +810,7 @@ export const duplicateRecipe = async (
     },
   );
 
-  const duplicated = await getRecipeByID(db, newRecipeId);
+  const duplicated = await readRecipeById(db, newRecipeId);
   if (!duplicated) {
     throw createAppError(
       "RECIPE_NOT_FOUND",
@@ -974,7 +966,7 @@ export const updateRecipe = defineMutationWriter({
     _updates: RecipeUpdateInput["data"],
     _actor: ActorContext,
   ) => {
-    const recipe = await getRecipeByID(db, receipt.entityId);
+    const recipe = await readRecipeById(db, receipt.entityId);
     if (!recipe)
       throw createAppError(
         "RECIPE_NOT_FOUND",
@@ -1053,7 +1045,7 @@ export const updateRecipe = defineMutationWriter({
           detachedImageKeys,
         },
         async () => {
-          const recipe = await getRecipeByID(tx, id);
+          const recipe = await readRecipeById(tx, id);
           if (!recipe)
             throw createAppError(
               "RECIPE_NOT_FOUND",

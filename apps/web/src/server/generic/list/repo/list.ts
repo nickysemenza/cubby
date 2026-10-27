@@ -5,7 +5,7 @@ import { suggestionStatus } from "@cubby/schemas/ai";
  * (`listScaffold`) that binds them with the data-quality filters, audit
  * dates, lexical search, the generated sort roster and paging.
  */
-import { scoredEntities, type ScoredEntity } from "@cubby/schemas/data-quality";
+import { scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
@@ -15,8 +15,10 @@ import {
   type GeneratedRowSet,
 } from "@cubby/schemas/entity-list-fields";
 import {
+  allEntities,
   entityInspectorMetadata,
   entityManifest,
+  entityMembership,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
@@ -36,10 +38,7 @@ import {
   type PresenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import {
-  searchableEntities,
-  type SearchableEntity,
-} from "@cubby/schemas/search";
+import { searchableEntities } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
 import {
   type AnyColumn,
@@ -56,7 +55,7 @@ import {
   SQL,
   sql,
 } from "drizzle-orm";
-import type { PgSelect, PgTable } from "drizzle-orm/pg-core";
+import type { PgColumn, PgSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
@@ -85,6 +84,7 @@ import {
   formatSearchTerm,
   householdDayRangeConditions,
   type ListReadIntent,
+  notDeleted,
   matchesStringValues,
   presenceCondition,
   rangeConditions,
@@ -107,6 +107,7 @@ import {
 } from "~/server/generic/derived/repo/read";
 import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
+import type { EvidenceLoader } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import {
   type HierarchyEntity,
   hierarchyDescendantsSql,
@@ -118,6 +119,7 @@ import {
   lexicalEligibility,
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
+import type { SearchReadPort } from "~/server/generic/search/repo/search-read-port";
 import {
   traceListPageWithCount,
   withListReadTracing,
@@ -131,8 +133,10 @@ import {
   derivedPrepare,
   derivedIntervalSql,
   derivedValueSet,
+  declaredRollup,
   declaredRollups,
   declaredResultProjections,
+  derivedSelectSql,
   derivedValueSql,
   type AnyDerivedSql,
   groupSql,
@@ -143,6 +147,7 @@ import {
   ListContext,
   type ListPreparationScope,
   type ListPrepare,
+  type ListReader,
   relatedExistsSql,
   type AnyRowsSql,
   rowSetSql,
@@ -345,13 +350,12 @@ const booleanPredicate = (
         flag === undefined ? undefined : flag ? "has" : "none",
       );
 
-const hierarchyEntities = new Set<string>(
-  Object.entries(generatedEntityListFields).flatMap(([key, fields]) =>
-    fields.hierarchy === null ? [] : [key],
+const isHierarchyEntity = entityMembership(
+  allEntities.filter(
+    (entity): entity is HierarchyEntity =>
+      generatedEntityListFields[entity].hierarchy !== null,
   ),
-);
-const isHierarchyEntity = (entity: string): entity is HierarchyEntity =>
-  hierarchyEntities.has(entity);
+).has;
 
 /**
  * The ids of the requested public shortcodes of `target`, widened to their
@@ -1500,6 +1504,10 @@ interface ListRequest<Filters extends object> {
   pagination: PaginationParams;
   readIntent?: ListReadIntent;
   projection?: ListProjection;
+  /** Shares prepared derived data across the reads of one request. */
+  preparation?: ListPreparationScope;
+  /** Who reads and the clients loaders may call (`context.reader`). */
+  reader?: ListReader;
 }
 
 /** What a list request reads, so `scaffold.context` prepares only that. */
@@ -1564,12 +1572,8 @@ type ListSelection<Row> =
       ) => Promise<Array<Row & { id: string }>>;
     };
 
-const searchableEntityNames = new Set<string>(searchableEntities);
-const isSearchableEntity = (entity: string): entity is SearchableEntity =>
-  searchableEntityNames.has(entity);
-const scoredEntityNames = new Set<string>(scoredEntities);
-const isScoredEntity = (entity: string): entity is ScoredEntity =>
-  scoredEntityNames.has(entity);
+const isSearchableEntity = entityMembership(searchableEntities).has;
+const isScoredEntity = entityMembership(scoredEntities).has;
 const listSearchSchema = z
   .object({ searchQuery: z.string().trim().min(1).max(100).optional() })
   .passthrough();
@@ -1665,9 +1669,9 @@ type ScopesArg<E extends Entity> = {
  * of every repository row set (`model.rows`), and the target list of every
  * related scope; each key is required exactly when the entity declares one.
  */
-type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
-  never,
-]
+type ListScaffoldOptions<E extends Entity, Row> = ([
+  keyof DerivedSqlArg<E>,
+] extends [never]
   ? { derived?: DerivedSqlArg<E> }
   : { derived: DerivedSqlArg<E> }) &
   ([keyof RowsSqlArg<E>] extends [never]
@@ -1680,49 +1684,65 @@ type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
     population?: <Filters extends object>(filters: Filters) => SQL;
     /** Request options consumed by population rather than tested against each row. */
     populationFilters?: readonly (keyof DerivedSqlArg<E>)[];
+    /** How a page and a single record read their rows; see {@link ListReadDeclaration}. */
+    read?: ListReadDeclaration<Row>;
   };
 
+/**
+ * The entity's read, stated once: list pages, selected projections and the
+ * single-record read all select through it. Stored columns and every
+ * declared derived value with one expression are selected without restating
+ * them; `columns` adds the read keys that are neither, and the helper
+ * columns a binding reads.
+ */
+type ListReadDeclaration<Row> = ListReadOptions<Row> & {
+  title?: SQL;
+  optionCount?: string;
+  optionKind?: PgColumn;
+  evidence?: Readonly<Record<string, EvidenceLoader>>;
+  search?: SearchReadPort;
+  columns?: Readonly<
+    Record<string, SQL | PgColumn | ((context: ListContext) => SQL)>
+  >;
+  /**
+   * Rows by id when one plain select over the root table cannot read them
+   * (relation-loaded children). The scaffold selects, orders and pages the
+   * ids; `where` restricts to them.
+   */
+  load?: (
+    db: Database | DrizzleTransaction,
+    where: SQL,
+    projection: ListProjection,
+    context: ListContext,
+  ) => Promise<Array<Row & { id: string }>>;
+  /** A domain tie-breaker ahead of the shortcode for explicit sorts. */
+  tieBreaker?: SQL;
+  /**
+   * An order the request's filters impose over any sort (an image Run's
+   * capture order); undefined leaves the declared sorts in charge.
+   */
+  orderBy?: (filters: ListFilterValues) => SQL[] | undefined;
+};
+
 /** `options` is required exactly when the entity declares SQL it reads. */
-type ListScaffoldArgs<E extends Entity> = [
+type ListScaffoldArgs<E extends Entity, Row> = [
   keyof DerivedSqlArg<E> | keyof RowsSqlArg<E> | GeneratedListScopeKey<E>,
 ] extends [never]
-  ? [options?: ListScaffoldOptions<E>]
-  : [options: ListScaffoldOptions<E>];
+  ? [options?: ListScaffoldOptions<E, Row>]
+  : [options: ListScaffoldOptions<E, Row>];
 
 const scopeValue = listFilterValues.optional();
 
-/** What the generic facet operation needs from an entity's list scaffold. */
-interface ListFacetCounter {
-  repositoryRows(key: string): SQL;
-  selectionIds(
-    db: Database | DrizzleTransaction,
-    filters: ListFilterValues,
-    input: { cursor?: string; limit: number },
-  ): Promise<{ ids: string[]; totalCount: number; nextCursor: string | null }>;
-  countBy(
-    db: Database | DrizzleTransaction,
-    filters: ListFilterValues,
-    descriptorId: string,
-  ): Promise<ListFacet | null>;
-}
-
 /**
- * Each entity's scaffold, registered when its repository module builds it
- * (once per entity, at module scope), so the generic facet operation can
- * reach the same filtered WHERE without a per-repository method.
+ * Static SQL for an explicitly opted-in repository reference connection,
+ * read from the entity's own scaffold (its repository port).
  */
-const facetCounters = new Map<Entity, ListFacetCounter>();
-
-/** The entity's facet counter once its repository module has loaded. */
-export const listFacetCounter = (entity: Entity): ListFacetCounter | null =>
-  facetCounters.get(entity) ?? null;
-
-/** Static SQL for an explicitly opted-in repository reference connection. */
 export const repositoryConnectionRows = (
-  entity: Entity,
+  scaffold: { entity: Entity; repositoryRows(key: string): SQL },
   key: string,
   column: string,
 ): SQL => {
+  const { entity } = scaffold;
   const rowSet: GeneratedRowSet | undefined = Object.entries(
     generatedEntityListFields[entity].rows,
   ).find(([name]) => name === key)?.[1];
@@ -1734,18 +1754,20 @@ export const repositoryConnectionRows = (
     throw new Error(
       `${entity}.model.rows.${key}.${column} is not a declared repository reference with connection: true`,
     );
-  const scaffold = facetCounters.get(entity);
-  if (!scaffold)
-    throw new Error(
-      `${entity}.model.rows.${key}: connection SQL is unavailable; load the entity repository to register its listScaffold before reading connections`,
-    );
   return scaffold.repositoryRows(key);
 };
 
+/** The canonical list read schema's entity, or null for a non-list entity. */
+const listEntityOf = (entity: Entity): ListEntity | null =>
+  Object.keys(ENTITY_LIST_READ_SCHEMAS).find(
+    (key): key is ListEntity =>
+      key === entity && Object.hasOwn(ENTITY_LIST_READ_SCHEMAS, key),
+  ) ?? null;
+
 /**
- * `entity`/`table` scope the helpers to one entity's list. Call once per
- * repository (module scope is fine — request data lives in the
- * `scaffold.context` a request builds).
+ * `entity`/`table` scope the helpers to one entity's list. Build once per
+ * repository and hand it to `defineRepository` as the `scaffold` port; no
+ * generic module reaches a scaffold any other way.
  */
 export function listScaffold<
   E extends SortableEntity,
@@ -1756,7 +1778,8 @@ export function listScaffold<
     updatedAt: AnyColumn;
     shortcode: AnyColumn;
   },
->(entity: E, table: T, ...[options]: ListScaffoldArgs<E>) {
+  Row = InferSelectModel<T> & ListReadRow,
+>(entity: E, table: T, ...[options]: ListScaffoldArgs<E, Row>) {
   // Declared rollups compile from the manifest; a repository supplies only
   // the remaining value and predicate SQL.
   const derivedSql: AnyDerivedSql = {
@@ -1791,11 +1814,98 @@ export function listScaffold<
       return [{ via: scope.via, nested, value }];
     });
   const fieldModel = fieldModelFor(entity);
+  const readDeclaration: ListReadDeclaration<Row> = options?.read ?? {};
+  const listEntity = listEntityOf(entity);
+  let plan: ReturnType<typeof listReadPlan<Row>> | undefined;
+  // Built on first use: repository modules are evaluated while the generated
+  // read schemas may still be initializing.
+  const readPlan = () => {
+    if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
+    if (plan) return plan;
+    plan = listReadPlan<Row>(listEntity, readDeclaration);
+    // A read-schema key that no column, derived value, declared column or
+    // binding loads would parse as absent on every read; refuse the plan.
+    const missing = plan.unloaded(
+      readDeclaration.load
+        ? undefined
+        : new Set([
+            ...Object.keys(getTableColumns(table)),
+            ...Object.keys(derivedFields),
+            ...Object.keys(readDeclaration.columns ?? {}),
+          ]),
+    );
+    if (missing.length)
+      throw new Error(
+        `${entity} read schema keys nothing loads: ${missing.join(", ")}`,
+      );
+    return plan;
+  };
+  /** The keys a page loads unless a projection names others. */
+  const pageFields = (): ListProjection =>
+    listEntity ? readPlan().fields.list : [];
   // Internal filter-only rows can require tokens absent from an ordinary page.
   const projects = (key: string, projection: ListProjection): boolean =>
     fieldModel?.fields.some((field) => field.key === key) === true &&
-    (projection.kind === "full" ||
-      (projection.kind === "selected" && projection.fields.includes(key)));
+    projection.includes(key);
+  /** Stored columns, declared derived values and declared columns a projection reads. */
+  const readColumns = (projection: ListProjection, context: ListContext) => {
+    const wanted = new Set(projection);
+    const schema = listEntity
+      ? ENTITY_LIST_READ_SCHEMAS[listEntity].schema
+      : null;
+    const selected = new Map<string, SQL | PgColumn>(
+      Object.entries(getTableColumns(table)),
+    );
+    for (const key of Object.keys(derivedFields)) {
+      if (!wanted.has(key) || Object.hasOwn(readDeclaration.columns ?? {}, key))
+        continue;
+      const value = derivedSelectSql(entity, derivedSql, key, context);
+      if (value !== null) selected.set(key, value);
+    }
+    for (const [key, value] of Object.entries(readDeclaration.columns ?? {}))
+      // A key outside the read schema is a helper column a binding reads.
+      if (wanted.has(key) || !schema || !Object.hasOwn(schema.shape, key))
+        selected.set(key, typeof value === "function" ? value(context) : value);
+    return Object.fromEntries(selected);
+  };
+  /** The declared read's rows for `where`, in no particular order. */
+  const readRows = (
+    db: Database | DrizzleTransaction,
+    context: ListContext,
+  ):
+    | {
+        load: NonNullable<
+          Extract<ListSelection<Row>, { load: unknown }>["load"]
+        >;
+        select?: never;
+      }
+    | {
+        select: NonNullable<
+          Extract<
+            ListSelection<Row>,
+            { select?: unknown; load?: never }
+          >["select"]
+        >;
+        load?: never;
+      } => {
+    const load = readDeclaration.load;
+    if (load)
+      return {
+        load: (where, projection) => load(db, where, projection, context),
+      };
+    return {
+      select: async (page, projection) =>
+        // SAFETY: the selection is the root table's columns plus the read's
+        // declared SQL, which is what `Row` describes.
+        (await unwrapDb(db)
+          .select(readColumns(projection, context))
+          .from(listTable)
+          .where(page.where)
+          .orderBy(...page.orderBy)
+          .limit(page.limit)
+          .offset(page.offset)) as Row[],
+    };
+  };
   const searchable = isSearchableEntity(entity);
   // A scored entity's `dataStatus`/`dataGap` filters and `dataQualityScore`
   // sort are declared by the manifest block, so they bind here for every
@@ -1943,7 +2053,7 @@ export function listScaffold<
                   (metric) => metric.key === key,
                 )) ||
               (projection &&
-                projects(key, request.projection ?? { kind: "full" })))),
+                projects(key, request.projection ?? pageFields())))),
       );
       const scopes = requestedScopes(values);
       const prepares = new Set(
@@ -1988,6 +2098,24 @@ export function listScaffold<
         (context, scope) => context.with(scope),
         new ListContext(new Map(loaded)),
       );
+    },
+
+    /**
+     * The filter WHERE with the context it reads prepared for a count: what
+     * a caller outside a page read (dashboards, work sources, sweeps) needs.
+     */
+    async prepareWhere<Filters extends object>(
+      db: Database | DrizzleTransaction,
+      filters: Filters,
+      seeded: ReadonlyArray<readonly [ListPrepare<unknown>, unknown]> = [],
+    ): Promise<SQL | undefined> {
+      return scaffold.where(filters, {
+        context: await scaffold.context(
+          db,
+          { filters, readIntent: "count" },
+          seeded,
+        ),
+      });
     },
 
     /**
@@ -2333,11 +2461,10 @@ export function listScaffold<
               : undefined,
           resolve: (sort) =>
             scoreSort?.(sort) ?? scaffold.derivedSort(sort, context),
-          // Offset pagination must be deterministic. Repositories may keep a
-          // domain-specific tie-breaker, but every explicit list sort then
-          // lands on the public shortcode before the private primary key.
+          // Declared tie-breakers finish on the primary key; otherwise the
+          // public shortcode orders ties independently of insertion order.
           tieBreaker: opts?.tieBreaker
-            ? sql`${opts.tieBreaker}, ${table.shortcode} asc`
+            ? sql`${opts.tieBreaker}, ${table.id} asc`
             : sql`${table.shortcode} asc`,
         },
       );
@@ -2478,42 +2605,176 @@ export function listScaffold<
       };
     },
 
-    /** Canonical assembly validates static bindings and demand before selecting even an empty page. */
-    async read<Filters extends object, Row = InferSelectModel<T>>(
+    /**
+     * The entity's page through its declared read. A caller may supply the
+     * prepared context or WHERE it already built for the same request.
+     */
+    async read<Filters extends object>(
       db: Database | DrizzleTransaction,
       request: ListRequest<Filters>,
-      spec: Omit<ListHydration<Row, ListReadRow>, "hydrate"> &
-        ListSelection<Row> & { read?: ListReadOptions<Row> },
+      override: Pick<
+        ListHydration<Row, ListReadRow>,
+        "context" | "where" | "count" | "joins" | "orderBy"
+      > = {},
     ) {
-      const listEntity = Object.keys(ENTITY_LIST_READ_SCHEMAS).find(
-        (key): key is ListEntity =>
-          key === entity && Object.hasOwn(ENTITY_LIST_READ_SCHEMAS, key),
-      );
-      if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
-      const plan = listReadPlan<Row>(listEntity, spec.read);
-      plan.validate(request.projection ?? { kind: "full" });
-      return scaffold.list(db, request, {
-        ...spec,
-        derived: true,
-        hydrate: (rows, projection, context, prefetched) =>
-          plan.read(db, rows, projection, context, "stored", prefetched),
-        prefetch: (ids, projection) => plan.prefetch(db, ids, projection),
-      });
+      const plan = readPlan();
+      const projection = request.projection ?? plan.fields.list;
+      plan.validate(projection);
+      const scoped = { ...request, projection };
+      // Prepared derived values a projection reads render into its select.
+      const context = (
+        override.context ?? (await scaffold.context(db, scoped))
+      ).withReader(request.reader);
+      const totals =
+        request.readIntent !== "count" && request.projection === undefined
+          ? scaffold.totals(db, request.filters, context)
+          : undefined;
+      const [page, sums] = await Promise.all([
+        scaffold.list(db, scoped, {
+          orderBy: readDeclaration.orderBy?.(
+            listFilterValues.parse(request.filters),
+          ),
+          ...override,
+          context,
+          tieBreaker: readDeclaration.tieBreaker,
+          ...readRows(db, context),
+          derived: true,
+          hydrate: (rows, selected, hydration, prefetched) =>
+            plan.read(db, rows, selected, hydration, "stored", prefetched),
+          prefetch: (ids, selected) =>
+            plan.prefetch(db, ids, selected, "stored", "list", context),
+        }),
+        totals,
+      ]);
+      return sums === undefined ? page : { ...page, sums };
     },
+
+    /**
+     * Live records by public code through the same declared read, with the
+     * detail projection by default: no filter compilation, ordering or
+     * count. Absent, foreign and deleted codes are simply missing. Quality
+     * evaluates live, as every record read does.
+     */
+    async get(
+      db: Database | DrizzleTransaction,
+      codes: readonly string[],
+      projection: ListProjection = readPlan().fields.detail,
+      reader?: ListReader,
+    ): Promise<{ data: ListReadRow[]; fieldReads?: PageFieldReadContexts }> {
+      if (codes.length === 0) return { data: [] };
+      const plan = readPlan();
+      plan.validate(projection);
+      const context = (
+        await scaffold.context(db, {
+          filters: { ids: [...codes] },
+          projection,
+        })
+      ).withReader(reader);
+      const where = and(
+        notDeleted(table),
+        shortcodeSetCondition(sql`${table.shortcode}`, [...codes]),
+      );
+      if (where === undefined) throw new Error("A read needs a WHERE");
+      const selection = readRows(db, context);
+      const rows = selection.load
+        ? await selection.load(where, projection)
+        : await selection.select(
+            { where, orderBy: [], limit: codes.length, offset: 0 },
+            projection,
+          );
+      if (rows.length === 0) return { data: [] };
+      return withPageFields(db, entity, rows, () =>
+        plan.read(db, rows, projection, context, "live", undefined, "detail"),
+      );
+    },
+
+    /** {@link get} by internal ids, for writers that hold the row they wrote. */
+    async getByIds(
+      db: Database | DrizzleTransaction,
+      ids: readonly string[],
+      projection?: ListProjection,
+      reader?: ListReader,
+    ) {
+      if (ids.length === 0) return { data: [] };
+      const codes = await unwrapDb(db)
+        .select({
+          id: sql<string>`${table.id}`,
+          code: sql<string>`${table.shortcode}`,
+        })
+        .from(listTable)
+        .where(and(inArray(table.id, [...ids]), notDeleted(table)));
+      const read = await scaffold.get(
+        db,
+        codes.map((row) => row.code),
+        projection,
+        reader,
+      );
+      // Rows come back keyed by public id; restore the requested id order.
+      const byCode = new Map(
+        read.data.map((row) => {
+          const { id } = listRowIdSchema.parse(row);
+          return [parseShortcode(id)?.shortcode ?? id, row] as const;
+        }),
+      );
+      const codeOf = new Map(codes.map((row) => [row.id, row.code]));
+      return {
+        ...read,
+        data: ids.flatMap((id) => {
+          const code = codeOf.get(id);
+          const row = code === undefined ? undefined : byCode.get(code);
+          return row === undefined ? [] : [row];
+        }),
+      };
+    },
+
+    /**
+     * The declared `presentation.list.totals` over the filtered population:
+     * one aggregate statement, each key's own additive SQL.
+     */
+    async totals<Filters extends object>(
+      db: Database | DrizzleTransaction,
+      filters: Filters,
+      context?: ListContext,
+    ): Promise<Record<string, number> | undefined> {
+      const keys = [
+        ...new Set(
+          (entitySummary[entity]?.list.totals ?? []).flatMap(
+            (total) => total.keys,
+          ),
+        ),
+      ];
+      if (keys.length === 0) return undefined;
+      const prepared =
+        context ??
+        (await scaffold.context(db, {
+          filters,
+          readIntent: "count",
+          projection: keys,
+        }));
+      const [row] = await unwrapDb(db)
+        .select(
+          Object.fromEntries(
+            keys.map((key) => [
+              key,
+              sql<number>`COALESCE(sum((${listMetricSql(entity, key, derivedSql, table, prepared)})::numeric), 0)::double precision`,
+            ]),
+          ),
+        )
+        .from(listTable)
+        .where(scaffold.where(filters, { context: prepared }));
+      return Object.fromEntries(
+        keys.map((key) => [key, Number(row?.[key] ?? 0)]),
+      );
+    },
+
     /** Narrow/internal consumers retain the selected raw shape and own their explicit computation. */
-    async raw<Filters extends object, Row = InferSelectModel<T>>(
+    async raw<Filters extends object, Raw = InferSelectModel<T>>(
       db: Database | DrizzleTransaction,
       request: ListRequest<Filters>,
-      spec: Omit<ListHydration<Row, Row>, "hydrate"> & ListSelection<Row>,
+      spec: Omit<ListHydration<Raw, Raw>, "hydrate"> & ListSelection<Raw>,
     ) {
-      if (request.projection?.kind === "selected") {
-        const listEntity = Object.keys(ENTITY_LIST_READ_SCHEMAS).find(
-          (key): key is ListEntity =>
-            key === entity && Object.hasOwn(ENTITY_LIST_READ_SCHEMAS, key),
-        );
-        if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
-        selectedListProjection(listEntity, request.projection.fields);
-      }
+      if (request.projection && listEntity)
+        selectedListProjection(listEntity, request.projection);
       return scaffold.list(db, request, { ...spec, hydrate: (rows) => rows });
     },
     /**
@@ -2564,7 +2825,7 @@ export function listScaffold<
         nesting.scope === "flat" || !parent
           ? filtered
           : and(filtered, nestingCondition(nesting, parent, filtered));
-      const projection = request.projection ?? { kind: "full" };
+      const projection = request.projection ?? pageFields();
       const { take, skip } = buildTakeSkip(request.pagination);
       const readIntent = request.readIntent ?? "page";
       // Sections lead the total order, so a page never splits a section the
@@ -2648,7 +2909,7 @@ export function listScaffold<
         | ReturnType<typeof loadCurrentFieldOwnership>
         | undefined;
       // The id/count projection binds no fields, so it carries no envelope.
-      const withEnvelope = Boolean(spec.derived) && projection.kind !== "base";
+      const withEnvelope = Boolean(spec.derived) && projection.length > 0;
       const readLoadedPageWithCount =
         loadIds && !spec.count
           ? () =>
@@ -2694,7 +2955,7 @@ export function listScaffold<
               })
           : undefined;
       return withListReadTracing(
-        { entity, projection: projection.kind },
+        { entity, fields: projection.length },
         async () => {
           const groupedPage =
             group.length && readIntent === "page"
@@ -2773,7 +3034,7 @@ export function listScaffold<
             context,
           );
           const incompleteSums =
-            readIntent === "count" || projection.kind === "base"
+            readIntent === "count" || projection.length === 0
               ? undefined
               : await scaffold.incompleteSums(
                   db,
@@ -2852,9 +3113,46 @@ export function listScaffold<
     },
   };
   const { list: _executeList, ...publicScaffold } = scaffold;
-  if (!facetCounters.has(entity)) facetCounters.set(entity, publicScaffold);
-  return publicScaffold;
+  return {
+    ...publicScaffold,
+    evidence: readDeclaration.evidence,
+    optionCount(): SQL | undefined {
+      const key = readDeclaration.optionCount;
+      return key ? declaredRollup(entity, key, table) : undefined;
+    },
+    optionKind: readDeclaration.optionKind,
+    search: readDeclaration.search,
+    title(): SQL | undefined {
+      if (readDeclaration.title) return sql`(${readDeclaration.title})::text`;
+      const title = fieldModel?.fields.find(
+        (field) => field.readKey === entitySummary[entity].titleField,
+      );
+      const stored = fieldModel?.storage.find(
+        (field) => field.key === title?.key,
+      );
+      const column = tableColumns.find(
+        (entry) => entry.name === stored?.column,
+      );
+      return column ? sql`(${column})::text` : undefined;
+    },
+    /** The keys a page and a single-record read load by default. */
+    get fields() {
+      return readPlan().fields;
+    },
+  };
 }
+
+/** Any entity's scaffold, as the kernel and generic modules receive it. */
+export type EntityListScaffold = ReturnType<
+  typeof listScaffold<SortableEntity, ListScaffoldTable, never>
+>;
+type ListScaffoldTable = PgTable & {
+  id: AnyColumn;
+  deletedAt?: AnyColumn;
+  createdAt: AnyColumn;
+  updatedAt: AnyColumn;
+  shortcode: AnyColumn;
+};
 
 /**
  * The key a row contributes to a value facet, as the filter value a pick

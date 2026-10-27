@@ -20,7 +20,7 @@ import { dataExceptionRecord } from "~/server/db/retained-tables";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";
 
-import { dataQualityEntries, storedEntryFor } from "./entries";
+import { storedEntryFor } from "./entry";
 import type { QualityEvaluation, StoredEntityChecks } from "./stored-registry";
 
 type ReaderDb = Database | DrizzleTransaction;
@@ -106,7 +106,7 @@ export async function loadPublishedQuality(
   ids: readonly string[],
 ): Promise<StoredEvaluation[]> {
   if (!ids.length) return [];
-  const { table: t } = dataQualityEntries[kind];
+  const { table: t } = storedEntryFor(kind);
   const [result, exceptions] = await Promise.all([
     unwrapDb(db)
       .execute(sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
@@ -153,7 +153,6 @@ export async function prepareQualityPublications(
   ids: readonly string[],
 ): Promise<QualityPublication[]> {
   const entry = storedEntryFor(kind);
-  if (!entry) throw new Error(`${kind} has no stored quality evaluator`);
   // Loaders need not promise source-row order; publication comparisons do.
   return (await evaluateLiveQuality(db, entry, ids))
     .map((row) => ({

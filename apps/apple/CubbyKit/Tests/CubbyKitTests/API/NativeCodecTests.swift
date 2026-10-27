@@ -41,14 +41,14 @@ struct NativeCodecTests {
                 "width", "height", "detectedContentType", "sha256", "renderStatus", "storageStatus",
                 "sourcePageUrl", "sourceAssetUrl", "sourceName", "verifiedAt", "capturedAt",
                 "capturedAtOffsetMinutes", "captureLocation", "capturePlaceName", "captureDeviceLabel",
-                "capturedByPartyId", "provenanceEvidence", "sourceEvidence", "redirectedFrom",
+                "capturedByPartyId", "provenanceEvidence", "sourceEvidence",
             ].map { ($0, JSONValue.null) })
         row.merge(
             [
                 "id": "IMG-2345", "key": "synthetic-image", "filename": "synthetic.png", "size": 1,
                 "contentType": "image/png", "status": "UPLOADED", "source": "upload",
                 "useOriginal": false, "captureAttribution": "none", "associations": [], "attachments": [],
-                "previousShortcodes": [], "createdAt": "2026-10-01T00:00:00Z",
+                "createdAt": "2026-10-01T00:00:00Z",
                 "updatedAt": "2026-10-01T00:00:00Z",
                 "fields": .object(fields),
             ], uniquingKeysWith: { _, next in next })
@@ -82,8 +82,6 @@ struct NativeCodecTests {
         let parent = JSONValue.object(node("LOC-3456", "Synthetic parent", parent: ancestor))
         var root = node("LOC-4567", "Synthetic location", parent: parent)
         root["attachments"] = []
-        root["redirectedFrom"] = .null
-        root["previousShortcodes"] = []
         root["children"] = [.object(node("LOC-5678", "Synthetic child"))]
         let original: InfLocation = try JSONValue.object(root).decoded()
         #expect(original.parent?.parent?.name == "Synthetic ancestor")

@@ -13,7 +13,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { findOrCreateIngredient } from "./crud";
-import { ingredientList } from "./search";
+import { ingredientScaffold } from "./search";
 
 describe("ingredient mappingGap filter", () => {
   const ctx = withTestDb();
@@ -80,12 +80,11 @@ describe("ingredient mappingGap filter", () => {
       ctx.actor,
     );
 
-    const gap = await ingredientList(
-      ctx.db,
-      { mappingGap: true },
-      [{ orderBy: "name", direction: "asc" }],
-      firstPage,
-    );
+    const gap = await ingredientScaffold.read(ctx.db, {
+      filters: { mappingGap: true },
+      sorts: [{ orderBy: "name", direction: "asc" }],
+      pagination: firstPage,
+    });
     expect(gap.data.map((row) => row.name)).toEqual([
       "Gap partial",
       "Gap unknown",
@@ -98,12 +97,11 @@ describe("ingredient mappingGap filter", () => {
     expect(names).not.toContain("Gap mixed");
     // The flag is a boolean now: false is the complement, never-used included.
     const nonGap = (
-      await ingredientList(
-        ctx.db,
-        { mappingGap: false },
-        [{ orderBy: "name", direction: "asc" }],
-        firstPage,
-      )
+      await ingredientScaffold.read(ctx.db, {
+        filters: { mappingGap: false },
+        sorts: [{ orderBy: "name", direction: "asc" }],
+        pagination: firstPage,
+      })
     ).data.map((row) => row.name);
     expect(nonGap).toEqual(
       expect.arrayContaining(["Gap covered", "Gap mixed", unused.name]),

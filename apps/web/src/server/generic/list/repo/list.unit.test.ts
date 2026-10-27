@@ -32,10 +32,14 @@ describe("listScaffold", () => {
     // SAFETY: no stubbed field prepares, so the database is never read.
     const db = {} as never;
     nestedContext.mockClear();
-    await scaffold.context(db, { filters: { status: "done" } });
+    await scaffold.context(db, {
+      filters: { status: "done" },
+      projection: ["id"],
+    });
     expect(nestedContext).not.toHaveBeenCalled();
     await scaffold.context(db, {
       filters: { projectScope: { kind: ["garden"] } },
+      projection: ["id"],
     });
     expect(nestedContext).toHaveBeenCalledExactlyOnceWith(db, {
       filters: { kind: ["garden"] },

@@ -18,10 +18,18 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { InventoryPlacement } from "@cubby/schemas/inventory";
+import type {
+  InventoryPlacement,
+  inventoryFiltersSchema,
+} from "@cubby/schemas/inventory";
+import { rawInventoryList } from "@cubby/schemas/inventory-raw-read";
 import type { LocationCreateInput } from "@cubby/schemas/location";
 import type { PlantCreateInput } from "@cubby/schemas/plant";
-import type { ProductCreateInput } from "@cubby/schemas/product";
+import type {
+  ProductCreateInput,
+  ProductFilters,
+} from "@cubby/schemas/product";
+import { rawProductList } from "@cubby/schemas/product-raw-read";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import { type RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
@@ -58,11 +66,15 @@ import {
   createIngredient,
   findOrCreateIngredient,
 } from "../domains/ingredient/repo/crud";
-import { createInventoryEntry } from "../domains/inventory/repo/crud";
+import {
+  createInventoryEntry,
+  inventoryScaffold,
+} from "../domains/inventory/repo/crud";
 import { createLocation } from "../domains/location/repo/crud";
 import {
   createProduct,
   createProductRecord,
+  productScaffold,
 } from "../domains/product/repo/crud";
 import { createRecipe } from "../domains/recipe/repo/crud";
 import type { CookbookImportContext } from "../domains/recipe/repo/import-recipe-convert";
@@ -767,4 +779,45 @@ export const createSystemUserFixture = async (db: Database): Promise<void> => {
       updatedAt: new Date(),
     })
     .onConflictDoNothing();
+};
+
+type ProductReadRequest = Parameters<typeof productScaffold.read>[1];
+type InventoryReadRequest = Parameters<typeof inventoryScaffold.read>[1];
+const FIXTURE_PAGE = { pageIndex: 0, pageSize: 100 };
+
+/** A complete Product list page, parsed to the public list row. */
+export const listProductsFixture = async (
+  db: Database | DrizzleTransaction,
+  filters: ProductFilters & { ids?: readonly string[] },
+  sorts: ProductReadRequest["sorts"] = [],
+  pagination: ProductReadRequest["pagination"] = FIXTURE_PAGE,
+  readIntent: ProductReadRequest["readIntent"] = "page",
+) => {
+  const page = await productScaffold.read(db, {
+    filters,
+    sorts,
+    pagination,
+    readIntent,
+  });
+  return { ...page, data: page.data.map((row) => rawProductList.parse(row)) };
+};
+
+/** A complete Inventory list page, parsed to the public list row. */
+export const listInventoryFixture = async (
+  db: Database | DrizzleTransaction,
+  filters: z.output<typeof inventoryFiltersSchema> & { searchQuery?: string },
+  sorts: InventoryReadRequest["sorts"] = [],
+  pagination: InventoryReadRequest["pagination"] = FIXTURE_PAGE,
+  readIntent: InventoryReadRequest["readIntent"] = "page",
+) => {
+  const page = await inventoryScaffold.read(db, {
+    filters,
+    sorts,
+    pagination,
+    readIntent,
+  });
+  return {
+    ...page,
+    data: page.data.map((row) => rawInventoryList.parse(row)),
+  };
 };

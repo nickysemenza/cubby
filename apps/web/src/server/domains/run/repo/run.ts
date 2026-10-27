@@ -1,19 +1,17 @@
 import { activityIconEntity } from "@cubby/schemas/activity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { describeJobRollup } from "@cubby/schemas/job";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { RunFilters } from "@cubby/schemas/run";
 import { runPurpose, runStatus, runWorkLabel } from "@cubby/schemas/run-fields";
-import { type RawRunOut, rawRunOut } from "@cubby/schemas/run-raw-read";
+import { rawRunOut } from "@cubby/schemas/run-raw-read";
 import {
   runWorkSamples,
   readRunWorkPhase,
 } from "@cubby/schemas/run-work-progress";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, inArray, sql } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   databaseForTransaction,
   isTransaction,
@@ -21,19 +19,10 @@ import {
   unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { run as runTable } from "~/server/db/schema";
 import { aiUsage } from "~/server/db/schema";
-import {
-  defineRepository,
-  listOn,
-  onDb,
-} from "~/server/entity-kernel/repo/repository";
-import {
-  createEntityReader,
-  createEntityRowFetcher,
-  listReadOn,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import {
   readRunRollups,
   runStalledSql,
@@ -41,13 +30,11 @@ import {
 } from "~/server/generic/jobs/repo/job-queue";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  listReadPlan,
   selectedListProjection,
   type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { listRunStepsForRuns } from "./run-step";
 import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
@@ -70,18 +57,35 @@ const runRead = {
       kind: "lookup",
       missing: "null",
       includeDeleted: true,
-      consumers: ["displayName", "iconEntity"],
     },
     ledgerPartyId: {
       kind: "lookup",
       missing: "null",
       includeDeleted: true,
-      consumers: ["displayName", "iconEntity"],
     },
     predecessorRunId: { kind: "lookup", missing: "null", includeDeleted: true },
     parentRunId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
+    const actors = bind.batch(async ({ db, rows }) => {
+      const [vendors, parties] = await Promise.all([
+        lookupEntityReferences(
+          db,
+          "vendor",
+          rows.map((row) => row.vendorId),
+          {
+            includeDeleted: true,
+          },
+        ),
+        lookupEntityReferences(
+          db,
+          "ledgerParty",
+          rows.map((row) => row.ledgerPartyId),
+          { includeDeleted: true },
+        ),
+      ]);
+      return { vendors, parties };
+    });
     const costs = bind.batch(async ({ db, rows }) => {
       const values = rows.length
         ? await unwrapDb(db)
@@ -174,11 +178,13 @@ const runRead = {
           };
         },
       ),
-      bind(
+      actors.fields(
         rawRunOut.pick({ displayName: true, iconEntity: true }),
-        (row, { references }) => {
-          const vendor = references.get("vendorId");
-          const party = references.get("ledgerPartyId");
+        (row, { vendors, parties }) => {
+          const vendor = row.vendorId ? vendors.get(row.vendorId) : undefined;
+          const party = row.ledgerPartyId
+            ? parties.get(row.ledgerPartyId)
+            : undefined;
           return {
             displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
             iconEntity: activityIconEntity({
@@ -247,80 +253,41 @@ function runDisplayStatusOf(
     return "retried" as const;
   return status;
 }
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: RunRow[],
-): Promise<RawRunOut[]> =>
-  (
-    await listReadPlan<RunRow>("run", runRead).read(db, rows, { kind: "full" })
-  ).map((row) => rawRunOut.parse(row));
-
-const scaffold = listScaffold("run", runTable, {
+export const runScaffold = listScaffold("run", runTable, {
   derived: {
     stalled: listReadValue(() => runStalledSql()),
     needsAttention: listReadValue(() => runNeedsAttentionSql()),
   },
+  read: { ...runRead, title: sql`${runTable.purpose}` },
 });
 
-export const listRunsRead = (
-  db: Database,
-  filters: RunFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    { read: runRead },
-  );
-export const listRuns = completeListReader(rawRunOut, listRunsRead);
-
-const reader = createEntityReader<
-  RunRow,
-  RawRunOut,
-  "run",
-  Database | DrizzleTransaction
->({
+const reader = createEntityReader({
   entity: "run",
-  fetchById: createEntityRowFetcher(runTable),
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  scaffold: runScaffold,
+  output: rawRunOut,
 });
 
-export const getRunByShortcode = reader.getByShortcode;
-export const getRunByID = reader.getByID;
+/** One live Run by public code, or null. */
+export const readRun = reader.getByShortcode;
+/** One live Run by internal id; throws when absent. */
+export const readRunById = reader.getByID;
 
 /** Import status needs the shared projection, without unrelated entity-quality hydration. */
 export async function getRunHeaderByShortcode(db: Database, shortcode: string) {
-  const [row] = await unwrapDb(db)
-    .select()
-    .from(runTable)
-    .where(
-      and(
-        eq(runTable.shortcode, parseShortcodeFor("run", shortcode)),
-        notDeleted(runTable),
-      ),
-    )
-    .limit(1);
-  if (!row) return undefined;
   const schema = rawRunOut.omit({ dataQuality: true });
-  return schema.parse(
-    (
-      await listReadPlan<RunRow>("run", runRead).read(
-        db,
-        [row],
-        selectedListProjection("run", Object.keys(schema.shape)),
-      )
-    )[0],
-  );
+  const [row] = (
+    await runScaffold.get(
+      db,
+      [shortcode],
+      selectedListProjection("run", Object.keys(schema.shape)),
+    )
+  ).data;
+  return row === undefined ? undefined : schema.parse(row);
 }
 
 /** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */
 export const runRepository = defineRepository("run", {
-  get: onDb(getRunByShortcode),
-  list: listOn(listRuns),
-  listRead: listReadOn(listRunsRead),
+  scaffold: runScaffold,
 });
 
 /** One transaction for a Run's work step; services compose repo writes inside it. */

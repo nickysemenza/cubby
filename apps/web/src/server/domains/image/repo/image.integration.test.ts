@@ -23,7 +23,7 @@ import type { Database } from "~/server/db";
 import {
   associatePendingImages,
   getDb,
-  imageJoinBindings,
+  galleryBinding,
   insertAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
@@ -65,11 +65,11 @@ import {
   countCullablePendingImages,
   cullPendingImages,
   detachImagesFromEntity,
-  imageList,
+  imageScaffold,
   getImageHashIndex,
   setImagePerceptualHashes,
   updateImage,
-  getImageById,
+  readImageById,
 } from "./image";
 
 /** Integration tests reach no R2: the stored object is served from memory. */
@@ -248,14 +248,14 @@ describe("image repository", () => {
         { source: "own", sourceEvidence: null },
       ]),
     );
-    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+    expect(await readImageById(ctx.db, eligible.id)).toMatchObject({
       source: "catalog",
       sourceEvidence: evidence,
     });
     const captureState = await getImageCaptureState(ctx.db, eligibleId);
     if (!captureState) throw new Error("Expected capture state");
     await setImageCaptureState(ctx.db, eligibleId, captureState);
-    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+    expect(await readImageById(ctx.db, eligible.id)).toMatchObject({
       sourceEvidence: evidence,
     });
     await setImageCaptureState(ctx.db, eligibleId, {
@@ -263,7 +263,7 @@ describe("image repository", () => {
       source: "own",
       provenanceEvidence: { basis: "sighting" },
     });
-    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+    expect(await readImageById(ctx.db, eligible.id)).toMatchObject({
       source: "own",
       sourceEvidence: null,
     });
@@ -276,7 +276,7 @@ describe("image repository", () => {
       .from(image)
       .where(eq(image.id, eligibleId));
     expect(manuallyChanged).toEqual([{ source: "own", sourceEvidence: null }]);
-    expect(await getImageById(ctx.db, eligible.id)).toMatchObject({
+    expect(await readImageById(ctx.db, eligible.id)).toMatchObject({
       source: "own",
       sourceEvidence: null,
     });
@@ -290,7 +290,7 @@ describe("image repository", () => {
       size: 512,
       source: "own",
     });
-    const before = await getImageById(ctx.db, original.id);
+    const before = await readImageById(ctx.db, original.id);
     await updateImage(ctx.db, original.id, {
       filename: before.filename,
       source: "catalog",
@@ -298,7 +298,7 @@ describe("image repository", () => {
       sourceAssetUrl: "https://supplier.example.test/images/item.jpg",
       sourceName: "Example supplier",
     });
-    const persisted = await getImageById(ctx.db, original.id);
+    const persisted = await readImageById(ctx.db, original.id);
     expect(persisted).toMatchObject({
       source: "catalog",
       sourcePageUrl: "https://supplier.example.test/products/item",
@@ -313,7 +313,7 @@ describe("image repository", () => {
       filename: before.filename,
       sourceName: null,
     });
-    expect(await getImageById(ctx.db, original.id)).toMatchObject({
+    expect(await readImageById(ctx.db, original.id)).toMatchObject({
       source: "catalog",
       sourcePageUrl: persisted.sourcePageUrl,
       sourceAssetUrl: persisted.sourceAssetUrl,
@@ -393,7 +393,7 @@ describe("image repository", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) throw new Error(result.error.message);
       const row = result.data;
-      const raw = await getImageById(ctx.db, pending.id);
+      const raw = await readImageById(ctx.db, pending.id);
       expect(row.status).toBe("UPLOADED");
       expect(row.source).toBe("catalog");
       expect(row.sourcePageUrl).toBe(
@@ -611,13 +611,13 @@ describe("image repository", () => {
     });
     const imageId = parseEntityId("image", pending.id);
     const dbc = getDb(ctx.db);
-    await associatePendingImages(dbc, imageJoinBindings.project, projectId, [
+    await associatePendingImages(dbc, galleryBinding("project"), projectId, [
       imageId,
       imageId,
     ]);
     await associatePendingImages(
       dbc,
-      imageJoinBindings.project,
+      galleryBinding("project"),
       projectId,
       [imageId],
       1,
@@ -629,7 +629,7 @@ describe("image repository", () => {
       size: 512,
     });
     const appendedId = parseEntityId("image", appended.id);
-    await associatePendingImages(dbc, imageJoinBindings.project, projectId, [
+    await associatePendingImages(dbc, galleryBinding("project"), projectId, [
       imageId,
       appendedId,
     ]);
@@ -705,7 +705,7 @@ describe("image repository", () => {
       .where(eq(image.id, ids[3]!));
 
     await expect(
-      associatePendingImages(dbc, imageJoinBindings.project, projectId, ids),
+      associatePendingImages(dbc, galleryBinding("project"), projectId, ids),
     ).rejects.toMatchObject({ reason: "REFERENCED_RECORD_MISSING" });
     expect(
       await dbc
@@ -746,7 +746,7 @@ describe("image repository", () => {
       .where(inArray(image.id, [expired.id, protectedByAssociation.id]));
     await associatePendingImages(
       getDb(ctx.db),
-      imageJoinBindings.project,
+      galleryBinding("project"),
       projectId,
       [parseEntityId("image", protectedByAssociation.id)],
       0,
@@ -864,9 +864,13 @@ describe("image repository — import-run targets", () => {
     });
 
     const runCode = parseShortcodeFor("run", run.shortcode);
-    const byRun = await imageList(ctx.db, { runId: runCode }, [], {
-      pageIndex: 0,
-      pageSize: 100,
+    const byRun = await imageScaffold.read(ctx.db, {
+      filters: { runId: runCode },
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 100,
+      },
     });
     const byRunIds = byRun.data.map((row) => row.id);
     expect(byRunIds).toContain(pendingImage.shortcode);
@@ -874,22 +878,20 @@ describe("image repository — import-run targets", () => {
     expect(byRunIds).not.toContain(otherRunImage.shortcode);
     expect(byRunIds).not.toContain(untargetedImage.shortcode);
 
-    const byRunAndState = await imageList(
-      ctx.db,
-      { runId: runCode, targetState: "pending" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const byRunAndState = await imageScaffold.read(ctx.db, {
+      filters: { runId: runCode, targetState: "pending" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     const byRunAndStateIds = byRunAndState.data.map((row) => row.id);
     expect(byRunAndStateIds).toContain(pendingImage.shortcode);
     expect(byRunAndStateIds).not.toContain(preparedImage.shortcode);
 
-    const byStateAlone = await imageList(
-      ctx.db,
-      { targetState: ["pending"] },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const byStateAlone = await imageScaffold.read(ctx.db, {
+      filters: { targetState: ["pending"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     const byStateAloneIds = byStateAlone.data.map((row) => row.id);
     expect(byStateAloneIds).toContain(pendingImage.shortcode);
     expect(byStateAloneIds).toContain(otherRunImage.shortcode);
@@ -914,7 +916,7 @@ describe("image repository — import-run targets", () => {
 // consumers in image.ts were never updated to know about it: `deleteImages`
 // (missing the join-row delete -> a raw `PurchaseImage_imageId_fkey`
 // violation, a 500 on `/images`), `imageEntityRelations`/
-// `imageWithRelationsToAPI` (missing the relation/branch -> a charge document
+// `imageAssociations` (missing the relation/branch -> a charge document
 // reads as unattached), and `findCullablePendingImages` (missing the
 // association check -> reachable only in theory today, but the same shape of
 // bug). This block pins all three against regressing.
@@ -977,7 +979,7 @@ describe("image repository — purchase (charge) documents", () => {
           .toBe(true);
         await associatePendingImages(
           holder,
-          imageJoinBindings.project,
+          galleryBinding("project"),
           project.entityId,
           [parseEntityId("image", photo.id)],
         );
@@ -1263,7 +1265,7 @@ describe("image repository — purchase (charge) documents", () => {
    * even though `detachImagesFromEntity` now deletes the row it detaches.
    */
 
-  describe("imageList reference-presence filter", () => {
+  describe("imageScaffold.read reference-presence filter", () => {
     it("reports an unattached UPLOADED row and skips everything still spoken for", async () => {
       const projectId = (
         await createRepoEntity(ctx, "project", { name: "Unreferenced Sweep" })
@@ -1316,18 +1318,17 @@ describe("image repository — purchase (charge) documents", () => {
         .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
         .where(eq(image.id, orphan.id));
 
-      const listed = await imageList(
-        ctx.db,
-        {
+      const listed = await imageScaffold.read(ctx.db, {
+        filters: {
           status: "UPLOADED",
           referencePresenceFilter: "none",
           uploadedAgeHoursMin: 1,
         },
-        [],
-        { pageIndex: 0, pageSize: 100 },
-      );
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 100 },
+      });
 
-      // `imageList` is a read API, so its rows carry shortcodes.
+      // `imageScaffold.read` is a read API, so its rows carry shortcodes.
       expect(listed.data.map((row) => row.id)).toContain(orphan.shortcode);
       expect(listed.data.map((row) => row.id)).not.toContain(attached.id);
       expect(listed.data.map((row) => row.id)).not.toContain(pending.id);

@@ -1,50 +1,32 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { sourceTransactionRecordUpdateData } from "@cubby/schemas/source-transaction-record";
-import {
-  sourceTransactionRecordMatchState,
-  type SourceTransactionRecordFilters,
-} from "@cubby/schemas/source-transaction-record";
-import {
-  rawSourceTransactionRecordOut,
-  type RawSourceTransactionRecordOut,
-} from "@cubby/schemas/source-transaction-record-raw-read";
-import { type TransactionImportFilters } from "@cubby/schemas/transaction-import";
-import {
-  rawTransactionImportOut,
-  type RawTransactionImportOut,
-} from "@cubby/schemas/transaction-import-raw-read";
-import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
+import { rawSourceTransactionRecordOut } from "@cubby/schemas/source-transaction-record-raw-read";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
+import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
+import { transactionImportSearch } from "~/server/domains/transaction-import/repo/search-read-transaction-import";
 import {
   merchantVendorInferences,
   normalizeMerchant,
 } from "~/server/domains/vendor/repo/merchant-vendor-inference";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   asActor,
   createEntityReader,
-  createEntityRowFetcher,
   defineMutationWriter,
   type MutationReceipt,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { auditEvidenceRows } from "./intake-audit";
@@ -56,7 +38,6 @@ import { CHARGE_STATE } from "./statement-charge";
 
 type ReaderDb = Database | DrizzleTransaction;
 type SourceRow = typeof sourceTransactionRecord.$inferSelect;
-type ImportRow = typeof transactionImport.$inferSelect;
 
 // Charge state is authoritative over every live observation, independent of the page.
 const chargeState = sql`(SELECT CASE WHEN cs.ignored THEN ${sourceTransactionRecordMatchState.enum.ignored} WHEN cs.superseded THEN ${sourceTransactionRecordMatchState.enum.superseded}
@@ -69,37 +50,6 @@ const transactionCode = sql`(SELECT cs.shortcode FROM ${CHARGE_STATE} cs
 const storedCount = sql<number>`(SELECT count(*)::int FROM "TransactionImportRecord" m
   JOIN "SourceTransactionRecord" r ON r.id = m."statementRowId" AND r."deletedAt" IS NULL
   WHERE m."importId" = "TransactionImport".id)`;
-const sourceScaffold = listScaffold(
-  "sourceTransactionRecord",
-  sourceTransactionRecord,
-  {
-    rows: {
-      runStepInputs: runStepInputListRows("sourceTransactionRecord"),
-      acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
-    },
-    derived: {
-      matchState: chargeState,
-    },
-  },
-);
-const importScaffold = listScaffold("transactionImport", transactionImport, {
-  derived: { rowCountStored: storedCount },
-});
-
-export const buildSourceTransactionRecordWhere = async (
-  db: ReaderDb,
-  filters: SourceTransactionRecordFilters = {},
-) =>
-  sourceScaffold.where(filters, {
-    context: await sourceScaffold.context(db, {
-      filters,
-      readIntent: "count",
-    }),
-  });
-export const buildTransactionImportWhere = (
-  filters: TransactionImportFilters = {},
-) => importScaffold.where(filters);
-
 const sourceRead = {
   media: true,
   references: {
@@ -174,22 +124,6 @@ const sourceRead = {
         inferences: await merchantVendorInferences(db, merchants),
       };
     });
-    const provider = bind.batch(async ({ db, rows }) => {
-      if (!rows.length) return new Map<string, SourceRow["providerData"]>();
-      const result = await unwrapDb(db)
-        .select({
-          id: sourceTransactionRecord.id,
-          providerData: sourceTransactionRecord.providerData,
-        })
-        .from(sourceTransactionRecord)
-        .where(
-          inArray(
-            sourceTransactionRecord.id,
-            rows.map((row) => row.id),
-          ),
-        );
-      return new Map(result.map((row) => [row.id, row.providerData]));
-    });
     return [
       bind(
         rawSourceTransactionRecordOut.pick({ displayName: true }),
@@ -241,132 +175,50 @@ const sourceRead = {
               : null,
         }),
       ),
-      provider.fields(
-        rawSourceTransactionRecordOut.pick({ providerData: true }),
-        (row, loaded) => ({
-          providerData: rawSourceTransactionRecordOut.shape.providerData.parse(
-            loaded.get(row.id) ?? null,
-          ),
-        }),
-      ),
     ];
   },
 } satisfies ListReadOptions<SourceRow>;
 
-const importRead = {
-  media: true,
-  references: { source: { kind: "public" } },
-  bindings: (bind) => {
-    const counts = bind.batch(async ({ db, rows }) => {
-      if (!rows.length) return new Map<string, number>();
-      const result = await unwrapDb(db)
-        .select({ id: transactionImport.id, count: storedCount })
-        .from(transactionImport)
-        .where(
-          inArray(
-            transactionImport.id,
-            rows.map((row) => row.id),
-          ),
-        );
-      return new Map(result.map((row) => [row.id, row.count]));
-    });
-    return [
-      counts.fields(
-        rawTransactionImportOut.pick({ rowCountStored: true }),
-        (row, loaded) => ({ rowCountStored: loaded.get(row.id) ?? 0 }),
-      ),
-    ];
-  },
-} satisfies ListReadOptions<ImportRow>;
-
-export const listSourceTransactionRecordsRead = (
-  db: ReaderDb,
-  filters: SourceTransactionRecordFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  sourceScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      read: sourceRead,
-      select: async (page) => {
-        const { providerData: _providerData, ...columns } = getTableColumns(
-          sourceTransactionRecord,
-        );
-        return unwrapDb(db)
-          .select({
-            ...columns,
-            providerData: sql<SourceRow["providerData"]>`NULL::jsonb`,
-          })
-          .from(sourceTransactionRecord)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset);
-      },
+export const sourceTransactionRecordScaffold = listScaffold(
+  "sourceTransactionRecord",
+  sourceTransactionRecord,
+  {
+    rows: {
+      runStepInputs: runStepInputListRows("sourceTransactionRecord"),
+      acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
     },
-  );
-const listSources = completeListReader(
-  rawSourceTransactionRecordOut,
-  listSourceTransactionRecordsRead,
+    derived: {
+      matchState: chargeState,
+    },
+    read: {
+      ...sourceRead,
+      title: sql`${sourceTransactionRecord.rawDescription}`,
+      search: sourceTransactionRecordSearch,
+    },
+  },
 );
-export const listTransactionImportsRead = (
-  db: ReaderDb,
-  filters: TransactionImportFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  importScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    { read: importRead },
-  );
-const listImports = completeListReader(
-  rawTransactionImportOut,
-  listTransactionImportsRead,
+export const transactionImportScaffold = listScaffold(
+  "transactionImport",
+  transactionImport,
+  {
+    derived: { rowCountStored: storedCount },
+    read: {
+      search: transactionImportSearch,
+      media: true,
+      references: { source: { kind: "public" } },
+    },
+  },
 );
 
 const sourceReader = createEntityReader<
-  SourceRow,
-  RawSourceTransactionRecordOut,
+  unknown,
+  z.output<typeof rawSourceTransactionRecordOut>,
   "sourceTransactionRecord",
   ReaderDb
 >({
   entity: "sourceTransactionRecord",
-  fetchById: createEntityRowFetcher(sourceTransactionRecord),
-  fromDB: async (db, row) =>
-    rawSourceTransactionRecordOut.parse(
-      (
-        await listReadPlan<SourceRow>(
-          "sourceTransactionRecord",
-          sourceRead,
-        ).read(db, [row], { kind: "full" })
-      )[0],
-    ),
-});
-const importReader = createEntityReader<
-  ImportRow,
-  RawTransactionImportOut,
-  "transactionImport",
-  ReaderDb
->({
-  entity: "transactionImport",
-  fetchById: createEntityRowFetcher(transactionImport),
-  fromDB: async (db, row) =>
-    rawTransactionImportOut.parse(
-      (
-        await listReadPlan<ImportRow>("transactionImport", importRead).read(
-          db,
-          [row],
-          { kind: "full" },
-        )
-      )[0],
-    ),
+  scaffold: sourceTransactionRecordScaffold,
+  output: rawSourceTransactionRecordOut,
 });
 
 const updateSource = defineMutationWriter({
@@ -476,59 +328,13 @@ export const sourceTransactionRecordRepository = defineRepository(
   {
     lifecycle: { delete: SOURCE_TRANSACTION_RECORD_DELETE_POLICY },
     deleteHooks: { beforeDelete: assertSourceTransactionRecordDeletionAllowed },
-    get: (ctx: EntityKernelContext, code: string) =>
-      sourceReader.getByShortcode(ctx.db, code),
-    list: (
-      ctx: EntityKernelContext,
-      filters: SourceTransactionRecordFilters,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-    ) => listSources(ctx.db, filters, sorts, pagination),
-    listRead: (
-      ctx: EntityKernelContext,
-      filters: SourceTransactionRecordFilters,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-      projection: ListProjection,
-      readIntent: ListReadIntent = "page",
-    ) =>
-      listSourceTransactionRecordsRead(
-        ctx.db,
-        filters,
-        sorts,
-        pagination,
-        projection,
-        readIntent,
-      ),
+    scaffold: sourceTransactionRecordScaffold,
     update: asActor(updateSource),
   },
 );
 export const transactionImportRepository = defineRepository(
   "transactionImport",
   {
-    get: (ctx: EntityKernelContext, code: string) =>
-      importReader.getByShortcode(ctx.db, code),
-    list: (
-      ctx: EntityKernelContext,
-      filters: TransactionImportFilters,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-    ) => listImports(ctx.db, filters, sorts, pagination),
-    listRead: (
-      ctx: EntityKernelContext,
-      filters: TransactionImportFilters,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-      projection: ListProjection,
-      readIntent: ListReadIntent = "page",
-    ) =>
-      listTransactionImportsRead(
-        ctx.db,
-        filters,
-        sorts,
-        pagination,
-        projection,
-        readIntent,
-      ),
+    scaffold: transactionImportScaffold,
   },
 );

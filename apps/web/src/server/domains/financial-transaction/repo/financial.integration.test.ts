@@ -12,16 +12,16 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import {
   createFinancialAccount,
-  listFinancialAccounts,
+  financialAccountScaffold,
   updateFinancialAccount,
 } from "~/server/domains/financial-account/repo";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
   deletePurchases,
-  getPurchaseByID,
+  readPurchaseById,
   linkExpensesToPurchase,
   mergePurchases,
-  purchaseList,
+  purchaseScaffold,
 } from "~/server/domains/purchase/repo/purchase";
 import {
   recordSourceTransactionRecords,
@@ -30,8 +30,8 @@ import {
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import {
   findOrCreateVendor,
-  getVendorByID,
-  vendorList,
+  readVendorById,
+  vendorScaffold,
 } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
@@ -46,7 +46,7 @@ import {
 import {
   createFinancialTransaction,
   financialTransactionSourceOptions,
-  listFinancialTransactions,
+  financialTransactionScaffold,
   updateFinancialTransaction,
 } from "./financial-transaction";
 
@@ -211,7 +211,7 @@ describe("financial repositories — critical invariants", () => {
   // Regression: `accountId`/`purchaseId` are `oneOrMany`, so a mixed batch of
   // real and bogus codes is reachable from the list API and MCP. This must
   // narrow to what resolves (matching every other list filter's
-  // `resolveAllPresent` convention — locationList, productList) rather than
+  // `resolveAllPresent` convention — locationList, productScaffold) rather than
   // silently drop the bogus code AND rather than widen to an unfiltered
   // query. An all-bogus batch still yields nothing, same as before.
 
@@ -871,7 +871,7 @@ describe("financial repositories — critical invariants", () => {
       await createFinancialAccount(ctx.db, account("Preview Visa"), ctx.actor)
     ).output;
     const vendorId = await findOrCreateVendor(ctx.db, "Preview Vendor");
-    const previewVendor = await getVendorByID(ctx.db, vendorId);
+    const previewVendor = await readVendorById(ctx.db, vendorId);
     const previewPurchase = (
       await createRepoEntity(ctx, "purchase", {
         date: "2024-01-15",
@@ -932,60 +932,57 @@ describe("financial repositories — critical invariants", () => {
         ?.totalCount,
     ).toBe(2);
 
-    const byExpense = await purchaseList(
-      ctx.db,
-      {
+    const byExpense = await purchaseScaffold.read(ctx.db, {
+      filters: {
         expenseId: requireTestValue(
           expenses[0],
           "Expected a seeded preview expense.",
         ).id,
       },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(byExpense.data.map((row) => row.id)).toContain(previewPurchase.id);
-    const byTransactionSearch = await purchaseList(
-      ctx.db,
-      { financialTransactionSearch: "Preview merchant" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const byTransactionSearch = await purchaseScaffold.read(ctx.db, {
+      filters: { financialTransactionSearch: "Preview merchant" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(byTransactionSearch.data.map((row) => row.id)).toContain(
       previewPurchase.id,
     );
-    const byTransactionId = await purchaseList(
-      ctx.db,
-      { financialTransactionId: activeTransaction.id },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const byTransactionId = await purchaseScaffold.read(ctx.db, {
+      filters: { financialTransactionId: activeTransaction.id },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(byTransactionId.data.map((row) => row.id)).toContain(
       previewPurchase.id,
     );
 
-    const vendorsByExpense = await vendorList(
-      ctx.db,
-      { expenseSearch: "preview line 2" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const vendorsByExpense = await vendorScaffold.read(ctx.db, {
+      filters: { expenseSearch: "preview line 2" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(vendorsByExpense.data.map((row) => row.id)).toContain(
       previewVendor.id,
     );
-    const accountsByTransaction = await listFinancialAccounts(
-      ctx.db,
-      { financialTransactionSearch: "Preview merchant" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
-    );
+    const accountsByTransaction = await financialAccountScaffold.read(ctx.db, {
+      filters: { financialTransactionSearch: "Preview merchant" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(accountsByTransaction.data.map((row) => row.id)).toContain(
       createdAccount.id,
     );
-    const transactionsByExpense = await listFinancialTransactions(
+    const transactionsByExpense = await financialTransactionScaffold.read(
       ctx.db,
-      { expenseSearch: "preview line 3" },
-      [],
-      { pageIndex: 0, pageSize: 100 },
+      {
+        filters: { expenseSearch: "preview line 3" },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 100 },
+      },
     );
     expect(transactionsByExpense.data.map((row) => row.id)).toContain(
       activeTransaction.id,
@@ -1104,7 +1101,7 @@ describe("financial repositories — critical invariants", () => {
     const purchase = (
       await createRepoEntity(ctx, "purchase", {
         date: "2024-01-15",
-        vendorId: (await getVendorByID(ctx.db, vendorId)).id,
+        vendorId: (await readVendorById(ctx.db, vendorId)).id,
         orderId: "finance-1",
       })
     ).output;
@@ -1156,9 +1153,13 @@ describe("financial repositories — critical invariants", () => {
       { accountId: testShortcode("financialAccount", "FAC-2222") },
       { purchaseId: testShortcode("purchase", "PUR-2222") },
     ]) {
-      const filtered = await listFinancialTransactions(ctx.db, filters, [], {
-        pageIndex: 0,
-        pageSize: 100,
+      const filtered = await financialTransactionScaffold.read(ctx.db, {
+        filters,
+        sorts: [],
+        pagination: {
+          pageIndex: 0,
+          pageSize: 100,
+        },
       });
       expect(filtered).toMatchObject({ data: [], count: 0 });
     }
@@ -1169,9 +1170,9 @@ describe("financial repositories — critical invariants", () => {
       await createFinancialAccount(ctx.db, account("Reconcile Visa"), ctx.actor)
     ).output;
     const vendorId = await findOrCreateVendor(ctx.db, "Reconcile Vendor");
-    const { getVendorByID } =
+    const { readVendorById } =
       await import("~/server/domains/vendor/repo/vendor");
-    const vendor = await getVendorByID(ctx.db, vendorId);
+    const vendor = await readVendorById(ctx.db, vendorId);
     const p1 = (
       await createRepoEntity(ctx, "purchase", {
         date: "2024-01-15",
@@ -1217,7 +1218,7 @@ describe("financial repositories — critical invariants", () => {
       ),
     );
     expect(
-      (await getPurchaseByID(ctx.db, p1Uuid)).financialReconciliation.status,
+      (await readPurchaseById(ctx.db, p1Uuid)).financialReconciliation.status,
     ).toBe("match");
     await mergePurchases(
       ctx.db,
@@ -1227,15 +1228,11 @@ describe("financial repositories — critical invariants", () => {
     await deletePurchases(ctx.db, [p1.id], ctx.actor);
     const txs = await (
       await import("./financial-transaction")
-    ).listFinancialTransactions(
-      ctx.db,
-      { purchasePresenceFilter: "none" },
-      [],
-      {
-        pageIndex: 0,
-        pageSize: 100,
-      },
-    );
+    ).financialTransactionScaffold.read(ctx.db, {
+      filters: { purchasePresenceFilter: "none" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 100 },
+    });
     expect(txs.data.some((row) => row.purchaseId === null)).toBe(true);
   });
 
@@ -1244,7 +1241,7 @@ describe("financial repositories — critical invariants", () => {
       await createFinancialAccount(ctx.db, account("Status Visa"), ctx.actor)
     ).output;
     const vendorId = await findOrCreateVendor(ctx.db, "Status Vendor");
-    const vendor = await getVendorByID(ctx.db, vendorId);
+    const vendor = await readVendorById(ctx.db, vendorId);
 
     const makePurchaseWithExpense = async (
       orderId: string,
@@ -1284,7 +1281,7 @@ describe("financial repositories — critical invariants", () => {
 
     const unknown = await makePurchaseWithExpense("status-unknown", 10);
     expect(
-      (await getPurchaseByID(ctx.db, unknown.uuid)).financialReconciliation,
+      (await readPurchaseById(ctx.db, unknown.uuid)).financialReconciliation,
     ).toMatchObject({ status: "unknown", delta: null, transactionCount: 0 });
 
     const unpriced = await makePurchaseWithExpense("status-unpriced", null);
@@ -1297,7 +1294,7 @@ describe("financial repositories — critical invariants", () => {
       amount: 5,
     });
     expect(
-      (await getPurchaseByID(ctx.db, unpriced.uuid)).financialReconciliation,
+      (await readPurchaseById(ctx.db, unpriced.uuid)).financialReconciliation,
     ).toMatchObject({ status: "unknown", delta: null, transactionCount: 1 });
 
     // A payment schedule part-way through: one payment posted, one still
@@ -1326,7 +1323,7 @@ describe("financial repositories — critical invariants", () => {
       postedDate: "2026-01-01",
       amount: 100,
     });
-    const scheduled = await getPurchaseByID(ctx.db, schedule.uuid);
+    const scheduled = await readPurchaseById(ctx.db, schedule.uuid);
     // The displayed total still carries the whole commitment...
     expect(scheduled.expenseTotal).toBe(500);
     // ...but settlement only answers for the $100 actually incurred.
@@ -1354,7 +1351,7 @@ describe("financial repositories — critical invariants", () => {
       amount: -9.07,
     });
     expect(
-      (await getPurchaseByID(ctx.db, pending.uuid)).financialReconciliation,
+      (await readPurchaseById(ctx.db, pending.uuid)).financialReconciliation,
     ).toMatchObject({
       status: "pending",
       postedTotal: 60.56,
@@ -1410,7 +1407,7 @@ describe("financial repositories — critical invariants", () => {
       deletedRefund.id,
     ]);
     const adjustedReconciliation = (
-      await getPurchaseByID(ctx.db, adjusted.uuid)
+      await readPurchaseById(ctx.db, adjusted.uuid)
     ).financialReconciliation;
     expect(adjustedReconciliation).toMatchObject({
       status: "match",
@@ -1451,7 +1448,7 @@ describe("financial repositories — critical invariants", () => {
     await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
       deleted.id,
     ]);
-    const result = await getPurchaseByID(ctx.db, mismatch.uuid);
+    const result = await readPurchaseById(ctx.db, mismatch.uuid);
     expect(result.expenseTotal).toBe(10);
     expect(result.financialReconciliation).toMatchObject({
       status: "mismatch",
@@ -1472,7 +1469,7 @@ describe("financial repositories — critical invariants", () => {
       )
     ).output;
     const vendorId = await findOrCreateVendor(ctx.db, "Payout Marketplace");
-    const vendor = await getVendorByID(ctx.db, vendorId);
+    const vendor = await readVendorById(ctx.db, vendorId);
 
     // A disposal: a Purchase whose Expense is negative, settled net of fees.
     const sale = (
@@ -1520,7 +1517,7 @@ describe("financial repositories — critical invariants", () => {
     ).output;
     expect(payout.purchaseId).toBe(sale.id);
 
-    const settled = await getPurchaseByID(ctx.db, saleUuid);
+    const settled = await readPurchaseById(ctx.db, saleUuid);
     expect(settled.financialReconciliation).toMatchObject({
       status: "match",
       delta: 0,
@@ -1565,7 +1562,7 @@ describe("financial repositories — critical invariants", () => {
 
   // Provider and owner filter accounts without collapsing distinct balances.
   it("allows independent balances and cards at the same provider", async () => {
-    const vendor = await getVendorByID(
+    const vendor = await readVendorById(
       ctx.db,
       await findOrCreateVendor(ctx.db, "Stored Value Vendor"),
     );
@@ -1621,12 +1618,11 @@ describe("financial repositories — critical invariants", () => {
       [memberA, [a.id, rewards.id]],
       [memberB, [b.id]],
     ] as const) {
-      const resolved = await listFinancialAccounts(
-        ctx.db,
-        { providerVendorId: [vendor.id], ledgerPartyId: [owner] },
-        [],
-        { pageIndex: 0, pageSize: 10 },
-      );
+      const resolved = await financialAccountScaffold.read(ctx.db, {
+        filters: { providerVendorId: [vendor.id], ledgerPartyId: [owner] },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
       expect(resolved.data.map((row) => row.id).sort()).toEqual(
         [...expected].sort(),
       );

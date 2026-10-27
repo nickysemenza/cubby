@@ -144,7 +144,6 @@ describe("generated CRUD delete action", () => {
       async ({ input }) => ({
         id: input.id,
         kind: "expense",
-        redirectedFrom: null,
         groups: [
           {
             direction: "incoming",

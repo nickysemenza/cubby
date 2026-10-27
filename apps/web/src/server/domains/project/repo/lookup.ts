@@ -3,35 +3,29 @@ import {
   parseShortcodeFor,
   type ProjectId,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
-import type {
-  ProjectAttentionReport,
-  ProjectFilters,
-  ProjectOptionsOut,
-} from "@cubby/schemas/project";
+import type { ProjectOptionsOut } from "@cubby/schemas/project";
 import { rawProjectListItemOut } from "@cubby/schemas/work-raw-read";
-import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   getDb,
+  databaseForTransaction,
   isTransaction,
-  type ListReadIntent,
   notDeleted,
 } from "~/server/db/helpers";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
+import { projectSearch } from "~/server/domains/project/repo/search-read-project";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 
 import {
   projectContentDates,
@@ -48,11 +42,7 @@ import {
   projectSettingsFields,
   type ProjectContentDates,
 } from "./helpers";
-import {
-  aggregateSubtreeDates,
-  loadProjectTree,
-  type ProjectTree,
-} from "./subtree";
+import { aggregateSubtreeDates, loadProjectTree } from "./subtree";
 
 const qb = new QueryBuilder();
 
@@ -67,21 +57,16 @@ const projectIdsWithImages = qb
   )
   .where(and(notDeleted(entityAttachment), displayableImageWhere));
 
-// The tree and attention reads take the request's Database handle; a project
-// list never reads inside a write transaction.
-const projectReadDatabase = (db: Database | DrizzleTransaction): Database => {
-  if (isTransaction(db))
-    throw new Error(
-      "A project list cannot prepare its filters in a transaction.",
-    );
-  return db;
-};
+// The tree, rollup and attention reads take a Database; a record read inside
+// a write sees the transaction's rows.
+const projectReadDatabase = (db: Database | DrizzleTransaction): Database =>
+  isTransaction(db) ? databaseForTransaction(db) : db;
 
 // Exact tracker membership comes from the deep module the dashboard and
 // Problems share, so the list keeps no second copy of the stalled, budget,
 // and blocked-next-action predicates. A caller that already computed the
 // items seeds this prepare (`buildProjectListQuery`).
-const projectAttention = listPrepare((db) =>
+export const projectAttention = listPrepare((db) =>
   computeAttentionItems(projectReadDatabase(db)),
 );
 
@@ -142,6 +127,133 @@ export const projectScaffold = listScaffold("project", project, {
           FROM (VALUES ${sql.join(rows, sql`, `)}) item("code", "type")
           JOIN "Project" p ON p."shortcode" = item."code"`;
     }),
+  },
+  read: {
+    search: projectSearch,
+    media: true,
+    bindings: (bind) => {
+      const hierarchy = bind.batch(({ db }) =>
+        loadProjectTree(projectReadDatabase(db)),
+      );
+      const settings = bind.batch(async (page) => {
+        const loaded = await hierarchy.load(page);
+        return new Map(
+          page.rows.map((row) => [
+            row.id,
+            projectSettingsFields(row, loaded.rowsById, loaded.rowsByShortcode),
+          ]),
+        );
+      });
+      const dependencies = bind.batch(({ db, rows }) =>
+        projectDependencyIds(
+          projectReadDatabase(db),
+          rows.map((row) => row.id),
+        ),
+      );
+      const urls = bind.batch(
+        async ({ db, rows }) =>
+          new Map(
+            (await withProjectExternalUrls(projectReadDatabase(db), rows)).map(
+              (row) => [row.id, row],
+            ),
+          ),
+      );
+      return [
+        settings.fields(
+          rawProjectListItemOut.pick({ locations: true }),
+          (row, loaded) => {
+            const value = loaded.get(row.id);
+            if (!value) throw new Error("Project settings were not loaded");
+            return { locations: value.locations };
+          },
+        ),
+        settings.fields(
+          rawProjectListItemOut.pick({
+            assigneeId: true,
+            assigneeName: true,
+            defaultTrade: true,
+            fieldResolutions: true,
+          }),
+          (row, loaded) => {
+            const value = loaded.get(row.id);
+            if (!value)
+              throw new Error("Project field resolution was not loaded");
+            const { locations: _locations, ...derived } = value;
+            return derived;
+          },
+        ),
+        hierarchy.fields(
+          rawProjectListItemOut.pick({
+            parentProjectId: true,
+            parentProjectName: true,
+            childProjectIds: true,
+          }),
+          (row, loaded) => ({
+            parentProjectId:
+              row.parentProjectId &&
+              loaded.shortcodeById.has(row.parentProjectId)
+                ? parseShortcodeFor(
+                    "project",
+                    loaded.shortcodeById.get(row.parentProjectId)!,
+                  )
+                : null,
+            parentProjectName: row.parentProjectId
+              ? (loaded.nameById.get(row.parentProjectId) ?? null)
+              : null,
+            childProjectIds: (loaded.childrenByParent.get(row.id) ?? []).map(
+              (id) =>
+                parseShortcodeFor(
+                  "project",
+                  loaded.shortcodeById.get(id) ?? "",
+                ),
+            ),
+          }),
+        ),
+        bind
+          .batch(async (page) => ({
+            dependencies: await dependencies.load(page),
+            tree: await hierarchy.load(page),
+          }))
+          .fields(
+            rawProjectListItemOut.pick({
+              blockedByIds: true,
+              blockingIds: true,
+            }),
+            (row, loaded) => ({
+              blockedByIds: (
+                loaded.dependencies.blockedBy.get(row.id) ?? []
+              ).map((id) =>
+                parseShortcodeFor(
+                  "project",
+                  loaded.tree.shortcodeById.get(id) ?? "",
+                ),
+              ),
+              blockingIds: (loaded.dependencies.blocking.get(row.id) ?? []).map(
+                (id) =>
+                  parseShortcodeFor(
+                    "project",
+                    loaded.tree.shortcodeById.get(id) ?? "",
+                  ),
+              ),
+            }),
+          ),
+        urls.fields(
+          rawProjectListItemOut.pick({
+            googleDriveFolderUrl: true,
+            notionPageUrl: true,
+          }),
+          (row, loaded) => {
+            const value = loaded.get(row.id);
+            if (!value)
+              throw new Error("Project external links were not loaded");
+            return {
+              googleDriveFolderUrl: value.googleDriveFolderUrl,
+              notionPageUrl: value.notionPageUrl,
+            };
+          },
+        ),
+      ];
+    },
   },
 });
 
@@ -229,269 +341,3 @@ const projectOptions = (
     };
   });
 };
-
-/**
- * Everything the project list does before it paginates: the whole-tree load,
- * the filters resolved into a WHERE clause, and the ORDER BY.
- *
- * Shared with the WBS tree page (`repo/project/tree.ts`), which applies the
- * SAME predicates but paginates by root of the filtered forest rather than by
- * row. Extracted rather than copied precisely because those two must never
- * disagree about membership — a tree that selected a different set than the
- * flat list would be the browser-side membership bug this endpoint exists to
- * avoid, just moved to the server.
- */
-export const buildProjectListQuery = async (
-  db: Database,
-  filters: ProjectFilters,
-  sorts: SortParams[],
-  attentionItems?: ProjectAttentionReport,
-  preparedTree?: ProjectTree,
-  readIntent: ListReadIntent = "page",
-) => {
-  // `getEntityCounts` calls this with `{}` inside a function whose design is
-  // one round trip, so the tree and attention items load only when a filter,
-  // sort or group asks; rows hydrate apart from this context.
-  const context = await projectScaffold.context(
-    db,
-    { filters, sorts, projection: { kind: "base" }, readIntent },
-    attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
-  );
-  const loadedTree = preparedTree;
-  const whereClause = projectScaffold.where(filters, { context });
-
-  const orderByArray =
-    readIntent === "count"
-      ? []
-      : projectScaffold.orderBy(sorts, {}, filters, context);
-
-  return { tree: loadedTree, whereClause, orderByArray, context };
-};
-
-/**
- * The complete WHERE for a project list. `getEntityCounts` calls it with `{}` —
- * see repo/dashboard.ts. Thin wrapper so the registry's entries all look alike
- * and the dashboard never has to discard an `orderByArray` it did not ask for;
- * with no filters set, the lazy tree above means this issues no query.
- */
-export const buildProjectWhere = async (
-  db: Database,
-  filters: ProjectFilters,
-  attentionItems?: ProjectAttentionReport,
-) => (await buildProjectListQuery(db, filters, [], attentionItems)).whereClause;
-
-/**
- * Footer total for the `costEstimate` column: `SUM` over the FULL filtered
- * set, not the loaded page — see `createCurrencyColumn`'s footer and
- * `vendor.ts`'s `vendorList` for the pattern this follows. The displayed
- * column reads each row's own `costEstimate` (not the subtree rollup — see
- * `helpers.ts`'s `dbProjectToAPI`), so the matching total is a flat SUM over
- * `whereClause`, no tree-fold needed.
- *
- * Shared by `projectList` and `projectTreePage`: both apply the identical
- * `whereClause` (`buildProjectListQuery`), and the tree page's matching SET is
- * the same filtered forest as the flat list — it only paginates by root. So
- * "the total" means the same thing in both renderers: the sum over every
- * matching project, not just roots. A roots-only sum would under-report
- * whenever a filtered-in project has a costEstimate but its parent (also
- * shown, also summed in flat mode) does too, and would disagree with what
- * fully expanding the tree already sums row-by-row.
- */
-export const projectListSums = async (
-  db: Database,
-  whereClause: SQL | undefined,
-): Promise<{ costEstimate: number }> => {
-  const [row] = await getDb(db)
-    .select({
-      costEstimate: sql<number>`COALESCE(sum(${project.costEstimate}), 0)::double precision`,
-    })
-    .from(project)
-    .where(whereClause);
-  return { costEstimate: Number(row?.costEstimate ?? 0) };
-};
-
-export const projectListRead = async (
-  db: Database,
-  filters: ProjectFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection,
-  readIntent: ListReadIntent = "page",
-  prepared?: {
-    tree?: ProjectTree;
-    attentionItems?: ProjectAttentionReport;
-  },
-) => {
-  const { tree, whereClause, orderByArray, context } =
-    await buildProjectListQuery(
-      db,
-      filters,
-      sorts,
-      prepared?.attentionItems,
-      prepared?.tree,
-      readIntent,
-    );
-  // Both start beside the page read rather than after it.
-  const sumsRead =
-    readIntent === "page" && projection.kind === "full"
-      ? projectListSums(db, whereClause)
-      : undefined;
-  const [page, sums] = await Promise.all([
-    projectScaffold.read(
-      db,
-      { filters, sorts, pagination, readIntent, projection },
-      {
-        where: whereClause,
-        context,
-        orderBy: orderByArray,
-        read: {
-          media: true,
-          bindings: (bind) => {
-            const hierarchy = bind.batch(() =>
-              Promise.resolve(tree ?? loadProjectTree(db)),
-            );
-            const settings = bind.batch(async (page) => {
-              const loaded = await hierarchy.load(page);
-              return new Map(
-                page.rows.map((row) => [
-                  row.id,
-                  projectSettingsFields(
-                    row,
-                    loaded.rowsById,
-                    loaded.rowsByShortcode,
-                  ),
-                ]),
-              );
-            });
-            const dependencies = bind.batch(({ rows }) =>
-              projectDependencyIds(
-                db,
-                rows.map((row) => row.id),
-              ),
-            );
-            const urls = bind.batch(
-              async ({ rows }) =>
-                new Map(
-                  (await withProjectExternalUrls(db, rows)).map((row) => [
-                    row.id,
-                    row,
-                  ]),
-                ),
-            );
-            return [
-              settings.fields(
-                rawProjectListItemOut.pick({ locations: true }),
-                (row, loaded) => {
-                  const value = loaded.get(row.id);
-                  if (!value)
-                    throw new Error("Project settings were not loaded");
-                  return { locations: value.locations };
-                },
-              ),
-              settings.fields(
-                rawProjectListItemOut.pick({
-                  assigneeId: true,
-                  assigneeName: true,
-                  defaultTrade: true,
-                  fieldResolutions: true,
-                }),
-                (row, loaded) => {
-                  const value = loaded.get(row.id);
-                  if (!value)
-                    throw new Error("Project field resolution was not loaded");
-                  const { locations: _locations, ...derived } = value;
-                  return derived;
-                },
-              ),
-              hierarchy.fields(
-                rawProjectListItemOut.pick({
-                  parentProjectId: true,
-                  parentProjectName: true,
-                  childProjectIds: true,
-                }),
-                (row, loaded) => ({
-                  parentProjectId:
-                    row.parentProjectId &&
-                    loaded.shortcodeById.has(row.parentProjectId)
-                      ? parseShortcodeFor(
-                          "project",
-                          loaded.shortcodeById.get(row.parentProjectId)!,
-                        )
-                      : null,
-                  parentProjectName: row.parentProjectId
-                    ? (loaded.nameById.get(row.parentProjectId) ?? null)
-                    : null,
-                  childProjectIds: (
-                    loaded.childrenByParent.get(row.id) ?? []
-                  ).map((id) =>
-                    parseShortcodeFor(
-                      "project",
-                      loaded.shortcodeById.get(id) ?? "",
-                    ),
-                  ),
-                }),
-              ),
-              bind
-                .batch(async (page) => ({
-                  dependencies: await dependencies.load(page),
-                  tree: await hierarchy.load(page),
-                }))
-                .fields(
-                  rawProjectListItemOut.pick({
-                    blockedByIds: true,
-                    blockingIds: true,
-                  }),
-                  (row, loaded) => ({
-                    blockedByIds: (
-                      loaded.dependencies.blockedBy.get(row.id) ?? []
-                    ).map((id) =>
-                      parseShortcodeFor(
-                        "project",
-                        loaded.tree.shortcodeById.get(id) ?? "",
-                      ),
-                    ),
-                    blockingIds: (
-                      loaded.dependencies.blocking.get(row.id) ?? []
-                    ).map((id) =>
-                      parseShortcodeFor(
-                        "project",
-                        loaded.tree.shortcodeById.get(id) ?? "",
-                      ),
-                    ),
-                  }),
-                ),
-              urls.fields(
-                rawProjectListItemOut.pick({
-                  googleDriveFolderUrl: true,
-                  notionPageUrl: true,
-                }),
-                (row, loaded) => {
-                  const value = loaded.get(row.id);
-                  if (!value)
-                    throw new Error("Project external links were not loaded");
-                  return {
-                    googleDriveFolderUrl: value.googleDriveFolderUrl,
-                    notionPageUrl: value.notionPageUrl,
-                  };
-                },
-              ),
-            ];
-          },
-        },
-      },
-    ),
-    sumsRead,
-  ]);
-  return projection.kind === "base" || readIntent === "count"
-    ? page
-    : { ...page, sums };
-};
-
-export const projectList = completeListReader(
-  rawProjectListItemOut,
-  projectListRead,
-);
-export const projectListSummary = async (
-  db: Database,
-  filters: ProjectFilters,
-) => projectListSums(db, await buildProjectWhere(db, filters));

@@ -3,10 +3,10 @@ import {
   type ListProjection,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
-import { ENTITY_REPOSITORY_LIST_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 
 export const listReadSchema = (entity: ListEntity) =>
-  ENTITY_REPOSITORY_LIST_READ_SCHEMAS[entity].schema;
+  ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema;
 
 /** Pick actual loaded fields; a missing dependency must fail instead of producing partial success. */
 export function selectListReadFields(
@@ -28,7 +28,7 @@ export function validateListReadRows(
   rows: ListReadRow[],
   fields: readonly string[],
 ): ListReadRow[] {
-  const read = ENTITY_REPOSITORY_LIST_READ_SCHEMAS[entity];
+  const read = ENTITY_REPOSITORY_READ_SCHEMAS[entity];
   return rows.map((row) => {
     // An optional field the complete list also omits stays absent; every
     // other field must be loaded. Check raw mapped values before a group's
@@ -63,7 +63,5 @@ export function projectListRows(
   rows: ListReadRow[],
   projection: ListProjection,
 ) {
-  return projection.kind === "selected"
-    ? validateListReadRows(entity, rows, projection.fields)
-    : rows;
+  return validateListReadRows(entity, rows, projection);
 }

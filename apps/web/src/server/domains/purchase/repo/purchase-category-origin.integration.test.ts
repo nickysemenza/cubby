@@ -6,7 +6,7 @@ import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { getPurchaseByID, updatePurchase } from "./purchase";
+import { readPurchaseById, updatePurchase } from "./purchase";
 
 const ctx = withTestDb();
 it("records an accepted source category through the ordinary Purchase writer", async () => {
@@ -42,7 +42,7 @@ it("keeps legacy fallback provenance pending review until an explicit category s
     vendorId: vendor.id,
     spendingCategoryId: category.id,
   });
-  const legacy = await getPurchaseByID(ctx.db, purchase.id);
+  const legacy = await readPurchaseById(ctx.db, purchase.id);
   expect(legacy.spendingCategoryOrigin).toBe("legacy");
   expect(legacy.dataQuality.gaps.map((gap) => gap.check)).toContain(
     "purchase_spending_category_origin",

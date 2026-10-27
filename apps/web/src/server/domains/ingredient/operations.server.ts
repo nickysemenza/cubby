@@ -17,15 +17,18 @@ import {
   ingredientManyRead,
 } from "~/contracts/ingredient.contract";
 import type { Database } from "~/server/db";
-import { findUnlinkedProductCandidates } from "~/server/domains/ingredient/repo/crud";
+import {
+  findUnlinkedProductCandidates,
+  readIngredientDetail,
+} from "~/server/domains/ingredient/repo/crud";
 import {
   enrichmentWorkbench,
-  getIngredientByName,
   getIngredientsByIDs,
 } from "~/server/domains/ingredient/repo/ingredient-with-food";
+import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/recipe-usages";
 import {
+  findIngredientIdByName,
   getIngredientMatches,
-  getRecipeUsagesForIngredient,
 } from "~/server/domains/ingredient/repo/search";
 import {
   type EntityKernelContext,
@@ -142,11 +145,8 @@ export async function mergeWorkflow(
 
 export const ingredientHandlers = implementOperationDomain(ingredientContract, {
   getByName: async (context, input) => {
-    const row = await getIngredientByName(
-      context.db,
-      context.usdaClient,
-      input.nameFilter,
-    );
+    const id = await findIngredientIdByName(context.db, input.nameFilter);
+    const row = id ? await readIngredientDetail(context.db, id) : null;
     return row
       ? ((
           await readPublicEntityRows({

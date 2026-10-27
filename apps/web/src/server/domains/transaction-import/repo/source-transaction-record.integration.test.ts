@@ -26,7 +26,7 @@ import {
 import {
   findSourceTransactionRecordDrift,
   getSourceTransactionRecordSummary,
-  listSourceTransactionRecordsRead,
+  sourceTransactionRecordScaffold,
   recordSourceTransactionRecords,
   updateSourceTransactionRecords,
 } from "./source-transaction-record";
@@ -474,17 +474,16 @@ describe("statement row ledger", () => {
     ).rejects.toThrow("original evidence");
     expect(await audits()).toEqual(initialAudits);
 
-    const base = await listSourceTransactionRecordsRead(
-      ctx.db,
-      {},
-      [],
-      { pageIndex: 0, pageSize: 10 },
-      selectedListProjection("sourceTransactionRecord", [
+    const base = await sourceTransactionRecordScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+      projection: selectedListProjection("sourceTransactionRecord", [
         "id",
         "source",
         "matchState",
       ]),
-    );
+    });
     expect(base.data[0]).toMatchObject({
       id: row!.id,
       source: input.import.source,
@@ -493,13 +492,15 @@ describe("statement row ledger", () => {
     expect(base.data[0]).not.toHaveProperty("providerData");
     expect(base.data[0]).not.toHaveProperty("vendorInference");
     expect(base.data[0]).not.toHaveProperty("accountName");
-    const metadata = await listSourceTransactionRecordsRead(
-      ctx.db,
-      {},
-      [],
-      { pageIndex: 0, pageSize: 10 },
-      selectedListProjection("sourceTransactionRecord", ["id", "providerData"]),
-    );
+    const metadata = await sourceTransactionRecordScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+      projection: selectedListProjection("sourceTransactionRecord", [
+        "id",
+        "providerData",
+      ]),
+    });
     expect(metadata.data).toEqual([
       { id: row!.id, providerData: { synthetic: true } },
     ]);

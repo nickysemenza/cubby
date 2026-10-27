@@ -5,7 +5,7 @@ import { getSpendingCategoryByShortcode } from "~/server/domains/spending-catego
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadCategoryConnections } from "./category-connections";
-import { listProductCategories } from "./product-category";
+import { productCategoryScaffold } from "./product-category";
 
 // Failure modes: inherited mappings disappear, a blocked descendant leaks into reverse links,
 // or mapping identity is reduced to a shortcode instead of its name and source.
@@ -65,12 +65,11 @@ describe("effective category connections", () => {
         inherited: true,
       }),
     );
-    const filtered = await listProductCategories(
-      ctx.db,
-      { effectiveSpendingCategoryId: [spending.shortcode] },
-      [],
-      { pageIndex: 0, pageSize: 50 },
-    );
+    const filtered = await productCategoryScaffold.read(ctx.db, {
+      filters: { effectiveSpendingCategoryId: [spending.shortcode] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
     expect(new Set(filtered.data.map((category) => category.id))).toEqual(
       new Set([root.shortcode, child.shortcode]),
     );

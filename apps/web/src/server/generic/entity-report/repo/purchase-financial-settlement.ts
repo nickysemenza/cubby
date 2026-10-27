@@ -1,9 +1,12 @@
-import { type RawFinancialTransactionOut } from "@cubby/schemas/financial-transaction-raw-read";
+import {
+  type RawFinancialTransactionOut,
+  rawFinancialTransactionOut,
+} from "@cubby/schemas/financial-transaction-raw-read";
 import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
-import { listFinancialTransactions } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import {
   optionColor,
   sectionBlocks,
@@ -114,14 +117,16 @@ export const purchaseFinancialSettlementReport = async (
 ) => {
   const purchaseId = purchase.id;
   const linked = await listAll((pagination) =>
-    listFinancialTransactions(
-      db,
-      { purchaseId },
-      [{ orderBy: "postedDate", direction: "desc" }],
+    financialTransactionScaffold.read(db, {
+      filters: { purchaseId },
+      sorts: [{ orderBy: "postedDate", direction: "desc" }],
       pagination,
-    ),
+    }),
   );
   return sectionBlocks(
-    composeFinancialSettlementSection(purchase, linked.data),
+    composeFinancialSettlementSection(
+      purchase,
+      linked.data.map((row) => rawFinancialTransactionOut.parse(row)),
+    ),
   );
 };

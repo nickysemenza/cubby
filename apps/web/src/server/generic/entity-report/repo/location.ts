@@ -15,7 +15,7 @@ import {
   inventoryValuationSql,
   loadInventoryValuations,
 } from "~/server/domains/inventory/repo/valuation";
-import { getLocationById } from "~/server/domains/location/repo/crud";
+import { readLocationById } from "~/server/domains/location/repo/crud";
 
 const TOP_MANUFACTURERS = 6;
 
@@ -66,7 +66,7 @@ export async function locationContentsValuationReport(
   id: LocationId,
 ): Promise<ReportBlock[]> {
   const [location, breakdown] = await Promise.all([
-    getLocationById(db, id),
+    readLocationById(db, id),
     directValueByManufacturer(db, id),
   ]);
   const valuation = location.valuation;

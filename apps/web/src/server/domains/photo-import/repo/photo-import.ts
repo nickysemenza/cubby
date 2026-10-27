@@ -30,7 +30,7 @@ import type { Database } from "~/server/db";
 import {
   associatePendingImages,
   getDb,
-  imageJoinBindings,
+  galleryBinding,
   nextImageSortOrder,
   notDeleted,
   withTransaction,
@@ -487,10 +487,7 @@ export async function attachImportedGalleryImages<E extends GalleryEntity>(
   const destinationId = await resolveOrThrow(db, entity, destinationCode);
   const imageIds = await resolveAllOrThrow(db, "image", imageCodes);
   const client = getDb(db);
-  type GalleryBinding = Parameters<typeof nextImageSortOrder>[1];
-  // SAFETY: `entity` was narrowed by `isGalleryEntity`; the generated
-  // `imageJoinBindings` exhaustively maps that same GalleryEntity roster.
-  const binding = imageJoinBindings[entity] as GalleryBinding;
+  const binding = galleryBinding(entity);
   const startSortOrder = await nextImageSortOrder(
     client,
     binding,

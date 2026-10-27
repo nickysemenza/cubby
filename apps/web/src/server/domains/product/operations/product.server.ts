@@ -47,7 +47,7 @@ import {
 import { createProductWithInventory } from "~/server/domains/product/repo/capture";
 import {
   getProductPickerItemsByIds,
-  getProductsByShortcodes,
+  readProducts,
   productSearch,
   quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
@@ -596,7 +596,7 @@ export const productHandlers = implementOperationDomain(productContract, {
       db: context.db,
       entity: "product",
       projection: "output",
-      rows: await getProductsByShortcodes(context.db, input.shortcodes),
+      rows: await readProducts(context.db, input.shortcodes),
     }),
   mergePreview: async (context, input) => {
     const [keepId, mergeId] = await Promise.all([

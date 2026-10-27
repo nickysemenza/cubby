@@ -1729,6 +1729,12 @@ const buildMetadataSchemas = () => {
                     z.tuple([nonEmptyString(), nonEmptyString()]),
                   ]),
                   format: z.enum(["currency", "currencyRange", "integer"]),
+                  /**
+                   * Also sum the key per list group, over distinct records.
+                   * Needs a canonical additive SQL value (Expense-derived for
+                   * money).
+                   */
+                  group: z.boolean().optional().default(false),
                   /** Cached contributors required before this total is complete. */
                   requiresResults: z.array(derivedKey).min(1).optional(),
                 })
@@ -1742,8 +1748,6 @@ const buildMetadataSchemas = () => {
             )
             .optional()
             .default([]),
-          /** Numeric fields with a canonical additive SQL expression, over distinct records. */
-          metrics: z.array(fieldKey).optional().default([]),
           /** Replaces the subtitle inferred from mobile card placement. */
           shelfSubtitleOverride: z.array(fieldKey).optional(),
           /**
@@ -1969,7 +1973,6 @@ const buildMetadataSchemas = () => {
             views,
             viewAliases,
             totals,
-            metrics,
             shelfSubtitleOverride,
             titleSubtitle,
             initialFilter,
@@ -1985,7 +1988,7 @@ const buildMetadataSchemas = () => {
             views,
             viewAliases,
             totals,
-            metrics,
+            metrics: totals.flatMap((total) => (total.group ? total.keys : [])),
             shelf:
               shelfSubtitleOverride === undefined
                 ? null

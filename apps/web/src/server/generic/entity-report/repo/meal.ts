@@ -20,7 +20,7 @@ import { formatEstimate } from "~/lib/nutrition-format";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty } from "~/server/db/schema";
-import { getMealByID } from "~/server/domains/meal/repo/crud";
+import { readMealById } from "~/server/domains/meal/repo/crud";
 import { getMealPreparations } from "~/server/domains/meal/repo/portions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -117,7 +117,7 @@ export async function mealCompositionReport(
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "meal", code);
   // SAFETY: `resolveOrThrow` just resolved a live meal, so the read cannot miss.
-  const meal = (await getMealByID(db, id))!;
+  const meal = (await readMealById(db, id))!;
   const mealId = mealShortcode.parse(code);
   // The same recipe can be served twice; number the repeats like the web list.
   const seen = new Map<string, number>();

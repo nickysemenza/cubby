@@ -6,11 +6,9 @@ import {
   ENTITY_NOT_FOUND_REASON,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type SpendingCategoryCreateInput,
   type SpendingCategoryUpdateData,
-  type SpendingCategoryFilters,
 } from "@cubby/schemas/spending-category";
 import { rawSpendingCategoryOut } from "@cubby/schemas/spending-category-raw-read";
 import { and, inArray, sql } from "drizzle-orm";
@@ -30,7 +28,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { productCategory } from "~/server/db/schema";
 import { spendingCategory } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -43,24 +40,15 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import {
   createEntityCrud,
-  createEntityRowFetcher,
   defineRepository,
   asActor,
-  onDb,
-  listOn,
-  listReadOn,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import {
   finalizeMerge,
   resolveMergeTargets,
@@ -72,8 +60,6 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-const scaffold = listScaffold("spendingCategory", spendingCategory);
-export const buildSpendingCategoryWhere = scaffold.where;
 type Row = typeof spendingCategory.$inferSelect;
 
 const inheritedStockTracking = z.object({
@@ -180,40 +166,16 @@ const categoryRead = {
     ];
   },
 } satisfies ListReadOptions<Row>;
-const hydrate = (
-  db: Database | DrizzleTransaction,
-  rows: Row[],
-  projection: ListProjection,
-) =>
-  listReadPlan<Row>("spendingCategory", categoryRead).read(
-    db,
-    rows,
-    projection,
-  );
-const listRead = (
-  db: Database,
-  filters: SpendingCategoryFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    { read: categoryRead },
-  );
-const list = completeListReader(rawSpendingCategoryOut, listRead);
-export const listSpendingCategories = list;
-export const readSpendingCategories = listRead;
+export const spendingCategoryScaffold = listScaffold(
+  "spendingCategory",
+  spendingCategory,
+  { read: { ...categoryRead } },
+);
 const crud = createEntityCrud({
   table: spendingCategory,
   entity: "spendingCategory",
-  fetchById: createEntityRowFetcher(spendingCategory),
-  fromDB: async (db, row: Row) =>
-    rawSpendingCategoryOut.parse(
-      (await hydrate(db, [row], { kind: "full" }))[0],
-    ),
+  scaffold: spendingCategoryScaffold,
+  output: rawSpendingCategoryOut,
   toUpdate: (
     data: Omit<SpendingCategoryUpdateData, "parentId"> & {
       parentId?: EntityId<"spendingCategory"> | null;
@@ -510,9 +472,7 @@ export const spendingCategoryRepository = defineRepository("spendingCategory", {
       },
     },
   },
-  get: onDb(crud.getByShortcode),
-  list: listOn(list),
-  listRead: listReadOn(listRead),
+  scaffold: spendingCategoryScaffold,
   create: asActor(create),
   update: asActor(update),
   merge: {

@@ -11,7 +11,7 @@ import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readRunCatalogActivity } from "./catalog-activity";
-import { getRunByShortcode, listRuns } from "./run";
+import { readRun, runScaffold } from "./run";
 
 const collisionGenerator = (
   first: string,
@@ -23,7 +23,7 @@ const collisionGenerator = (
   };
 };
 
-describe("getRunByShortcode", () => {
+describe("readRun", () => {
   const ctx = withTestDb();
 
   // Regression: an AI run has no member party, so its party name reads null.
@@ -36,7 +36,7 @@ describe("getRunByShortcode", () => {
       .from(runTable)
       .where(eq(runTable.id, runId));
 
-    const run = await getRunByShortcode(ctx.db, row!.shortcode);
+    const run = await readRun(ctx.db, row!.shortcode);
 
     expect(run).toMatchObject({
       purpose: "ai_suggest",
@@ -110,14 +110,21 @@ describe("listRuns", () => {
     await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const page = { pageIndex: 0, pageSize: 50 };
 
-    const all = await listRuns(ctx.db, {}, [], page);
-    const ephemeral = await listRuns(
-      ctx.db,
-      { trigger: ["ephemeral"] },
-      [],
-      page,
-    );
-    const manual = await listRuns(ctx.db, { trigger: ["manual"] }, [], page);
+    const all = await runScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: page,
+    });
+    const ephemeral = await runScaffold.read(ctx.db, {
+      filters: { trigger: ["ephemeral"] },
+      sorts: [],
+      pagination: page,
+    });
+    const manual = await runScaffold.read(ctx.db, {
+      filters: { trigger: ["manual"] },
+      sorts: [],
+      pagination: page,
+    });
 
     expect(all.data).toEqual([
       expect.objectContaining({ purpose: "ai_suggest", trigger: "ephemeral" }),
@@ -210,8 +217,8 @@ describe("Run lineage and waiting-on reads", () => {
     const earlierCode = await codeOf(earlier);
     const laterCode = await codeOf(later);
 
-    const predecessor = await getRunByShortcode(ctx.db, earlierCode);
-    const successor = await getRunByShortcode(ctx.db, laterCode);
+    const predecessor = await readRun(ctx.db, earlierCode);
+    const successor = await readRun(ctx.db, laterCode);
 
     expect(predecessor).toMatchObject({
       status: "needs_review",
@@ -241,7 +248,7 @@ describe("Run lineage and waiting-on reads", () => {
         runId,
       });
 
-    const read = await getRunByShortcode(ctx.db, await codeOf(runId));
+    const read = await readRun(ctx.db, await codeOf(runId));
 
     expect(read).toMatchObject({
       displayStatus: "waiting_for_funding",
@@ -274,7 +281,7 @@ describe("Run lineage and waiting-on reads", () => {
       })
       .where(eq(job.id, abandoned.id));
 
-    const read = await getRunByShortcode(ctx.db, await codeOf(runId));
+    const read = await readRun(ctx.db, await codeOf(runId));
 
     expect(read?.waitingOn).toBe("1 expired lease awaiting reclaim");
   });
@@ -308,15 +315,14 @@ describe("Run attention entity view", () => {
       runId: stalled,
       input: {},
     });
-    const page = await listRuns(
-      ctx.db,
-      { purpose: ["ai_suggest"], needsAttention: true },
-      [
+    const page = await runScaffold.read(ctx.db, {
+      filters: { purpose: ["ai_suggest"], needsAttention: true },
+      sorts: [
         { orderBy: "stalled", direction: "desc" },
         { orderBy: "startedAt", direction: "desc" },
       ],
-      { pageIndex: 0, pageSize: 10 },
-    );
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(page.data).toHaveLength(2);
     expect(page.data.map((row) => row.stalled)).toEqual([true, false]);
     expect(page.data.map((row) => row.status)).toEqual(["running", "failed"]);

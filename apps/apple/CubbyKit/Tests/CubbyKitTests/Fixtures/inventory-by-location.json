@@ -493,8 +493,6 @@
     },
     "displayName": "Sample Product at Bin 1",
     "attachments": [],
-    "redirectedFrom": null,
-    "previousShortcodes": [],
     "fields": {
       "amount": {
         "current": {
@@ -889,8 +887,6 @@
     },
     "displayName": "Other Product at Bin 1",
     "attachments": [],
-    "redirectedFrom": null,
-    "previousShortcodes": [],
     "fields": {
       "amount": {
         "current": {

@@ -1,17 +1,12 @@
-import {
-  defineRepository,
-  listOn,
-} from "~/server/entity-kernel/repo/repository";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   createRecipe,
   deleteRecipes,
-  getRecipeByShortcode,
   RECIPE_DELETE_EDGE_POLICY,
-  recipeList,
-  recipeListRead,
+  recipeScaffold,
   updateRecipe,
 } from "./crud";
 
@@ -19,17 +14,7 @@ const recipeShortcodes = bindShortcodeResolver("recipe");
 
 export const recipeRepository = defineRepository("recipe", {
   lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
-  get: (ctx, id) => getRecipeByShortcode(ctx.db, id),
-  list: listOn(recipeList),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-  ) =>
-    recipeListRead(ctx.db, filters, sorts, pagination, readIntent, projection),
+  scaffold: recipeScaffold,
   create: async (ctx, data) => {
     const output = await createRecipe(ctx.db, data, ctx.actorContext);
     const entityId = await recipeShortcodes.one(ctx.db, output.id);

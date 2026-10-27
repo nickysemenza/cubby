@@ -1,20 +1,18 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import { emailFilters, type EmailFilters } from "@cubby/schemas/email";
-import { rawEmailOut, type RawEmailOut } from "@cubby/schemas/email-raw-read";
+import { rawEmailOut } from "@cubby/schemas/email-raw-read";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
   mailboxClassificationStage,
   relevanceLabel,
 } from "@cubby/schemas/mailbox-research";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   expense,
   product,
@@ -47,23 +45,10 @@ import {
   emailReviewConflictSql,
 } from "~/server/domains/email/repo/email-sql";
 import { loadEmailImportOutcomes } from "~/server/domains/email/repo/import-outcome";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import {
-  createEntityReader,
-  createEntityRowFetcher,
-  defineRepository,
-} from "~/server/entity-kernel/repo/repository";
-import {
-  ListContext,
-  listPrepare,
-} from "~/server/generic/list/repo/field-compiler";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type EmailRow = typeof emailTable.$inferSelect;
@@ -236,23 +221,6 @@ const inScope = emailScope.predicate(({ scope }) =>
   scope ? emailInScopeSql(scope) : undefined,
 );
 
-const scaffold = listScaffold("email", emailTable, {
-  derived: {
-    // Ties read newest first in either direction.
-    linkState: emailScope.value(({ scope, fixedLinkState }) => [
-      // A single included state fixes the rank; retain date and stable ties.
-      fixedLinkState ? sql`0::integer` : emailLinkRankSql(scope),
-      { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
-    ]),
-    scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
-    linked: cachedEmailLinkedSql(),
-    reviewConflict: emailReviewConflictSql(),
-    purchaseId: inScope,
-    vendorId: inScope,
-    vendorAccountId: inScope,
-  },
-});
-
 /**
  * The record an Emails section is scoped to, resolved from the list's
  * `purchaseId`/`vendorId`/`vendorAccountId` filter. A declared exception to
@@ -297,20 +265,7 @@ export async function resolveEmailScope(
   return { kind: "vendorAccount", ...account };
 }
 
-export const buildEmailWhere = (
-  filters: EmailFilters,
-  context: ListContext = ListContext.empty,
-  membership: "certain" | "possible" = "certain",
-) => scaffold.where(filters, { context, membership });
-
-/** Who reads the list, for `ownedByViewer`; null reads as nobody's. */
-type EmailViewer = { userId: string } | null;
-
-const emailRead = (
-  db: Database | DrizzleTransaction,
-  viewer: EmailViewer,
-  scope: EmailPurchaseScope | null = null,
-): ListReadOptions<EmailRow> => ({
+const emailRead: ListReadOptions<EmailRow> = {
   media: true,
   // includes-deleted: immutable mail metadata retains its original owner and Run.
   references: {
@@ -318,7 +273,13 @@ const emailRead = (
     runId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
-    const facts = bind.batch(async ({ rows, idPage }) => {
+    const facts = bind.batch(async ({ db, rows, context, idPage }) => {
+      // The actor reads `ownedByViewer`; a read without one owns nothing. An
+      // unscoped read loads no `emailScope` and links across every Purchase.
+      const viewer = context.actor ?? null;
+      const scope = context.has(emailScope)
+        ? context.get(emailScope).scope
+        : null;
       // includes-deleted: immutable mail metadata keeps naming its owner and Run.
       const [associations, reviews, purchaseLinks, owners] = await Promise.all([
         rows.length === 0
@@ -496,89 +457,29 @@ const emailRead = (
       ),
     ];
   },
+};
+
+export const emailScaffold = listScaffold("email", emailTable, {
+  derived: {
+    // Ties read newest first in either direction.
+    linkState: emailScope.value(({ scope, fixedLinkState }) => [
+      // A single included state fixes the rank; retain date and stable ties.
+      fixedLinkState ? sql`0::integer` : emailLinkRankSql(scope),
+      { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
+    ]),
+    scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
+    linked: cachedEmailLinkedSql(),
+    reviewConflict: emailReviewConflictSql(),
+    purchaseId: inScope,
+    vendorId: inScope,
+    vendorAccountId: inScope,
+  },
+  read: {
+    ...emailRead,
+    title: sql`${emailTable.subject}`,
+  },
 });
-const hydrateRead = (
-  db: Database | DrizzleTransaction,
-  rows: EmailRow[],
-  projection: ListProjection,
-  viewer: EmailViewer,
-  scope: EmailPurchaseScope | null = null,
-) =>
-  listReadPlan<EmailRow>("email", emailRead(db, viewer, scope)).read(
-    db,
-    rows,
-    projection,
-  );
-
-/** The Email list read for one viewer (`ownedByViewer` depends on who reads). */
-const emailListRead =
-  (viewer: EmailViewer) =>
-  async (
-    db: Database,
-    filters: EmailFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-    projection: ListProjection = { kind: "full" },
-    readIntent: ListReadIntent = "page",
-  ) => {
-    const request = { filters, sorts, pagination, projection, readIntent };
-    const context = await scaffold.context(db, request);
-    const scope = context.has(emailScope)
-      ? context.get(emailScope).scope
-      : await resolveEmailScope(db, filters);
-    return scaffold.read(db, request, {
-      context,
-      read: emailRead(db, viewer, scope),
-    });
-  };
-
-/** Viewer-free reads (work queues, counts): `ownedByViewer` reads false. */
-export const listEmailsRead = emailListRead(null);
-
-const readerFor = (viewer: EmailViewer) =>
-  createEntityReader<
-    EmailRow,
-    RawEmailOut,
-    "email",
-    Database | DrizzleTransaction
-  >({
-    entity: "email",
-    fetchById: createEntityRowFetcher(emailTable),
-    fromDB: async (db, row) =>
-      rawEmailOut.parse(
-        (await hydrateRead(db, [row], { kind: "full" }, viewer))[0],
-      ),
-  });
 
 export const emailRepository = defineRepository("email", {
-  get: (ctx: EntityKernelContext, code: string) =>
-    readerFor(ctx.actorContext).getByShortcode(ctx.db, code),
-  list: (
-    ctx: EntityKernelContext,
-    filters: EmailFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-  ) =>
-    completeListReader(rawEmailOut, emailListRead(ctx.actorContext))(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-    ),
-  listRead: (
-    ctx: EntityKernelContext,
-    filters: EmailFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-    projection: ListProjection,
-    readIntent: ListReadIntent = "page",
-  ) =>
-    emailListRead(ctx.actorContext)(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      projection,
-      readIntent,
-    ),
+  scaffold: emailScaffold,
 });

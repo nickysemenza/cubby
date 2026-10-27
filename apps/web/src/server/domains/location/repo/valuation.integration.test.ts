@@ -20,7 +20,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { createExpense } from "~/server/domains/expense/repo/crud";
-import { getLocationById } from "~/server/domains/location/repo/crud";
+import { readLocationById } from "~/server/domains/location/repo/crud";
 import { rollupLocationValuations } from "~/server/domains/location/repo/location-valuation-rollup";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -33,7 +33,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { locationList } from "./crud";
+import { locationScaffold } from "./crud";
 import {
   computeLocationValuations,
   getLocationValuationSummary,
@@ -88,9 +88,11 @@ describe("location valuation — computed on read", () => {
       container: { directValuation: 25, directItemCount: 1 },
     });
 
-    expect((await getLocationById(ctx.db, room.entityId)).valuation).toBeNull();
+    expect(
+      (await readLocationById(ctx.db, room.entityId)).valuation,
+    ).toBeNull();
     await drainStoredDerived(ctx.db);
-    const storedRoom = await getLocationById(ctx.db, room.entityId);
+    const storedRoom = await readLocationById(ctx.db, room.entityId);
     expect(storedRoom.valuation).toMatchObject({
       container: { directValuation: 25, directItemCount: 1 },
     });
@@ -153,18 +155,21 @@ describe("location valuation — computed on read", () => {
 
     await drainStoredDerived(ctx.db);
     // Filter: only the shelf whose rollup direct value clears the bar.
-    const filtered = await locationList(ctx.db, { valuationMin: 40 }, [], page);
+    const filtered = await locationScaffold.read(ctx.db, {
+      filters: { valuationMin: 40 },
+      sorts: [],
+      pagination: page,
+    });
     const filteredIds = filtered.data.map((l) => l.id);
     expect(filteredIds).toContain(highShelf.id);
     expect(filteredIds).not.toContain(lowShelf.id);
 
     // Sort: descending valuation puts the pricier shelf first.
-    const sorted = await locationList(
-      ctx.db,
-      {},
-      [{ orderBy: "valuation", direction: "desc" }],
-      page,
-    );
+    const sorted = await locationScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [{ orderBy: "valuation", direction: "desc" }],
+      pagination: page,
+    });
     const orderedShelfIds = sorted.data
       .map((l) => l.id)
       .filter((id) => id === lowShelf.id || id === highShelf.id);

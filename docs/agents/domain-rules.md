@@ -22,6 +22,8 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   it until the client reconnects. A client that cached an older closed schema
   must reconnect once to load the open schema. Input schemas stay closed.
 - Household data is real: carry it through a migration that transforms it.
+- Merged-away codes refuse reads as well as writes, naming the survivor; no
+  client redirects ([ADR 0023](../adr/0023-repository-read-declaration.md)).
 - Queued work stores frozen snapshots (`AiEvaluation.snapshot`, provenance
   fingerprints). Changing a fingerprinted snapshot's shape makes every queued
   row fail its evidence check at execution, one full page each. In the same
@@ -143,6 +145,15 @@ out of services, and keeps platform and generic code off a domain's service
 and operations. It has no baseline, so a new violation is fixed by moving
 code to the right role, never by an exemption. No `index.ts` barrels in
 `domains/`, `generic/`, or client `features/` (`cubby/no-domain-barrel`).
+
+Entity reads go through the repository's read declaration
+([ADR 0023](../adr/0023-repository-read-declaration.md)): a page is
+`scaffold.read`, a record is `scaffold.get`/`getByIds`, and a writer returns
+the record it wrote through `getByIds`. Do not add a per-entity mapper
+(`dbXToAPI`), a by-id reader twin, or an entity-keyed map in
+`server/generic/**`; put the per-entity fact in the declaration or the
+repository's read declaration. A read-schema key that nothing loads fails when
+the read plan is built.
 
 `Database` is a request-scoped handle: routers pass it onward, services
 orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.

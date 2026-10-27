@@ -7,33 +7,19 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   VendorAccountCreateInput,
-  VendorAccountFilters,
   VendorAccountUpdateData,
 } from "@cubby/schemas/vendor-account";
 import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
-import {
-  type RawVendorAccountOut,
-  rawVendorAccountOut,
-} from "@cubby/schemas/vendor-account-raw-read";
+import { rawVendorAccountOut } from "@cubby/schemas/vendor-account-raw-read";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import {
-  and,
-  count,
-  eq,
-  getTableColumns,
-  inArray,
-  max,
-  sql,
-} from "drizzle-orm";
+import { and, count, eq, inArray, max, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
@@ -43,20 +29,11 @@ import {
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { finalizeMerge } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -233,19 +210,6 @@ export async function foldVendorAccountsInto(
   return { moved, folded };
 }
 
-type VendorAccountRow = typeof vendorAccount.$inferSelect & {
-  displayName: string;
-};
-
-/** Every account read carries its derived `<vendor> · <member>` title. */
-const selectVendorAccounts = (db: Database | DrizzleTransaction) =>
-  unwrapDb(db)
-    .select({
-      ...getTableColumns(vendorAccount),
-      displayName: vendorAccountLabelSql,
-    })
-    .from(vendorAccount);
-
 /**
  * When each account last ran and last finished a run, read from Run (served by
  * `Run_vendorAccount_started_idx`) rather than stored on the account, so the
@@ -282,130 +246,81 @@ export const loadVendorAccountRunActivity = async (
   return activity;
 };
 
-// includes-deleted: both FKs are required, so a tombstoned vendor or party
-// still names the account's scope rather than failing the read.
-const accountRead = {
-  references: {
-    vendorId: { kind: "lookup", missing: "error", includeDeleted: true },
-    ledgerPartyId: { kind: "lookup", missing: "error", includeDeleted: true },
-  },
-  bindings: (bind) => {
-    const activity = bind.batch(({ db, rows }) =>
-      loadVendorAccountRunActivity(
-        db,
-        rows.map((row) => row.id),
-      ),
-    );
-    const counts = bind.batch(async ({ db, rows }) => {
-      const values = await unwrapDb(db)
-        .select({ accountId: purchase.vendorAccountId, count: count() })
-        .from(purchase)
-        .where(
-          and(
-            inArray(
-              purchase.vendorAccountId,
-              rows.map((row) => row.id),
-            ),
-            notDeleted(purchase),
-          ),
-        )
-        .groupBy(purchase.vendorAccountId);
-      return new Map(values.map((row) => [row.accountId, row.count]));
-    });
-    return [
-      activity.fields(
-        rawVendorAccountOut.pick({ lastRunAt: true, lastSuccessAt: true }),
-        (row, loaded) => ({
-          lastRunAt: loaded.get(row.id)?.lastRunAt ?? null,
-          lastSuccessAt: loaded.get(row.id)?.lastSuccessAt ?? null,
-        }),
-      ),
-      counts.fields(
-        rawVendorAccountOut.pick({ purchaseCount: true }),
-        (row, loaded) => ({ purchaseCount: loaded.get(row.id) ?? 0 }),
-      ),
-    ];
-  },
-} satisfies ListReadOptions<VendorAccountRow>;
-const hydrateRead = (
-  db: Database | DrizzleTransaction,
-  rows: VendorAccountRow[],
-  projection: ListProjection,
-) =>
-  listReadPlan<VendorAccountRow>("vendorAccount", accountRead).read(
-    db,
-    rows,
-    projection,
-  );
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: VendorAccountRow[],
-): Promise<RawVendorAccountOut[]> =>
-  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
-    rawVendorAccountOut.parse(row),
-  );
-
 // `lastRunAt` and `displayName` are computed, not columns.
-const scaffold = listScaffold("vendorAccount", vendorAccount, {
-  derived: {
-    displayName: { sql: vendorAccountLabelSql, nulls: "high" },
-    lastRunAt: sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id})`,
+export const vendorAccountScaffold = listScaffold(
+  "vendorAccount",
+  vendorAccount,
+  {
+    derived: {
+      displayName: { sql: vendorAccountLabelSql, nulls: "high" },
+      lastRunAt: sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id})`,
+    },
+    // includes-deleted: both FKs are required, so a tombstoned vendor or party
+    // still names the account's scope rather than failing the read.
+    read: {
+      title: vendorAccountLabelSql,
+      references: {
+        vendorId: { kind: "lookup", missing: "error", includeDeleted: true },
+        ledgerPartyId: {
+          kind: "lookup",
+          missing: "error",
+          includeDeleted: true,
+        },
+      },
+      bindings: (bind) => {
+        const activity = bind.batch(({ db, rows }) =>
+          loadVendorAccountRunActivity(
+            db,
+            rows.map((row) => row.id),
+          ),
+        );
+        const counts = bind.batch(async ({ db, rows }) => {
+          const values = await unwrapDb(db)
+            .select({ accountId: purchase.vendorAccountId, count: count() })
+            .from(purchase)
+            .where(
+              and(
+                inArray(
+                  purchase.vendorAccountId,
+                  rows.map((row) => row.id),
+                ),
+                notDeleted(purchase),
+              ),
+            )
+            .groupBy(purchase.vendorAccountId);
+          return new Map(values.map((row) => [row.accountId, row.count]));
+        });
+        return [
+          activity.fields(
+            rawVendorAccountOut.pick({ lastRunAt: true, lastSuccessAt: true }),
+            (row, loaded) => ({
+              lastRunAt: loaded.get(row.id)?.lastRunAt ?? null,
+              lastSuccessAt: loaded.get(row.id)?.lastSuccessAt ?? null,
+            }),
+          ),
+          counts.fields(
+            rawVendorAccountOut.pick({ purchaseCount: true }),
+            (row, loaded) => ({ purchaseCount: loaded.get(row.id) ?? 0 }),
+          ),
+        ];
+      },
+    },
   },
-});
+);
 
 type VendorAccountReferencePatch = {
   vendorId?: ReturnType<typeof parseEntityId<"vendor">>;
   ledgerPartyId?: ReturnType<typeof parseEntityId<"ledgerParty">>;
 };
 
-export const buildVendorAccountWhere = (filters: VendorAccountFilters) =>
-  scaffold.where(filters);
-
-export const listVendorAccountsRead = (
-  db: Database,
-  filters: VendorAccountFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      where: buildVendorAccountWhere(filters),
-      select: (page) =>
-        selectVendorAccounts(db)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      read: accountRead,
-    },
-  );
-
-const listVendorAccounts = completeListReader(
-  rawVendorAccountOut,
-  listVendorAccountsRead,
-);
-
-const reader = createEntityReader<
-  VendorAccountRow,
-  RawVendorAccountOut,
-  "vendorAccount",
-  Database | DrizzleTransaction
->({
+const reader = createEntityReader({
   entity: "vendorAccount",
-  fetchById: async (db, id) => {
-    const [row] = await selectVendorAccounts(db)
-      .where(and(eq(vendorAccount.id, id), notDeleted(vendorAccount)))
-      .limit(1);
-    return row;
-  },
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  scaffold: vendorAccountScaffold,
+  output: rawVendorAccountOut,
 });
 
-export const getVendorAccountByShortcode = reader.getByShortcode;
+/** One live Vendor Account by public code, or null. */
+export const readVendorAccount = reader.getByShortcode;
 
 async function resolveReferences(
   db: Database | DrizzleTransaction,
@@ -517,9 +432,7 @@ const updateVendorAccount = defineMutationWriter({
 
 export const vendorAccountRepository = defineRepository("vendorAccount", {
   lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },
-  get: onDb(getVendorAccountByShortcode),
-  list: listOn(listVendorAccounts),
-  listRead: listReadOn(listVendorAccountsRead),
+  scaffold: vendorAccountScaffold,
   create: asActor(createVendorAccount),
   update: asActor(updateVendorAccount),
 });

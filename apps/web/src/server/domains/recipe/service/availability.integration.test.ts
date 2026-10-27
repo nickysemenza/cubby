@@ -6,7 +6,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  getIngredientByID,
+  readIngredientById,
   updateIngredient,
 } from "~/server/domains/ingredient/repo/crud";
 import { getInventoryForProducts } from "~/server/domains/inventory/repo/crud";
@@ -276,7 +276,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
         TEST_ACTOR,
       );
       const stockProducts = (
-        await getIngredientByID(tdb.db, flour.id)
+        await readIngredientById(tdb.db, flour.id)
       ).product.map((product) => product.id);
       const stockIds = await resolveAllPresent(
         tdb.db,

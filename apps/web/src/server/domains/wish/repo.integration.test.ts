@@ -17,7 +17,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { wishPriceRangeSql } from "./price-range";
-import { createWish, wishList, wishListSummary } from "./repo";
+import { createWish, wishScaffold } from "./repo";
 
 describe("wish candidates", () => {
   const ctx = withTestDb();
@@ -72,9 +72,13 @@ describe("wish candidates", () => {
       },
       ctx.actor,
     );
-    const listed = await wishList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 20,
+    const listed = await wishScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 20,
+      },
     });
     expect(created.output.priceRange).toEqual({
       low: 20,
@@ -88,7 +92,7 @@ describe("wish candidates", () => {
     expect(
       listed.data.find((row) => row.id === created.output.id)?.priceRange,
     ).toEqual(created.output.priceRange);
-    expect(await wishListSummary(ctx.db, {})).toEqual({
+    expect(await wishScaffold.totals(ctx.db, {})).toEqual({
       priceLow: 20,
       priceHigh: 125,
     });

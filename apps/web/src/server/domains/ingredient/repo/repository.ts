@@ -1,4 +1,3 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   ingredientMergeInput,
   mergeSummary as ingredientMergeSummary,
@@ -6,24 +5,17 @@ import {
 import { rawIngredientOutput as ingredientOut } from "@cubby/schemas/ingredient-raw-read";
 import { z } from "zod";
 
-import { getIngredientByID as getIngredientDetail } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
 } from "~/server/entity-kernel/repo/repository";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import {
-  bindShortcodeResolver,
-  resolveLiveShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { createIngredient, getIngredientByID, updateIngredient } from "./crud";
+import { createIngredient, readIngredientById, updateIngredient } from "./crud";
 import { deleteIngredients, INGREDIENT_DELETE_EDGE_POLICY } from "./deletion";
 import { INGREDIENT_MERGE_EDGE_POLICY, mergeIngredients } from "./merge";
-import { ingredientListRead } from "./search";
-import { ingredientList } from "./search";
+import { ingredientScaffold } from "./search";
 
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
 
@@ -32,18 +24,7 @@ export const ingredientRepository = defineRepository("ingredient", {
     delete: INGREDIENT_DELETE_EDGE_POLICY,
     merge: INGREDIENT_MERGE_EDGE_POLICY,
   },
-  get: async (ctx, shortcode) => {
-    const id = await resolveLiveShortcode(ctx.db, shortcode, "ingredient");
-    return id
-      ? getIngredientDetail(
-          ctx.db,
-          ctx.usdaClient,
-          parseEntityId("ingredient", id),
-        )
-      : null;
-  },
-  list: listOn(ingredientList),
-  listRead: listReadOn(ingredientListRead),
+  scaffold: ingredientScaffold,
   create: asActor(createIngredient),
   update: async (ctx, shortcode, data) => {
     const entityId = await ingredientShortcodes.one(ctx.db, shortcode);
@@ -103,7 +84,7 @@ export const ingredientRepository = defineRepository("ingredient", {
       });
       return {
         output: {
-          ingredient: await getIngredientByID(ctx.db, entityId),
+          ingredient: await readIngredientById(ctx.db, entityId),
           mergeSummary: ingredientMergeSummary.parse(summary),
         },
         entityId,

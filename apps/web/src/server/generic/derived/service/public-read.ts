@@ -4,17 +4,11 @@ import {
   type EntityFieldEnvelopeRead,
 } from "@cubby/schemas/entity-field-envelopes";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { withUniversalEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
-import {
-  publicFieldEnvelopeRows,
-  loadPublicFieldReadContexts,
-} from "~/server/generic/derived/repo/public-read";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
-
-const publicIdentity = z.object({ id: z.string() });
 
 /** Batch public serialization shared by specialist operations and entity reads. */
 export async function readPublicEntityRows<
@@ -34,23 +28,21 @@ export async function readPublicEntityRows<
   contexts?: PageFieldReadContexts;
 }): Promise<EntityFieldEnvelopeRead<E, P>[]> {
   const schema = fieldEnvelopeReadSchema(entity, projection);
-  const [hydrated, current] = await Promise.all([
+  const hydrated =
     projection === "output"
-      ? Promise.resolve(rows)
-      : withUniversalEntityMedia(db, entity, rows, projection === "detail"),
-    contexts ??
-      loadPublicFieldReadContexts(
-        db,
-        entity,
-        rows.map((row) => publicIdentity.parse(row).id),
-      ),
-  ]);
+      ? rows
+      : await withUniversalEntityMedia(
+          db,
+          entity,
+          rows,
+          projection === "detail",
+        );
   return publicFieldEnvelopeRows({
     db,
     entity,
     schema,
     rows: hydrated,
-    contexts: current,
+    contexts,
   });
 }
 

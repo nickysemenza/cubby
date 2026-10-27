@@ -14,7 +14,7 @@ import {
   inventoryEntry,
   product,
 } from "~/server/db/schema";
-import { getProductByShortcode } from "~/server/domains/product/repo/crud";
+import { readProduct } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   entityKernelContextSchema,
@@ -259,7 +259,7 @@ describe("commitPhotoGroup", () => {
       },
       ctx.actor,
     );
-    const attached = await getProductByShortcode(ctx.db, existing.id);
+    const attached = await readProduct(ctx.db, existing.id);
     expect(attached?.notes).toBe("Earlier catalog notes.");
     expect(attached?.labelImages.map((image) => image.id)).toEqual([
       images[0]!.shortcode,
@@ -316,7 +316,7 @@ describe("commitPhotoGroup", () => {
         state: "active",
       }),
     );
-    const historical = await getProductByShortcode(ctx.db, existing.id);
+    const historical = await readProduct(ctx.db, existing.id);
     expect(historical?.dataQuality.exceptions).toContainEqual(
       expect.objectContaining({
         check: "product_external_id",
@@ -338,7 +338,7 @@ describe("commitPhotoGroup", () => {
       },
       ctx.actor,
     );
-    const after = await getProductByShortcode(ctx.db, existing.id);
+    const after = await readProduct(ctx.db, existing.id);
     expect(after?.labelImages.map((image) => image.id)).toEqual([
       images[0]!.shortcode,
     ]);

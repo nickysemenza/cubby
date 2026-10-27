@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { task } from "~/server/db/schema";
 
-import { reorderTasks, getTaskByShortcode } from "./crud";
+import { reorderTasks, readTask } from "./crud";
 
 // The client sends only a page: rank collisions and an unranked page must preserve
 // rows outside it. A failed placement must also roll back its destination patch.
@@ -53,12 +53,14 @@ describe("server-owned task placement", () => {
       },
       ctx.actor,
     );
-    const readTask = async (id: typeof moved.id) => {
-      const row = await getTaskByShortcode(ctx.db, id);
+    const readTaskOrThrow = async (id: typeof moved.id) => {
+      const row = await readTask(ctx.db, id);
       if (!row) throw new Error(`Missing task ${id}`);
       return row;
     };
-    const read = await Promise.all(records.map((row) => readTask(row.id)));
+    const read = await Promise.all(
+      records.map((row) => readTaskOrThrow(row.id)),
+    );
     const ranks = new Map(read.map((row) => [row.id, row.sortOrder]));
     expect(ranks.get(outside.id)).toBeLessThan(ranks.get(left.id)!);
     expect(ranks.get(left.id)).toBeLessThan(ranks.get(moved.id)!);
@@ -86,7 +88,7 @@ describe("server-owned task placement", () => {
         ctx.actor,
       ),
     ).rejects.toThrow(/anchor/iu);
-    expect((await readTask(moved.id)).status).toBe(moved.status);
+    expect((await readTaskOrThrow(moved.id)).status).toBe(moved.status);
   });
   it("moves into No project and rolls back when clearing the only trade source", async () => {
     const project = await createRepoEntity(ctx, "project", {
@@ -107,9 +109,7 @@ describe("server-owned task placement", () => {
       },
       ctx.actor,
     );
-    expect(
-      (await getTaskByShortcode(ctx.db, explicit.output.id))?.projectId,
-    ).toBeNull();
+    expect((await readTask(ctx.db, explicit.output.id))?.projectId).toBeNull();
     const inherited = await createRepoEntity(ctx, "task", {
       name: "Inherited trade",
       projectId: project.output.id,

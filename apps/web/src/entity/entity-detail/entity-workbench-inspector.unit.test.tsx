@@ -23,8 +23,6 @@ const IMAGE_ID = testShortcode("image", "IMG-WORK");
 
 const vendor = entityReadFixture(vendorOut, {
   attachments: [],
-  redirectedFrom: null,
-  previousShortcodes: [],
   id: VENDOR_ID,
   name: "Fixture vendor",
   website: null,

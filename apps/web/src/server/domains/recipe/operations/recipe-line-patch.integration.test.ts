@@ -3,7 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
-import { getRecipeByShortcode } from "~/server/domains/recipe/repo/crud";
+import { readRecipe } from "~/server/domains/recipe/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -62,7 +62,7 @@ describe("recipe_insights.patch_line", () => {
         ],
       }),
     });
-    const before = await getRecipeByShortcode(ctx.db, created.item.id);
+    const before = await readRecipe(ctx.db, created.item.id);
     if (!before) throw new Error("Synthetic recipe missing");
     const onionLine = before.sections[0]!.ingredients[0]!;
 

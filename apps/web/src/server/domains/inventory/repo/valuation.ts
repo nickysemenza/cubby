@@ -144,39 +144,6 @@ export const attachInventoryValuations = <T extends { id: InventoryId }>(
   }));
 
 /**
- * Attach published valuations to the `inventoryEntry` rows nested in loaded
- * product rows (the detail/list product reads embed their stock).
- */
-export const enrichProductRowsWithInventoryValuations = async <
-  T extends { inventoryEntry: readonly InventoryValuationRow[] },
->(
-  db: Database | DrizzleTransaction,
-  products: readonly T[],
-): Promise<
-  Array<
-    Omit<T, "inventoryEntry"> & {
-      inventoryEntry: Array<
-        T["inventoryEntry"][number] & { valuation: number | null }
-      >;
-    }
-  >
-> => {
-  const valuations = await loadStoredInventoryValuations(
-    db,
-    products.flatMap((product) =>
-      product.inventoryEntry.map((entry) => entry.id),
-    ),
-  );
-  return products.map((product) => ({
-    ...product,
-    inventoryEntry: attachInventoryValuations(
-      product.inventoryEntry,
-      valuations,
-    ),
-  }));
-};
-
-/**
  * A computed valuation map as a SQL scalar for `idColumn`'s row, so the list's
  * `ORDER BY`, `WHERE` and `SUM` see exactly the figure the mappers display.
  * The map travels as ONE jsonb parameter (`{ "<uuid>": 12.5 | null }`) and each

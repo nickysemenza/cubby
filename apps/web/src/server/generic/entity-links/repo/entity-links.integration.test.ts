@@ -22,13 +22,10 @@ import { z } from "zod";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { entityLink, entityIdentity, product } from "~/server/db/schema";
 import {
-  getProjectByID,
+  readProjectById,
   updateProject,
 } from "~/server/domains/project/repo/crud";
-import {
-  getTaskByShortcode,
-  updateTask,
-} from "~/server/domains/task/repo/crud";
+import { readTask, updateTask } from "~/server/domains/task/repo/crud";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture as createProduct,
@@ -183,7 +180,7 @@ describe("EntityLink constraints", () => {
             ctx.actor,
           ),
         blockedBy: async (at: number) =>
-          (await getTaskByShortcode(ctx.db, rows[at]!.output.id))?.blockedByIds,
+          (await readTask(ctx.db, rows[at]!.output.id))?.blockedByIds,
       };
     },
     project: async () => {
@@ -208,7 +205,7 @@ describe("EntityLink constraints", () => {
             ctx.actor,
           ),
         blockedBy: async (at: number) =>
-          (await getProjectByID(ctx.db, rows[at]!.entityId)).blockedByIds,
+          (await readProjectById(ctx.db, rows[at]!.entityId)).blockedByIds,
       };
     },
   };

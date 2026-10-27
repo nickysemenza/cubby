@@ -11,11 +11,9 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   type ProductCategoryCreateInput,
   type ProductCategoryFeature,
-  type ProductCategoryFilters,
   type RawProductCategorySummary,
   type ProductCategoryUpdateData,
 } from "@cubby/schemas/product-category";
@@ -24,10 +22,7 @@ import {
   productCategoryFeature,
   rawProductCategorySummary,
 } from "@cubby/schemas/product-category-fields";
-import {
-  type RawProductCategoryOut,
-  rawProductCategoryOut,
-} from "@cubby/schemas/product-category-raw-read";
+import { rawProductCategoryOut } from "@cubby/schemas/product-category-raw-read";
 import type { categoryMappingSchema } from "@cubby/schemas/spending-classification";
 import {
   and,
@@ -53,7 +48,6 @@ import {
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { product, productCategory } from "~/server/db/schema";
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
@@ -67,23 +61,12 @@ import {
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
-import {
-  createEntityCrud,
-  createEntityRowFetcher,
-} from "~/server/entity-kernel/repo/repository";
+import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listReadPlan,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -128,12 +111,6 @@ type CategoryPathRow = {
 // unaliased table.
 const categoryMapping = () =>
   categoryMappingSql(sql.raw('"ProductCategory"."id"'));
-
-const scaffold = listScaffold("productCategory", productCategory, {
-  derived: {
-    needsClassification: sql`(${categoryMapping()}->>'state' = 'unmapped')`,
-  },
-});
 
 const parseFeature = (feature: string | null): ProductCategoryFeature | null =>
   productCategoryFeature.nullable().parse(feature);
@@ -408,16 +385,6 @@ const categoryRead = {
     ];
   },
 } satisfies ListReadOptions<CategoryRow>;
-const hydrateRead = (
-  db: Database | DrizzleTransaction,
-  rows: CategoryRow[],
-  projection: ListProjection,
-) =>
-  listReadPlan<CategoryRow>("productCategory", categoryRead).read(
-    db,
-    rows,
-    projection,
-  );
 function mappedCategoryIdentity(
   mapping: z.infer<typeof categoryMappingSchema> | undefined,
 ) {
@@ -429,49 +396,28 @@ function mappedCategoryIdentity(
   return { ...mapping.category, name: `${mapping.category.name}${suffix}` };
 }
 
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: CategoryRow[],
-): Promise<RawProductCategoryOut[]> =>
-  (await hydrateRead(db, rows, { kind: "full" })).map((row) =>
-    rawProductCategoryOut.parse(row),
-  );
-
-export const buildProductCategoryWhere = (filters: ProductCategoryFilters) =>
-  scaffold.where(filters);
-
-export const listProductCategoriesRead = (
-  db: Database,
-  filters: ProductCategoryFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  scaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      where: buildProductCategoryWhere(filters),
-      read: categoryRead,
+export const productCategoryScaffold = listScaffold(
+  "productCategory",
+  productCategory,
+  {
+    derived: {
+      needsClassification: sql`(${categoryMapping()}->>'state' = 'unmapped')`,
     },
-  );
-
-export const listProductCategories = completeListReader(
-  rawProductCategoryOut,
-  listProductCategoriesRead,
+    read: { ...categoryRead },
+  },
 );
 
 const crud = createEntityCrud({
   table: productCategory,
   entity: "productCategory",
-  fetchById: createEntityRowFetcher(productCategory),
-  fromDB: async (db, row: CategoryRow) => (await hydrate(db, [row]))[0]!,
+  scaffold: productCategoryScaffold,
+  output: rawProductCategoryOut,
   toUpdate: (values: Partial<typeof productCategory.$inferInsert>) => values,
   auditUpdateFields: [...entityFieldModels.productCategory.audit],
 });
 
-export const getProductCategoryByShortcode = crud.getByShortcode;
+/** One live product category by public code, or null. */
+export const readProductCategory = crud.getByShortcode;
 
 const cleanAliases = (aliases: string[]) => [
   ...new Set(aliases.map((alias) => alias.trim()).filter(Boolean)),
@@ -893,9 +839,7 @@ export async function loadCategorySummaries(
 
 export const productCategoryRepository = defineRepository("productCategory", {
   lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
-  get: onDb(getProductCategoryByShortcode),
-  list: listOn(listProductCategories),
-  listRead: listReadOn(listProductCategoriesRead),
+  scaffold: productCategoryScaffold,
   create: asActor(createProductCategory),
   update: asActor(updateProductCategory),
   deleteHooks: { beforeDelete: refuseBoundCategories },

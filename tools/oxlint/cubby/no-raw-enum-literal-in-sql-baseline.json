@@ -26,10 +26,9 @@
   "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.ts": 86,
   "apps/web/src/server/domains/purchase/repo/purchase-financial-aggregates.ts": 3,
   "apps/web/src/server/domains/purchase/repo/purchase-settlement-candidates.ts": 3,
-  "apps/web/src/server/domains/purchase/repo/purchase.ts": 1,
   "apps/web/src/server/domains/recipe/repo/crud.ts": 2,
   "apps/web/src/server/generic/entity-links/repo/related-view.ts": 25,
-  "apps/web/src/server/generic/search/repo/search-document.ts": 39,
+  "apps/web/src/server/generic/search/repo/search-document.ts": 2,
   "apps/web/src/server/domains/spending-category/repo/spending-classification-review.ts": 3,
   "apps/web/src/server/domains/task/repo/blocking-sql.ts": 4,
   "apps/web/src/server/domains/task/repo/summary.ts": 4,
@@ -54,6 +53,5 @@
   "apps/web/src/server/domains/cookbook/repo/cookbook.ts": 1,
   "apps/web/src/server/domains/product/repo/crud.ts": 1,
   "apps/web/src/server/domains/product/repo/orphan-condition.ts": 1,
-  "apps/web/src/server/domains/run/repo/ensure-run.ts": 1,
-  "apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts": 2
+  "apps/web/src/server/domains/run/repo/ensure-run.ts": 1
 }

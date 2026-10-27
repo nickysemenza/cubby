@@ -14,7 +14,7 @@ import {
   orderMailAttachment,
   run as runTable,
 } from "~/server/db/schema";
-import { listEmailsRead } from "~/server/domains/email/repo/email";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
 import { confirmEmailClassification } from "~/server/domains/purchase-import/repo/gmail/ingest-state";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
@@ -187,36 +187,34 @@ describe("Email data quality", () => {
         sorts: [],
         pagination: { pageIndex: 0, pageSize: 25 },
         readIntent: "count",
+        projection: [],
       },
       {},
     );
     expect(plain.count).toBe(6);
-    const filtered = await listEmailsRead(
-      ctx.db,
-      { dataGap: ["email_not_imported"] },
-      [{ orderBy: "dataQuality", direction: "asc" }],
-      { pageIndex: 0, pageSize: 25 },
-      { kind: "selected", fields: ["dataQuality"] },
-    );
+    const filtered = await emailScaffold.read(ctx.db, {
+      filters: { dataGap: ["email_not_imported"] },
+      sorts: [{ orderBy: "dataQuality", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 25 },
+      projection: ["dataQuality"],
+    });
     expect(filtered.count).toBe(4);
     expect(filtered.data).toHaveLength(4);
-    const count = await listEmailsRead(
-      ctx.db,
-      { dataGap: ["email_not_imported"] },
-      [],
-      { pageIndex: 0, pageSize: 25 },
-      { kind: "selected", fields: [] },
-      "count",
-    );
+    const count = await emailScaffold.read(ctx.db, {
+      filters: { dataGap: ["email_not_imported"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 25 },
+      projection: [],
+      readIntent: "count",
+    });
     expect(count.count).toBe(4);
-    const facet = await listEmailsRead(
-      ctx.db,
-      { dataStatus: ["needs_data"] },
-      [],
-      { pageIndex: 0, pageSize: 25 },
-      { kind: "selected", fields: [] },
-      "count",
-    );
+    const facet = await emailScaffold.read(ctx.db, {
+      filters: { dataStatus: ["needs_data"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 25 },
+      projection: [],
+      readIntent: "count",
+    });
     expect(facet.count).toBe(6);
     const queue = await readWorkQueue(
       ctx.db,
@@ -596,22 +594,20 @@ describe("Email data quality", () => {
     expect(gaps(linked)).toEqual(["email_display_image"]);
 
     await refresh();
-    const reviewQueue = await listEmailsRead(
-      ctx.db,
-      { dataGap: ["email_relevance_unreviewed"] },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const reviewQueue = await emailScaffold.read(ctx.db, {
+      filters: { dataGap: ["email_relevance_unreviewed"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(reviewQueue.data.map((row) => row.id)).not.toContain(
       unrelated.shortcode,
     );
 
-    const missingOriginal = await listEmailsRead(
-      ctx.db,
-      { dataGap: ["email_original_missing"] },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const missingOriginal = await emailScaffold.read(ctx.db, {
+      filters: { dataGap: ["email_original_missing"] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(missingOriginal.data.map((row) => row.id)).toEqual([
       related.shortcode,
     ]);

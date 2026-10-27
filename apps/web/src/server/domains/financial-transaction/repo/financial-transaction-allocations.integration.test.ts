@@ -15,12 +15,12 @@ import {
 } from "~/server/domains/purchase/repo/purchase";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import { findFinancialTransactionAllocationDefects } from "~/server/generic/problems/repo/detectors-financial";
 
 import {
-  listFinancialTransactions,
+  financialTransactionScaffold,
   updateFinancialTransaction,
 } from "./financial-transaction";
 
@@ -63,7 +63,7 @@ describe("settlement allocations — write path", () => {
 
   const mkPurchase = async (orderId: string | null = null) => {
     const vendorId = await findOrCreateVendor(ctx.db, "Home Depot");
-    const vendor = await getVendorByID(ctx.db, vendorId);
+    const vendor = await readVendorById(ctx.db, vendorId);
     return (
       await createRepoEntity(ctx, "purchase", {
         vendorId: vendor.id,
@@ -100,12 +100,11 @@ describe("settlement allocations — write path", () => {
     );
 
   const allocationsOf = async (id: FinancialTransactionShortcode) => {
-    const { data: items } = await listFinancialTransactions(
-      ctx.db,
-      {},
-      [],
-      page,
-    );
+    const { data: items } = await financialTransactionScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: page,
+    });
     return items.find((row) => row.id === id);
   };
 
@@ -139,12 +138,11 @@ describe("settlement allocations — write path", () => {
     });
 
     for (const purchaseId of [a.id, b.id]) {
-      const { data: items } = await listFinancialTransactions(
-        ctx.db,
-        { purchaseId },
-        [],
-        page,
-      );
+      const { data: items } = await financialTransactionScaffold.read(ctx.db, {
+        filters: { purchaseId },
+        sorts: [],
+        pagination: page,
+      });
       expect(items.map((row) => row.id)).toContain(txn.id);
     }
   });
@@ -262,12 +260,11 @@ describe("settlement allocations — write path", () => {
     // whereas zero allocations is legal and re-enterable.
     const after = await allocationsOf(txn.id);
     expect(after?.purchaseId).toBeNull();
-    const { data: items } = await listFinancialTransactions(
-      ctx.db,
-      { purchaseId: b.id },
-      [],
-      page,
-    );
+    const { data: items } = await financialTransactionScaffold.read(ctx.db, {
+      filters: { purchaseId: b.id },
+      sorts: [],
+      pagination: page,
+    });
     expect(items.map((row) => row.id)).not.toContain(txn.id);
     expect(await findFinancialTransactionAllocationDefects(ctx.db)).toEqual([]);
   });

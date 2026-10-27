@@ -23,7 +23,7 @@ import {
   resolveEntityDisplayImageLists,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
-import { storedEntryFor } from "~/server/generic/data-quality/repo/entries";
+import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
 import { scoreSql, statusSql } from "~/server/generic/data-quality/repo/sql";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 

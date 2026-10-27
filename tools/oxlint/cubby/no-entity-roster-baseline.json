@@ -1,0 +1,5 @@
+{
+  "apps/web/src/server/generic/shortcode/repo/shortcode-tables.ts": 1,
+  "apps/web/src/server/generic/work-queue/repo/work-queue-projection.ts": 1,
+  "apps/web/src/server/generic/work-queue/service/work-queue-problems.ts": 1
+}

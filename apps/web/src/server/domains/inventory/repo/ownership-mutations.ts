@@ -12,7 +12,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { expense, inventoryEntry } from "~/server/db/schema";
-import { getExpenseByID } from "~/server/domains/expense/repo/crud";
+import { readExpenseById } from "~/server/domains/expense/repo/crud";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
 import {
   assertValidRawInventoryOwnership,
@@ -380,7 +380,7 @@ export const confirmInventoryExpenseBeneficiary = async (
     );
     await assertValidIndividualOwner(tx, ownerId);
 
-    const before = await getExpenseByID(tx, expenseId);
+    const before = await readExpenseById(tx, expenseId);
     const beneficiaries = [
       { partyId: effective.effectiveOwner.id, weight: 1 },
     ] as const;
@@ -390,7 +390,7 @@ export const confirmInventoryExpenseBeneficiary = async (
       "beneficiary",
       beneficiaries,
     );
-    const after = await getExpenseByID(tx, expenseId);
+    const after = await readExpenseById(tx, expenseId);
     const changes = computeChanges(before, after, ["beneficiaries"]);
     if (changes) {
       await logAuditEntry(tx, actor, {

@@ -12,6 +12,7 @@ import {
 } from "@cubby/schemas/entity-fields";
 import {
   entityManifest,
+  entityMembership,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -19,10 +20,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import type { ListEntity } from "~/entity/generated/entity-lists.gen";
-import {
-  isListMediaField,
-  type ListReadRow,
-} from "~/entity/model/list-read-fields";
+import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
 import {
@@ -33,77 +31,37 @@ import {
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { loadStoredFieldProjections } from "~/server/generic/derived/repo/read";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
-import type {
-  ListBindingGroup,
-  ListProjection,
-} from "~/server/generic/list/repo/list-contracts";
+import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   listReadSchema,
   projectListRows,
 } from "~/server/generic/list/repo/list-read-schema";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { traceListGroup } from "~/server/observability/list-read-tracing";
 
 import { ListContext, derivedFieldsOf } from "./field-compiler";
 import { loadRelationProjection } from "./relation-projection";
-
-export const wantsListGroup = (
-  projection: ListProjection,
-  group: ListBindingGroup,
-): boolean => {
-  if (projection.kind === "base") return false;
-  if (projection.kind === "full") return true;
-  if (group === "media") return projection.fields.some(isListMediaField);
-  if (group === "quality") return projection.fields.includes("dataQuality");
-  return true;
-};
 
 /** Validate explicit field demand before reading even an empty page. */
 export function selectedListProjection(
   entity: ListEntity,
   requested: readonly string[],
-): Extract<ListProjection, { kind: "selected" }> {
+): ListProjection {
   const schema = listReadSchema(entity);
   for (const field of requested)
     if (!(field in schema.shape))
       throw new Error(`Unknown list field: ${entity}.${field}`);
-  return { kind: "selected", fields: [...new Set(requested)] };
+  return [...new Set(requested)];
 }
 
-/** Selected reads can gate a shared loader by all its consumer fields,
- * including transitive consumers;
- * full/group reads still load every dependency belonging to their groups. */
-export const loadListGroup = async <T>(
-  projection: ListProjection,
-  groups: ListBindingGroup | readonly ListBindingGroup[],
-  load: () => Promise<T>,
-  consumerFields?: readonly string[],
-): Promise<T | undefined> =>
-  [groups].flat().some((group) => wantsListGroup(projection, group)) &&
-  (projection.kind !== "selected" ||
-    consumerFields === undefined ||
-    consumerFields.some((field) => projection.fields.includes(field)))
-    ? traceListGroup(groups, load)
-    : undefined;
-
-/** Build only the selected group's columns or canonical fields; omitted groups stay absent. */
-export const listGroupFields = <T extends object>(
-  projection: ListProjection,
-  groups: ListBindingGroup | readonly ListBindingGroup[],
-  build: () => T,
-): Partial<T> => {
-  if ([groups].flat().some((group) => wantsListGroup(projection, group)))
-    return build();
-  return {};
-};
-
-const scored = new Set<string>(scoredEntities);
+const scored = entityMembership(scoredEntities);
 const isScored = (entity: string): entity is ScoredEntity => scored.has(entity);
 
 type ListIdPage = {
   db: Database | DrizzleTransaction;
   ids: readonly string[];
   projection: ListProjection;
+  /** The request's context: its reader (actor, clients) and prepares. */
+  context: ListContext;
   stored?: Promise<PageStoredMeta>;
 };
 
@@ -119,10 +77,6 @@ export type ListReadValueContext = {
   context: ListContext;
   quality: DataQuality | undefined;
   displayImages: DisplayImageSummary[] | undefined;
-  references: ReadonlyMap<
-    string,
-    { id: string; name: string | null; emoji?: string | null } | undefined
-  >;
 };
 type ListReadPage<Row> = {
   idPage: ListIdPage;
@@ -133,6 +87,7 @@ type ListReadPage<Row> = {
 };
 type ListReadBinding<Row> = {
   schema: z.ZodObject;
+  scope?: "detail";
   prefetch?: (page: ListIdPage) => Promise<void>;
   prepare?: (page: ListReadPage<Row>) => Promise<void>;
   value: (
@@ -150,8 +105,11 @@ type ListBatch<Row, Page, Loaded> = {
       loaded: Loaded,
       context: ListReadValueContext,
     ) => z.output<z.ZodObject<Fields>>,
+    options?: BindingOptions,
   ) => ListReadBinding<Row>;
 };
+/** `scope: "detail"`: a page omits these keys unless a projection names them. */
+type BindingOptions = { scope?: "detail" };
 type BindListFields<Row> = {
   <Fields extends z.ZodRawShape>(
     schema: z.ZodObject<Fields>,
@@ -159,6 +117,7 @@ type BindListFields<Row> = {
       row: Row,
       context: ListReadValueContext,
     ) => z.output<z.ZodObject<Fields>>,
+    options?: BindingOptions,
   ): ListReadBinding<Row>;
   batch: <Loaded>(
     load: (page: ListReadPage<Row>) => Promise<Loaded>,
@@ -183,13 +142,15 @@ export type ListReadOptions<Row> = {
         emoji?: string;
         missing: "null" | "error";
         includeDeleted?: boolean;
-        consumers?: readonly string[];
       }
   >;
   bindings?: (bind: BindListFields<Row>) => readonly ListReadBinding<Row>[];
 };
 
 const sourceRecord = z.record(z.string(), z.unknown());
+
+/** The read keys the plan resolves through the canonical display-media query. */
+const displayMediaFields = ["displayImages", "images", "labelImages"];
 
 type DateRangeProjection = NonNullable<
   EntityFieldModel["fields"][number]["dateRange"]
@@ -236,8 +197,9 @@ export function listReadPlan<Row>(
     };
     return {
       load: get,
-      fields: (picked, value) => ({
+      fields: (picked, value, bindingOptions) => ({
         schema: picked,
+        scope: bindingOptions?.scope,
         prefetch: prefetchPage
           ? async (page) => {
               await get(prefetchPage(page));
@@ -258,8 +220,10 @@ export function listReadPlan<Row>(
         row: Row,
         context: ListReadValueContext,
       ) => z.output<z.ZodObject<Fields>>,
+      bindingOptions?: BindingOptions,
     ): ListReadBinding<Row> => ({
       schema: picked,
+      scope: bindingOptions?.scope,
       value: (row, _page, context) => value(row, context),
     }),
     {
@@ -311,15 +275,38 @@ export function listReadPlan<Row>(
     : [];
   const bindings = [...resultBindings, ...(options.bindings?.(bind) ?? [])];
   const written = new Set<string>(["id", "dataQuality", "displayImages"]);
-  const claim = (key: string) => {
+  // A key may have one page writer and one detail-scoped writer: the record
+  // read takes the richer detail value, a page keeps its own.
+  const overridden = new Set<string>();
+  const claim = (key: string, scope?: "detail") => {
     if (!Object.hasOwn(schema.shape, key))
       throw new Error(`Unknown list binding field: ${entity}.${key}`);
-    if (written.has(key))
+    if (written.has(key)) {
+      const writers = bindings.filter((binding) =>
+        Object.hasOwn(binding.schema.shape, key),
+      );
+      if (
+        scope === "detail" &&
+        !overridden.has(key) &&
+        writers.length === 2 &&
+        writers.filter((binding) => binding.scope === "detail").length === 1
+      ) {
+        overridden.add(key);
+        return;
+      }
       throw new Error(`Multiple list binding writers: ${entity}.${key}`);
+    }
     written.add(key);
   };
-  for (const binding of bindings)
-    for (const key of Object.keys(binding.schema.shape)) claim(key);
+  // Page writers claim and run first, so a detail writer of the same key
+  // overrides.
+  const ordered = [...bindings].sort(
+    (left, right) =>
+      Number(left.scope === "detail") - Number(right.scope === "detail"),
+  );
+  for (const binding of ordered)
+    for (const key of Object.keys(binding.schema.shape))
+      claim(key, binding.scope);
   const model = Object.entries(entityFieldModels).find(
     ([key]) => key === entity,
   )?.[1];
@@ -384,11 +371,6 @@ export function listReadPlan<Row>(
       );
     if (instruction.name) claim(instruction.name);
     if (instruction.emoji) claim(instruction.emoji);
-    for (const consumer of instruction.consumers ?? [])
-      if (!Object.hasOwn(schema.shape, consumer))
-        throw new Error(
-          `Unknown list reference consumer: ${entity}.${consumer}`,
-        );
     return {
       key,
       instruction,
@@ -397,28 +379,43 @@ export function listReadPlan<Row>(
       via: derived[declared?.key ?? key],
     };
   });
-  const wanted = (projection: ListProjection, key: string): boolean => {
-    switch (projection.kind) {
-      case "full":
-        return true;
-      case "selected":
-        return (
-          projection.fields.includes(key) ||
-          (key === "storedProjectionVersions" &&
-            modelFields.some(
-              (field) =>
-                field.storedProjection &&
-                projection.fields.includes(field.readKey ?? field.key),
-            ))
-        );
-      case "base":
-        return false;
-    }
-  };
+  const wanted = (projection: ListProjection, key: string): boolean =>
+    projection.includes(key) ||
+    (key === "storedProjectionVersions" &&
+      modelFields.some(
+        (field) =>
+          field.storedProjection &&
+          projection.includes(field.readKey ?? field.key),
+      ));
   const validate = (projection: ListProjection) => {
-    if (projection.kind === "selected")
-      selectedListProjection(entity, projection.fields);
+    selectedListProjection(entity, projection);
   };
+  // A detail-scoped binding is expensive per row: a single-record read loads
+  // it, a page loads it only when a projection names its keys.
+  const detailOnly = new Set(
+    bindings.flatMap((binding) =>
+      binding.scope === "detail"
+        ? Object.keys(binding.schema.shape).filter(
+            (key) => !overridden.has(key),
+          )
+        : [],
+    ),
+  );
+  /** The bindings a read runs: a page skips detail overrides of its keys. */
+  const scoped = (scope: "list" | "detail") =>
+    scope === "detail"
+      ? ordered
+      : ordered.filter(
+          (binding) =>
+            binding.scope !== "detail" ||
+            !Object.keys(binding.schema.shape).some((key) =>
+              overridden.has(key),
+            ),
+        );
+  const fields = {
+    detail: Object.keys(schema.shape),
+    list: Object.keys(schema.shape).filter((key) => !detailOnly.has(key)),
+  } as const;
   /**
    * The page loads that need only row ids. The scaffold starts them as soon
    * as the page's ids are known, so they share a round trip with the row
@@ -428,10 +425,9 @@ export function listReadPlan<Row>(
   // them here from internal ids spares the kernel's shortcode-then-images
   // pass two sequential round trips per page.
   const resolvesDisplayImages = (projection: ListProjection) =>
-    wantsListGroup(projection, "media") &&
-    (options.media === true ||
-      (Object.hasOwn(schema.shape, "displayImages") &&
-        wanted(projection, "displayImages")));
+    displayMediaFields.some(
+      (key) => Object.hasOwn(schema.shape, key) && wanted(projection, key),
+    );
   /** Non-media entities take the plan-resolved images; media bindings own theirs. */
   const attachDisplayImages = (
     result: ListReadRow,
@@ -455,8 +451,10 @@ export function listReadPlan<Row>(
     ids: readonly string[],
     projection: ListProjection,
     qualitySource: "stored" | "live" = "stored",
+    scope: "list" | "detail" = "list",
+    context = ListContext.empty,
   ): ListPagePrefetch => {
-    const page = { db, ids, projection };
+    const page = { db, ids, projection, context };
     const settled = <V>(promise: Promise<V>) => {
       promise.catch(() => {
         // SILENT: `read` awaits and surfaces this rejection; only a page
@@ -465,7 +463,7 @@ export function listReadPlan<Row>(
       return promise;
     };
     if (ids.length)
-      for (const binding of bindings)
+      for (const binding of scoped(scope))
         if (
           binding.prefetch &&
           Object.keys(binding.schema.shape).some((key) =>
@@ -476,7 +474,7 @@ export function listReadPlan<Row>(
     return {
       page,
       qualities:
-        isScored(entity) && wantsListGroup(projection, "quality") && ids.length
+        isScored(entity) && wanted(projection, "dataQuality") && ids.length
           ? settled(
               loadDataQualities(
                 db,
@@ -511,7 +509,33 @@ export function listReadPlan<Row>(
           : undefined,
     };
   };
+  /**
+   * Read-schema keys that nothing in this plan, nor a row key in `rowKeys`,
+   * loads. `rowKeys` is undefined when the rows come from a custom `load`
+   * whose keys the plan cannot see; then the check is skipped.
+   */
+  const unloaded = (rowKeys: ReadonlySet<string> | undefined): string[] => {
+    if (rowKeys === undefined) return [];
+    const loaded = new Set<string>([
+      ...written,
+      // The page envelope and the tree scope attach these after the plan;
+      // stored-projection versions are optional metadata the envelope reads
+      // only when an entity's binding supplies them.
+      "fieldResolutions",
+      "childCount",
+      "storedProjectionVersions",
+      ...references.flatMap(({ key, column }) => [key, column ?? key]),
+      ...(model?.fields ?? []).flatMap((field) =>
+        "dateRange" in field && field.dateRange ? [field.key] : [],
+      ),
+    ]);
+    return Object.keys(schema.shape).filter(
+      (key) => !loaded.has(key) && !rowKeys.has(key),
+    );
+  };
   return {
+    fields,
+    unloaded,
     validate,
     prefetch,
     async read(
@@ -521,6 +545,7 @@ export function listReadPlan<Row>(
       context = ListContext.empty,
       qualitySource: "stored" | "live" = "stored",
       prefetched?: ListPagePrefetch,
+      scope: "list" | "detail" = "list",
     ): Promise<ListReadRow[]> {
       validate(projection);
       if (!rows.length) return [];
@@ -536,6 +561,8 @@ export function listReadPlan<Row>(
           sources.map(({ identity }) => identity.id),
           projection,
           qualitySource,
+          scope,
+          context,
         );
       const page: ListReadPage<Row> = {
         idPage: early.page,
@@ -544,7 +571,8 @@ export function listReadPlan<Row>(
         projection,
         context,
       };
-      const admitted = bindings.filter((binding) =>
+      // Detail overrides run after page writers, so their value wins.
+      const admitted = scoped(scope).filter((binding) =>
         Object.keys(binding.schema.shape).some((key) =>
           wanted(projection, key),
         ),
@@ -558,12 +586,9 @@ export function listReadPlan<Row>(
         instruction: NonNullable<ListReadOptions<Row>["references"]>[string],
       ) =>
         instruction.kind === "lookup" &&
-        [
-          key,
-          instruction.name,
-          instruction.emoji,
-          ...(instruction.consumers ?? []),
-        ].some((output) => output !== undefined && wanted(projection, output));
+        [key, instruction.name, instruction.emoji].some(
+          (output) => output !== undefined && wanted(projection, output),
+        );
       // Materialize only demanded to-one relation UUIDs; public values still go
       // through the same canonical resolver as stored foreign keys.
       await Promise.all(
@@ -601,12 +626,7 @@ export function listReadPlan<Row>(
             if (
               instruction.kind !== "lookup" ||
               target === null ||
-              ![
-                key,
-                instruction.name,
-                instruction.emoji,
-                ...(instruction.consumers ?? []),
-              ].some(
+              ![key, instruction.name, instruction.emoji].some(
                 (output) => output !== undefined && wanted(projection, output),
               )
             )
@@ -677,12 +697,7 @@ export function listReadPlan<Row>(
               continue;
             }
             if (
-              ![
-                key,
-                instruction.name,
-                instruction.emoji,
-                ...(instruction.consumers ?? []),
-              ].some(
+              ![key, instruction.name, instruction.emoji].some(
                 (output) => output !== undefined && wanted(projection, output),
               )
             )
@@ -706,14 +721,6 @@ export function listReadPlan<Row>(
             ? qualities?.get(parseEntityId(entity, identity.id))
             : undefined;
           if (qualities) result.dataQuality = quality;
-          const referenceValues = new Map(
-            references.map(({ key, instruction }, index) => [
-              key,
-              instruction.kind === "lookup" && typeof source[key] === "string"
-                ? links[index]?.get(source[key])
-                : undefined,
-            ]),
-          );
           const valueContext: ListReadValueContext = {
             projection,
             context,
@@ -721,7 +728,6 @@ export function listReadPlan<Row>(
             displayImages: images
               ? (images.get(entityRefKey(entity, identity.id)) ?? [])
               : undefined,
-            references: referenceValues,
           };
           for (const binding of admitted) {
             const value = sourceRecord.parse(
@@ -746,13 +752,7 @@ export function listReadPlan<Row>(
           }
           attachDisplayImages(result, images, identity.id, projection);
           // Required requested outputs must exist before any schema defaults run.
-          const requested =
-            projection.kind === "selected"
-              ? projection.fields
-              : projection.kind === "base"
-                ? []
-                : Object.keys(schema.shape);
-          for (const key of requested)
+          for (const key of projection)
             if (
               key !== "displayImages" &&
               (!Object.hasOwn(result, key) || result[key] === undefined) &&

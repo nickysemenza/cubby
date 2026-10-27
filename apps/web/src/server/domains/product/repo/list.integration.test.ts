@@ -1,5 +1,6 @@
 import { shortcode } from "@cubby/schemas/identifiers";
 import type { LocationCreateInput } from "@cubby/schemas/location";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -22,23 +23,23 @@ import {
   createPlantFixture,
   createProductFixture,
   createProductIdentityFixture,
-  makeLocationInput,
+  listProductsFixture,
   makeExpenseInput,
+  makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { productList } from "./crud";
-import { listProductsRead, productListSummary } from "./crud";
+import { productScaffold } from "./crud";
 import { loadProductPriceSum, loadProductPricing } from "./pricing";
 import { loadProductQuantityLedgers } from "./quantity-ledger";
 
 /**
  * `ingredientIdFilter` (the SKU's own ingredient) and `growsPlantIdFilter`
  * (the crop this product seeds — the Product↔Ingredient "grows" relation) are
- * independent shortcode-resolved id filters on `buildProductWhere`; each must
+ * independent shortcode-resolved id filters on `productScaffold.where`; each must
  * narrow by its own column, not the other's.
  */
-describe("productList id filters", () => {
+describe("product list id filters", () => {
   const ctx = withTestDb();
 
   it("ingredientIdFilter narrows to products whose own ingredientId matches, leaving growsPlantId-only matches out", async () => {
@@ -66,7 +67,7 @@ describe("productList id filters", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await productList(
+    const { data } = await listProductsFixture(
       ctx.db,
       { ingredientIdFilter: flour.id },
       [],
@@ -102,7 +103,7 @@ describe("productList id filters", () => {
       TEST_ACTOR,
     );
 
-    const { data } = await productList(
+    const { data } = await listProductsFixture(
       ctx.db,
       { growsPlantIdFilter: tomato.id },
       [],
@@ -180,12 +181,15 @@ describe("product list price footer", () => {
     );
     expect(filteredSum).toBeCloseTo(69.99, 2);
 
-    const page = await productList(ctx.db, {}, [], {
+    const page = await listProductsFixture(ctx.db, {}, [], {
       pageIndex: 0,
       pageSize: 2,
     });
     expect(page.data).toHaveLength(2);
-    expect(page.sums!.price).toBeCloseTo(159.99, 2);
+    expect((await productScaffold.totals(ctx.db, {}))?.price).toBeCloseTo(
+      159.99,
+      2,
+    );
   });
 
   it("keeps nested kit shares, own counts, overrides, refunds, and live siblings aligned across batch reads and the footer", async () => {
@@ -335,22 +339,23 @@ describe("product list staged projections", () => {
         ctx.actor,
       );
     }
-    const usda: Pick<USDAClient, "findFoodsBatch"> = {
-      findFoodsBatch: async (inputs) => inputs.map(() => null),
-    };
-    const page = await listProductsRead(
-      ctx.db,
-      { ids: products.map((row) => row.id) },
-      [{ orderBy: "name", direction: "asc" }],
-      { pageIndex: 0, pageSize: 3 },
-      "page",
-      usda,
-      selectedListProjection("product", [
+    const usda = fromPartial<USDAClient>({
+      findFoodsBatch: async (
+        inputs: Parameters<USDAClient["findFoodsBatch"]>[0],
+      ) => inputs.map(() => null),
+    });
+    const page = await productScaffold.read(ctx.db, {
+      filters: { ids: products.map((row) => row.id) },
+      sorts: [{ orderBy: "name", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 3 },
+      projection: selectedListProjection("product", [
         "food",
         "pricing",
         "primaryPlacement",
       ]),
-    );
+      readIntent: "page",
+      reader: { usdaClient: usda },
+    });
     expect(page.data).toHaveLength(3);
     expect(page.data.every((row) => row.primaryPlacement != null)).toBe(true);
     expect(page.data.map((row) => row.id)).toEqual(
@@ -366,35 +371,35 @@ describe("product list staged projections", () => {
       ctx.actor,
     );
     let lookups = 0;
-    const usda: Pick<USDAClient, "findFoodsBatch"> = {
-      findFoodsBatch: async (inputs) => {
+    const usda = fromPartial<USDAClient>({
+      findFoodsBatch: async (
+        inputs: Parameters<USDAClient["findFoodsBatch"]>[0],
+      ) => {
         lookups += inputs.length;
         return inputs.map(() => null);
       },
-    };
+    });
     const filters = { ids: [item.id] };
     const pagination = { pageIndex: 0, pageSize: 10 };
-    const stock = await listProductsRead(
-      ctx.db,
-      filters,
-      [],
-      pagination,
-      "page",
-      usda,
-      selectedListProjection("product", ["pricing", "stockStatus"]),
-    );
+    const stock = await productScaffold.read(ctx.db, {
+      filters: filters,
+      sorts: [],
+      pagination: pagination,
+      projection: selectedListProjection("product", ["pricing", "stockStatus"]),
+      readIntent: "page",
+      reader: { usdaClient: usda },
+    });
     expect(stock.data[0]).toHaveProperty("pricing");
     expect(stock.data[0]).not.toHaveProperty("food");
     expect(lookups).toBe(0);
-    const food = await listProductsRead(
-      ctx.db,
-      filters,
-      [],
-      pagination,
-      "page",
-      usda,
-      selectedListProjection("product", ["food"]),
-    );
+    const food = await productScaffold.read(ctx.db, {
+      filters: filters,
+      sorts: [],
+      pagination: pagination,
+      projection: selectedListProjection("product", ["food"]),
+      readIntent: "page",
+      reader: { usdaClient: usda },
+    });
     expect(food.data[0]).toHaveProperty("food");
     expect(lookups).toBeGreaterThan(0);
   });
@@ -424,16 +429,14 @@ describe("product list staged projections", () => {
     const filters = { ids: [first.id, second.id], nameFilter: "Staged" };
     const sorts = [{ orderBy: "name", direction: "asc" as const }];
     const pagination = { pageIndex: 0, pageSize: 1 };
-    const full = await productList(ctx.db, filters, sorts, pagination);
-    const base = await listProductsRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      "page",
-      undefined,
-      { kind: "base" },
-    );
+    const full = await listProductsFixture(ctx.db, filters, sorts, pagination);
+    const base = await productScaffold.read(ctx.db, {
+      filters: filters,
+      sorts: sorts,
+      pagination: pagination,
+      projection: [],
+      readIntent: "page",
+    });
     expect(base.count).toBe(full.count);
     expect(base.data.map((row) => row.id)).toEqual(
       full.data.map((row) => row.id),
@@ -441,15 +444,12 @@ describe("product list staged projections", () => {
     // `base` is the id/count projection (view counts, relation paging); it binds no fields.
     expect(base.data[0]).toEqual({ id: first.id });
     expect(base.incompleteSums).toBeUndefined();
-    const idOnly = await listProductsRead(
-      ctx.db,
-      { ids: [second.id] },
+    const idOnly = await productScaffold.read(ctx.db, {
+      filters: { ids: [second.id] },
       sorts,
-      { pageIndex: 0, pageSize: 50 },
-      "page",
-      undefined,
-      { kind: "base" },
-    );
+      pagination: { pageIndex: 0, pageSize: 50 },
+      projection: [],
+    });
     expect(idOnly.data.map((row) => row.id)).toEqual([second.id]);
     expect(idOnly.count).toBe(1);
 
@@ -503,26 +503,20 @@ describe("product list staged projections", () => {
     );
     const filters = { ids: [included.id, excluded.id], nameFilter: "Staged" };
     const pagination = { pageIndex: 0, pageSize: 50 };
-    const full = await productList(ctx.db, filters, [], pagination);
-    const enrichment = await listProductsRead(
-      ctx.db,
+    const full = await listProductsFixture(ctx.db, filters, [], pagination);
+    const enrichment = await productScaffold.read(ctx.db, {
       filters,
-      [],
+      sorts: [],
       pagination,
-      "page",
-      undefined,
-      {
-        kind: "selected",
-        fields: [
-          "price",
-          "pricing",
-          "quantityLedger",
-          "onHandUnits",
-          "quantityVariance",
-          "expenseTotal",
-        ],
-      },
-    );
+      projection: [
+        "price",
+        "pricing",
+        "quantityLedger",
+        "onHandUnits",
+        "quantityVariance",
+        "expenseTotal",
+      ],
+    });
     expect(enrichment.data).toHaveLength(1);
     expect(enrichment.data[0]).toMatchObject({
       id: included.id,
@@ -562,12 +556,7 @@ describe("product list staged projections", () => {
       }),
     );
     const filters = { ids: [first.id, second.id] };
-    const full = await productList(ctx.db, filters, [], {
-      pageIndex: 0,
-      pageSize: 1,
-    });
-    const summary = await productListSummary(ctx.db, filters);
-    expect(summary).toEqual(full.sums);
+    const summary = await productScaffold.totals(ctx.db, filters);
     expect(summary).toEqual({ price: 10, expenseTotal: -5 });
   });
 });
@@ -580,7 +569,7 @@ describe("product list staged projections", () => {
  * nodes duplicates its row; a deleted or unknown selection widens instead of
  * matching nothing.
  */
-describe("productList location subtree filter", () => {
+describe("product list location subtree filter", () => {
   const ctx = withTestDb();
 
   const place = async (
@@ -616,13 +605,18 @@ describe("productList location subtree filter", () => {
   };
   const listAt = async (
     locationIdFilter: NonNullable<
-      Parameters<typeof productList>[1]["locationIdFilter"]
+      Parameters<typeof listProductsFixture>[1]["locationIdFilter"]
     >,
   ): Promise<string[]> => {
-    const { data } = await productList(ctx.db, { locationIdFilter }, [], {
-      pageIndex: 0,
-      pageSize: 50,
-    });
+    const { data } = await listProductsFixture(
+      ctx.db,
+      { locationIdFilter },
+      [],
+      {
+        pageIndex: 0,
+        pageSize: 50,
+      },
+    );
     return data.map((row) => row.id);
   };
 
@@ -742,10 +736,15 @@ describe("product list display labels", () => {
         productQuantity: null,
       }),
     );
-    const { data } = await productList(ctx.db, { ids: [product.id] }, [], {
-      pageIndex: 0,
-      pageSize: 10,
-    });
+    const { data } = await listProductsFixture(
+      ctx.db,
+      { ids: [product.id] },
+      [],
+      {
+        pageIndex: 0,
+        pageSize: 10,
+      },
+    );
     expect(data).toHaveLength(1);
     expect(data[0]?.ledgerExpectedQuantityLabel).toBe("3 +1?");
     // Nothing on the shelf: there is no shelf-versus-ledger variance to print.

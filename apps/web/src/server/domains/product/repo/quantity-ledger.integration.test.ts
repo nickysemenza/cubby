@@ -1,4 +1,5 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductFilters } from "@cubby/schemas/product";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
@@ -7,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -22,7 +24,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { buildProductWhere } from "./crud";
+import { productScaffold } from "./crud";
 import { attachProductComponents } from "./product-components";
 import {
   hasUnknownQuantityLinesSql,
@@ -47,6 +49,16 @@ import {
  * that stores a POSITIVE quantity (302 live rows do), and the $0 line whose
  * sign is the only thing distinguishing a freebie from a discard.
  */
+
+/** The filtered Product predicate, prepared the way a filtered count reads it. */
+const productWhere = async (db: Database, filters: ProductFilters) =>
+  productScaffold.where(filters, {
+    context: await productScaffold.context(db, {
+      filters,
+      readIntent: "count",
+    }),
+  });
+
 describe("loadProductQuantityLedgers", () => {
   const ctx = withTestDb();
 
@@ -100,7 +112,7 @@ describe("loadProductQuantityLedgers", () => {
       future: true,
     });
     await drainStoredDerived(ctx.db);
-    const where = await buildProductWhere(ctx.db, {
+    const where = await productWhere(ctx.db, {
       expectedQuantityMin: -8,
       expectedQuantityMax: -2,
     });
@@ -117,7 +129,7 @@ describe("loadProductQuantityLedgers", () => {
     expect(await ledgerFor(part.entityId)).toMatchObject({
       expectedQuantity: -8,
     });
-    const zeroWhere = await buildProductWhere(ctx.db, {
+    const zeroWhere = await productWhere(ctx.db, {
       expectedQuantityMin: 0,
       expectedQuantityMax: 0,
     });
@@ -243,7 +255,7 @@ describe("loadProductQuantityLedgers", () => {
     );
     expect(catalog.rows.length).toBeGreaterThan(1);
     for (const row of catalog.rows) expect(row.value).toBe(row.scalar);
-    const filter = await buildProductWhere(ctx.db, {
+    const filter = await productWhere(ctx.db, {
       unknownQuantityLinesFilter: "has",
     });
     const filtered = await getDb(ctx.db)

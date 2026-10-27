@@ -13,7 +13,8 @@ export { defineMutationWriter, type MutationReceipt } from "./mutation-writer";
  * - schemas and sort come from the generated roster;
  * - the kernel actions come from the declaration (`lifecycle: "readOnly"`
  *   exposes get/list only, whatever the spec supplies);
- * - `get` defaults to the reader (`fetchById` + `mapper`) by shortcode;
+ * - every read — a page, a selected projection, the single-record get and
+ *   the declared totals — goes through the entity's `scaffold` port;
  * - `delete` defaults to the declared `lifecycle.delete` edge policy plus
  *   `deleteHooks`;
  * - a create/update that returns the bare output has its internal id
@@ -39,7 +40,6 @@ import {
   ENTITY_NOT_FOUND_REASON,
   type EntityId,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   and,
   eq,
@@ -48,7 +48,7 @@ import {
   type InferSelectModel,
 } from "drizzle-orm";
 import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
-import { type output as ZodOutput, type ZodSchema, z } from "zod";
+import { type output as ZodOutput, type ZodSchema, type ZodType, z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -57,7 +57,6 @@ import {
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import type {
   EntityKernelContext,
@@ -69,6 +68,7 @@ import type {
   EntitySortContract,
 } from "~/server/entity-kernel/adapter";
 import { deletedWithImages } from "~/server/entity-kernel/adapter";
+import { registerReadPorts } from "~/server/entity-kernel/repo/read-ports";
 import { createAppError } from "~/server/errors/app-error";
 import {
   ENTITY_SCHEMA_BINDINGS,
@@ -81,10 +81,8 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import type {
-  ListProjection,
-  ListReadPage,
-} from "~/server/generic/list/repo/list-contracts";
+import type { ListReader } from "~/server/generic/list/repo/field-compiler";
+import type { EntityListScaffold } from "~/server/generic/list/repo/list";
 import { type RemovableEntity } from "~/server/generic/removal/repo/core";
 import { executeDeleteWithEffects } from "~/server/generic/removal/repo/delete-effects";
 import {
@@ -124,35 +122,61 @@ export const createEntityRowFetcher =
     return row;
   };
 
-interface EntityReaderConfig<
+/** The scaffold reads a record reader runs: by public code and by id. */
+type RecordScaffold = Pick<EntityListScaffold, "get" | "getByIds">;
+
+type EntityReaderConfig<
   TRow,
   TOut,
   E extends ShortcodeEntity,
   TDb extends ReaderDb = Database,
-> {
+> = {
   /** Drives the 404 message and the shortcode this reader resolves. */
   entity: E;
-  /** Relations-loaded fetch of a live row by id; `undefined` when absent. */
-  fetchById: (db: TDb, id: EntityId<E>) => Promise<TRow | undefined>;
-  /** DB row → API shape. Async to support mappers that do a follow-up query. */
-  fromDB: (db: TDb, row: TRow) => TOut | Promise<TOut>;
-}
+} & (
+  | {
+      /** The entity's declared read; a record is a one-row scaffold read. */
+      scaffold: RecordScaffold;
+      output: ZodType<TOut>;
+      fetchById?: never;
+      fromDB?: never;
+    }
+  | {
+      scaffold?: never;
+      output?: never;
+      /** Relations-loaded fetch of a live row by id; `undefined` when absent. */
+      fetchById: (db: TDb, id: EntityId<E>) => Promise<TRow | undefined>;
+      /** DB row → API shape. Async to support mappers that do a follow-up query. */
+      fromDB: (db: TDb, row: TRow) => TOut | Promise<TOut>;
+    }
+);
 
 export interface EntityReader<
   TOut,
   E extends ShortcodeEntity,
   TDb extends ReaderDb = Database,
 > {
-  /** Fetch by id, throwing `ENTITY_NOT_FOUND_REASON[entity]` when there is no live row. */
-  getByID: (db: TDb, id: EntityId<E>) => Promise<TOut>;
+  /**
+   * Fetch by id, throwing `ENTITY_NOT_FOUND_REASON[entity]` when there is no
+   * live row. `reader` passes the caller's actor and clients to a declared read.
+   */
+  getByID: (db: TDb, id: EntityId<E>, reader?: ListReader) => Promise<TOut>;
   /** Fetch by id, returning `null` when there is no live row. */
-  getByIDOrNull: (db: TDb, id: EntityId<E>) => Promise<TOut | null>;
+  getByIDOrNull: (
+    db: TDb,
+    id: EntityId<E>,
+    reader?: ListReader,
+  ) => Promise<TOut | null>;
   /**
    * Fetch by PUBLIC id — the shortcode URLs and MCP speak — returning `null`
    * when the code is malformed, belongs to another entity, or names a row
    * that no longer lives.
    */
-  getByShortcode: (db: TDb, shortcode: string) => Promise<TOut | null>;
+  getByShortcode: (
+    db: TDb,
+    shortcode: string,
+    reader?: ListReader,
+  ) => Promise<TOut | null>;
 }
 
 /**
@@ -173,13 +197,24 @@ export function createEntityReader<
   const getByIDOrNull = async (
     db: TDb,
     id: EntityId<E>,
+    reader?: ListReader,
   ): Promise<TOut | null> => {
+    if (config.scaffold) {
+      const [row] = (
+        await config.scaffold.getByIds(db, [id], undefined, reader)
+      ).data;
+      return row === undefined ? null : config.output.parse(row);
+    }
     const row = await config.fetchById(db, id);
     return row ? config.fromDB(db, row) : null;
   };
 
-  const getByID = async (db: TDb, id: EntityId<E>): Promise<TOut> => {
-    const result = await getByIDOrNull(db, id);
+  const getByID = async (
+    db: TDb,
+    id: EntityId<E>,
+    reader?: ListReader,
+  ): Promise<TOut> => {
+    const result = await getByIDOrNull(db, id, reader);
     if (result === null) {
       throw createAppError(
         ENTITY_NOT_FOUND_REASON[config.entity],
@@ -192,7 +227,14 @@ export function createEntityReader<
   const getByShortcode = async (
     db: TDb,
     shortcode: string,
+    reader?: ListReader,
   ): Promise<TOut | null> => {
+    if (config.scaffold) {
+      const [row] = (
+        await config.scaffold.get(db, [shortcode], undefined, reader)
+      ).data;
+      return row === undefined ? null : config.output.parse(row);
+    }
     // `resolveLiveShortcode` pins the entity, so another entity's (valid) code
     // resolves to null here rather than to a uuid of the wrong type.
     const id = await resolveLiveShortcode(db, shortcode, config.entity);
@@ -206,16 +248,15 @@ export function createEntityReader<
 /* Audited column update                                                       */
 /* -------------------------------------------------------------------------- */
 
-interface EntityCrudConfig<
+type EntityCrudConfig<
   TTable extends LiveEntityTable,
   TRow extends object,
   TOut,
   TUpdate,
   E extends AuditableEntity & ShortcodeEntity,
   TRelKey extends string,
-> extends Omit<EntityReaderConfig<TRow, TOut, E, ReaderDb>, "entity"> {
+> = EntityReaderConfig<TRow, TOut, E, ReaderDb> & {
   table: TTable;
-  entity: E;
   /** Column values to write; `before` is the live row, for derived values. */
   toUpdate: (
     data: TUpdate,
@@ -250,7 +291,7 @@ interface EntityCrudConfig<
       data: TUpdate,
     ) => Promise<void>;
   };
-}
+};
 
 export interface EntityCrud<
   TOut,
@@ -381,56 +422,11 @@ export function createEntityCrud<
 /* defineRepository                                                            */
 /* -------------------------------------------------------------------------- */
 
-/** A `(db, …args)` repository function as a kernel method `(ctx, …args)`. */
-export const onDb =
-  <TArgs extends readonly unknown[], TResult>(
-    fn: (db: Database, ...args: TArgs) => TResult,
-  ) =>
-  (ctx: EntityKernelContext, ...args: TArgs): TResult =>
-    fn(ctx.db, ...args);
-
-/**
- * A `(db, filters, sorts, pagination)` list as a kernel `list`. A list that
- * takes a `readIntent` fifth keeps its default; `groupBy` rides in `filters`.
- */
-export const listOn =
-  <TFilters, TResult>(
-    fn: (
-      db: Database,
-      filters: TFilters,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-    ) => TResult,
-  ) =>
-  (
-    ctx: EntityKernelContext,
-    filters: TFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-  ): TResult =>
-    fn(ctx.db, filters, sorts, pagination);
-
-/** Projection controls row shape; count intent retains the same filter population. */
-export const listReadOn =
-  <TFilters, TResult>(
-    fn: (
-      db: Database,
-      filters: TFilters,
-      sorts: SortParams[],
-      pagination: PaginationParams,
-      projection: ListProjection,
-      readIntent?: Extract<ListReadIntent, "page" | "count">,
-    ) => TResult,
-  ) =>
-  (
-    ctx: EntityKernelContext,
-    filters: TFilters,
-    sorts: SortParams[],
-    pagination: PaginationParams,
-    projection: ListProjection,
-    readIntent: Extract<ListReadIntent, "page" | "count"> = "page",
-  ): TResult =>
-    fn(ctx.db, filters, sorts, pagination, projection, readIntent);
+/** What a declared read takes from the kernel context. */
+const readerOf = (ctx: EntityKernelContext): ListReader => ({
+  actor: ctx.actorContext,
+  usdaClient: ctx.usdaClient,
+});
 
 /** A `(db, …args, actor)` repository write as a kernel method `(ctx, …args)`. */
 export const asActor = <
@@ -485,30 +481,20 @@ type DeleteOutcome = {
   deletedImageShortcodes?: readonly string[];
 } | void;
 
-export interface RepositorySpec<
+export type RepositorySpec<
   E extends KernelEntity,
   SMergeInput extends ZodSchema = z.ZodNever,
   SMergeOutput extends ZodSchema = z.ZodNever,
   TMergeItem = never,
   TMergeSummary = never,
-> {
+> = {
   /** Declared delete/merge edge policies; `{ delete: {} }` when omitted. */
   lifecycle?: EntityLifecycleContract;
-  listRead?: EntityRepository<E, SchemasFor<E>>["listRead"];
-  listSummary?: EntityRepository<E, SchemasFor<E>>["listSummary"];
+  /** The entity's declared read: list pages, records, totals and facets. */
+  scaffold: EntityListScaffold;
   createRead?: EntityRepository<E, SchemasFor<E>>["createRead"];
   updateRead?: EntityRepository<E, SchemasFor<E>>["updateRead"];
   updatePolicy?: { recordFields: readonly string[] };
-  get: (
-    ctx: EntityKernelContext,
-    id: ZodOutput<SchemasFor<E>["id"]>,
-  ) => Promise<ZodOutput<SchemasFor<E>["repositoryDetail"]> | null>;
-  list: (
-    ctx: EntityKernelContext,
-    filters: ZodOutput<SchemasFor<E>["filters"]>,
-    sorts: Parameters<EntityRepositoryListFn<E>>[2],
-    pagination: Parameters<EntityRepositoryListFn<E>>[3],
-  ) => ReturnType<EntityRepositoryListFn<E>>;
   create?: ((
     ctx: EntityKernelContext,
     data: Present<SchemasFor<E>["createInput"]>,
@@ -552,14 +538,7 @@ export interface RepositorySpec<
     TMergeItem,
     TMergeSummary
   >;
-}
-
-type EntityRepositoryListFn<E extends KernelEntity> = (
-  ctx: EntityKernelContext,
-  filters: ZodOutput<SchemasFor<E>["filters"]>,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-) => Promise<ListReadPage<ZodOutput<SchemasFor<E>["repositoryList"]>>>;
+};
 
 const sortFor = (entity: string): EntitySortContract => {
   // SAFETY: `generatedEntitySort` is keyed by `Entity`; a kernel entity
@@ -666,13 +645,61 @@ export function defineRepository<
     };
   };
 
-  const { create, update, merge } = spec;
+  const { create, update, merge, scaffold } = spec;
+  registerReadPorts(entity, {
+    title: scaffold.title,
+    fieldReads: async (db, codes) => {
+      // SAFETY: the repository boundary erases the assembled schema, not the
+      // native Drizzle transaction passed by its callers.
+      const readDb = db as Database | DrizzleTransaction;
+      return (await scaffold.get(readDb, codes, [])).fieldReads;
+    },
+  });
+  const listRead: EntityRepository<E, SchemasFor<E>>["listRead"] = async (
+    ctx,
+    filters,
+    sorts,
+    pagination,
+    projection,
+    readIntent = "page",
+    preparation,
+  ) => {
+    const [page, sums] = await Promise.all([
+      scaffold.read(ctx.db, {
+        filters,
+        sorts,
+        pagination,
+        projection,
+        readIntent,
+        preparation,
+        reader: readerOf(ctx),
+      }),
+      readIntent === "page" && projection !== undefined
+        ? scaffold.totals(ctx.db, filters)
+        : undefined,
+    ]);
+    return sums === undefined ? page : { ...page, sums };
+  };
+  const read: EntityRepository<E, SchemasFor<E>>["read"] = (
+    ctx,
+    ids,
+    projection,
+  ) => scaffold.get(ctx.db, ids, projection, readerOf(ctx));
   const repository: EntityRepository<E, SchemasFor<E>> = {
+    scaffold,
     updatePolicy: spec.updatePolicy,
-    get: spec.get,
-    list: spec.list,
-    listRead: spec.listRead,
-    listSummary: spec.listSummary,
+    listRead,
+    read,
+    get: async (ctx, id) => {
+      const [row] = (await read(ctx, [id])).data;
+      // SAFETY: the binding's repositoryDetail schema is SchemasFor<E>'s; the
+      // generated record widens it to the union across entities.
+      return row === undefined
+        ? null
+        : (ENTITY_SCHEMA_BINDINGS[entity].repositoryDetail.parse(
+            row,
+          ) as ZodOutput<SchemasFor<E>["repositoryDetail"]>);
+    },
   };
   // Only the actions the declaration grants reach the kernel; a readOnly
   // entity's spec may still carry methods its own workflows use.

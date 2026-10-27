@@ -16,11 +16,10 @@ import {
 } from "~/server/db/schema";
 import {
   createLedgerParty,
-  listLedgerParties,
+  ledgerPartyScaffold,
 } from "~/server/domains/ledger-party/repo/ledger-party";
-import { locationList } from "~/server/domains/location/repo/crud";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
-import { productList } from "~/server/domains/product/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -30,9 +29,10 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  listProductsFixture,
+  makeExpenseInput,
   makeLocationInput,
   makeProductInput,
-  makeExpenseInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -51,14 +51,19 @@ const groups = (result: {
   }));
 // The kernel carries a validated `groupBy` beside the filters, like `nesting`.
 const groupedProducts = (
-  sort: Parameters<typeof productList>[2],
+  sort: Parameters<typeof listProductsFixture>[2],
   pageIndex: number,
   pageSize: number,
 ) =>
-  productList(ctx.db, withListGroupBy({}, [{ key: "categoryId" }]), sort, {
-    pageIndex,
-    pageSize,
-  });
+  listProductsFixture(
+    ctx.db,
+    withListGroupBy({}, [{ key: "categoryId" }]),
+    sort,
+    {
+      pageIndex,
+      pageSize,
+    },
+  );
 const kernel = () =>
   entityKernelContextSchema.parse(
     createTestRequestContext(ctx.db, {
@@ -461,16 +466,17 @@ describe("server list grouping", () => {
     await location("Box one", "box");
 
     const grouped = (pageIndex: number, readIntent?: "count") =>
-      locationList(
-        ctx.db,
-        withListGroupBy({ itemTypeFilter: ["box", "room"] }, [{ key: "type" }]),
-        [
+      locationScaffold.read(ctx.db, {
+        filters: withListGroupBy({ itemTypeFilter: ["box", "room"] }, [
+          { key: "type" },
+        ]),
+        sorts: [
           { orderBy: "name", direction: "asc" },
           { orderBy: "type", direction: "desc" },
         ],
-        { pageIndex, pageSize: 1 },
-        readIntent,
-      );
+        pagination: { pageIndex, pageSize: 1 },
+        readIntent: readIntent,
+      });
     const pages = await Promise.all([0, 1, 2].map((index) => grouped(index)));
     expect(pages.map((result) => result.data[0]?.name)).toEqual([
       "Room one",
@@ -516,16 +522,15 @@ describe("server list grouping", () => {
       ctx.actor,
     );
 
-    const result = await listLedgerParties(
-      ctx.db,
-      {},
-      [
+    const result = await ledgerPartyScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [
         { orderBy: "kind", direction: "asc" },
         { orderBy: "name", direction: "desc" },
         { orderBy: "createdAt", direction: "desc" },
       ],
-      { pageIndex: 0, pageSize: 10 },
-    );
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(result.data.map((row) => row.name)).toEqual([
       "Beta",
       "Alpha",

@@ -46,10 +46,7 @@ import {
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
-import {
-  buildEmailWhere,
-  listEmailsRead,
-} from "~/server/domains/email/repo/email";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import {
   emailLinkedSql,
   emailMemberClassificationSql,
@@ -58,7 +55,7 @@ import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import {
-  getPurchaseByID,
+  readPurchaseById,
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -83,12 +80,11 @@ describe("Email Purchase links", () => {
     // Stable fixture reads settle publications; dedicated cases below exercise missing and stale results.
     await drainStoredDerived(ctx.db);
     return (
-      await listEmailsRead(
-        ctx.db,
+      await emailScaffold.read(ctx.db, {
         filters,
-        [{ orderBy: "linkState", direction: "asc" }],
-        { pageIndex: 0, pageSize: 50 },
-      )
+        sorts: [{ orderBy: "linkState", direction: "asc" }],
+        pagination: { pageIndex: 0, pageSize: 50 },
+      })
     ).data.map((row) =>
       Object.assign({}, row, {
         purchaseLinks: emailPurchaseLink.array().parse(row.purchaseLinks),
@@ -330,7 +326,7 @@ describe("Email Purchase links", () => {
         .set({ vendorAccountId: null })
         .where(eq(purchaseTable.id, purchase.id));
       expect(
-        (await getPurchaseByID(ctx.db, purchaseId.parse(purchase.id)))
+        (await readPurchaseById(ctx.db, purchaseId.parse(purchase.id)))
           .purchaserId,
       ).toBeNull();
       await getDb(ctx.db)
@@ -338,7 +334,7 @@ describe("Email Purchase links", () => {
         .set({ deletedAt: new Date() })
         .where(eq(emailTable.ledgerPartyId, foreignParty.id));
       expect(
-        (await getPurchaseByID(ctx.db, purchaseId.parse(purchase.id)))
+        (await readPurchaseById(ctx.db, purchaseId.parse(purchase.id)))
           .purchaserId,
       ).toBe(party.shortcode);
     },
@@ -418,18 +414,17 @@ describe("Email Purchase links", () => {
       vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
     };
     const read = async () => {
-      const page = await listEmailsRead(
-        ctx.db,
-        filters,
-        [{ orderBy: "linkState", direction: "asc" }],
-        { pageIndex: 0, pageSize: 25 },
-        selectedListProjection("email", [
+      const page = await emailScaffold.read(ctx.db, {
+        filters: filters,
+        sorts: [{ orderBy: "linkState", direction: "asc" }],
+        pagination: { pageIndex: 0, pageSize: 25 },
+        projection: selectedListProjection("email", [
           "linkState",
           "purchaseLinks",
           "linked",
           "importOutcome",
         ]),
-      );
+      });
       const row = page.data.find((row) => row.id === f.email);
       if (!row)
         throw new Error("Sender-proof Email must remain in Vendor scope");
@@ -443,8 +438,8 @@ describe("Email Purchase links", () => {
       (
         await getDb(ctx.db)
           .select({
-            certain: sql<boolean>`${buildEmailWhere({ linked: false })}`,
-            possible: sql<boolean>`${buildEmailWhere({ linked: false }, undefined, "possible")}`,
+            certain: sql<boolean>`${emailScaffold.where({ linked: false })}`,
+            possible: sql<boolean>`${emailScaffold.where({ linked: false }, { membership: "possible" })}`,
           })
           .from(emailTable)
           .where(eq(emailTable.shortcode, f.email))
@@ -454,21 +449,30 @@ describe("Email Purchase links", () => {
       possible: true,
     });
     expect(
-      await listEmailsRead(
-        ctx.db,
-        { purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode) },
-        [],
-        { pageIndex: 0, pageSize: 25 },
-      ),
+      await emailScaffold.read(ctx.db, {
+        filters: {
+          purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+        },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 25 },
+      }),
     ).toMatchObject({ count: 0, unresolvedCount: 1 });
     // Sender proof settles Vendor inclusion even before candidate facts exist.
     expect(
-      await listEmailsRead(ctx.db, filters, [], { pageIndex: 0, pageSize: 25 }),
+      await emailScaffold.read(ctx.db, {
+        filters: filters,
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 25 },
+      }),
     ).toMatchObject({ count: 1, unresolvedCount: 0 });
     expect(
-      await listEmailsRead(ctx.db, { ...filters, linked: false }, [], {
-        pageIndex: 0,
-        pageSize: 25,
+      await emailScaffold.read(ctx.db, {
+        filters: { ...filters, linked: false },
+        sorts: [],
+        pagination: {
+          pageIndex: 0,
+          pageSize: 25,
+        },
       }),
     ).toMatchObject({ count: 0, unresolvedCount: 1 });
 
@@ -510,25 +514,25 @@ describe("Email Purchase links", () => {
     await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"
       WHERE key = 'relationshipFacts' AND "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
     expect(
-      await listEmailsRead(
-        ctx.db,
-        { purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode) },
-        [],
-        { pageIndex: 0, pageSize: 25 },
-      ),
+      await emailScaffold.read(ctx.db, {
+        filters: {
+          purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+        },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 25 },
+      }),
     ).toMatchObject({ count: 0, unresolvedCount: 0 });
     expect(
-      await listEmailsRead(
-        ctx.db,
-        {
+      await emailScaffold.read(ctx.db, {
+        filters: {
           vendorAccountId: parseShortcodeFor(
             "vendorAccount",
             account.shortcode,
           ),
         },
-        [],
-        { pageIndex: 0, pageSize: 25 },
-      ),
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 25 },
+      }),
     ).toMatchObject({ count: 0, unresolvedCount: 0 });
     await drainStoredDerived(ctx.db);
     await getDb(ctx.db)
@@ -636,12 +640,11 @@ describe("Email Purchase links", () => {
     await mail("synthetic-older", "2026-10-01T12:00:00Z", "a");
     await mail("synthetic-newer", "2026-10-02T12:00:00Z", "b");
     for (const direction of ["asc", "desc"] as const) {
-      const { data } = await listEmailsRead(
-        ctx.db,
-        {},
-        [{ orderBy: "linkState", direction }],
-        { pageIndex: 0, pageSize: 50 },
-      );
+      const { data } = await emailScaffold.read(ctx.db, {
+        filters: {},
+        sorts: [{ orderBy: "linkState", direction }],
+        pagination: { pageIndex: 0, pageSize: 50 },
+      });
       expect(data.map((row) => row.subject)).toEqual([
         "synthetic-newer",
         "synthetic-older",

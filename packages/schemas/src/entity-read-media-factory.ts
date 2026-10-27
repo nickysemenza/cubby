@@ -20,10 +20,6 @@ export function createEntityReadMedia<ImageFields extends z.ZodRawShape>(
   const detailMediaFields = z.object({
     displayImages: displayImagesField,
     attachments: entityAttachmentList,
-    /** The code a read asked for when it was a merged-away code (ADR 0006). */
-    redirectedFrom: z.string().nullable(),
-    /** Codes of entities merged into this one; each still redirects here. */
-    previousShortcodes: z.array(z.string()),
     /** Records above this one, from a declared `hero.breadcrumb` field. */
     breadcrumb: detailBreadcrumbSchema.optional(),
     /** Where facts about this record were seen, newest first. */

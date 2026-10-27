@@ -4,13 +4,17 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
   expenseUpdateData,
 } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
-import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
+import {
+  rawExpenseOut,
+  type RawExpenseOut,
+} from "@cubby/schemas/work-raw-read";
 import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -37,18 +41,15 @@ import { expenseChargeContextWorkflow } from "~/server/domains/expense/repo/char
 import {
   createExpense,
   deleteExpenses,
-  getExpenseByShortcode,
+  readExpense,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
-import {
-  expenseList,
-  expenseListRead,
-} from "~/server/domains/expense/repo/lookup";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   getPurchaseExpenses,
-  purchaseList,
+  purchaseScaffold,
 } from "~/server/domains/purchase/repo/purchase";
 import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
@@ -214,12 +215,11 @@ describe("expense vendor presence", () => {
       { value: "__any__", label: null, count: 1 },
       { value: "__none__", label: null, count: 1 },
     ]);
-    const { data } = await expenseList(
-      ctx.db,
-      { ...filters, purchaseIdPresenceFilter: "none" },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const { data } = await expenseScaffold.read(ctx.db, {
+      filters: { ...filters, purchaseIdPresenceFilter: "none" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(data.map((row) => row.name)).toEqual(["Facet gone"]);
   });
 });
@@ -436,7 +436,7 @@ describe("expense repository — CRUD", () => {
       future: false,
     });
 
-    const read = await getExpenseByShortcode(ctx.db, created.id);
+    const read = await readExpense(ctx.db, created.id);
     expect(read).toMatchObject({
       name: "test faucet",
       cost: 42.5,
@@ -464,11 +464,15 @@ describe("expense repository — CRUD", () => {
 
     await deleteExpenses(ctx.db, [created.id], ctx.actor);
 
-    expect(await getExpenseByShortcode(ctx.db, created.id)).toBeNull();
+    expect(await readExpense(ctx.db, created.id)).toBeNull();
 
-    const { data } = await expenseList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 50,
+    const { data } = await expenseScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 50,
+      },
     });
     expect(data.map((p) => p.id)).not.toContain(created.id);
   });
@@ -528,9 +532,9 @@ describe("expense repository — CRUD", () => {
     ).rejects.toMatchObject({
       reason: "CONSTRAINT_VIOLATION",
     });
-    expect(
-      (await getExpenseByShortcode(ctx.db, productExpense.id))?.productId,
-    ).toBe(productRow.id);
+    expect((await readExpense(ctx.db, productExpense.id))?.productId).toBe(
+      productRow.id,
+    );
 
     await expect(
       updateExpense(
@@ -542,9 +546,7 @@ describe("expense repository — CRUD", () => {
     ).rejects.toMatchObject({
       reason: "CONSTRAINT_VIOLATION",
     });
-    expect(
-      (await getExpenseByShortcode(ctx.db, inferredTax.id))?.productId,
-    ).toBeNull();
+    expect((await readExpense(ctx.db, inferredTax.id))?.productId).toBeNull();
 
     const changedKind = await unwrap(
       updateExpense(ctx.db, inferredTax.id, { lineKind: "fee" }, ctx.actor),
@@ -807,7 +809,7 @@ describe("expense workflow", () => {
       return { projA, projB };
     };
 
-    // buildExpenseWhereClause backs BOTH the ledger list and the analytics
+    // The expense scaffold backs BOTH the ledger list and the analytics
     // aggregates; this pins that they still agree through the new OR branch.
     it("keeps ledger totals and analytics totals in agreement", async () => {
       const caller = createExpenseWorkflowCaller(ctx.db);
@@ -818,29 +820,38 @@ describe("expense workflow", () => {
       };
 
       const [listed, analytics] = await Promise.all([
-        expenseList(ctx.db, filters, [], { pageIndex: 0, pageSize: 500 }),
+        expenseScaffold.read(ctx.db, {
+          filters,
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 500 },
+        }),
         caller.analytics(filters),
       ]);
 
       expect(analytics.summary.count).toBe(listed.data.length);
       expect(analytics.summary.net).toBeCloseTo(
-        listed.data.reduce((sum, p) => sum + (p.cost ?? 0), 0),
+        listed.data.reduce(
+          (sum, p) =>
+            sum + (rawExpenseOut.pick({ cost: true }).parse(p).cost ?? 0),
+          0,
+        ),
         2,
       );
-      expect(listed.sums).toEqual({ cost: 7 });
-      const counted = await expenseList(
-        ctx.db,
+      expect(await expenseScaffold.totals(ctx.db, filters)).toEqual({
+        cost: 7,
+      });
+      const counted = await expenseScaffold.read(ctx.db, {
         filters,
-        [],
-        { pageIndex: 0, pageSize: 500 },
-        "count",
-      );
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 500 },
+        readIntent: "count",
+      });
       expect(counted).not.toHaveProperty("sums");
     });
 
     // CUBBY-11R: the relational list leg threw `invalid reference to
     // FROM-clause entry for table "Expense"` under a `trade` filter, because
-    // `buildExpenseWhereClause` applied it as a raw-aliased predicate that
+    // The expense scaffold applied it as a raw-aliased predicate that
     // only the unaliased analytics leg could resolve. Pins that the list and
     // analytics legs agree again now that both run through `tradeCondition`.
     it("keeps the relational list and analytics in agreement under a trade filter", async () => {
@@ -849,7 +860,11 @@ describe("expense workflow", () => {
       const filters = { trade: "drywall" as const };
 
       const [listed, analytics] = await Promise.all([
-        expenseList(ctx.db, filters, [], { pageIndex: 0, pageSize: 500 }),
+        expenseScaffold.read(ctx.db, {
+          filters,
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 500 },
+        }),
         caller.analytics(filters),
       ]);
 
@@ -893,7 +908,7 @@ describe("expense kernel — bulkUpdate", () => {
       (await bulkUpdate([e.id], { trade: "drywall", costType: "services" }))
         .updatedReferences,
     ).toEqual([{ entity: "expense", id: e.id }]);
-    const reread = await getExpenseByShortcode(ctx.db, e.id);
+    const reread = await readExpense(ctx.db, e.id);
     expect(reread?.trade).toBe("drywall");
     expect(reread?.costType).toBe("services");
   });
@@ -911,9 +926,7 @@ describe("expense kernel — bulkUpdate", () => {
         trade: "drywall",
       }),
     ).rejects.toMatchObject({ reason: "EXPENSE_NOT_FOUND" });
-    expect((await getExpenseByShortcode(ctx.db, expense.id))?.trade).toBe(
-      "other",
-    );
+    expect((await readExpense(ctx.db, expense.id))?.trade).toBe("other");
   });
 });
 
@@ -963,13 +976,9 @@ describe("expense repository — bulk trade / cost-type writes", () => {
       expect.arrayContaining([a.id, b.id, already.id]),
     );
     for (const id of [a.id, b.id, already.id]) {
-      expect((await getExpenseByShortcode(ctx.db, id))?.trade).toBe(
-        "electrical",
-      );
+      expect((await readExpense(ctx.db, id))?.trade).toBe("electrical");
     }
-    expect((await getExpenseByShortcode(ctx.db, untouched.id))?.trade).toBe(
-      "plumbing",
-    );
+    expect((await readExpense(ctx.db, untouched.id))?.trade).toBe("plumbing");
 
     expect(changeOf((await updateEntries(aId))[0], "trade")).toEqual({
       from: "other",
@@ -996,7 +1005,7 @@ describe("expense repository — bulk trade / cost-type writes", () => {
     expect(
       await Promise.all(
         [a.id, already.id].map(
-          async (id) => (await getExpenseByShortcode(ctx.db, id))?.costType,
+          async (id) => (await readExpense(ctx.db, id))?.costType,
         ),
       ),
     ).toEqual(["tools", "tools"]);
@@ -1076,7 +1085,7 @@ describe("expense repository — expenseAnalytics", () => {
       costType: "materials",
       cost: 14,
     });
-    const read = await getExpenseByShortcode(ctx.db, tax.id);
+    const read = await readExpense(ctx.db, tax.id);
     expect(read?.fieldResolutions?.trade).toMatchObject({
       mode: "allocated",
       value: "travel",
@@ -1099,17 +1108,15 @@ describe("expense repository — expenseAnalytics", () => {
       cost: 9,
     });
     expect(
-      (await getExpenseByShortcode(ctx.db, shipping.id))?.fieldResolutions
-        ?.costType,
+      (await readExpense(ctx.db, shipping.id))?.fieldResolutions?.costType,
     ).toMatchObject({ mode: "explicit", value: "services", source: "expense" });
-    const names = async (filters: Parameters<typeof expenseList>[1]) =>
+    const names = async (filters: ExpenseFilters) =>
       (
-        await expenseList(
-          ctx.db,
-          { search: "synthetic award", ...filters },
-          [],
-          { pageIndex: 0, pageSize: 50 },
-        )
+        await expenseScaffold.read(ctx.db, {
+          filters: { search: "synthetic award", ...filters },
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 50 },
+        })
       ).data
         .map((row) => row.name)
         .sort();
@@ -1118,13 +1125,12 @@ describe("expense repository — expenseAnalytics", () => {
       "synthetic award fare",
     ]);
     // A list patch of only the derived group resolves like a full read.
-    const derived = await expenseListRead(
-      ctx.db,
-      { search: "synthetic award departure" },
-      [],
-      { pageIndex: 0, pageSize: 50 },
-      { kind: "selected", fields: ["fieldResolutions"] },
-    );
+    const derived = await expenseScaffold.read(ctx.db, {
+      filters: { search: "synthetic award departure" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+      projection: ["fieldResolutions"],
+    });
     expect(derived.data[0]?.fieldResolutions).toMatchObject({
       trade: { mode: "allocated", value: "travel" },
       costType: { mode: "allocated", value: "services" },
@@ -1250,7 +1256,7 @@ describe("expense repository — expenseAnalytics", () => {
     });
   });
 
-  it("aggregates match manual arithmetic, omits empty categories, and stays consistent with expenseList under the same filter", async () => {
+  it("aggregates match manual arithmetic, omits empty categories, and stays consistent with the expense list under the same filter", async () => {
     const { output: projectA } = await createRepoEntity(ctx, "project", {
       name: "analytics project a",
     });
@@ -1491,14 +1497,21 @@ describe("expense repository — expenseAnalytics", () => {
     expect(result.byProject).toHaveLength(2);
 
     // Analytics totals must agree with the visible ledger under the same filter.
-    const { data: listedRows } = await expenseList(ctx.db, filters, [], {
-      pageIndex: 0,
-      pageSize: 100,
+    const { data: listedRows } = await expenseScaffold.read(ctx.db, {
+      filters,
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 100,
+      },
     });
     expect(listedRows.map((p) => p.id).sort()).toEqual(
       [p1.id, p2.id, p3.id, p4.id, p5.id, p6.id].sort(),
     );
-    const summedCost = listedRows.reduce((sum, p) => sum + (p.cost ?? 0), 0);
+    const summedCost = listedRows.reduce(
+      (sum, p) => sum + (rawExpenseOut.pick({ cost: true }).parse(p).cost ?? 0),
+      0,
+    );
     expect(summedCost).toBe(result.summary.net);
   });
 });
@@ -1609,7 +1622,13 @@ describe("expense repository — charge resolution on update", () => {
       line("about to be deleted", null),
       ctx.actor,
     );
-    const chargesBefore = (await purchaseList(ctx.db, {}, [], page)).count;
+    const chargesBefore = (
+      await purchaseScaffold.read(ctx.db, {
+        filters: {},
+        sorts: [],
+        pagination: page,
+      })
+    ).count;
     const vendorsBefore = (await vendorOptions(ctx.db)).length;
 
     await deleteExpenses(ctx.db, [doomed.id], ctx.actor);
@@ -1628,9 +1647,15 @@ describe("expense repository — charge resolution on update", () => {
       "Ghost Supply Co",
     );
     expect((await vendorOptions(ctx.db)).length).toBe(vendorsBefore);
-    expect((await purchaseList(ctx.db, {}, [], page)).count).toBe(
-      chargesBefore,
-    );
+    expect(
+      (
+        await purchaseScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: page,
+        })
+      ).count,
+    ).toBe(chargesBefore);
 
     // And no audit entry for a write that never landed. `getAuditLog`'s
     // `entityId` matches the internal uuid, not the shortcode.

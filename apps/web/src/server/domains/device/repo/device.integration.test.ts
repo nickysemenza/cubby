@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createDevice,
-  getDeviceByID,
+  readDeviceById,
 } from "~/server/domains/device/repo/device";
 import {
   createLedgerParty,
@@ -85,7 +85,7 @@ describe("device", () => {
 
     await deleteThroughKernel(ctx.db, ctx.actor, "device", [created.output.id]);
     expect(
-      await getDeviceByID(ctx.db, created.entityId).catch(() => null),
+      await readDeviceById(ctx.db, created.entityId).catch(() => null),
     ).toBeNull();
   });
 
@@ -120,13 +120,13 @@ describe("device", () => {
       { keepId: kept.output.id, mergeIds: [merged.output.id] },
       ctx.actor,
     );
-    expect((await getDeviceByID(ctx.db, owned.entityId)).ledgerPartyId).toBe(
+    expect((await readDeviceById(ctx.db, owned.entityId)).ledgerPartyId).toBe(
       kept.output.id,
     );
 
     await deleteLedgerParties(ctx.db, [kept.output.id], ctx.actor);
     expect(
-      (await getDeviceByID(ctx.db, owned.entityId)).ledgerPartyId,
+      (await readDeviceById(ctx.db, owned.entityId)).ledgerPartyId,
     ).toBeNull();
   });
 
@@ -161,13 +161,13 @@ describe("device", () => {
       { keepId: kept.id, mergeIds: [merged.id] },
       ctx.actor,
     );
-    expect((await getDeviceByID(ctx.db, withHardware.entityId)).productId).toBe(
-      kept.id,
-    );
+    expect(
+      (await readDeviceById(ctx.db, withHardware.entityId)).productId,
+    ).toBe(kept.id);
 
     await deleteProducts(ctx.db, [kept.entityId], ctx.actor);
     expect(
-      (await getDeviceByID(ctx.db, withHardware.entityId)).productId,
+      (await readDeviceById(ctx.db, withHardware.entityId)).productId,
     ).toBeNull();
   });
 });

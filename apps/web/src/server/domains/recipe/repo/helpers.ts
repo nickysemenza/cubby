@@ -1,31 +1,20 @@
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { totalsPreview } from "@cubby/schemas/nutrition";
 import type {
   RawRecipeGraph as RecipeGraphOut,
   RawRecipeList as RecipeListItem,
-  RawRecipeOutput as RecipeOut,
   RawRecipeSection as RecipeSectionOut,
   RawRecipeTopLevel as RecipeTopLevel,
   RawSectionIngredient as SectionIngredient,
 } from "@cubby/schemas/recipe-raw-read";
 
 import { totalsForRead } from "~/lib/nutrition-estimates";
-import {
-  type MappableImageRecord,
-  mapImages,
-  mapRelation,
-} from "~/server/db/helpers/transform";
+import { mapRelation } from "~/server/db/helpers/transform";
 import {
   type recipe,
   type recipeSection,
   type recipeSectionIngredient,
 } from "~/server/db/retained-tables";
-import {
-  recipeCompositionLabel,
-  recipeTotalsLabel,
-} from "~/server/entity-kernel/repo/detail-display-labels";
 
 import type {
   RecipeDeepDB,
@@ -37,14 +26,6 @@ import { resolveRecipeServings } from "./servings";
 import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
-type RecipeImageRow = {
-  image: MappableImageRecord;
-  deletedAt?: Date | null;
-};
-
-const mapRecipeImages = (
-  images: RecipeImageRow[] | undefined,
-): RawImageOutput[] => mapImages(images);
 
 // Uses cookbookId, not SourceType; ingredientRef must be a trusted SQL expression.
 export const ownRecipeCountForIngredientSql = (ingredientRef: string): string =>
@@ -230,7 +211,7 @@ const dbRecipeToAPIShallow: (recipeParam: RecipeSelect) => RecipeShallowOut = (
   ...recipeTotalsFields(recipeData),
 });
 
-const mapRecipeSections = (
+export const mapRecipeSections = (
   sections: RecipeDeepDB["sections"] | RecipeGraphDB["sections"],
 ): RecipeSectionOut[] =>
   mapRelation(sections, (section) => {
@@ -250,22 +231,6 @@ const mapRecipeSections = (
         : [],
     };
   });
-
-export const dbRecipeToAPI = (
-  recipeData: RecipeDeepDB,
-  dataQuality: DataQuality,
-): RecipeOut => {
-  const baseRecipe = dbRecipeToAPIShallow(recipeData);
-  const sections = mapRecipeSections(recipeData.sections);
-  return {
-    ...baseRecipe,
-    dataQuality,
-    images: mapRecipeImages(recipeData.images),
-    sections,
-    compositionLabel: recipeCompositionLabel(sections),
-    totalsLabel: recipeTotalsLabel(baseRecipe.totals),
-  };
-};
 
 export const dbRecipeToAPIGraph = (
   recipeData: RecipeGraphDB,

@@ -1,6 +1,6 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
 /**
- * The WBS renderer's page reader: same filters as {@link projectList}, but the
+ * The WBS renderer's page reader: same filters as the project list, but the
  * unit of pagination is a **root of the filtered forest** rather than a row.
  *
  * Why this exists at all: nesting rows in the browser is presentation, but
@@ -31,20 +31,18 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ProjectFilters } from "@cubby/schemas/project";
-import type { RawProjectListItemOut } from "@cubby/schemas/work-raw-read";
+import {
+  rawProjectListItemOut,
+  type RawProjectListItemOut,
+} from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { project } from "~/server/db/schema";
-import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
-import { withDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
-import { projectDependencyIds } from "./analytics";
-import { hydrateProjectRow } from "./helpers";
-import { buildProjectListQuery, projectListSums } from "./lookup";
-import { collectDescendantIds, loadStoredProjectRollups } from "./subtree";
+import { projectScaffold } from "./lookup";
+import { collectDescendantIds } from "./subtree";
 
 /**
  * One page of the project WBS tree: `count` is the number of matching ROOTS
@@ -53,11 +51,12 @@ import { collectDescendantIds, loadStoredProjectRollups } from "./subtree";
  * beneath them, in the query's global sort order — so the client's per-parent
  * input-order nesting reproduces that ordering at every level of the tree.
  *
- * `sums`, by contrast, is deliberately NOT scoped to roots — see
- * `projectListSums`'s doc comment. It's the same full-filtered-set total
- * `projectList` returns, computed off the same `whereClause`, because the
- * `costEstimate` footer means "every matching project's own estimate,
- * summed" regardless of which renderer is drawing the rows.
+ * `sums`, by contrast, is deliberately NOT scoped to roots: it is the
+ * declared `costEstimate` total over the whole filtered set, the same total
+ * the flat list returns, because the footer means "every matching project's
+ * own estimate, summed" regardless of which renderer is drawing the rows. A
+ * roots-only sum would disagree with what fully expanding the tree sums
+ * row by row.
  */
 export const projectTreePage = async (
   db: Database,
@@ -69,26 +68,30 @@ export const projectTreePage = async (
   count: number;
   sums: { costEstimate: number };
 }> => {
-  const { tree, whereClause, orderByArray } = await buildProjectListQuery(
-    db,
+  const context = await projectScaffold.context(db, {
     filters,
     sorts,
-  );
+    projection: [],
+  });
+  const whereClause = projectScaffold.where(filters, { context });
+  const orderByArray = projectScaffold.orderBy(sorts, {}, filters, context);
   // The full matching set, ordered but unpaginated — ids only. Run through
   // RQB (not `select().from(project)`) because the effective-start ORDER BY is
   // `sql.raw` with the `"project"` alias spelled out by hand, and only the
   // relational builder aliases the root table that way. See the comment on
   // `effectiveStartSortSql` in lookup.ts.
   //
-  // The footer sum is independent of root selection (see `projectListSums`'s
-  // doc comment), so it runs alongside this scan rather than after it.
+  // The footer sum is independent of root selection, so it runs alongside
+  // this scan rather than after it.
   const [matchingRows, sums] = await Promise.all([
     getDb(db).query.project.findMany({
       columns: { id: true, parentProjectId: true },
       where: whereClause,
       orderBy: orderByArray,
     }),
-    projectListSums(db, whereClause),
+    projectScaffold
+      .totals(db, filters, context)
+      .then((totals) => ({ costEstimate: totals?.costEstimate ?? 0 })),
   ]);
   const matching = new Set(matchingRows.map((row) => row.id));
 
@@ -133,31 +136,19 @@ export const projectTreePage = async (
   // `whereClause` is re-applied on top of the id set: the closure is only ever
   // allowed to NARROW the matching set, never widen it.
   const rows = await getDb(db).query.project.findMany({
+    columns: { id: true },
     where: and(inArray(project.id, [...keep]), whereClause),
     orderBy: orderByArray,
   });
 
-  const ids = rows.map((row) => row.id);
-  const [projectContext, deps, dataQualities] = await Promise.all([
-    loadStoredProjectRollups(db, tree, ids),
-    projectDependencyIds(db, ids),
-    loadDataQualities(db, "project", ids),
-  ]);
-
   return {
-    data: await withDisplayImages(
-      db,
-      "project",
-      await withProjectExternalUrls(db, rows),
-      (row) =>
-        // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-        hydrateProjectRow(
-          row,
-          projectContext,
-          deps,
-          dataQualities.get(row.id)!,
-        ),
-    ),
+    data: (
+      await projectScaffold.getByIds(
+        db,
+        rows.map((row) => row.id),
+        projectScaffold.fields.list,
+      )
+    ).data.map((row) => rawProjectListItemOut.parse(row)),
     count: roots.length,
     sums,
   };

@@ -1,16 +1,15 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { dateRangeFromDates } from "@cubby/schemas/date-range";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { EntityLinkKind } from "@cubby/schemas/entity-links";
 import {
-  type GardenEntryFilters,
   type gardenEntryCreateInput,
   type gardenEntryUpdateData,
 } from "@cubby/schemas/garden-entry";
 import {
   rawGardenEntryOut,
   rawGardenEntryListItemOut,
+  type RawGardenEntryOut,
 } from "@cubby/schemas/garden-entry-raw-read";
 import {
   parseEntityId,
@@ -18,15 +17,14 @@ import {
   type GardenEntryId,
   type PlantingId,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
-  type PlantingFilters,
   type plantingCreateInput,
   type plantingUpdateData,
 } from "@cubby/schemas/planting";
 import {
   rawPlantingOut,
   rawPlantingListItemOut,
+  type RawPlantingOut,
 } from "@cubby/schemas/planting-raw-read";
 import { isPlantingSourceFeature } from "@cubby/schemas/product-category-relations";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -37,7 +35,7 @@ import {
   associatePendingImages,
   buildPartialUpdateValues,
   householdDaySql,
-  imageJoinBindings,
+  galleryBinding,
   mapImages,
   type MappableImageRecord,
   notDeleted,
@@ -45,7 +43,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   entityLink,
   gardenEntry,
@@ -53,6 +50,8 @@ import {
   planting,
   product,
 } from "~/server/db/schema";
+import { gardenEntrySearch } from "~/server/domains/garden/repo/search-read-garden-entry";
+import { plantingSearch } from "~/server/domains/garden/repo/search-read-planting";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import {
   expectedHarvestFor,
@@ -63,6 +62,7 @@ import {
 import { getCategoryFeature } from "~/server/domains/product-category/repo/product-category";
 import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
@@ -71,7 +71,6 @@ import {
   diffUnorderedIdSet,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   assertLiveLinkEndpoints,
   linkValues,
@@ -79,9 +78,6 @@ import {
   ofLinkKind,
 } from "~/server/generic/entity-links/repo/entity-links";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
-import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -101,12 +97,6 @@ type PlantingCreateInput = z.input<typeof plantingCreateInput>;
 type PlantingUpdateData = z.infer<typeof plantingUpdateData>;
 type GardenEntryCreateInput = z.input<typeof gardenEntryCreateInput>;
 type GardenEntryUpdateData = z.infer<typeof gardenEntryUpdateData>;
-
-/** Shared dashboard/list predicate; garden records are always soft-delete scoped. */
-export const buildPlantingWhere = () => notDeleted(planting);
-
-/** Shared dashboard/list predicate; garden entries are always soft-delete scoped. */
-export const buildGardenEntryWhere = () => notDeleted(gardenEntry);
 
 const required = async <
   T extends "location" | "plant" | "planting" | "product" | "task",
@@ -174,33 +164,22 @@ const plantingReferences = {
   task: { columns: { shortcode: true, name: true } },
 } as const;
 
-const plantingRow = async (db: GardenDb, id: PlantingId) => {
-  const row = await unwrapDb(db).query.planting.findFirst({
-    where: and(eq(planting.id, id), notDeleted(planting)),
+const loadPlantingReferences = (db: GardenDb, ids: readonly string[]) =>
+  unwrapDb(db).query.planting.findMany({
+    where: inArray(
+      planting.id,
+      ids.map((id) => parseEntityId("planting", id)),
+    ),
+    columns: { id: true },
     with: plantingReferences,
   });
-  if (!row)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "The planting no longer exists.",
-    );
-  return row;
-};
 
-type PlantingWithReferences = Awaited<ReturnType<typeof plantingRow>>;
+type PlantingWithReferences = Awaited<
+  ReturnType<typeof loadPlantingReferences>
+>[number];
 
-type PlantingReadRow = typeof planting.$inferSelect & {
-  plant:
-    | (Pick<
-        NonNullable<PlantingWithReferences["plant"]>,
-        "name" | "gardenGuideKey"
-      > &
-        Partial<NonNullable<PlantingWithReferences["plant"]>>)
-    | null;
-  sourceProduct?: PlantingWithReferences["sourceProduct"];
-  location?: PlantingWithReferences["location"];
-  task?: PlantingWithReferences["task"];
-};
+type PlantingReadRow = typeof planting.$inferSelect &
+  Omit<PlantingWithReferences, "id">;
 
 const plantingRelationFields = (row: PlantingReadRow) => {
   if (!row.plant?.shortcode)
@@ -246,29 +225,6 @@ const plantingDerivedFields = (row: PlantingReadRow) => {
   };
 };
 
-const mapPlantingRead = (
-  row: PlantingReadRow,
-  projection: ListProjection,
-  dataQuality?: DataQuality,
-) => {
-  const { sowedOn, finishedOn, ...fields } = row;
-  const result = {
-    ...fields,
-    season: dateRangeFromDates(sowedOn, finishedOn),
-    id: parseShortcodeFor("planting", row.shortcode),
-    displayName: plantingDisplayName(row.plant),
-  };
-  if (wantsListGroup(projection, "relations"))
-    Object.assign(result, plantingRelationFields(row));
-  if (wantsListGroup(projection, "derived"))
-    Object.assign(result, plantingDerivedFields(row));
-  if (dataQuality) Object.assign(result, { dataQuality });
-  return result;
-};
-
-const mapPlanting = (row: PlantingWithReferences, dataQuality: DataQuality) =>
-  rawPlantingOut.parse(mapPlantingRead(row, { kind: "full" }, dataQuality));
-
 type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
   location: { shortcode: string; name: string };
   plantings: Array<{
@@ -306,12 +262,6 @@ const gardenEntryDisplayName = (row: {
   return `${kindLabel} · ${row.observedOn} · ${row.locationName}`;
 };
 
-type GardenEntryReadRow = Omit<
-  GardenEntryWithReferences,
-  "plantings" | "images"
-> &
-  Partial<Pick<GardenEntryWithReferences, "plantings" | "images">>;
-
 const entryPlantingFields = (links: GardenEntryWithReferences["plantings"]) => {
   const plantings = links
     .flatMap((link) => (link.planting ? [link.planting] : []))
@@ -325,43 +275,6 @@ const entryPlantingFields = (links: GardenEntryWithReferences["plantings"]) => {
       name: plantingDisplayName(linked.plant),
     })),
   };
-};
-
-const mapEntryRead = (
-  row: GardenEntryReadRow,
-  projection: ListProjection,
-  dataQuality?: DataQuality,
-) => {
-  const result = {
-    ...row,
-    id: parseShortcodeFor("gardenEntry", row.shortcode),
-    displayName: gardenEntryDisplayName({
-      kind: row.kind,
-      observedOn: row.observedOn,
-      locationName: row.location.name,
-    }),
-  };
-  if (wantsListGroup(projection, "relations")) {
-    Object.assign(result, {
-      locationId: parseShortcodeFor("location", row.location.shortcode),
-      locationName: row.location.name,
-      ...entryPlantingFields(row.plantings ?? []),
-    });
-  }
-  if (wantsListGroup(projection, "media"))
-    Object.assign(result, { images: mapImages(row.images ?? []) });
-  if (dataQuality) Object.assign(result, { dataQuality });
-  return result;
-};
-
-const mapEntry = (row: GardenEntryWithReferences, dataQuality: DataQuality) =>
-  rawGardenEntryOut.parse(mapEntryRead(row, { kind: "full" }, dataQuality));
-
-export const getPlanting = async (db: GardenDb, id: PlantingId) => {
-  const row = await plantingRow(db, id);
-  const dataQualities = await loadDataQualities(db, "planting", [id]);
-  // SAFETY: `row` was just fetched live by `id`, so its quality was evaluated.
-  return mapPlanting(row, dataQualities.get(id)!);
 };
 
 /**
@@ -406,30 +319,6 @@ const loadEntryPlantings = async (
     ]);
   }
   return out;
-};
-
-export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
-  const row = await unwrapDb(db).query.gardenEntry.findFirst({
-    where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
-    with: {
-      location: { columns: { shortcode: true, name: true } },
-      images: { with: { image: true } },
-    },
-  });
-  if (!row)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "The garden entry no longer exists.",
-    );
-  const [dataQualities, plantingsByEntry] = await Promise.all([
-    loadDataQualities(db, "gardenEntry", [id]),
-    loadEntryPlantings(db, [id]),
-  ]);
-  // SAFETY: `row` was just fetched live by `id`, so its quality was evaluated.
-  return mapEntry(
-    { ...row, plantings: plantingsByEntry.get(id) ?? [] },
-    dataQualities.get(id)!,
-  );
 };
 
 /**
@@ -534,7 +423,7 @@ export const createPlanting = defineMutationWriter({
     db: Database,
     _data: PlantingCreateInput,
     _actor: ActorContext,
-  ) => getPlanting(db, receipt.entityId),
+  ) => readPlantingById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
@@ -577,7 +466,7 @@ export const createPlanting = defineMutationWriter({
           entityId: parseEntityId("planting", row.id),
           shortcode: row.shortcode,
         },
-        () => getPlanting(tx, parseEntityId("planting", row.id)),
+        () => readPlantingById(tx, parseEntityId("planting", row.id)),
       );
     }),
 });
@@ -589,7 +478,7 @@ export const createGardenEntry = defineMutationWriter({
     db: Database,
     _data: GardenEntryCreateInput,
     _actor: ActorContext,
-  ) => getGardenEntry(db, receipt.entityId),
+  ) => readGardenEntryById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
@@ -623,7 +512,7 @@ export const createGardenEntry = defineMutationWriter({
         );
         await associatePendingImages(
           tx,
-          imageJoinBindings.gardenEntry,
+          galleryBinding("gardenEntry"),
           row.id,
           imageIds,
         );
@@ -638,7 +527,7 @@ export const createGardenEntry = defineMutationWriter({
           entityId: parseEntityId("gardenEntry", row.id),
           shortcode: row.shortcode,
         },
-        () => getGardenEntry(tx, parseEntityId("gardenEntry", row.id)),
+        () => readGardenEntryById(tx, parseEntityId("gardenEntry", row.id)),
       );
     }),
 });
@@ -656,7 +545,7 @@ export const updatePlanting = defineMutationWriter({
     _data: PlantingUpdateData,
     _actor: ActorContext,
   ) => ({
-    planting: await getPlanting(db, receipt.entityId),
+    planting: await readPlantingById(db, receipt.entityId),
     detachedImageKeys: receipt.detachedImageKeys ?? [],
   }),
   write: async (
@@ -744,7 +633,7 @@ export const updatePlanting = defineMutationWriter({
       return readOutput(
         { entityId: id, shortcode: before.shortcode, detachedImageKeys: [] },
         async () => ({
-          planting: await getPlanting(tx, id),
+          planting: await readPlantingById(tx, id),
           detachedImageKeys: [],
         }),
       );
@@ -769,7 +658,7 @@ export const updateGardenEntry = defineMutationWriter({
     _id: GardenEntryId,
     _data: GardenEntryUpdateInput,
     _actor: ActorContext,
-  ) => getGardenEntry(db, receipt.entityId),
+  ) => readGardenEntryById(db, receipt.entityId),
   write: async (
     readOutput,
     db: Database,
@@ -851,7 +740,7 @@ export const updateGardenEntry = defineMutationWriter({
       await syncEntityImages(
         tx,
         "gardenEntry",
-        imageJoinBindings.gardenEntry,
+        galleryBinding("gardenEntry"),
         id,
         data,
         { unresolved: "throw" },
@@ -879,7 +768,7 @@ export const updateGardenEntry = defineMutationWriter({
         });
       }
       return readOutput({ entityId: id, shortcode: before.shortcode }, () =>
-        getGardenEntry(tx, id),
+        readGardenEntryById(tx, id),
       );
     }),
 });
@@ -891,90 +780,70 @@ export const plantingScaffold = listScaffold("planting", planting, {
       sql`${planting.finishedOn}`,
     ],
   },
+  read: {
+    title: sql`(SELECT p."name" FROM "Plant" p WHERE p."id" = "Planting"."plantId")`,
+    search: plantingSearch,
+    media: true,
+    bindings: (bind) => {
+      const references = bind.ids(async ({ db, ids }) => {
+        const rows = await loadPlantingReferences(db, ids);
+        return new Map(rows.map(({ id, ...row }) => [id, row]));
+      });
+      const withReferences = (
+        row: typeof planting.$inferSelect,
+        loaded: ReadonlyMap<string, Omit<PlantingWithReferences, "id">>,
+      ): PlantingReadRow => {
+        const related = loaded.get(row.id);
+        if (!related) throw new Error("Planting references were not loaded");
+        return { ...row, ...related };
+      };
+      return [
+        references.fields(
+          rawPlantingListItemOut.pick({ displayName: true }),
+          (row, loaded) => ({
+            displayName: plantingDisplayName(withReferences(row, loaded).plant),
+          }),
+        ),
+        references.fields(
+          rawPlantingListItemOut.pick({
+            plantId: true,
+            sourceProductId: true,
+            locationId: true,
+            taskId: true,
+            plantName: true,
+            sourceProductName: true,
+            locationName: true,
+            taskName: true,
+          }),
+          (row, loaded) => plantingRelationFields(withReferences(row, loaded)),
+        ),
+        references.fields(
+          rawPlantingListItemOut.pick({
+            guideSowWindow: true,
+            guideTransplantWindow: true,
+            expectedHarvestStart: true,
+            expectedHarvestEnd: true,
+            expectedHarvest: true,
+          }),
+          (row, loaded) => plantingDerivedFields(withReferences(row, loaded)),
+        ),
+      ];
+    },
+  },
 });
 
-export const plantingListRead = async (
-  db: Database,
-  filters: PlantingFilters,
-  pagination: PaginationParams,
-  sorts: SortParams[] = [],
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) => {
-  return plantingScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      load: (where, selected) =>
-        unwrapDb(db).query.planting.findMany({
-          where,
-          with: {
-            plant:
-              wantsListGroup(selected, "derived") ||
-              wantsListGroup(selected, "relations")
-                ? plantingReferences.plant
-                : { columns: { name: true, gardenGuideKey: true } },
-            sourceProduct: wantsListGroup(selected, "relations")
-              ? plantingReferences.sourceProduct
-              : undefined,
-            location: wantsListGroup(selected, "relations")
-              ? plantingReferences.location
-              : undefined,
-            task: wantsListGroup(selected, "relations")
-              ? plantingReferences.task
-              : undefined,
-          },
-        }),
-      read: {
-        media: true,
-        bindings: (bind) => [
-          bind(rawPlantingListItemOut.pick({ displayName: true }), (row) => ({
-            displayName: plantingDisplayName(row.plant),
-          })),
-          bind(
-            rawPlantingListItemOut.pick({
-              plantId: true,
-              sourceProductId: true,
-              locationId: true,
-              taskId: true,
-              plantName: true,
-              sourceProductName: true,
-              locationName: true,
-              taskName: true,
-            }),
-            plantingRelationFields,
-          ),
-          bind(
-            rawPlantingListItemOut.pick({
-              guideSowWindow: true,
-              guideTransplantWindow: true,
-              expectedHarvestStart: true,
-              expectedHarvestEnd: true,
-              expectedHarvest: true,
-            }),
-            plantingDerivedFields,
-          ),
-        ],
-      },
-    },
-  );
-};
-
-export const plantingList = async (
-  db: Database,
-  filters: PlantingFilters,
-  pagination: PaginationParams,
-  sorts: SortParams[] = [],
-) => {
-  const result = await plantingListRead(db, filters, pagination, sorts, {
-    kind: "full",
-  });
-  return parseCompleteListRead(rawPlantingListItemOut, Promise.resolve(result));
-};
+const plantingReader = createEntityReader<
+  unknown,
+  RawPlantingOut,
+  "planting",
+  GardenDb
+>({ entity: "planting", scaffold: plantingScaffold, output: rawPlantingOut });
+/** One live Planting by internal id; throws `PLANTING_NOT_FOUND`. */
+export const readPlantingById = plantingReader.getByID;
 
 const JOURNAL_LINK: EntityLinkKind = "gardenEntryPlanting";
 
-const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
+export const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
   rows: {
     /**
      * A planting's journal always includes its direct live associations. A
@@ -998,99 +867,95 @@ const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
           AND whole_area_link."deletedAt" IS NULL
       )`,
   },
+  read: {
+    title: sql`initcap("GardenEntry"."kind"::text) || ' · ' || to_char("GardenEntry"."observedOn", 'YYYY-MM-DD') || ' · ' || (SELECT l."name" FROM "Location" l WHERE l."id" = "GardenEntry"."locationId")`,
+    search: gardenEntrySearch,
+    // `createdAt desc` is a deliberate stable tiebreak — a `tieBreaker`, not
+    // a `resolve` special-case, so it can't swallow a second user-requested
+    // sort (see `buildOrderBy`'s doc comment).
+    tieBreaker: desc(gardenEntry.createdAt),
+    media: true,
+    bindings: (bind) => {
+      const locations = bind.ids(async ({ db, ids }) => {
+        const rows = await unwrapDb(db).query.gardenEntry.findMany({
+          where: inArray(
+            gardenEntry.id,
+            ids.map((id) => parseEntityId("gardenEntry", id)),
+          ),
+          columns: { id: true },
+          with: { location: { columns: { shortcode: true, name: true } } },
+        });
+        return new Map(rows.map((row) => [row.id, row.location]));
+      });
+      const attachments = bind.ids(async ({ db, ids }) => {
+        const rows = await unwrapDb(db).query.gardenEntry.findMany({
+          where: inArray(
+            gardenEntry.id,
+            ids.map((id) => parseEntityId("gardenEntry", id)),
+          ),
+          columns: { id: true },
+          with: { images: { with: { image: true } } },
+        });
+        return new Map(rows.map((row) => [row.id, mapImages(row.images)]));
+      });
+      const plantings = bind.ids(({ db, ids }) => loadEntryPlantings(db, ids));
+      const locationOf = (
+        row: { id: string },
+        loaded: ReadonlyMap<string, { shortcode: string; name: string }>,
+      ) => {
+        const location = loaded.get(row.id);
+        if (!location) throw new Error("Garden entry location was not loaded");
+        return location;
+      };
+      return [
+        locations.fields(
+          rawGardenEntryListItemOut.pick({ displayName: true }),
+          (row, loaded) => ({
+            displayName: gardenEntryDisplayName({
+              kind: row.kind,
+              observedOn: row.observedOn,
+              locationName: locationOf(row, loaded).name,
+            }),
+          }),
+        ),
+        locations.fields(
+          rawGardenEntryListItemOut.pick({
+            locationId: true,
+            locationName: true,
+          }),
+          (row, loaded) => {
+            const location = locationOf(row, loaded);
+            return {
+              locationId: parseShortcodeFor("location", location.shortcode),
+              locationName: location.name,
+            };
+          },
+        ),
+        plantings.fields(
+          rawGardenEntryListItemOut.pick({
+            plantingIds: true,
+            plantings: true,
+          }),
+          (row, loaded) => entryPlantingFields(loaded.get(row.id) ?? []),
+        ),
+        attachments.fields(
+          rawGardenEntryListItemOut.pick({ images: true }),
+          (row, loaded) => ({ images: loaded.get(row.id) ?? [] }),
+        ),
+      ];
+    },
+  },
 });
 
-export const gardenEntryListRead = async (
-  db: Database,
-  filters: GardenEntryFilters,
-  pagination: PaginationParams,
-  sorts: SortParams[] = [],
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) => {
-  return gardenEntryScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      // `createdAt desc` is a deliberate stable tiebreak — a `tieBreaker`, not
-      // a `resolve` special-case, so it can't swallow a second user-requested
-      // sort (see `buildOrderBy`'s doc comment).
-      tieBreaker: desc(gardenEntry.createdAt),
-      load: (where, selected) =>
-        unwrapDb(db).query.gardenEntry.findMany({
-          where,
-          with: {
-            location: { columns: { shortcode: true, name: true } },
-            images: wantsListGroup(selected, "media")
-              ? { with: { image: true } }
-              : undefined,
-          },
-        }),
-      read: {
-        media: true,
-        bindings: (bind) => {
-          const plantings = bind.batch(({ rows }) =>
-            loadEntryPlantings(
-              db,
-              rows.map((row) => row.id),
-            ),
-          );
-          return [
-            bind(
-              rawGardenEntryListItemOut.pick({ displayName: true }),
-              (row) => ({
-                displayName: gardenEntryDisplayName({
-                  kind: row.kind,
-                  observedOn: row.observedOn,
-                  locationName: row.location.name,
-                }),
-              }),
-            ),
-            bind(
-              rawGardenEntryListItemOut.pick({
-                locationId: true,
-                locationName: true,
-              }),
-              (row) => ({
-                locationId: parseShortcodeFor(
-                  "location",
-                  row.location.shortcode,
-                ),
-                locationName: row.location.name,
-              }),
-            ),
-            plantings.fields(
-              rawGardenEntryListItemOut.pick({
-                plantingIds: true,
-                plantings: true,
-              }),
-              (row, loaded) => entryPlantingFields(loaded.get(row.id) ?? []),
-            ),
-            bind(rawGardenEntryListItemOut.pick({ images: true }), (row) => ({
-              images: mapImages(
-                (row.images ?? []).flatMap((entry) =>
-                  "image" in entry ? [entry] : [],
-                ),
-              ),
-            })),
-          ];
-        },
-      },
-    },
-  );
-};
-
-export const gardenEntryList = async (
-  db: Database,
-  filters: GardenEntryFilters,
-  pagination: PaginationParams,
-  sorts: SortParams[] = [],
-) => {
-  const result = await gardenEntryListRead(db, filters, pagination, sorts, {
-    kind: "full",
-  });
-  return parseCompleteListRead(
-    rawGardenEntryListItemOut,
-    Promise.resolve(result),
-  );
-};
+const gardenEntryReader = createEntityReader<
+  unknown,
+  RawGardenEntryOut,
+  "gardenEntry",
+  GardenDb
+>({
+  entity: "gardenEntry",
+  scaffold: gardenEntryScaffold,
+  output: rawGardenEntryOut,
+});
+/** One live garden entry by internal id; throws `GARDEN_ENTRY_NOT_FOUND`. */
+const readGardenEntryById = gardenEntryReader.getByID;

@@ -13,7 +13,7 @@ import {
   type StoredAiAnalysis,
 } from "~/server/ai/repo/ai-analysis";
 import type { Database } from "~/server/db";
-import { getRecipeByID } from "~/server/domains/recipe/repo/crud";
+import { readRecipeById } from "~/server/domains/recipe/repo/crud";
 import { createAppError } from "~/server/errors/app-error";
 
 /**
@@ -34,7 +34,7 @@ export interface RecipeFlowReadPorts {
 }
 
 export const productionRecipeFlowReadPorts: RecipeFlowReadPorts = {
-  getRecipe: getRecipeByID,
+  getRecipe: readRecipeById,
   listCandidates: async (db, recipeId) =>
     await listAiAnalysesForEntityFeature(db, {
       entityKind: "recipe",

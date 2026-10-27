@@ -19,8 +19,8 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import {
-  getLocationById,
-  locationList,
+  readLocationById,
+  locationScaffold,
   updateLocation,
   updateLocationAiDescription,
 } from "./crud";
@@ -46,7 +46,7 @@ describe("location shape", () => {
   const ctx = withTestDb();
 
   const describeWith = async (
-    locationId: Parameters<typeof getLocationById>[1],
+    locationId: Parameters<typeof readLocationById>[1],
     name: string,
     description: string,
   ) =>
@@ -70,34 +70,32 @@ describe("location shape", () => {
       makeLocationInput({ name: "Described shelf", type: "shelf" }),
       ctx.actor,
     );
-    expect((await getLocationById(ctx.db, shelf.entityId)).aiDescription).toBe(
+    expect((await readLocationById(ctx.db, shelf.entityId)).aiDescription).toBe(
       null,
     );
 
     await describeWith(shelf.entityId, "Described shelf", "Cans on the left.");
-    expect((await getLocationById(ctx.db, shelf.entityId)).aiDescription).toBe(
+    expect((await readLocationById(ctx.db, shelf.entityId)).aiDescription).toBe(
       "Cans on the left.",
     );
-    const listed = await locationList(
-      ctx.db,
-      { aiDescriptionPresenceFilter: "has" },
-      [],
-      page,
-    );
+    const listed = await locationScaffold.read(ctx.db, {
+      filters: { aiDescriptionPresenceFilter: "has" },
+      sorts: [],
+      pagination: page,
+    });
     const row = listed.data.find((item) => item.id === shelf.id);
     expect(row?.aiDescription).toBe("Cans on the left.");
 
-    const undescribed = await locationList(
-      ctx.db,
-      { aiDescriptionPresenceFilter: "none" },
-      [],
-      page,
-    );
+    const undescribed = await locationScaffold.read(ctx.db, {
+      filters: { aiDescriptionPresenceFilter: "none" },
+      sorts: [],
+      pagination: page,
+    });
     expect(undescribed.data.map((item) => item.id)).not.toContain(shelf.id);
 
     // Removing the last photo retires the description; nothing left to say.
     await updateLocationAiDescription(ctx.db, shelf.entityId, null);
-    expect((await getLocationById(ctx.db, shelf.entityId)).aiDescription).toBe(
+    expect((await readLocationById(ctx.db, shelf.entityId)).aiDescription).toBe(
       null,
     );
   });

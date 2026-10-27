@@ -11,19 +11,18 @@ import { getDb } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
-import { projectList } from "~/server/domains/project/repo/lookup";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-
-import { productList } from "./crud";
 
 /**
  * Product filters compile from the declaration (#2410). Failure modes: a
@@ -168,7 +167,7 @@ describe("product list declared filters", () => {
     const all = [w.driver, w.flour, w.misc, w.kit, w.bit, w.tote];
     const list = async (filters: ProductFilters) =>
       (
-        await productList(
+        await listProductsFixture(
           ctx.db,
           { ...filters, ids: all.map((row) => row.id) },
           [],
@@ -291,7 +290,7 @@ describe("product list declared filters", () => {
       [{ projectId: [fallback.output.id], projectSearch: "explicit" }, [split]],
     ];
     for (const [filters, expected] of cases) {
-      const result = await productList(
+      const result = await listProductsFixture(
         ctx.db,
         { ...filters, ids: all.map((item) => item.id) },
         [],
@@ -307,12 +306,11 @@ describe("product list declared filters", () => {
       { item: overridden, projects: [explicit] },
       { item: split, projects: [fallback, explicit] },
     ]) {
-      const inverse = await projectList(
-        ctx.db,
-        { purchasedProductId: [scope.item.id] },
-        [],
-        { pageIndex: 0, pageSize: 50 },
-      );
+      const inverse = await projectScaffold.read(ctx.db, {
+        filters: { purchasedProductId: [scope.item.id] },
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 50 },
+      });
       expect(inverse.count).toBe(scope.projects.length);
       expect(inverse.data.map((row) => row.id).sort()).toEqual(
         scope.projects.map((item) => item.output.id).sort(),
@@ -325,7 +323,7 @@ describe("product list declared filters", () => {
     await drainStoredDerived(ctx.db);
     const all = [w.driver, w.flour, w.misc, w.kit, w.bit, w.tote];
     const listIds = async (filters: ProductFilters) => {
-      const { data } = await productList(
+      const { data } = await listProductsFixture(
         ctx.db,
         { ...filters, ids: all.map(({ id }) => id) },
         [],

@@ -42,13 +42,6 @@ export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   };
 };
 
-export type InventoryEntryListDB = typeof inventoryEntry.$inferSelect & {
-  product: ProductSelect & {
-    externalIds?: MappableProductExternalId[];
-  };
-  location: LocationSelect;
-};
-
 export interface UpdateInventoryEntryData {
   amount?: Amount;
   productId?: ProductId;

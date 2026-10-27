@@ -11,13 +11,12 @@ import {
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
+  listInventoryFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { inventoryentryList } from "./crud";
-
-type Filters = Parameters<typeof inventoryentryList>[1];
+type Filters = Parameters<typeof listInventoryFixture>[1];
 
 /**
  * Inventory filters compile from the declaration (#2410). Failure modes: a
@@ -125,7 +124,7 @@ describe("inventory list declared filters", () => {
   };
 
   const listIds = async (filters: Filters) => {
-    const { data, count } = await inventoryentryList(ctx.db, filters, [], {
+    const { data, count } = await listInventoryFixture(ctx.db, filters, [], {
       pageIndex: 0,
       pageSize: 100,
     });

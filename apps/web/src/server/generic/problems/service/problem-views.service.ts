@@ -1,6 +1,4 @@
 import { amount } from "@cubby/schemas/codec";
-import { entitySchema, type Entity } from "@cubby/schemas/entity";
-import { imageListFiltersSchema } from "@cubby/schemas/image";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   ProblemKey,
@@ -22,7 +20,6 @@ import {
   listEntities,
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
-import type { ListReadRow } from "~/entity/model/list-read-fields";
 import {
   type ViewProblemDeclaration,
   viewProblemDeclarations,
@@ -42,56 +39,14 @@ import { validateCompleteProblemRegistry } from "~/entity/problems/problem-regis
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
-  expenseList,
-  expenseListRead,
-} from "~/server/domains/expense/repo/lookup";
-import {
-  listFinancialTransactions,
-  listFinancialTransactionsRead,
-} from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { imageList, imageListRead } from "~/server/domains/image/repo/image";
-import {
-  ingredientList,
-  ingredientListRead,
-} from "~/server/domains/ingredient/repo/search";
-import {
-  inventoryentryList,
-  inventoryentryListRead,
-} from "~/server/domains/inventory/repo/crud";
-import {
-  locationList,
-  locationListRead,
-} from "~/server/domains/location/repo/crud";
-import { mealList, mealListRead } from "~/server/domains/meal/repo/crud";
-import {
   getProductConversionCoverageFreshness,
   type ProductConversionCoverageFreshness,
 } from "~/server/domains/product/repo/conversion-coverage";
-import {
-  productList,
-  listProductsRead,
-} from "~/server/domains/product/repo/crud";
-import {
-  projectList,
-  projectListRead,
-} from "~/server/domains/project/repo/lookup";
-import {
-  purchaseList,
-  purchaseListRead,
-} from "~/server/domains/purchase/repo/purchase";
-import { recipeList } from "~/server/domains/recipe/repo/crud";
-import { taskList, taskListRead } from "~/server/domains/task/repo/lookup";
-import {
-  vendorList,
-  vendorListRead,
-} from "~/server/domains/vendor/repo/vendor";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import { projectAttention } from "~/server/domains/project/repo/lookup";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
-import {
-  type DiagnosticRunOptions,
-  diagnosticAdapters,
-} from "~/server/generic/problems/service/problem-diagnostics.service";
+import { diagnosticAdapters } from "~/server/generic/problems/service/problem-diagnostics.service";
 import {
   executeProblem,
   PROBLEM_SAMPLE_SIZE as SAMPLE_SIZE,
@@ -127,36 +82,6 @@ import { traceAllBounded } from "~/server/observability/tracing";
  * `totals`, not `rows.length`. That is what `sectionTotals` is for.
  */
 
-/**
- * Server adapters for the Problem read seam. The declaration registry remains
- * data-only; these wrappers localize each repo's concrete filter type instead
- * of erasing thirteen incompatible functions into one cast.
- */
-type EntityReadKind = "sample" | "count";
-type EntityReadAdapter = {
-  selected?: (
-    db: Database,
-    filters: FilterAssembly,
-    sorts: SortParams[],
-    pagination: { pageIndex: number; pageSize: number },
-    projection: Extract<ListProjection, { kind: "selected" }>,
-    prepared?: DiagnosticRunOptions,
-  ) => Promise<{ data: ListReadRow[]; count: number }>;
-  read: (
-    db: Database,
-    filters: FilterAssembly,
-    sorts: SortParams[],
-    pagination: { pageIndex: number; pageSize: number },
-    kind: EntityReadKind,
-  ) => Promise<{ data: ListRow[]; count: number }>;
-  ids?: (
-    db: Database,
-    filters: FilterAssembly,
-    sorts: SortParams[],
-    pagination: { pageIndex: number; pageSize: number },
-  ) => Promise<{ ids: string[]; hasMore: boolean }>;
-};
-
 const parsedFiltersFor = <E extends ListEntity>(
   entity: E,
   filters: FilterAssembly,
@@ -166,261 +91,66 @@ const parsedFiltersFor = <E extends ListEntity>(
     filters: compileProblemFilters(entity, filters),
   }).filters;
 
-const ENTITY_READERS = {
-  expense: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      expenseListRead(
-        db,
-        parsedFiltersFor("expense", filters),
-        sorts,
-        pagination,
-        projection,
-        "sample",
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      expenseList(
-        db,
-        parsedFiltersFor("expense", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  financialTransaction: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      listFinancialTransactionsRead(
-        db,
-        parsedFiltersFor("financialTransaction", filters),
-        sorts,
-        pagination,
-        "sample",
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      listFinancialTransactions(
-        db,
-        parsedFiltersFor("financialTransaction", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  image: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      imageListRead(
-        db,
-        imageListFiltersSchema.parse(compileProblemFilters("image", filters)),
-        sorts,
-        pagination,
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      imageList(
-        db,
-        imageListFiltersSchema.parse(compileProblemFilters("image", filters)),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  ingredient: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      ingredientListRead(
-        db,
-        parsedFiltersFor("ingredient", filters),
-        sorts,
-        pagination,
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      ingredientList(
-        db,
-        parsedFiltersFor("ingredient", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-    ids: async (db, filters, sorts, pagination) => {
-      const result = await ingredientList(
-        db,
-        parsedFiltersFor("ingredient", filters),
-        sorts,
-        pagination,
-        "ids",
-      );
-      return {
-        ids: result.data.map((row) => row.id),
-        hasMore: result.hasMore,
-      };
-    },
-  },
-  inventory: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      inventoryentryListRead(
-        db,
-        parsedFiltersFor("inventory", filters),
-        sorts,
-        pagination,
-        projection,
-        "sample",
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      inventoryentryList(
-        db,
-        parsedFiltersFor("inventory", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  location: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      locationListRead(
-        db,
-        parsedFiltersFor("location", filters),
-        sorts,
-        pagination,
-        projection,
-        "sample",
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      locationList(
-        db,
-        parsedFiltersFor("location", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  meal: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      mealListRead(
-        db,
-        parsedFiltersFor("meal", filters),
-        sorts,
-        pagination,
-        "sample",
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      mealList(db, parsedFiltersFor("meal", filters), sorts, pagination, kind),
-  },
-  product: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      listProductsRead(
-        db,
-        parsedFiltersFor("product", filters),
-        sorts,
-        pagination,
-        "sample",
-        undefined,
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      productList(
-        db,
-        parsedFiltersFor("product", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  project: {
-    selected: (db, filters, sorts, pagination, projection, prepared) =>
-      projectListRead(
-        db,
-        parsedFiltersFor("project", filters),
-        sorts,
-        pagination,
-        projection,
-        "sample",
-        { attentionItems: prepared?.attentionItems },
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      projectList(
-        db,
-        parsedFiltersFor("project", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  purchase: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      purchaseListRead(
-        db,
-        parsedFiltersFor("purchase", filters),
-        sorts,
-        pagination,
-        "sample",
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      purchaseList(
-        db,
-        parsedFiltersFor("purchase", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  recipe: {
-    read: (db, filters, sorts, pagination, kind) =>
-      recipeList(
-        db,
-        parsedFiltersFor("recipe", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-  task: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      taskListRead(
-        db,
-        parsedFiltersFor("task", filters),
-        sorts,
-        pagination,
-        projection,
-        "sample",
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      taskList(db, parsedFiltersFor("task", filters), sorts, pagination, kind),
-  },
-  vendor: {
-    selected: (db, filters, sorts, pagination, projection) =>
-      vendorListRead(
-        db,
-        parsedFiltersFor("vendor", filters),
-        sorts,
-        pagination,
-        "sample",
-        projection,
-      ),
-    read: (db, filters, sorts, pagination, kind) =>
-      vendorList(
-        db,
-        parsedFiltersFor("vendor", filters),
-        sorts,
-        pagination,
-        kind,
-      ),
-  },
-} satisfies Partial<Record<Entity, EntityReadAdapter>>;
+type EntityRead = {
+  intent: "sample" | "count" | "ids";
+  sorts: SortParams[];
+  pagination: { pageIndex: number; pageSize: number };
+  fields?: readonly string[];
+  diagnostic?: ProblemRunOptions["diagnostic"];
+};
 
-type ReaderEntity = keyof typeof ENTITY_READERS;
-const isReaderEntity = (value: string): value is ReaderEntity =>
-  entitySchema.safeParse(value).success && Object.hasOwn(ENTITY_READERS, value);
-const entityReaderFor = (entity: Entity): EntityReadAdapter | undefined =>
-  isReaderEntity(entity) ? ENTITY_READERS[entity] : undefined;
+/**
+ * Runs a view-backed Problem through the entity's own list scaffold, so the
+ * Problem and the list share one read.
+ */
+const readEntityProblem = async (
+  db: Database,
+  source: EntityProblemSource,
+  { intent, sorts, pagination, fields, diagnostic }: EntityRead,
+) => {
+  const entity = listEntities.find((entity) => entity === source.entity);
+  const scaffold = kernelScaffold(source.entity);
+  if (!entity || !scaffold)
+    throw new Error(`No list scaffold for entity "${source.entity}"`);
+  const request = {
+    filters: parsedFiltersFor(entity, source.filters),
+    sorts,
+    pagination,
+    readIntent: intent === "ids" ? "page" : intent,
+    projection:
+      intent === "ids"
+        ? ["id"]
+        : fields && selectedListProjection(entity, fields),
+  } as const;
+  const seeds =
+    source.entity === "project" && diagnostic?.attentionItems
+      ? [[projectAttention, diagnostic.attentionItems] as const]
+      : [];
+  const context = await scaffold.context(db, request, seeds);
+  const page = await scaffold.read(db, request, { context });
+  return fields
+    ? { ...page, data: selectListReadRows(entity, page.data, fields) }
+    : page;
+};
 
 const isDiagnosticKey = (value: string): value is DiagnosticKey =>
   Object.hasOwn(diagnosticAdapters, value);
 
-validateCompleteProblemRegistry(problemQueryDeclarations(), {
-  listEntities: new Set(Object.keys(ENTITY_READERS).filter(isReaderEntity)),
-  diagnostics: new Set(Object.keys(diagnosticAdapters).filter(isDiagnosticKey)),
-});
+// Validated on first use: the scaffolds come from the kernel bindings, which
+// import this module's callers.
+let registryValidated = false;
+const validateRegistry = () => {
+  if (registryValidated) return;
+  validateCompleteProblemRegistry(problemQueryDeclarations(), {
+    listEntities: new Set(
+      listEntities.filter((entity) => kernelScaffold(entity)),
+    ),
+    diagnostics: new Set(
+      Object.keys(diagnosticAdapters).filter(isDiagnosticKey),
+    ),
+  });
+  registryValidated = true;
+};
 
 const toSortParams = (
   sort: readonly { id: string; desc: boolean }[] | undefined,
@@ -622,41 +352,18 @@ export const executeEntityProblem = async (
   if (definition.source.kind !== "entity")
     throw new Error(`No entity Problem declares "${key}"`);
   const source = definition.source;
-  const reader = entityReaderFor(source.entity);
-  if (!reader) {
-    throw new Error(
-      `No list function registered for entity "${source.entity}"`,
-    );
-  }
+  validateRegistry();
   const pagination = {
     pageIndex: options.pageIndex ?? 0,
     pageSize: options.sampleSize ?? SAMPLE_SIZE,
   };
-  const fields = options.mode === "count" ? undefined : options.fields;
-  const entity = listEntities.find((entity) => entity === source.entity);
-  const page = fields
-    ? await (async () => {
-        if (!entity || !reader.selected)
-          throw new Error(
-            `No selected list reader registered for ${source.entity}`,
-          );
-        const page = await reader.selected(
-          db,
-          source.filters,
-          toSortParams(source.sort),
-          pagination,
-          selectedListProjection(entity, fields),
-          options.diagnostic,
-        );
-        return { ...page, data: selectListReadRows(entity, page.data, fields) };
-      })()
-    : await reader.read(
-        db,
-        source.filters,
-        toSortParams(source.sort),
-        pagination,
-        options.mode === "count" ? "count" : "sample",
-      );
+  const page = await readEntityProblem(db, source, {
+    intent: options.mode === "count" ? "count" : "sample",
+    sorts: toSortParams(source.sort),
+    pagination,
+    fields: options.mode === "count" ? undefined : options.fields,
+    diagnostic: options.diagnostic,
+  });
   const projection =
     options.mode !== "count" && usesConversionCoverageProjection(key)
       ? (options.projectionFreshness ??
@@ -861,17 +568,6 @@ export const findAllViewProblemIds = async (
   key: ProblemKey,
 ): Promise<string[]> => {
   const source = entityProblemForKey(key);
-  const reader = entityReaderFor(source.entity);
-  if (!reader) {
-    throw new Error(
-      `No list function registered for entity "${source.entity}"`,
-    );
-  }
-  if (!reader.ids) {
-    throw new Error(
-      `Entity "${source.entity}" has no identity projection for Problem "${key}"`,
-    );
-  }
 
   // Paged rather than one huge fetch: these sections converge to zero, so the
   // loop almost always runs once, and it can't be defeated by a population that
@@ -879,12 +575,15 @@ export const findAllViewProblemIds = async (
   const PAGE = 500;
   const ids: string[] = [];
   for (let pageIndex = 0; ; pageIndex++) {
-    const { ids: pageIds, hasMore } = await reader.ids(
-      db,
-      source.filters,
-      toSortParams(source.sort),
-      { pageIndex, pageSize: PAGE },
+    const page = await readEntityProblem(db, source, {
+      intent: "ids",
+      sorts: toSortParams(source.sort),
+      pagination: { pageIndex, pageSize: PAGE },
+    });
+    const pageIds = page.data.map(
+      (row) => z.object({ id: z.string() }).parse(row).id,
     );
+    const hasMore = (pageIndex + 1) * PAGE < page.count;
     ids.push(...pageIds);
     if (!hasMore) return ids;
   }
@@ -901,18 +600,10 @@ export const countViewProblem = async (
   key: ProblemKey,
 ): Promise<number> => {
   const source = entityProblemForKey(key);
-  const reader = entityReaderFor(source.entity);
-  if (!reader) {
-    throw new Error(
-      `No list function registered for entity "${source.entity}"`,
-    );
-  }
-  const { count } = await reader.read(
-    db,
-    source.filters,
-    [],
-    { pageIndex: 0, pageSize: SAMPLE_SIZE },
-    "count",
-  );
+  const { count } = await readEntityProblem(db, source, {
+    intent: "count",
+    sorts: [],
+    pagination: { pageIndex: 0, pageSize: SAMPLE_SIZE },
+  });
   return count;
 };

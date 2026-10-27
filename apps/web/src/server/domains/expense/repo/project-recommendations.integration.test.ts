@@ -11,7 +11,7 @@ import { expense } from "~/server/db/schema";
 import { snapshotJson } from "~/server/domains/connection/repo/connection-evidence";
 import {
   deleteExpenses,
-  getExpenseByShortcode,
+  readExpense,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
@@ -67,9 +67,9 @@ describe("expense project recommendation evidence", () => {
     ]);
     expect(group.proposals[0]?.sameTradeCount).toBe(0);
     expect(group.proposals[0]?.supportingExpenses).toEqual([]);
-    expect(
-      (await getExpenseByShortcode(ctx.db, source.output.id))?.projectId,
-    ).toBe(child.output.id);
+    expect((await readExpense(ctx.db, source.output.id))?.projectId).toBe(
+      child.output.id,
+    );
   });
 
   it("ranks exact-product support after trade counts, excludes deleted history, and accepts through the normal update", async () => {
@@ -146,9 +146,9 @@ describe("expense project recommendation evidence", () => {
       { projectId: preferred.output.id },
       ctx.actor,
     );
-    expect(
-      (await getExpenseByShortcode(ctx.db, source.output.id))?.projectId,
-    ).toBe(preferred.output.id);
+    expect((await readExpense(ctx.db, source.output.id))?.projectId).toBe(
+      preferred.output.id,
+    );
     const after = await getEntityRecommendations(ctx.db, {
       entityKind: "expense",
       entityId: source.output.id,

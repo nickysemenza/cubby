@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -12,26 +11,20 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerSourceClaimOut,
   LedgerTransferCreateInput,
-  LedgerTransferFilters,
   LedgerTransferUpdateData,
 } from "@cubby/schemas/ledger-transfer";
-import {
-  type RawLedgerTransferOut,
-  rawLedgerTransferOut,
-} from "@cubby/schemas/ledger-transfer-raw-read";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { rawLedgerTransferOut } from "@cubby/schemas/ledger-transfer-raw-read";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
   notDeleted,
-  unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
-import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   financialAccount,
   financialTransaction,
@@ -49,21 +42,11 @@ import {
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
-import {
-  listGroupFields,
-  type ListReadOptions,
-} from "~/server/generic/list/repo/list-projection";
-import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -84,50 +67,24 @@ const LEDGER_TRANSFER_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"ledgerTransfer", OperationDisposition>;
 
-const columns = {
-  id: ledgerTransfer.id,
-  shortcode: ledgerTransfer.shortcode,
-  fromPartyId: ledgerTransfer.fromPartyId,
-  toPartyId: ledgerTransfer.toPartyId,
-  // includes-deleted: `fromPartyName` is the entity's non-null titleField and
-  // `toPartyName` mirrors it; the `deletedAt IS NULL` filter these used to
-  // carry made a soft-deleted party's name read as SQL NULL into a
-  // `z.string()` read schema. `fromPartyShortcode`/`toPartyShortcode` below
-  // already resolve across a soft-deleted party for the same reason.
-  fromPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
-  toPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
-  fromPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
-  toPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
-  fromPartyKind: sql<
-    "member" | "guest" | "household"
-  >`(SELECT kind FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
-  toPartyKind: sql<
-    "member" | "guest" | "household"
-  >`(SELECT kind FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
-  amount: ledgerTransfer.amount,
-  date: ledgerTransfer.date,
-  notes: ledgerTransfer.notes,
-  createdAt: ledgerTransfer.createdAt,
-  updatedAt: ledgerTransfer.updatedAt,
-  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- source, reconciliation and note are JSON property names, not vocabulary values.
-  sourceClaims: sql<LedgerSourceClaimRow[]>`COALESCE((
-    SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
-      'source', c.source,
-      'sourceKey', c."sourceKey", 'sourceKeyVersion', c."sourceKeyVersion",
-      'normalizedEvidence', c."normalizedEvidence", 'reconciliation',
-      CASE WHEN c."reconciliationDecision" = 'amounts_match'
-        THEN jsonb_build_object('decision', c."reconciliationDecision")
-        ELSE jsonb_build_object('decision', c."reconciliationDecision", 'note', c."reconciliationNote") END,
-      'targetAmountAtClaim', c."targetAmountAtClaim", 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
-    FROM "LedgerSourceClaim" c
-    WHERE c."ledgerTransferId" = "LedgerTransfer".id AND c."deletedAt" IS NULL
-  ), '[]'::jsonb)`,
-  evidenceTransactionIds: sql<string[]>`COALESCE((
-    SELECT jsonb_agg(ft.shortcode ORDER BY ft.amount DESC, ft.shortcode)
-    FROM "FinancialTransaction" ft
-    WHERE ft."ledgerTransferId" = "LedgerTransfer".id AND ft."deletedAt" IS NULL
-  ), '[]'::jsonb)`,
-} as const;
+// oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- source, reconciliation and note are JSON property names, not vocabulary values.
+const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
+  SELECT jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+    'source', c.source,
+    'sourceKey', c."sourceKey", 'sourceKeyVersion', c."sourceKeyVersion",
+    'normalizedEvidence', c."normalizedEvidence", 'reconciliation',
+    CASE WHEN c."reconciliationDecision" = 'amounts_match'
+      THEN jsonb_build_object('decision', c."reconciliationDecision")
+      ELSE jsonb_build_object('decision', c."reconciliationDecision", 'note', c."reconciliationNote") END,
+    'targetAmountAtClaim', c."targetAmountAtClaim", 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
+  FROM "LedgerSourceClaim" c
+  WHERE c."ledgerTransferId" = "LedgerTransfer".id AND c."deletedAt" IS NULL
+), '[]'::jsonb)`;
+const transferEvidenceIdsSql = sql<string[]>`COALESCE((
+  SELECT jsonb_agg(ft.shortcode ORDER BY ft.amount DESC, ft.shortcode)
+  FROM "FinancialTransaction" ft
+  WHERE ft."ledgerTransferId" = "LedgerTransfer".id AND ft."deletedAt" IS NULL
+), '[]'::jsonb)`;
 
 type LedgerSourceClaimRow = Omit<
   LedgerSourceClaimOut,
@@ -137,146 +94,86 @@ type LedgerSourceClaimRow = Omit<
   updatedAt: string;
 };
 
-const selectTransfers = (db: Database | DrizzleTransaction) =>
-  unwrapDb(db).select(columns).from(ledgerTransfer);
-type LedgerTransferRow = Awaited<ReturnType<typeof selectTransfers>>[number];
+const partyKind = z.enum(["member", "guest", "household"]);
 
-const classificationFor = (row: LedgerTransferRow) =>
-  row.fromPartyShortcode === row.toPartyShortcode
-    ? "internal_move"
-    : row.toPartyKind === "household"
-      ? "contribution"
-      : row.fromPartyKind === "household"
-        ? "household_distribution"
-        : "reimbursement";
-
-const toOut = (
-  row: LedgerTransferRow,
-  dataQuality: DataQuality,
-): RawLedgerTransferOut =>
-  rawLedgerTransferOut.parse({
-    id: parseShortcodeFor("ledgerTransfer", row.shortcode),
-    fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode),
-    toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode),
-    fromPartyName: row.fromPartyName,
-    toPartyName: row.toPartyName,
-    amount: row.amount,
-    date: row.date,
-    notes: row.notes,
-    classification: classificationFor(row),
-    sourceClaims: row.sourceClaims.map((claim) => {
-      return {
-        ...claim,
-        createdAt: new Date(claim.createdAt),
-        updatedAt: new Date(claim.updatedAt),
-      };
-    }),
-    evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>
-      parseShortcodeFor("financialTransaction", id),
-    ),
-    dataQuality,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  });
-
-const hydrate = async (
-  db: Database | DrizzleTransaction,
-  rows: LedgerTransferRow[],
-): Promise<RawLedgerTransferOut[]> => {
-  const dataQualities = await loadDataQualities(
-    db,
-    "ledgerTransfer",
-    rows.map((row) => row.id),
-  );
-  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-  return rows.map((row) => toOut(row, dataQualities.get(row.id)!));
-};
-
-const selectTransfersRead = (
-  db: Database | DrizzleTransaction,
-  projection: ListProjection,
-) => {
-  const {
-    fromPartyShortcode,
-    toPartyShortcode,
-    toPartyName,
-    fromPartyKind,
-    toPartyKind,
-    sourceClaims,
-    evidenceTransactionIds,
-    ...core
-  } = columns;
-  return unwrapDb(db)
-    .select({
-      ...core,
-      ...listGroupFields(projection, "relations", () => ({
-        fromPartyShortcode,
-        toPartyShortcode,
-        toPartyName,
-        sourceClaims,
-        evidenceTransactionIds,
-      })),
-      ...listGroupFields(projection, "derived", () => ({
-        fromPartyKind,
-        toPartyKind,
-      })),
-    })
-    .from(ledgerTransfer);
-};
-const transferRead = {
-  bindings: (bind) => [
-    bind(
-      rawLedgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
-      (row) => ({
-        fromPartyId: parseShortcodeFor("ledgerParty", row.fromPartyShortcode!),
-        toPartyId: parseShortcodeFor("ledgerParty", row.toPartyShortcode!),
-      }),
-    ),
-    bind(rawLedgerTransferOut.pick({ sourceClaims: true }), (row) => {
-      if (row.sourceClaims === undefined)
-        throw new Error("Ledger transfer source claims were not loaded");
-      return {
-        sourceClaims: row.sourceClaims.map((claim) => ({
-          ...claim,
-          createdAt: new Date(claim.createdAt),
-          updatedAt: new Date(claim.updatedAt),
-        })),
-      };
-    }),
-    bind(rawLedgerTransferOut.pick({ evidenceTransactionIds: true }), (row) => {
-      if (row.evidenceTransactionIds === undefined)
-        throw new Error("Ledger transfer evidence was not loaded");
-      return {
-        evidenceTransactionIds: row.evidenceTransactionIds.map((id) =>
-          parseShortcodeFor("financialTransaction", id),
+export const ledgerTransferScaffold = listScaffold(
+  "ledgerTransfer",
+  ledgerTransfer,
+  {
+    read: {
+      title: sql`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
+      // Keys outside the read schema are helper columns the bindings read.
+      columns: {
+        // includes-deleted: `fromPartyName` is the entity's non-null titleField
+        // and `toPartyName` mirrors it; a soft-deleted party's name must not
+        // read as SQL NULL into a `z.string()` read schema. The party
+        // shortcodes resolve across a soft-deleted party for the same reason.
+        fromPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
+        toPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
+        sourceClaims: transferSourceClaimsSql,
+        evidenceTransactionIds: transferEvidenceIdsSql,
+        fromPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
+        toPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
+        fromPartyKind: sql<string>`(SELECT kind FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
+        toPartyKind: sql<string>`(SELECT kind FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
+      },
+      bindings: (bind) => [
+        bind(
+          rawLedgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
+          (row) => ({
+            fromPartyId: parseShortcodeFor(
+              "ledgerParty",
+              z.string().parse(row.fromPartyShortcode),
+            ),
+            toPartyId: parseShortcodeFor(
+              "ledgerParty",
+              z.string().parse(row.toPartyShortcode),
+            ),
+          }),
         ),
-      };
-    }),
-    bind(rawLedgerTransferOut.pick({ classification: true }), (row) => ({
-      classification: rawLedgerTransferOut.shape.classification.parse(
-        row.fromPartyId === row.toPartyId
-          ? "internal_move"
-          : row.toPartyKind === "household"
-            ? "contribution"
-            : row.fromPartyKind === "household"
-              ? "household_distribution"
-              : "reimbursement",
-      ),
-    })),
-  ],
-} satisfies ListReadOptions<
-  Awaited<ReturnType<typeof selectTransfersRead>>[number]
->;
-
-const getById = async (
-  db: Database | DrizzleTransaction,
-  id: LedgerTransferId,
-): Promise<LedgerTransferRow | undefined> => {
-  const [row] = await selectTransfers(db)
-    .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)))
-    .limit(1);
-  return row;
-};
+        // The aggregate carries claim timestamps as JSON strings.
+        bind(rawLedgerTransferOut.pick({ sourceClaims: true }), (row) => ({
+          sourceClaims: rawLedgerTransferOut.shape.sourceClaims.parse(
+            z
+              .array(
+                z.looseObject({ createdAt: z.string(), updatedAt: z.string() }),
+              )
+              .parse(row.sourceClaims)
+              .map((claim) => ({
+                ...claim,
+                createdAt: new Date(claim.createdAt),
+                updatedAt: new Date(claim.updatedAt),
+              })),
+          ),
+        })),
+        bind(
+          rawLedgerTransferOut.pick({ evidenceTransactionIds: true }),
+          (row) => ({
+            evidenceTransactionIds: z
+              .array(z.string())
+              .parse(row.evidenceTransactionIds)
+              .map((id) => parseShortcodeFor("financialTransaction", id)),
+          }),
+        ),
+        bind(rawLedgerTransferOut.pick({ classification: true }), (row) => {
+          const toKind = partyKind.parse(row.toPartyKind);
+          const fromKind = partyKind.parse(row.fromPartyKind);
+          return {
+            classification: rawLedgerTransferOut.shape.classification.parse(
+              row.fromPartyId === row.toPartyId
+                ? "internal_move"
+                : toKind === "household"
+                  ? "contribution"
+                  : fromKind === "household"
+                    ? "household_distribution"
+                    : "reimbursement",
+            ),
+          };
+        }),
+      ],
+    },
+  },
+);
 
 /** Per-update work resolved before the audited column update: see `relations`. */
 type LedgerTransferChange = {
@@ -290,8 +187,8 @@ type LedgerTransferChange = {
 const crud = createEntityCrud({
   table: ledgerTransfer,
   entity: "ledgerTransfer",
-  fetchById: getById,
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  scaffold: ledgerTransferScaffold,
+  output: rawLedgerTransferOut,
   toUpdate: (change: LedgerTransferChange) =>
     buildPartialUpdateValues({ ...change.columns, ...change.parties }),
   auditUpdateFields: [...entityFieldModels.ledgerTransfer.audit],
@@ -301,8 +198,8 @@ const crud = createEntityCrud({
     read: async (tx, id) => {
       const [row] = await tx
         .select({
-          sourceClaims: columns.sourceClaims,
-          evidenceTransactionIds: columns.evidenceTransactionIds,
+          sourceClaims: transferSourceClaimsSql,
+          evidenceTransactionIds: transferEvidenceIdsSql,
         })
         .from(ledgerTransfer)
         .where(eq(ledgerTransfer.id, id));
@@ -323,7 +220,8 @@ const crud = createEntityCrud({
     },
   },
 });
-export const getLedgerTransferByShortcode = crud.getByShortcode;
+/** One live Ledger Transfer by public code, or null. */
+export const readLedgerTransfer = crud.getByShortcode;
 
 async function resolvePartyIds(
   tx: DrizzleTransaction,
@@ -568,7 +466,11 @@ export const updateLedgerTransfer = defineMutationWriter({
     const id = await resolveOrThrow(db, "ledgerTransfer", shortcode);
     await withTransaction(db, async (tx) => {
       const [locked] = await tx
-        .select({ id: ledgerTransfer.id })
+        .select({
+          id: ledgerTransfer.id,
+          fromPartyId: ledgerTransfer.fromPartyId,
+          toPartyId: ledgerTransfer.toPartyId,
+        })
         .from(ledgerTransfer)
         .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)))
         .for("update")
@@ -578,7 +480,7 @@ export const updateLedgerTransfer = defineMutationWriter({
           "LEDGER_TRANSFER_NOT_FOUND",
           `Ledger transfer not found: ${shortcode}`,
         );
-      const before = await getById(tx, id);
+      const before = await crud.getByIDOrNull(tx, id);
       if (!before)
         throw createAppError(
           "LEDGER_TRANSFER_NOT_FOUND",
@@ -593,14 +495,10 @@ export const updateLedgerTransfer = defineMutationWriter({
       );
       const parties =
         data.fromPartyId === undefined && data.toPartyId === undefined
-          ? { fromPartyId: before.fromPartyId, toPartyId: before.toPartyId }
+          ? { fromPartyId: locked.fromPartyId, toPartyId: locked.toPartyId }
           : await resolvePartyIds(tx, {
-              fromPartyId:
-                data.fromPartyId ??
-                parseShortcodeFor("ledgerParty", before.fromPartyShortcode),
-              toPartyId:
-                data.toPartyId ??
-                parseShortcodeFor("ledgerParty", before.toPartyShortcode),
+              fromPartyId: data.fromPartyId ?? before.fromPartyId,
+              toPartyId: data.toPartyId ?? before.toPartyId,
             });
       const amount = data.amount ?? before.amount;
       // Party shortcodes are resolved into `parties` above; the columns carry ids.
@@ -640,44 +538,9 @@ export const updateLedgerTransfer = defineMutationWriter({
   },
 });
 
-const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer);
-
-export const buildLedgerTransferWhere = (filters: LedgerTransferFilters) =>
-  ledgerTransferScaffold.where(filters);
-
-export const listLedgerTransfersRead = async (
-  db: Database,
-  filters: LedgerTransferFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection = { kind: "full" },
-  readIntent: ListReadIntent = "page",
-) =>
-  ledgerTransferScaffold.read(
-    db,
-    { filters, sorts, pagination, projection, readIntent },
-    {
-      where: buildLedgerTransferWhere(filters),
-      select: (page) =>
-        selectTransfersRead(db, projection)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      read: transferRead,
-    },
-  );
-
-const listLedgerTransfers = completeListReader(
-  rawLedgerTransferOut,
-  listLedgerTransfersRead,
-);
-
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
-  get: onDb(getLedgerTransferByShortcode),
-  list: listOn(listLedgerTransfers),
-  listRead: listReadOn(listLedgerTransfersRead),
+  scaffold: ledgerTransferScaffold,
   create: asActor(createLedgerTransfer),
   update: asActor(updateLedgerTransfer),
 });

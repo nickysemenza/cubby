@@ -15,10 +15,10 @@ import {
 import { job, jobInvalidationCapture } from "~/server/db/schema";
 import {
   createLocation,
-  getLocationById,
+  readLocationById,
   updateLocationAiDescription,
 } from "~/server/domains/location/repo/crud";
-import { getPlantByShortcode } from "~/server/domains/plant/repo/plant";
+import { readPlant } from "~/server/domains/plant/repo/plant";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -181,8 +181,7 @@ describe("repository writes publish after their commit", () => {
       verdictsAtPublish.push(
         await Promise.all(
           [first, second].map(
-            async (plant) =>
-              (await getPlantByShortcode(ctx.db, plant.id))?.verdict,
+            async (plant) => (await readPlant(ctx.db, plant.id))?.verdict,
           ),
         ),
       );
@@ -230,7 +229,7 @@ describe("repository writes publish after their commit", () => {
     const seenAtRefresh: { images: number; aiDescription: string | null }[] =
       [];
     recordingQueue(async () => {
-      const location = await getLocationById(ctx.db, locationId);
+      const location = await readLocationById(ctx.db, locationId);
       seenAtRefresh.push({
         images: location.images.length,
         aiDescription: location.aiDescription,
@@ -246,7 +245,7 @@ describe("repository writes publish after their commit", () => {
 
     if (updated.action !== "update") throw new Error("expected update");
     expect(updated.item).toMatchObject({ id: created.id });
-    expect(await getLocationById(ctx.db, locationId)).toMatchObject({
+    expect(await readLocationById(ctx.db, locationId)).toMatchObject({
       aiDescription: null,
       images: [],
     });

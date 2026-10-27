@@ -1,6 +1,6 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
-import { entityRefKey, entitySchema } from "@cubby/schemas/entity";
-import { gardenEntryKind } from "@cubby/schemas/garden-fields";
+import { entityRefKey } from "@cubby/schemas/entity";
+import { entityMembership } from "@cubby/schemas/entity-manifest";
 import {
   embeddableEntities,
   type SearchableEntity,
@@ -15,9 +15,6 @@ import { z } from "zod";
 import { normalizeSearchText } from "~/lib/search-normalization";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
-import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
 import {
   fanoutTarget,
@@ -30,8 +27,6 @@ import {
   uuidArrayParam,
   withTransactionOn,
 } from "~/server/db/helpers";
-import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
-import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
@@ -72,7 +67,7 @@ async function loadDirectImageSearchText(
     refs.map((ref) => sql`(${ref.entityKind}::text, ${ref.entityId}::uuid)`),
     sql`, `,
   );
-  const searchable = new Set<string>(searchableEntities);
+  const searchable = entityMembership(searchableEntities);
   // Every direct attachment — gallery photo, cookbook cover, vendor logo — is
   // one EntityAttachment row; `refs` already limits it to searchable owners.
   const branches = [
@@ -160,7 +155,7 @@ type SearchSourcePage = {
   createdBefore?: string;
 };
 
-function searchDocumentSourceSql(
+async function searchDocumentSourceSql(
   entityKinds: SearchableEntity[],
   entityIds?: readonly string[],
   page?: SearchSourcePage,
@@ -195,144 +190,15 @@ function searchDocumentSourceSql(
   const bounded = (column: SQL) =>
     createdBefore ? sql`${column} <= ${createdBefore}::timestamp` : sql`TRUE`;
 
-  const expenseNameIds = entityIds
-    ? uuidArrayParam(entityIds)
-    : page?.pageSize
-      ? sql`ARRAY(SELECT name_source.id FROM "Expense" name_source
-      WHERE name_source."deletedAt" IS NULL AND ${bounded(sql`name_source."createdAt"`)}
-      ${page.cursor ? sql`AND (${entitySchema.enum.expense}::text, name_source.id) > (${page.cursor.entityKind}, ${page.cursor.entityId}::uuid)` : sql``}
-      ORDER BY name_source.id LIMIT ${page.pageSize})`
-      : undefined;
-
-  // Exhaustive builders make newly searchable kinds a compiler obligation;
-  // a missing source must not silently become a permanently missing document.
-  const branches = {
-    image: () => sql`
-      SELECT 'image'::text AS "entityKind", i."id"::text AS "entityId", i."shortcode",
-        i.filename AS title, NULL::text AS subtitle, 'image'::text AS "typeHint",
-        ARRAY[]::text[] AS aliases, ARRAY[i."contentType"]::text[] AS keywords
-      FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)} AND ${bounded(sql`i."createdAt"`)}`,
-    product: () => sql`
-      SELECT 'product'::text AS "entityKind", p."id"::text AS "entityId", p."shortcode",
-        p."name" AS title, ${productBrandNameSql(sql`p."brandId"`)} AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
-        p."aliases" AS aliases,
-        COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
-                  WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
-                 ARRAY[]::text[]) || ARRAY[p."model", ${productBrandNameSql(sql`p."brandId"`)}]::text[] AS keywords
-      FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
-    recipe: () => sql`
-      SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
-      FROM "Recipe" r WHERE r."deletedAt" IS NULL AND 'recipe' IN (${types}) AND ${requested(sql`r."id"`)} AND ${bounded(sql`r."createdAt"`)}`,
-    ingredient: () => sql`
-      SELECT 'ingredient', i."id"::text, i."shortcode", i."name", NULL, NULL, i."aliases", ARRAY[]::text[]
-      FROM "Ingredient" i WHERE i."deletedAt" IS NULL AND i."recipeId" IS NULL AND 'ingredient' IN (${types}) AND ${requested(sql`i."id"`)} AND ${bounded(sql`i."createdAt"`)}`,
-    cookbook: () => sql`
-      SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
-      FROM "Cookbook" c WHERE c."deletedAt" IS NULL AND 'cookbook' IN (${types}) AND ${requested(sql`c."id"`)} AND ${bounded(sql`c."createdAt"`)}`,
-    location: () => sql`
-      SELECT 'location', l."id"::text, l."shortcode", l."name",
-        (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
-        l."type", l."aliases", ARRAY[l."type"]::text[]
-      FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)} AND ${bounded(sql`l."createdAt"`)}`,
-    inventory: () => sql`
-      SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", ${categorySummarySql(sql`p."categoryId"`)}->>'name', p."aliases",
-        ARRAY[l."name", l."type", ${productBrandNameSql(sql`p."brandId"`)}]::text[] ||
-        COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
-                  WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
-                 ARRAY[]::text[])
-      FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL
-      WHERE ie."deletedAt" IS NULL AND 'inventory' IN (${types}) AND ${requested(sql`ie."id"`)} AND ${bounded(sql`ie."createdAt"`)}`,
-    meal: () => sql`
-      SELECT 'meal', m."id"::text, m."shortcode", COALESCE(NULLIF(m."name", ''), m."date"::text), m."date"::text, NULL, ARRAY[]::text[], ARRAY[m."date"::text]::text[]
-      FROM "Meal" m WHERE m."deletedAt" IS NULL AND 'meal' IN (${types}) AND ${requested(sql`m."id"`)} AND ${bounded(sql`m."createdAt"`)}`,
-    project: () => sql`
-      SELECT 'project', p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveFieldSql("project", "locations", "p")}
-      FROM "Project" p WHERE p."deletedAt" IS NULL AND 'project' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
-    task: () => sql`
-      SELECT 'task', t."id"::text, t."shortcode", t."name", p."name", ${effectiveFieldSql("task", "trade", "t")}, ARRAY[]::text[], ARRAY[${effectiveFieldSql("task", "trade", "t")}, sp."name"]::text[]
-      FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveFieldSql("task", "projectId", "t")} AND p."deletedAt" IS NULL LEFT JOIN "Product" sp ON sp."id" = ${effectiveFieldSql("task", "subjectProductId", "t")} AND sp."deletedAt" IS NULL
-      WHERE t."deletedAt" IS NULL AND 'task' IN (${types}) AND ${requested(sql`t."id"`)} AND ${bounded(sql`t."createdAt"`)}`,
-    vendor: () => sql`
-      SELECT 'vendor', v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
-      FROM "Vendor" v WHERE v."deletedAt" IS NULL AND 'vendor' IN (${types}) AND ${requested(sql`v."id"`)} AND ${bounded(sql`v."createdAt"`)}`,
-    // An orderless Purchase with an unknown date still has its Vendor as a title.
-    purchase: () => sql`
-      SELECT 'purchase', pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), concat_ws(' · ', v."name", pu."date"::text)), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
-      FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND v."deletedAt" IS NULL
-      WHERE pu."deletedAt" IS NULL AND 'purchase' IN (${types}) AND ${requested(sql`pu."id"`)} AND ${bounded(sql`pu."createdAt"`)}`,
-    financialAccount: () => sql`
-      SELECT ${"financialAccount"}::text, fa."id"::text, fa."shortcode", fa."name", fa."identity"->>'kind', fa."identity"->>'kind', ARRAY[]::text[],
-        ARRAY(
-          SELECT term
-          FROM jsonb_array_elements(fa."sourceAliases") alias,
-            LATERAL unnest(ARRAY[alias->>'source', alias->>'alias', alias->>'externalAccountId']) term
-          WHERE term IS NOT NULL AND term <> ''
-        ) || ARRAY(
-          SELECT card->>'last4' FROM jsonb_array_elements(fa."cardNumbers") card
-        )
-      FROM "FinancialAccount" fa WHERE fa."deletedAt" IS NULL AND ${"financialAccount"}::text IN (${types}) AND ${requested(sql`fa."id"`)} AND ${bounded(sql`fa."createdAt"`)}`,
-    financialTransaction: () => sql`
-      SELECT 'financialTransaction', ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
-      FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
-      WHERE ft."deletedAt" IS NULL AND 'financialTransaction' IN (${types}) AND ${requested(sql`ft."id"`)} AND ${bounded(sql`ft."createdAt"`)}`,
-    expense: () => sql`
-      SELECT 'expense', e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = 'principal' THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType", e."notes"]::text[]
-      FROM "Expense" e
-      LEFT JOIN (${expenseDerivedReadSql("names", { expenseIds: expenseNameIds })}) names ON names."expenseId" = e."id"
-      WHERE e."deletedAt" IS NULL AND 'expense' IN (${types}) AND ${requested(sql`e."id"`)} AND ${bounded(sql`e."createdAt"`)}`,
-    wish: () => sql`
-      SELECT 'wish', w."id"::text, w."shortcode", w."name", w."notes", 'tool wishlist', ARRAY[]::text[], ARRAY['tool wishlist']::text[]
-      FROM "Wish" w WHERE w."deletedAt" IS NULL AND 'wish' IN (${types}) AND ${requested(sql`w."id"`)} AND ${bounded(sql`w."createdAt"`)}`,
-    // The crop label lives in static data, not SQL, so the title is the plant
-    // name and the crop key rides along as a search term.
-    plant: () => sql`
-      SELECT 'plant', p."id"::text, p."shortcode", p."name",
-        concat_ws(' · ', p."gardenGuideKey", p."verdict"), p."verdict",
-        ARRAY[]::text[], ARRAY[p."gardenGuideKey", p."latinName"]::text[]
-      FROM "Plant" p
-      WHERE p."deletedAt" IS NULL AND 'plant' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
-    // Title is the plant name (see `plant` above for why not its crop label).
-    planting: () => sql`
-      SELECT 'planting', pl."id"::text, pl."shortcode",
-        COALESCE(p."name", 'Unknown plant'),
-        concat_ws(' · ', pl."status", l."name"), pl."status",
-        ARRAY[]::text[], ARRAY[p."gardenGuideKey", l."name"]::text[]
-      FROM "Planting" pl
-      LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
-      LEFT JOIN "Location" l ON l."id" = pl."locationId" AND l."deletedAt" IS NULL
-      WHERE pl."deletedAt" IS NULL AND 'planting' IN (${types}) AND ${requested(sql`pl."id"`)} AND ${bounded(sql`pl."createdAt"`)}`,
-    // Title mirrors `gardenEntryDisplayName` (garden/index.ts): kind label ·
-    // observed date · location name. Subtitle is the comma-separated set of
-    // live linked planting display names.  The correlated aggregate keeps the
-    // source projection one row per GardenEntry even when an entry names many
-    // plantings.
-    gardenEntry: () => sql`
-      SELECT 'gardenEntry', ge."id"::text, ge."shortcode",
-        (CASE ge."kind" WHEN ${gardenEntryKind.enum.note} THEN 'Note' WHEN ${gardenEntryKind.enum.harvest} THEN 'Harvest' ELSE 'Move' END)
-          || ' · ' || to_char(ge."observedOn", 'YYYY-MM-DD') || ' · ' || l."name",
-        (SELECT string_agg(COALESCE(p."name", 'Unknown plant'), ', ' ORDER BY pl."shortcode")
-         FROM "EntityLink" gep
-         JOIN "Planting" pl ON pl."id" = gep."toEntityId" AND pl."deletedAt" IS NULL
-         LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND p."deletedAt" IS NULL
-         WHERE gep."fromEntityId" = ge."id" AND gep."deletedAt" IS NULL AND gep."kind" = 'gardenEntryPlanting'),
-        ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
-      FROM "GardenEntry" ge
-      JOIN "Location" l ON l."id" = ge."locationId" AND l."deletedAt" IS NULL
-      WHERE ge."deletedAt" IS NULL AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)} AND ${bounded(sql`ge."createdAt"`)}`,
-    sourceTransactionRecord: () => sql`
-      SELECT 'sourceTransactionRecord', r.id::text, r.shortcode,
-        COALESCE(NULLIF(r."rawDescription", ''), r.merchant, r."accountDescriptor"), r."accountDescriptor",
-        r.source, ARRAY[r."externalId"]::text[], ARRAY[r.merchant, r."sourceCategory", r.notes]::text[]
-      FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)} AND ${bounded(sql`r."createdAt"`)}`,
-    shipment: () => sql`
-      SELECT 'shipment', s.id::text, s.shortcode, s.name, s."trackingNumber",
-        s.purpose, ARRAY[]::text[], ARRAY[s.notes]::text[]
-      FROM "Shipment" s WHERE s."deletedAt" IS NULL AND 'shipment' IN (${types}) AND ${requested(sql`s.id`)} AND ${bounded(sql`s."createdAt"`)}`,
-    transactionImport: () => sql`
-      SELECT 'transactionImport', i.id::text, i.shortcode, i.label, i.fingerprint,
-        i.source, ARRAY[]::text[], ARRAY[i.notes]::text[]
-      FROM "TransactionImport" i WHERE i."deletedAt" IS NULL AND 'transactionImport' IN (${types}) AND ${requested(sql`i.id`)} AND ${bounded(sql`i."createdAt"`)}`,
-  } satisfies Record<SearchableEntity, () => SQL>;
+  const context = { types, requested, bounded, entityIds, page };
+  // Lazy: domain repositories import this module, and the scaffold registry
+  // imports every repository.
+  const { kernelScaffold } = await import("~/server/entity-kernel/scaffolds");
+  const ports = selectedKinds.map((kind) => {
+    const port = kernelScaffold(kind)?.search;
+    if (!port) throw new Error(`${kind} has no search read port`);
+    return port;
+  });
 
   // An empty typed arm owns the shared columns independently of the first
   // requested kind. Only requested source builders are constructed/planned.
@@ -341,7 +207,7 @@ function searchDocumentSourceSql(
     NULL::text AS "typeHint", ARRAY[]::text[] AS aliases,
     ARRAY[]::text[] AS keywords WHERE false`;
   const union = sql.join(
-    [header, ...selectedKinds.map((kind) => branches[kind]())],
+    [header, ...ports.map((port) => port.document(context))],
     sql` UNION ALL `,
   );
 
@@ -349,23 +215,11 @@ function searchDocumentSourceSql(
     ? sql`WHERE (source."entityKind", source."entityId"::uuid) > (${page.cursor.entityKind}, ${page.cursor.entityId}::uuid)`
     : sql``;
   const limit = page?.pageSize ? sql`LIMIT ${page.pageSize}` : sql``;
-  const locationPath = selectedKinds.includes("location")
-    ? sql`
-    WITH RECURSIVE location_path AS (
-      SELECT l.id AS "rootId", l.id, l."parentId", l.name, 0 AS depth
-      FROM "Location" l
-      WHERE 'location' IN (${types})
-        AND ${requested(sql`l."id"`)}
-        AND l."deletedAt" IS NULL
-      UNION ALL
-      SELECT child."rootId", parent.id, parent."parentId", parent.name, child.depth + 1
-      FROM "Location" parent
-      JOIN location_path child ON child."parentId" = parent.id
-      WHERE parent."deletedAt" IS NULL
-    )
-  `
-    : sql``;
-  return { locationPath, union, cursor, limit };
+  const sourcePrefix = sql.join(
+    ports.flatMap((port) => (port.prefix ? [port.prefix(context)] : [])),
+    sql` `,
+  );
+  return { sourcePrefix, union, cursor, limit };
 }
 
 /** One COUNT over the sources a repair pass pages, under the same cutoff. */
@@ -374,12 +228,12 @@ export async function countSearchDocumentSources(
   entityKinds: SearchableEntity[],
   createdBefore: string,
 ): Promise<number> {
-  const query = searchDocumentSourceSql(entityKinds, undefined, {
+  const query = await searchDocumentSourceSql(entityKinds, undefined, {
     createdBefore,
   });
   if (!query) return 0;
   const result = await unwrapDb(db).execute<{ count: number }>(sql`
-    ${query.locationPath}
+    ${query.sourcePrefix}
     SELECT count(*)::int AS count FROM (${query.union}) source
   `);
   return result.rows[0]?.count ?? 0;
@@ -391,9 +245,9 @@ async function getSearchDocumentSources(
   entityIds?: readonly string[],
   page?: SearchSourcePage,
 ): Promise<SearchDocumentSource[]> {
-  const query = searchDocumentSourceSql(entityKinds, entityIds, page);
+  const query = await searchDocumentSourceSql(entityKinds, entityIds, page);
   if (!query) return [];
-  const { locationPath, union, cursor, limit } = query;
+  const { sourcePrefix, union, cursor, limit } = query;
   const result = await unwrapDb(db).execute<{
     entityKind: SearchableEntity;
     entityId: string;
@@ -404,7 +258,7 @@ async function getSearchDocumentSources(
     aliases: string[] | null;
     keywords: string[] | null;
   }>(sql`
-    ${locationPath}
+    ${sourcePrefix}
     SELECT * FROM (${union}) source
     ${cursor}
     ORDER BY source."entityKind", source."entityId"::uuid

@@ -1413,6 +1413,6 @@ export async function updateSourceTransactionRecords(
 export {
   sourceTransactionRecordRepository,
   transactionImportRepository,
-  listSourceTransactionRecordsRead,
+  sourceTransactionRecordScaffold,
 } from "./entity-repositories";
 export { assertSourceTransactionRecordDeletionAllowed } from "./source-transaction-record-lifecycle";

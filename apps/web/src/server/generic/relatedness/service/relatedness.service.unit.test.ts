@@ -46,7 +46,7 @@ function dependenciesFor(
       results: [],
     }),
     getProductsSharingTags: async () => [],
-    getProductsByShortcodes: async () => [],
+    readProducts: async () => [],
     getActiveDismissalKeys: async () => new Set(),
     makeCandidateKey: async (_kind, values) => `key:${values.join(":")}`,
   };
@@ -102,7 +102,7 @@ describe("getProductTagPropagation", () => {
       }),
       getActiveDismissalKeys: async () => new Set(),
       makeCandidateKey: async () => "candidate-key",
-      getProductsByShortcodes: async () => [
+      readProducts: async () => [
         { id: sourceId, tags: ["already"] },
         { id: oneId, tags: ["shared", "low-vote"] },
         { id: twoId, tags: ["shared"] },

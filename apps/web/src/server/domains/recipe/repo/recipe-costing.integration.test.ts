@@ -14,6 +14,8 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import { rawRecipeList } from "@cubby/schemas/recipe-raw-read";
+
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { updateProduct } from "~/server/domains/product/repo/crud";
 import {
@@ -21,7 +23,7 @@ import {
   recomputeStaleDurableWorkflow,
 } from "~/server/domains/recipe/operations/recipe.server";
 import { getRecipesByIDs } from "~/server/domains/recipe/repo/crud";
-import { recipeList } from "~/server/domains/recipe/repo/crud";
+import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import {
   getRecipeTotalsState,
   selectAllStaleRecipeIds,
@@ -303,22 +305,24 @@ describe("RecipeCostingService", () => {
           saved.id === stale.id ? null : new Date(),
         );
       }
-      const filtered = await recipeList(
-        ctx.db,
-        { caloriesTotalMax: 50 },
-        [{ orderBy: "caloriesTotal", direction: "asc" }],
-        { pageSize: 20, pageIndex: 0 },
-      );
+      const filtered = await recipeScaffold.read(ctx.db, {
+        filters: { caloriesTotalMax: 50 },
+        sorts: [{ orderBy: "caloriesTotal", direction: "asc" }],
+        pagination: { pageSize: 20, pageIndex: 0 },
+      });
       expect(filtered.data.map((entry) => entry.id)).toEqual([
         zero.id,
         partial.id,
       ]);
-      const all = await recipeList(
-        ctx.db,
-        {},
-        [{ orderBy: "caloriesTotal", direction: "asc" }],
-        { pageSize: 20, pageIndex: 0 },
-      );
+      const all = {
+        data: (
+          await recipeScaffold.read(ctx.db, {
+            filters: {},
+            sorts: [{ orderBy: "caloriesTotal", direction: "asc" }],
+            pagination: { pageSize: 20, pageIndex: 0 },
+          })
+        ).data.map((row) => rawRecipeList.parse(row)),
+      };
       expect(all.data.slice(0, 2).map((entry) => entry.id)).toEqual([
         zero.id,
         partial.id,

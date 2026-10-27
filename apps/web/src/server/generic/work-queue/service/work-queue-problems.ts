@@ -35,19 +35,22 @@ import type {
 } from "~/entity/problems/problem-query";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import type { Database } from "~/server/db";
-import { buildImageWhere } from "~/server/domains/image/repo/image";
-import { buildIngredientListWhere } from "~/server/domains/ingredient/repo/search";
-import { buildInventoryWhere } from "~/server/domains/inventory/repo/crud";
-import { buildLocationWhere } from "~/server/domains/location/repo/crud";
-import { buildMealWhere } from "~/server/domains/meal/repo/crud";
-import { buildProductWhere } from "~/server/domains/product/repo/crud";
+import { imageScaffold } from "~/server/domains/image/repo/image";
+import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
+import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
+import { locationScaffold } from "~/server/domains/location/repo/crud";
+import { mealScaffold } from "~/server/domains/meal/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
-import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
+import {
+  projectAttention,
+  projectScaffold,
+} from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
-import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
-import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
+import { vendorScaffold } from "~/server/domains/vendor/repo/vendor";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { findIncompleteTransactionImports } from "~/server/generic/problems/repo/detectors-financial";
@@ -77,57 +80,66 @@ type WhereBuilder = (
   readContext?: QualityReadContext,
 ) => SQL | undefined | Promise<SQL | undefined>;
 const sharedProblemBuilders = {
-  product: (db, filters, _attentionItems, readContext) =>
-    buildProductWhere(
-      db,
+  product: (_db, filters, _attentionItems, readContext) =>
+    productScaffold.where(
       productFiltersSchema.parse(compileProblemFilters("product", filters)),
-      readContext,
+      { readContext },
     ),
   ingredient: (_db, filters) =>
-    buildIngredientListWhere(
+    ingredientScaffold.where(
       ingredientFiltersSchema.parse(
         compileProblemFilters("ingredient", filters),
       ),
     ),
   recipe: (_db, filters) =>
-    buildRecipeWhere(
+    recipeScaffold.where(
       recipeFiltersSchema.parse(compileProblemFilters("recipe", filters)),
     ),
-  inventory: (db, filters) =>
-    buildInventoryWhere(
-      db,
+  inventory: (_db, filters) =>
+    inventoryScaffold.where(
       inventoryFiltersSchema.parse(compileProblemFilters("inventory", filters)),
     ),
-  location: (db, filters) =>
-    buildLocationWhere(
-      db,
-      locationFiltersSchema.parse(compileProblemFilters("location", filters)),
-    ),
-  meal: (db, filters) =>
-    buildMealWhere(
-      db,
+  location: async (db, filters) => {
+    const parsed = locationFiltersSchema.parse(
+      compileProblemFilters("location", filters),
+    );
+    return locationScaffold.where(parsed, {
+      context: await locationScaffold.context(db, {
+        filters: parsed,
+        readIntent: "count",
+      }),
+    });
+  },
+  meal: (_db, filters) =>
+    mealScaffold.where(
       mealFiltersSchema.parse(compileProblemFilters("meal", filters)),
     ),
   project: (db, filters, attentionItems) =>
-    buildProjectWhere(
+    projectScaffold.prepareWhere(
       db,
       projectFiltersSchema.parse(compileProblemFilters("project", filters)),
-      attentionItems,
+      attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
     ),
   task: (db, filters) =>
-    buildTaskWhere(
+    taskScaffold.prepareWhere(
       db,
       taskFiltersSchema.parse(compileProblemFilters("task", filters)),
     ),
   vendor: (_db, filters) =>
-    buildVendorWhereClause(
+    vendorScaffold.where(
       vendorFiltersSchema.parse(compileProblemFilters("vendor", filters)),
     ),
-  image: (db, filters) =>
-    buildImageWhere(
-      db,
-      imageListFiltersSchema.parse(compileProblemFilters("image", filters)),
-    ),
+  image: async (db, filters) => {
+    const parsed = imageListFiltersSchema.parse(
+      compileProblemFilters("image", filters),
+    );
+    return imageScaffold.where(parsed, {
+      context: await imageScaffold.context(db, {
+        filters: parsed,
+        readIntent: "count",
+      }),
+    });
+  },
 } satisfies Partial<Record<Entity, WhereBuilder>>;
 
 /** Only automatic maintenance or external inference is outside the interactive queue. */

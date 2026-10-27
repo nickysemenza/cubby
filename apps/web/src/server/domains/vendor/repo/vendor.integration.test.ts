@@ -32,7 +32,7 @@ import {
 import {
   deletePurchases,
   findOrCreatePurchase,
-  getPurchaseByID,
+  readPurchaseById,
   getPurchaseExpenses,
 } from "~/server/domains/purchase/repo/purchase";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
@@ -48,10 +48,10 @@ import {
 import {
   deleteVendors,
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
   getVendorCoverage,
   mergeVendors,
-  vendorList,
+  vendorScaffold,
   updateVendor,
 } from "./vendor";
 
@@ -199,7 +199,7 @@ describe("vendor declared scalar updates", () => {
   // each client wording the structured hints.
   it("words the agent hints for the detail read", async () => {
     const id = await findOrCreateVendor(ctx.db, "Hinted vendor");
-    const original = await getVendorByID(ctx.db, id);
+    const original = await readVendorById(ctx.db, id);
     expect(original.agentHintsLabel).toBeNull();
 
     const changed = await updateVendor(
@@ -231,7 +231,7 @@ describe("vendor repository — spend rollup", () => {
       { name: "Synthetic role vendor" },
     );
     const read = () =>
-      getVendorByID(ctx.db, parseEntityId("vendor", identityId));
+      readVendorById(ctx.db, parseEntityId("vendor", identityId));
     expect((await read()).role).toBe("unused");
     const item = await createProductFixture(
       ctx.db,
@@ -249,23 +249,21 @@ describe("vendor repository — spend rollup", () => {
     expect((await read()).role).toBe("both");
     expect(
       (
-        await vendorList(
-          ctx.db,
-          { search: "Synthetic role vendor", role: ["seller"] },
-          [],
-          page,
-        )
+        await vendorScaffold.read(ctx.db, {
+          filters: { search: "Synthetic role vendor", role: ["seller"] },
+          sorts: [],
+          pagination: page,
+        })
       ).count,
     ).toBe(0);
-    const grouped = await vendorList(
-      ctx.db,
-      withListGroupBy(
+    const grouped = await vendorScaffold.read(ctx.db, {
+      filters: withListGroupBy(
         { search: "Synthetic role vendor", role: ["seller", "both"] },
         [{ key: "role" }],
       ),
-      [],
-      page,
-    );
+      sorts: [],
+      pagination: page,
+    });
     expect(grouped.data.map((row) => row.role)).toEqual(["both"]);
     expect(grouped).toMatchObject({ groups: [{ label: "Both", count: 1 }] });
     await deleteProducts(ctx.db, [item.entityId], ctx.actor);
@@ -277,7 +275,7 @@ describe("vendor repository — spend rollup", () => {
   it("separates brand catalog and spend from seller history and coverage", async () => {
     const seller = await findOrCreateVendor(ctx.db, "Synthetic Seller");
     const brand = await findOrCreateVendor(ctx.db, "Synthetic Brand");
-    const sellerRef = (await getVendorByID(ctx.db, seller)).id;
+    const sellerRef = (await readVendorById(ctx.db, seller)).id;
     const { output: category } = await createRepoEntity(
       ctx,
       "productCategory",
@@ -336,7 +334,7 @@ describe("vendor repository — spend rollup", () => {
       purchaseId: order.id,
       lineKind: "unclassified",
     });
-    const sellerRow = await getVendorByID(ctx.db, seller);
+    const sellerRow = await readVendorById(ctx.db, seller);
     expect(sellerRow).toMatchObject({
       brandedProductCount: 0,
       brandSpend: 0,
@@ -346,7 +344,7 @@ describe("vendor repository — spend rollup", () => {
       documentedPurchaseCount: 0,
       missingItemizationCount: 1,
     });
-    expect(await getVendorByID(ctx.db, brand)).toMatchObject({
+    expect(await readVendorById(ctx.db, brand)).toMatchObject({
       brandedProductCount: 1,
       brandCategoryCount: 1,
       purchasedBrandProductCount: 1,
@@ -356,7 +354,11 @@ describe("vendor repository — spend rollup", () => {
       firstPurchaseDate: null,
       missingItemizationCount: 0,
     });
-    const listed = await vendorList(ctx.db, {}, [], page);
+    const listed = await vendorScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: page,
+    });
     expect(
       listed.data.find((row) => row.id === sellerRef)?.brandedProductCount,
     ).toBe(0);
@@ -364,7 +366,7 @@ describe("vendor repository — spend rollup", () => {
       listed.data.find((row) => row.id === branded.brandId)
         ?.brandedProductCount,
     ).toBe(1);
-    const brandRef = (await getVendorByID(ctx.db, brand)).id;
+    const brandRef = (await readVendorById(ctx.db, brand)).id;
     const previews = await loadRelatedPreviews(ctx.db, {
       source: "vendor",
       sourceIds: [sellerRef, brandRef],
@@ -399,7 +401,7 @@ describe("vendor repository — spend rollup", () => {
 
   it("spend is SUM(expense.cost), never the charge's statedTotal", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Spend Rollup Vendor");
-    const vendorShortcode = (await getVendorByID(ctx.db, vendorId)).id;
+    const vendorShortcode = (await readVendorById(ctx.db, vendorId)).id;
     const { output: charge } = await createRepoEntity(ctx, "purchase", {
       date: "2024-01-15",
       vendorId: vendorShortcode,
@@ -428,7 +430,7 @@ describe("vendor repository — spend rollup", () => {
       purchaseId: charge.id,
     });
 
-    const row = await getVendorByID(ctx.db, vendorId);
+    const row = await readVendorById(ctx.db, vendorId);
     expect(row.spend).toBe(75);
     expect(row.spend).not.toBe(charge.statedTotal);
     expect(row.purchaseCount).toBe(1);
@@ -440,7 +442,7 @@ describe("vendor coverage", () => {
 
   it("uses inclusive boundaries, unique sorted order ids, and latest overall", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Coverage Vendor");
-    const vendorRow = await getVendorByID(ctx.db, vendorId);
+    const vendorRow = await readVendorById(ctx.db, vendorId);
     for (const [date, orderId] of [
       ["2026-09-01", "OUTSIDE-EARLY"],
       ["2026-09-10", "ORDER-B"],
@@ -481,7 +483,7 @@ describe("vendor repository — deletion guard", () => {
       orderId: "LB-1",
       date: "2024-01-15",
     });
-    const vendorShortcode = (await getVendorByID(ctx.db, vendorId)).id;
+    const vendorShortcode = (await readVendorById(ctx.db, vendorId)).id;
 
     // Dropping the vendor would leave that charge resolving `vendorName` to
     // null, which reads as "no vendor recorded" and is a lie. The re-point path
@@ -494,16 +496,22 @@ describe("vendor repository — deletion guard", () => {
 
     await deletePurchases(
       ctx.db,
-      [(await getPurchaseByID(ctx.db, charge)).id],
+      [(await readPurchaseById(ctx.db, charge)).id],
       ctx.actor,
     );
     await deleteVendors(ctx.db, [vendorShortcode], ctx.actor);
 
-    await expect(getVendorByID(ctx.db, vendorId)).rejects.toMatchObject({
+    await expect(readVendorById(ctx.db, vendorId)).rejects.toMatchObject({
       reason: "VENDOR_NOT_FOUND",
     });
     expect(
-      (await vendorList(ctx.db, {}, [], page)).data.map((row) => row.id),
+      (
+        await vendorScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: page,
+        })
+      ).data.map((row) => row.id),
     ).not.toContain(vendorShortcode);
   });
 });
@@ -685,7 +693,7 @@ describe("vendor repository — mergeVendors", () => {
   // returns the internal uuid, but `mergeVendors`'s input and `VendorOut.id`
   // are shortcodes post-cutover.
   const vendorCode = async (id: VendorId): Promise<VendorShortcode> =>
-    (await getVendorByID(ctx.db, id)).id;
+    (await readVendorById(ctx.db, id)).id;
 
   const addLine = async (name: string, cost: number, purchaseId: PurchaseId) =>
     createRepoEntity(
@@ -694,7 +702,7 @@ describe("vendor repository — mergeVendors", () => {
       makeExpenseInput({
         name,
         cost,
-        purchaseId: (await getPurchaseByID(ctx.db, purchaseId)).id,
+        purchaseId: (await readPurchaseById(ctx.db, purchaseId)).id,
       }),
     );
 
@@ -715,7 +723,7 @@ describe("vendor repository — mergeVendors", () => {
   };
 
   // Returns the charge's internal uuid — every downstream helper here
-  // (`chargeRow`, `getPurchaseExpenses`, `getPurchaseByID`, the audit-row
+  // (`chargeRow`, `getPurchaseExpenses`, `readPurchaseById`, the audit-row
   // lookups) is keyed on it, even though `createPurchase` itself now speaks
   // shortcodes at its public boundary.
   const charge = async (
@@ -747,7 +755,7 @@ describe("vendor repository — mergeVendors", () => {
     await addLine("cash run line", 10, loserCashRun);
 
     const moneyBefore = await liveExpenseTotal();
-    // Captured BEFORE the merge: `vendorCode` reads through `getVendorByID`,
+    // Captured BEFORE the merge: `vendorCode` reads through `readVendorById`,
     // which 404s on the loser the instant it's soft-deleted below.
     const keeperCode = await vendorCode(keeper);
     const loserCode = await vendorCode(loser);
@@ -789,7 +797,7 @@ describe("vendor repository — mergeVendors", () => {
       (await getPurchaseExpenses(ctx.db, loserOrdered)).map((l) => l.cost),
     ).toEqual([40]);
 
-    await expect(getVendorByID(ctx.db, loser)).rejects.toMatchObject({
+    await expect(readVendorById(ctx.db, loser)).rejects.toMatchObject({
       reason: "VENDOR_NOT_FOUND",
     });
 
@@ -859,7 +867,7 @@ describe("vendor repository — mergeVendors", () => {
     expect(oldJoin?.deletedAt).not.toBeNull();
 
     expect((await chargeRow(dead))?.deletedAt).not.toBeNull();
-    await expect(getPurchaseByID(ctx.db, dead)).rejects.toMatchObject({
+    await expect(readPurchaseById(ctx.db, dead)).rejects.toMatchObject({
       reason: "PURCHASE_NOT_FOUND",
     });
 

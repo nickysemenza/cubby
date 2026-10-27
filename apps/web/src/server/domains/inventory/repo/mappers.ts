@@ -1,16 +1,10 @@
-import type { DataQuality } from "@cubby/schemas/data-quality";
 import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { inventoryDisplayName } from "@cubby/schemas/inventory";
 import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import type { RawInventoryDetail } from "@cubby/schemas/inventory-raw-read";
 
-import { mapImages, parseInventoryAmount } from "~/server/db/helpers";
-import type {
-  InventoryEntryDeepDB,
-  InventoryEntryListDB,
-} from "~/server/domains/inventory/repo/types";
-import { parseLocationType } from "~/server/domains/location/repo/parse-type";
+import { mapImages } from "~/server/db/helpers";
+import type { InventoryEntryDeepDB } from "~/server/domains/inventory/repo/types";
 import {
   mapDbProductToInventoryEmbed,
   mapProductExternalIds,
@@ -24,58 +18,13 @@ import {
   inventoryOwnerResolution,
 } from "./ownership";
 
-type InventoryEntryBaseDB = Pick<
-  InventoryEntryListDB,
-  | "id"
-  | "shortcode"
-  | "amountValue"
-  | "amountUnit"
-  | "verifiedAt"
-  | "placement"
-  | "ownershipMode"
-  | "createdAt"
-  | "updatedAt"
->;
-
 export type InventoryOwnershipTrace = {
   ownership: EffectiveInventoryOwnership;
   steps: InventoryOwnershipStep[];
 };
 
-/** Fallback when a caller hydrates an entry without loading its evidence. */
-const unresolvedOwnership = (
-  entry: InventoryEntryBaseDB,
-): InventoryOwnershipTrace => ({
-  ownership: {
-    mode: entry.ownershipMode,
-    explicitOwner: null,
-    effectiveOwner: null,
-    inheritedOwner: null,
-    source: entry.ownershipMode === "explicit" ? "household" : "unresolved",
-    evidence: null,
-    evidenceFingerprint: "unresolved",
-    matchesInheritedOwner: false,
-  },
-  steps: [],
-});
-
-const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
-  entry: InventoryEntryBaseDB,
-  valuation: number | null,
-  dataQuality: Q,
-) => ({
-  id: parseShortcodeFor("inventory", entry.shortcode),
-  amount: parseInventoryAmount(entry),
-  valuation,
-  verifiedAt: entry.verifiedAt,
-  placement: entry.placement,
-  createdAt: entry.createdAt,
-  updatedAt: entry.updatedAt,
-  dataQuality,
-});
-
 /** Map loaded ownership; list callers omit this block when evidence is unloaded. */
-const inventoryEntryOwnershipFields = ({
+export const inventoryEntryOwnershipFields = ({
   ownership,
   steps,
 }: InventoryOwnershipTrace) => ({
@@ -99,51 +48,22 @@ export const requireLoadedProductPricing = (
   return value;
 };
 
-export const dbInventoryEntryToAPI: (
-  inventoryentry: InventoryEntryDeepDB,
-  valuation: number | null,
+/** A record read's embedded product: gallery, identifiers and unit mappings. */
+export const inventoryDetailProduct = (
+  product: InventoryEntryDeepDB["product"],
   pricing: ProductPricing,
-  dataQuality: DataQuality,
-  ownership?: InventoryOwnershipTrace,
-  displayImages?: DisplayImageSummary[],
-) => RawInventoryDetail = (
-  inventoryentry,
-  valuation,
-  pricing,
-  dataQuality,
-  ownership,
-  displayImages = [],
-) => {
-  const { product, location } = inventoryentry;
-
-  return {
-    ...inventoryEntryBaseFields(inventoryentry, valuation, dataQuality),
-    ...inventoryEntryOwnershipFields(
-      ownership ?? unresolvedOwnership(inventoryentry),
-    ),
-    locationId: parseShortcodeFor("location", location.shortcode),
-    location: {
-      id: parseShortcodeFor("location", location.shortcode),
-      name: location.name,
-      type: parseLocationType(location.type),
-    },
-    product: {
-      displayImages,
-      ...mapDbProductToInventoryEmbed({
-        ...product,
-        effectivePrice: pricing.effectivePrice,
-        primaryGtin: primaryGtinOf(product.externalIds),
-      }),
-      images: mapImages(product.images),
-      externalIds: mapProductExternalIds(product.externalIds),
-      unitMappings: mapProductUnitMappings(
-        parseShortcodeFor("product", product.shortcode),
-        product.unitMappings,
-      ),
-    },
-    displayName: inventoryDisplayName({
-      productName: product.name,
-      locationName: location.name,
-    }),
-  };
-};
+  displayImages: DisplayImageSummary[],
+): RawInventoryDetail["product"] => ({
+  displayImages,
+  ...mapDbProductToInventoryEmbed({
+    ...product,
+    effectivePrice: pricing.effectivePrice,
+    primaryGtin: primaryGtinOf(product.externalIds),
+  }),
+  images: mapImages(product.images),
+  externalIds: mapProductExternalIds(product.externalIds),
+  unitMappings: mapProductUnitMappings(
+    parseShortcodeFor("product", product.shortcode),
+    product.unitMappings,
+  ),
+});

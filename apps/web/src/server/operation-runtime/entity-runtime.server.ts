@@ -25,6 +25,7 @@ import {
   entityBrowserMutationResultSchema,
 } from "~/server/entity-kernel/contracts";
 import { listEntityRecords } from "~/server/entity-kernel/repo/entity-records";
+import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import {
   getDetailActivity,
   getMonthlyExpenseSpend,
@@ -117,7 +118,8 @@ export const entityGraphHandlers = implementOperationDomain(
       withGraphPreviews(context, await getEntityGraph(context.db, input)),
     graphPaths: async (context, input) =>
       withGraphPreviews(context, await getEntityGraphPaths(context.db, input)),
-    connections: (context, input) => getEntityConnections(context.db, input),
+    connections: (context, input) =>
+      getEntityConnections(context.db, input, kernelScaffold),
     relation: async (context, input) => {
       // The parse brands the ids; the input's entity is a union, so the
       // parsed command (not the raw input) is what executeEntityAs accepts.

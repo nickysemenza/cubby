@@ -18,7 +18,7 @@ import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
  * installed fixtures are not items you can walk over and count, and the
  * computed `location.valuation` rollup excludes them too.
  *
- * Regression: `getLocationById` once counted via its own GROUP BY and left
+ * Regression: `loadLocationTree` once counted via its own GROUP BY and left
  * `inventoryItems` unmapped, so the HTTP/CLI resource detail reported
  * `directItemCount: 12` next to `inventoryItems: []`.
  */

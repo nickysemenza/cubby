@@ -350,11 +350,11 @@ export const getLocationInventoryBreakdown = async (
 /**
  * Root-first ancestor chain for each of `ids`, batched into ONE query.
  *
- * The upward twin of {@link buildLocationTree}, and the reason `getLocationById`'s
+ * The upward twin of {@link buildLocationTree}, and the reason `loadLocationTree`'s
  * per-level `findFirst` loop must not be reused for list-shaped reads: this
  * costs one round-trip for a whole page instead of one per ancestor per row.
  *
- * Deliberately does NOT skip soft-deleted rungs, matching `getLocationById`'s
+ * Deliberately does NOT skip soft-deleted rungs, matching `loadLocationTree`'s
  * walk. A picker resolves a typed `LOC-` code through that read and a typed
  * name through this one, so any divergence here shows the SAME location two
  * different breadcrumbs depending on how it was found. `Location.parentId` is
@@ -393,7 +393,7 @@ export const loadLocationAncestorsWithIds = async (
       UNION ALL
 
       -- Recursive case: walk UP to each row's parent. No deletedAt filter —
-      -- see the doc comment: this has to match getLocationById's walk.
+      -- see the doc comment: this has to match loadLocationTree's walk.
       SELECT
         a.root,
         l."id" AS "locationId",

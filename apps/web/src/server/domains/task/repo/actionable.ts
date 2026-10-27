@@ -50,13 +50,10 @@
  * independently. They still participate in `tasksById`/`taskEdgesByOwner`, so
  * a why-chain can walk through one if an edge points at it.
  */
-import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type ProjectId,
   parseEntityId,
-  parseShortcodeFor,
   type TaskId,
-  type TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   BlockedReason,
@@ -64,10 +61,11 @@ import type {
   TaskFilters,
   TaskStatus,
 } from "@cubby/schemas/project";
-import type {
-  RawActionableTaskOut,
-  RawActionableTasksOut,
-  RawBlockedTaskOut,
+import {
+  type RawActionableTaskOut,
+  type RawActionableTasksOut,
+  type RawBlockedTaskOut,
+  rawTaskOut,
 } from "@cubby/schemas/work-raw-read";
 import { and, asc, ne } from "drizzle-orm";
 
@@ -77,17 +75,10 @@ import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { entityLink, project, task } from "~/server/db/schema";
-import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { listAll } from "~/server/generic/list/repo/list-all";
-import {
-  type EntityRef,
-  lookupShortcodes,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { taskSubtaskCounts } from "./crud";
-import { taskList } from "./lookup";
+import { taskScaffold } from "./lookup";
 import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 /** The subset of a live, non-done task's fields the chain walk needs. */
@@ -475,13 +466,11 @@ export async function listActionableTasks(
   // renderer then adds its disclosed open/top-level semantics while retaining
   // the full graph below to explain why a matching row is blocked.
   const matching = await listAll((pagination) =>
-    taskList(
-      db,
-      { ...filters, completion: "open", topLevelOnly: true },
-      [],
+    taskScaffold.read(db, {
+      filters: { ...filters, completion: "open", topLevelOnly: true },
+      sorts: [],
       pagination,
-      "page",
-    ),
+    }),
   );
   const matchingShortcodes = new Set<string>(
     matching.data.map((row) => row.id),
@@ -502,44 +491,19 @@ export async function listActionableTasks(
     db,
     openTaskRows,
   );
-  const { blockedReasonsFor, blockedByIds, blockingIds } = taskBlockerResolver(
+  const { blockedReasonsFor } = taskBlockerResolver(
     hydratedOpenTaskRows,
     graph,
   );
 
-  // Subtask counts must include done subtasks, which `openTaskRows` (non-done
-  // only) can't supply — a separate grouped query over ALL live subtasks.
-  const [subtaskCounts, dataQualities] = await Promise.all([
-    taskSubtaskCounts(
-      db,
-      hydratedOpenTaskRows.map((row) => row.id),
-    ),
-    loadDataQualities(
-      db,
-      "task",
-      hydratedOpenTaskRows.map((row) => row.id),
-    ),
-  ]);
-
-  // `dbTaskToAPI` takes public ids for blockedByIds/blockingIds; the edge
-  // values above are the OTHER side's uuid regardless of its open/done
-  // state, so they aren't all covered by the open-task graph — one batched reverse
-  // lookup for whichever ones are actually referenced.
-  const referencedTaskIds = [
-    ...new Set([...blockedByIds.values(), ...blockingIds.values()].flat()),
-  ];
-  const taskRefs: EntityRef[] = referencedTaskIds.map((id) => ({
-    entity: "task",
-    id,
-  }));
-  const taskShortcodesById = await lookupShortcodes(db, taskRefs);
-  const toTaskShortcodes = (ids: TaskId[]): TaskShortcode[] =>
-    ids.map((id) =>
-      parseShortcodeFor(
-        "task",
-        taskShortcodesById.get(entityRefKey("task", id)) ?? "",
-      ),
-    );
+  // The renderer groups records; the declared read loads each one.
+  const details = await taskScaffold.get(db, [...matchingShortcodes]);
+  const recordByCode = new Map(
+    details.data.map((row) => {
+      const record = rawTaskOut.parse(row);
+      return [String(record.id), record] as const;
+    }),
+  );
 
   const next: RawActionableTaskOut[] = [];
   const later: RawActionableTaskOut[] = [];
@@ -552,19 +516,8 @@ export async function listActionableTasks(
     // why-chain through the shared blocker resolver — its graph stays
     // unfiltered).
     if (row.parentTaskId) return;
-    if (!matchingShortcodes.has(row.shortcode)) return;
-
-    const counts = subtaskCounts.get(row.id);
-    const taskOutRow = dbTaskToAPI(
-      row,
-      toTaskShortcodes(blockedByIds.get(row.id) ?? []),
-      toTaskShortcodes(blockingIds.get(row.id) ?? []),
-      counts?.count ?? 0,
-      counts?.doneCount ?? 0,
-      // SAFETY: `row` came from `hydratedOpenTaskRows`, which `dataQualities`
-      // was loaded for.
-      dataQualities.get(row.id)!,
-    );
+    const taskOutRow = recordByCode.get(row.shortcode);
+    if (!taskOutRow) return;
 
     const reasons = blockedReasonsFor(row);
 

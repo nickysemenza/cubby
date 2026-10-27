@@ -8,12 +8,9 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { expenseHandlers } from "~/server/domains/expense/operations.server";
-import {
-  getExpenseByShortcode,
-  updateExpense,
-} from "~/server/domains/expense/repo/crud";
+import { readExpense, updateExpense } from "~/server/domains/expense/repo/crud";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
-import { expenseList } from "~/server/domains/expense/repo/lookup";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { purchaseHandlers } from "~/server/domains/purchase/operations/purchase.server";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -24,7 +21,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   deletePurchases,
-  getPurchaseByID,
+  readPurchaseById,
   mergePurchases,
   updatePurchase,
 } from "./purchase";
@@ -128,7 +125,7 @@ describe("purchase inheritance lifecycle", () => {
   it("updates inheriting reads live and refuses a source change that loses required trade", async () => {
     const { source, second, item } = await fixture();
     const code = parseShortcodeFor("expense", item.shortcode);
-    expect(await getExpenseByShortcode(ctx.db, code)).toMatchObject({
+    expect(await readExpense(ctx.db, code)).toMatchObject({
       trade: "building",
       fieldResolutions: { projectId: { mode: "inherit", storedValue: null } },
     });
@@ -138,7 +135,7 @@ describe("purchase inheritance lifecycle", () => {
       purchaseUpdateData.parse({ defaultProjectId: second.shortcode }),
       ctx.actor,
     );
-    expect(await getExpenseByShortcode(ctx.db, code)).toMatchObject({
+    expect(await readExpense(ctx.db, code)).toMatchObject({
       projectId: second.shortcode,
       trade: "plumbing",
     });
@@ -150,7 +147,7 @@ describe("purchase inheritance lifecycle", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
-    expect(await getExpenseByShortcode(ctx.db, code)).toMatchObject({
+    expect(await readExpense(ctx.db, code)).toMatchObject({
       projectId: second.shortcode,
       trade: "plumbing",
     });
@@ -185,12 +182,16 @@ describe("purchase inheritance lifecycle", () => {
         },
       },
     };
-    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject(
+    expect(await readExpense(ctx.db, item.shortcode)).toMatchObject(
       expectedInherited,
     );
-    const list = await expenseList(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 25,
+    const list = await expenseScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: {
+        pageIndex: 0,
+        pageSize: 25,
+      },
     });
     expect(list.data.find((row) => row.id === item.shortcode)).toMatchObject(
       expectedInherited,
@@ -201,7 +202,7 @@ describe("purchase inheritance lifecycle", () => {
       { spendingCategoryId: override.shortcode },
       ctx.actor,
     );
-    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject({
+    expect(await readExpense(ctx.db, item.shortcode)).toMatchObject({
       spendingCategoryId: override.shortcode,
       fieldResolutions: {
         spendingCategoryId: {
@@ -221,7 +222,7 @@ describe("purchase inheritance lifecycle", () => {
       { spendingCategoryId: null },
       ctx.actor,
     );
-    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject(
+    expect(await readExpense(ctx.db, item.shortcode)).toMatchObject(
       expectedInherited,
     );
     expect(
@@ -235,7 +236,7 @@ describe("purchase inheritance lifecycle", () => {
       { spendingCategoryId: override.shortcode },
       ctx.actor,
     );
-    expect(await getExpenseByShortcode(ctx.db, item.shortcode)).toMatchObject({
+    expect(await readExpense(ctx.db, item.shortcode)).toMatchObject({
       spendingCategoryId: override.shortcode,
       fieldResolutions: {
         spendingCategoryId: {
@@ -398,7 +399,7 @@ describe("purchase inheritance lifecycle", () => {
     expect(charge.ok).toBe(true);
     if (!charge.ok || !charge.data)
       throw new Error("Synthetic charge context missing");
-    const rawPurchase = await getPurchaseByID(ctx.db, source.id);
+    const rawPurchase = await readPurchaseById(ctx.db, source.id);
     expect(fieldValueOf(charge.data.purchase.fields.vendorId)).toBe(
       rawPurchase.vendorId,
     );
@@ -421,14 +422,14 @@ describe("purchase inheritance lifecycle", () => {
         purchaseId: source.id,
       });
     }
-    expect((await getPurchaseByID(ctx.db, source.id)).expenseTotal).toBe(10.3);
+    expect((await readPurchaseById(ctx.db, source.id)).expenseTotal).toBe(10.3);
   });
 
   it("preserves principal attribution when its purchase link is explicitly detached", async () => {
     const { first, item } = await fixture();
     const code = parseShortcodeFor("expense", item.shortcode);
     await updateExpense(ctx.db, code, { purchaseId: null }, ctx.actor);
-    expect(await getExpenseByShortcode(ctx.db, code)).toMatchObject({
+    expect(await readExpense(ctx.db, code)).toMatchObject({
       purchaseId: null,
       projectId: first.shortcode,
       trade: "building",
@@ -468,7 +469,7 @@ describe("purchase inheritance lifecycle", () => {
     });
     const expenseCode = parseShortcodeFor("expense", item.shortcode);
 
-    expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
+    expect(await readExpense(ctx.db, expenseCode)).toMatchObject({
       fieldResolutions: { trade: { fallbackValue: "building" } },
     });
     expect(
@@ -510,7 +511,7 @@ describe("purchase inheritance lifecycle", () => {
     ).toMatchObject({ trade: { mode: "explicit", value: "logistics" } });
 
     await updateExpense(ctx.db, expenseCode, { trade: null }, ctx.actor);
-    expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
+    expect(await readExpense(ctx.db, expenseCode)).toMatchObject({
       projectId: explicitProject.shortcode,
       trade: "building",
       fieldResolutions: { trade: { mode: "inherit" } },
@@ -536,7 +537,7 @@ describe("purchase inheritance lifecycle", () => {
     });
     const expenseCode = parseShortcodeFor("expense", item.shortcode);
 
-    expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
+    expect(await readExpense(ctx.db, expenseCode)).toMatchObject({
       fieldResolutions: {
         trade: {
           storedValue: "electrical",
@@ -580,7 +581,7 @@ describe("purchase inheritance lifecycle", () => {
     });
     const expenseCode = parseShortcodeFor("expense", item.shortcode);
 
-    expect(await getExpenseByShortcode(ctx.db, expenseCode)).toMatchObject({
+    expect(await readExpense(ctx.db, expenseCode)).toMatchObject({
       fieldResolutions: {
         trade: {
           storedValue: "electrical",
@@ -602,10 +603,7 @@ describe("purchase inheritance lifecycle", () => {
       ctx.actor,
     );
     expect(
-      await getExpenseByShortcode(
-        ctx.db,
-        parseShortcodeFor("expense", item.shortcode),
-      ),
+      await readExpense(ctx.db, parseShortcodeFor("expense", item.shortcode)),
     ).toMatchObject({
       projectId: first.shortcode,
       trade: "building",
@@ -640,10 +638,7 @@ describe("purchase inheritance lifecycle", () => {
       ),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
     expect(
-      await getExpenseByShortcode(
-        ctx.db,
-        parseShortcodeFor("expense", item.shortcode),
-      ),
+      await readExpense(ctx.db, parseShortcodeFor("expense", item.shortcode)),
     ).toMatchObject({ projectId: null, purchaseId: source.shortcode });
   });
 
@@ -664,7 +659,7 @@ describe("purchase inheritance lifecycle", () => {
       ctx.actor,
     );
     expect(
-      await getExpenseByShortcode(
+      await readExpense(
         ctx.db,
         parseShortcodeFor("expense", unresolved.shortcode),
       ),
@@ -685,10 +680,7 @@ describe("purchase inheritance lifecycle", () => {
       ctx.actor,
     );
     expect(
-      await getExpenseByShortcode(
-        ctx.db,
-        parseShortcodeFor("expense", item.shortcode),
-      ),
+      await readExpense(ctx.db, parseShortcodeFor("expense", item.shortcode)),
     ).toMatchObject({
       projectId: first.shortcode,
       trade: "building",

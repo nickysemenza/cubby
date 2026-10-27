@@ -9,14 +9,12 @@ import type {
   DerivedComputed,
 } from "~/server/generic/derived/repo/compute";
 
-import { storedEntryFor } from "./entries";
 import { prepareQualityPublications } from "./stored";
 
 const qualityCompute =
   (kind: ScoredEntity): DerivedCompute =>
   async (db, ids) => {
     const out = new Map<string, DerivedComputed>();
-    if (!storedEntryFor(kind)) return out;
     for (const row of await prepareQualityPublications(db, kind, ids))
       out.set(row.entityId, {
         value: {

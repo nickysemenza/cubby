@@ -12,7 +12,7 @@ import {
   expenseProjectRecommendationContext,
   expenseProjectRecommendationContexts,
 } from "~/server/domains/expense/repo/project-recommendations";
-import { getInventoryEntryByShortcode } from "~/server/domains/inventory/repo/crud";
+import { readInventory } from "~/server/domains/inventory/repo/crud";
 import { getPlacementRecommendation } from "~/server/domains/inventory/service/placement-recommendation.service";
 import {
   rankProjectSuggestions,
@@ -146,7 +146,7 @@ export async function getEntityRecommendations(
   if (source.entityKind === "inventory") {
     const id = parseShortcodeFor("inventory", source.entityId);
     const [row, proposal] = await Promise.all([
-      getInventoryEntryByShortcode(db, id),
+      readInventory(db, id),
       getPlacementRecommendation(db, id),
     ]);
     return {

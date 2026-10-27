@@ -2,15 +2,12 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { Entity } from "@cubby/schemas/entity";
 
-import type {
-  ListBindingGroup,
-  ListProjection,
-} from "~/server/generic/list/repo/list-contracts";
 import { type AppSpan, withTrace } from "~/server/observability/tracing";
 
 interface ListReadTraceContext {
   entity?: Entity;
-  projection?: ListProjection["kind"];
+  /** How many read keys the request loads; 0 for a count. */
+  fields?: number;
   rows?: number;
   corePhase?: "page" | "count";
 }
@@ -30,7 +27,7 @@ const dimensions = () => {
   const context = listReadContext.getStore();
   const attributes: Record<string, string | number> = {};
   if (context?.entity) attributes["entity.kind"] = context.entity;
-  if (context?.projection) attributes["list.projection"] = context.projection;
+  if (context?.fields !== undefined) attributes["list.fields"] = context.fields;
   if (context?.rows !== undefined) attributes["list.rows"] = context.rows;
   return attributes;
 };
@@ -78,13 +75,4 @@ export async function traceListCount(
       attributes,
     ),
   );
-}
-export function traceListGroup<T>(
-  groups: ListBindingGroup | readonly ListBindingGroup[],
-  run: () => Promise<T>,
-): Promise<T> {
-  return withTrace("entity.list.binding", run, {
-    ...dimensions(),
-    "list.groups": [groups].flat().join(","),
-  });
 }

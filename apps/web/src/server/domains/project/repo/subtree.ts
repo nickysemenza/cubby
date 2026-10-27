@@ -392,7 +392,7 @@ export function projectCompletionYear(
 
 /**
  * Step 1 of the pipeline on its own — one query, no rollups. Only for the
- * caller that needs the tree *before* it knows its ids: `projectList` resolves
+ * caller that needs the tree *before* it knows its ids: the project list resolves
  * `includeSubProjects` into its WHERE clause, so it can't hand the ids to
  * {@link loadProjectSubtreeRollups} until the tree is already in hand. Pass
  * the result back in as that function's `tree` argument — never re-fetch.

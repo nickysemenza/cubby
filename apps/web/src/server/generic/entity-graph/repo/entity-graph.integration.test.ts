@@ -216,6 +216,9 @@ describe("entity graph repository", () => {
       roots: [{ entityKind: "inventory", entityId: inventory.id }],
       relationshipKeys: ["location"],
     });
+    expect(
+      graph.nodes.find((node) => node.entityId === inventory.id)?.label,
+    ).toBe("Inverse graph product · Inverse graph location");
     expect(graph.edges).toContainEqual(
       expect.objectContaining({
         relationshipKey: "location",

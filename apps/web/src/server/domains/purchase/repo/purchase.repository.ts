@@ -7,8 +7,6 @@ import { rawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 import {
   asActor,
   defineRepository,
-  listOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -16,13 +14,10 @@ import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode
 import {
   createPurchase,
   deletePurchases,
-  getPurchaseByShortcode,
   mergePurchases,
   PURCHASE_DELETE_EDGE_POLICY,
   PURCHASE_MERGE_EDGE_POLICY,
-  purchaseList,
-  purchaseListRead,
-  purchaseListSummary,
+  purchaseScaffold,
   updatePurchase,
 } from "./purchase";
 
@@ -33,25 +28,7 @@ export const purchaseRepository = defineRepository("purchase", {
     delete: PURCHASE_DELETE_EDGE_POLICY,
     merge: PURCHASE_MERGE_EDGE_POLICY,
   },
-  get: onDb(getPurchaseByShortcode),
-  list: listOn(purchaseList),
-  listRead: (
-    ctx,
-    filters,
-    sorts,
-    pagination,
-    projection,
-    readIntent = "page",
-  ) =>
-    purchaseListRead(
-      ctx.db,
-      filters,
-      sorts,
-      pagination,
-      readIntent,
-      projection,
-    ),
-  listSummary: (ctx, filters) => purchaseListSummary(ctx.db, filters),
+  scaffold: purchaseScaffold,
   create: asActor(createPurchase),
   update: (ctx, id, data) => updatePurchase(ctx.db, id, data, ctx.actorContext),
   updateRead: (ctx, id, data, fields) =>

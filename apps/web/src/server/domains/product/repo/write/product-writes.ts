@@ -35,8 +35,6 @@ import {
   databaseForTransaction,
 } from "~/server/db/helpers";
 import { product as productTable } from "~/server/db/schema";
-import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
-import { loadProductOwners } from "~/server/domains/inventory/repo/ownership";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { productUnitPriceDetailFields } from "~/server/domains/product/repo/list-enrichment";
 import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
@@ -48,19 +46,17 @@ import { createAppError } from "~/server/errors/app-error";
 import { selectListReadFields } from "~/server/generic/list/repo/list-read-schema";
 import {
   resolveAllOrThrow,
-  resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { observeOperationPhase } from "~/server/observability/observed-request";
 
 import {
   createProductRecord,
-  getProductByID as getProductByIDRepo,
+  readProductById,
   getProductImagesByProductIds,
   getProductsForFoodLookup,
   updateProduct as updateProductRepo,
 } from "../crud";
-import { loadProductOwnershipEvidence } from "../ownership-evidence";
 import { getProductUnitMappingsByProductIds } from "../unit-mappings";
 
 export type ProductMutationSnapshot = Pick<RawProductDetail, "id"> & {
@@ -141,40 +137,26 @@ export const getProductWithFood = async (
   usdaClient: UsdaFoodLookupPort,
   id: ProductId,
 ): Promise<RawProductDetail> => {
-  const product = await getProductByIDRepo(db, id);
+  const product = await readProductById(db, id);
 
+  // Writers hold a single-food lookup port rather than the kernel's batch
+  // client, so food and the values derived from it are overlaid here.
   const lookupParam = foodLookupParamFromProduct(product);
-  const operation = startOperationDefinition("entity.detail");
-  const [food, { recipeUsages }, ownership, owners] = await Promise.all([
-    observeOperationPhase(operation, "food", () =>
+  const food = await observeOperationPhase(
+    startOperationDefinition("entity.detail"),
+    "food",
+    () =>
       lookupParam ? usdaClient.findFood(lookupParam) : Promise.resolve(null),
-    ),
-    observeOperationPhase(operation, "recipe_usages", async () => {
-      const ingredientEntityId = product.ingredient
-        ? await resolveLiveShortcode(db, product.ingredient.id, "ingredient")
-        : null;
-      return ingredientEntityId
-        ? await getRecipeUsagesForIngredient(
-            db,
-            parseEntityId("ingredient", ingredientEntityId),
-          )
-        : { recipeUsages: [], appearsInRecipes: [] };
-    }),
-    loadProductOwnershipEvidence(db, id, product.category),
-    loadProductOwners(db, [id]),
-  ]);
+  );
 
   return {
     ...product,
     ...productUnitPriceDetailFields({ ...product, food }),
-    ownershipEvidence: ownership,
-    owners: owners.get(id) ?? null,
     nutritionDisplay: buildNutritionDisplay({
       labelNutrition: product.labelNutrition,
       food,
     }),
     food,
-    recipeUsages,
   };
 };
 

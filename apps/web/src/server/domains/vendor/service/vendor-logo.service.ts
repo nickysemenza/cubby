@@ -27,7 +27,7 @@ import {
   inspectImageFile,
 } from "~/server/domains/image/repo/image-integrity";
 import {
-  getVendorByShortcode,
+  readVendor,
   replaceVendorLogo,
 } from "~/server/domains/vendor/repo/vendor";
 import { createAppError } from "~/server/errors/app-error";
@@ -249,7 +249,7 @@ const productionVendorLogoPorts: VendorLogoPorts<
   fetchResponse: fetchExternalResponse,
   filenameForContentType,
   generateImageKey,
-  getVendor: getVendorByShortcode,
+  getVendor: readVendor,
   inspect: inspectImageFile,
   replaceVendorLogo,
   upload: uploadToS3,

@@ -5,22 +5,16 @@ import {
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { RawProductListInventoryEntryOut } from "@cubby/schemas/product-raw-read";
-import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
+import {
+  type RawProductOutput,
+  rawProductOutput,
+} from "@cubby/schemas/product-raw-read";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
 import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 
 import type { Database } from "~/server/db";
-import {
-  productBrandNameSql,
-  productBrandCodeSql,
-} from "~/server/db/computed/product-brand-sql";
-import {
-  categoryStockTrackingSql,
-  categorySummarySql,
-} from "~/server/db/computed/product-category-sql";
-import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
-import { escapeLike, getDb, imageOrder, notDeleted } from "~/server/db/helpers";
+import { escapeLike, getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityExternalId,
   inventoryEntry,
@@ -41,14 +35,9 @@ import {
   parseBrandClaim,
   vendorNamedSql,
 } from "~/server/domains/vendor/repo/product-brand";
-import { attachDataQuality } from "~/server/generic/data-quality/repo/hydrate";
 
-import { getProductCoverImageUrlsByProductIds } from "./crud";
-import {
-  dbProductToTopLevelAPI,
-  mapProductListInventoryEntries,
-} from "./mappers";
-import { enrichProductRowsWithPricing } from "./pricing";
+import { productScaffold } from "./crud";
+import { mapProductListInventoryEntries } from "./mappers";
 
 const productMatchesFoodLookup = (
   linkedProduct: {
@@ -89,6 +78,15 @@ const productFoodLinkCondition = (lookups: readonly FoodLookupParam[]) =>
     ),
   );
 
+/** Live Product records by internal id, in id order, through the declared read. */
+const readProductRecords = async (
+  db: Database,
+  ids: readonly ProductId[],
+): Promise<RawProductOutput[]> =>
+  (await productScaffold.getByIds(db, ids)).data.map((row) =>
+    rawProductOutput.parse(row),
+  );
+
 /**
  * Resolve every USDA identifier with one product projection.
  *
@@ -117,41 +115,13 @@ export const findProductsByFoodIdentifiers = async (
   // form of that same barcode never matched the old `eq(product.upc, ...)`.
   const linkCondition = productFoodLinkCondition(lookups);
 
-  const res = await getDb(db).query.product.findMany({
-    where: and(linkCondition, notDeleted(product)),
-    extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
-      categoryStockTracking: categoryStockTrackingSql(
-        sql`${product.categoryId}`,
-      ).as("categoryStockTracking"),
-      classificationEvidence: productClassificationEvidenceSql(
-        sql`${product.id}`,
-      ).as("classificationEvidence"),
-    },
-    with: {
-      externalIds: true,
-      images: {
-        orderBy: imageOrder,
-        with: {
-          image: true,
-        },
-      },
-    },
-  });
-
-  const priced = await enrichProductRowsWithPricing(db, res);
-  const qualified = await attachDataQuality(db, "product", priced);
-  const coverImageUrls = await getProductCoverImageUrlsByProductIds(
+  const ids = await getDb(db)
+    .select({ id: product.id })
+    .from(product)
+    .where(and(linkCondition, notDeleted(product)));
+  const linkedProducts = await readProductRecords(
     db,
-    qualified.map((row) => row.id),
-  );
-  const linkedProducts = qualified.map((row) =>
-    dbProductToTopLevelAPI({
-      ...row,
-      coverImageUrl: coverImageUrls.get(row.id) ?? null,
-    }),
+    ids.map((row) => row.id),
   );
   return lookups.map((lookup) =>
     linkedProducts.filter((linkedProduct) =>
@@ -224,43 +194,19 @@ const findProductToAPI = async (
   db: Database,
   where: SQL | undefined,
 ): Promise<RawProductOutput | null> => {
-  const res = await getDb(db).query.product.findFirst({
-    where,
-    extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
-      categoryStockTracking: categoryStockTrackingSql(
-        sql`${product.categoryId}`,
-      ).as("categoryStockTracking"),
-      classificationEvidence: productClassificationEvidenceSql(
-        sql`${product.id}`,
-      ).as("classificationEvidence"),
-    },
-    with: {
-      externalIds: true,
-      images: {
-        orderBy: imageOrder,
-        with: {
-          image: true,
-        },
-      },
-    },
-  });
-
-  if (!res) {
-    return null;
-  }
-
-  const priced = (await enrichProductRowsWithPricing(db, [res]))[0];
-  if (!priced) return null;
-  const qualified = (await attachDataQuality(db, "product", [priced]))[0];
-  if (!qualified) return null;
-  const coverImageUrl =
-    (await getProductCoverImageUrlsByProductIds(db, [qualified.id])).get(
-      qualified.id,
-    ) ?? null;
-  return dbProductToTopLevelAPI({ ...qualified, coverImageUrl });
+  const found = await getDb(db)
+    .select({ id: product.id })
+    .from(product)
+    .where(where)
+    .limit(1);
+  return (
+    (
+      await readProductRecords(
+        db,
+        found.map((row) => row.id),
+      )
+    )[0] ?? null
+  );
 };
 
 /**

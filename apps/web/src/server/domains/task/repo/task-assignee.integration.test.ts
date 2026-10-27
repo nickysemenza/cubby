@@ -9,14 +9,14 @@ import { getDb } from "~/server/db/helpers";
 import { ledgerParty } from "~/server/db/schema";
 import { updateLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
-  getProjectByID,
+  readProjectById,
   updateProject,
 } from "~/server/domains/project/repo/crud";
 import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-member-filter";
 
 import { listActionableTasks } from "./actionable";
-import { getTaskByShortcode, updateTask } from "./crud";
-import { taskList } from "./lookup";
+import { readTask, updateTask } from "./crud";
+import { taskScaffold } from "./lookup";
 
 describe("member assignee inheritance", () => {
   const ctx = withTestDb();
@@ -46,7 +46,7 @@ describe("member assignee inheritance", () => {
       name: "Child work",
       parentTaskId: parent.output.id,
     });
-    const read = () => getTaskByShortcode(ctx.db, child.output.id);
+    const read = () => readTask(ctx.db, child.output.id);
     expect(await read()).toMatchObject({
       assigneeId: first.output.id,
       assigneeName: "First member",
@@ -156,7 +156,7 @@ describe("member assignee inheritance", () => {
       { assigneeId: second.output.id },
       ctx.actor,
     );
-    expect(await getProjectByID(ctx.db, childProject.entityId)).toMatchObject({
+    expect(await readProjectById(ctx.db, childProject.entityId)).toMatchObject({
       assigneeId: first.output.id,
     });
   });
@@ -197,12 +197,11 @@ describe("member assignee inheritance", () => {
     await expect(
       updateLedgerParty(ctx.db, member.output.id, { kind: "guest" }, ctx.actor),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
-    const page = await taskList(
-      ctx.db,
-      { assigneeId: [member.output.id] },
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const page = await taskScaffold.read(ctx.db, {
+      filters: { assigneeId: [member.output.id] },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(page.data.map((row) => row.id)).toContain(task.output.id);
     const earlier = await createRepoEntity(ctx, "ledgerParty", {
       name: "A member",
@@ -213,12 +212,11 @@ describe("member assignee inheritance", () => {
       trade: "building",
       assigneeId: earlier.output.id,
     });
-    const sorted = await taskList(
-      ctx.db,
-      {},
-      [{ orderBy: "assigneeId", direction: "asc" }],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const sorted = await taskScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [{ orderBy: "assigneeId", direction: "asc" }],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(sorted.data.map((row) => row.id)).toEqual([
       explicit.output.id,
       task.output.id,
@@ -231,23 +229,21 @@ describe("member assignee inheritance", () => {
         taskFiltersSchema,
         filters,
       );
-    const beforeLink = await taskList(
-      ctx.db,
-      await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const beforeLink = await taskScaffold.read(ctx.db, {
+      filters: await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(beforeLink.data).toEqual([]);
     await getDb(ctx.db)
       .update(ledgerParty)
       .set({ userId: ctx.actor.userId })
       .where(eq(ledgerParty.id, member.entityId));
-    const mine = await taskList(
-      ctx.db,
-      await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const mine = await taskScaffold.read(ctx.db, {
+      filters: await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(mine.data.map((row) => row.id)).toContain(task.output.id);
     // Only Ledger Party filters resolve; a text search for "@me" stays text.
     const searched = await me({
@@ -257,12 +253,13 @@ describe("member assignee inheritance", () => {
     expect(searched.search).toBe(CURRENT_MEMBER_FILTER);
     expect(searched.assigneeId).toEqual([member.output.id]);
     expect(mine.data.map((row) => row.id)).not.toContain(explicit.output.id);
-    const mineOrEarlier = await taskList(
-      ctx.db,
-      await me({ assigneeId: [CURRENT_MEMBER_FILTER, earlier.output.id] }),
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const mineOrEarlier = await taskScaffold.read(ctx.db, {
+      filters: await me({
+        assigneeId: [CURRENT_MEMBER_FILTER, earlier.output.id],
+      }),
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(mineOrEarlier.data.map((row) => row.id)).toEqual(
       expect.arrayContaining([task.output.id, explicit.output.id]),
     );
@@ -271,12 +268,11 @@ describe("member assignee inheritance", () => {
       await me({ assigneeId: [CURRENT_MEMBER_FILTER] }),
     );
     expect(actionable.next.map((row) => row.id)).toContain(task.output.id);
-    const unassigned = await taskList(
-      ctx.db,
-      { assigneeIdPresenceFilter: "none" },
-      [],
-      { pageIndex: 0, pageSize: 20 },
-    );
+    const unassigned = await taskScaffold.read(ctx.db, {
+      filters: { assigneeIdPresenceFilter: "none" },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 20 },
+    });
     expect(unassigned.data.map((row) => row.id)).not.toContain(task.output.id);
   });
 });

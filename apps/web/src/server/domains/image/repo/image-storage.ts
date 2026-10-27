@@ -54,7 +54,7 @@ import {
   cullPendingImages,
   deleteImages,
   findAttachmentByIdempotencyKey,
-  getImageById,
+  readImageById,
   getImageByKey,
 } from "~/server/domains/image/repo/image";
 import {
@@ -127,9 +127,9 @@ export interface ImageStoragePorts<TDatabase> {
       database: TDatabase,
       ...args: WithoutDatabase<typeof findAttachmentByIdempotencyKey>
     ) => Promise<AttachedImageRecord | null>;
-    getImageById: (
+    readImageById: (
       database: TDatabase,
-      ...args: WithoutDatabase<typeof getImageById>
+      ...args: WithoutDatabase<typeof readImageById>
     ) => Promise<StagedImageRecord>;
     getImageByKey: (
       database: TDatabase,
@@ -178,7 +178,7 @@ export const productionImageStoragePorts = {
     cullPendingImages,
     deleteImages,
     findAttachmentByIdempotencyKey,
-    getImageById,
+    readImageById,
     getImageByKey,
   },
   objectStorage: {
@@ -567,7 +567,7 @@ const readStagedUpload = async <TDatabase>(
       `Upload ${uploadId} not found. Call image.create_file_upload first.`,
       cause,
     );
-  // `uploadId` is the staged row's public `IMG-` code; `getImageById` is a raw
+  // `uploadId` is the staged row's public `IMG-` code; `readImageById` is a raw
   // uuid PK lookup, so the boundary has to be crossed here.
   const stagedImageId = await ports.shortcode.resolveLive(
     db,
@@ -580,7 +580,7 @@ const readStagedUpload = async <TDatabase>(
   // delete, so a concurrent attach of the same uploadId can take the row out
   // between the two reads.
   const staged = await ports.repository
-    .getImageById(db, stagedImageUuid)
+    .readImageById(db, stagedImageUuid)
     .catch((error) => {
       if (toPublicErrorPayload(error).reason !== "IMAGE_NOT_FOUND") {
         throw error;

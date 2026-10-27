@@ -17,9 +17,8 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
-import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { readProductDetail } from "./detail";
+import { readProduct } from "./crud";
 
 let queue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -82,11 +81,7 @@ describe("Product linked references and category behavior", () => {
       book.entityId,
       product.entityId,
     );
-    const context = createTestRequestContext(ctx.db);
-    const raw = await readProductDetail(
-      { db: ctx.db, usdaClient: context.usdaClient },
-      product.id,
-    );
+    const raw = await readProduct(ctx.db, product.id);
     if (!raw) throw new Error("Synthetic raw Product detail missing");
     expect(raw.category?.feature).toBe("storage");
     const repeated = await readPublicEntityRows({

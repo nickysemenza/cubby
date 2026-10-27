@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   deleteProducts,
-  getProductByID,
+  readProductById,
   updateProduct,
 } from "~/server/domains/product/repo/crud";
 import {
@@ -106,7 +106,7 @@ describe("product identity constraints", () => {
       ctx.actor,
     );
 
-    expect((await getProductByID(ctx.db, canonical.entityId)).model).toBe(
+    expect((await readProductById(ctx.db, canonical.entityId)).model).toBe(
       "ID-100",
     );
     await expect(

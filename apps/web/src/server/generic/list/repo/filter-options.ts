@@ -24,7 +24,6 @@ import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
-import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
@@ -32,25 +31,18 @@ import { formatSearchTerm, getDb, notDeleted } from "~/server/db/helpers";
 import {
   ingredient,
   inventoryEntry,
-  ledgerParty,
   location,
   product,
   purchase,
-  project,
-  task,
   vendor,
 } from "~/server/db/schema";
-import { financialAccountTransactionCount } from "~/server/domains/financial-account/repo";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { getProductTagOptions } from "~/server/domains/product/repo/analytics";
 import { projectNameOptions } from "~/server/domains/project/repo/lookup";
 import { getAllTags as getAllRecipeTags } from "~/server/domains/recipe/repo/queries";
-import { vendorPurchaseCount } from "~/server/domains/vendor/repo/vendor";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
-import {
-  DISPLAY_NAME_COLUMN,
-  resolveLiveShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import type { kernelScaffold as kernelScaffoldType } from "~/server/entity-kernel/scaffolds";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
@@ -73,7 +65,7 @@ type DecorableRow = OptionRow & { internalId: LocationId };
 
 type FilterOptionSelection = {
   id: PgColumn;
-  label: PgColumn;
+  label: SQL;
   detail?: PgColumn | SQL;
   internalId?: PgColumn;
 };
@@ -85,11 +77,11 @@ type FilterOptionSelection = {
  */
 type FilterOptionSpec = {
   /** Scanned table; its soft-delete guard is always applied. */
-  from: PgTable & { deletedAt: AnyColumn };
+  from: PgTable & { deletedAt?: AnyColumn };
   /** Public shortcode: the option id, and the column `selectedIds` matches. */
   id: PgColumn;
   /** Searched, and the primary ordering column. */
-  label: PgColumn;
+  label: SQL;
   detail?: PgColumn | SQL;
   /** Set when a join can multiply rows, so the roster stays one row per option. */
   distinct?: boolean;
@@ -102,81 +94,87 @@ type FilterOptionSpec = {
   decorate?: (db: Database, rows: DecorableRow[]) => Promise<OptionRow[]>;
 };
 
-const FILTER_OPTION_SPECS = {
-  product: {
-    from: product,
-    id: product.shortcode,
-    label: product.name,
-    detail: productBrandNameSql(product.brandId),
-  },
-  task: { from: task, id: task.shortcode, label: task.name },
-  project: { from: project, id: project.shortcode, label: project.name },
-  vendor: { from: vendor, id: vendor.shortcode, label: vendor.name },
-
-  ingredientWithProduct: {
-    from: ingredient,
-    id: ingredient.shortcode,
-    label: ingredient.name,
-    where: (dbClient) =>
-      exists(
-        dbClient
-          .select({ id: product.id })
-          .from(product)
-          .where(
-            and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
-          ),
-      ),
-  },
-
-  locationIdentityProduct: {
-    from: location,
-    id: product.shortcode,
-    label: product.name,
-    distinct: true,
-    joins: [
-      {
-        table: product,
-        on: and(eq(product.id, location.productId), notDeleted(product)),
-      },
-    ],
-  },
-
-  locationWithInventory: {
-    from: location,
-    id: location.shortcode,
-    label: location.name,
-    distinct: true,
-    internalId: location.id,
-    joins: [
-      {
-        table: inventoryEntry,
-        on: and(
-          eq(inventoryEntry.locationId, location.id),
-          notDeleted(inventoryEntry),
-          stockOnly(),
+const optionSpec = (
+  kind: FilterOptionKind,
+  kernelScaffold: typeof kernelScaffoldType,
+): FilterOptionSpec => {
+  const entity =
+    kind === "ingredientWithProduct"
+      ? "ingredient"
+      : kind === "locationIdentityProduct"
+        ? "product"
+        : kind === "locationWithInventory"
+          ? "location"
+          : kind;
+  const table: ShortcodeTable = SHORTCODE_TABLE[entity];
+  const label = kernelScaffold(entity)?.title() ?? sql`${table.shortcode}`;
+  const base = { from: table, id: table.shortcode, label };
+  if (kind === "product")
+    return { ...base, detail: productBrandNameSql(product.brandId) };
+  if (kind === "ingredientWithProduct")
+    return {
+      ...base,
+      where: (dbClient) =>
+        exists(
+          dbClient
+            .select({ id: product.id })
+            .from(product)
+            .where(
+              and(eq(product.ingredientId, ingredient.id), notDeleted(product)),
+            ),
         ),
+    };
+  if (kind === "locationIdentityProduct")
+    return {
+      ...base,
+      from: location,
+      distinct: true,
+      joins: [
+        {
+          table: product,
+          on: and(eq(product.id, location.productId), notDeleted(product)),
+        },
+      ],
+    };
+  if (kind === "locationWithInventory")
+    return {
+      ...base,
+      distinct: true,
+      internalId: location.id,
+      joins: [
+        {
+          table: inventoryEntry,
+          on: and(
+            eq(inventoryEntry.locationId, location.id),
+            notDeleted(inventoryEntry),
+            stockOnly(),
+          ),
+        },
+        {
+          table: product,
+          on: and(
+            eq(product.id, inventoryEntry.productId),
+            notDeleted(product),
+          ),
+        },
+      ],
+      decorate: async (db, rows) => {
+        const ancestors = await loadLocationAncestors(
+          db,
+          rows.map((row) => row.internalId),
+        );
+        return rows.map((row) => ({
+          ...row,
+          detail:
+            ancestors
+              .get(row.internalId)
+              ?.map((ancestor) => ancestor.name)
+              .join(" › ") || undefined,
+        }));
       },
-      {
-        table: product,
-        on: and(eq(product.id, inventoryEntry.productId), notDeleted(product)),
-      },
-    ],
-    decorate: async (db, rows) => {
-      const ancestors = await loadLocationAncestors(
-        db,
-        rows.map((row) => row.internalId),
-      );
-      return rows.map((row) => ({
-        ...row,
-        detail:
-          ancestors
-            .get(row.internalId)
-            ?.map((ancestor) => ancestor.name)
-            .join(" › ") || undefined,
-      }));
-    },
-  },
-} satisfies Record<FilterOptionKind, FilterOptionSpec>;
+    };
+  return base;
+};
 
 const optionQueryRowSchema = z.object({
   id: z.string(),
@@ -216,7 +214,8 @@ async function loadRows(
   selectedOnly: boolean,
 ): Promise<OptionRow[]> {
   const dbClient = getDb(db);
-  const spec: FilterOptionSpec = FILTER_OPTION_SPECS[input.kind];
+  const { kernelScaffold } = await import("~/server/entity-kernel/scaffolds");
+  const spec = optionSpec(input.kind, kernelScaffold);
   const offset = selectedOnly ? 0 : Number(input.cursor ?? "0");
   const limit = selectedOnly ? undefined : input.limit + 1;
   const selected = selectedOnly ? input.selectedIds : [];
@@ -273,29 +272,32 @@ async function loadRows(
   );
 }
 
-/**
- * Generic public-reference roster. It deliberately reads the same shortcode
- * table and declared display-name column the resolver owns, rather than
- * teaching filters a second per-entity table/name registry.
- */
 async function loadEntityRows(
   db: Database,
   input: Extract<FilterOptionsInput, { source: "entity" }>,
   selectedOnly: boolean,
 ): Promise<EntityOptionRow[]> {
   const entity: ShortcodeEntity = input.entity;
+  const { kernelScaffold } = await import("~/server/entity-kernel/scaffolds");
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
-  const labelColumn = DISPLAY_NAME_COLUMN[entity] ?? table.shortcode;
+  const scaffold = kernelScaffold(entity);
+  const labelColumn = scaffold?.title() ?? sql`${table.shortcode}`;
   // Purchase identity is computed from receipt facts, rather than a name column.
   const label =
     entity === "purchase"
       ? sql<string>`concat_ws(' ', ${purchase.displayLabel}, ${purchase.orderId}, ${vendor.name}, ${purchase.date})`
       : sql<string>`coalesce(${labelColumn}, ${table.shortcode})`;
-  const count = input.include.includes("count") ? optionCountFor(entity) : null;
+  const count = input.include.includes("count")
+    ? scaffold?.optionCount()
+    : undefined;
+  if (input.include.includes("count") && !count)
+    throw new Error(`Filter option counts are not defined for ${entity}`);
   const withLogo = input.include.includes("logo");
   const kindColumn = input.include.includes("kind")
-    ? optionKindFor(entity)
-    : null;
+    ? scaffold?.optionKind
+    : undefined;
+  if (input.include.includes("kind") && !kindColumn)
+    throw new Error(`Filter option kind is not defined for ${entity}`);
   const emojiColumn = getTableColumns(table).emoji;
   const withDates = input.include.includes("dates");
   if (withDates && entity !== "project")
@@ -305,10 +307,7 @@ async function loadEntityRows(
     .select({
       entityId: table.id,
       id: table.shortcode,
-      label,
-      orderId: entity === "purchase" ? purchase.orderId : sql<null>`NULL::text`,
-      displayLabel:
-        entity === "purchase" ? purchase.displayLabel : sql<null>`NULL::text`,
+      label: sql`coalesce(${labelColumn}, ${table.shortcode})`,
       vendorName: entity === "purchase" ? vendor.name : sql<null>`NULL::text`,
       purchaseDate:
         entity === "purchase" ? purchase.date : sql<null>`NULL::text`,
@@ -355,12 +354,6 @@ async function loadEntityRows(
       parseOptionQueryRow({ id: row.id, label: row.label }),
     );
     if (entity === "purchase") {
-      option.label = purchaseLabel({
-        orderId: row.orderId,
-        displayLabel: row.displayLabel,
-        vendorName: row.vendorName,
-        date: row.purchaseDate,
-      });
       option.detail = [
         row.vendorName,
         row.purchaseDate
@@ -384,33 +377,6 @@ type EntityOptionRow = OptionRow &
     FilterOptionsOut["items"][number],
     "count" | "logo" | "kind" | "emoji" | "dateWindow"
   >;
-
-/**
- * The usage a `count` projection ranks by. An entity absent here refuses the
- * projection rather than reporting a zero it never measured.
- */
-const OPTION_COUNTS = new Map<ShortcodeEntity, SQL<number>>([
-  ["vendor", vendorPurchaseCount],
-  ["financialAccount", financialAccountTransactionCount],
-]);
-
-const optionCountFor = (entity: ShortcodeEntity): SQL<number> => {
-  const count = OPTION_COUNTS.get(entity);
-  if (!count)
-    throw new Error(`Filter option counts are not defined for ${entity}`);
-  return count;
-};
-
-/** Entities whose `ledgerParty`-shaped `kind` column a picker can project. */
-const OPTION_KINDS = new Map<ShortcodeEntity, PgColumn>([
-  ["ledgerParty", ledgerParty.kind],
-]);
-
-const optionKindFor = (entity: ShortcodeEntity): PgColumn => {
-  const kind = OPTION_KINDS.get(entity);
-  if (!kind) throw new Error(`Filter option kind is not defined for ${entity}`);
-  return kind;
-};
 
 /**
  * Merges `project`'s effective content-date window onto rows already read by

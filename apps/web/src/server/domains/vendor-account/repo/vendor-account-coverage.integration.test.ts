@@ -19,10 +19,7 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
-import {
-  getVendorAccountByShortcode,
-  listVendorAccountsRead,
-} from "./vendor-account";
+import { readVendorAccount, vendorAccountScaffold } from "./vendor-account";
 
 // Failure modes: a vendor without purchases escapes logo work, duplicate
 // problem/research branches produce two tasks for one logo, assigning an
@@ -246,19 +243,16 @@ describe("vendor identity and purchase account coverage", () => {
       other.shortcode,
     ]);
     expect(
-      (await getVendorAccountByShortcode(ctx.db, first.shortcode))
-        ?.purchaseCount,
+      (await readVendorAccount(ctx.db, first.shortcode))?.purchaseCount,
     ).toBe(4);
     expect(
-      (await getVendorAccountByShortcode(ctx.db, second.shortcode))
-        ?.purchaseCount,
+      (await readVendorAccount(ctx.db, second.shortcode))?.purchaseCount,
     ).toBe(1);
-    const filtered = await listVendorAccountsRead(
-      ctx.db,
-      vendorAccountFilters.parse({ purchaseId: [other.shortcode] }),
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const filtered = await vendorAccountScaffold.read(ctx.db, {
+      filters: vendorAccountFilters.parse({ purchaseId: [other.shortcode] }),
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(filtered.data.map((account) => account.id)).toEqual([
       second.shortcode,
     ]);

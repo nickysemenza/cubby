@@ -27,7 +27,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
-import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
+import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -559,7 +559,7 @@ describe("shared spending booking", () => {
         purchaserId: other.output.id,
         purchaserOverrideId: null,
       };
-      expect(await getPurchaseByID(ctx.db, receipt.entityId)).toMatchObject(
+      expect(await readPurchaseById(ctx.db, receipt.entityId)).toMatchObject(
         expected,
       );
       const plan = await previewFinancialSpending(ctx.db, {
@@ -586,11 +586,11 @@ describe("shared spending booking", () => {
           ? () => commitFinancialSpending(ctx.db, plan, ctx.actor)
           : () => commitFinancialBooking(ctx.db, direct, ctx.actor);
       expect(await commit()).toMatchObject({ replayed: false });
-      expect(await getPurchaseByID(ctx.db, receipt.entityId)).toMatchObject(
+      expect(await readPurchaseById(ctx.db, receipt.entityId)).toMatchObject(
         expected,
       );
       expect(await commit()).toMatchObject({ replayed: true });
-      expect(await getPurchaseByID(ctx.db, receipt.entityId)).toMatchObject(
+      expect(await readPurchaseById(ctx.db, receipt.entityId)).toMatchObject(
         expected,
       );
       expect(

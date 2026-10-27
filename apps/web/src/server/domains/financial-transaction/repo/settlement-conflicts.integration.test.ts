@@ -15,7 +15,7 @@ import {
 } from "~/server/db/schema";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
-import { getPurchaseByShortcode as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
+import { readPurchase as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -30,9 +30,7 @@ import { updateFinancialTransaction } from "./financial-transaction";
  */
 describe("settlement conflicts", () => {
   const ctx = withTestDb();
-  const getPurchaseByShortcode: typeof readPurchaseByShortcode = async (
-    ...args
-  ) => {
+  const readPurchase: typeof readPurchaseByShortcode = async (...args) => {
     await publishQualityFixtures(ctx.db, "purchase");
     return readPurchaseByShortcode(...args);
   };
@@ -109,7 +107,7 @@ describe("settlement conflicts", () => {
   }
 
   const gaps = async (shortcode: string) =>
-    (await getPurchaseByShortcode(ctx.db, shortcode))?.dataQuality.gaps.map(
+    (await readPurchase(ctx.db, shortcode))?.dataQuality.gaps.map(
       (gap) => gap.check,
     ) ?? [];
 
@@ -154,8 +152,7 @@ describe("settlement conflicts", () => {
       },
       ctx.actor,
     );
-    const quality = (await getPurchaseByShortcode(ctx.db, order.shortcode))
-      ?.dataQuality;
+    const quality = (await readPurchase(ctx.db, order.shortcode))?.dataQuality;
     expect(quality?.gaps.map((gap) => gap.check)).not.toContain(
       "settlement_party_conflict",
     );
@@ -418,7 +415,7 @@ describe("settlement conflicts", () => {
     expect(await gaps(order.shortcode)).toContain("settlement_party_conflict");
     // The settling card's sole user is not the order's member: purchaser stays unknown.
     expect(
-      (await getPurchaseByShortcode(ctx.db, order.shortcode))?.purchaserId,
+      (await readPurchase(ctx.db, order.shortcode))?.purchaserId,
     ).toBeNull();
   });
 

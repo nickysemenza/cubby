@@ -14,7 +14,7 @@ import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { createRecipe } from "~/server/domains/recipe/repo/crud";
 import {
   findOrCreateVendor,
-  getVendorByID,
+  readVendorById,
 } from "~/server/domains/vendor/repo/vendor";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -144,7 +144,7 @@ describe("entity reference filter options", () => {
 
   it("recognizes purchases by receipt identity and vendor/date context, including selected matches outside the search", async () => {
     const vendorId = (
-      await getVendorByID(
+      await readVendorById(
         ctx.db,
         await findOrCreateVendor(ctx.db, "Synthetic Apparel"),
       )
@@ -190,7 +190,7 @@ describe("entity reference filter options", () => {
   // vendor's logo; both used to come from a dedicated `vendor.options` read.
   it("projects counts and logos, ordering a counted roster by usage", async () => {
     const vendorCode = async (name: string) =>
-      (await getVendorByID(ctx.db, await findOrCreateVendor(ctx.db, name))).id;
+      (await readVendorById(ctx.db, await findOrCreateVendor(ctx.db, name))).id;
     const quiet = await vendorCode("Aardvark hardware");
     const busy = await vendorCode("Zephyr lumber");
     for (const orderId of ["ORDER-A", "ORDER-B"])

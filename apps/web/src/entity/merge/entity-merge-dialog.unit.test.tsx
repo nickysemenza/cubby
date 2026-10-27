@@ -23,7 +23,6 @@ import { EntityMergeDialog } from "./entity-merge-dialog";
 function blockingConnections(): Promise<{
   id: string;
   kind: "ingredient" | "vendor";
-  redirectedFrom: null;
   groups: {
     direction: "incoming";
     edgeKey: string;
@@ -38,7 +37,6 @@ function blockingConnections(): Promise<{
   return Promise.resolve({
     id: "irrelevant",
     kind: "ingredient",
-    redirectedFrom: null,
     groups: [
       {
         direction: "incoming",
@@ -252,7 +250,6 @@ describe("EntityMergeDialog generic kernel merge", () => {
             Promise.resolve({
               id: candidate.id,
               kind: "purchase",
-              redirectedFrom: null,
               groups: [],
             }),
           ),
@@ -286,7 +283,6 @@ describe("EntityMergeDialog generic kernel merge", () => {
             Promise.resolve({
               id: rows[1]!.id,
               kind: "plant",
-              redirectedFrom: null,
               groups: [],
             }),
           ),

@@ -2,7 +2,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
-import { getProductByID } from "~/server/domains/product/repo/crud";
+import { readProductById } from "~/server/domains/product/repo/crud";
 import { listProductFdcLinks } from "~/server/domains/product/repo/lookup";
 import { updateProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
@@ -58,7 +58,7 @@ export async function advanceProductUsdaLinks(
   const applied: UsdaLinkAdvance[] = [];
   for (const advance of advances) {
     // A link the household changed since the snapshot is theirs to keep.
-    const { fdc_id } = await getProductByID(db, advance.productId);
+    const { fdc_id } = await readProductById(db, advance.productId);
     if (fdc_id !== advance.fromFdcId) continue;
     await updateProductWithSideEffects(
       services,

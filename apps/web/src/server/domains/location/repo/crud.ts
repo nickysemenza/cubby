@@ -20,15 +20,17 @@ import type {
 } from "@cubby/schemas/location";
 import { locationPickerSortableFields } from "@cubby/schemas/location";
 import { locationValuation } from "@cubby/schemas/location-fields";
-import type { RawLocationDetail } from "@cubby/schemas/location-raw-read";
-import { rawLocationList } from "@cubby/schemas/location-raw-read";
+import {
+  type RawLocationDetail,
+  rawLocationDetail,
+  rawLocationList,
+} from "@cubby/schemas/location-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, gt, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { storedValueSql } from "~/server/db/computed/derived-value-sql";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import {
   LOCATION_DESCRIPTION_FEATURE_ID,
@@ -40,8 +42,7 @@ import {
   buildOrderBy,
   buildPartialUpdateValues,
   getDb,
-  imageJoinBindings,
-  type ListReadIntent,
+  galleryBinding,
   mapImages,
   notDeleted,
   relations,
@@ -50,6 +51,7 @@ import {
   withTransaction,
   withTransactionOn,
 } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import {
   aiAnalysis,
   derivedValue,
@@ -69,6 +71,7 @@ import type {
   LocationWithParentChild,
 } from "~/server/domains/location/repo/internal-types";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
+import { locationSearch as locationSearchRead } from "~/server/domains/location/repo/search-read-location";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import {
   resolveEntityDisplayImages,
@@ -76,6 +79,7 @@ import {
 } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
@@ -91,12 +95,8 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
-import { type ListContext } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { valuationLabel } from "~/server/generic/list/repo/list-display-labels";
-import { wantsListGroup } from "~/server/generic/list/repo/list-projection";
-import { parseCompleteListRead } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllPresent,
@@ -204,7 +204,7 @@ export const createLocationRecord = defineMutationWriter({
     _data: LocationCreateInput,
     _actor: ActorContext,
   ) => ({
-    output: await getLocationById(db, receipt.entityId),
+    output: await readLocationById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (
@@ -253,7 +253,7 @@ const createLocationTx = defineMutationWriter({
     _data: LocationCreateInput,
     _actor: ActorContext,
   ) => ({
-    output: await getLocationById(db, receipt.entityId),
+    output: await readLocationById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (
@@ -313,7 +313,7 @@ const createLocationTx = defineMutationWriter({
         );
         await associatePendingImages(
           tx,
-          imageJoinBindings.location,
+          galleryBinding("location"),
           newLocation.id,
           resolvedImageIds,
         );
@@ -328,7 +328,7 @@ const createLocationTx = defineMutationWriter({
       return readOutput(
         { entityId: newLocation.id, shortcode: newLocation.shortcode },
         async () => ({
-          output: await getLocationById(tx, newLocation.id),
+          output: await readLocationById(tx, newLocation.id),
           entityId: newLocation.id,
         }),
       );
@@ -358,7 +358,7 @@ export const ensureGlobalUnknownLocation = async (
   const existing = await findUnknown();
 
   if (existing) {
-    return getLocationById(db, existing.id);
+    return readLocationById(db, existing.id);
   }
 
   try {
@@ -377,7 +377,7 @@ export const ensureGlobalUnknownLocation = async (
     // Location_name_key prevents duplicate active names; if another request won
     // the create race, reuse that row instead of surfacing a transient conflict.
     const raced = await findUnknown();
-    if (raced) return getLocationById(db, raced.id);
+    if (raced) return readLocationById(db, raced.id);
     throw error;
   }
 };
@@ -401,7 +401,7 @@ export const updateLocation = defineMutationWriter({
     _actor: ActorContext,
     _options?: { resolvedParentId?: LocationId | null },
   ) => ({
-    location: await getLocationById(db, receipt.entityId),
+    location: await readLocationById(db, receipt.entityId),
     detachedImageKeys: receipt.detachedImageKeys ?? [],
   }),
   write: async (
@@ -466,7 +466,7 @@ export const updateLocation = defineMutationWriter({
       ({ detachedImageKeys } = await syncEntityImages(
         tx,
         "location",
-        imageJoinBindings.location,
+        galleryBinding("location"),
         locationId,
         data,
       ));
@@ -533,7 +533,7 @@ export const updateLocation = defineMutationWriter({
       return readOutput(
         { entityId: id, shortcode: updated.shortcode, detachedImageKeys },
         async () => ({
-          location: await getLocationById(tx, updated.id),
+          location: await readLocationById(tx, updated.id),
           detachedImageKeys,
         }),
       );
@@ -685,7 +685,55 @@ const locationIdsWithChildren = qb
   .from(childLocation)
   .where(and(notDeleted(childLocation), isNotNull(childLocation.parentId)));
 
-const locationScaffold = listScaffold("location", location, {
+/** Each location row's relation `with` under `key`, by location id. */
+const loadLocationRelation = async <
+  K extends keyof typeof relations.location.list.with,
+>(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+  key: K,
+) => {
+  const rows = await unwrapDb(db).query.location.findMany({
+    where: inArray(
+      location.id,
+      ids.map((id) => parseEntityId("location", id)),
+    ),
+    columns: { id: true },
+    // SAFETY: the computed key is `key`, so the object is exactly that pick.
+    with: { [key]: relations.location.list.with[key] } as Pick<
+      typeof relations.location.list.with,
+      K
+    >,
+  });
+  return new Map(rows.map((row) => [row.id, row]));
+};
+
+/**
+ * The record read's tree: the parent chain and children as full nodes, with
+ * stock items and item counts. Batched per id; a record read names one.
+ */
+const loadLocationTrees = async (
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) =>
+  new Map(
+    await Promise.all(
+      ids.map(
+        async (id) =>
+          [
+            id,
+            await loadLocationTree(db, parseEntityId("location", id)),
+          ] as const,
+      ),
+    ),
+  );
+
+/**
+ * The Location read, stated once: list pages, selected projections and the
+ * single-record read all select through it. A page reads compact parent and
+ * child refs; the record read replaces them with the full tree.
+ */
+export const locationScaffold = listScaffold("location", location, {
   derived: {
     // Direct value, because that is what the list cell renders in compact
     // mode.
@@ -708,137 +756,141 @@ const locationScaffold = listScaffold("location", location, {
     hasChildren: inArray(location.id, locationIdsWithChildren),
     hasAiDescription: sql`${locationAiDescriptionSql(location.id)} IS NOT NULL`,
   },
+  read: {
+    search: locationSearchRead,
+    columns: {
+      // Not a column: the latest live AiAnalysis text. A single-table select
+      // renders an interpolated column bare, so the row is qualified by hand.
+      aiDescription: locationAiDescriptionSql(outer(location.id)),
+      // The rolled-up valuation the list cell and record read show; the
+      // derived `valuation` is the direct value filters and sorts read.
+      valuationRollup: sql`(SELECT value FROM "DerivedValue" WHERE "entityId" = ${outer(location.id)} AND key = 'valuationRollup')`,
+    },
+    media: true,
+    bindings: (bind) => {
+      const identity = bind.ids(({ db, ids }) =>
+        loadLocationRelation(db, ids, "product"),
+      );
+      const parents = bind.ids(({ db, ids }) =>
+        loadLocationRelation(db, ids, "parent"),
+      );
+      const children = bind.ids(({ db, ids }) =>
+        loadLocationRelation(db, ids, "children"),
+      );
+      const images = bind.ids(({ db, ids }) =>
+        loadLocationRelation(db, ids, "images"),
+      );
+      const stock = bind.ids(({ db, ids }) =>
+        loadLocationRelation(db, ids, "inventoryEntries"),
+      );
+      const trees = bind.ids(({ db, ids }) => loadLocationTrees(db, ids));
+      const tree = (
+        row: { id: string },
+        loaded: Awaited<ReturnType<typeof loadLocationTrees>>,
+      ) => {
+        const value = loaded.get(row.id);
+        if (!value) throw new Error(`Location tree was not loaded: ${row.id}`);
+        return value;
+      };
+      return [
+        bind(rawLocationList.pick({ type: true }), (row) => ({
+          type: parseLocationType(row.type),
+        })),
+        identity.fields(
+          rawLocationList.pick({ product: true }),
+          (row, loaded) => ({
+            product: mapLocationIdentityProduct(loaded.get(row.id)),
+          }),
+        ),
+        parents.fields(
+          rawLocationList.pick({ parent: true }),
+          (row, loaded) => ({
+            parent: locationReferenceFields({
+              parent: loaded.get(row.id)?.parent ?? null,
+              children: [],
+            }).parent,
+          }),
+        ),
+        children.fields(
+          rawLocationList.pick({ children: true }),
+          (row, loaded) => ({
+            children: locationReferenceFields({
+              parent: null,
+              children: loaded.get(row.id)?.children ?? [],
+            }).children,
+          }),
+        ),
+        images.fields(
+          rawLocationList.pick({ images: true }),
+          (row, loaded) => ({
+            images: mapImages(loaded.get(row.id)?.images ?? []),
+          }),
+        ),
+        stock.fields(
+          rawLocationList.pick({ inventoryEntries: true }),
+          (row, loaded) =>
+            locationInventoryFields({
+              inventoryEntries: (
+                loaded.get(row.id)?.inventoryEntries ?? []
+              ).map((entry) => ({
+                ...entry,
+                valuation: entry.storedValuation,
+              })),
+            }),
+        ),
+        bind(
+          rawLocationList.pick({ valuation: true, valuationLabel: true }),
+          (row) => {
+            const valuation = locationValuation
+              .nullable()
+              .parse(row.valuationRollup ?? null);
+            return { valuation, valuationLabel: valuationLabel(valuation) };
+          },
+        ),
+        // A root omits `parent` on its record read.
+        trees.fields(
+          rawLocationDetail.pick({ parent: true, children: true }),
+          (row, loaded) => {
+            const { parent, children } = tree(row, loaded);
+            return { parent: parent ?? undefined, children };
+          },
+          { scope: "detail" },
+        ),
+        trees.fields(
+          rawLocationDetail.pick({
+            childCount: true,
+            directItemCount: true,
+            totalItemCount: true,
+            inventoryItems: true,
+          }),
+          (row, loaded) => {
+            const value = tree(row, loaded);
+            return {
+              childCount: value.childCount,
+              directItemCount: value.directItemCount,
+              totalItemCount: value.totalItemCount,
+              inventoryItems: value.inventoryItems,
+            };
+          },
+          { scope: "detail" },
+        ),
+      ];
+    },
+  },
 });
 
-/**
- * The full `locationList` predicate. Exported so `getEntityCounts` can call
- * `buildLocationWhere(db, {})` and get the list's REAL population rather
- * than a hand-restated copy that can drift from it.
- */
-export const buildLocationWhere = async (
-  db: Database,
-  filters: LocationFilters,
-  prepared?: ListContext,
-): Promise<SQL | undefined> =>
-  locationScaffold.where(filters, {
-    context:
-      prepared ??
-      (await locationScaffold.context(db, { filters, readIntent: "count" })),
-  });
-
-export const locationListRead = async (
-  db: Database,
-  filters: LocationFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  projection: ListProjection,
-  readIntent: ListReadIntent = "page",
-) => {
-  const context = await locationScaffold.context(db, {
-    filters,
-    sorts,
-    readIntent,
-    projection,
-  });
-  const whereClause = await buildLocationWhere(db, filters, context);
-
-  // A count never orders, and skipped the prepare a valuation sort reads.
-  const orderByClause: SQL[] =
-    readIntent === "count"
-      ? []
-      : locationScaffold.orderBy(sorts, {}, filters, context);
-
-  return locationScaffold.read(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      context,
-      where: whereClause,
-      orderBy: orderByClause,
-      load: (where) =>
-        getDb(db).query.location.findMany({
-          where,
-          extras: {
-            ...relations.location.list.extras,
-            valuationRollup: storedValueSql(location.id, "valuationRollup").as(
-              "valuationRollup",
-            ),
-          },
-          with: {
-            parent: wantsListGroup(projection, "relations")
-              ? relations.location.list.with.parent
-              : undefined,
-            product: wantsListGroup(projection, "relations")
-              ? relations.location.list.with.product
-              : undefined,
-            children: wantsListGroup(projection, "relations")
-              ? relations.location.list.with.children
-              : undefined,
-            inventoryEntries: wantsListGroup(projection, "relations")
-              ? relations.location.list.with.inventoryEntries
-              : undefined,
-            images: wantsListGroup(projection, "media")
-              ? relations.location.list.with.images
-              : undefined,
-          },
-        }),
-      read: {
-        media: true,
-        bindings: (bind) => {
-          return [
-            bind(rawLocationList.pick({ type: true }), (row) => ({
-              type: parseLocationType(row.type),
-            })),
-            bind(rawLocationList.pick({ product: true }), (row) => ({
-              product: mapLocationIdentityProduct({
-                ...row,
-                product:
-                  row.product && "category" in row.product ? row.product : null,
-              }),
-            })),
-            bind(
-              rawLocationList.pick({ parent: true, children: true }),
-              (row) =>
-                locationReferenceFields({
-                  parent: row.parent ?? null,
-                  children: row.children ?? [],
-                }),
-            ),
-            bind(rawLocationList.pick({ images: true }), (row) => ({
-              images: mapImages(
-                (row.images ?? []).flatMap((entry) =>
-                  "image" in entry ? [entry] : [],
-                ),
-              ),
-            })),
-            bind(rawLocationList.pick({ inventoryEntries: true }), (row) =>
-              locationInventoryFields({
-                inventoryEntries: (row.inventoryEntries ?? []).flatMap(
-                  (entry) =>
-                    "product" in entry
-                      ? [{ ...entry, valuation: entry.storedValuation }]
-                      : [],
-                ),
-              }),
-            ),
-            bind(
-              rawLocationList.pick({
-                valuation: true,
-                valuationLabel: true,
-              }),
-              (row) => {
-                const valuation = locationValuation
-                  .nullable()
-                  .parse(row.valuationRollup ?? null);
-                return { valuation, valuationLabel: valuationLabel(valuation) };
-              },
-            ),
-          ];
-        },
-      },
-    },
-  );
-};
+const locationReader = createEntityReader<
+  never,
+  RawLocationDetail,
+  "location",
+  Database | DrizzleTransaction
+>({
+  entity: "location",
+  scaffold: locationScaffold,
+  output: rawLocationDetail,
+});
+/** One live Location's record read by internal id; throws `LOCATION_NOT_FOUND`. */
+export const readLocationById = locationReader.getByID;
 
 /** Full image metadata for picker DTOs; selection belongs to the canonical resolver. */
 const loadLocationCoverImages = async (
@@ -914,7 +966,7 @@ type LocationRosterFilters = Pick<
  * same-named shelves apart.
  *
  * Skips the inventory-entry / product / valuation relation load AND the
- * batched product-pricing pass that `locationList` pays for, none of which a
+ * batched product-pricing pass that the Location list read pays for, none of which a
  * dropdown renders. Same split as `productSearch`.
  */
 export const locationSearch = async (
@@ -923,7 +975,7 @@ export const locationSearch = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{ data: LocationPickerItemOut[]; count: number }> => {
-  // The same declared predicates `buildLocationWhere` applies, so the two
+  // The same declared predicates the list applies, so the two
   // surfaces cannot drift.
   const whereClause = locationScaffold.where(filters);
 
@@ -1078,7 +1130,8 @@ export const findLocationsNeedingAiDescription = async (
     }));
 };
 
-export const getLocationById = async (
+/** One location's record tree: parent chain, children, stock items, counts. */
+const loadLocationTree = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
 ): Promise<RawLocationDetail> => {
@@ -1214,24 +1267,6 @@ export const getLocationById = async (
     dataQualities,
     displayImages,
   );
-};
-
-export const locationList = async (
-  db: Database,
-  filters: LocationFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-) => {
-  const page = await locationListRead(
-    db,
-    filters,
-    sorts,
-    pagination,
-    { kind: "full" },
-    readIntent,
-  );
-  return parseCompleteListRead(rawLocationList, Promise.resolve(page));
 };
 
 /** Only image presence is required when clearing a description after the last attachment is removed. */

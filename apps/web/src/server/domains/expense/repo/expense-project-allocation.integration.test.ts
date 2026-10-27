@@ -33,7 +33,7 @@ import {
   expenseJointAllocationSql,
   loadExpenseProjectAllocations,
 } from "./expense-project-allocation";
-import { buildExpenseWhereClause } from "./lookup";
+import { expenseScaffold } from "./lookup";
 
 const allocationPlanNode = z.object({
   "Subplan Name": z.string().optional(),
@@ -277,7 +277,7 @@ describe("expense project allocation", () => {
 
     // Stored row filters must select complete purchases before allocation:
     // these principals fail the tax/cost filters but still supply its weights.
-    const filteredWhere = await buildExpenseWhereClause(ctx.db, {
+    const filteredWhere = await expenseScaffold.prepareWhere(ctx.db, {
       lineKind: "tax",
       costMin: 0.01,
       costMax: 0.1,

@@ -42,19 +42,18 @@ import {
 import {
   describeUnresolvableCode,
   isShortcodeEntity,
-  resolveEntityIdentity,
 } from "~/server/entity-kernel/repo/entity-identity";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import {
-  loadPublicFieldReadContexts,
-  publicFieldEnvelopeRows,
-} from "~/server/generic/derived/repo/public-read";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
-import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
+import {
+  withChildCounts,
+  withDisplayImages,
+} from "~/server/generic/list/repo/list-read-adapters";
 import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import {
   bindWorkflow,
@@ -341,59 +340,24 @@ const buildEntityOperations = <
           parseSchema<S["id"], string>(binding.schemas.id, input.id),
         )
         .call("found", async ({ context }, { input, id }) => {
-          const fieldReads = loadPublicFieldReadContexts(
-            context.db,
-            binding.entity,
-            [input.id],
-          );
-          fieldReads.catch(() => {
-            // SILENT: The promise is awaited below; prevent an unhandled rejection on an early not-found response.
-          });
-          const item = await binding.repository.get(context, id);
-          if (item !== null)
-            return {
-              item,
-              fieldReads,
-              redirectedFrom: null,
-              missingMessage: null,
-            };
-          // A merged-away code reads as its survivor (ADR 0006). Mutations never
-          // follow this redirect; they refuse with the survivor's code instead.
-          const identity = await resolveEntityIdentity(context.db, input.id);
-          const canonical =
-            identity.state === "redirected" &&
-            identity.kind === binding.entity &&
-            identity.canonicalDeletedAt === null
-              ? await binding.repository.get(
-                  context,
-                  parseSchema<S["id"], string>(
-                    binding.schemas.id,
-                    identity.canonicalShortcode,
-                  ),
-                )
-              : null;
-          if (canonical !== null && identity.state === "redirected")
-            return {
-              item: canonical,
-              fieldReads: loadPublicFieldReadContexts(
-                context.db,
-                binding.entity,
-                [identity.canonicalShortcode],
-              ),
-              redirectedFrom: identity.requested,
-              missingMessage: null,
-            };
+          // A merged-away or deleted code is simply not found; the message
+          // names the survivor (ADR 0006).
+          const page = await binding.repository.read(context, [id]);
+          const [row] = page.data;
           return {
-            item: null,
-            fieldReads,
-            redirectedFrom: null,
-            missingMessage: isShortcodeEntity(binding.entity)
-              ? await describeUnresolvableCode(
-                  context.db,
-                  binding.entity,
-                  input.id,
-                )
-              : null,
+            item:
+              row === undefined
+                ? null
+                : binding.schemas.repositoryDetail.parse(row),
+            fieldReads: page.fieldReads,
+            missingMessage:
+              row === undefined && isShortcodeEntity(binding.entity)
+                ? await describeUnresolvableCode(
+                    context.db,
+                    binding.entity,
+                    input.id,
+                  )
+                : null,
           };
         })
         .call("media", async ({ context }, { found }) => {
@@ -411,7 +375,6 @@ const buildEntityOperations = <
           return {
             ...item,
             ...(breadcrumb === undefined ? {} : { breadcrumb }),
-            redirectedFrom: found.redirectedFrom,
           };
         })
         .call("enveloped", async ({ context }, { found, media }) =>
@@ -423,7 +386,7 @@ const buildEntityOperations = <
                   entity: binding.entity,
                   schema: binding.schemas.detail,
                   rows: [media],
-                  contexts: await found.fieldReads,
+                  contexts: found.fieldReads,
                 })
               )[0],
         )
@@ -471,7 +434,7 @@ const buildEntityOperations = <
           };
         })
         .call("page", async ({ context }, { validated }) => {
-          return binding.repository.list(
+          const page = await binding.repository.listRead(
             context,
             withListGroupBy(
               Object.assign(
@@ -488,6 +451,18 @@ const buildEntityOperations = <
             validated.sorts,
             validated.pagination,
           );
+          return {
+            ...page,
+            data: withDisplayImages(
+              withChildCounts(
+                page.data.map((row) =>
+                  binding.schemas.repositoryList.parse(row),
+                ),
+                page.data,
+              ),
+              page.data,
+            ),
+          };
         })
         .call("mediaPage", async ({ context }, { page }) => ({
           ...page,

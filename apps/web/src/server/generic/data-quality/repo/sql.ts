@@ -24,7 +24,7 @@ import {
   type ScoredTable,
 } from "~/server/generic/data-quality/repo/registry";
 
-import { dataQualityEntries, storedEntryFor } from "./entries";
+import { storedEntryFor } from "./entry";
 import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
 
 /**
@@ -163,9 +163,10 @@ export const relatedGapCondition = (
   const link = storedEntryFor(entity).related?.[target];
   if (!link)
     throw new Error(`${entity} does not roll up ${target} data quality.`);
-  // The inferred (not erased) entry, so the alias keeps its typed columns.
-  const targetTable = dataQualityEntries[target].table;
-  const related = alias(targetTable, RELATED_ALIAS);
+  const targetTable = storedEntryFor(target).table;
+  const aliased: unknown = alias(targetTable, RELATED_ALIAS);
+  // SAFETY: alias preserves the scored table's id, shortcode, and tombstone columns.
+  const related = aliased as ScoredTable;
   // A raw `${related}` renders only the alias; the FROM needs both names.
   const from = sql.raw(`"${getTableName(targetTable)}" "${RELATED_ALIAS}"`);
   return group(sql`EXISTS (

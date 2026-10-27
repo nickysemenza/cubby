@@ -36,7 +36,7 @@ import {
   orderMail,
   run,
 } from "~/server/db/schema";
-import { listEmailsRead } from "~/server/domains/email/repo/email";
+import { emailScaffold } from "~/server/domains/email/repo/email";
 import { pauseExecutionRun } from "~/server/domains/run/repo/execution-context";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
@@ -409,12 +409,11 @@ describe("member Reclassify", () => {
       kind: "member_review",
       memberClassification: "related",
     });
-    const conflicts = await listEmailsRead(
-      ctx.db,
-      { reviewConflict: true },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const conflicts = await emailScaffold.read(ctx.db, {
+      filters: { reviewConflict: true },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(conflicts.data.map((row) => row.id)).toEqual([email.shortcode]);
   });
 
@@ -525,12 +524,11 @@ describe("member Reclassify", () => {
       kind: "member_review",
       memberClassification: "related",
     });
-    const reviewed = await listEmailsRead(
-      ctx.db,
-      { reviewConflict: true },
-      [],
-      { pageIndex: 0, pageSize: 10 },
-    );
+    const reviewed = await emailScaffold.read(ctx.db, {
+      filters: { reviewConflict: true },
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
     expect(reviewed.data[0]).toMatchObject({
       id: email.shortcode,
       reviewedClassification: "related",

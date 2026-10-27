@@ -37,7 +37,7 @@ import {
   executeEntity,
   executeEntityAs,
 } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -70,7 +70,7 @@ describe("row-set filters", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
   const listed = async (entity: ListEntity, filters: ListFilterValues) => {
-    const pageResult = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
+    const pageResult = await listOperations(entity).listFields(
       context(),
       {
         filters,

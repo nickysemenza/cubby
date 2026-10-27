@@ -26,7 +26,7 @@ import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exceptio
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { storedEntryFor } from "./entries";
+import { storedEntryFor } from "./entry";
 import { loadDataQualities } from "./hydrate";
 import { checksOf } from "./sql";
 import { evaluateLiveQuality } from "./stored";

@@ -15,13 +15,11 @@ import {
   parseShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   LinkExpensesToPurchaseInput,
   MergePurchasesInput,
   MergePurchasesOut,
   PurchaseCreateInput,
-  PurchaseFilters,
   PurchaseUpdateData,
   ReclassifyPurchaseDocumentInput,
   SplitExpenseInput,
@@ -35,30 +33,30 @@ import {
   splitExpenseDelta,
 } from "@cubby/schemas/purchase";
 import {
-  type RawPurchaseListItemOut,
   type RawPurchaseOut,
-  rawPurchaseListItemOut,
   rawPurchaseOut,
 } from "@cubby/schemas/purchase-raw-read";
-import type { SpendingCategorySummary } from "@cubby/schemas/spending-classification";
 import { purchaseOrderUrl } from "@cubby/schemas/vendor";
-import type { RawExpenseOut } from "@cubby/schemas/work-raw-read";
+import {
+  type RawExpenseOut,
+  rawExpenseOut,
+} from "@cubby/schemas/work-raw-read";
 import { parseShortcode, cents } from "@cubby/shared";
 import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
+import { z } from "zod";
 
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
   getDb,
-  imageJoinBindings,
-  type ListReadIntent,
+  galleryBinding,
   lockAndValidateForDelete,
   notDeleted,
-  relations,
   touchUpdatedAt,
   unwrapDb,
   updateLiveAndReturn,
@@ -87,18 +85,14 @@ import {
 import {
   effectiveExpenseProjectSql,
   effectiveExpenseTradeSql,
-  expenseInheritanceReadExtras,
   validateExpenseInheritance,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { hydrateExpenseProjectAllocations } from "~/server/domains/expense/repo/expense-project-allocation";
-import {
-  assertQuantitySignMatchesCost,
-  dbExpenseToAPI,
-} from "~/server/domains/expense/repo/helpers";
+import { assertQuantitySignMatchesCost } from "~/server/domains/expense/repo/helpers";
 import {
   requireLineRoleClassifier,
   type ExpenseLineRoleClassifier,
 } from "~/server/domains/expense/repo/line-role-classifier";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import {
   calculateFinancialReconciliation,
   postedRefundTotal,
@@ -115,7 +109,6 @@ import {
   transactionIdsAllocatedTo,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
-import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
@@ -126,16 +119,21 @@ import {
 import {
   emptyPurchaseFinancialAggregate,
   loadPurchaseFinancialAggregates,
-  type PurchaseFinancialAggregate,
 } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
 import {
   purchasePurchaserSetSql,
   purchasePurchaserSql,
 } from "~/server/domains/purchase/repo/purchase-purchaser";
 import { resolveSplitPartClassification } from "~/server/domains/purchase/repo/purchase-split-draft";
+import { purchaseSearch } from "~/server/domains/purchase/repo/search-read-purchase";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import {
+  vendorLogoKeySql,
+  vendorLogoSummary,
+} from "~/server/domains/vendor/repo/vendor-logo";
+import {
   type MutationReceipt,
+  createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
@@ -145,21 +143,22 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
+import {
+  loadPurchaseDocumentEvidence,
+  loadPurchaseExpenseEvidence,
+} from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import {
   validateProductPolicy,
   validateLiveInheritedPolicies,
 } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { declaredRollup } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
   expenseCountLabel,
   reconciliationLabel,
   settlementLabel,
 } from "~/server/generic/list/repo/list-display-labels";
-import { listGroupFields } from "~/server/generic/list/repo/list-projection";
 import {
   finalizeMerge,
   mergeNotes,
@@ -174,7 +173,6 @@ import {
 } from "~/server/generic/removal/repo/dispositions";
 import {
   resolveAllOrThrow,
-  resolveLiveShortcode,
   resolveOrThrow,
   resolveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -373,172 +371,7 @@ const purchaseVendorOrderUrlTemplate = purchaseVendor().value<string>(
   (v) => v.orderUrlTemplate,
 );
 
-const purchaseVendorLogoKey = sql<string | null>`(
-  SELECT logo."key" FROM "Vendor" v
-  JOIN "EntityAttachment" logo_att ON logo_att."entityId" = v."id"
-    AND logo_att."role" = 'logo' AND logo_att."deletedAt" IS NULL
-  JOIN "Image" logo ON logo."id" = logo_att."imageId"
-  WHERE v."id" = ${outer(purchase.vendorId)}
-    AND v."deletedAt" IS NULL
-    AND logo."deletedAt" IS NULL
-    AND ${displayableImageSql("logo")}
-)`;
-
-const purchaseColumns = {
-  purchaserId: purchasePurchaserSql,
-  purchaserOverrideId: sql<
-    string | null
-  >`(SELECT shortcode FROM "LedgerParty" WHERE id = "Purchase"."purchaserOverrideId")`,
-  coverage: purchaseCoverageSql("Purchase"),
-  fieldResolutions: purchaseEvidenceFieldResolutionsSql("Purchase"),
-  defaultProjectShortcode: purchaseDefaultProjectShortcode,
-  defaultTrade: purchase.defaultTrade,
-  id: purchase.id,
-  shortcode: purchase.shortcode,
-  orderId: purchase.orderId,
-  displayLabel: purchase.displayLabel,
-  date: purchase.date,
-  spendingCategoryOrigin: purchase.spendingCategoryOrigin,
-  spendingCategoryShortcode: sql<
-    string | null
-  >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
-  spendingCategoryName: sql<
-    string | null
-  >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
-  itemizationExpectation: purchase.itemizationExpectation,
-  statedTotal: purchase.statedTotal,
-  notes: purchase.notes,
-  createdAt: purchase.createdAt,
-  updatedAt: purchase.updatedAt,
-  vendorName: purchaseVendorName,
-  vendorShortcode: purchaseVendorShortcode,
-  vendorAccountShortcode: purchaseVendorAccountShortcode,
-  vendorOrderUrlTemplate: purchaseVendorOrderUrlTemplate,
-  vendorLogoKey: purchaseVendorLogoKey,
-  expenseCount: purchaseExpenseCount,
-  unpricedExpenseCount: purchaseUnpricedExpenseCount,
-  expenseTotal: purchaseExpenseTotal,
-  vendorExpenseTotal: purchaseVendorExpenseTotal,
-  vendorExpenseCount: purchaseVendorExpenseCount,
-  vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
-  settleableExpenseTotal: purchaseSettleableExpenseTotal,
-  settleableUnpricedExpenseCount: purchaseSettleableUnpricedExpenseCount,
-  documentCount: purchaseDocumentCount,
-} as const;
-
-type PurchaseRow = Pick<
-  typeof purchase.$inferSelect,
-  | "id"
-  | "shortcode"
-  | "orderId"
-  | "displayLabel"
-  | "date"
-  | "statedTotal"
-  | "notes"
-  | "createdAt"
-  | "updatedAt"
-> & {
-  purchaserId: RawPurchaseOut["purchaserId"];
-  purchaserOverrideId: string | null;
-  coverage: RawPurchaseOut["coverage"];
-  fieldResolutions: RawPurchaseOut["fieldResolutions"];
-  spendingCategoryOrigin: string;
-  spendingCategoryShortcode: string | null;
-  spendingCategoryName: RawPurchaseOut["spendingCategoryName"];
-  itemizationExpectation: RawPurchaseOut["itemizationExpectation"];
-  defaultProjectShortcode: string | null;
-  defaultTrade: RawPurchaseOut["defaultTrade"];
-  vendorName: string | null;
-  vendorShortcode: string;
-  vendorAccountShortcode: string | null;
-  vendorOrderUrlTemplate: string | null;
-  vendorLogoKey: string | null;
-  expenseCount: number;
-  unpricedExpenseCount: number;
-  expenseTotal: number;
-  vendorExpenseTotal: number;
-  vendorExpenseCount: number;
-  vendorUnpricedExpenseCount: number;
-  settleableExpenseTotal: number;
-  settleableUnpricedExpenseCount: number;
-  documentCount: number;
-};
-
-const dbPurchaseToAPI = (
-  row: PurchaseRow,
-  dataQuality: RawPurchaseOut["dataQuality"],
-  images: RawPurchaseOut["images"] = [],
-  financial: PurchaseFinancialAggregate = emptyPurchaseFinancialAggregate(),
-  spendingCategorySummary: SpendingCategorySummary = emptySpendingCategorySummary(),
-): RawPurchaseOut => ({
-  purchaserId: row.purchaserId,
-  purchaserOverrideId: row.purchaserOverrideId
-    ? parseShortcodeFor("ledgerParty", row.purchaserOverrideId)
-    : null,
-  id: parseShortcodeFor("purchase", row.shortcode),
-  vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
-  vendorAccountId: row.vendorAccountShortcode
-    ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
-    : null,
-  defaultProjectId: row.defaultProjectShortcode
-    ? parseShortcodeFor("project", row.defaultProjectShortcode)
-    : null,
-  spendingCategoryOrigin: rawPurchaseOut.shape.spendingCategoryOrigin.parse(
-    row.spendingCategoryOrigin,
-  ),
-  spendingCategoryId: row.spendingCategoryShortcode
-    ? parseShortcodeFor("spendingCategory", row.spendingCategoryShortcode)
-    : null,
-  spendingCategoryName: row.spendingCategoryName,
-  itemizationExpectation: row.itemizationExpectation,
-  coverage: row.coverage,
-  fieldResolutions: row.fieldResolutions,
-  spendingCategorySummary,
-  bookingCoverage: row.coverage.booking,
-  documentCoverage: row.coverage.document,
-  itemizationCoverage: row.coverage.itemization,
-  productsCoverage: row.coverage.products,
-  defaultTrade: row.defaultTrade,
-  orderId: row.orderId,
-  displayLabel: row.displayLabel,
-  date: row.date,
-  statedTotal: row.statedTotal,
-  notes: row.notes,
-  vendorName: row.vendorName,
-  vendorLogo: row.vendorLogoKey
-    ? { url: getR2PublicUrl(row.vendorLogoKey) }
-    : null,
-  orderUrl: purchaseOrderUrl({
-    orderUrlTemplate: row.vendorOrderUrlTemplate,
-    orderId: row.orderId,
-  }),
-  expenseCount: Number(row.expenseCount),
-  unpricedExpenseCount: Number(row.unpricedExpenseCount),
-  expenseTotal: Number(row.expenseTotal),
-  reconciliation: reconcilePurchase({
-    statedTotal: row.statedTotal,
-    expenseTotal: Number(row.vendorExpenseTotal),
-    expenseCount: Number(row.vendorExpenseCount),
-    unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
-    postedRefundTotal: financial.postedRefundTotal,
-  }),
-  documentCount: Number(row.documentCount),
-  financialReconciliation: calculateFinancialReconciliation({
-    settleableExpenseTotal: row.settleableExpenseTotal,
-    settleableUnpricedExpenseCount: row.settleableUnpricedExpenseCount,
-    ...financial,
-  }),
-  dataQuality,
-  images,
-  displayName: purchaseLabel({
-    orderId: row.orderId,
-    displayLabel: row.displayLabel,
-    vendorName: row.vendorName,
-    date: row.date,
-  }),
-  createdAt: row.createdAt,
-  updatedAt: row.updatedAt,
-});
+const purchaseVendorLogoKey = vendorLogoKeySql(outer(purchase.vendorId));
 
 const loadPurchaseImages = async (
   db: Database | DrizzleTransaction,
@@ -583,7 +416,7 @@ const syncPurchaseImages = async (
   const { detachedImageKeys } = await syncEntityImages(
     tx,
     "purchase",
-    imageJoinBindings.purchase,
+    galleryBinding("purchase"),
     id,
     { pendingImageIds, removeImageIds, imageOrder },
   );
@@ -621,7 +454,10 @@ const reconciliationSql = (): SQL => {
   ) verdict)`;
 };
 
-const purchaseScaffold = listScaffold("purchase", purchase, {
+// Helper columns typed from `related(...).value` read back as unknown.
+const helperText = z.string().nullable();
+
+export const purchaseScaffold = listScaffold("purchase", purchase, {
   derived: {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
     // A purchase with no live vendor leads a descending list.
@@ -632,269 +468,242 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
       WHEN ${purchaseUnpricedExpenseCount} > 0 THEN ${purchaseExpenseStatus.enum.unpriced}::text
       ELSE ${purchaseExpenseStatus.enum.priced}::text END`,
     hasDocuments: sql`${purchaseDocumentCount} > 0`,
-    financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch")} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
+    financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch", purchase)} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
     reconciliation: reconciliationSql(),
     effectivePurchaser: {
       value: purchasePurchaserSql,
       set: purchasePurchaserSetSql,
     },
   },
-});
-
-/** The complete WHERE for a purchase list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
-export const buildPurchaseWhereClause = (filters: PurchaseFilters) =>
-  purchaseScaffold.where(filters);
-
-export const purchaseListRead = async (
-  db: Database,
-  filters: PurchaseFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-  projection: ListProjection = { kind: "full" },
-) => {
-  const {
-    spendingCategoryName,
-    coverage,
-    fieldResolutions,
-    defaultProjectShortcode,
-    vendorShortcode,
-    vendorAccountShortcode,
-    vendorOrderUrlTemplate,
-    vendorLogoKey,
-    expenseCount,
-    unpricedExpenseCount,
-    expenseTotal,
-    vendorExpenseTotal,
-    vendorExpenseCount,
-    vendorUnpricedExpenseCount,
-    settleableExpenseTotal,
-    settleableUnpricedExpenseCount,
-    documentCount,
-    ...core
-  } = purchaseColumns;
-  return purchaseScaffold.read(
-    db,
-    { filters, sorts, pagination, readIntent, projection },
-    {
-      select: (page) =>
-        getDb(db)
+  read: {
+    title: sql`(CASE
+      WHEN NULLIF(${trimTextSql(purchase.orderId)}, '') IS NOT NULL THEN ${purchase.orderId}
+      WHEN ${purchase.date} IS NOT NULL THEN COALESCE((SELECT v."name" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId"), 'Unknown vendor') || ' · ' || to_char(${purchase.date}::date, 'FMMon FMDD, YYYY')
+      ELSE COALESCE((SELECT v."name" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId"), 'Unknown vendor')
+    END) || COALESCE(' (' || NULLIF(${trimTextSql(purchase.displayLabel)}, '') || ')', '')`,
+    search: purchaseSearch,
+    evidence: {
+      expenseCount: loadPurchaseExpenseEvidence,
+      documentCount: loadPurchaseDocumentEvidence,
+    },
+    // Keys outside the read schema are helper columns the bindings read.
+    columns: {
+      purchaserId: purchasePurchaserSql,
+      purchaserOverrideId: sql<
+        string | null
+      >`(SELECT shortcode FROM "LedgerParty" WHERE id = "Purchase"."purchaserOverrideId")`,
+      fieldResolutions: purchaseEvidenceFieldResolutionsSql("Purchase"),
+      spendingCategoryName: sql<
+        string | null
+      >`(SELECT name FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+      unpricedExpenseCount: purchaseUnpricedExpenseCount,
+      liveVendorName: purchaseVendorName,
+      spendingCategoryShortcode: sql<
+        string | null
+      >`(SELECT shortcode FROM "SpendingCategory" WHERE id = "Purchase"."spendingCategoryId" AND "deletedAt" IS NULL)`,
+      defaultProjectShortcode: purchaseDefaultProjectShortcode,
+      vendorShortcode: purchaseVendorShortcode,
+      vendorAccountShortcode: purchaseVendorAccountShortcode,
+      vendorOrderUrlTemplate: purchaseVendorOrderUrlTemplate,
+      vendorLogoKey: purchaseVendorLogoKey,
+    },
+    media: true,
+    references: { purchaserOverrideId: { kind: "public" } },
+    bindings: (bind) => {
+      const purchaseIds = (ids: readonly string[]) =>
+        ids.map((id) => parseEntityId("purchase", id));
+      // Expense rollups the coverage and reconciliation verdicts read; loaded
+      // only when a projection names one of those keys.
+      const aggregates = bind.ids(async ({ db, ids }) => {
+        const rows = await unwrapDb(db)
           .select({
-            ...core,
-            ...listGroupFields(projection, "relations", () => ({
-              spendingCategoryName,
-              defaultProjectShortcode,
-              vendorShortcode,
-              vendorAccountShortcode,
-              vendorOrderUrlTemplate,
-            })),
-            ...listGroupFields(projection, "media", () => ({ vendorLogoKey })),
-            ...listGroupFields(projection, "derived", () => ({
-              coverage,
-              fieldResolutions,
-              expenseCount,
-              unpricedExpenseCount,
-              expenseTotal,
-              vendorExpenseTotal,
-              vendorExpenseCount,
-              vendorUnpricedExpenseCount,
-              settleableExpenseTotal,
-              settleableUnpricedExpenseCount,
-              documentCount,
-            })),
+            id: purchase.id,
+            coverage: purchaseCoverageSql("Purchase"),
+            expenseCount: purchaseExpenseCount,
+            unpricedExpenseCount: purchaseUnpricedExpenseCount,
+            expenseTotal: purchaseExpenseTotal,
+            vendorExpenseTotal: purchaseVendorExpenseTotal,
+            vendorExpenseCount: purchaseVendorExpenseCount,
+            vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
+            settleableExpenseTotal: purchaseSettleableExpenseTotal,
+            settleableUnpricedExpenseCount:
+              purchaseSettleableUnpricedExpenseCount,
           })
           .from(purchase)
-          .where(page.where)
-          .orderBy(...page.orderBy)
-          .limit(page.limit)
-          .offset(page.offset),
-      read: {
-        media: true,
-        references: { purchaserOverrideId: { kind: "public" } },
-        bindings: (bind) => {
-          const financials = bind.batch(({ rows }) =>
-            loadPurchaseFinancialAggregates(
-              db,
-              rows.map((row) => row.id),
-            ),
-          );
-          const categories = bind.batch(({ rows }) =>
-            loadPurchaseSpendingCategorySummaries(
-              db,
-              rows.map((row) => row.id),
-            ),
-          );
-          return [
-            bind(rawPurchaseOut.pick({ displayName: true }), (row) => ({
+          .where(inArray(purchase.id, purchaseIds(ids)));
+        return new Map(rows.map((row) => [row.id, row]));
+      });
+      const aggregateOf = (
+        loaded: Awaited<ReturnType<typeof aggregates.load>>,
+        id: PurchaseId,
+      ) => {
+        const row = loaded.get(id);
+        if (!row) throw new Error(`Purchase aggregates were not loaded: ${id}`);
+        return row;
+      };
+      const financials = bind.ids(async (page) => ({
+        aggregates: await aggregates.load(page),
+        financial: await loadPurchaseFinancialAggregates(
+          page.db,
+          purchaseIds(page.ids),
+        ),
+      }));
+      const categories = bind.ids(({ db, ids }) =>
+        loadPurchaseSpendingCategorySummaries(db, purchaseIds(ids)),
+      );
+      const images = bind.ids(async ({ db, ids }) => {
+        const byId = await Promise.all(
+          purchaseIds(ids).map(
+            async (id) => [id, await loadPurchaseImages(db, id)] as const,
+          ),
+        );
+        return new Map(byId);
+      });
+      return [
+        bind(
+          rawPurchaseOut.pick({ vendorName: true, displayName: true }),
+          (row) => {
+            const vendorName = helperText.parse(row.liveVendorName ?? null);
+            return {
+              vendorName,
               displayName: purchaseLabel({
                 orderId: row.orderId,
                 displayLabel: row.displayLabel,
-                vendorName: row.vendorName,
+                vendorName,
                 date: row.date,
               }),
-            })),
-            bind(rawPurchaseOut.pick({ spendingCategoryId: true }), (row) => ({
-              spendingCategoryId: row.spendingCategoryShortcode
-                ? parseShortcodeFor(
-                    "spendingCategory",
-                    row.spendingCategoryShortcode,
-                  )
+            };
+          },
+        ),
+        bind(rawPurchaseOut.pick({ spendingCategoryId: true }), (row) => ({
+          spendingCategoryId: row.spendingCategoryShortcode
+            ? parseShortcodeFor(
+                "spendingCategory",
+                row.spendingCategoryShortcode,
+              )
+            : null,
+        })),
+        bind(
+          rawPurchaseOut.pick({
+            vendorId: true,
+            vendorAccountId: true,
+            defaultProjectId: true,
+            orderUrl: true,
+          }),
+          (row) => {
+            if (!row.vendorShortcode)
+              throw new Error("Purchase vendor was not loaded");
+            return {
+              vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
+              vendorAccountId: row.vendorAccountShortcode
+                ? parseShortcodeFor("vendorAccount", row.vendorAccountShortcode)
                 : null,
-            })),
-            bind(
-              rawPurchaseOut.pick({
-                vendorId: true,
-                vendorAccountId: true,
-                defaultProjectId: true,
-                orderUrl: true,
+              defaultProjectId: row.defaultProjectShortcode
+                ? parseShortcodeFor("project", row.defaultProjectShortcode)
+                : null,
+              orderUrl: purchaseOrderUrl({
+                orderUrlTemplate: helperText.parse(
+                  row.vendorOrderUrlTemplate ?? null,
+                ),
+                orderId: row.orderId,
               }),
-              (row) => {
-                if (!row.vendorShortcode)
-                  throw new Error("Purchase vendor was not loaded");
-                return {
-                  vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
-                  vendorAccountId: row.vendorAccountShortcode
-                    ? parseShortcodeFor(
-                        "vendorAccount",
-                        row.vendorAccountShortcode,
-                      )
-                    : null,
-                  defaultProjectId: row.defaultProjectShortcode
-                    ? parseShortcodeFor("project", row.defaultProjectShortcode)
-                    : null,
-                  orderUrl: purchaseOrderUrl({
-                    orderUrlTemplate: row.vendorOrderUrlTemplate ?? null,
-                    orderId: row.orderId,
-                  }),
-                };
-              },
-            ),
-            bind(
-              rawPurchaseOut.pick({ images: true, vendorLogo: true }),
-              (row) => ({
-                images: [],
-                vendorLogo: row.vendorLogoKey
-                  ? { url: getR2PublicUrl(row.vendorLogoKey) }
-                  : null,
+            };
+          },
+        ),
+        bind(rawPurchaseOut.pick({ vendorLogo: true }), (row) => ({
+          vendorLogo: vendorLogoSummary(row),
+        })),
+        // A page shows the display image; only the record read lists files.
+        bind(rawPurchaseOut.pick({ images: true }), () => ({ images: [] })),
+        images.fields(
+          rawPurchaseOut.pick({ images: true }),
+          (row, loaded) => ({ images: loaded.get(row.id) ?? [] }),
+          { scope: "detail" },
+        ),
+        aggregates.fields(
+          rawPurchaseOut.pick({
+            coverage: true,
+            bookingCoverage: true,
+            documentCoverage: true,
+            itemizationCoverage: true,
+            productsCoverage: true,
+            expenseCountLabel: true,
+          }),
+          (row, loaded) => {
+            const value = aggregateOf(loaded, row.id);
+            return {
+              coverage: value.coverage,
+              bookingCoverage: value.coverage.booking,
+              documentCoverage: value.coverage.document,
+              itemizationCoverage: value.coverage.itemization,
+              productsCoverage: value.coverage.products,
+              expenseCountLabel: expenseCountLabel(
+                Number(value.expenseCount),
+                Number(value.unpricedExpenseCount),
+              ),
+            };
+          },
+        ),
+        categories.fields(
+          rawPurchaseOut.pick({ spendingCategorySummary: true }),
+          (row, loaded) => ({
+            spendingCategorySummary:
+              loaded.get(row.id) ?? emptySpendingCategorySummary(),
+          }),
+        ),
+        financials.fields(
+          rawPurchaseOut.pick({
+            reconciliation: true,
+            financialReconciliation: true,
+            reconciliationLabel: true,
+            financialReconciliationLabel: true,
+          }),
+          (row, loaded) => {
+            const value = aggregateOf(loaded.aggregates, row.id);
+            const financial =
+              loaded.financial.get(row.id) ?? emptyPurchaseFinancialAggregate();
+            const reconciliation = reconcilePurchase({
+              statedTotal: row.statedTotal,
+              expenseTotal: Number(value.vendorExpenseTotal),
+              expenseCount: Number(value.vendorExpenseCount),
+              unpricedExpenseCount: Number(value.vendorUnpricedExpenseCount),
+              postedRefundTotal: financial.postedRefundTotal,
+            });
+            const financialReconciliation = calculateFinancialReconciliation({
+              settleableExpenseTotal: Number(value.settleableExpenseTotal),
+              settleableUnpricedExpenseCount: Number(
+                value.settleableUnpricedExpenseCount,
+              ),
+              ...financial,
+            });
+            return {
+              reconciliation,
+              financialReconciliation,
+              reconciliationLabel: reconciliationLabel({
+                statedTotal: row.statedTotal,
+                expenseTotal: Number(value.expenseTotal),
+                reconciliation,
               }),
-            ),
-            bind(
-              rawPurchaseOut.pick({
-                coverage: true,
-                bookingCoverage: true,
-                documentCoverage: true,
-                itemizationCoverage: true,
-                productsCoverage: true,
-                expenseCountLabel: true,
-              }),
-              (row) => {
-                if (
-                  !row.coverage ||
-                  row.expenseCount === undefined ||
-                  row.unpricedExpenseCount === undefined
-                )
-                  throw new Error(
-                    "Purchase coverage and expense counts were not loaded",
-                  );
-                return {
-                  coverage: row.coverage,
-                  bookingCoverage: row.coverage.booking,
-                  documentCoverage: row.coverage.document,
-                  itemizationCoverage: row.coverage.itemization,
-                  productsCoverage: row.coverage.products,
-                  expenseCountLabel: expenseCountLabel(
-                    Number(row.expenseCount),
-                    Number(row.unpricedExpenseCount),
-                  ),
-                };
-              },
-            ),
-            categories.fields(
-              rawPurchaseOut.pick({ spendingCategorySummary: true }),
-              (row, loaded) => ({
-                spendingCategorySummary:
-                  loaded.get(row.id) ?? emptySpendingCategorySummary(),
-              }),
-            ),
-            financials.fields(
-              rawPurchaseOut.pick({
-                reconciliation: true,
-                financialReconciliation: true,
-                reconciliationLabel: true,
-                financialReconciliationLabel: true,
-              }),
-              (row, loaded) => {
-                const financial =
-                  loaded.get(row.id) ?? emptyPurchaseFinancialAggregate();
-                if (
-                  row.settleableExpenseTotal === undefined ||
-                  row.settleableUnpricedExpenseCount === undefined ||
-                  row.vendorExpenseTotal === undefined ||
-                  row.vendorExpenseCount === undefined ||
-                  row.vendorUnpricedExpenseCount === undefined ||
-                  row.expenseTotal === undefined
-                )
-                  throw new Error(
-                    "Purchase reconciliation aggregates were not loaded",
-                  );
-                const reconciliation = reconcilePurchase({
-                  statedTotal: row.statedTotal,
-                  expenseTotal: Number(row.vendorExpenseTotal),
-                  expenseCount: Number(row.vendorExpenseCount),
-                  unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
-                  postedRefundTotal: financial.postedRefundTotal,
-                });
-                const financialReconciliation =
-                  calculateFinancialReconciliation({
-                    settleableExpenseTotal: row.settleableExpenseTotal,
-                    settleableUnpricedExpenseCount:
-                      row.settleableUnpricedExpenseCount,
-                    ...financial,
-                  });
-                return {
-                  reconciliation,
-                  financialReconciliation,
-                  reconciliationLabel: reconciliationLabel({
-                    statedTotal: row.statedTotal,
-                    expenseTotal: Number(row.expenseTotal),
-                    reconciliation,
-                  }),
-                  financialReconciliationLabel: settlementLabel(
-                    financialReconciliation,
-                  ),
-                };
-              },
-            ),
-          ];
-        },
-      },
+              financialReconciliationLabel: settlementLabel(
+                financialReconciliation,
+              ),
+            };
+          },
+        ),
+      ];
     },
-  );
-};
+  },
+});
 
-export const purchaseListSummary = async (
-  db: Database,
-  filters: PurchaseFilters,
-) => {
-  const where = buildPurchaseWhereClause(filters);
-  // Each live ledger row contributes once, including credits, across the full filtered set.
-  const [totals] = await getDb(db)
-    .select({
-      expenseTotal: sql<number>`COALESCE(sum(${expense.cost}::numeric), 0)::double precision`,
-      expenseCount: sql<number>`count(*)::int`,
-    })
-    .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        sql`${expense.purchaseId} IN (SELECT ${purchase.id} FROM ${purchase} WHERE ${where ?? sql`true`})`,
-      ),
-    );
-  return {
-    expenseTotal: Number(totals?.expenseTotal ?? 0),
-    expenseCount: Number(totals?.expenseCount ?? 0),
-  };
-};
+const purchaseReader = createEntityReader({
+  entity: "purchase",
+  scaffold: purchaseScaffold,
+  output: rawPurchaseOut,
+});
+/** One live Purchase by internal id; throws `PURCHASE_NOT_FOUND` when absent. */
+export const readPurchaseById = purchaseReader.getByID;
+/** One live Purchase by public code, or null. */
+export const readPurchase = purchaseReader.getByShortcode;
 
 /** Narrow root-table projection for relation paging; the scaffold owns the count. */
 export function pagePurchaseRelationTargets(
@@ -909,7 +718,7 @@ export function pagePurchaseRelationTargets(
       filters: {},
       sorts: [],
       pagination: { pageIndex: 0, pageSize: input.limit },
-      projection: { kind: "base" },
+      projection: [],
     },
     {
       where,
@@ -925,203 +734,6 @@ export function pagePurchaseRelationTargets(
     },
   );
 }
-
-export const purchaseList = async (
-  db: Database,
-  filters: PurchaseFilters,
-  sorts: SortParams[],
-  pagination: PaginationParams,
-  readIntent: ListReadIntent = "page",
-): Promise<{
-  data: RawPurchaseListItemOut[];
-  count: number;
-  sums?: { expenseTotal: number; expenseCount: number };
-}> => {
-  const [page, sums] = await Promise.all([
-    purchaseListRead(db, filters, sorts, pagination, readIntent),
-    readIntent === "page" ? purchaseListSummary(db, filters) : undefined,
-  ]);
-  const result = {
-    ...page,
-    data: page.data.map((row) => rawPurchaseListItemOut.parse(row)),
-  };
-  if (sums) Object.assign(result, { sums });
-  return result;
-};
-
-export const getPurchaseByID = async (
-  db: Database,
-  id: PurchaseId,
-): Promise<RawPurchaseOut> => {
-  const [rows, images, financialByPurchase, dataQualities, categorySummaries] =
-    await Promise.all([
-      getDb(db)
-        .select(purchaseColumns)
-        .from(purchase)
-        .where(and(eq(purchase.id, id), notDeleted(purchase)))
-        .limit(1),
-      loadPurchaseImages(db, id),
-      loadPurchaseFinancialAggregates(db, [id]),
-      loadDataQualities(db, "purchase", [id]),
-      loadPurchaseSpendingCategorySummaries(db, [id]),
-    ]);
-  const [row] = rows;
-  if (!row) {
-    throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
-  }
-  return dbPurchaseToAPI(
-    row,
-    dataQualities.get(id)!,
-    images,
-    financialByPurchase.get(id),
-    categorySummaries.get(id),
-  );
-};
-
-/** Report-only demand; full detail consumers keep getPurchaseByID. */
-type PurchaseFinanceProjection = {
-  reconciliation: boolean;
-  allocation: boolean;
-  settlement: boolean;
-};
-type PurchaseFinanceRead = {
-  reconciliation?: Pick<
-    RawPurchaseOut,
-    "statedTotal" | "expenseTotal" | "reconciliation"
-  >;
-  allocation?: Pick<RawPurchaseOut, "id" | "expenseTotal">;
-  settlement?: Pick<RawPurchaseOut, "id" | "financialReconciliation">;
-};
-
-/** Select the union of this batch's finance inputs, without detail hydration. */
-export const getPurchaseFinanceByID = async (
-  db: Database,
-  id: PurchaseId,
-  projection: PurchaseFinanceProjection,
-): Promise<PurchaseFinanceRead> => {
-  const { reconciliation, allocation, settlement } = projection;
-  const [[row], financialByPurchase] = await Promise.all([
-    getDb(db)
-      .select({
-        ...(allocation || settlement ? { shortcode: purchase.shortcode } : {}),
-        ...(reconciliation || allocation
-          ? { expenseTotal: purchaseExpenseTotal }
-          : {}),
-        ...(reconciliation
-          ? {
-              statedTotal: purchase.statedTotal,
-              vendorExpenseTotal: purchaseVendorExpenseTotal,
-              vendorExpenseCount: purchaseVendorExpenseCount,
-              vendorUnpricedExpenseCount: purchaseVendorUnpricedExpenseCount,
-            }
-          : {}),
-        ...(settlement
-          ? {
-              settleableExpenseTotal: purchaseSettleableExpenseTotal,
-              settleableUnpricedExpenseCount:
-                purchaseSettleableUnpricedExpenseCount,
-            }
-          : {}),
-      })
-      .from(purchase)
-      .where(and(eq(purchase.id, id), notDeleted(purchase)))
-      .limit(1),
-    reconciliation || settlement
-      ? loadPurchaseFinancialAggregates(db, [id])
-      : undefined,
-  ]);
-  if (!row)
-    throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
-
-  // Selection and result branches use the same demand flags: requested fields
-  // and financial inputs are present in those branches. Reconciliation needs
-  // posted refunds too; one scan supplies both verdicts.
-  const financial =
-    reconciliation || settlement
-      ? (financialByPurchase?.get(id) ?? emptyPurchaseFinancialAggregate())
-      : undefined;
-  return {
-    ...(reconciliation
-      ? {
-          reconciliation: {
-            statedTotal: row.statedTotal ?? null,
-            expenseTotal: Number(row.expenseTotal),
-            reconciliation: reconcilePurchase({
-              statedTotal: row.statedTotal ?? null,
-              expenseTotal: Number(row.vendorExpenseTotal),
-              expenseCount: Number(row.vendorExpenseCount),
-              unpricedExpenseCount: Number(row.vendorUnpricedExpenseCount),
-              postedRefundTotal: financial!.postedRefundTotal,
-            }),
-          },
-        }
-      : {}),
-    ...(allocation
-      ? {
-          allocation: {
-            id: parseShortcodeFor("purchase", row.shortcode!),
-            expenseTotal: Number(row.expenseTotal),
-          },
-        }
-      : {}),
-    ...(settlement
-      ? {
-          settlement: {
-            id: parseShortcodeFor("purchase", row.shortcode!),
-            financialReconciliation: calculateFinancialReconciliation({
-              settleableExpenseTotal: Number(row.settleableExpenseTotal),
-              settleableUnpricedExpenseCount: Number(
-                row.settleableUnpricedExpenseCount,
-              ),
-              ...financial!,
-            }),
-          },
-        }
-      : {}),
-  };
-};
-
-export type PurchaseLinkIdentity = Pick<
-  RawPurchaseOut,
-  "id" | "orderId" | "displayLabel" | "date" | "vendorId" | "vendorName"
->;
-
-export const getPurchaseLinkIdentityByID = async (
-  db: Database,
-  id: PurchaseId,
-): Promise<PurchaseLinkIdentity | null> => {
-  const [row] = await getDb(db)
-    .select({
-      shortcode: purchase.shortcode,
-      orderId: purchase.orderId,
-      displayLabel: purchase.displayLabel,
-      date: purchase.date,
-      vendorName: purchaseVendorName,
-      vendorShortcode: purchaseVendorShortcode,
-    })
-    .from(purchase)
-    .where(and(eq(purchase.id, id), notDeleted(purchase)))
-    .limit(1);
-
-  return row
-    ? {
-        id: parseShortcodeFor("purchase", row.shortcode),
-        orderId: row.orderId,
-        displayLabel: row.displayLabel,
-        date: row.date,
-        vendorId: parseShortcodeFor("vendor", row.vendorShortcode),
-        vendorName: row.vendorName,
-      }
-    : null;
-};
-
-export const getPurchaseByShortcode = async (
-  db: Database,
-  shortcode: string,
-): Promise<RawPurchaseOut | null> => {
-  const id = await resolveLiveShortcode(db, shortcode, "purchase");
-  return id ? getPurchaseByID(db, parseEntityId("purchase", id)) : null;
-};
 
 export const reclassifyPurchaseDocument = async (
   db: Database,
@@ -1162,7 +774,7 @@ export const reclassifyPurchaseDocument = async (
       },
     });
   });
-  return getPurchaseByID(db, id);
+  return readPurchaseById(db, id);
 };
 
 /** Order IDs are vendor-scoped; never group same-number orders across vendors. */
@@ -1170,22 +782,16 @@ export const getPurchaseExpenses = async (
   db: Database,
   id: PurchaseId,
 ): Promise<RawExpenseOut[]> => {
-  const rows = await getDb(db).query.expense.findMany({
-    where: and(eq(expense.purchaseId, id), notDeleted(expense)),
-    orderBy: [asc(expense.date), asc(expense.name)],
-    extras: expenseInheritanceReadExtras(),
-    ...relations.expense.withProject,
-  });
-  const [hydrated, dataQualities] = await Promise.all([
-    hydrateExpenseProjectAllocations(db, rows),
-    loadDataQualities(
-      db,
-      "expense",
-      rows.map((row) => row.id),
-    ),
-  ]);
-  // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
-  return hydrated.map((row) => dbExpenseToAPI(row, dataQualities.get(row.id)!));
+  const rows = await getDb(db)
+    .select({ id: expense.id })
+    .from(expense)
+    .where(and(eq(expense.purchaseId, id), notDeleted(expense)))
+    .orderBy(asc(expense.date), asc(expense.name));
+  const read = await expenseScaffold.getByIds(
+    db,
+    rows.map((row) => row.id),
+  );
+  return read.data.map((row) => rawExpenseOut.parse(row));
 };
 
 /**
@@ -1230,7 +836,7 @@ export const createPurchase = defineMutationWriter({
     _data: PurchaseCreateInput,
     _actor: ActorContext,
   ) => ({
-    output: await getPurchaseByID(db, receipt.entityId),
+    output: await readPurchaseById(db, receipt.entityId),
     entityId: receipt.entityId,
   }),
   write: async (
@@ -1318,7 +924,7 @@ export const updatePurchase = defineMutationWriter({
     _actor: ActorContext,
     _options: { spendingCategoryOrigin?: "source" } = {},
   ) => ({
-    output: await getPurchaseByID(db, receipt.entityId),
+    output: await readPurchaseById(db, receipt.entityId),
     entityId: receipt.entityId,
     detachedImageKeys: receipt.detachedImageKeys ?? [],
   }),
@@ -1562,7 +1168,7 @@ export const linkExpensesToPurchase = async (
     );
   });
 
-  return getPurchaseByID(db, purchaseId);
+  return readPurchaseById(db, purchaseId);
 };
 
 /** A split replaces one ledger amount with parts that conserve its exact cents. */
@@ -1935,25 +1541,9 @@ export const splitExpense = async (
     },
   );
 
-  const rows = await getDb(db).query.expense.findMany({
-    where: and(inArray(expense.id, createdIds), notDeleted(expense)),
-    extras: expenseInheritanceReadExtras(),
-    ...relations.expense.withProject,
-  });
-  const [hydratedCreated, createdDataQualities] = await Promise.all([
-    hydrateExpenseProjectAllocations(db, rows),
-    loadDataQualities(
-      db,
-      "expense",
-      rows.map((row) => row.id),
-    ),
-  ]);
+  const created = await expenseScaffold.getByIds(db, createdIds);
   return {
-    // SAFETY: `row` came from `rows`, which `createdDataQualities` was loaded
-    // for.
-    items: hydratedCreated.map((row) =>
-      dbExpenseToAPI(row, createdDataQualities.get(row.id)!),
-    ),
+    items: created.data.map((row) => rawExpenseOut.parse(row)),
     priceAffectedProductIds,
   };
 };
@@ -2571,7 +2161,7 @@ export const mergePurchases = async (
   });
 
   return {
-    purchase: await getPurchaseByID(db, keepId),
+    purchase: await readPurchaseById(db, keepId),
     mergeSummary: {
       keepId: input.keepId,
       deletedIds: input.mergeIds.filter((code) => code !== input.keepId),

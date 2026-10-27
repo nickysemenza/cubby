@@ -29,6 +29,7 @@ export const repositoryOwners = [
   "src/server/domains/email/repo/field-envelope.ts",
   "src/server/generic/derived/repo/inherited-resolution.ts",
   "src/server/generic/entity-graph/repo/record-label.ts",
+  "src/server/entity-kernel/repo/read-ports.ts",
   "src/server/generic/derived/repo/envelope.ts",
   "src/server/generic/derived/repo/public-read.ts",
   "src/server/generic/field-explanation/repo/inherited-reset-preview.ts",

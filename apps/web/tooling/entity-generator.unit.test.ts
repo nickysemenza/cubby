@@ -1074,7 +1074,19 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          presentation: { ...presentation, list: { savedViews, metrics } },
+          presentation: {
+            ...presentation,
+            list: {
+              savedViews,
+              totals: metrics.map((key) => ({
+                id: key,
+                label: key,
+                keys: [key] as [string],
+                format: "integer" as const,
+                group: true,
+              })),
+            },
+          },
           relations,
           filters,
           model: {

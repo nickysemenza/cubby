@@ -1,26 +1,19 @@
 import {
   asActor,
   defineRepository,
-  listOn,
-  listReadOn,
-  onDb,
 } from "~/server/entity-kernel/repo/repository";
 
 import {
   createProject,
   deleteProjects,
-  getProjectByShortcode,
   PROJECT_DELETE_EDGE_POLICY,
   updateProject,
 } from "./crud";
-import { projectList, projectListRead, projectListSummary } from "./lookup";
+import { projectScaffold } from "./lookup";
 
 export const projectRepository = defineRepository("project", {
   lifecycle: { delete: PROJECT_DELETE_EDGE_POLICY },
-  get: onDb(getProjectByShortcode),
-  list: listOn(projectList),
-  listRead: listReadOn(projectListRead),
-  listSummary: (ctx, filters) => projectListSummary(ctx.db, filters),
+  scaffold: projectScaffold,
   create: asActor(createProject),
   update: asActor(updateProject),
   delete: asActor(deleteProjects),

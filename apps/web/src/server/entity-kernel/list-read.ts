@@ -14,10 +14,7 @@ import {
   selectedFieldEnvelopeSchema,
 } from "~/server/generic/derived/repo/public-read";
 import { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
-import {
-  listFacetCounter,
-  withListGroupBy,
-} from "~/server/generic/list/repo/list";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { validateListReadRows } from "~/server/generic/list/repo/list-read-schema";
@@ -95,11 +92,7 @@ export function defineListOperations<
       }),
       parseGroupBy(binding, input.groupBy),
     );
-  const reader = () => {
-    if (!binding.repository.listRead)
-      throw new Error(`Missing list reader: ${binding.entity}`);
-    return binding.repository.listRead;
-  };
+  const reader = binding.repository.listRead;
   return {
     /** Narrow published projections share the canonical selector and full-population totals. */
     async listFields(
@@ -109,30 +102,21 @@ export function defineListOperations<
     ) {
       const projection = selectedListProjection(binding.entity, fields);
       const input = inputSchema.parse(value);
-      const filters = Object.assign(await filtersFor(context, input.filters), {
-        resultMembership: input.resultMembership,
-      });
       const pagination = input.pagination ?? { pageIndex: 0, pageSize: 50 };
       const scoped = await scopedFilters(context, input);
-      const [result, sums] = await Promise.all([
-        withListReadTracing(
-          { entity: binding.entity, projection: "selected" },
-          () =>
-            reader()(
-              context,
-              scoped,
-              parseSorts(
-                binding,
-                input.sort,
-                Boolean(input.filters.searchQuery),
-              ),
-              pagination,
-              projection,
-            ),
-        ),
-        binding.repository.listSummary?.(context, filters),
-      ]);
-      const rows = projection.fields.some(
+      const result = await withListReadTracing(
+        { entity: binding.entity, fields: projection.length },
+        () =>
+          reader(
+            context,
+            scoped,
+            parseSorts(binding, input.sort, Boolean(input.filters.searchQuery)),
+            pagination,
+            projection,
+          ),
+      );
+      const sums = result.sums;
+      const rows = projection.some(
         (field) => field === "displayImages" || field === "images",
       )
         ? z
@@ -178,7 +162,7 @@ export function defineListOperations<
     async facets(context: EntityKernelContext, value: unknown) {
       const input = facetInputSchema.parse(value);
       const filters = await filtersFor(context, input.filters);
-      const counter = listFacetCounter(binding.entity);
+      const counter = binding.repository.scaffold;
       const facets = counter
         ? await withTrace(
             "entity.list.facets",
@@ -205,12 +189,12 @@ export function defineListOperations<
       const { views } = viewCountsInputSchema.parse(value);
       const preparation = new ListPreparationScope(context.db);
       const countOf = async (raw: z.output<typeof inputSchema>["filters"]) => {
-        const result = await reader()(
+        const result = await reader(
           context,
           await filtersFor(context, raw),
           [],
           { pageIndex: 0, pageSize: 1 },
-          { kind: "base" },
+          [],
           "count",
           preparation,
         );

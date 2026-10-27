@@ -35,9 +35,9 @@ import {
   recipe,
 } from "~/server/db/schema";
 import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
-import { getImageById } from "~/server/domains/image/repo/image";
+import { readImageById } from "~/server/domains/image/repo/image";
 import { readImageIdentification } from "~/server/domains/image/repo/image-identification";
-import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/search";
+import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/recipe-usages";
 import { readLocationAiDescription } from "~/server/domains/location/repo/ai-description";
 import {
   listRuns,
@@ -358,7 +358,7 @@ export const imageIdentificationBlocks = (
 export const imageAssociationsReport = async (db: Database, code: string) => {
   const id = await resolveOrThrow(db, "image", code);
   const [record, identification] = await Promise.all([
-    getImageById(db, id),
+    readImageById(db, id),
     readImageIdentification(db, id),
   ]);
   return [

@@ -1,4 +1,5 @@
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
+import { rawProductCategoryOut } from "@cubby/schemas/product-category-raw-read";
 import { testShortcode } from "@cubby/schemas/testing";
 import { eq, inArray, sql } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -23,8 +24,8 @@ import {
 
 import {
   createProductCategory,
-  getProductCategoryByShortcode,
-  listProductCategories,
+  readProductCategory,
+  productCategoryScaffold,
   listProductCategoryTreeOptions,
   loadCategorySummaries,
   updateProductCategory,
@@ -82,11 +83,14 @@ describe("product category hierarchy", () => {
       .set({ deletedAt: new Date() })
       .where(eq(productTable.id, removed.entityId));
 
-    const { data } = await listProductCategories(ctx.db, {}, [], {
-      pageIndex: 0,
-      pageSize: 500,
+    const { data } = await productCategoryScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 500 },
     });
-    const listed = new Map(data.map((row) => [row.id, row]));
+    const listed = new Map(
+      data.map((row) => [row.id, rawProductCategoryOut.parse(row)]),
+    );
     expect(listed.get(type.output.id)?.productCount).toBe(1);
     expect(listed.get(group.output.id)?.productCount).toBe(2);
     expect(
@@ -96,7 +100,7 @@ describe("product category hierarchy", () => {
       listed.get(taxonomyShortcode("tools"))?.fieldResolutions?.feature,
     ).toMatchObject({ mode: "explicit", value: "tools", fallbackValue: null });
 
-    const detail = await getProductCategoryByShortcode(ctx.db, type.output.id);
+    const detail = await readProductCategory(ctx.db, type.output.id);
     expect(detail?.productCount).toBe(1);
     expect(detail?.feature).toBeNull();
     expect(detail?.effectiveFeature).toBe("tools");
@@ -157,7 +161,7 @@ describe("product category hierarchy", () => {
       null,
       parent.output.id,
     );
-    const read = () => getProductCategoryByShortcode(ctx.db, child.output.id);
+    const read = () => readProductCategory(ctx.db, child.output.id);
     expect((await read())?.fieldResolutions?.feature).toMatchObject({
       mode: "explicit",
       storedValue: "tools",
@@ -188,7 +192,7 @@ describe("product category hierarchy", () => {
       canReset: false,
     });
     expect(
-      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+      (await readProductCategory(ctx.db, inheriting.output.id))
         ?.fieldResolutions?.feature,
     ).toMatchObject({
       mode: "inherit",
@@ -198,7 +202,7 @@ describe("product category hierarchy", () => {
       sourceEntity: { entityId: parent.output.id },
     });
     expect(
-      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+      (await readProductCategory(ctx.db, inheriting.output.id))
         ?.effectiveFeature,
     ).toBe("books");
     await updateProductCategory(
@@ -208,7 +212,7 @@ describe("product category hierarchy", () => {
       ctx.actor,
     );
     expect(
-      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+      (await readProductCategory(ctx.db, inheriting.output.id))
         ?.fieldResolutions?.feature,
     ).toMatchObject({
       mode: "inherit",
@@ -228,7 +232,7 @@ describe("product category hierarchy", () => {
       canReset: false,
     });
     expect(
-      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+      (await readProductCategory(ctx.db, inheriting.output.id))
         ?.effectiveFeature,
     ).toBe("electronics");
     // Legacy deleted ancestry must never remain an effective source.
@@ -237,7 +241,7 @@ describe("product category hierarchy", () => {
       .set({ deletedAt: new Date() })
       .where(eq(productCategory.id, otherParent.entityId));
     expect(
-      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+      (await readProductCategory(ctx.db, inheriting.output.id))
         ?.fieldResolutions?.feature,
     ).toMatchObject({
       mode: "inherit",
@@ -247,7 +251,7 @@ describe("product category hierarchy", () => {
       canReset: false,
     });
     expect(
-      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+      (await readProductCategory(ctx.db, inheriting.output.id))
         ?.effectiveFeature,
     ).toBeNull();
   });
@@ -294,8 +298,7 @@ describe("product category hierarchy", () => {
     );
     const undecided = await create("Synthetic undecided root", null);
     const resolution = async (id: ProductCategoryShortcode) =>
-      (await getProductCategoryByShortcode(ctx.db, id))?.fieldResolutions
-        ?.stockTracked;
+      (await readProductCategory(ctx.db, id))?.fieldResolutions?.stockTracked;
 
     expect(await resolution(root.output.id)).toMatchObject({
       mode: "explicit",
@@ -336,8 +339,7 @@ describe("product category hierarchy", () => {
     // The editor keeps the stored intent; reset returns the type to its
     // ancestor's default.
     expect(
-      (await getProductCategoryByShortcode(ctx.db, tracked.output.id))
-        ?.stockTracked,
+      (await readProductCategory(ctx.db, tracked.output.id))?.stockTracked,
     ).toBe(true);
     await updateProductCategory(
       ctx.db,
@@ -395,7 +397,7 @@ describe("product category hierarchy", () => {
       ctx.actor,
     );
 
-    const detail = await getProductCategoryByShortcode(ctx.db, group.output.id);
+    const detail = await readProductCategory(ctx.db, group.output.id);
 
     expect(detail?.pathLabel).toBe("Labelled root / Labelled group");
   });

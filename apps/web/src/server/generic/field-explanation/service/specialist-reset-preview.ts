@@ -10,7 +10,7 @@ import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
-import { getExpenseByID } from "~/server/domains/expense/repo/crud";
+import { readExpenseById } from "~/server/domains/expense/repo/crud";
 import {
   resolveDraftExpenseFields,
   type ExpenseFieldDraft,
@@ -217,7 +217,7 @@ async function expenseInheritanceResetPreview(
   field: "trade" | "projectId",
   internalId: string,
 ): Promise<z.output<typeof resultSchema> | null> {
-  const row = await getExpenseByID(db, expenseId.parse(internalId));
+  const row = await readExpenseById(db, expenseId.parse(internalId));
   if (row.lineKind !== "principal") return null;
   const storedTrade = fieldResolutionSchema.parse(row.fieldResolutions?.trade);
   const storedProject = fieldResolutionSchema.parse(

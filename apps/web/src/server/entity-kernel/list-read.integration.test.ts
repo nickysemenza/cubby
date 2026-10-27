@@ -17,7 +17,7 @@ import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { vendorHandlers } from "~/server/domains/vendor/operations.server";
 import { executeEntity } from "~/server/entity-kernel";
-import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { listOperations } from "~/server/entity-kernel/list-operations";
 import { selectedFieldEnvelopeSchema } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -100,7 +100,7 @@ describe("complete list composition", () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
     for (const entity of ["task", "product"] as const) {
-      const operation = ENTITY_LIST_READ_OPERATIONS[entity];
+      const operation = listOperations(entity);
       const specs = getEntityFilters(entity);
       const views = viewsForEntity(entity).map((view) => {
         const values = new Map(
@@ -132,7 +132,7 @@ describe("complete list composition", () => {
         );
       }
     }
-    const productOperation = ENTITY_LIST_READ_OPERATIONS.product;
+    const productOperation = listOperations("product");
     const expected = await executeEntity(context, {
       action: "list",
       entity: "product",
@@ -224,7 +224,7 @@ describe("complete list composition", () => {
         },
       },
     ];
-    const operation = ENTITY_LIST_READ_OPERATIONS.product;
+    const operation = listOperations("product");
     const context = buildKernelContext(ctx.db);
     const pending = await operation.viewCounts(context, { views });
     expect(pending.total).toBe(6);
@@ -279,7 +279,7 @@ describe("complete list composition", () => {
         expect(row).not.toHaveProperty("derived");
       }
       const fields = entitySummaryFields(entity);
-      const selected = await ENTITY_LIST_READ_OPERATIONS[entity].listFields(
+      const selected = await listOperations(entity).listFields(
         context,
         { filters: {}, pagination: { pageIndex: 0, pageSize: 2 } },
         fields,
