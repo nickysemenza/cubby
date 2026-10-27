@@ -51,6 +51,18 @@ it("carries open AI evaluations into the drain states without losing paid result
         ],
       );
 
+    // The per-evaluation Job of the retry wait carries its attempts and error.
+    const oldJob = "00000000-0000-4000-8000-000000000301";
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'job','JOB-SYNTH30123')`,
+      [oldJob],
+    );
+    await client.query(
+      `INSERT INTO "Job" (id,shortcode,key,kind,input,state,attempts,error,"availableAt")
+      VALUES ($1,'JOB-SYNTH30123',$2,'ai.evaluation','{}','retry_wait',2,'Synthetic SQLSTATE 40001',$3)`,
+      [oldJob, `ai-evaluation:${evaluation(1)}`, new Date("2026-01-02")],
+    );
+
     await migrateDatabase(db, { through: "0048_carry_drain_work" });
 
     const after = await client.query<{
@@ -68,5 +80,42 @@ it("carries open AI evaluations into the drain states without losing paid result
       [evaluation(7), "obsolete"],
     ]);
     expect(after.rows[1]!.result).toEqual({ answer: "Synthetic paid answer" });
+
+    const items = await client.query(
+      `SELECT ref,drain,priority,attempts,"lastError","readyAt" FROM "WorkItem"
+       WHERE target = 'ai.evaluation' ORDER BY ref`,
+    );
+    expect(items.rows).toEqual(
+      [1, 2, 3, 5, 6].map((n) =>
+        expect.objectContaining({
+          ref: evaluation(n),
+          drain: "ai-evaluation:synthetic-feature",
+          priority: 0,
+          attempts: n === 1 ? 2 : 0,
+          lastError: n === 1 ? "Synthetic SQLSTATE 40001" : null,
+        }),
+      ),
+    );
+    expect(items.rows[0]!.readyAt).toEqual(new Date("2026-01-02"));
+    const jobs = await client.query(
+      `SELECT j.key,j.kind,j.state,j."maxAttempts",e.kind AS identity,
+        EXISTS (SELECT 1 FROM "JobInvalidationCapture" c WHERE c.key = j.key AND NOT c.observed) AS woken
+       FROM "Job" j LEFT JOIN "Entity" e ON e.id = j.id
+       WHERE j.kind = 'ai.evaluation' ORDER BY j.key`,
+    );
+    expect(jobs.rows).toEqual([
+      {
+        key: "ai-evaluation:synthetic-feature",
+        kind: "ai.evaluation",
+        state: "queued",
+        maxAttempts: null,
+        identity: "job",
+        woken: true,
+      },
+    ]);
+    expect(
+      (await client.query(`SELECT 1 FROM "Entity" WHERE id = $1`, [oldJob]))
+        .rowCount,
+    ).toBe(0);
   });
 });
