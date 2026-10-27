@@ -1,0 +1,33 @@
+apps/web/docs/web-runtime.md
+  s_77bdb89dbc0fc6::t_69e9020d070681 395-402
+docs/adr/0018-current-member-filter-token.md
+  s_77bdb89dbc0fc6::t_5494f497a9c81b 39-45
+docs/adr/0023-lists-are-declared-over-a-relation.md
+  s_77bdb89dbc0fc6::t_43fec77e7015ef 1-54
+docs/adr/README.md
+  s_77bdb89dbc0fc6::t_b78be703ed2c32 33
+docs/agents/generic-paths.md
+  s_77bdb89dbc0fc6::t_7301c093059360 87-93
+docs/entities.md
+  s_77bdb89dbc0fc6::t_bc50364e606b09 2313,2319-2335,3261-3286
+docs/guide/terminology.md
+  s_77bdb89dbc0fc6::t_99b0818fca7593 877,880-902
+docs/guide/work-queue.md
+  s_77bdb89dbc0fc6::t_33c9b26fabde96 3-9,68-92,95-111,168-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "90ca9a5df5ea031569fc4d0c5999e53b5a5cc34a",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
