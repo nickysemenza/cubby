@@ -131,6 +131,9 @@ extension SearchHit {
     /// declare, which `SearchModel` drops rather than renders.
     public var key: EntityKey? { EntityKey(rawValue: entityKind) }
     public var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
+    /// Identifying context under the title: the declared facts, else the projection's subtitle,
+    /// so kinds without facts keep what tells same-titled hits apart.
+    public var context: String? { facts.isEmpty ? subtitle : facts.joined(separator: " · ") }
 
     /// The server's caps on a `search.find` query.
     public static let maxQueryLength = 100

@@ -45,6 +45,15 @@ function getSearchResultEntity(item: SearchDestination): BrowserRoutedEntity {
   return entityKindMap[item.entityKind];
 }
 
+/**
+ * Identifying context under a hit's title: the declared facts, else the
+ * projection's subtitle, so kinds without facts keep what tells same-titled
+ * hits apart.
+ */
+export function searchHitContext(item: SearchDestination): string | null {
+  return item.facts.length > 0 ? item.facts.join(" · ") : item.subtitle;
+}
+
 export function getSearchResultRoute(item: SearchDestination) {
   const entity = getSearchResultEntity(item);
   return {

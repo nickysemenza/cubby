@@ -706,6 +706,29 @@ describe("primary placement", () => {
         missing: "error",
       }),
     ).toEqual(["Home"]);
+    // A Product placed only by a Location installed as it (no Inventory
+    // entry) still walks that Location's ancestry.
+    const installed = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic installed cabinet" }),
+      ctx.actor,
+    );
+    await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic cabinet unit",
+        productId: installed.id,
+      }),
+      ctx.actor,
+    );
+    expect(
+      await read({
+        action: "get",
+        entity: "product",
+        id: installed.id,
+        missing: "error",
+      }),
+    ).toEqual(["Home", "Synthetic cabinet unit"]);
     const [empty] = await enrichProductRowsWithQuantityLedger(ctx.db, [
       { id: absent.entityId },
     ]);
