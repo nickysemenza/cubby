@@ -1,0 +1,29 @@
+apps/web/generator/entities/list-fields.ts
+  s_9fb58b1f0c0012::t_105da32f87b535 1602,1615,1620,1631
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_9fb58b1f0c0012::t_d71018ea99d108 479,488
+docs/entities.md
+  s_9fb58b1f0c0012::t_96eb9546819921 1739-1740
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_9fb58b1f0c0012::t_505fa45886eb2d 737
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_9fb58b1f0c0012::t_bf547edfb7cacd 307
+packages/schemas/src/entity-definitions/definition.ts
+  s_9fb58b1f0c0012::t_abdece7309f2a6 1696-1701,1953
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0dc00d8f0af79db00cd34064f3386e5b32a1d6c2",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
