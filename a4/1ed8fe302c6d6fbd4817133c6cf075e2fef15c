@@ -1,0 +1,35 @@
+apps/web/src/server/domains/expense/repo/charge-context.ts
+  s_493ea6f93c31a7::t_e9611f9fbb7e1c 13,52,54-55,57,64
+apps/web/src/server/entity-kernel/repo/entity-display-image.ts
+  s_493ea6f93c31a7::t_171fd600bd92c7 704
+apps/web/src/server/entity-kernel/repo/entity-identity.ts
+  s_493ea6f93c31a7::t_43f2efa296cb83 13,47
+apps/web/src/server/generic/entity-report/repo/record-dependencies.ts
+  s_493ea6f93c31a7::t_b1d528d5047639 2,4-5,38-71
+apps/web/src/server/generic/field-explanation/operations/field-explanation.server.ts
+  s_493ea6f93c31a7::t_690c94ad60854e 9-12,73
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_493ea6f93c31a7::t_9820bfd04479e3 15,54
+apps/web/src/server/generic/removal/repo/core.ts
+  s_493ea6f93c31a7::t_7c901b5b895b78 58,97
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_493ea6f93c31a7::t_a135a0c21a1f0b 3,76
+packages/schemas/src/entity-manifest.ts
+  s_493ea6f93c31a7::t_b9a531f1859b47 264-267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a41ed8fe302c6d6fbd4817133c6cf075e2fef15c",
+  "prompts": {},
+  "sessions": {
+    "s_493ea6f93c31a7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17ef8-fea3-78b2-9dac-0fea14d1d03a",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
