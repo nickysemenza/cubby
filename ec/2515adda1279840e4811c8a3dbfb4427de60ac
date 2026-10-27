@@ -1,0 +1,73 @@
+apps/web/src/server/db/computed/effective-field.integration.test.ts
+  s_9fb58b1f0c0012::t_f32c288940309e 3,249,357,361-363,527,531-533
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_9fb58b1f0c0012::t_c5b022734abb84 14-17,846-850,853-855,1524-1527
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-itemization.integration.test.ts
+  s_9fb58b1f0c0012::t_b45bbe149bf991 6,105-110
+apps/web/src/server/domains/job/repo.integration.test.ts
+  s_9fb58b1f0c0012::t_22546b8819e482 40,55,60,118,130,230-238
+apps/web/src/server/domains/project/repo/project-attribution.integration.test.ts
+  s_9fb58b1f0c0012::t_db7b965d441702 1,74-80
+apps/web/src/server/domains/project/repo/project-list-filters.integration.test.ts
+  s_9fb58b1f0c0012::t_932430fed4d30b 54-56
+apps/web/src/server/domains/task/repo/task-assignee.integration.test.ts
+  s_9fb58b1f0c0012::t_703bcab6a42b86 12,149
+apps/web/src/server/domains/task/repo/task-inheritance.integration.test.ts
+  s_9fb58b1f0c0012::t_313496e13ae72c 9,236
+apps/web/src/server/domains/task/repo/task-reorder.integration.test.ts
+  s_9fb58b1f0c0012::t_6f91b074df3ca1 56,61-63,91
+apps/web/src/server/entity-kernel/list-read.integration.test.ts
+  s_9fb58b1f0c0012::t_302467299a10d1 21,104,136,228,270
+apps/web/src/server/entity-kernel/list-smoke.integration.test.ts
+  s_9fb58b1f0c0012::t_25b9fc0101d744 62,258-262
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_9fb58b1f0c0012::t_f6f64608581817 2,1066-1068
+apps/web/src/server/generic/derived/service/assignment-precedence.integration.test.ts
+  s_9fb58b1f0c0012::t_a8c2ba7076170d 18,297
+apps/web/src/server/generic/entity-links/repo/entity-edge-source.integration.test.ts
+  s_9fb58b1f0c0012::t_f89d0ac0121d70 17,71-75,96-100,112-119,204-212,226-232,239-247,266-270,278-280,299-301
+apps/web/src/server/generic/entity-links/repo/entity-links.integration.test.ts
+  s_9fb58b1f0c0012::t_1c540552d3d288 25,208
+apps/web/src/server/generic/list/repo/field-compiler.unit.test.ts
+  s_9fb58b1f0c0012::t_8b99fc13c56a97 227,244,288
+apps/web/src/server/generic/list/repo/list-facets.integration.test.ts
+  s_9fb58b1f0c0012::t_d9abcdc0c11cf1 4,45,65
+apps/web/src/server/generic/list/repo/list-field-compiler.integration.test.ts
+  s_9fb58b1f0c0012::t_f4ebc64dde58e6 410
+apps/web/src/server/generic/list/repo/list-projection.unit.test.ts
+  s_9fb58b1f0c0012::t_f457a3236cb3d6 11,191-193,195-197,200,206,210-213
+apps/web/src/server/generic/list/repo/list-scopes.integration.test.ts
+  s_9fb58b1f0c0012::t_a2edef8e72879a 34,69
+apps/web/src/server/generic/list/repo/relative-dates.integration.test.ts
+  s_9fb58b1f0c0012::t_285528b4963720 84,87-91
+apps/web/src/server/generic/list/repo/row-sets.integration.test.ts
+  s_9fb58b1f0c0012::t_91fb0dcf367324 40,72
+apps/web/src/server/generic/list/repo/state-values.integration.test.ts
+  s_9fb58b1f0c0012::t_ddecf5c84374d2 446-449,508
+apps/web/src/server/mcp/entity-read-selection.integration.test.ts
+  s_9607b89cdf7e1e::t_2597961999b922 38-48,586
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ec2515adda1279840e4811c8a3dbfb4427de60ac",
+  "prompts": {},
+  "sessions": {
+    "s_9607b89cdf7e1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f56125d7-a4fa-4fe4-a445-81d11b32c3e7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
