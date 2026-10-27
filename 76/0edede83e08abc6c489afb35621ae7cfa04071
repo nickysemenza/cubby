@@ -1,0 +1,53 @@
+apps/web/src/entity/model/list-read-fields.ts
+  s_9fb58b1f0c0012::t_d00347507164e6 22-31,33-36
+apps/web/src/server/domains/email/repo/email.ts
+  s_9fb58b1f0c0012::t_7c5a4fae4a3fb1 50
+apps/web/src/server/domains/image-processing/repo/image-processing.integration.test.ts
+  s_9fb58b1f0c0012::t_550eb98cd53c3b 33,958,972
+apps/web/src/server/domains/image/repo/image.integration.test.ts
+  s_9fb58b1f0c0012::t_d68b6611fb996e 70,940,954,963,1014,1032,1045,1410,1463,1473
+apps/web/src/server/domains/image/repo/image.repository.ts
+  s_9fb58b1f0c0012::t_1641ca14ed6628 7,16
+apps/web/src/server/domains/image/repo/image.ts
+  s_9fb58b1f0c0012::t_0ec29e2e201b81 1369-1370
+apps/web/src/server/domains/ingredient/repo/search.ts
+  s_9fb58b1f0c0012::t_19abf41bee1049 76,640-642
+apps/web/src/server/domains/job/repo.ts
+  s_9fb58b1f0c0012::t_15aa246d885ba0 4,14,16-17,19,116-118,122
+apps/web/src/server/domains/location/repo/crud.ts
+  s_9fb58b1f0c0012::t_62ee7b5b278aba 848,850,853,888
+apps/web/src/server/domains/product/repo/crud.ts
+  s_9fb58b1f0c0012::t_0eba15ea6c76c0 608,632-635
+apps/web/src/server/domains/product/repo/list-enrichment.ts
+  s_9fb58b1f0c0012::t_7fd1f41629e904 149
+apps/web/src/server/domains/product/repo/write/product-writes.ts
+  s_9fb58b1f0c0012::t_aa3c8ed41d3c9f 142-143
+apps/web/src/server/entity-kernel/adapter.ts
+  s_9fb58b1f0c0012::t_3f35fe9deae00c 173
+apps/web/src/server/entity-kernel/repo/repository.ts
+  s_9fb58b1f0c0012::t_656106d06aa0f9 84,159-163,165-169,175-179,200,203-205,212-217,230,233-235,425-430,501-502,660-668,685,690-695
+apps/web/src/server/generic/jobs/repo/entity-list.ts
+  s_9fb58b1f0c0012::t_520aa2d8f86c7b 17-18,43-44
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_9fb58b1f0c0012::t_5b9882aeb94d13 10,255-260,266-267,272-276,280,283-284,286-289,300,305
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_9fb58b1f0c0012::t_7af45bb5390754 60-61,419,421,504
+apps/web/src/server/generic/list/repo/list.ts
+  s_9fb58b1f0c0012::t_183abade008ec8 144,1385-1386,1591-1595,2267,2269,2277-2278,2291,2301,2322,2336
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "760edede83e08abc6c489afb35621ae7cfa04071",
+  "prompts": {},
+  "sessions": {
+    "s_9fb58b1f0c0012": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e4a2c943-686f-4b7b-804f-9f203d871b36",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
