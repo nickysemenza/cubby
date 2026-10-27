@@ -1,0 +1,29 @@
+apps/web/src/features/activity/queue-overview.preview.test.tsx
+  s_8b07d067c671e4::t_4c5126ef6c860b 182,262-263,268
+apps/web/src/features/run/run-detail.preview.test.tsx
+  s_77bdb89dbc0fc6::t_25407b3168bdb8 287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "df8d2a3c747ddfe9f71c7b8c413f71b3cda34358",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_8b07d067c671e4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17e86-dcaa-79a1-8890-32428b8d1aa7",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
