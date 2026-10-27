@@ -1,0 +1,31 @@
+apps/apple/DESIGN.md
+  s_c6deccbb7f9ce5::t_08a5247b856275 19,31,64,101,103,107,123
+apps/apple/README.md
+  s_c6deccbb7f9ce5::t_036f13128857f2 240-241
+apps/web/DESIGN.md
+  s_c6deccbb7f9ce5::t_cc305a36f6960a 245
+apps/web/docs/web-runtime.md
+  s_c6deccbb7f9ce5::t_ba193a1acd5fab 263-267
+docs/entities.md
+  s_c6deccbb7f9ce5::t_935ab8225c1bdb 348,405-407,512-513,542-543,551-552,862,864-866
+docs/jobs.md
+  s_c6deccbb7f9ce5::t_06032f28562e6c 485-487
+docs/photo-library-dedup.md
+  s_c6deccbb7f9ce5::t_28eabcee93ba1d 181-183
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2930c8ccfb0a2b180085bd74a89933b26fdb1abd",
+  "prompts": {},
+  "sessions": {
+    "s_c6deccbb7f9ce5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3136f515-308a-44a5-bd63-4661b67fa76f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

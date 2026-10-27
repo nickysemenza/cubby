@@ -1,0 +1,1046 @@
+apps/apple/App/Shared/Intents/Intents.swift
+  s_01e2d2cf933447::t_61fc612b5d8ffe 42-60,66-67,74,76-77,79
+  s_9ac7e5f472a0df::t_0b2d2948658a32 129-147,154-156,164-169
+  s_7667243984c2e9::t_40ee5576e54780 250-292,338-343
+apps/apple/App/Shared/Search/SearchView.swift
+  s_01e2d2cf933447::t_64aa17b30618ee 363,395-396
+  s_6b163ef7edc339::t_c2aae77aa55a53 165-169,326,353
+  s_7667243984c2e9::t_db265d49d51f74 260-262,265-276
+  s_49ab8ab0a006bb::t_619f759780ad32 5-6,52-54,131-137,139,144-148,219,226-228
+apps/apple/App/Shared/Spotlight/SpotlightIndexer.swift
+  s_01e2d2cf933447::t_d5fc02829cde4a 77,79-81
+apps/apple/App/Tests/Entity/List/EntityRowPresentationTests.swift
+  s_01e2d2cf933447::t_d97ec9d404f18f 22-26,31-37
+apps/apple/App/Tests/Search/SearchModelTests.swift
+  s_01e2d2cf933447::t_b46f32fda5f759 210-223,233
+  s_6b163ef7edc339::t_411a4d42008de5 110-129,151,155-171
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/SearchHitTests.swift
+  s_01e2d2cf933447::t_42664243c0bd1b 14-15
+apps/apple/CubbyKit/Tests/CubbyKitTests/Fixtures/search-find.json
+  s_01e2d2cf933447::t_7437661d7bf1c8 7,22,37
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/IntentSurfaceTests.swift
+  s_01e2d2cf933447::t_379efcbb5d0994 7-12
+apps/web/src/entity/picker/combobox-builders.tsx
+  s_01e2d2cf933447::t_513a63e0ae3a53 201-202
+apps/web/src/entity/picker/combobox-builders.unit.test.tsx
+  s_01e2d2cf933447::t_dbf806d393bc63 27,163,165,169
+apps/web/src/features/command-menu/command-menu.tsx
+  s_01e2d2cf933447::t_d4e901c1395a9b 682,764,766
+apps/web/src/features/image/image-selects.unit.test.tsx
+  s_01e2d2cf933447::t_104b81bb73bb79 74
+apps/web/src/features/search/product-family.tsx
+  s_01e2d2cf933447::t_4225a936917aed 121,139
+apps/web/src/features/search/search-page.tsx
+  s_01e2d2cf933447::t_a8eff364e4092d 380,382,498,571,616-619,622
+apps/web/src/server/domains/product/repo/crud.ts
+  s_01e2d2cf933447::t_78ba8d280b9e33 982-984,1119,1153
+apps/web/src/server/domains/product/repo/detail.ts
+  s_01e2d2cf933447::t_469bbbdb9c82f2 31,98,179,191
+  s_34f0947f9f6a59::t_e24669dc90b155 1,194-202,216-227
+apps/web/src/server/domains/product/repo/list.integration.test.ts
+  s_01e2d2cf933447::t_91f01263ae0bad 309,323-338,351-355,363-365
+apps/web/src/server/domains/product/repo/mappers.ts
+  s_01e2d2cf933447::t_1762d5d35381a5 462,605
+apps/web/src/server/domains/product/repo/quantity-ledger.integration.test.ts
+  s_01e2d2cf933447::t_d779c0a57f8ac9 4,11,32-33,603-660,709-729
+  s_34f0947f9f6a59::t_b419fc4712304c 3,12-13,23,661-708
+apps/web/src/server/domains/product/repo/quantity-ledger.ts
+  s_01e2d2cf933447::t_4e965c40938c88 1-5,11,14,23,414-494,503,505-516,524
+apps/web/src/server/domains/product/repo/types.ts
+  s_01e2d2cf933447::t_b8875ae617b2f2 75-77,110-112
+apps/web/src/server/generic/entity-report/repo/summary.ts
+  s_01e2d2cf933447::t_70925118a2aa3d 6,118-120,122-123,128,145-147
+apps/web/src/server/generic/search/service/search-grouping.service.ts
+  s_01e2d2cf933447::t_5e152ee1e78c87 59
+apps/web/src/server/generic/search/service/search-grouping.service.unit.test.ts
+  s_01e2d2cf933447::t_6771157a0e8a90 29
+apps/web/src/server/generic/search/service/search-location-path.integration.test.ts
+  s_01e2d2cf933447::t_f2a64b9a487d19 1,8-10,38,60-96
+apps/web/src/server/generic/search/service/search.service.ts
+  s_01e2d2cf933447::t_357750766bfb08 10,14,18,21,45-47,99-106,109-151,154-155,158-159,162-191,194-196,314-316,385,428
+apps/web/src/server/generic/search/service/search.service.unit.test.ts
+  s_01e2d2cf933447::t_3786fedce571e4 1,41-47
+docs/entities.md
+  s_01e2d2cf933447::t_f2e96a78f6e76b 2254-2266
+  s_7133750c57d103::t_c16610b7b01857 855-866,1651
+  s_db808196b3a7fb::t_ec8a732321aaca 556-560,922-924
+  s_34f0947f9f6a59::t_0e572b5d9d11cf 347-351,357-361,535,539,543-549,584-588,593
+  s_144d6894ba8042::t_5a431aad524e76 517-525,1655-1663
+  s_e49ab742e2de8a::t_f3ae54195f9b9f 701-704
+  s_3e81357a17ae07::t_8bd8c38c03fdfe 352-356
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_01e2d2cf933447::t_23dc0c64fa5224 4-7,895-906,908-915
+  s_672398f43d55a3::t_1c9773390283de 907
+  s_34f0947f9f6a59::t_417ac127c789fa 198-203,233,248-255,260-264,272
+  s_34f0947f9f6a59::t_bd2873f32417c8 230
+  s_34f0947f9f6a59::t_530845b04dc165 139-144,151-156,165-167,234-247,256-259,274,276-278,291-295,299-304,306-311,319-337
+  s_144d6894ba8042::t_e281631a3282d2 850-853,1080,1678-1679,1811-1812,1882-1883,1912-1913
+packages/schemas/src/product-read-fields.ts
+  s_01e2d2cf933447::t_c55c1133f1c33c 93-100,102
+packages/schemas/src/product.ts
+  s_01e2d2cf933447::t_258905ed4b8da0 20-21,639-641
+packages/schemas/src/search.ts
+  s_01e2d2cf933447::t_eaf80a92ac00c2 145,164
+apps/web/generator/entities/render/swift-catalog.ts
+  s_7133750c57d103::t_957e6ac5aac972 924-928,930-939,941,944
+  s_db808196b3a7fb::t_d52375cdb78eb3 658-661,685-687
+  s_34f0947f9f6a59::t_bf69a440b6dc3d 36,622-624,666-668,893-895
+  s_144d6894ba8042::t_c9a29570238933 779-784
+  s_931718bbf1e269::t_0c825a6e83d6a0 409-414,906-914,929,940,984-987
+packages/schemas/src/native-coverage.unit.test.ts
+  s_7133750c57d103::t_05e8bc7555354e 85-87,89,92,99-100,121,124-153
+  s_db808196b3a7fb::t_e5e90696c322ec 168-186
+  s_e49ab742e2de8a::t_dbb86eb7d61c84 93-94,97,102,105-108
+  s_f9fa992b09d3a5::t_bd0167a4a621bd 101
+  s_5179a923bdfd2e::t_fdedb56fd5a5fc 95-96,103-104
+  s_931718bbf1e269::t_cbb998a094e03c 109,110,112-120
+  s_931718bbf1e269::t_6aa273f4c4649d 111
+apps/web/generator/http-api/entity-kernel.ts
+  s_7133750c57d103::t_56bb6ea20cd070 5-8,256-268,285,301-302,307
+packages/schemas/src/native-coverage.ts
+  s_7133750c57d103::t_9d40185111ed9a 51-54,56-64,67-71,108-109,111,426,435-441
+  s_db808196b3a7fb::t_74acbd6c5cfa18 329-330,335,690-697,829-858
+  s_e49ab742e2de8a::t_4ebb7972ea366d 394-395,449-466,473-476,479-498
+  s_f9fa992b09d3a5::t_52a49c40617e36 443-448
+  s_5179a923bdfd2e::t_38545918f970ba 372,427-434,557-565
+  s_931718bbf1e269::t_8de693b497075b 127,141-142,163,505,507-554
+apps/web/src/entity/platform/entity-schema-model.ts
+  s_7133750c57d103::t_57f10322e94ebf 72-77,268
+apps/web/src/entity/platform/entity-schema-inspector.tsx
+  s_7133750c57d103::t_0e8127c3c66ca7 129
+apps/apple/App/Shared/AppShell/Navigator.swift
+  s_7133750c57d103::t_a4e1b62bae2890 386
+  s_db808196b3a7fb::t_298a7dfcd57e2e 117-125
+  s_d8d8be46d31521::t_4305ab706caee4 168-183,192-204,348,360
+  s_43a2267536ddd9::t_4d249ae845170c 82-100,104
+  s_d1942d66b01930::t_bfbff46110e9e7 373-375
+  s_d4e0640dd7b1ac::t_3250c8e72177a7 184-191
+apps/apple/App/Shared/DesignSystem/NativePresentationCoverage.swift
+  s_7133750c57d103::t_21dde3dea06336 5,8-11,17-22,25,29,33,37,43,47,60,72-73,76-77,80-87,89-90
+  s_47fea50e8ec744::t_80963d77b222fe 50-54
+  s_931718bbf1e269::t_2a46eaa3f41290 65-69,88,91
+apps/apple/App/Shared/DesignSystem/OpenOnWebButton.swift
+  s_01e2d2cf933447::t_01a30478ab2ae5 1-40
+apps/apple/App/Shared/DesignSystem/WebHandoff.swift
+  s_01e2d2cf933447::t_0ad2ec659db31c 10-17,20-43,45-55
+apps/apple/App/Shared/Editors/EntityEditorSheet.swift
+  s_7133750c57d103::t_7da2dd6874c82a 61,68,70,107,307
+  s_3d5778384758c7::t_d0b922fb896c6a 42,101,115-117,119-121,149,159,163-179,187-188,213,233,239,246,336,429
+  s_3d5778384758c7::t_1f6bdf435cd843 180-185,355
+  s_931718bbf1e269::t_9e9b1b6be914aa 4-7,64,207,209-210,225-227,232,238,272-296,298-302,400
+apps/apple/App/Shared/Entity/Detail/DetailSectionViews.swift
+  s_7133750c57d103::t_434c313d7d1dcc 473,495-499
+  s_34f0947f9f6a59::t_2a85538e6ce875 32-40,68,76,83,87-95,97-104,126-134,149-170,463-465,467-469,748-753,763,853-860,871,887,890,893-895,897,903-909
+  s_49ab8ab0a006bb::t_0ddf7ff438d1f4 1010-1011
+apps/apple/App/Shared/Entity/Detail/DetailSlots.swift
+  s_7133750c57d103::t_dcbbd8be1b7ed6 5,149-152,161,163-167,169-170,176-187,191-193,274-276,296-298
+  s_e49ab742e2de8a::t_08a04d500a6a45 153-160,162,168,171-175,198,203-204,206-212
+  s_f9fa992b09d3a5::t_5151d638562233 188-190
+apps/apple/App/Shared/Entity/Detail/DetailSummaryGrid.swift
+  s_7133750c57d103::t_33edb9128f4e4e 17,69-70,72-73
+  s_34f0947f9f6a59::t_4852ae1d239b34 5,9,12,33-34,36-51,53,58-63,132-134,152-155
+apps/apple/App/Shared/Entity/Detail/EntityDetailView.swift
+  s_7133750c57d103::t_ce697173f0e469 67,150,158,178-187,315-316
+  s_db808196b3a7fb::t_d66552ef07d75c 280-282,354-355,357-358,393,409,447-449,497-518,536,702-704
+  s_34f0947f9f6a59::t_2ebed98be6dd01 624-625,627-632,802,851
+  s_9d5cc5297ac020::t_e57a0ac6f34f60 222-237,244-258
+  s_7667243984c2e9::t_eb98ceac04f6d4 38,40-46,141-145,147,151-156
+  s_e49ab742e2de8a::t_3bba5144d5c264 532,696
+  s_49ab8ab0a006bb::t_6af30903539515 452,570-575,747-751,867-868
+apps/apple/App/Shared/Entity/List/EntityListView.swift
+  s_7133750c57d103::t_67727756486f5f 1101,1104,1211,1214,1374,1377
+  s_db808196b3a7fb::t_b3f46653ed6f23 85,242,1209,1366-1370,1372
+  s_43a2267536ddd9::t_ce56965ae0f741 86-87,787-788,831-837,843-849,859-862,865-867,895-896,903-905,1106-1109,1157-1159,1177-1179,1448-1450,1453,1456-1458,1461
+  s_144d6894ba8042::t_6b63720adeb917 708-709,712,714-715,721-723
+  s_8058afbf13b87f::t_7e9edb6b7abeab 81-84,110-114,119-125,422-426,428-429,987-995,1004,1006-1008,1012-1013,1027-1030,1038,1040,1046,1048,1058,1060,1067,1069,1085-1093,1096,1149-1155,1243,1245,1257-1258,1269-1273,1275-1292,1294-1295,1298,1301,1303-1315,1317-1331
+  s_7667243984c2e9::t_801b75dbce39c4 25-26,35,37-39,75,211-213,851-856,897-902,1097
+  s_5179a923bdfd2e::t_06ac8bb6020968 63-64,67-69,132-139,141-151,340-345,730,762,1136,1143,1163
+  s_5179a923bdfd2e::t_6c627547db4ef8 339,384,439-451,617-619
+  s_672398f43d55a3::t_d8392125d55ead 945,1297,1485,1574
+apps/apple/App/Shared/Entity/List/EntityShelfView.swift
+  s_7133750c57d103::t_04bff8a8d8fdcd 99,102
+  s_43a2267536ddd9::t_7fddc0a90e248a 21,30,60-66,124-133,138-140,153,155-157,159-160
+apps/apple/App/Shared/Finance/ReceiveExpenseSheet.swift
+  s_7133750c57d103::t_101da807010617 158-160
+  s_672398f43d55a3::t_584690990af1fd 136,154-156
+apps/apple/App/Shared/Photo/ImageEntityDetailView.swift
+  s_7133750c57d103::t_6785d590410e95 87
+apps/apple/App/Shared/Photo/Import/PhotoImportRunSheet.swift
+  s_7133750c57d103::t_94d913555a9e5a 655,681
+  s_f9fa992b09d3a5::t_4de32758bb09d5 659,677,764
+apps/apple/App/Shared/Report/RecordsBlockView.swift
+  s_7133750c57d103::t_61451ada5223e5 576,580-583,585
+  s_db808196b3a7fb::t_4069dba7987dd2 13-57,59-60,68-69,71-102,110-111,118,146,152-153,169-174
+  s_e49ab742e2de8a::t_b538f909e02490 400,566-567,577-579,603-605
+  s_c503e493e0915b::t_6ccde7938c3444 125
+apps/apple/App/Tests/AppShell/NavigationTests.swift
+  s_7133750c57d103::t_a290c534abfd4e 45
+  s_6b163ef7edc339::t_34800745e2bbb2 228-229,231-232,236,238
+  s_db808196b3a7fb::t_5b2cf80a33f6d5 403-429
+  s_d8d8be46d31521::t_6d4fce30d8aae5 82-116
+  s_64bc8bb4cb8e63::t_7998151b3b55de 171,174-177,179,183,185-187,189-205
+  s_7667243984c2e9::t_f6e598c5f3ff57 295-296,300-322
+  s_d1942d66b01930::t_93c1b4f480b30b 36-38,42,59-67
+  s_d4e0640dd7b1ac::t_017586480ffcae 11-13,19,21-26
+apps/apple/App/Tests/DesignSystem/WebHandoffTests.swift
+  s_7133750c57d103::t_f7a553c9f2bb8f 7-11,13-14,16-25,27-28
+  s_7667243984c2e9::t_08c10d7e30e854 30-34
+apps/apple/App/Tests/Entity/NativeCoverageViewPathTests.swift
+  s_7133750c57d103::t_d0eb727c83bec7 26,28-31,68-88,95-96
+  s_e49ab742e2de8a::t_fb7a278f35f35c 32-44
+  s_f9fa992b09d3a5::t_c8cbce2a81a6d9 89-93
+apps/apple/App/macOS/RootSplitView.swift
+  s_7133750c57d103::t_d2644392bcd64f 239
+  s_d8d8be46d31521::t_32d24a033df006 1,11-14,25-34,36-37,39-43,45-46,50-59,79,91-96,98,101-135,293-295,334-385
+  s_7667243984c2e9::t_abe61a8cd95688 17-18,60-78
+  s_49ab8ab0a006bb::t_a7ddb1c1ba0545 149,282-286
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/NativeCoverage.swift
+  s_7133750c57d103::t_50ba54fae7e8e4 8-9,11-30,35-36,44-51
+  s_931718bbf1e269::t_b5ec64ef43aaa7 70-71
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/NativeCoverageTests.swift
+  s_7133750c57d103::t_5c9083cfe1f506 13-28,34-35
+  s_931718bbf1e269::t_87e7a20cf9431c 31
+apps/apple/project.yml
+  s_7133750c57d103::t_8223c512b0332b 312
+  s_7667243984c2e9::t_93e645fd876788 313
+  s_47fea50e8ec744::t_59c6d8997d677e 110
+  s_7226f12e1f3aaa::t_a7e2f86af92e7b 90,235,249
+apps/apple/AGENTS.md
+  s_7133750c57d103::t_9768e46bd15636 150-154
+  s_f9fa992b09d3a5::t_f31194302d3080 95
+  s_c503e493e0915b::t_69a526f05ad290 191-194
+apps/apple/DESIGN.md
+  s_7133750c57d103::t_dce61a83c339b4 21-23,54
+  s_6b163ef7edc339::t_c52f19f2309ce6 131-132,135-139
+  s_db808196b3a7fb::t_37288de36019d6 99-100
+  s_64bc8bb4cb8e63::t_43734bb002d9c2 39-40
+  s_34f0947f9f6a59::t_a2a32fa9c513e7 161-164
+  s_1e6ce2ba717cc6::t_98c3dd52979e7a 43-48
+  s_9d5cc5297ac020::t_04319111213e8b 27-28,49-50
+  s_8058afbf13b87f::t_b007dbf85f3302 103-104
+  s_3cc0060ca95746::t_72cb009281c6bc 94,96,129
+  s_672398f43d55a3::t_88226272067523 93
+  s_47fea50e8ec744::t_04750fdeeb92d8 95
+  s_f9fa992b09d3a5::t_33eec9b7499143 58,60,82,101
+  s_d1942d66b01930::t_67da72fc3aeeda 140
+  s_5179a923bdfd2e::t_8d5c5b1dfaa10f 31
+  s_5179a923bdfd2e::t_b918f3af7f891a 123
+  s_ff3e82730f47f5::t_d86f54295e70cc 62-65
+  s_3d5778384758c7::t_6fd51e39aaa995 119-120
+  s_931718bbf1e269::t_6518dfa9d8c0b9 117-118
+  s_49ab8ab0a006bb::t_b39ae141706a39 107,133-134,165
+  s_d4e0640dd7b1ac::t_75500b0caf1f4d 19
+  s_931718bbf1e269::t_2b8e3580883c6b 97,105
+apps/apple/App/Shared/AppShell/AppModel.swift
+  s_6b163ef7edc339::t_521d1921fe3fa8 194-208,362,367,384,403,454,468,502,504-505,508,595
+  s_47fea50e8ec744::t_30d52c2a2ebe91 44
+  s_ff3e82730f47f5::t_978793c5eebc3f 641,649,651
+  s_d4e0640dd7b1ac::t_6c69dafd6ad1c7 534
+apps/apple/App/Shared/AppShell/RootView.swift
+  s_6b163ef7edc339::t_ca90c2be48cfef 74-81,104-109
+  s_d4e0640dd7b1ac::t_a52f7e8dd05a5f 65
+apps/apple/App/Shared/Capture/CaptureModel.swift
+  s_6b163ef7edc339::t_8fd6c1e5b6b18b 120,135,145
+  s_1e6ce2ba717cc6::t_57f8a2cf149615 40,45-47,68-70
+apps/apple/App/Shared/Search/SearchModel.swift
+  s_6b163ef7edc339::t_4d20981c90f8df 47,117,128,130,178
+apps/apple/App/Tests/AppShell/DiagnosticsTests.swift
+  s_6b163ef7edc339::t_b730dcf69a3a80 20-51
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyAPIError.swift
+  s_6b163ef7edc339::t_241d7f552ed1d4 184-185,188-191
+apps/apple/App/Tests/Photo/Import/PhotoImportFlowTests.swift
+  s_37b21563b51dcd::t_9cdfed54325072 699-700
+  s_9d5cc5297ac020::t_52fa87662b9569 12-55
+  s_f9fa992b09d3a5::t_bb5ffb4f8584f4 61,84,87,102,128,132,147,156
+apps/apple/App/Tests/Photo/Review/PhotoMatchStoreTests.swift
+  s_37b21563b51dcd::t_79d17497202b31 549-557
+apps/apple/ITERATION.md
+  s_37b21563b51dcd::t_f2a12d48cb1a4a 149-160
+  s_e49ab742e2de8a::t_d7a4849d6b1658 34-35,41
+  s_f9fa992b09d3a5::t_780096f7e89c03 132-137
+  s_5179a923bdfd2e::t_124cb0a8027391 67,70,86
+  s_672398f43d55a3::t_9749dd33f37854 73-78
+apps/apple/App/Shared/Entity/Detail/HeroActionSheet.swift
+  s_db808196b3a7fb::t_f274dc3b7448e7 95,108-121,129-161,165,189
+apps/apple/CubbyKit/Sources/CubbyKit/Actions/HeroActionModel.swift
+  s_db808196b3a7fb::t_ce397f81dd714e 41-46,122,131-142
+apps/apple/CubbyKit/Sources/CubbyKit/Actions/HeroActionPlan.swift
+  s_db808196b3a7fb::t_6ecf1875535069 109-113,136-137,139-144,151,156,175-179
+apps/apple/CubbyKit/Sources/CubbyKit/Actions/HeroActionRunner.swift
+  s_db808196b3a7fb::t_f04bdd5e32a8da 111-125,130,255,316-323
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/EntityManifest.swift
+  s_db808196b3a7fb::t_48dfb5da6744ad 123-133
+  s_144d6894ba8042::t_ac777042427cab 109-112
+apps/apple/CubbyKit/Tests/CubbyKitTests/Actions/HeroActionRunnerTests.swift
+  s_db808196b3a7fb::t_9852a451e42554 331-384
+apps/apple/CubbyKit/Tests/CubbyKitTests/Manifest/EntityManifestTests.swift
+  s_db808196b3a7fb::t_d38c97c9656257 70-81
+  s_34f0947f9f6a59::t_2f38e044d21a38 57-69
+  s_144d6894ba8042::t_2d77c8188fb861 82-96
+apps/web/generator/entities/presentation.ts
+  s_db808196b3a7fb::t_dbeaac78e25534 499-503,505-519,919-923,1009,1050
+  s_34f0947f9f6a59::t_c3a9e4a7e10924 487-495,529,531,545-546,620-636,901,959
+apps/web/generator/http-api/native-plan-validation.ts
+  s_db808196b3a7fb::t_5646df11f2e91f 84,90-96,99-108
+apps/web/src/entity/actions/action-verbs.ts
+  s_db808196b3a7fb::t_ce5c02697b7c62 17,89,128
+apps/web/src/entity/actions/declared-entity-actions.tsx
+  s_db808196b3a7fb::t_1b937e64c2264a 10-17,186-287,326-345
+apps/web/src/entity/actions/entity-actions.tsx
+  s_db808196b3a7fb::t_e85b1087fd726b 3,593-607,786,793-797,826-832,836-843,845,848,853
+apps/web/src/entity/entity-detail/generic-entity-detail.tsx
+  s_db808196b3a7fb::t_041daea92a7711 636
+  s_34f0947f9f6a59::t_8dbd5bb682c8f4 2,36,43,133-134,140-143,145,183-185,191-198,213-215,224,229,232,254,258,328,482,509-516
+  s_3e81357a17ae07::t_e2ada11aeb4828 79,186-190
+apps/web/src/entity/manifest-registries.unit.test.tsx
+  s_db808196b3a7fb::t_97f2bd6eb7cdb0 157-173
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_db808196b3a7fb::t_b882ac5f23ac0c 107-108,279
+  s_34f0947f9f6a59::t_aaa51bfd82c9e2 109-128
+  s_34f0947f9f6a59::t_0ec019bf20ac43 103-106
+  s_34f0947f9f6a59::t_b461b219e59c8d 68-70,80-94
+  s_144d6894ba8042::t_f0af5f40c01c88 349-350,403-404
+packages/schemas/src/entity-definitions/10-task.entity.ts
+  s_db808196b3a7fb::t_55b5f997453fe0 132,134,245-246
+  s_34f0947f9f6a59::t_b240eec18f5d3c 135-150
+  s_34f0947f9f6a59::t_631e1aeff4e61c 81-83,91-96
+  s_144d6894ba8042::t_ace16be4e2451a 461-462,536-537
+packages/schemas/src/entity-definitions/definition.ts
+  s_db808196b3a7fb::t_677790996bbcfe 1591-1595,1661,1667,1884-1888,1930,1962
+  s_34f0947f9f6a59::t_307056510a943b 2-5,1362,1365-1367,1450,1563-1567,1615-1622,1654,1668
+  s_144d6894ba8042::t_93efe367760259 460-463,465,1518-1526
+packages/schemas/src/manifest-wire.ts
+  s_db808196b3a7fb::t_80183f4fb10648 295,304
+  s_144d6894ba8042::t_3ce5f554f3e534 378-382,399-400
+apps/apple/App/Shared/Entity/List/RowQuickActions.swift
+  s_db808196b3a7fb::t_e51aa535ac76f6 1-88
+apps/apple/App/Shared/Today/TodayModel.swift
+  s_db808196b3a7fb::t_9c2177349c8151 35-38,47-48
+  s_3cc0060ca95746::t_eff24c8096fa04 13-14,15-16,17-21,55,138-189
+  s_672398f43d55a3::t_ba1c850e617d50 11-12
+apps/apple/App/Shared/Today/TodayView.swift
+  s_db808196b3a7fb::t_e1ef0d0681c657 218,340-341
+  s_3cc0060ca95746::t_306d4510ee5371 23,152-154,156-162,203-209,217,222,230,247-272,357-359,363-377,383-386,387-388,389,393,399-401,405-416,419-424,426-431,433,435-442,444-446,448-451,453-462,465-469,471-480,483-487,489-495,497,499-504,507,509-516,518-521,525-532,534-537,540,542-543,545,549-555,658-669
+  s_931718bbf1e269::t_8be8e4213e43c4 395
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportSlotModel.swift
+  s_db808196b3a7fb::t_72275111803c4c 129-131,173
+apps/web/src/contracts/entity-mutation.contract.ts
+  s_db808196b3a7fb::t_b2413b6239299d 16-21
+apps/web/src/features/home/house-card.tsx
+  s_db808196b3a7fb::t_dba6796c640877 6-9,74,131-148
+apps/web/src/server/domains/task/repo/today-briefing.integration.test.ts
+  s_db808196b3a7fb::t_8bd7bd52e0807f 29-43
+apps/web/src/server/domains/task/repo/today-briefing.ts
+  s_db808196b3a7fb::t_45d7d2fd0cc50b 18,118-135
+apps/web/src/server/generic/entity-report/repo/task.ts
+  s_db808196b3a7fb::t_97764ff246b99f 46
+apps/web/tooling/checks/apple-preview-fixtures.ts
+  s_db808196b3a7fb::t_8f81dfbee43417 44,47,218-226
+apps/web/tooling/typecheck-repositories.ts
+  s_db808196b3a7fb::t_038abaebe47142 204
+packages/schemas/src/project.ts
+  s_db808196b3a7fb::t_00868d7728eb93 42,350-351
+apps/web/src/server/domains/task/repo/briefing-commands.ts
+  s_db808196b3a7fb::t_4e9939f1263112 1-28
+apps/apple/App/Shared/DesignSystem/RecordListRow.swift
+  s_db808196b3a7fb::t_d25bcc0a222349 3-5,44-49
+  s_931718bbf1e269::t_a5802c03c1cb5b 51
+apps/apple/App/Shared/Entity/Detail/DetailChartActivityViews.swift
+  s_db808196b3a7fb::t_0c22baf82de34c 142-151,156
+apps/apple/App/Tests/Intents/IntentSurfaceTests.swift
+  s_371a4fad79235c::t_c1898957b36faa 1,3-7,9,37-46,89
+  s_47fea50e8ec744::t_8011b7c13c0afc 26-36
+  s_7226f12e1f3aaa::t_506e8108b0390a 2,8,10-25
+docs/inventory-audit.md
+  s_9ac7e5f472a0df::t_e1283a353ece62 14-17
+apps/apple/App/Shared/Identify/IdentifyModel.swift
+  s_9ac7e5f472a0df::t_9f0eed482f063b 31-42,54-55,59,67-69,78-79,81-83,85,96-97,122,124,131
+apps/apple/App/Shared/Identify/IdentifyView.swift
+  s_9ac7e5f472a0df::t_e791fc73852418 56,93,113
+apps/apple/CubbyKit/Sources/CubbyKit/Identify/FeaturePrintIndex.swift
+  s_9ac7e5f472a0df::t_6a03aa36be877d 80,82-83,86,102,106,140
+apps/apple/README.md
+  s_9ac7e5f472a0df::t_97276e0e00f8d3 284-291
+  s_7226f12e1f3aaa::t_babbb8bf0dbfb6 179-195
+  s_ff3e82730f47f5::t_191492420fef9f 177,200,238-244,246-247,252-254
+apps/apple/CubbyKit/Tests/CubbyKitTests/Identify/FeaturePrintIndexTests.swift
+  s_9ac7e5f472a0df::t_3c2a632b22c7e4 53-74
+apps/apple/App/Shared/Activity/ActivityView.swift
+  s_d8d8be46d31521::t_ce7ef9e31b25a4 24,40-54,56,58,61-66,69-71,118-122,125-137,173-175
+  s_7667243984c2e9::t_6076a36fb9dd8f 31
+  s_ff3e82730f47f5::t_43447f34465583 4-5,11-12,14,23,25-26,67-68,74-75,77-78,85-91,94-113,123-124
+  s_931718bbf1e269::t_50ff2cbd54a032 29,288
+apps/apple/App/Shared/AppShell/Route.swift
+  s_d8d8be46d31521::t_36dc67cbd6a200 5,76
+  s_7667243984c2e9::t_9671d8222d8eeb 109-110
+  s_49ab8ab0a006bb::t_5978e39ca76f20 74-75,115
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityFilterState.swift
+  s_d8d8be46d31521::t_820902b1f0aa99 8
+apps/apple/App/Tests/Entity/List/EntityCardRenderingTests.swift
+  s_43a2267536ddd9::t_20706edaa38336 27-41
+  s_8058afbf13b87f::t_c1586400ff4777 42-79
+apps/web/tooling/entity-generator.unit.test.ts
+  s_34f0947f9f6a59::t_258991e32e6ed3 26,60,67-68,81-84,91,94-151,1370-1380,1383,1385-1392,1394-1412,1416-1417,1421,1979-1993,1999,2024,2039,2046
+  s_34f0947f9f6a59::t_0f09cef6c9fe84 1967-1971,1973,1997,2013
+packages/schemas/src/entity-definitions/01-recipe.entity.ts
+  s_34f0947f9f6a59::t_4f196ad8771eea 119-143
+  s_34f0947f9f6a59::t_3b5a1c8a469828 88-99
+  s_144d6894ba8042::t_54ae11bd634605 292
+packages/schemas/src/entity-definitions/02-ingredient.entity.ts
+  s_34f0947f9f6a59::t_130ff43d31c424 90-102
+packages/schemas/src/entity-definitions/03-cookbook.entity.ts
+  s_34f0947f9f6a59::t_760cbcbf196377 73-90
+packages/schemas/src/entity-definitions/04-location.entity.ts
+  s_34f0947f9f6a59::t_1c2a31235c603a 113-132
+  s_34f0947f9f6a59::t_c93d0bdef01df4 56-59,68-71,91-96
+  s_144d6894ba8042::t_eb879ee9daf88f 464-465,519
+packages/schemas/src/entity-definitions/06-meal.entity.ts
+  s_34f0947f9f6a59::t_fbe330de58221d 114-126
+packages/schemas/src/entity-definitions/07-ledgerParty.entity.ts
+  s_34f0947f9f6a59::t_b82cb1b2961589 89-102
+  s_144d6894ba8042::t_5c6f73173b1819 145
+packages/schemas/src/entity-definitions/08-ledgerTransfer.entity.ts
+  s_34f0947f9f6a59::t_c652914598694e 86-98
+  s_144d6894ba8042::t_99ecf2d39496e2 199
+packages/schemas/src/entity-definitions/09-project.entity.ts
+  s_34f0947f9f6a59::t_585513e3513804 234,244-251,255,257-262,264-265,269
+  s_34f0947f9f6a59::t_a9464f74e389a5 189-194,202-205,235-243,252-254,256,263,266-268,271-274,277-280,289-291,299-304
+  s_144d6894ba8042::t_228898922ae322 686
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_34f0947f9f6a59::t_350b0011195c3a 110-162
+  s_144d6894ba8042::t_41b62aa43aaf65 527
+packages/schemas/src/entity-definitions/12-purchase.entity.ts
+  s_34f0947f9f6a59::t_93f79b191347f4 143,161-166,169-179,192-202,214-227
+  s_34f0947f9f6a59::t_2d738511385688 99-108,123-126,144-160,167-168,180-191,203-213
+  s_144d6894ba8042::t_db1d69f403c9be 594-599,656-658,754-755,830,855,874,1181-1182
+packages/schemas/src/entity-definitions/13-financialAccount.entity.ts
+  s_34f0947f9f6a59::t_5b47cc4a79960b 111-142
+  s_144d6894ba8042::t_b538d17f5005e8 446
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_34f0947f9f6a59::t_67013065f1ff8c 180-185,187-189,190,193-220
+  s_34f0947f9f6a59::t_b67963e21bfa77 164-169,186,191-192
+  s_144d6894ba8042::t_d12424fc2e224b 926-931
+  s_3e81357a17ae07::t_9cb7278c813e5e 132-133,139
+packages/schemas/src/entity-definitions/15-wish.entity.ts
+  s_34f0947f9f6a59::t_6fcb9351a92411 66-78
+  s_144d6894ba8042::t_4a483e5213dac2 125
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_34f0947f9f6a59::t_7682ee9b93ff0c 125-156
+  s_144d6894ba8042::t_32e457e4e6845e 468-469,568-569,709,722-723,815-816
+packages/schemas/src/entity-definitions/17-usda-food.entity.ts
+  s_34f0947f9f6a59::t_3bbe96d1a949e8 70-86
+packages/schemas/src/entity-definitions/18-image.entity.ts
+  s_34f0947f9f6a59::t_96901a280b941b 107-151
+packages/schemas/src/entity-definitions/19-planting.entity.ts
+  s_34f0947f9f6a59::t_13f16494b80d1d 90
+packages/schemas/src/entity-definitions/20-gardenEntry.entity.ts
+  s_34f0947f9f6a59::t_e3dfb51cdc8591 83-102
+  s_144d6894ba8042::t_96ceab7fde2e0a 197
+packages/schemas/src/entity-definitions/21-vendorAccount.entity.ts
+  s_34f0947f9f6a59::t_643ad607e9527e 78-97
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_34f0947f9f6a59::t_04889687d3cf60 60-89
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_34f0947f9f6a59::t_afd89074b45684 186
+  s_10fb22c0a89324::t_3a31179ae551c4 398-408
+packages/schemas/src/entity-definitions/24-device.entity.ts
+  s_34f0947f9f6a59::t_dd8555e31d0033 70-100
+packages/schemas/src/entity-definitions/26-plant.entity.ts
+  s_34f0947f9f6a59::t_fba953bce3d806 118-143
+packages/schemas/src/entity-definitions/27-spendingCategory.entity.ts
+  s_34f0947f9f6a59::t_358bd6821b5760 78-99
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_34f0947f9f6a59::t_b80b07bb6b9b3e 191-221
+packages/schemas/src/entity-definitions/29-imageJob.entity.ts
+  s_34f0947f9f6a59::t_e51abc32390664 140-165
+  s_144d6894ba8042::t_f9bea6b9916eae 91-92
+packages/schemas/src/entity-definitions/30-sourceTransactionRecord.entity.ts
+  s_34f0947f9f6a59::t_a93772497950bd 88-139
+  s_144d6894ba8042::t_72c692385921d2 26-27
+packages/schemas/src/entity-definitions/31-transactionImport.entity.ts
+  s_34f0947f9f6a59::t_81c814d7404417 71-91
+  s_144d6894ba8042::t_c3f6bbe3a61eda 16-17
+packages/schemas/src/entity-definitions/32-job.entity.ts
+  s_34f0947f9f6a59::t_9305b274a05282 100-122
+  s_144d6894ba8042::t_654a57517a5b5c 53-54
+  s_931718bbf1e269::t_8797f3b4164ca0 1,38
+packages/schemas/src/entity-definitions/32-shipment.entity.ts
+  s_34f0947f9f6a59::t_e85ef6e169ea6f 93-120
+packages/schemas/src/entity-detail-summary.ts
+  s_34f0947f9f6a59::t_da4440f9791388 4-11,13-29
+  s_34f0947f9f6a59::t_e988854873d8a8 54-62
+apps/web/src/entity/page/entity-page-header.tsx
+  s_34f0947f9f6a59::t_7700db84a29d77 1-5,13-17,56-59,67-70,76,81,111-129,224-226
+apps/web/src/entity/page/page.unit.test.tsx
+  s_34f0947f9f6a59::t_db8f78ec205811 136-161
+apps/web/src/server/entity-kernel/entity-operations.ts
+  s_34f0947f9f6a59::t_2add4406555b48 53,391-408
+apps/web/src/server/generic/entity-detail/repo/detail-breadcrumb.ts
+  s_34f0947f9f6a59::t_d62cd8427ada0e 1-89
+apps/web/src/entity/entity-detail/detail-summary.tsx
+  s_34f0947f9f6a59::t_28b6cd6872425b 6-9,303,305,354,395
+  s_3e81357a17ae07::t_b0623e6daaff57 1-4,42,49-62,67-71,339-341,401,407-414,446-455
+apps/web/src/entity/entity-detail/entity-relation-table.tsx
+  s_34f0947f9f6a59::t_3a7a67ec540eeb 339-340,692-694,696-697
+apps/web/src/entity/entity-detail/generic-entity-detail.unit.test.tsx
+  s_34f0947f9f6a59::t_95238e5a486d56 304-306,358,385,393-399,473-477,486-494
+  s_3e81357a17ae07::t_8a94cedb82d1f3 359-360,400-403,415-422
+apps/apple/App/Tests/Entity/Detail/DetailActivityDateTests.swift
+  s_34f0947f9f6a59::t_50d7e9f92c9336 15-40
+apps/apple/App/Tests/Entity/Detail/EntityFieldValueTests.swift
+  s_34f0947f9f6a59::t_9d415ac0a29acc 27-36
+  s_9d5cc5297ac020::t_8700f281100498 9-26
+apps/web/DESIGN.md
+  s_34f0947f9f6a59::t_b06e92b3d43ad7 245,248-249
+apps/apple/App/Shared/Capture/CaptureView.swift
+  s_1e6ce2ba717cc6::t_748e241dc3b8a0 66,70-71,78,80-81,83-84,96-104,142-165,184-185,192-196,223,228-233,236,238,289,291-295,304-311
+apps/apple/App/Shared/Capture/LocationPickerSheet.swift
+  s_1e6ce2ba717cc6::t_17250862debfab 7,32,37-42,45,47-51
+apps/apple/App/Shared/Photo/Library/PhotosRootView.swift
+  s_1e6ce2ba717cc6::t_2b4dca6377eaaf 444-455
+  s_7667243984c2e9::t_4e404e2b872050 267
+  s_d4e0640dd7b1ac::t_cfb4b6c57474dd 237-239,595-628
+  s_931718bbf1e269::t_09956eb70cfbc5 151,296-298
+apps/apple/App/Shared/Photo/PhotoSourceButtons.swift
+  s_34f0947f9f6a59::t_2f93681e6f48ea 9,14,25,54,117-126,185-198,423-447
+  s_9d5cc5297ac020::t_d7266b87da9138 55,80-84,128-131,250-251,332-337,339-340,342-343,398-422
+apps/apple/CubbyKit/Sources/CubbyKit/Scan/ScanSession.swift
+  s_1e6ce2ba717cc6::t_2166d89547f451 92,101-102,104-106,109,116-128
+apps/apple/CubbyKit/Tests/CubbyKitTests/Scan/ScanSessionTests.swift
+  s_1e6ce2ba717cc6::t_5c9976c8a82ea8 66-101
+apps/web/src/entity/display/entity-display.tsx
+  s_144d6894ba8042::t_acb673742794e0 200,204,222-223
+apps/web/src/entity/entity-list/identity-list-config.ts
+  s_144d6894ba8042::t_6ab27a9bdb0ae8 19-20
+packages/schemas/src/entity-manifest.unit.test.ts
+  s_144d6894ba8042::t_f1993c7010de78 117-131
+packages/schemas/src/entity-projection-types.ts
+  s_144d6894ba8042::t_1b2213f3c27f0c 84
+apps/web/src/entity/display/entity-display.unit.test.tsx
+  s_144d6894ba8042::t_7ec5aff6fcc454 936,941
+apps/web/src/entity/table/list-workbench.unit.test.tsx
+  s_144d6894ba8042::t_8a602b47142ac8 11-14,28,289-306,310-315
+  s_672398f43d55a3::t_215a66e96f5d23 307-309
+apps/apple/App/Shared/Photo/Import/PhotoImportManifest.swift
+  s_9d5cc5297ac020::t_a1d4fc31d6cbd6 48,863,1168-1174
+apps/apple/App/Shared/Photo/Review/PhotoDestinationSheet.swift
+  s_9d5cc5297ac020::t_fa596e949e5ebc 10,39-43
+apps/apple/App/Tests/Capture/ScannerStartupTests.swift
+  s_9d5cc5297ac020::t_b4582d7979ed10 1-21
+apps/apple/App/iOS/DataScannerView.swift
+  s_144d6894ba8042::t_bfa0d776f1a7ea 16-17,23-40,87-102,111,129,138-140,144,159-160,170-180
+apps/apple/App/Shared/Entity/List/EntityTableLayout.swift
+  s_8058afbf13b87f::t_eb457312e032a2 1-76
+apps/apple/App/Shared/Entity/List/EntityFilterSheet.swift
+  s_8058afbf13b87f::t_e18e928cf2cd0d 122-220,385,443-477
+apps/apple/App/Tests/Entity/List/EntityFilterSheetTests.swift
+  s_3cc0060ca95746::t_dcf64ce5cd587a 112-148
+apps/apple/App/Tests/Today/TodayModelTests.swift
+  s_3cc0060ca95746::t_18977200e20a5a 101,145-146,148-200,212
+  s_672398f43d55a3::t_bdfa3dc32f2754 147
+apps/apple/App/iOS/RootTabsView.swift
+  s_3cc0060ca95746::t_ab50674693b623 20-25
+  s_d1942d66b01930::t_cfa50a91766ed4 6,69
+apps/apple/App/Shared/Entity/Detail/ConnectedSectionView.swift
+  s_7667243984c2e9::t_d11325ae169c32 180
+apps/apple/App/Shared/Run/RunConsoleView.swift
+  s_7667243984c2e9::t_c0295bf92986d4 124
+  s_d1942d66b01930::t_b3f0dc83366edd 5-9,11-13,19,23,28,52-53,80-82,85-88,113,129-130,136-137,154,167,172,175,242,249-250,257-258
+apps/apple/App/Tests/DesignSystem/SceneRefreshTests.swift
+  s_7667243984c2e9::t_bbac8daa28230a 1-26
+apps/apple/App/Shared/DesignSystem/RefreshControl.swift
+  s_7667243984c2e9::t_316b56882a8156 4-6,11-15,21-33,36-39,44-45,49-53,60-62,64-72,74-78,80-90
+apps/apple/App/Shared/AppShell/SceneCommands.swift
+  s_7667243984c2e9::t_69450183d40309 1-41,42-95
+apps/apple/App/Shared/DesignSystem/CubbyCommands.swift
+  s_7667243984c2e9::t_d6b81632a075e2 1,4-10,13,16-18,21-22,29-33,35-53,59-60,62-74,76-87,89,91-124
+  s_d4e0640dd7b1ac::t_2d023a569e4a96 11-12
+apps/apple/App/Shared/Recipe/RecipeCookingState.swift
+  s_7667243984c2e9::t_1ed30fb0141b43 1-132
+apps/apple/App/Shared/Recipe/RecipeWorkflowSlot.swift
+  s_47fea50e8ec744::t_9178f9ed648630 4-7,34,66,199,201,203-206,208-210,214-235,238-241,243-253,257-289,293-314,316,318-319,321-328,330-331,334-335,339,344-349
+apps/apple/App/Tests/Recipe/RecipeCookingStateTests.swift
+  s_47fea50e8ec744::t_c242404578a4eb 1-53
+apps/apple/App/iOS/Info.plist
+  s_47fea50e8ec744::t_59a19863deac12 61-64
+  s_7226f12e1f3aaa::t_205aef2f1a9dd9 58
+apps/apple/App/macOS/Info.plist
+  s_47fea50e8ec744::t_b9399f4ff02f2f 55-58
+  s_7226f12e1f3aaa::t_03f1f0cd7da8b5 54
+apps/apple/e2e/qa-cook-mode.ad
+  s_47fea50e8ec744::t_2446384eafed40 4,17,20,22-37
+  s_47fea50e8ec744::t_4054f5c9616e42 13
+  s_47fea50e8ec744::t_9b996f6995a15d 3
+  s_47fea50e8ec744::t_75bc5963e0d8f4 38
+apps/apple/App/Shared/AppShell/CubbyApp.swift
+  s_47fea50e8ec744::t_fb3a60dbb5197d 102
+  s_d4e0640dd7b1ac::t_3c519d2380d440 31-32,88-93
+apps/apple/CubbyKit/Tests/CubbyKitTests/Report/ReportPresentationTests.swift
+  s_e49ab742e2de8a::t_8e03710db40c36 149-171
+  s_5179a923bdfd2e::t_527bba0c05283c 8,127
+docs/spending-classification.md
+  s_e49ab742e2de8a::t_d2a78fe6249054 92-93,113
+apps/apple/App/LiveActivity/CaptureControl.swift
+  s_7226f12e1f3aaa::t_eb0ada286a7e47 4-8,11-12
+apps/apple/App/LiveActivity/DeviceWorkWidget.swift
+  s_7226f12e1f3aaa::t_8e02a66a4ef1d6 5,7-8,11,13-14,18,20,27-28,33,35-39,41-43,46-66,68,76-78
+apps/apple/App/LiveActivity/Shared/DeviceWorkAttributes.swift
+  s_7226f12e1f3aaa::t_2e9d27b1b93a68 12-29
+apps/apple/App/LiveActivity/Shared/DeviceWorkPresentation.swift
+  s_7226f12e1f3aaa::t_80b4d366f0507a 1-39
+apps/apple/App/LiveActivity/Shared/PhotoRunActivityAttributes.swift
+  s_7226f12e1f3aaa::t_e2bf9cc154d1b4 12-26
+apps/apple/App/Shared/Intents/ControlIntents.swift
+  s_7226f12e1f3aaa::t_f9ae787e6d5d45 1-30
+apps/apple/App/Tests/Activity/DeviceWorkLiveActivitySelectionTests.swift
+  s_7226f12e1f3aaa::t_d05911d6251c92 43,60-61,65-110
+apps/apple/App/iOS/DeviceWorkLiveActivityCoordinator.swift
+  s_7226f12e1f3aaa::t_7cbfa33fe17576 6-7,11-17,46-53,69,72-79,88-100,102-104,112-115,117,126,130,147-365
+apps/apple/App/iOS/DeviceWorkLiveActivitySelection.swift
+  s_7226f12e1f3aaa::t_9a617a31a97358 4-13,15-23,26-59,61-70,73-101,104-110
+apps/apple/App/Shared/Photo/Review/RunPhotoProgressSection.swift
+  s_f9fa992b09d3a5::t_98920e1db20803 4-8,10,20,25,32,35-40
+apps/apple/CubbyKit/Sources/CubbyKit/PurchaseImport/PhotoGroupingReadiness.swift
+  s_7226f12e1f3aaa::t_cdf9425410d906 26-32,34-42,51-62
+apps/apple/CubbyKit/Sources/CubbyKit/PurchaseImport/RunConsoleSession.swift
+  s_7226f12e1f3aaa::t_a71744604da298 4,10-12,14,22,35-36,56,61,67,70,75,77,83,88,94-103
+apps/apple/CubbyKit/Sources/CubbyKit/PurchaseImport/RunSnapshot.swift
+  s_f9fa992b09d3a5::t_67b5bf4f7d681b 4,25
+apps/apple/CubbyKit/Sources/cubby/CubbyCLI.swift
+  s_f9fa992b09d3a5::t_34f905c8ab54e2 12
+apps/apple/CubbyKit/Sources/cubby/HeadlessPhotoImport.swift
+  s_f9fa992b09d3a5::t_6a4b85dceb9251 51-53
+apps/apple/CubbyKit/Tests/CubbyKitTests/PurchaseImport/PhotoGroupingReadinessTests.swift
+  s_f9fa992b09d3a5::t_1c8b37af8187cd 6-7,27,30,35,41
+apps/apple/CubbyKit/Tests/CubbyKitTests/PurchaseImport/RunSnapshotTests.swift
+  s_f9fa992b09d3a5::t_b21cf6b0e4670b 6-7,46,65,67,79,82
+apps/web/src/server/domains/photo-import/repo/run/grouping.ts
+  s_f9fa992b09d3a5::t_b030b19443ba41 21
+apps/web/src/server/domains/photo-import/repo/run/lifecycle.ts
+  s_f9fa992b09d3a5::t_3daab9ba7ac67b 42
+docs/agents/generic-paths.md
+  s_f9fa992b09d3a5::t_d3347ee9510e34 46-51
+docs/photo-library-dedup.md
+  s_f9fa992b09d3a5::t_9e1c44be91589c 179-185,240-241
+apps/apple/e2e/native-layout.ad
+  s_f9fa992b09d3a5::t_6515e4c9ade936 8,10-11
+apps/web/tooling/scenarios/native-qa.ts
+  s_f9fa992b09d3a5::t_b6116eff8f3f1d 5
+apps/web/tooling/scenarios/simulator-input-journey.ts
+  s_f9fa992b09d3a5::t_e613882646bfca 10,13,15,83-84,314,349,351,375
+apps/web/tooling/sim-e2e.ts
+  s_f9fa992b09d3a5::t_a2812669f9b0a8 71,122,134,164,756-760,762-763,813,1022-1026
+docs/agents/core-journey-e2e.md
+  s_f9fa992b09d3a5::t_e23a41abf2cbb1 126-130,144
+docs/local-development.md
+  s_f9fa992b09d3a5::t_bfed375679f478 356
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_f9fa992b09d3a5::t_d20361be060077 347-379,381-404
+apps/apple/App/Shared/Entity/List/BrowseRootView.swift
+  s_d1942d66b01930::t_673c4d2807ad55 27,30,31-32,47,49,54,57,58,60-65
+  s_49ab8ab0a006bb::t_41f5954670c179 4-26,28-29,33-46,48,50-53,55-56,76-95,99-106,110,113,120,122-128,130-134,136-139,142,171-188,191,213-217
+  s_49ab8ab0a006bb::t_3b31324ebf6dca 107-109
+apps/apple/e2e/qa-entity-table.ad
+  s_5179a923bdfd2e::t_7436fe0dc084b1 3-4,23-25,32-35
+apps/apple/App/Shared/Entity/List/SpecialistListViews.swift
+  s_5179a923bdfd2e::t_e4acfb74b0493b 6
+apps/apple/CubbyKit/Sources/CubbyKit/Report/ReportPresentation.swift
+  s_5179a923bdfd2e::t_d12b5bcecc0003 9-10,394-396
+apps/apple/App/iOS/ImageQueueBackgroundProcessing.swift
+  s_ff3e82730f47f5::t_c3e1dbe4663196 5,10,34,43
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/CompanionImageWorker.swift
+  s_ff3e82730f47f5::t_c64a4ed6fee401 428-429,433,452,1088
+apps/apple/App/Shared/Settings/SettingsView.swift
+  s_ff3e82730f47f5::t_f76ee9064c82e3 125,536
+  s_d4e0640dd7b1ac::t_7672705f8a1318 10-12,25-46,48-50,52-58,60-64,66-77,79-80,83-89,93-95,97-98,100-106,108-117,119-124,126-171,173-175,177,181,183-185,190-242,244-260,262-294,296-298,301-321,329-330,333,336,369,371-374,376-393,396-401,405,424,428,434,446,537,541,544,549-551,554-558
+  s_d4e0640dd7b1ac::t_463883dd287019 186-188
+apps/apple/App/Shared/AppShell/SectionView.swift
+  s_ff3e82730f47f5::t_8b004d5afe4971 13,62
+  s_49ab8ab0a006bb::t_894ed20f3a810b 16-20
+docs/jobs.md
+  s_10fb22c0a89324::t_931a03fd6663a1 459-460,485-489
+apps/apple/App/Shared/DesignSystem/DraftDismissal.swift
+  s_3d5778384758c7::t_eb84f9ef687eb1 35-36,39,42-49,51
+apps/apple/App/Shared/Editors/EntityFieldControls.swift
+  s_3d5778384758c7::t_1f3c61caf5596c 59,61
+  s_931718bbf1e269::t_757a493be3d782 344
+apps/apple/App/Tests/Editors/EntityEditorDraftTests.swift
+  s_3d5778384758c7::t_2fb6a3b0a2e95e 40-41,46,51,55-93
+apps/apple/CubbyKit/Sources/CubbyKit/Edit/GenericEntityEditModel.swift
+  s_3d5778384758c7::t_b9df275462e812 21,46,68,81-86,189,448-449,451-458,461,537
+  s_49ab8ab0a006bb::t_ec125809c3c554 473-477
+apps/apple/CubbyKit/Tests/CubbyKitTests/Edit/GenericEntityEditModelTests.swift
+  s_3d5778384758c7::t_2f34312dd44279 25-59,282-284,576,617-640,642,647-652,654
+  s_49ab8ab0a006bb::t_d0c7f40260cddf 641,643-646,653
+apps/web/tooling/entity-generator-date-range.unit.test.ts
+  s_672398f43d55a3::t_a9ce242760a895 13
+apps/web/tooling/entity-generator-suggest-prune.unit.test.ts
+  s_672398f43d55a3::t_8999475b12ff72 17-26
+apps/apple/App/Shared/Editors/StructuredValueEditor.swift
+  s_931718bbf1e269::t_24ae609a334868 5,19,22,37,226,479
+apps/apple/CubbyKit/Sources/CubbyKit/Edit/StructuredValue.swift
+  s_931718bbf1e269::t_136675b4228eb8 32,185
+apps/apple/CubbyKit/Tests/CubbyKitTests/Edit/StructuredValueTests.swift
+  s_931718bbf1e269::t_a009ce7c74295e 20,63-68,160-164,235,240,243
+apps/web/generator/entities/render/structured-value-schemas.ts
+  s_931718bbf1e269::t_6269f4060978e4 54
+apps/web/src/entity/editing/structured-value-field.unit.test.tsx
+  s_931718bbf1e269::t_19aceccb96762d 1,10,15
+apps/web/src/entity/editing/structured-value.fixtures.json
+  s_931718bbf1e269::t_1a8287f24c8645 1-89,90,91-92,187-365,366,423-622
+apps/web/src/entity/editing/structured-value.unit.test.ts
+  s_931718bbf1e269::t_85985c271af537 2,13,24
+apps/web/src/server/domains/recipe/operations/recipe-sections-vector.integration.test.ts
+  s_931718bbf1e269::t_380ba0ade1f4a6 8
+apps/web/src/server/generic/embedding/operations/structured-field-vectors.integration.test.ts
+  s_931718bbf1e269::t_e2405daec8ef9e 10
+apps/web/tooling/entity-generator-value-schema.unit.test.ts
+  s_931718bbf1e269::t_c261a0c0b63987 12-16,241-251,253-263,267-269,280-284
+packages/schemas/src/recipe-fields.ts
+  s_931718bbf1e269::t_82c7e4f5596a0f 16-18
+packages/shared/golden-vectors/structured-roundtrip.json
+  s_931718bbf1e269::t_58bed6f979f9b0 2
+apps/apple/App/Shared/AppShell/DeveloperOverlays.swift
+  s_49ab8ab0a006bb::t_8b1b5d9e48d9bc 11
+apps/apple/App/Shared/Search/ScanLookupSheet.swift
+  s_49ab8ab0a006bb::t_6ce9389ed18bf2 4-15,17-26,28-31,33-41,43-44,47-49,51-61,64-66,68,84-92,95-114,118-138,142-153,155-162,164-175,177-179,183-194,198-200,202-210,212,214-219
+apps/apple/e2e/product-browse.ad
+  s_49ab8ab0a006bb::t_dadc65928dd829 15-17,20,23-25
+apps/apple/App/Shared/AppShell/DevView.swift
+  s_d4e0640dd7b1ac::t_0a0d61bcd9ce4c 115
+apps/apple/App/Shared/AppShell/UpdateAvailableBanner.swift
+  s_d4e0640dd7b1ac::t_a97c6247b7cd26 17,29-43
+apps/apple/CubbyKit/Sources/CubbyKit/Participation/DeviceParticipation.swift
+  s_d4e0640dd7b1ac::t_731098d58a3cc3 6-7
+apps/apple/e2e/qa-settings.ad
+  s_cf0a961180896c::t_a2acdb92cef290 1-14
+apps/apple/App/Shared/Audit/AdjustCountSheet.swift
+  s_672398f43d55a3::t_53a249f23066b5 47
+apps/apple/App/Shared/DesignSystem/FieldGuideDetailDensity.swift
+  s_931718bbf1e269::t_509219c214d660 4-5,17-25
+apps/apple/App/Shared/Photo/Import/PhotoImportHero.swift
+  s_931718bbf1e269::t_3877debda221b8 198,291
+apps/apple/App/Tests/DesignSystem/RecordListRowRenderingTests.swift
+  s_931718bbf1e269::t_987c68ebcaf066 29-46
+apps/web/src/entity/entity-detail/entity-record-fields.tsx
+  s_3e81357a17ae07::t_383dfa6a6fd727 96-106,117-129,134
+  s_c503e493e0915b::t_da40fbc94814e7 51-53
+apps/web/src/entity/entity-detail/detail-summary.preview.test.tsx
+  s_3e81357a17ae07::t_8144c54c0db3e1 23,30-31
+apps/web/tests/e2e/account-field-applicability.spec.ts
+  s_c503e493e0915b::t_c108400361ab3c 20-22
+apps/web/tests/e2e/product-clarity.spec.ts
+  s_3e81357a17ae07::t_df9da1f14d6077 86,147
+apps/web/tests/e2e/support/connected-records-contract.ts
+  s_3e81357a17ae07::t_3024377799ee76 35-37
+apps/apple/App/Shared/Entity/Detail/EntityFieldValue.swift
+  s_c503e493e0915b::t_9891684d09a497 85,101,186
+apps/apple/App/Shared/Entity/List/EntityRowPresentation.swift
+  s_2ebd3393cbe81b::t_ddaaac04733c5a 188-190
+apps/apple/CubbyKit/Sources/CubbyKit/FFI/IngredientParser.swift
+  s_c503e493e0915b::t_0eddb058d52738 100-111
+apps/apple/CubbyKit/Sources/CubbyKit/Format/DisplayFormat.swift
+  s_c503e493e0915b::t_859728fdecb12b 3-4,14-18
+apps/apple/CubbyKit/Tests/CubbyKitTests/Format/DisplayFormatTests.swift
+  s_c503e493e0915b::t_baaca59aec718e 23-33,49-50,84-97
+apps/web/src/lib/date-format.ts
+  s_c503e493e0915b::t_a9c136c4d3976d 6,101
+apps/web/src/lib/display-format.ts
+  s_c503e493e0915b::t_ff39142fe66d10 1-10
+apps/web/src/lib/display-format.unit.test.ts
+  s_2ebd3393cbe81b::t_502a95e48cdb49 7-12,25,42-52
+apps/web/src/lib/number-format.ts
+  s_c503e493e0915b::t_1db71862f3767f 108
+apps/web/src/server/generic/list/repo/list-display-labels.ts
+  s_c503e493e0915b::t_cc2c03825e366a 24,48,61-63
+apps/web/src/ui/primitives/none-value.tsx
+  s_c503e493e0915b::t_b4cd565dff302a 2,14
+cubby-ffi/src/display.rs
+  s_c503e493e0915b::t_bbae76acbbb485 124-138
+packages/shared/golden-vectors/display-format.json
+  s_2ebd3393cbe81b::t_b8cde0f319e044 2,91-134,637-713
+recipebridge/src/display_format.rs
+  s_2ebd3393cbe81b::t_685b9e3e0ab253 7-8,145-233,401-423,430-433,470-490
+apps/web/src/lib/wasm.ts
+  s_c503e493e0915b::t_0140012b092726 12-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "df4aaec23e75482cdc96de2f52156c6b32d52d1f",
+  "prompts": {},
+  "sessions": {
+    "s_01e2d2cf933447": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17934-42e1-71b1-8ce8-11b887aaf48b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_10fb22c0a89324": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cb44fff2-ae3d-48d4-954e-b91954f5bd34",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_144d6894ba8042": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f09c77a7-a3f4-48ec-9cec-08733cd15ce7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_1e6ce2ba717cc6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17994-ef85-7ed0-86f7-5db9815e3325",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_2ebd3393cbe81b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a68-c8da-7023-bf1d-bbea50b02f05",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_34f0947f9f6a59": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "121d83ba-ae8e-437b-8994-c2d0064b0126",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_371a4fad79235c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "69eca073-0f3a-47f2-a1c8-010847d4baef",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_37b21563b51dcd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1794f-72c4-75b0-baf3-efd63f098565",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_3cc0060ca95746": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a179cf-97ad-7123-af32-b60b60e65f0e",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_3d5778384758c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a2f-ac7e-72a3-9bd0-f7a7b2303131",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_3e81357a17ae07": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f6e45cef-6a1c-4ffe-81ee-e0d202b7084d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_43a2267536ddd9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17988-32e4-7800-931c-ddbcbef3655c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_47fea50e8ec744": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a179e5-43e7-7b80-94d2-c41cb34c8332",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_49ab8ab0a006bb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a4ba0b41-b28c-4210-8689-abbdf6600a58",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_5179a923bdfd2e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a24-b465-7303-96da-d76d9c4ec5dd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_64bc8bb4cb8e63": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3ca75f79-39c9-4698-8020-42998c33dd07",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_672398f43d55a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1308152e-836c-4a22-9173-0cea72af25e0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_6b163ef7edc339": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17945-28c6-7610-a46f-3af0e76941c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_7133750c57d103": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb423621-4957-46f1-b462-5fe4475fd57a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_7226f12e1f3aaa": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a08-5254-70e3-b386-1907eaae102f",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_7667243984c2e9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b9721aa1-95df-48cd-9b7c-c3998129dc3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_8058afbf13b87f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "731af77f-00db-42c5-b853-48611bea27c6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_931718bbf1e269": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a41-9a7e-73f3-b697-e6c6f52e51f3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9ac7e5f472a0df": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1795a-1422-7cc1-8a64-98051c1483bd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_9d5cc5297ac020": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a179b1-772f-7ab3-80bf-b86f659b429e",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c503e493e0915b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a61-18fe-7413-9322-d8bc677509bc",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_cf0a961180896c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a43-d85d-7fd2-a5b6-4c09042d9016",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d1942d66b01930": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17a18-bc3d-75d0-b561-557917c51865",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d4e0640dd7b1ac": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "78d76256-7241-4720-a3fe-9a49b5aeb01d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d8d8be46d31521": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1797e-ad2a-7603-aa0c-a8cbd94efe21",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_db808196b3a7fb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4ae7670-2eb0-4bb3-bc90-e6840a6bb9b2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_e49ab742e2de8a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "154468f1-8eae-47e2-93c8-5fd2881ba204",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f9fa992b09d3a5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "07b7a21e-cfad-421d-a3c8-8698f1f442fd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_ff3e82730f47f5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "10031cff-a3e6-4974-ad1d-15fc92417c83",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
