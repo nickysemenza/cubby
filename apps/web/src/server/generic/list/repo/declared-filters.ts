@@ -101,7 +101,7 @@ export const textPredicate = (
  * A boolean filter over a boolean column is equality; over any other
  * (nullable) column it is presence: `true` is NOT NULL, `false` is NULL.
  */
-export const booleanPredicate = (
+const booleanPredicate = (
   { value, kind }: FilterColumn,
   flag: boolean | undefined,
 ): SQL | undefined =>
@@ -149,7 +149,7 @@ export const requestedIdsSql = (
  * self-reference (a location's parent) never collides with the outer row,
  * preserving the outer root-table column for both selection and count.
  */
-export const referencePredicate = (
+const referencePredicate = (
   label: string,
   { column: source, value: column, reference }: FilterColumn,
   codes: readonly string[] | undefined,
@@ -184,7 +184,7 @@ export const referencePredicate = (
  * A text-array multiselect: overlap (any picked value) or containment (Match
  * all), ORed with the generated Any value / No value.
  */
-export const arrayPredicate = (
+const arrayPredicate = (
   { value: column, nullable }: FilterColumn,
   values: readonly string[] | undefined,
   presence: PresenceFilter,
@@ -227,14 +227,14 @@ export const descriptorValueKeys = (
  * not matching, so a row with no value stays (`IS NULL OR NOT IN`); pair it
  * with the presence filter to drop empty rows.
  */
-export const excludedPredicate = (
+const excludedPredicate = (
   include: ReadonlyArray<SQL | undefined>,
 ): SQL | undefined => flagCondition(false, () => and(...include));
 
 export const nonEmpty = <T>(list: readonly T[] | undefined) =>
   list === undefined || list.length === 0 ? undefined : list;
 
-export const dateRange = (
+const dateRange = (
   column: AnyColumn | SQL,
   from: string | undefined,
   to: string | undefined,

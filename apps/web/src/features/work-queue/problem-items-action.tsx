@@ -7,8 +7,8 @@ import {
   type WorkActionProps,
 } from "~/entity/work-queue/work-actions";
 import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
-import { Stack } from "~/ui/layout";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 
 /**
@@ -76,17 +76,22 @@ function ProblemItems<K extends ProblemKey>({
     return <ErrorDisplay error={report.error} title={problemKey} />;
   if (!report.data) return <p className="text-sm">Loading…</p>;
   // SAFETY: a typed report returns that detector's public items.
-  const items = ("items" in report.data ? report.data.items : []) as ProblemItem<K>[];
+  const items = (
+    "items" in report.data ? report.data.items : []
+  ) as ProblemItem<K>[];
   const shown =
     recordId && matches
       ? items.filter((item) => matches(item, recordId))
       : items;
   if (shown.length === 0)
-    return <p className="text-sm text-muted-foreground">Nothing left to fix.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">Nothing left to fix.</p>
+    );
   return (
     <Stack gap="lg">
-      {shown.map((item, index) => (
-        <div key={index}>{children(item, close)}</div>
+      {shown.map((item) => (
+        // Detector items share no id field; their content identifies them.
+        <div key={JSON.stringify(item)}>{children(item, close)}</div>
       ))}
     </Stack>
   );

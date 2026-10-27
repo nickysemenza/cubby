@@ -19,7 +19,7 @@ export function suggestionsSearch(row: WorkRowSource) {
 }
 
 /** A diagnostic row's queue search: its own reason group. */
-export function reasonSearch(row: WorkRowSource) {
+function reasonSearch(row: WorkRowSource) {
   const reason = row.reasonKeys[0];
   return row.link.kind === "reason" && reason ? { reason } : null;
 }

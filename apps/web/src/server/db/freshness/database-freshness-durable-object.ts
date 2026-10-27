@@ -15,7 +15,7 @@ import {
   ringDoorbell,
 } from "~/server/http/doorbell-socket";
 
-import { DatabaseFreshnessStore } from "../repo/database-freshness-store";
+import { DatabaseFreshnessStore } from "./database-freshness-store";
 
 /**
  * One timestamp per database environment, shared by every household client,

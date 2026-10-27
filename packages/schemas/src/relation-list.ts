@@ -364,7 +364,7 @@ export function defineRelationList<
   ) as FiltersInputFields<Fs>;
   // Surfaces that compose declared filters at runtime (Suggestions) extend
   // this open shape with their own scope and paging.
-  const filterShape: Record<string, z.ZodType> = Object.assign(
+  const runtimeFilterFields: Record<string, z.ZodType> = Object.assign(
     {},
     ...list.filters.map(inputFieldsOf),
   );
@@ -405,7 +405,7 @@ export function defineRelationList<
   return {
     ...list,
     /** Filter-only schema for surfaces with their own scope and paging. */
-    filterInput: z.strictObject(filterShape),
+    filterInput: z.strictObject(runtimeFilterFields),
     groupInput,
     specs: list.filters.map(specOf),
     descriptors: list.filters.map(descriptorOf),

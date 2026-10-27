@@ -9,14 +9,12 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
-import {
-  openProblemsPruneAliasesStream,
-  openProblemsReparseStream,
-} from "./maintenance-streams";
-import { openSearchIndexRepairStream } from "./search-streams";
-import { openRecipeRecomputeAllStream } from "~/features/recipe/recipe-streams";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import {
+  openRecipeRecomputeAllStream,
+  openRecipeRecomputeStaleStream,
+} from "~/features/recipe/recipe-streams";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { imageUpload } from "~/integrations/tanstack-query/generated/catalog/imageUpload.gen";
 import { maintenance } from "~/integrations/tanstack-query/generated/catalog/maintenance.gen";
 import { problems } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
@@ -26,9 +24,14 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 
-import { BACKFILL } from "./backfill-registry";
 import { BackfillButton } from "./backfill-button";
+import { BACKFILL } from "./backfill-registry";
+import {
+  openProblemsPruneAliasesStream,
+  openProblemsReparseStream,
+} from "./maintenance-streams";
 import { PendingButton } from "./pending-button";
+import { openSearchIndexRepairStream } from "./search-streams";
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
 function MaintenanceRow({
@@ -154,6 +157,24 @@ function RecomputeAction() {
           })}
         />
       }
+    />
+  );
+}
+
+function RecomputeStaleAction() {
+  return (
+    <BackfillButton<{ enqueued: number; total: number }>
+      run={(signal) => openRecipeRecomputeStaleStream(signal)}
+      invalidateTags={ripple.recipeList}
+      idleLabel="Run"
+      pendingLabel="Publishing…"
+      toastResult={(r) => ({
+        tone: r.enqueued > 0 ? "success" : "info",
+        message:
+          r.enqueued > 0
+            ? `Queued ${countLabel(r.enqueued, "recipe")} for recompute.`
+            : "No stale recipe totals.",
+      })}
     />
   );
 }
@@ -399,6 +420,13 @@ const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
   {
     group: "Recipes",
     tools: [
+      {
+        label: "Recompute stale totals",
+        description:
+          "Rebuild the cost, calorie, and macro rollup of recipes marked stale.",
+        count: (c) => c.staleRecipeTotals,
+        action: <RecomputeStaleAction />,
+      },
       {
         label: "Recompute all totals",
         description:
