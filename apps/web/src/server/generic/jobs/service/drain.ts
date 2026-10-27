@@ -29,6 +29,11 @@ export type DrainPreparation<P> = {
   failed?: ReadonlyMap<WorkItem, unknown>;
 };
 
+export type DrainPublication = {
+  /** Items whose `readyAt` was moved forward with `postponeWork`. */
+  retain?: readonly WorkItem[];
+};
+
 export type DrainSpec<P> = {
   /** Items claimed per page. */
   limit: number;
@@ -48,7 +53,11 @@ export type DrainSpec<P> = {
    */
   lock?(tx: Database, items: readonly WorkItem[], prepared: P): Promise<void>;
   /** Database writes for items still current and locked; never network work. */
-  publish(tx: Database, items: readonly WorkItem[], prepared: P): Promise<void>;
+  publish(
+    tx: Database,
+    items: readonly WorkItem[],
+    prepared: P,
+  ): Promise<void | DrainPublication>;
   /** Record the terminal outcome of items that ran out of attempts. */
   exhaust?(
     tx: Database,
@@ -129,9 +138,18 @@ export function defineDrain<P>(spec: DrainSpec<P>): JobHandler {
               await spec.lock?.(tx, chunk, prepared);
               const held = await lockWork(tx, chunk);
               if (!held.length) return;
-              await spec.publish(tx, held, prepared);
-              await clearWork(tx, held);
-              published += held.length;
+              const publication = await spec.publish(tx, held, prepared);
+              const retained = new Set(
+                (publication?.retain ?? []).map(
+                  ({ target, ref, ticket }) => `${target}\0${ref}\0${ticket}`,
+                ),
+              );
+              const completed = held.filter(
+                ({ target, ref, ticket }) =>
+                  !retained.has(`${target}\0${ref}\0${ticket}`),
+              );
+              await clearWork(tx, completed);
+              published += completed.length;
             },
             { isolationLevel: spec.isolationLevel },
           );
