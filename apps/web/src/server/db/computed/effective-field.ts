@@ -3,8 +3,9 @@ import { declaredClassificationPolicies } from "@cubby/schemas/classification-fi
  * The only implementation of inherited values: a field that declares
  * `resolution.inherit` reads its effective value, its fallback, and the
  * record that decided it from here, so a read, its `fieldResolutions`
- * provenance, and a filter, sort or group cannot disagree. Repositories
- * format provenance labels; the rule lives in the declaration.
+ * provenance, and a filter, sort or group cannot disagree. The generic
+ * inherited-resolution reader formats provenance labels; the rule lives in
+ * the declaration.
  *
  * Each expression is a scalar correlated subquery, so a caller can use it in
  * any query without changing its row cardinality. It carries no bind
@@ -353,6 +354,16 @@ export const inheritedFieldSql = <T = unknown>(
     inheritedSql(entity, requireChain(entity, field), alias, depth),
   ) as SQL<T>;
 
+/** Assignment intent uses the same decision predicate as effective values. */
+export const inheritedOwnAssignmentSql = (
+  entity: Entity,
+  field: string,
+  alias: string,
+) => {
+  const chain = requireChain(entity, field);
+  return { explicit: ownDecides(chain, alias), value: ownValue(chain, alias) };
+};
+
 /** Resolver facts only; callers hydrate sources and validate the field's read value. */
 const inheritedDecisionSource = z.object({
   entityKind: entitySchema,
@@ -429,20 +440,6 @@ export const inheritedSourceSql = (
     );
     return sql`(SELECT json_build_object('position', ${decided}.prio, 'id', ${decided}.src) FROM ${from})`;
   }) as SQL<{ position: number; id: string } | null>;
-
-/** The entity whose record a declared source names in provenance. */
-export const inheritedSourceEntity = (
-  entity: Entity,
-  field: string,
-  position: number,
-): Entity => {
-  const declared = requireChain(entity, field).from[position - 1];
-  if (declared === undefined)
-    throw new Error(`${entity}.${field} declares no source ${position}`);
-  return declared.kind === "hierarchy"
-    ? entity
-    : (declared.hops.at(-1)?.target ?? entity);
-};
 
 /**
  * Whether the record `rowId` names has an effective value in `values` (a SQL

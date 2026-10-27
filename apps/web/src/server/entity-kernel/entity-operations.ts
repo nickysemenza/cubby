@@ -14,6 +14,7 @@ import {
   listGroupMembershipSchema,
   type ListGroupSummary,
   type ListGroupBy,
+  type ListResultMembership,
   type PaginationParams,
 } from "@cubby/schemas/pagination";
 import { getErrorMessage } from "@cubby/shared";
@@ -90,6 +91,7 @@ type EntityListInput<TFilters = unknown> = {
   pagination?: PaginationParams;
   groupBy?: ListGroupBy[];
   nesting?: unknown;
+  resultMembership?: ListResultMembership;
 };
 
 const DEFAULT_PAGINATION: PaginationParams = {
@@ -116,7 +118,13 @@ const aggregates = (
   entity: EntityKernelEntity,
   sums: Record<string, number> | undefined,
   groups: ListGroupSummary[] | undefined,
-) => ({ sums, totalLabels: listTotalLabels(entity, sums), groups });
+  incompleteSums?: string[],
+) => ({
+  sums,
+  totalLabels: listTotalLabels(entity, sums, incompleteSums),
+  groups,
+  incompleteSums,
+});
 
 /**
  * Commit authoritative writes and durable refresh capture together.
@@ -459,6 +467,7 @@ const buildEntityOperations = <
             sorts: parseSorts(binding, input.sort, Boolean(searchQuery)),
             groupBy: parseGroupBy(binding, input.groupBy),
             nesting: parseNesting(binding, input.nesting),
+            resultMembership: input.resultMembership,
           };
         })
         .call("page", async ({ context }, { validated }) => {
@@ -469,7 +478,10 @@ const buildEntityOperations = <
                 {},
                 validated.filters,
                 validated.ids === undefined ? {} : { ids: validated.ids },
-                { nesting: validated.nesting },
+                {
+                  nesting: validated.nesting,
+                  resultMembership: validated.resultMembership,
+                },
               ),
               validated.groupBy,
             ),
@@ -503,6 +515,15 @@ const buildEntityOperations = <
               withChildCounts(enveloped, mediaPage.data),
               mediaPage.count,
               {
+                unresolvedCount:
+                  "unresolvedCount" in mediaPage
+                    ? z
+                        .number()
+                        .int()
+                        .nonnegative()
+                        .optional()
+                        .parse(mediaPage.unresolvedCount)
+                    : undefined,
                 ...aggregates(
                   binding.entity,
                   "sums" in mediaPage
@@ -516,6 +537,12 @@ const buildEntityOperations = <
                         .array(listGroupSummarySchema)
                         .optional()
                         .parse(mediaPage.groups)
+                    : undefined,
+                  "incompleteSums" in mediaPage
+                    ? z
+                        .array(z.string())
+                        .optional()
+                        .parse(mediaPage.incompleteSums)
                     : undefined,
                 ),
                 memberships:

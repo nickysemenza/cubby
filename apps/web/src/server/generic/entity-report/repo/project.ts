@@ -7,7 +7,7 @@ import {
   type ProjectId,
 } from "@cubby/schemas/identifiers";
 import { LEDGER_PARTY_KIND_LABELS } from "@cubby/schemas/ledger-party-fields";
-import { type ExpenseAnalyticsOut } from "@cubby/schemas/project";
+import { type ExpenseAnalyticsOut, projectOut } from "@cubby/schemas/project";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sum } from "es-toolkit";
 
@@ -22,6 +22,7 @@ import {
   type ProjectTree,
 } from "~/server/domains/project/repo/subtree";
 import { taskList } from "~/server/domains/task/repo/lookup";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { budgetRemaining } from "~/server/lib/spend";
 
@@ -317,10 +318,33 @@ export async function projectScheduleReport(
       ),
     ),
   ]);
+  const scheduleSchema = projectOut
+    .pick({
+      id: true,
+      name: true,
+      status: true,
+      blockedByIds: true,
+      blockingIds: true,
+      parentProjectId: true,
+      fields: true,
+    })
+    .extend({ fields: projectOut.shape.fields.pick({ dateWindow: true }) });
+  const [canonicalRoot, ...canonicalDescendants] =
+    await publicFieldEnvelopeRows({
+      schema: scheduleSchema,
+      db,
+      entity: "project",
+      rows: [root, ...descendants.data],
+    });
+  if (!canonicalRoot) throw new Error("Project schedule root is missing");
   return [
     {
       kind: "schedule",
-      rows: buildDetailScheduleRows(root, descendants.data, tasks.data),
+      rows: buildDetailScheduleRows(
+        canonicalRoot,
+        canonicalDescendants,
+        tasks.data,
+      ),
     },
   ];
 }

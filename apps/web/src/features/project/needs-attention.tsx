@@ -13,6 +13,7 @@ import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { Link } from "@tanstack/react-router";
 
+import { AttentionInputStatus } from "~/features/project/attention-input-status";
 import { formatCurrency } from "~/lib/number-format";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Row, Stack } from "~/ui/layout";
@@ -112,8 +113,14 @@ void _attentionGroupsAreExhaustive;
  * here anymore (the old client-side UTC-day workaround is gone along with
  * the raw projects/tasks/expenses props it needed).
  */
-export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
-  if (items.length === 0) return null;
+export function NeedsAttention({
+  items,
+  incompleteCount = 0,
+}: {
+  items: ProjectAttentionItem[];
+  incompleteCount?: number;
+}) {
+  if (items.length === 0 && incompleteCount === 0) return null;
 
   const byType = new Map<ProjectAttentionType, ProjectAttentionItem[]>();
   for (const item of items) {
@@ -133,6 +140,7 @@ export function NeedsAttention({ items }: { items: ProjectAttentionItem[] }) {
         Needs Attention ({items.length})
       </Row>
 
+      <AttentionInputStatus count={incompleteCount} />
       {ATTENTION_GROUPS.map(({ type, icon: Icon, iconClassName, title }) => {
         const group = byType.get(type);
         if (!group || group.length === 0) return null;

@@ -1,3 +1,4 @@
+import { expenseBeneficiaryResult } from "@cubby/schemas/expense-beneficiaries";
 import {
   type ExpenseId,
   type FinancialAccountId,
@@ -5,6 +6,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -19,10 +21,15 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
-import { loadExpenseAllocations } from "./allocation";
+import {
+  loadExpenseAllocations,
+  loadExpenseBeneficiaryPortions,
+} from "./allocation";
 
 async function insertParty(
   db: Parameters<typeof insertEntityFixtures>[0],
@@ -60,8 +67,8 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
     async (_label, cost, expectedCents) => {
       const people = await Promise.all(
         [
-          { name: "First beneficiary", shortcode: "LPY-AL01" },
-          { name: "Second beneficiary", shortcode: "LPY-AL02" },
+          { name: "First beneficiary", shortcode: "LPY-AB23" },
+          { name: "Second beneficiary", shortcode: "LPY-AB24" },
         ].map((row) =>
           insertParty(ctx.db, {
             ...row,
@@ -109,6 +116,22 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
         )
         .map((allocation) => allocation.cents);
 
+      const portions = (
+        await loadExpenseBeneficiaryPortions(ctx.db, [row.id])
+      ).get(row.id);
+      expect(portions).toEqual([
+        expect.objectContaining({
+          partyId: "LPY-AB23",
+          weight: "2147483647",
+          basis: "recorded",
+        }),
+        expect.objectContaining({
+          partyId: "LPY-AB24",
+          weight: "2147483646",
+          basis: "recorded",
+        }),
+      ]);
+      expect(portions?.some((portion) => "cents" in portion)).toBe(false);
       expect(beneficiaryCents).toHaveLength(2);
       expect(beneficiaryCents.reduce((total, cents) => total + cents, 0n)).toBe(
         expectedCents,
@@ -118,6 +141,126 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
       }
     },
   );
+
+  it("retains explicit unpriced identities without expanding the unpriced fallback policy", async () => {
+    const person = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Unpriced beneficiary",
+      kind: "member",
+    });
+    await createRepoEntity(ctx, "ledgerParty", {
+      name: "Unpriced household",
+      kind: "household",
+    });
+    const explicit = await createRepoEntity(ctx, "expense", {
+      name: "Unpriced explicit line",
+      cost: null,
+      trade: "other",
+      future: true,
+      beneficiaries: [
+        { partyId: person.output.id, weight: 3 },
+        { partyId: null, weight: 1 },
+      ],
+    });
+    const unset = await createRepoEntity(ctx, "expense", {
+      name: "Unpriced unset line",
+      cost: null,
+      trade: "other",
+    });
+    const portions = await loadExpenseBeneficiaryPortions(ctx.db, [
+      explicit.entityId,
+      unset.entityId,
+    ]);
+    expect(portions.get(explicit.entityId)).toEqual([
+      expect.objectContaining({
+        allocationKey: person.output.id,
+        weight: "3",
+        basis: "recorded",
+      }),
+      expect.objectContaining({
+        allocationKey: "~unattributed",
+        partyId: null,
+        weight: "1",
+        basis: "recorded",
+      }),
+    ]);
+    expect(portions.has(unset.entityId)).toBe(false);
+    expect(
+      await loadExpenseAllocations(ctx.db, {
+        expenseIds: [explicit.entityId, unset.entityId],
+        includeFuture: true,
+      }),
+    ).toEqual([]);
+  });
+
+  it("refreshes both Purchases' beneficiaries when settlement membership moves", async () => {
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Move fallback household",
+      kind: "household",
+    });
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Move payment owner",
+      kind: "member",
+    });
+    const seller = await createRepoEntity(ctx, "vendor");
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "credit_card", network: "visa" },
+      ledgerPartyId: owner.output.id,
+    });
+    const first = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      date: "2026-08-20",
+    });
+    const second = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      date: "2026-08-20",
+    });
+    const firstLine = await createRepoEntity(ctx, "expense", {
+      purchaseId: first.output.id,
+      trade: "other",
+      cost: 2,
+      date: "2026-08-20",
+    });
+    const secondLine = await createRepoEntity(ctx, "expense", {
+      purchaseId: second.output.id,
+      trade: "other",
+      cost: 2,
+      date: "2026-08-20",
+    });
+    const transaction = await insertSettlementTransaction(ctx.db, {
+      accountId: account.entityId,
+      purchaseId: first.entityId,
+      kind: "purchase",
+      status: "posted",
+      amount: 2,
+      transactionDate: "2026-08-20",
+      postedDate: "2026-08-20",
+    });
+    const ownerOf = async (id: ExpenseId) =>
+      expenseBeneficiaryResult
+        .parse(
+          (
+            await loadStoredDerived(
+              ctx.db,
+              "expense",
+              [id],
+              ["beneficiaryResult"],
+            )
+          )
+            .get(id)
+            ?.get("beneficiaryResult")?.value,
+        )
+        .portions.map((portion) => portion.partyId);
+    await drainStoredDerived(ctx.db);
+    expect(await ownerOf(firstLine.entityId)).toEqual([owner.output.id]);
+    expect(await ownerOf(secondLine.entityId)).toEqual([household.output.id]);
+    await unwrapDb(ctx.db)
+      .update(financialTransactionAllocation)
+      .set({ purchaseId: second.entityId })
+      .where(eq(financialTransactionAllocation.transactionId, transaction.id));
+    await drainStoredDerived(ctx.db);
+    expect(await ownerOf(firstLine.entityId)).toEqual([household.output.id]);
+    expect(await ownerOf(secondLine.entityId)).toEqual([owner.output.id]);
+  });
 
   it("uses LedgerParty shortcode, rather than UUID, for a tied leftover cent", async () => {
     const [first, second] = await Promise.all([

@@ -11,6 +11,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
 import { FieldRecordValue } from "~/ui/derived/record-value";
+import { FieldValueMark } from "~/ui/derived/value-mark";
 import { useHouseholdToday } from "~/ui/hooks/use-household-today";
 import { Badge } from "~/ui/primitives/badge";
 
@@ -30,7 +31,21 @@ function CalendarBeneficiaries({
 }) {
   if (item.kind !== "expense" && item.kind !== "purchase") return null;
   const parties = item.spendingContext?.parties ?? [];
-  if (!parties.length) return null;
+  const sources = item.spendingContext?.beneficiarySources ?? [];
+  const envelopes = sources.map(
+    (source) => source.fields.effectiveBeneficiaries,
+  );
+  const status =
+    envelopes.find((envelope) => envelope.work.kind === "failed") ??
+    envelopes.find((envelope) => envelope.result.kind === "missing") ??
+    envelopes.find(
+      (envelope) =>
+        envelope.work.kind === "pending" ||
+        envelope.work.kind === "waiting" ||
+        (envelope.result.kind === "cached" &&
+          envelope.result.freshness === "stale"),
+    );
+  if (!parties.length && !sources.length) return null;
   return (
     <span
       className={cn(
@@ -40,6 +55,11 @@ function CalendarBeneficiaries({
           : "gap-1",
       )}
     >
+      {status ? (
+        <FieldValueMark envelope={status} interactive={false}>
+          {null}
+        </FieldValueMark>
+      ) : null}
       {parties.map((party) => (
         <span
           key={party.id}
@@ -145,7 +165,12 @@ function CalendarItemCompact({
       kind: "party",
       label:
         item.kind === "expense" || item.kind === "purchase"
-          ? item.spendingContext?.parties.map((party) => party.name).join(", ")
+          ? item.spendingContext?.parties
+              .map((party) => party.name)
+              .join(", ") ||
+            (item.spendingContext?.beneficiarySources.length
+              ? "Beneficiaries"
+              : null)
           : null,
     },
   ].filter(({ label }) => Boolean(label));

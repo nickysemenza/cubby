@@ -687,6 +687,41 @@ describe("stored derived values", () => {
     expect((await valuation(entry))?.value).toBe(5);
   });
 
+  it("retains the previous publication when a source edit awaits fanout during compute", async () => {
+    const location = await makeLocation("Synthetic storage rack");
+    const cord = await makeProduct("Synthetic cord", 6);
+    const entry = await makeEntry(cord, location, 2);
+    await drain();
+    const previous = await valuation(entry);
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ amountValue: 3 })
+      .where(eq(inventoryEntry.id, entry));
+    const claimed = (await claimDerivedMarks(ctx.db)).filter(
+      (mark) => mark.target === "inventory.valuation" && mark.ref === entry,
+    );
+    const plan = await prepareDerivedPage(ctx.db, derivedComputes, claimed);
+    await getDb(ctx.db).insert(productUnitMappings).values({
+      productId: cord,
+      aValue: 1,
+      aUnit: "each",
+      bValue: 10,
+      bUnit: "m",
+    });
+    // The save has not expanded its dependent tickets yet.
+    expect((await fanoutMarks("inventory.valuation")).length).toBeGreaterThan(
+      0,
+    );
+    expect(await claimDerivedMarks(ctx.db)).toEqual(
+      expect.arrayContaining(claimed),
+    );
+    await publishDerivedPage(ctx.db, plan);
+    expect(await marks("inventory.valuation")).toContain(entry);
+    expect((await valuation(entry))?.value).toEqual(previous?.value);
+    await drain();
+    expect(await valuation(entry)).toMatchObject({ value: 18, stale: false });
+  });
+
   it("never clears a mark re-created after its ticket was claimed", async () => {
     const location = await makeLocation("Attic box");
     const nails = await makeProduct("Synthetic nails", 1);

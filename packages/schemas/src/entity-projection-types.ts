@@ -58,6 +58,9 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
     description: DeclaredField["description"];
     readKey: string | null;
     storedKey: NonNullable<DeclaredField["storedKey"]> | null;
+    /** Path inside the stored result; absent for a whole-value snapshot. */
+    storedPath: readonly string[] | null;
+    storedProjection?: true;
     reference: DeclaredField["reference"];
     explanation: DeclaredField["explanation"];
     resolution: {
@@ -154,6 +157,7 @@ export type GeneratedRollup<E extends string = Entity> = {
 export type GeneratedListField<E extends string = Entity> =
   | {
       readonly shape: "via";
+      readonly requiresResult?: string;
       readonly path: string;
       readonly steps: readonly RelationshipPathStep[];
       readonly target: E;
@@ -170,6 +174,7 @@ export type GeneratedListField<E extends string = Entity> =
     }
   | {
       readonly shape: "rows";
+      readonly requiresResult?: string;
       readonly path: string;
       readonly rows: string;
       readonly terminal:
@@ -202,6 +207,11 @@ export type GeneratedListField<E extends string = Entity> =
       readonly group: string | null;
       /** Compiled from a `rollup` declaration; the repository passes no SQL. */
       readonly rollup?: GeneratedRollup<E>;
+      readonly fromResult?: {
+        readonly key: string;
+        readonly path: readonly string[];
+      };
+      readonly requiresResult?: string;
     }
   | {
       readonly shape: "predicate";
@@ -214,6 +224,7 @@ export type GeneratedListField<E extends string = Entity> =
         | "range";
       readonly options: readonly string[] | null;
       readonly reason: string;
+      readonly requiresResult?: string;
       readonly sort: string;
       readonly group: string;
     };

@@ -457,6 +457,22 @@ describe("compiled list fields", () => {
     ).id;
     const stock = [firsts, seconds, household, unknown];
     const entries = new Set(stock.map(({ entry }) => entry));
+    // Explicit decisions are known immediately. An unpublished inherited owner
+    // is unresolved, so it cannot yet satisfy an exclusion either.
+    expect(
+      (
+        await inventoryentryList(
+          ctx.db,
+          { ownerLedgerPartyIdExclude: [first] },
+          [],
+          page,
+        )
+      ).data
+        .map((row) => row.id)
+        .filter((id) => entries.has(id))
+        .sort(),
+    ).toEqual([seconds.entry, household.entry].sort());
+    await drainStoredDerived(ctx.db);
     expect(
       (
         await inventoryentryList(

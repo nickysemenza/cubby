@@ -255,7 +255,7 @@ async function expenseCategorySteps(
   db: Database,
   shortcode: string,
   resolution: FieldResolution,
-): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
+): Promise<FieldSteps> {
   const evidence = await loadExpenseSpendingCategoryEvidence(db, shortcode);
   const titles = {
     context: "Vendor food context",
@@ -284,7 +284,7 @@ async function expenseCategorySteps(
 async function taskAssigneeSteps(
   db: Database,
   shortcode: string,
-): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
+): Promise<FieldSteps> {
   const entity = "task";
   const field = "assigneeId";
   const subject = { entity, id: shortcode } as const;
@@ -324,7 +324,7 @@ async function expenseProjectSteps(
   db: Database,
   shortcode: string,
   resolution: FieldResolution,
-): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
+): Promise<FieldSteps> {
   const entity = "expense";
 
   const result = await unwrapDb(db).execute(sql`
@@ -385,7 +385,11 @@ async function expenseProjectSteps(
   };
 }
 
-type FieldSteps = { steps: Step[]; fallbackSource: Evidence["fallbackSource"] };
+type FieldSteps = {
+  steps: Step[];
+  fallbackSource: Evidence["fallbackSource"];
+  currentResolution?: FieldResolution;
+};
 
 function evaluatedFieldSteps(
   entity: Entity,
@@ -425,9 +429,13 @@ async function inventoryOwnershipFieldSteps(
   const trace = row
     ? (await loadInventoryOwnershipTraces(db, [row])).get(row.id)
     : undefined;
+  const currentResolution = trace
+    ? inventoryOwnerResolution(trace.ownership, trace.steps)
+    : resolution;
   return {
+    currentResolution,
     steps: [
-      ownershipSelfStep(resolution, trace?.intent),
+      ownershipSelfStep(currentResolution, trace?.intent),
       ...ownershipSteps(trace?.steps ?? []),
     ],
     fallbackSource: trace?.fallbackSource ?? null,
@@ -441,8 +449,11 @@ async function fieldSteps(
   shortcode: string,
   field: string,
   resolution: FieldResolution,
-): Promise<{ steps: Step[]; fallbackSource: Evidence["fallbackSource"] }> {
+): Promise<FieldSteps> {
   const subject = { entity, id: shortcode };
+  // A cached winner cannot select a row in the current acquisition ladder.
+  if (entity === "inventory" && field === "ownerLedgerPartyId")
+    return inventoryOwnershipFieldSteps(db, shortcode, resolution);
   if (resolution.evaluation) return evaluatedFieldSteps(entity, resolution);
   if (entity === "recipe" && field === "servings") {
     return {
@@ -637,9 +648,6 @@ async function fieldSteps(
       ),
     };
   }
-  if (entity === "inventory" && field === "ownerLedgerPartyId")
-    return inventoryOwnershipFieldSteps(db, shortcode, resolution);
-
   return {
     steps: [
       selfStep(entity, resolution),
@@ -1389,7 +1397,7 @@ export async function loadFieldResolutionEvidence(
     ["projectId", "trade", "costType", "spendingCategoryId"].includes(field)
   )
     return allocatedExpenseEvidence(db, shortcode, field, resolution);
-  const { steps, fallbackSource } = await fieldSteps(
+  const { steps, fallbackSource, currentResolution } = await fieldSteps(
     db,
     entity,
     shortcode,
@@ -1401,10 +1409,10 @@ export async function loadFieldResolutionEvidence(
     entity,
     field,
     steps,
-    winnerIndex(steps, resolution),
+    winnerIndex(steps, currentResolution ?? resolution),
     fallbackSource,
   );
-  evidence.outcome = resolutionOutcome(steps, resolution);
+  evidence.outcome = resolutionOutcome(steps, currentResolution ?? resolution);
   return { evidence, truncated: isTruncated(evidence) };
 }
 

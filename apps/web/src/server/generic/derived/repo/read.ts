@@ -1,5 +1,6 @@
 import { storedFieldDecision } from "@cubby/schemas/derived-value";
 import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 /**
  * Reading stored derived values. Lists compile a stored field to one indexed
  * primary-key lookup, so sorting, filtering and the footer read the same
@@ -14,12 +15,13 @@ import {
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import type {
   PageStoredMeta,
   StoredDerivedRead,
+  CurrentReadFacts,
 } from "~/server/generic/derived/repo/read-context";
 export type {
   PageStoredMeta,
@@ -43,14 +45,33 @@ export function storedDerivedSql(
   id: AnyColumn | SQL,
   { currentAssignment }: { currentAssignment?: SQL } = {},
 ): SQL {
-  const declaration = requireStored(entity, key);
+  const field = entityFieldModels[entity].fields.find(
+    (field) => field.key === key,
+  );
+  const storedKey = field?.storedKey ?? key;
+  const declaration = requireStored(entity, storedKey);
+  const path = field && "storedPath" in field ? field.storedPath : undefined;
+  const projected = path
+    ? sql`value #>> ARRAY[${sql.join(
+        path.map((part) => sql`${part}`),
+        sql`, `,
+      )}]::text[]`
+    : null;
   const column =
-    declaration.sort === "date"
-      ? sql.raw(`"sortDate"::date`)
-      : declaration.sort === "text"
-        ? sql.raw(`"sortText"`)
-        : sql.raw(`"sortNumber"`);
-  const cached = sql`(SELECT ${column} FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${key}
+    projected && field
+      ? field.kind === "number"
+        ? sql`(${projected})::double precision`
+        : field.kind === "date" || field.kind === "timestamp"
+          ? sql`(${projected})::timestamptz`
+          : field.kind === "boolean"
+            ? sql`(${projected})::boolean`
+            : projected
+      : declaration.sort === "date"
+        ? sql.raw(`"sortDate"::date`)
+        : declaration.sort === "text"
+          ? sql.raw(`"sortText"`)
+          : sql.raw(`"sortNumber"`);
+  const cached = sql`(SELECT ${column} FROM "DerivedValue" WHERE "entityId" = ${id} AND key = ${storedKey}
     AND "decidedBy"#>>'{outcome,kind}' = 'value'
     ${
       currentAssignment
@@ -63,6 +84,78 @@ export function storedDerivedSql(
     : cached;
 }
 
+/** Successful empty values are known; an absent publication cannot satisfy a negative filter. */
+export function storedFieldAvailableSql(
+  entity: Entity,
+  key: string,
+  id: AnyColumn | SQL,
+  { currentValue }: { currentValue?: SQL } = {},
+): SQL | null {
+  const field = entityFieldModels[entity].fields.find(
+    (field) => field.key === key,
+  );
+  const declaration = storedDerived(entity, field?.storedKey ?? key);
+  return declaration?.publishes === "derivedValue"
+    ? sql`EXISTS (
+    SELECT 1 FROM "DerivedValue" v WHERE v."entityId" = ${id} AND v.key = ${declaration.key}
+      AND v."computedAt" IS NOT NULL AND v."decidedBy"#>>'{outcome,kind}' IN (${storedFieldDecision.shape.outcome.options[0].shape.kind.value}, ${storedFieldDecision.shape.outcome.options[1].shape.kind.value})
+      ${currentValue ? sql`AND (${currentValue} IS NOT NULL OR v."decidedBy"#>>'{outcome,kind}' = ${storedFieldDecision.shape.outcome.options[1].shape.kind.value})` : sql``}
+  )`
+    : null;
+}
+
+/** A projection keeps the exact result revision, provenance and work of its owner. */
+export function projectStoredResult(
+  read: StoredDerivedRead,
+  path: readonly string[],
+): StoredDerivedRead {
+  let value = read.value;
+  for (const segment of path) {
+    const object = z.record(z.string(), z.unknown()).safeParse(value);
+    if (!object.success || !Object.hasOwn(object.data, segment))
+      return { ...read, value: null, decision: undefined, resultExists: false };
+    value = object.data[segment];
+  }
+  return {
+    ...read,
+    value,
+    ...(read.decision
+      ? {
+          decision: {
+            provenance: read.decision.provenance,
+            outcome:
+              value == null
+                ? { kind: "empty", reason: "unset" }
+                : { kind: "value", value },
+          },
+        }
+      : {}),
+  };
+}
+
+/** A scoped fold must name the exact publication it read; races remain unavailable. */
+export function projectStoredValue(
+  read: StoredDerivedRead,
+  value: StoredDerivedRead["value"],
+  revision: string | null | undefined,
+): StoredDerivedRead {
+  if (!read.resultExists || !read.computedAt || revision !== read.computedAt)
+    return { ...read, value: null, decision: undefined, resultExists: false };
+  return {
+    ...read,
+    value,
+    decision: read.decision
+      ? {
+          provenance: read.decision.provenance,
+          outcome:
+            value == null
+              ? { kind: "empty", reason: "unset" }
+              : { kind: "value", value },
+        }
+      : undefined,
+  };
+}
+
 const valueRow = z.object({
   entityId: z.string(),
   key: z.string(),
@@ -70,6 +163,7 @@ const valueRow = z.object({
   decidedBy: z.unknown(),
   computedAt: z.coerce.date().nullable(),
   stale: z.boolean(),
+  pending: z.boolean(),
   error: z.string().nullable(),
   retryAt: z.coerce.date().nullable(),
 });
@@ -105,12 +199,22 @@ export async function loadStoredDerived(
   const out = new Map<string, Map<string, StoredDerivedRead>>();
   if (ids.length === 0 || declarations.length === 0) return out;
   const result = await unwrapDb(db).execute(sql`
+    WITH keys AS MATERIALIZED (
+      SELECT declared.*, EXISTS (
+        SELECT 1 FROM "DerivedDirty" fanout
+         WHERE starts_with(fanout.target, declared.target || '@')
+      ) AS "fanoutPending"
+      FROM jsonb_to_recordset(${JSON.stringify(
+        declarations.map(({ key, target, clock }) => ({ key, target, clock })),
+      )}::jsonb) AS declared(key text, target text, clock text)
+    )
     SELECT i.id AS "entityId", k.key, v.value, v."decidedBy", v."computedAt",
-           d.ref IS NOT NULL AS stale, d."lastError" AS error, d."readyAt" AS "retryAt"
+           (d.ref IS NOT NULL OR k."fanoutPending") AS pending,
+           (d.ref IS NOT NULL OR k."fanoutPending" OR (k.clock = 'householdDay' AND
+             ${householdDaySql(sql`v."computedAt"`)} < ${householdDaySql(sql`now() AT TIME ZONE 'UTC'`)})) IS TRUE AS stale,
+           d."lastError" AS error, d."readyAt" AS "retryAt"
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
-     CROSS JOIN jsonb_to_recordset(${JSON.stringify(
-       declarations.map(({ key, target }) => ({ key, target })),
-     )}::jsonb) AS k(key text, target text)
+     CROSS JOIN keys k
       LEFT JOIN "DerivedValue" v ON v."entityId" = i.id AND v.key = k.key
       LEFT JOIN "DerivedDirty" d ON d.target = k.target AND d.ref = i.id`);
   for (const row of z.array(valueRow).parse(result.rows)) {
@@ -132,6 +236,7 @@ export async function loadStoredDerived(
       ...(decision.success ? { decision: decision.data } : {}),
       resultExists: row.computedAt !== null && decision.success,
       stale: row.stale,
+      pending: row.pending,
       retryAt: row.retryAt?.toISOString() ?? null,
       computedAt: row.computedAt?.toISOString() ?? null,
       error: row.error,
@@ -139,4 +244,42 @@ export async function loadStoredDerived(
     out.set(row.entityId, byKey);
   }
   return out;
+}
+
+/** Raw repository hydration of declared projections; public envelopes retain availability. */
+export async function loadStoredFieldProjections(
+  db: RepositoryQueryInput,
+  entity: Entity,
+  ids: readonly string[],
+  started?: Promise<PageStoredMeta>,
+): Promise<Map<string, CurrentReadFacts>> {
+  const fields = entityFieldModels[entity].fields.filter(
+    (field) => field.storedPath,
+  );
+  const reads = await (started ??
+    loadStoredDerived(db, entity, ids, [
+      ...new Set(
+        fields.flatMap((field) => (field.storedKey ? [field.storedKey] : [])),
+      ),
+    ]));
+  return new Map(
+    ids.map((id) => [
+      id,
+      Object.fromEntries(
+        fields.map((field) => {
+          const read = field.storedKey
+            ? reads.get(id)?.get(field.storedKey)
+            : undefined;
+          const selected =
+            read && field.storedPath
+              ? projectStoredResult(read, field.storedPath)
+              : undefined;
+          return [
+            field.readKey ?? field.key,
+            selected?.resultExists ? selected.value : null,
+          ];
+        }),
+      ),
+    ]),
+  );
 }

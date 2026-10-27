@@ -30,6 +30,7 @@ import {
   type ListGroupBy,
   type ListNesting,
   listNestingSchema,
+  listResultMembership,
   type PaginationParams,
   presenceFilter,
   type PresenceFilter,
@@ -70,6 +71,7 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
+import { storedDerived } from "~/server/db/derived-declarations";
 import {
   arrayOverlapOrPresence,
   auditDateWhereConditions,
@@ -100,6 +102,7 @@ import {
 } from "~/server/generic/data-quality/repo/sql";
 import {
   loadPageStoredMeta,
+  storedFieldAvailableSql,
   type PageStoredMeta,
 } from "~/server/generic/derived/repo/read";
 import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
@@ -129,6 +132,7 @@ import {
   derivedIntervalSql,
   derivedValueSet,
   declaredRollups,
+  declaredResultProjections,
   derivedValueSql,
   type AnyDerivedSql,
   groupSql,
@@ -247,6 +251,70 @@ const storedColumn = (
     nullable: stored.nullable,
     reference: stored.reference,
   };
+};
+
+/** All declared stored scalar forms share the same membership readiness gate. */
+const descriptorResultKey = (
+  entity: Entity,
+  descriptor: StoredDescriptorView,
+): string | undefined => {
+  const field = descriptor.derived
+    ? derivedFieldsOf(entity)[descriptor.derived]
+    : undefined;
+  if (field && "requiresResult" in field && field.requiresResult)
+    return field.requiresResult;
+  if (field && "fromResult" in field && field.fromResult)
+    return field.fromResult.key;
+  const candidate =
+    descriptor.derived ?? descriptor.field ?? descriptor.columnId;
+  return (
+    fieldModelFor(entity)?.fields.find((field) => field.key === candidate)
+      ?.storedKey ?? (storedDerived(entity, candidate) ? candidate : undefined)
+  );
+};
+
+const descriptorAvailabilitySql = (
+  entity: Entity,
+  table: PgTable & { id: AnyColumn },
+  descriptor: StoredDescriptorView,
+  input?: DerivedFilterInput,
+): SQL | null => {
+  const key = descriptorResultKey(entity, descriptor);
+  if (!key) return null;
+  const field = descriptor.derived
+    ? derivedFieldsOf(entity)[descriptor.derived]
+    : undefined;
+  // Contextual predicate adapters already return NULL only when their policy cannot decide.
+  if (field?.shape === "predicate") return null;
+  const source = derivedFieldsOf(entity)[key];
+  const directScalar =
+    source?.shape === "value" && !source.fromResult && !source.requiresResult;
+  const value = directScalar
+    ? derivedValueSql(
+        entity,
+        input?.derived ?? {},
+        key,
+        input?.context ?? ListContext.empty,
+      )
+    : undefined;
+  const available = storedFieldAvailableSql(
+    entity,
+    key,
+    table.id,
+    value ? { currentValue: value } : {},
+  );
+  if (!available) return null;
+  // Contextual adapters return NULL when undecided; cheap decisive values remain immediate.
+  const current =
+    field?.shape === "value" && field.requiresResult && descriptor.derived
+      ? derivedValueSql(
+          entity,
+          input?.derived ?? {},
+          descriptor.derived,
+          input?.context ?? ListContext.empty,
+        )
+      : value;
+  return current ? sql`(${current} IS NOT NULL OR ${available})` : available;
 };
 
 /** `formatSearchTerm` over a stored column, a `text[]` column by element. */
@@ -655,15 +723,16 @@ const derivedFilterPredicates = (
           ? [derivedTextMatch(entity, table, derivedKey, term, input)]
           : [];
       }
-      case "boolean":
-        // An UNKNOWN value counts as not met, as `flagCondition` reads it.
-        return [
-          flagCondition(
-            optionalBoolean.parse(value),
-            () =>
-              test((column) => sql`COALESCE((${column}), false)`) ?? sql`false`,
-          ),
-        ];
+      case "boolean": {
+        const flag = optionalBoolean.parse(value);
+        if (flag === undefined) return [];
+        const predicate = flagCondition(
+          flag,
+          () =>
+            test((column) => sql`COALESCE((${column}), false)`) ?? sql`false`,
+        );
+        return [predicate];
+      }
       case "presence":
         return [valuePresence(field.type, test, presenceFilter.parse(value))];
       case "range": {
@@ -856,7 +925,7 @@ interface RowCondition {
  */
 const rowSetPredicates = (
   entity: Entity,
-  table: PgTable,
+  table: PgTable & { id: AnyColumn },
   rows: string,
   descriptors: readonly (StoredDescriptorView & { derived: string })[],
   values: ListFilterValues,
@@ -984,32 +1053,54 @@ const rowSetPredicates = (
   const matches = (condition: SQL | undefined, absent: boolean) =>
     absent ? set.matchesOrEmpty(condition) : set.matches(condition);
   const everyValue = conditions.filter(({ all }) => all !== null);
-  if (everyValue.length === 0)
-    return matches(
-      and(...conditions.map(({ any }) => any)),
-      conditions.every(({ absent }) => absent),
-    );
-  // Each value of a Match all filter needs its own row, which also holds
-  // every sibling's any-of condition (another Match all filter's included).
-  return and(
-    ...everyValue.map((condition) => {
-      const others = conditions.filter((other) => other !== condition);
-      const siblings = and(...others.map(({ any }) => any));
-      return or(
+  const predicate =
+    everyValue.length === 0
+      ? matches(
+          and(...conditions.map(({ any }) => any)),
+          conditions.every(({ absent }) => absent),
+        )
+      : // Each value of a Match all filter needs its own row, which also holds
+        // every sibling's any-of condition (another Match all filter's included).
         and(
-          ...(condition.all ?? []).map((each) =>
-            set.matches(and(each, siblings)),
-          ),
-        ),
-        condition.presence === undefined
-          ? undefined
-          : matches(
-              and(condition.presence, siblings),
-              condition.absent && others.every(({ absent }) => absent),
-            ),
-      );
+          ...everyValue.map((condition) => {
+            const others = conditions.filter((other) => other !== condition);
+            const siblings = and(...others.map(({ any }) => any));
+            return or(
+              and(
+                ...(condition.all ?? []).map((each) =>
+                  set.matches(and(each, siblings)),
+                ),
+              ),
+              condition.presence === undefined
+                ? undefined
+                : matches(
+                    and(condition.presence, siblings),
+                    condition.absent && others.every(({ absent }) => absent),
+                  ),
+            );
+          }),
+        );
+  const available = and(
+    ...descriptors.flatMap((descriptor) => {
+      if (
+        !descriptorValueKeys(descriptor).some(
+          (key) => values[key] !== undefined,
+        )
+      )
+        return [];
+      const key = descriptorResultKey(entity, descriptor);
+      const readiness = key
+        ? storedFieldAvailableSql(entity, key, table.id)
+        : null;
+      return readiness ? [readiness] : [];
     }),
   );
+  if (!available || !predicate) return predicate;
+  // A present positive row proves its match immediately. Absence needs a completed result.
+  const positive = conditions.every(({ absent }) => absent)
+    ? sql`false`
+    : predicate;
+  return sql`CASE WHEN ${positive} THEN true WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`;
 };
 
 /**
@@ -1173,6 +1264,7 @@ export function declaredFilterPredicates<Filters extends object>(
   table: PgTable & { id: AnyColumn },
   filters: Filters,
   derivedInput?: DerivedFilterInput,
+  membership: "certain" | "possible" = "certain",
 ): Array<SQL | undefined> {
   const hasSuggestTargets = fieldModelFor(entity)?.fields.some(
     (field) => field.control?.suggest != null,
@@ -1190,6 +1282,7 @@ export function declaredFilterPredicates<Filters extends object>(
   const include = (
     values: ListFilterValues,
     input = derivedInput,
+    mode = membership,
   ): Array<SQL | undefined> => [
     hasSuggestTargets
       ? suggestionPredicate(
@@ -1201,9 +1294,31 @@ export function declaredFilterPredicates<Filters extends object>(
       : undefined,
     ...derivedDescriptors
       .filter((descriptor) => rowSetOf(descriptor) === null)
-      .flatMap((descriptor) =>
-        derivedFilterPredicates(entity, table, descriptor, values, input),
-      ),
+      .flatMap((descriptor) => {
+        const field = derivedFieldsOf(entity)[descriptor.derived];
+        return derivedFilterPredicates(
+          entity,
+          table,
+          descriptor,
+          values,
+          input,
+        ).map((predicate) => {
+          if (!predicate || !descriptorResultKey(entity, descriptor) || !field)
+            return predicate;
+          const available = descriptorAvailabilitySql(
+            entity,
+            table,
+            descriptor,
+            input,
+          );
+          const outcome = available
+            ? sql`CASE WHEN ${available} THEN COALESCE(${predicate}, false) ELSE NULL::boolean END`
+            : predicate;
+          return mode === "certain"
+            ? sql`(${outcome}) IS TRUE`
+            : sql`(${outcome}) IS NOT FALSE`;
+        });
+      }),
     ...descriptorsFor(entity).map((descriptor) =>
       descriptor.anyOf === null
         ? undefined
@@ -1219,8 +1334,8 @@ export function declaredFilterPredicates<Filters extends object>(
     ...[...new Set(derivedDescriptors.map(rowSetOf))].flatMap((rows) =>
       rows === null
         ? []
-        : [
-            rowSetPredicates(
+        : (() => {
+            const predicate = rowSetPredicates(
               entity,
               table,
               rows,
@@ -1229,8 +1344,15 @@ export function declaredFilterPredicates<Filters extends object>(
               ),
               values,
               input,
-            ),
-          ],
+            );
+            return [
+              predicate === undefined
+                ? undefined
+                : mode === "certain"
+                  ? sql`(${predicate}) IS TRUE`
+                  : sql`(${predicate}) IS NOT FALSE`,
+            ];
+          })(),
     ),
     ...descriptorsFor(entity)
       .filter((descriptor) => descriptor.stored !== null)
@@ -1336,6 +1458,7 @@ export function declaredFilterPredicates<Filters extends object>(
             ...derivedInput,
             context: derivedInput.context.excluding(),
           },
+          membership === "certain" ? "possible" : "certain",
         ),
       ),
     ),
@@ -1466,6 +1589,9 @@ const listNestingCarrier = z
  */
 const listNestingFromFilters = (filters: unknown): ListNesting =>
   listNestingCarrier.parse(filters).nesting ?? { scope: "flat" };
+const listResultMembershipCarrier = z
+  .object({ resultMembership: listResultMembership.optional() })
+  .passthrough();
 const listRowIdSchema = z.object({ id: z.string() });
 const selectionCursorSchema = z
   .object({
@@ -1518,8 +1644,9 @@ export interface NestedListScaffold<T extends Entity> {
   ): Promise<ListContext>;
   matchingIds(
     filters: ListFilterValues,
-    options: { context: ListContext },
+    options: { context: ListContext; membership?: "certain" | "possible" },
   ): SQL;
+  hasResultFilters(filters: ListFilterValues): boolean;
 }
 
 /**
@@ -1634,6 +1761,7 @@ export function listScaffold<
   // the remaining value and predicate SQL.
   const derivedSql: AnyDerivedSql = {
     ...declaredRollups(entity, table),
+    ...declaredResultProjections(entity, table.id),
     ...options?.derived,
   };
   const rowsSql: AnyRowsSql = options?.rows ?? {};
@@ -1758,10 +1886,13 @@ export function listScaffold<
      */
     matchingIds(
       filters: ListFilterValues,
-      { context }: { context: ListContext },
+      {
+        context,
+        membership = "certain",
+      }: { context: ListContext; membership?: "certain" | "possible" },
     ): SQL {
       return sql`(SELECT ${table.id} FROM ${table} WHERE ${
-        scaffold.where(filters, { context }) ?? sql`true`
+        scaffold.where(filters, { context, membership }) ?? sql`true`
       })`;
     },
 
@@ -1870,15 +2001,30 @@ export function listScaffold<
       {
         context = ListContext.empty,
         readContext,
-      }: { context?: ListContext; readContext?: QualityReadContext } = {},
+        membership,
+      }: {
+        context?: ListContext;
+        readContext?: QualityReadContext;
+        membership?: "certain" | "possible";
+      } = {},
     ): SQL | undefined {
+      if (
+        membership === undefined &&
+        listResultMembershipCarrier.parse(filters).resultMembership ===
+          "unresolved"
+      )
+        return scaffold.unresolvedWhere(filters, context.withRead(readContext));
       return buildSearchConditions(
         table,
         [],
         [
           options?.population?.(filters),
           // Only a caller's own read context reaches derived SQL.
-          ...scaffold.filterPredicates(filters, context.withRead(readContext)),
+          ...scaffold.filterPredicates(
+            filters,
+            context.withRead(readContext),
+            membership,
+          ),
           ...(scored
             ? dataQualityFilterPredicates(scored, table, filters)
             : []),
@@ -1892,7 +2038,10 @@ export function listScaffold<
           ...requestedScopes(listFilterValues.parse(filters)).map(
             ({ via, nested, value }) => {
               const scopeContext = context.withRead(undefined);
-              const ids = nested.matchingIds(value, { context: scopeContext });
+              const ids = nested.matchingIds(value, {
+                context: scopeContext,
+                membership: membership ?? "certain",
+              });
               if (via.shape === "via")
                 return relatedExistsSql(
                   entity,
@@ -1930,6 +2079,7 @@ export function listScaffold<
     filterPredicates<Filters extends object>(
       filters: Filters,
       context: ListContext = ListContext.empty,
+      membership: "certain" | "possible" = "certain",
     ): Array<SQL | undefined> {
       const values = options?.populationFilters
         ? Object.fromEntries(
@@ -1939,11 +2089,130 @@ export function listScaffold<
             ),
           )
         : filters;
-      return declaredFilterPredicates(entity, table, values, {
-        derived: derivedSql,
-        rows: rowsSql,
+      return declaredFilterPredicates(
+        entity,
+        table,
+        values,
+        {
+          derived: derivedSql,
+          rows: rowsSql,
+          context,
+        },
+        membership,
+      );
+    },
+
+    /** Candidates whose requested membership awaits a declared stored result. */
+    unresolvedWhere<Filters extends object>(
+      filters: Filters,
+      context: ListContext = ListContext.empty,
+    ): SQL {
+      const certain = scaffold.where(filters, {
         context,
+        membership: "certain",
       });
+      const possible = scaffold.where(filters, {
+        context,
+        membership: "possible",
+      });
+      return sql`(${possible ?? sql`true`}) IS TRUE AND (${certain ?? sql`true`}) IS NOT TRUE`;
+    },
+
+    /** Includes nested scope dependencies rather than only this entity's explicit roots. */
+    hasResultFilters<Filters extends object>(filters: Filters): boolean {
+      const values = listFilterValues.parse(filters);
+      return (
+        descriptorsFor(entity).some(
+          (descriptor) =>
+            descriptorResultKey(entity, descriptor) !== undefined &&
+            descriptorValueKeys(descriptor).some(
+              (key) => values[key] !== undefined,
+            ),
+        ) ||
+        requestedScopes(values).some(({ nested, value }) =>
+          nested.hasResultFilters(value),
+        )
+      );
+    },
+
+    /** No additional query when the requested filters depend only on known data. */
+    async unresolvedCount<Filters extends object>(
+      db: Database | DrizzleTransaction,
+      filters: Filters,
+      context: ListContext = ListContext.empty,
+    ): Promise<number | undefined> {
+      if (!scaffold.hasResultFilters(filters)) return undefined;
+      return countWhere(
+        db,
+        table,
+        scaffold.unresolvedWhere(filters, context),
+        listTable,
+      );
+    },
+
+    /** Stored contributors determine completeness; current authoritative scalars can settle it. */
+    async incompleteSums<Filters extends object>(
+      db: Database | DrizzleTransaction,
+      filters: Filters,
+      context: ListContext = ListContext.empty,
+      unresolvedCount = 0,
+    ): Promise<string[] | undefined> {
+      const uncertainMembership =
+        unresolvedCount > 0
+          ? entitySummary[entity].list.totals.flatMap((total) => total.keys)
+          : [];
+      const totals = entitySummary[entity].list.totals.filter(
+        (total) => "requiresResults" in total,
+      );
+      if (totals.length === 0)
+        return uncertainMembership.length
+          ? [...new Set(uncertainMembership)]
+          : undefined;
+      const selections: Record<string, SQL<boolean>> = {};
+      for (const [index, total] of totals.entries()) {
+        const results = (total.requiresResults ?? []).map((key) => {
+          const field = derivedFields[key];
+          const currentValue =
+            field?.shape === "value" && field.type === "number"
+              ? derivedValueSql(entity, derivedSql, key, context)
+              : undefined;
+          const available = storedFieldAvailableSql(entity, key, table.id, {
+            currentValue,
+          });
+          if (!available)
+            throw new Error(
+              `${entity}.totals.${total.id}: ${key} is not a published result`,
+            );
+          return available;
+        });
+        const live = total.keys.flatMap((key) => {
+          const field = derivedFields[key];
+          return field?.shape === "value" && field.type === "number"
+            ? [derivedValueSql(entity, derivedSql, key, context)]
+            : [];
+        });
+        const ready = or(
+          and(...results),
+          live.length === total.keys.length
+            ? and(...live.map((value) => sql`${value} IS NOT NULL`))
+            : undefined,
+        );
+        selections[`total_${index}`] =
+          sql<boolean>`COALESCE(bool_or(NOT (${ready})), false)`;
+      }
+      const [row] = await unwrapDb(db)
+        .select(selections)
+        .from(listTable)
+        .where(scaffold.where(filters, { context }));
+      const flags = z.record(z.string(), z.boolean()).parse(row);
+      return [
+        ...new Set([
+          ...uncertainMembership,
+          ...totals.flatMap((total, index) =>
+            flags[`total_${index}`] ? total.keys : [],
+          ),
+        ]),
+      ];
     },
 
     /** One snapshot per page; refuse any population change during cursor traversal. */
@@ -2082,8 +2351,9 @@ export function listScaffold<
      * One declared filter's facet over the filtered set minus that filter's
      * own request keys, so its alternatives stay meaningful: per-value counts
      * for a stored enum, boolean, presence or flat reference filter, min/max
-     * for a stored range. Derived, `anyOf` and hierarchical reference filters
-     * have no facet (null).
+     * for a scalar range. Compound, predicate, `anyOf` and hierarchical
+     * reference filters have no facet (null). Missing results are counted
+     * separately from known empty values.
      */
     async countBy(
       db: Database | DrizzleTransaction,
@@ -2094,13 +2364,16 @@ export function listScaffold<
         (candidate) => candidate.columnId === descriptorId,
       );
       const [columnKey] = descriptor?.stored?.columns ?? [];
+      if (!descriptor || descriptor.anyOf !== null) return null;
+      const derived = descriptor.derived
+        ? derivedFields[descriptor.derived]
+        : undefined;
       if (
-        !descriptor ||
-        columnKey === undefined ||
-        descriptor.derived !== null ||
-        descriptor.anyOf !== null
+        derived &&
+        (derived.shape !== "value" || derived.type === "dateInterval")
       )
         return null;
+      if (columnKey === undefined && !derived) return null;
       const own = new Set([
         descriptor.field ?? descriptor.columnId,
         ...descriptorValueKeys(descriptor),
@@ -2110,20 +2383,60 @@ export function listScaffold<
           ([key]) => !own.has(key),
         ),
       );
-      const stored = storedColumn(entity, table, descriptor, columnKey);
+      const base =
+        columnKey === undefined
+          ? undefined
+          : storedColumn(entity, table, descriptor, columnKey);
+      const model = fieldModel?.fields.find(
+        (field) => field.key === descriptor.derived,
+      );
       // Picking a hierarchy node matches its descendants too; a direct count
       // would show a parent with child-only rows as 0.
       if (
         descriptor.kind === "idMulti" &&
-        isHierarchyEntity(String(stored.reference))
+        isHierarchyEntity(String(base?.reference ?? model?.reference?.entity))
       )
         return null;
-      const context = await scaffold.context(db, {
-        filters: rest,
-        readIntent: "count",
+      const context = await scaffold.context(
+        db,
+        {
+          filters: rest,
+          sorts: descriptor.derived
+            ? [{ orderBy: descriptor.derived, direction: "asc" }]
+            : [],
+        },
+        [],
+        { projection: false },
+      );
+      const available = descriptorAvailabilitySql(entity, table, descriptor, {
+        derived: derivedSql,
+        rows: rowsSql,
+        context,
       });
-      const where = scaffold.where(rest, { context });
-      const value = stored.value;
+      const certain = scaffold.where(rest, { context, membership: "certain" });
+      const where = and(certain, available ?? undefined);
+      const hasUnknown = available !== null || scaffold.hasResultFilters(rest);
+      const unresolvedCount = hasUnknown
+        ? await countWhere(
+            db,
+            table,
+            and(
+              scaffold.where(rest, { context, membership: "possible" }),
+              sql`(${and(certain, available ?? undefined) ?? sql`true`}) IS NOT TRUE`,
+            ),
+            listTable,
+          )
+        : undefined;
+      const value = descriptor.derived
+        ? derivedValueSql(entity, derivedSql, descriptor.derived, context)
+        : base?.value;
+      if (!value) return null;
+      const stored = {
+        value,
+        kind:
+          derived?.shape === "value" ? derived.type : (base?.kind ?? "text"),
+        reference: model?.reference?.entity ?? base?.reference ?? null,
+      };
       if (descriptor.kind === "range") {
         const bound = (aggregate: "min" | "max") =>
           stored.kind === "timestamp"
@@ -2138,6 +2451,7 @@ export function listScaffold<
           kind: "range",
           min: row?.min ?? null,
           max: row?.max ?? null,
+          ...(unresolvedCount === undefined ? {} : { unresolvedCount }),
         };
       }
       const keyed = facetValueSql(entity, descriptor, stored);
@@ -2153,6 +2467,7 @@ export function listScaffold<
       return {
         id: descriptorId,
         kind: "values",
+        ...(unresolvedCount === undefined ? {} : { unresolvedCount }),
         options: rows.flatMap(({ value: key, count }) =>
           key !== null
             ? [{ value: key, count }]
@@ -2213,6 +2528,8 @@ export function listScaffold<
       data: Out[];
       fieldReads?: PageFieldReadContexts;
       count: number;
+      unresolvedCount?: number;
+      incompleteSums?: string[];
       groups?: ListGroupSummary[];
       memberships?: ListGroupMembership[];
       membershipCount?: number;
@@ -2450,10 +2767,39 @@ export function listScaffold<
                   memberships: groupedPage.memberships,
                   membershipCount: groupedPage.membershipCount,
                 };
+          const unresolvedCount = await scaffold.unresolvedCount(
+            db,
+            request.filters,
+            context,
+          );
+          const incompleteSums =
+            readIntent === "count"
+              ? undefined
+              : await scaffold.incompleteSums(
+                  db,
+                  request.filters,
+                  context,
+                  unresolvedCount,
+                );
           if (readIntent === "count" || data.length === 0)
-            return { data: [], count, ...grouped };
+            return {
+              data: [],
+              count,
+              unresolvedCount,
+              incompleteSums,
+              ...grouped,
+            };
           return withListReadTracing({ rows: data.length }, async () => {
             const context = await hydrationContext;
+            if (withEnvelope) {
+              const ids = data.map((row) => listRowIdSchema.parse(row).id);
+              storedMeta ??= loadPageStoredMeta(db, entity, ids);
+              storedMeta.catch(() => {
+                // SILENT: withPageFields awaits this same promise and surfaces its failure.
+              });
+              prefetched ??= spec.prefetch?.(ids, projection);
+              if (prefetched) prefetched.page.stored = storedMeta;
+            }
             const hydrate = () =>
               spec.hydrate(data, projection, context, prefetched);
             const complete = withEnvelope
@@ -2467,7 +2813,14 @@ export function listScaffold<
                 )
               : { data: await hydrate(), fieldReads: undefined };
             const hydrated = complete.data;
-            if (!parent) return { ...complete, count, ...grouped };
+            if (!parent)
+              return {
+                ...complete,
+                count,
+                unresolvedCount,
+                incompleteSums,
+                ...grouped,
+              };
             const codeOf = (row: Out) => {
               const { id } = listRowIdSchema.parse(row);
               return parseShortcode(id)?.shortcode ?? id;
@@ -2489,6 +2842,8 @@ export function listScaffold<
               ),
               fieldReads: complete.fieldReads,
               count,
+              unresolvedCount,
+              incompleteSums,
               ...grouped,
             };
           });
@@ -2512,13 +2867,19 @@ const PRESENCE = presenceFilter.unwrap().enum;
 const facetValueSql = (
   entity: Entity,
   descriptor: StoredDescriptorView,
-  { value, kind, reference }: StoredColumn,
+  {
+    value,
+    kind,
+    reference,
+  }: Pick<StoredColumn, "value" | "kind" | "reference">,
 ): SQL | null => {
   switch (descriptor.kind) {
     case "boolean":
       return kind === "boolean" ? sql`${value}` : sql`(${value}) IS NOT NULL`;
     case "presence":
-      return sql`CASE WHEN (${value}) IS NULL THEN ${PRESENCE.none}::text ELSE ${PRESENCE.has}::text END`;
+      return kind === "boolean"
+        ? sql`CASE WHEN (${value}) THEN ${PRESENCE.has}::text ELSE ${PRESENCE.none}::text END`
+        : sql`CASE WHEN (${value}) IS NULL THEN ${PRESENCE.none}::text ELSE ${PRESENCE.has}::text END`;
     case "multiselect":
       return descriptor.stored?.array ? sql`unnest(${value})` : sql`${value}`;
     case "idMulti": {

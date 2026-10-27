@@ -19,6 +19,7 @@ import { sqlColumnCompute } from "~/server/generic/derived/repo/sql-compute";
 import { projectStartDateSql } from "./lookup";
 import {
   loadProjectDateWindows,
+  loadProjectSubtreeRollups,
   loadProjectTree,
   projectCompletionYear,
 } from "./subtree";
@@ -46,7 +47,31 @@ const completionYearCompute: DerivedCompute = async (db, ids) => {
   return out;
 };
 
+const rollupsCompute: DerivedCompute = async (db, ids) => {
+  const loaded = await loadProjectSubtreeRollups(readDatabase(db));
+  const out = new Map<string, DerivedComputed>();
+  for (const row of loaded.allRows) {
+    if (!ids.includes(row.id)) continue;
+    const own = loaded.ownRollups.get(row.id);
+    const subtree = loaded.subtreeRollups.get(row.id);
+    const dateWindow = loaded.dateWindows.get(row.id);
+    if (!own || !subtree || !dateWindow) continue;
+    const value = {
+      rollup: { ...own, subtree },
+      dateWindow,
+      taskProgress: `${own.doneTaskCount}/${own.taskCount}`,
+      ownContentDates: loaded.ownContentDates.get(row.id) ?? {
+        contentStart: null,
+        contentEnd: null,
+      },
+    };
+    out.set(row.id, { value, sort: null });
+  }
+  return out;
+};
+
 export const projectDerivedComputes = {
+  "project.rollups": rollupsCompute,
   "project.startDate": sqlColumnCompute(
     { table: project, id: project.id, deletedAt: project.deletedAt },
     sql`(${projectStartDateSql})::text`,

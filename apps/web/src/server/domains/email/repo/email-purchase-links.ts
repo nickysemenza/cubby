@@ -7,6 +7,10 @@ import {
   type EmailLinkState,
   type EmailPurchaseLink,
 } from "@cubby/schemas/email-fields";
+import {
+  emailPurchaseFact,
+  emailRelationshipResult,
+} from "@cubby/schemas/email-relationship-facts";
 import type {
   EmailId,
   LedgerPartyId,
@@ -14,15 +18,22 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
-import { householdDaySqlText } from "~/server/db/helpers/query";
+import {
+  purchase,
+  vendorAccount,
+} from "~/server/db/generated/entity-table-definitions.gen";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { householdDaySqlText, uuidArrayParam } from "~/server/db/helpers/query";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 
 /**
  * The record an Emails section or filter is scoped to. A Vendor scope also
@@ -33,6 +44,9 @@ export type EmailPurchaseScope =
   | { kind: "purchase"; purchaseId: PurchaseId }
   | { kind: "vendor"; vendorId: VendorId }
   | { kind: "vendorAccount"; vendorId: VendorId; ownerId: LedgerPartyId };
+
+const livePurchase = alias(purchase, "p");
+const liveAccount = alias(vendorAccount, "account");
 
 const KIND = emailLinkEvidenceKind.enum;
 const STATE = emailLinkState.enum;
@@ -65,8 +79,8 @@ export const emailPurchaseEvidenceSql = (
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
   INNER JOIN "AssessmentEmailLink" decision ON decision."eventId" = event."id"
-  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND p."deletedAt" IS NULL
-  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
+  INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${notDeleted(livePurchase)}
+  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL
@@ -90,8 +104,8 @@ export const emailPurchaseEvidenceSql = (
         AND p."date" BETWEEN
           ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))} - ${SUGGESTION_WINDOW_DAYS}::integer
           AND ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))} + ${SUGGESTION_WINDOW_DAYS}::integer
-  ) p ON p."deletedAt" IS NULL
-  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND account."deletedAt" IS NULL
+  ) p ON ${notDeleted(livePurchase)}
+  LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
     AND event."supersededAt" IS NULL
@@ -109,7 +123,7 @@ const inScope = (scope: EmailPurchaseScope, purchaseId: SQL): SQL => {
     case "vendor":
     case "vendorAccount":
       return sql`EXISTS (
-        SELECT 1 FROM "Purchase" scoped
+        SELECT 1 FROM ${purchase} scoped
         WHERE scoped."id" = ${purchaseId} AND scoped."vendorId" = ${scope.vendorId}::uuid
           AND scoped."deletedAt" IS NULL
       )`;
@@ -126,13 +140,23 @@ const senderProofSql = (vendorId: VendorId): SQL => sql`EXISTS (
 
 /** Whether the correlated `"Email"` belongs in the scope's Emails section. */
 export const emailInScopeSql = (scope: EmailPurchaseScope): SQL => {
-  const related = sql`EXISTS (
-    SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence
+  const matches = sql`EXISTS (
+    SELECT 1 FROM (${cachedEmailPurchaseEvidenceSql()}) evidence
     WHERE ${inScope(scope, sql`evidence."purchaseId"`)}
   )`;
+  const related = sql`CASE WHEN ${emailRelationshipResultExistsSql}
+    THEN ${matches} ELSE NULL::boolean END`;
   switch (scope.kind) {
     case "purchase":
-      return related;
+      // Eligibility is authoritative even while the candidate facts are missing.
+      // Do not count another account owner's mail as unresolved in this scope.
+      return sql`CASE WHEN ${emailRelationshipResultExistsSql} THEN ${matches}
+        WHEN NOT EXISTS (
+          SELECT 1 FROM ${purchase} p
+          LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND account."deletedAt" IS NULL
+          WHERE p.id = ${scope.purchaseId}::uuid AND p."deletedAt" IS NULL
+            AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+        ) THEN false ELSE NULL::boolean END`;
     case "vendor":
       return sql`(${related} OR ${senderProofSql(scope.vendorId)})`;
     case "vendorAccount":
@@ -140,58 +164,56 @@ export const emailInScopeSql = (scope: EmailPurchaseScope): SQL => {
   }
 };
 
-// An accepted association needs an exact source identity; decisions and
-// suggestions need an order event. This superset is evaluated once per statement;
-// the evidence policy below still decides ownership, lifecycle and scope.
-const emailMayHavePurchaseEvidenceSql = sql`(
-  "Email"."id" IN (
-    SELECT candidate."id" FROM "ImportSourceClaim" claim
-    INNER JOIN "Email" candidate ON candidate."ledgerPartyId" = claim."ledgerPartyId"
-      AND claim."kind" = ${importSourceKind.enum.mail_message}
-      AND claim."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId"
-    UNION
-    SELECT candidate."id" FROM "ImportSourceClaim" claim
-    INNER JOIN "OrderMailAttachment" attachment ON claim."kind" = ${importSourceKind.enum.mail_attachment}
-    INNER JOIN "OrderMail" original ON original."id" = attachment."orderMailId"
-      AND original."ledgerPartyId" = claim."ledgerPartyId"
-    INNER JOIN "Email" candidate ON candidate."orderMailId" = original."id"
-      AND candidate."ledgerPartyId" = original."ledgerPartyId"
-      AND claim."externalKey" = candidate."provider" || ':' || candidate."mailboxId" || ':' || candidate."messageId" || ':attachment:' || attachment."providerAttachmentId"
-  ) OR "Email"."orderMailId" IN (SELECT event."orderMailId" FROM "OrderMailEvent" event)
+/** A missing computation is not a successful no-match result. */
+const emailRelationshipResultExistsSql = sql`EXISTS (
+  SELECT 1 FROM "DerivedValue" v WHERE v."entityId" = "Email".id AND v.key = 'relationshipFacts'
+    AND v."decidedBy"#>>'{outcome,kind}' = 'value' AND jsonb_typeof(v.value->'facts') = 'array'
 )`;
+
+/** Fixed typed facts, with current account-owner eligibility kept separate. */
+const cachedEmailPurchaseEvidenceSql = (): SQL => sql`
+  SELECT fact."purchaseId", fact."eventId", fact.kind, fact.changed, fact."proposedBy"
+  FROM "DerivedValue" v
+  CROSS JOIN LATERAL jsonb_to_recordset(CASE WHEN jsonb_typeof(v.value->'facts') = 'array'
+    THEN v.value->'facts' ELSE '[]'::jsonb END)
+    AS fact("purchaseId" uuid, "eventId" uuid, kind text, changed boolean, "proposedBy" text)
+  JOIN "Purchase" p ON p.id = fact."purchaseId" AND ${notDeleted(livePurchase)}
+  LEFT JOIN "VendorAccount" account ON account.id = p."vendorAccountId" AND ${notDeleted(liveAccount)}
+  WHERE v."entityId" = "Email".id AND v.key = 'relationshipFacts'
+    AND v."decidedBy"#>>'{outcome,kind}' = 'value'
+    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+`;
 
 /**
  * The scope-relative link state of the correlated `"Email"`: its strongest
  * pair inside the scope (everywhere when unscoped), else `none`.
  */
 export const emailLinkStateSql = (scope: EmailPurchaseScope | null): SQL =>
-  sql`CASE WHEN ${emailMayHavePurchaseEvidenceSql} THEN (
+  sql`CASE WHEN ${emailRelationshipResultExistsSql} THEN (
     SELECT CASE
       WHEN bool_or(evidence."kind" IN (${KIND.accepted}, ${KIND.linked})) THEN ${STATE.linked}::text
       WHEN bool_or(evidence."kind" = ${KIND.suggested}) THEN ${STATE.suggested}::text
       WHEN bool_or(evidence."kind" = ${KIND.dismissed}) THEN ${STATE.dismissed}::text
       ELSE ${STATE.none}::text
     END
-    FROM (${emailPurchaseEvidenceSql()}) evidence
+    FROM (${cachedEmailPurchaseEvidenceSql()}) evidence
     ${scope ? sql`WHERE ${inScope(scope, sql`evidence."purchaseId"`)}` : sql``}
-  ) ELSE ${STATE.none}::text END`;
+  ) ELSE NULL::text END`;
 
 /** Linked first, then suggestions to act on, then nothing, then dismissals. */
 export const emailLinkRankSql = (scope: EmailPurchaseScope | null): SQL =>
   sql`CASE ${emailLinkStateSql(scope)}
     WHEN ${STATE.linked}::text THEN 0 WHEN ${STATE.suggested}::text THEN 1
-    WHEN ${STATE.none}::text THEN 2 ELSE 3 END`;
+    WHEN ${STATE.none}::text THEN 2 WHEN ${STATE.dismissed}::text THEN 3 ELSE NULL END`;
 
-const evidenceRow = z.object({
-  emailId: z.string(),
-  purchaseId: z.string(),
-  purchaseShortcode: z.string(),
-  vendorId: z.string(),
-  eventId: z.string().nullable(),
-  kind: emailLinkEvidenceKind,
-  changed: z.boolean(),
-  proposedBy: emailLinkProposer.nullable(),
-});
+/** Ordinary linked/import-state reads reuse published evidence; command guards stay live. */
+export const cachedEmailLinkedSql = (): SQL<
+  boolean | null
+> => sql`CASE WHEN ${emailRelationshipResultExistsSql} THEN EXISTS (
+  SELECT 1 FROM (${cachedEmailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${KIND.accepted}, ${KIND.linked})
+) ELSE NULL::boolean END`;
+
+const evidenceRow = emailPurchaseFact.extend({ emailId: z.string() });
 type EvidenceRow = z.infer<typeof evidenceRow>;
 
 /** The event-level evidence of the named Emails, optionally limited to a scope. */
@@ -199,6 +221,7 @@ export async function readEmailPurchaseEvidence(
   db: Database | DrizzleTransaction,
   emailIds: readonly EmailId[],
   scope: EmailPurchaseScope | null,
+  accountOwnerScope: "respect" | "ignore" = "respect",
 ): Promise<EvidenceRow[]> {
   if (emailIds.length === 0) return [];
   const result = await unwrapDb(db).execute(sql`
@@ -206,7 +229,7 @@ export async function readEmailPurchaseEvidence(
       p."shortcode" AS "purchaseShortcode", p."vendorId", evidence."eventId", evidence."kind",
       evidence."changed", evidence."proposedBy"
     FROM "Email"
-    CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
+    CROSS JOIN LATERAL (${emailPurchaseEvidenceSql(accountOwnerScope)}) evidence
     INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId"
     WHERE "Email"."id" IN (${sql.join(
       emailIds.map((id) => sql`${id}::uuid`),
@@ -328,5 +351,125 @@ export async function readEmailPurchaseLinks(
       emailId,
       foldPurchaseLinks(group).filter(keep),
     ]),
+  );
+}
+
+const currentPurchase = z.object({
+  id: z.string(),
+  vendorId: z.string(),
+  ownerId: z.string().nullable(),
+});
+
+/** Current cheap eligibility gates do not rerun candidate discovery. */
+export async function loadRelationshipPurchaseGates(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (ids.length === 0)
+    return new Map<string, z.output<typeof currentPurchase>>();
+  const result = await unwrapDb(db).execute(sql`
+    SELECT p.id, p."vendorId", account."ledgerPartyId" AS "ownerId" FROM "Purchase" p
+    LEFT JOIN "VendorAccount" account ON account.id = p."vendorAccountId" AND ${notDeleted(liveAccount)}
+    WHERE p.id = ANY(${uuidArrayParam(ids)}) AND ${notDeleted(livePurchase)}`);
+  return new Map(
+    z
+      .array(currentPurchase)
+      .parse(result.rows)
+      .map((row) => [row.id, row]),
+  );
+}
+
+export function foldScopedEmailPurchaseFacts({
+  facts,
+  emailId,
+  ownerId,
+  purchases,
+  scope,
+}: {
+  facts: readonly z.output<typeof emailPurchaseFact>[];
+  emailId: string;
+  ownerId: string;
+  purchases: ReadonlyMap<string, z.output<typeof currentPurchase>>;
+  scope: EmailPurchaseScope | null;
+}): EmailPurchaseLink[] {
+  const rows = facts.flatMap((fact) => {
+    const purchase = purchases.get(fact.purchaseId);
+    return purchase &&
+      (purchase.ownerId === null || purchase.ownerId === ownerId)
+      ? [{ ...fact, vendorId: purchase.vendorId, emailId }]
+      : [];
+  });
+  const keep = pairInScope(scope, rows);
+  return scope?.kind === "vendorAccount" && scope.ownerId !== ownerId
+    ? []
+    : foldPurchaseLinks(rows).filter(keep);
+}
+
+/** Page hydration folds the same cached facts its SQL predicates use. */
+export async function readCachedEmailPurchaseLinks(
+  db: Database | DrizzleTransaction,
+  emails: readonly { id: string; ledgerPartyId: string }[],
+  scope: EmailPurchaseScope | null,
+  started?: Promise<PageStoredMeta>,
+): Promise<
+  Map<
+    string,
+    {
+      links: EmailPurchaseLink[];
+      linked: boolean;
+      accepted: boolean;
+      computedAt: string;
+    }
+  >
+> {
+  const stored = started
+    ? await started
+    : await loadStoredDerived(
+        db,
+        "email",
+        emails.map((row) => row.id),
+        ["relationshipFacts"],
+      );
+  const results = emails.flatMap((email) => {
+    const read = stored.get(email.id)?.get("relationshipFacts");
+    const parsed = emailRelationshipResult.safeParse(read?.value);
+    return read?.resultExists && read.computedAt && parsed.success
+      ? [{ email, read, result: parsed.data, computedAt: read.computedAt }]
+      : [];
+  });
+  const purchases = await loadRelationshipPurchaseGates(db, [
+    ...new Set(
+      results.flatMap(({ result }) =>
+        result.facts.map((fact) => fact.purchaseId),
+      ),
+    ),
+  ]);
+  return new Map(
+    results.map(({ email, result, computedAt }) => {
+      const globalLinks = foldScopedEmailPurchaseFacts({
+        facts: result.facts,
+        emailId: email.id,
+        ownerId: email.ledgerPartyId,
+        purchases,
+        scope: null,
+      });
+      return [
+        email.id,
+        {
+          links: scope
+            ? foldScopedEmailPurchaseFacts({
+                facts: result.facts,
+                emailId: email.id,
+                ownerId: email.ledgerPartyId,
+                purchases,
+                scope,
+              })
+            : globalLinks,
+          linked: globalLinks.some((link) => link.state === "linked"),
+          accepted: globalLinks.some((link) => link.accepted),
+          computedAt,
+        },
+      ];
+    }),
   );
 }

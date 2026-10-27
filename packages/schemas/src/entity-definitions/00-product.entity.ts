@@ -1,3 +1,5 @@
+import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
+import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
 import { PRODUCT_PRICING_INPUTS } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { imageAssociationStorage } from "./image-associations";
@@ -729,6 +731,7 @@ export default defineEntity(
             label: "Item prices",
             keys: ["price"],
             format: "currency",
+            requiresResults: ["price"],
           },
           {
             id: "expenseTotal",
@@ -1803,6 +1806,8 @@ Rules:
         },
         {
           key: "owners",
+          storedKey: "ownership",
+          storedPath: ["owners"],
           kind: "json",
           labelOverride: "Owner",
           display: {
@@ -1826,6 +1831,9 @@ Rules:
             ruleId: "product.effective-owners",
             description:
               "Each live inventory entry's effective owner, Household or Unknown; a product with no inventory shows the owner its single acquisition would hand down.",
+            sourceDependencies: [
+              { path: "storedResult", label: "Published ownership snapshot" },
+            ],
             projections: {
               list: "owners",
               detail: "owners",
@@ -1833,7 +1841,7 @@ Rules:
             },
           },
           validation: {
-            read: resolvedListSchema,
+            read: resolvedListSchema.nullable(),
             create: null,
             update: null,
           },
@@ -2296,6 +2304,13 @@ Rules:
       },
       // Stored derived values that are not list fields (ADR 0021).
       stored: {
+        ownership: {
+          compute: "product.ownership",
+          clock: "householdDay",
+          publishes: "derivedValue",
+          resultSchema: storedProductOwnership,
+          inputs: PRODUCT_OWNERSHIP_INPUTS,
+        },
         conversionCoverage: {
           compute: "product.conversionCoverage",
           inputs: [
@@ -2462,11 +2477,12 @@ Rules:
         stockTrackedDecided: { type: "boolean" },
         miscBucket: { type: "boolean" },
         unknownQuantityLines: { type: "boolean" },
-        priced: { type: "boolean" },
+        priced: { type: "boolean", requiresResult: "price" },
         // Any of the product's barcodes, not only the primary its column shows.
         anyGtin: { via: "barcodes.externalId" },
         effectiveOwner: {
           predicate: "idMulti",
+          requiresResult: "ownership",
           reason:
             "The effective owner is resolved from inventory and acquisition evidence outside SQL",
         },

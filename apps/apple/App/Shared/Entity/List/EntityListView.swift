@@ -193,6 +193,8 @@ struct EntityListView: View {
             }
         }
         .fieldGuideScreen()
+        .environment(\.fieldExplanationListFilters, model?.filters ?? initialFilters)
+        .safeAreaInset(edge: .top, spacing: 0) { resultMembershipStatus }
         .navigationTitle(descriptor.plural)
         #if os(macOS)
             .navigationSubtitle(Text(toolbarSubtitle))
@@ -599,7 +601,57 @@ struct EntityListView: View {
         let totals = descriptor.presentation.listTotals.map { total in
             meta.totalLabels?[total.id] ?? "Unavailable"
         }
-        return ([meta.totalCount.formatted()] + totals).joined(separator: " · ")
+        return ([countSummary(meta)] + totals).joined(separator: " · ")
+    }
+
+    private func countSummary(_ meta: ListPageMeta) -> String {
+        let count = ValueFormat.count(Double(meta.totalCount))
+        if model?.resultMembership == .unresolved { return "\(count) unresolved" }
+        if (meta.unresolvedCount ?? 0) > 0 { return "\(count) known" }
+        return count
+    }
+
+    @ViewBuilder
+    private var resultMembershipStatus: some View {
+        if let model {
+            let meta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
+            if model.resultMembership == .unresolved || (meta?.unresolvedCount ?? 0) > 0 {
+                HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                    Text(
+                        model.resultMembership == .unresolved
+                            ? "Unresolved records"
+                            : "Count incomplete · \(ValueFormat.count(Double(meta?.unresolvedCount ?? 0))) unresolved"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if model.canSelectResultMembership {
+                        Button {
+                            Task {
+                                await model.apply(
+                                    resultMembership: model.resultMembership == .unresolved
+                                        ? .known : .unresolved)
+                            }
+                        } label: {
+                            Text(
+                                model.resultMembership == .unresolved
+                                    ? "Show known matches" : "Show unresolved"
+                            )
+                            #if os(iOS)
+                                .frame(minHeight: 44)
+                            #endif
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("browse.\(key.rawValue).membership")
+                    }
+                }
+                .padding(.horizontal, FieldGuideTokens.Space.md)
+                .padding(.vertical, FieldGuideTokens.Space.xs)
+                .background(.background)
+                .overlay(alignment: .bottom) { Divider() }
+            }
+        }
     }
 
     private func refreshVisible(_ model: GenericEntityListModel) async {
@@ -1385,7 +1437,7 @@ struct EntityListView: View {
         let totals = descriptor.presentation.listTotals.compactMap {
             meta.totalLabels?[$0.id]
         }.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let summary = ([meta.totalCount.formatted()] + totals + (filtered ? ["filtered"] : []))
+        let summary = ([countSummary(meta)] + totals + (filtered ? ["filtered"] : []))
             .joined(separator: " · ")
         return Text(summary)
             .font(.caption)

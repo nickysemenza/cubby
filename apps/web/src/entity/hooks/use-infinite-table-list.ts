@@ -3,6 +3,7 @@ import type {
   ListGroupMembership,
   ListGroupSummary,
   ListNesting,
+  ListResultMembership,
 } from "@cubby/schemas/pagination";
 import {
   keepPreviousData,
@@ -40,6 +41,7 @@ interface UseInfiniteTableListOptions<
   groupBy?: ListGroupBy[];
   /** A declared tree's scope for the paged rows (`roots` when nested). */
   nesting?: ListNesting;
+  resultMembership?: ListResultMembership;
 }
 
 export interface InfiniteScrollControls<
@@ -67,6 +69,7 @@ interface UseInfiniteTableListReturn<
   pages: readonly TPage[] | undefined;
   data: TData[];
   totalCount: number;
+  unresolvedCount?: number;
   /** Server-computed full-filtered-set column sums (footer totals). */
   sums?: Record<string, number>;
   /** The declared list totals as the server words them, by total id. */
@@ -105,6 +108,7 @@ function useInfiniteTableListPlan<
   tableState,
   groupBy,
   nesting,
+  resultMembership,
 }: UseInfiniteTableListOptions<TFilters, TData, TPage>) {
   const { filters, sortParams, pagination, queryParams } =
     usePaginatedTableCore<TFilters, TData, TPage>({
@@ -126,12 +130,15 @@ function useInfiniteTableListPlan<
       if (queryParams.sort !== undefined) params.sort = sortParams;
       if (groupBy) params.groupBy = groupBy;
       if (nesting) params.nesting = nesting;
+      if (resultMembership === "unresolved")
+        params.resultMembership = resultMembership;
       return params;
     },
     [
       filters,
       groupBy,
       nesting,
+      resultMembership,
       pagination.pageSize,
       queryParams.sort,
       sortParams,
@@ -198,6 +205,7 @@ export function useInfiniteTableList<
   tableState,
   groupBy,
   nesting,
+  resultMembership,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData,
@@ -211,6 +219,7 @@ export function useInfiniteTableList<
       tableState,
       groupBy,
       nesting,
+      resultMembership,
     });
 
   // SAFETY: this adapter narrows TanStack's observer result to the exact
@@ -382,6 +391,7 @@ export function useInfiniteTableList<
     totalCount,
     sums: isPlaceholderData ? undefined : lastMeta?.sums,
     totalLabels: isPlaceholderData ? undefined : lastMeta?.totalLabels,
+    unresolvedCount: isPlaceholderData ? undefined : lastMeta?.unresolvedCount,
     groups,
     memberships,
     isLoading,

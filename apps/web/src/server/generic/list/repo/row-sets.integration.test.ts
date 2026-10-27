@@ -40,6 +40,7 @@ import {
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
@@ -754,10 +755,11 @@ describe("row-set filters", () => {
     };
     const unbudgeted = await project("Row-set unbudgeted project", null);
     const budgeted = await project("Row-set budgeted project", 500);
+    await drainStoredDerived(ctx.db);
     const fixture = new Set<string>([unbudgeted, budgeted]);
     const inFixture = (ids: string[]) => ids.filter((id) => fixture.has(id));
     // The retired predicate: the attention items of the picked rules.
-    const items = await computeAttentionItems(ctx.db);
+    const { items } = await computeAttentionItems(ctx.db);
     const retired = (filter: keyof typeof projectAttentionFilterTypes) =>
       sorted(
         items

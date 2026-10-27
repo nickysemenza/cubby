@@ -81,18 +81,12 @@ import {
   loadStoredDerived,
   storedDerivedSql,
 } from "~/server/generic/derived/repo/read";
-import {
-  type AnyOfValue,
-  ListContext,
-  sharedListPrepare,
-} from "~/server/generic/list/repo/field-compiler";
+import { ListContext } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { lexicalRelevance } from "~/server/generic/search/repo/search-lexical";
-
-import { inventoryEntryOwnershipFields } from "./mappers";
 
 // InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
 // so a newly introduced reference must be classified before kernel deletion
@@ -121,9 +115,9 @@ import { assertLiveTargets, inventoryAuditRow } from "./helpers";
 import { dbInventoryEntryToAPI, requireLoadedProductPricing } from "./mappers";
 import {
   assertIndividualOwner,
-  loadInventoryOwnerStates,
+  inventoryOwnerFilterSql,
+  loadStoredInventoryOwnershipTraces,
   loadInventoryOwnershipTraces,
-  selectInventoryIdsByOwner,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
 import { loadStoredInventoryValuations } from "./valuation";
@@ -187,7 +181,7 @@ const inventoryReader = createEntityReader({
     const [pricing, ownership, dataQualities, valuations, productImages] =
       await Promise.all([
         loadProductPricing(db, [row.product]),
-        loadInventoryOwnershipTraces(db, [row]),
+        loadStoredInventoryOwnershipTraces(db, [row]),
         loadDataQualities(db, "inventory", [row.id]),
 
         loadStoredInventoryValuations(db, [row.id]),
@@ -226,15 +220,17 @@ const storedValuation = storedDerivedSql(
 );
 
 // The ownership resolver runs once per request, only when it filters by owner.
-const effectiveOwners = sharedListPrepare(loadInventoryOwnerStates);
 
 const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
   population: liveProductAndLocation,
   derived: {
-    effectiveOwner: effectiveOwners.predicate<AnyOfValue>((states, value) => {
-      const ids = selectInventoryIdsByOwner(states, value.values);
-      return ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids);
-    }),
+    effectiveOwner: (value) =>
+      value.values.length === 0
+        ? sql`false`
+        : sql`${inventoryOwnerFilterSql()} IN (${sql.join(
+            value.values.map((owner) => sql`${owner}`),
+            sql`, `,
+          )})`,
     locationRole: gapCondition("inventory", "inventory_unknown_location"),
     valuation: storedValuation,
     // Amount is stored as a unit + value pair: group by unit, then by size.
@@ -365,9 +361,6 @@ export const inventoryentryListRead = async (
     read: {
       media: true,
       bindings: (bind) => {
-        const ownership = bind.batch(({ rows }) =>
-          loadInventoryOwnershipTraces(db, rows),
-        );
         const references = bind.batch(async ({ rows }) => {
           const [related, prices] = await Promise.all([
             getDb(db).query.inventoryEntry.findMany({
@@ -402,19 +395,9 @@ export const inventoryentryListRead = async (
           bind(rawInventoryList.pick({ valuation: true }), (row) => ({
             valuation: row.valuation,
           })),
-          ownership.fields(
-            rawInventoryList.pick({
-              ownerLedgerPartyId: true,
-              effectiveOwnership: true,
-              fieldResolutions: true,
-            }),
-            (row, loaded) => {
-              const trace = loaded.get(row.id);
-              if (!trace)
-                throw new Error("Inventory ownership trace was not loaded");
-              return inventoryEntryOwnershipFields(trace);
-            },
-          ),
+          bind(rawInventoryList.pick({ fieldResolutions: true }), () => ({
+            fieldResolutions: {},
+          })),
           references.fields(
             rawInventoryList.pick({
               product: true,

@@ -2,6 +2,7 @@ import {
   storedFieldDecision,
   type StoredFieldDecision,
 } from "@cubby/schemas/derived-value";
+import { storedResultSchemas } from "@cubby/schemas/entity-stored-derived";
 
 /**
  * The compute seam for stored derived values. An adapter receives a batch of
@@ -39,6 +40,21 @@ export function computedDecision(
   if ((decision.outcome.kind === "value") !== hasValue)
     throw new Error("Derived outcome does not match its published value");
   return decision;
+}
+
+/** Both publication and live comparison validate the declaration's complete result. */
+export function validateComputedResult({
+  target,
+  computed,
+}: {
+  target: string;
+  computed: DerivedComputed;
+}): DerivedComputed & { readonly decision: StoredFieldDecision } {
+  const schema = storedResultSchemas[target];
+  const selected = schema
+    ? { ...computed, value: schema.parse(computed.value) }
+    : computed;
+  return { ...selected, decision: computedDecision(selected) };
 }
 
 export type DerivedCompute = (

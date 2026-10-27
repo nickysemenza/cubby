@@ -15,6 +15,7 @@ import {
   DEFAULT_PAGE_SIZE,
   listGroupByDimensionsSchema,
   listNestingSchema,
+  listResultMembership,
   MAX_PAGE_SIZE,
   MAX_SORTS,
   mcpPaginationFields,
@@ -94,6 +95,7 @@ const listFields = {
     })
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),
+  resultMembership: listResultMembership.optional(),
   nesting: listNestingSchema
     .optional()
     .describe(
@@ -132,6 +134,7 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       pagination: mcpListPagination,
       groupBy: listFields.groupBy,
       nesting: listFields.nesting,
+      resultMembership: listFields.resultMembership,
       ...mcpReadSelectionFields,
     });
   },

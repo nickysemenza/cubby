@@ -610,7 +610,7 @@ describe("connection preparation and publication authority", () => {
       }),
     );
     const before = await readWorkQueueWith(
-      async () => [],
+      async () => ({ selections: [], incompleteProjectIds: [] }),
       ctx.db,
       null,
       workQueueHouseholdInput.parse({ pageSize: 100 }),
@@ -629,7 +629,7 @@ describe("connection preparation and publication authority", () => {
       .where(eq(product.id, item.entityId));
     expect(await readEntityConnections(ctx.db, source)).toEqual([]);
     const after = await readWorkQueueWith(
-      async () => [],
+      async () => ({ selections: [], incompleteProjectIds: [] }),
       ctx.db,
       null,
       workQueueHouseholdInput.parse({ pageSize: 100 }),

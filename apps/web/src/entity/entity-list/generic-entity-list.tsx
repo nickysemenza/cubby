@@ -627,9 +627,41 @@ function ServerListBody({
             data-list-status-group=""
             className="ml-auto flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
           >
+            {(list.resultMembership === "unresolved" ||
+              (list.unresolvedCount ?? 0) > 0) && (
+              <div className="flex flex-wrap items-center gap-1">
+                <output className="text-muted-foreground">
+                  {list.resultMembership === "unresolved"
+                    ? "Showing unresolved records"
+                    : `Count incomplete · ${formatCount(list.unresolvedCount ?? 0)} unresolved`}
+                </output>
+                <Button
+                  variant="link"
+                  size="xs"
+                  onClick={() =>
+                    list.setResultMembership(
+                      list.resultMembership === "unresolved"
+                        ? "known"
+                        : "unresolved",
+                    )
+                  }
+                >
+                  {list.resultMembership === "unresolved"
+                    ? "Show known matches"
+                    : "Show unresolved"}
+                </Button>
+              </div>
+            )}
             <ListTotalSummary
               totals={entitySummary[entity].list.totals}
               labels={list.totalLabels}
+              scopeLabel={
+                list.resultMembership === "unresolved"
+                  ? "Unresolved records"
+                  : (list.unresolvedCount ?? 0) > 0
+                    ? "Known matches"
+                    : undefined
+              }
             />
             {sweepAction}
             <div data-workbench-status className="min-w-0" />

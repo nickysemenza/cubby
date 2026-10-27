@@ -10,12 +10,15 @@ import {
 } from "@cubby/schemas/search";
 
 import { USDAClient } from "~/server/clients/usda";
+import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
+import { expenseDerivedComputes } from "~/server/domains/expense/repo/derived";
 import { inventoryDerivedComputes } from "~/server/domains/inventory/repo/derived";
 import { locationDerivedComputes } from "~/server/domains/location/repo/derived";
 import { productDerivedComputes } from "~/server/domains/product/repo/derived";
 import { projectDerivedComputes } from "~/server/domains/project/repo/derived";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import { prepareRecipeRefresh } from "~/server/domains/run/service/derived-refresh";
+import { shipmentDerivedComputes } from "~/server/domains/shipment/repo/event-summary";
 import { requestUsdaRelease } from "~/server/domains/usda-release/service/client";
 import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
 import {
@@ -103,8 +106,11 @@ const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(
 export const derivedComputes: DerivedComputes = {
   ...productDerivedComputes,
   ...inventoryDerivedComputes,
+  ...expenseDerivedComputes,
+  ...emailDerivedComputes,
   ...locationDerivedComputes,
   ...projectDerivedComputes,
+  ...shipmentDerivedComputes,
   ...qualityDerivedComputes,
   ...searchComputes,
   "recipe.totals": recipeTotalsSink,

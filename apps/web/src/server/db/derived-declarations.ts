@@ -21,6 +21,7 @@ export interface DerivedInput {
   readonly except: readonly string[];
   /** A join path from the matched value to this entity's ids. */
   readonly path: readonly DerivedPathStep[] | null;
+  readonly targetWhere: Readonly<Record<string, string | null>> | null;
   /** The matched column is JSON; values are `key` of the array at `array`. */
   readonly json: {
     readonly array?: readonly string[];
@@ -68,6 +69,7 @@ export interface StoredDerivedDeclaration {
   readonly target: string;
   readonly table: string;
   readonly compute: string;
+  readonly clock: "householdDay" | null;
   /**
    * `derivedValue`: published as a `DerivedValue` row, with per-row meta in the
    * envelope. `ownTable`: written to the value's own table (search documents,
@@ -97,6 +99,7 @@ const storedEntry = z.object({
   publishes: z.enum(["derivedValue", "ownTable"]),
   stored: z.object({
     compute: z.string(),
+    clock: z.literal("householdDay").optional(),
     inputs: z.array(
       z.object({
         table: z.string(),
@@ -105,6 +108,7 @@ const storedEntry = z.object({
         where: z.record(z.string(), z.string()).optional(),
         except: z.array(z.string()).optional(),
         path: z.array(pathStep).optional(),
+        targetWhere: z.record(z.string(), z.string().nullable()).optional(),
         json: z
           .object({ array: z.array(z.string()).optional(), key: z.string() })
           .optional(),
@@ -169,6 +173,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
           target: `${entry.entity}.${entry.key}`,
           table: entry.table,
           compute: entry.stored.compute,
+          clock: entry.stored.clock ?? null,
           publishes: entry.publishes,
           sort: sortTypeOf(entry.type),
           inputs: entry.stored.inputs.map((input) => {
@@ -181,6 +186,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               where: input.where ?? null,
               except: input.except ?? [],
               path: input.path ?? null,
+              targetWhere: input.targetWhere ?? null,
               json: input.json ?? null,
             };
           }),
@@ -242,7 +248,10 @@ function storedDerivedByTarget(
 
 /** Whether a changed input row marks records directly or through the drain. */
 export const isFanoutInput = (input: DerivedInput) =>
-  input.entityColumn !== "id" || input.path !== null || input.json !== null;
+  input.entityColumn !== "id" ||
+  input.path !== null ||
+  input.json !== null ||
+  input.targetWhere !== null;
 
 /** A fanout mark names its input: `<entity>.<key>@<input index>`. */
 export const fanoutTarget = (target: string, inputIndex: number) =>

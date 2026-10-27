@@ -13,6 +13,7 @@ const governedFields = (entity: CompiledEntity) =>
   entity.fieldModel.fields.filter(
     (field) =>
       field.resolution !== null ||
+      field.storedKey !== null ||
       field.provenance?.kind === "derived" ||
       (field.control?.suggest !== null &&
         field.control?.suggest !== undefined) ||

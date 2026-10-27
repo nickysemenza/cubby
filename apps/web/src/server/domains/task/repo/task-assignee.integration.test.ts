@@ -111,7 +111,17 @@ describe("member assignee inheritance", () => {
       fieldResolutions: { assigneeId: { storedValue: null } },
     });
     await updateTask(ctx.db, parent.output.id, { assigneeId: null }, ctx.actor);
-    expect(await read()).toMatchObject({ assigneeId: null });
+    expect(await read()).toMatchObject({
+      assigneeId: null,
+      fieldResolutions: {
+        assigneeId: {
+          mode: "inherit",
+          emptyReason: "explicit_none",
+          source: "Parent task",
+          sourceEntity: { entityKind: "task", entityId: parent.output.id },
+        },
+      },
+    });
     await updateTask(
       ctx.db,
       parent.output.id,

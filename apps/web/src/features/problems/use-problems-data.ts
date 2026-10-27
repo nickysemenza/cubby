@@ -80,8 +80,11 @@ export function useProblemsData(opts?: ProblemsDataOptions) {
         freshness: upcFreshness,
         ...upcSections
       } = upc.data ?? {};
-      const { sectionTotals: trackerTotals, ...trackerSections } =
-        tracker.data ?? {};
+      const {
+        sectionTotals: trackerTotals,
+        incompleteProjectIds,
+        ...trackerSections
+      } = tracker.data ?? {};
       // Each group's own shape supplies its keys, so a group that hasn't
       // resolved yet falls through to the derived empties rather than to 42
       // hand-written `?? []` defaults that a new detector would have to be
@@ -135,6 +138,7 @@ export function useProblemsData(opts?: ProblemsDataOptions) {
       return {
         problems: {
           ...sections,
+          incompleteProjectIds: incompleteProjectIds ?? [],
           sectionTotals,
           upcFreshness,
           conversionCoverageFreshness,

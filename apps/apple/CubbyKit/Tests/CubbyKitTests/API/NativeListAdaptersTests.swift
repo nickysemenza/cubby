@@ -23,6 +23,18 @@ private final class NativeListStub: URLProtocol, @unchecked Sendable {
 @Suite("Native list adapters", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct NativeListAdaptersTests {
+    @Test func resultMembershipKeepsFiltersAndOmitsTheOrdinaryDefault() throws {
+        let descriptor = EntityCatalog[.product]
+        let filters = EntityFilterState(["ownerLedgerPartyId": ["@household"]])
+        let ordinary = try descriptor.listInput(page: 1, pageSize: 20, sort: nil, filters: filters)
+        let unresolved = try descriptor.listInput(
+            page: 1, pageSize: 20, sort: nil, filters: filters, resultMembership: .unresolved)
+        #expect(ordinary["resultMembership"] == nil)
+        #expect(unresolved["resultMembership"] == .string("unresolved"))
+        #expect(unresolved["filters"] == ordinary["filters"])
+        #expect(unresolved["pagination"] == ordinary["pagination"])
+    }
+
     private func makeClient() throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")

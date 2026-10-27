@@ -12,7 +12,7 @@
   "apps/web/src/server/db/computed/source-transaction-settlement-sql.ts": 4,
   "apps/web/src/server/db/helpers/relations.ts": 1,
   "apps/web/src/server/domains/connection/repo/email-connections.ts": 2,
-  "apps/web/src/server/domains/email/repo/email-purchase-links.ts": 5,
+  "apps/web/src/server/domains/email/repo/email-purchase-links.ts": 3,
   "apps/web/src/server/domains/email/repo/email-sql.ts": 13,
   "apps/web/src/server/domains/expense/repo/analyze.ts": 2,
   "apps/web/src/server/domains/expense/repo/expense-category-resolution.ts": 14,

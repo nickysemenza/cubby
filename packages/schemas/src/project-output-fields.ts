@@ -45,3 +45,15 @@ export const projectRollup = projectExpenseTotals.extend({
   }),
 });
 export type ProjectRollup = z.infer<typeof projectRollup>;
+
+/** Coherent authoritative fold published once for Project readers (ADR 0021). */
+export const projectRollupResult = z.object({
+  rollup: projectRollup,
+  dateWindow: projectDateWindow,
+  taskProgress: z.string(),
+  ownContentDates: z.object({
+    contentStart: plainDate.nullable(),
+    contentEnd: plainDate.nullable(),
+  }),
+});
+export type ProjectRollupResult = z.infer<typeof projectRollupResult>;

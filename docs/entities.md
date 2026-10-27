@@ -2676,9 +2676,87 @@ search documents, recipe totals and conversion coverage. Each is declared once:
 `model.derived.<key>.stored` for a list field, `model.stored.<key>` for a value
 that is not a list field, a scored entity's `dataQuality` block, or a searchable
 entity's `search` setting. Non-list `model.stored` entries default to
-`publishes: "sink"`; `publishes: "value"` stores their output in `DerivedValue`
+`publishes: "ownTable"`; `publishes: "derivedValue"` stores their output in `DerivedValue`
 without exposing a list column. Declarations are generated into
 `entity-stored-derived.gen.ts`; `server/db/derived-declarations.ts` parses them.
+
+A stored result may declare `resultSchema` and supply several scalar fields through
+`model.derived.<field>.fromResult: { key, path }`. Generation checks each path and
+scalar type against that schema. These fields share the result's publication,
+provenance, computation time and work status; a null member is a successful empty
+value, while an absent member is unavailable. The generic list reader loads their
+payloads in one page batch and the query compiler projects the same paths for
+sorting, filtering and totals. Generation emits the declared result schemas for
+the common preparation and live-comparison validator; a malformed target backs
+off without poisoning another target's publication. Shipment event summaries retain timeline
+reconciliation and publish count, dates, span and label together; normal list
+reads do not reconcile observations or prepare the live Shipment population.
+
+A field can declare `storedProjection: true` with its `storedKey` when it cheaply
+folds a published result with current context. Its raw reader supplies a private
+`storedProjectionVersions` witness for the publication used. The canonical
+constructor accepts the projected value only when that witness matches the
+loaded result's computation time; a concurrent publication leaves the value
+unavailable instead of attaching another revision's provenance. The witness is
+never part of public web, Apple or MCP reads. A `storedPath` supplies the default
+unscoped live comparison; contextual projections without one report that a
+standalone comparison is unavailable.
+
+Deferred source fanout is real queued work even before its dependent record
+endpoints have been expanded. Page metadata conservatively marks snapshots for
+that declared target stale/pending while such fanout exists. The target lookup
+is materialized once per requested key in the page batch; saves still do not
+expand dependents. After expansion, per-record marks determine status. Clock
+expiry alone remains stale without fabricating pending work.
+
+An Inventory owner's current decisive assignment wins immediately. Product's
+owner collection is a dependent fold: its display and membership use the same
+published collection until the drain republishes it. An Inventory edit can
+therefore precede the Product collection update; keep its stale/work disclosure
+instead of mixing live explicit members with a cached collection and mismatched
+provenance. Ordinary-edit latency against the five-second target and bulk catch-up
+are measured separately in #3420.
+
+Project dashboard cards read the same stored rollups as the canonical Project
+list. The portfolio totals retain live financial scope selection and allocation;
+the dashboard's date chips and hidden-by-date counts retain their existing exact
+own-content date predicates. Those current portfolio/scope reads can differ
+briefly from a card's disclosed stale snapshot. They are not a replacement cache
+or a settlement authority. Work-queue tool-ownership diagnostics likewise need
+current date windows, but load the date policy alone rather than folding live
+spend/task rollups. Attention consumes stored expensive inputs and compares
+household dates live. Detailed cost and latency evidence, including Task's live
+inheritance fields, belongs to #3420.
+
+Email declares one typed `relationshipFacts` result. Canonical candidate discovery
+and retained/reviewed evidence compute once per batch. Filters, sorts and page
+hydration read those facts; current Purchase liveness, account ownership and the
+requested singular scope remain separate gates. Pair folding still precedes
+scope selection so replacement actions retain out-of-scope links. Sender-proof
+Vendor inclusion remains independent. Import progress reads the current Run over
+the selected accepted flags; Run reporting does not invalidate relationship facts.
+Purchase candidate edits and source-identity changes conservatively expand to
+live Emails in the background so new matches need no existing cached pair.
+Negative boolean filters require an available publication; missing facts cannot
+match Unlinked. Ordinary page reads do not run source matching or accepted-family
+resolution. Retention guards and review commands continue reading authoritative
+live evidence.
+
+Stored results whose canonical policy depends on today's household date declare
+`clock: "householdDay"`. A publication from an earlier household day reads as
+stale even before work is queued. The existing minute drain discovers expired
+publications when its ready queue is empty, marks them at reconciliation priority
+and captures its own invalidation. Discovery preserves existing tickets, retry
+errors and member-edit priority; it adds no per-record timer or separate Job.
+Freshness and pending work remain independent. Inventory and Product acquisition
+ownership use this clock because future acquisitions become eligible with time.
+
+On-demand field explanations expose a stored root as `storedResult` in the
+source-dependency projection. A manifest can bind evidence paths there while
+ordinary field paths project only compact values. The explanation reads the root
+and displayed envelope in one MVCC snapshot; it labels live recomputation as a
+separate comparison. Expense beneficiary portions use this binding to keep
+contributor references out of ordinary list payloads.
 
 A declaration names its compute adapter and its `inputs`. An input pairs one
 column of a table with the entity column it equals: `{ id: "id" }` is the
@@ -2686,7 +2764,7 @@ record's own row, `{ productId: "id" }` a child row pointing at it, and
 `{ id: "productId" }` a referenced row whose dependents the drain finds. An
 input may limit the columns that matter (`columns`), skip its own output
 columns (`except`), admit only rows holding `where` values, walk a join `path`,
-or read record ids from a JSON object (`json: { key }`) or array
+select fixed target rows with `targetWhere` during deferred fanout, or read record ids from a JSON object (`json: { key }`) or array
 (`json: { array, key }`). A path step may select a UUID from its `to` JSON
 object with `jsonKey`, or compare its `from` object’s UUID with
 `fromJsonKey`; malformed JSON references contribute no records. `dependsOn` names other stored
@@ -2733,8 +2811,12 @@ other computation failures, before the publication batch is assembled. The Job's
 and publishes prepared values; newly expanded targets compute on a later page.
 Publication writes only marks whose ticket is unchanged since the claim, so an
 edit that lands during compute keeps its record dirty, and a deleted-and-reset
-mark cannot be cleared by an older page. Only changed values propagate to
-declared dependents, so cascades stop at the first unchanged hop. Sink adapters
+mark cannot be cleared by an older page. Publication also retains a target's
+previous result and direct marks while source fanout tickets not observed before
+preparation remain pending: the dependent ticket alone cannot detect a source
+edit that has not expanded yet. This guard applies to value and sink adapters,
+including deferred fanout retries. Only changed values propagate to declared
+dependents, so cascades stop at the first unchanged hop. Sink adapters
 return only records whose output or readiness changed; a recipe recalculation
 that only advances its computation timestamp does not propagate. A failing
 target backs off (30 seconds doubling to 15 minutes) and other targets publish.
@@ -2779,8 +2861,39 @@ not a production rebuild or exhaustive coverage of every input branch.
 
 Reads never compute or repair: lists compile a stored field to one primary-key
 lookup (`storedDerivedSql`) for rows, sort, filter and footer totals, and a
-missing value reads as unknown, never zero. List pages and record reads carry
-one typed envelope per governed field. A field whose public name differs from
+missing value reads as unknown, never zero. Product ownership membership and
+cached boolean filter predicates retain SQL NULL for an unavailable publication,
+distinct from a known false match. Their ordinary WHERE reads select only true
+matches. Contextual values and predicates declare `requiresResult` to bind list
+membership to an existing stored result; generation rejects a missing result
+key. A predicate adapter returns SQL NULL only while membership is unresolved,
+so current authoritative decisions can still settle membership immediately.
+Row-set paths can bind `requiresResult` too: a known matching row settles an
+include immediately, while absence remains unresolved until the result exists.
+Presence-none and exclusions use the same availability contract. Scalar adapters
+distinguish a published empty value from a missing result by the declared
+result's availability. The compiler evaluates both certain and
+possible membership; exclusions negate the opposite bound, so an unresolved
+include cannot become a known exclusion. `unresolvedWhere` selects possible
+matches that are not certain without loading the population into memory.
+For a requested filter bound to a result, the shared list read reports the
+additional candidates in `meta.unresolvedCount`; `meta.totalCount` remains the
+known-match count. No extra membership count query runs for filters without
+declared result dependencies. Published unknown-attribution portions are known
+outcomes, not unresolved computations.
+`entity.list.resultMembership: "unresolved"` reads those candidates through the
+same filters, sorting, paging and field envelopes. The default `known` mode
+selects only certain matches. Selection-ID reads carry the same mode so bulk
+selection cannot silently switch populations. The web list's status strip
+discloses an incomplete count and switches between known and unresolved records;
+the query scope changes with the mode and retires the previous selection.
+Declared totals can bind `requiresResults` to the stored results needed for
+their contributions. A missing contribution or unresolved filter membership
+marks its sum keys in `meta.incompleteSums`; the numeric sums omit those keys,
+and total labels identify the available subtotal as known and incomplete.
+Current authoritative numeric assignments can settle a contribution immediately.
+An old own result suppressed after reset cannot make that contribution complete.
+List pages and record reads carry one typed envelope per governed field. A field whose public name differs from
 its existing cache key declares `storedKey`; the compiler requires a published
 stored value and the serializer carries that snapshot's value, provenance,
 freshness and work together. Pure domain projections over selected envelopes

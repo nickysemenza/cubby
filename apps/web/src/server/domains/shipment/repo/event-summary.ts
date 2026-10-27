@@ -1,70 +1,58 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { shipment, shipmentObservation } from "~/server/db/schema";
 import {
   reconcileShipmentTimeline,
   shipmentEventSummary,
 } from "~/server/domains/shipment/repo/timeline";
-import { listPrepare } from "~/server/generic/list/repo/field-compiler";
+import type {
+  DerivedCompute,
+  DerivedComputed,
+} from "~/server/generic/derived/repo/compute";
 
-type Summary = ReturnType<typeof shipmentEventSummary>;
-type ShipmentId = typeof shipment.$inferSelect.id;
-
-/** Page reads are bounded; sorting prepares the live population once before pagination. */
-export async function loadShipmentEventSummaries(
-  db: Database | DrizzleTransaction,
-  ids?: ShipmentId[],
-): Promise<Map<string, Summary>> {
-  if (ids?.length === 0) return new Map();
+/** Reconcile once per claimed batch; ordinary reads never load observations. */
+const eventSummaryCompute: DerivedCompute = async (db, ids) => {
+  if (ids.length === 0) return new Map();
+  const shipmentIds = ids.map((id) => parseEntityId("shipment", id));
   const records = await unwrapDb(db)
     .select({
-      id: shipmentObservation.id,
-      shipmentId: shipmentObservation.shipmentId,
+      id: shipment.id,
+      observationId: shipmentObservation.id,
       event: shipmentObservation.event,
     })
-    .from(shipmentObservation)
-    .innerJoin(shipment, eq(shipment.id, shipmentObservation.shipmentId))
-    .where(
+    .from(shipment)
+    .leftJoin(
+      shipmentObservation,
       and(
-        notDeleted(shipment),
+        eq(shipment.id, shipmentObservation.shipmentId),
         isNull(shipmentObservation.supersededById),
-        ids ? inArray(shipment.id, ids) : undefined,
       ),
-    );
-  const groups = new Map<string, typeof records>();
+    )
+    .where(and(notDeleted(shipment), inArray(shipment.id, shipmentIds)));
+  const groups = new Map<
+    string,
+    Parameters<typeof reconcileShipmentTimeline>[0][number][]
+  >();
   for (const record of records) {
-    const group = groups.get(record.shipmentId) ?? [];
-    group.push(record);
-    groups.set(record.shipmentId, group);
+    const group = groups.get(record.id) ?? [];
+    if (record.observationId && record.event)
+      group.push({
+        id: record.observationId,
+        event: record.event,
+        superseded: false,
+      });
+    groups.set(record.id, group);
   }
-  return new Map(
-    [...groups].map(([id, events]) => [
-      id,
-      shipmentEventSummary(
-        reconcileShipmentTimeline(
-          events.map((event) => ({ ...event, superseded: false })),
-        ),
-      ),
-    ]),
-  );
-}
+  const out = new Map<string, DerivedComputed>();
+  for (const [id, observations] of groups) {
+    const value = shipmentEventSummary(reconcileShipmentTimeline(observations));
+    out.set(id, { value, sort: null });
+  }
+  return out;
+};
 
-export const shipmentEventSummaries = listPrepare((db) =>
-  loadShipmentEventSummaries(db),
-);
-
-export const shipmentSummarySort = (
-  key: "firstEventDate" | "lastEventDate" | "eventSpanHours" | "eventCount",
-) =>
-  shipmentEventSummaries.value((summaries) => {
-    const values = Object.fromEntries(
-      [...summaries].map(([id, summary]) => {
-        const value = summary[key];
-        return [id, typeof value === "string" ? Date.parse(value) : value];
-      }),
-    );
-    const scalar = sql`((${JSON.stringify(values)}::jsonb ->> (${shipment.id})::text)::double precision)`;
-    return key === "eventCount" ? sql`coalesce(${scalar}, 0)` : scalar;
-  });
+export const shipmentDerivedComputes = {
+  "shipment.eventSummary": eventSummaryCompute,
+};

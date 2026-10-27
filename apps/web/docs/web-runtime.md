@@ -251,10 +251,16 @@ when neither the URL nor a caller supplies an override. SSR preloads, secondary
 lists and mounted table state share the same lightweight sort-roster owner.
 Lexical search still omits the ordinary default sort so relevance remains authoritative.
 
-Every entity page reads complete rows, exact counts, full-filter totals and a
-canonical `fields` envelopes in one `entity.list` request. Batch shared row bindings
-inside that read and run independent loads concurrently. Stored metadata uses
-internal page IDs. Columns,
+Every entity page reads complete rows, counts with membership completeness,
+full-filter totals and canonical `fields` envelopes in one `entity.list` request.
+When `meta.unresolvedCount` is positive, the displayed count covers known matches;
+the list status strip explains the incomplete count and offers the unresolved
+records under the same filters. Changing `resultMembership` changes the query
+and bulk-selection scope, without removing the member's filters. Totals over
+known matches use that caption rather than claiming to cover unresolved records.
+
+Batch shared row bindings inside that read and run independent loads concurrently.
+Stored metadata uses internal page IDs. Columns,
 actions, captions and providers consume complete rows; no client field-readiness
 tracking, enrichment patches, generation retries or separate summary requests.
 Loading and errors apply to the whole page. Normal query cancellation, stale

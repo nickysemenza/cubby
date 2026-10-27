@@ -46,6 +46,7 @@ const qualityField = (entityKey: string): EntityField => ({
   description: null,
   readKey: DATA_QUALITY_FIELD,
   storedKey: null,
+  storedPath: null,
   reference: null,
   provenance: {
     kind: "derived",
@@ -128,6 +129,7 @@ export const compileDataQuality = (
             ...field,
             readKey: null,
             storedKey: null,
+            storedPath: null,
             provenance: null,
             validation: { read: null, create: null, update: null },
             explanation: {
@@ -185,6 +187,7 @@ export const compileDataQuality = (
     description: null,
     readKey: null,
     storedKey: null,
+    storedPath: null,
     reference: null,
     provenance,
     explanation: {

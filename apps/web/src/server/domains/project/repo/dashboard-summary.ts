@@ -59,6 +59,7 @@ import { EMPTY_PROJECT_SUBTREE_ROLLUP, hydrateProjectRow } from "./helpers";
 import {
   collectDescendantIds,
   loadProjectSubtreeRollups,
+  loadStoredProjectRollups,
   projectCompletionYear,
 } from "./subtree";
 
@@ -94,13 +95,10 @@ export async function projectDashboardSummary(
   db: Database,
   filters: ProjectDashboardSummaryInput,
 ): Promise<RawProjectDashboardSummaryOut> {
-  // ONE whole-tree load for the entire request. `computeAttentionItems` is
-  // global by construction (see attention.ts) and used to re-derive exactly
-  // this — same tree query, same batched project aggregates — so it is handed
-  // the bundle rather than loading its own. Whole-tree rather than
-  // page-scoped is free here for the same reason: attention already needed
-  // every id, and a superset never changes a page row's subtree numbers.
+  // Portfolio money and matched subtree scope remain authoritative live reads.
+  // Attention loads its published expensive inputs independently.
   const subtreeLoad = await loadProjectSubtreeRollups(db);
+  const cardLoad = await loadStoredProjectRollups(db, subtreeLoad);
   const { subtreeRollups, dateWindows, allRows } = subtreeLoad;
   const completionIds = filters.completionYear
     ? allRows
@@ -311,7 +309,7 @@ export async function projectDashboardSummary(
     // Expense.date is required; only Projects and Tasks can be hidden solely
     // because their date is missing.
     Promise.resolve(0),
-    computeAttentionItems(db, { preloaded: subtreeLoad, projectIds: ids }),
+    computeAttentionItems(db, { projectIds: ids }),
     expandedProjectIds.length > 0
       ? committedRead
           .select({
@@ -329,7 +327,7 @@ export async function projectDashboardSummary(
   const projects = (await withProjectExternalUrls(db, projectRows)).map((row) =>
     // SAFETY: `row` came from `projectRows`, whose ids (`ids`) `dataQualities`
     // was loaded for.
-    hydrateProjectRow(row, subtreeLoad, deps, dataQualities.get(row.id)!),
+    hydrateProjectRow(row, cardLoad, deps, dataQualities.get(row.id)!),
   );
 
   // Every non-done top-level task on a scoped project — exactly
@@ -487,7 +485,8 @@ export async function projectDashboardSummary(
     projects,
     taskStatusByProject: [...statusByProject.values()],
     nextTasks,
-    attention,
+    attention: attention.items,
+    attentionIncompleteProjectIds: attention.incompleteProjectIds,
     filterOptions: { kinds, locations, years, completionYears },
     hiddenByDate: {
       projects: undatedProjectCount,

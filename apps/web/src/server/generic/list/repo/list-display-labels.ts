@@ -198,12 +198,16 @@ const listTotalLabel = (
 export const listTotalLabels = (
   entity: keyof typeof entitySummary,
   sums: Readonly<Record<string, number>> | undefined,
+  incompleteSums?: readonly string[],
 ): Record<string, string> | undefined => {
   if (!sums) return undefined;
   const labels: Record<string, string> = {};
   for (const total of entitySummary[entity].list.totals) {
     const label = listTotalLabel(total, sums);
-    if (label !== null) labels[total.id] = label;
+    if (label !== null)
+      labels[total.id] = total.keys.some((key) => incompleteSums?.includes(key))
+        ? `Incomplete · ${label} known`
+        : label;
   }
   return labels;
 };

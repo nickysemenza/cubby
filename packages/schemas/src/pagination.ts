@@ -332,6 +332,9 @@ export const listNestingSchema = z
   ])
   .meta({ id: "ListNesting" });
 export type ListNesting = z.infer<typeof listNestingSchema>;
+/** Select known matches or candidates awaiting a declared result. */
+export const listResultMembership = z.enum(["known", "unresolved"]);
+export type ListResultMembership = z.infer<typeof listResultMembership>;
 /** A tree row's directly nested children that match the list's filters. */
 export const listChildCountSchema = z.number().int().nonnegative().optional();
 
@@ -340,6 +343,10 @@ export function buildPaginatedResponse<T>(
   data: T[],
   count: number,
   aggregates: {
+    /** Additional candidates whose filter membership awaits a derived result. */
+    unresolvedCount?: number;
+    /** Sum keys with unpublished required contributors; numeric subtotals are withheld. */
+    incompleteSums?: string[];
     /**
      * Server-computed column aggregates over the FULL filtered set (not the
      * page), keyed by column id — e.g. `{ price: 1234.5 }`. Surfaced so table
@@ -359,7 +366,16 @@ export function buildPaginatedResponse<T>(
     pageSize: pagination.pageSize,
     totalCount: count,
   };
-  if (aggregates.sums) meta.sums = aggregates.sums;
+  if (aggregates.sums)
+    meta.sums = Object.fromEntries(
+      Object.entries(aggregates.sums).filter(
+        ([key]) => !aggregates.incompleteSums?.includes(key),
+      ),
+    );
+  if (aggregates.incompleteSums?.length)
+    meta.incompleteSums = aggregates.incompleteSums;
+  if (aggregates.unresolvedCount !== undefined)
+    meta.unresolvedCount = aggregates.unresolvedCount;
   if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
   if (aggregates.groups) meta.groups = aggregates.groups;
   if (aggregates.memberships) meta.memberships = aggregates.memberships;
@@ -377,6 +393,8 @@ export const paginatedMetaSchema = z
     pageIndex: z.number().int().nonnegative(),
     pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
     totalCount: z.number().int().nonnegative(),
+    unresolvedCount: z.number().int().nonnegative().optional(),
+    incompleteSums: z.array(z.string()).optional(),
     sums: z.record(z.string(), z.number()).optional(),
     totalLabels: z.record(z.string(), z.string()).optional(),
     groups: z.array(listGroupSummarySchema).optional(),

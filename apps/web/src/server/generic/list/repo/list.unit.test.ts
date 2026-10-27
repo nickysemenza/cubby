@@ -12,6 +12,7 @@ describe("listScaffold", () => {
   const projects: NestedListScaffold<"project"> = {
     entity: "project",
     context: nestedContext,
+    hasResultFilters: () => false,
     matchingIds: () =>
       sql`(SELECT "Project"."id" FROM "Project" WHERE "Project"."name" = 'Stub scope')`,
   };

@@ -9,11 +9,9 @@ import {
   SHORTCODE_TABLE,
   TITLE_FIELD_COLUMN,
 } from "~/server/generated/shortcode-tables.gen";
+import { LABEL_COLUMN_OVERRIDES } from "~/server/generic/entity-graph/repo/record-label";
 
-import {
-  LABEL_COLUMN_OVERRIDES,
-  resolveTitleFieldColumn,
-} from "./shortcode-resolver";
+import { resolveTitleFieldColumn } from "./shortcode-resolver";
 
 /**
  * `DISPLAY_NAME_COLUMN` names the Drizzle column `lookupEntityLabels` selects

@@ -7,6 +7,8 @@ import { fieldResolutionSourceSchema } from "./field-resolution";
 
 export const fieldExplanationInput = entityRefSchema.extend({
   field: z.string().min(1),
+  /** The singular list scope whose contextual value is being explained. */
+  scope: entityRefSchema.optional(),
   surface: z.enum(["list", "detail", "summary"]).default("detail"),
 });
 

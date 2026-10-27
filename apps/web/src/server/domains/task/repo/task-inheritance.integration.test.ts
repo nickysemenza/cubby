@@ -213,6 +213,35 @@ describe("task inheritance", () => {
       name: "Dependent task",
       projectId: child.output.id,
     });
+    // A path default can itself inherit: provenance names the terminal decision,
+    // and draft previews must agree with the saved read before any assignment.
+    const expectedTradeResolution = {
+      mode: "inherit",
+      storedValue: null,
+      value: "building",
+      fallbackValue: "building",
+      source: "Project default",
+      sourceEntity: {
+        entityKind: "project",
+        entityId: parent.output.id,
+        name: "Site parent",
+      },
+      matchesFallback: false,
+      canReset: false,
+    };
+    expect(task.output.fieldResolutions?.trade).toEqual(
+      expectedTradeResolution,
+    );
+    expect(
+      (
+        await resolveDraftTaskFields(ctx.db, {
+          projectId: child.output.id,
+          parentTaskId: null,
+          subjectProductId: null,
+          trade: null,
+        })
+      ).trade,
+    ).toEqual(expectedTradeResolution);
     await expect(
       updateProject(
         ctx.db,

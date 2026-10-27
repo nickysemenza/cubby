@@ -64,6 +64,7 @@ import { entityFieldPresentation } from "~/entity/editing/entity-field-presentat
 import { entityDetailFor } from "~/entity/entity-detail";
 import { PhotoGrid } from "~/entity/entity-media/photo-grid";
 import { PhotoViewer } from "~/entity/entity-media/photo-viewer";
+import { compactFieldText } from "~/entity/fields/field-text";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
@@ -2553,6 +2554,7 @@ function InventoryFields({
       { enabled: Boolean(inventory?.existingEntryId) },
     ),
   );
+  const ownerField = entityFieldByKey("inventory", "ownerLedgerPartyId");
   const existingAmount = existingEntry.data
     ? fieldValueOf(existingEntry.data.fields.amount)
     : null;
@@ -2720,9 +2722,17 @@ function InventoryFields({
                         quantity,
                         mode: "add",
                         existingEntryId: entry.id,
-                        ownershipMode: entry.effectiveOwnership.mode,
+                        ownershipMode:
+                          entry.fields.ownerLedgerPartyId.current.assignment
+                            ?.kind === "inherit"
+                            ? "inherit"
+                            : "explicit",
                         ownerPartyId:
-                          entry.effectiveOwnership.explicitOwner?.id ?? null,
+                          entry.fields.ownerLedgerPartyId.current.assignment
+                            ?.kind === "value"
+                            ? entry.fields.ownerLedgerPartyId.current.assignment
+                                .value
+                            : null,
                       },
                     }),
                     review: { ...review, stockIntent: "receive" },
@@ -2781,8 +2791,13 @@ function InventoryFields({
                 inventory.ownerPartyId === null
                   ? "Household"
                   : inventory.ownershipMode === "inherit"
-                    ? (existingEntry.data?.effectiveOwnership.effectiveOwner
-                        ?.name ?? "Inherited from acquisition evidence")
+                    ? existingEntry.data && ownerField
+                      ? (compactFieldText(
+                          "inventory",
+                          existingEntry.data,
+                          ownerField,
+                        ) ?? "Inherited from acquisition evidence")
+                      : "Inherited from acquisition evidence"
                     : inventory.ownerPartyId
                       ? "Selected owner"
                       : "Run member"}

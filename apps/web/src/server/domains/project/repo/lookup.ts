@@ -6,7 +6,7 @@ import {
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import type {
-  ProjectAttentionItem,
+  ProjectAttentionReport,
   ProjectFilters,
   ProjectOptionsOut,
 } from "@cubby/schemas/project";
@@ -46,13 +46,10 @@ import { dashboardProjectDateCondition } from "./dashboard-shared";
 import {
   EMPTY_PROJECT_DATE_WINDOW,
   projectSettingsFields,
-  EMPTY_PROJECT_OWN_ROLLUP,
-  EMPTY_PROJECT_SUBTREE_ROLLUP,
   type ProjectContentDates,
 } from "./helpers";
 import {
   aggregateSubtreeDates,
-  loadProjectSubtreeRollups,
   loadProjectTree,
   type ProjectTree,
 } from "./subtree";
@@ -134,7 +131,7 @@ export const projectScaffold = listScaffold("project", project, {
     startDate: storedDerivedSql("project", "startDate", project.id),
   },
   rows: {
-    attentionItems: projectAttention.rows((items) => {
+    attentionItems: projectAttention.rows(({ items }) => {
       const rows = items.flatMap((item) => {
         const filter = attentionFilterOf(item.type);
         return filter === undefined ? [] : [sql`(${item.entityId}, ${filter})`];
@@ -248,7 +245,7 @@ export const buildProjectListQuery = async (
   db: Database,
   filters: ProjectFilters,
   sorts: SortParams[],
-  attentionItems?: readonly ProjectAttentionItem[],
+  attentionItems?: ProjectAttentionReport,
   preparedTree?: ProjectTree,
   readIntent: ListReadIntent = "page",
 ) => {
@@ -280,7 +277,7 @@ export const buildProjectListQuery = async (
 export const buildProjectWhere = async (
   db: Database,
   filters: ProjectFilters,
-  attentionItems?: readonly ProjectAttentionItem[],
+  attentionItems?: ProjectAttentionReport,
 ) => (await buildProjectListQuery(db, filters, [], attentionItems)).whereClause;
 
 /**
@@ -322,7 +319,7 @@ export const projectListRead = async (
   readIntent: ListReadIntent = "page",
   prepared?: {
     tree?: ProjectTree;
-    attentionItems?: readonly ProjectAttentionItem[];
+    attentionItems?: ProjectAttentionReport;
   },
 ) => {
   const { tree, whereClause, orderByArray, context } =
@@ -366,13 +363,6 @@ export const projectListRead = async (
                 ]),
               );
             });
-            const rollups = bind.batch(async (page) =>
-              loadProjectSubtreeRollups(
-                db,
-                page.rows.map((row) => row.id),
-                hierarchy.load(page),
-              ),
-            );
             const dependencies = bind.batch(({ rows }) =>
               projectDependencyIds(
                 db,
@@ -482,31 +472,6 @@ export const projectListRead = async (
                   return {
                     googleDriveFolderUrl: value.googleDriveFolderUrl,
                     notionPageUrl: value.notionPageUrl,
-                  };
-                },
-              ),
-              rollups.fields(
-                rawProjectListItemOut.pick({
-                  rollup: true,
-                  spent: true,
-                  taskProgress: true,
-                  dateWindow: true,
-                }),
-                (row, loaded) => {
-                  const own =
-                    loaded.ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP;
-                  return {
-                    rollup: {
-                      ...own,
-                      subtree:
-                        loaded.subtreeRollups.get(row.id) ??
-                        EMPTY_PROJECT_SUBTREE_ROLLUP,
-                    },
-                    spent: own.spent,
-                    taskProgress: `${own.doneTaskCount}/${own.taskCount}`,
-                    dateWindow:
-                      loaded.dateWindows.get(row.id) ??
-                      EMPTY_PROJECT_DATE_WINDOW,
                   };
                 },
               ),

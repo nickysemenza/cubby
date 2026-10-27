@@ -27,7 +27,10 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { normalizeSorts, oneOrManyValues } from "@cubby/schemas/pagination";
 import { photoGroupProposalState } from "@cubby/schemas/photo-import-run";
 import { productFiltersSchema } from "@cubby/schemas/product";
-import { expenseFiltersSchema } from "@cubby/schemas/project";
+import {
+  expenseFiltersSchema,
+  type ProjectAttentionIncompleteIds,
+} from "@cubby/schemas/project";
 import { purchaseFiltersSchema } from "@cubby/schemas/purchase";
 import { proposedImportFix } from "@cubby/schemas/purchase-import";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
@@ -278,7 +281,10 @@ export type WorkProblemSelections = (
   db: Database,
   scope: WorkQueueScope,
   readContexts?: Partial<Record<Entity, QualityReadContext>>,
-) => Promise<SQL[]>;
+) => Promise<{
+  selections: SQL[];
+  incompleteProjectIds: ProjectAttentionIncompleteIds;
+}>;
 
 // oxlint-disable-next-line complexity -- Source branches share one exact-count population and must reject excluded work before preparing it.
 async function workQueueProjection(
@@ -287,7 +293,10 @@ async function workQueueProjection(
   problemSelections: WorkProblemSelections,
   readContexts: Partial<Record<Entity, QualityReadContext>>,
   searched: boolean,
-): Promise<SQL> {
+): Promise<{
+  relation: SQL;
+  incompleteProjectIds: ProjectAttentionIncompleteIds;
+}> {
   const selections: SQL[] = [];
   const branch = (
     source: WorkQueueRow["source"],
@@ -856,14 +865,21 @@ async function workQueueProjection(
         key: "account:run",
       }),
     );
-  selections.push(...(await problemSelections(db, scope, readContexts)));
+  const problems = await problemSelections(db, scope, readContexts);
+  selections.push(...problems.selections);
   // A scope that admits no branch still yields a typed, empty relation.
   if (selections.length === 0)
-    return sql`SELECT NULL::text AS entity, NULL::text AS id, NULL::text AS name,
+    return {
+      incompleteProjectIds: problems.incompleteProjectIds,
+      relation: sql`SELECT NULL::text AS entity, NULL::text AS id, NULL::text AS name,
       NULL::text AS key, NULL::text AS source, NULL::text AS kind, NULL::text AS reason,
       NULL::text AS "nextAction", ARRAY[]::uuid[] AS owners, false AS shared,
-      NULL::text AS "problemKey", ARRAY[]::text[] AS reason_keys, ${NO_FACT_COLUMNS} WHERE false`;
-  return sql.join(selections, sql` UNION ALL `);
+      NULL::text AS "problemKey", ARRAY[]::text[] AS reason_keys, ${NO_FACT_COLUMNS} WHERE false`,
+    };
+  return {
+    relation: sql.join(selections, sql` UNION ALL `),
+    incompleteProjectIds: problems.incompleteProjectIds,
+  };
 }
 
 /** Each row carries its source record's quality score, and a gap row states
@@ -1044,36 +1060,39 @@ async function queryWorkQueue(
   const gapChecks = new Set<string>(
     workQueueGapViews.flatMap(workQueueGapChecks),
   );
-  const projection = await workQueueProjection(
-    db,
-    {
-      sources,
-      kinds,
-      sourceExclude: oneOrManyValues(input.sourceExclude),
-      kindExclude: oneOrManyValues(input.kindExclude),
-      reasons: reasonIncludes,
-      reasonExclude: oneOrManyValues(input.reasonExclude),
-      query: input.query,
-      gapChecks:
-        reasonIncludes?.length &&
-        reasonIncludes.every((key) => gapChecks.has(key))
-          ? reasonIncludes.flatMap((key) => dataCheck.safeParse(key).data ?? [])
-          : undefined,
-      reasonChecks: [
-        ...new Set([
-          ...(reasonIncludes ?? []),
-          ...(oneOrManyValues(input.reasonExclude) ?? []),
-        ]),
-      ].flatMap((key) =>
-        gapChecks.has(key) ? (dataCheck.safeParse(key).data ?? []) : [],
-      ),
-      record,
-      facts,
-    },
-    problemSelections,
-    { product: productReadContext },
-    Boolean(input.query),
-  );
+  const { relation: projection, incompleteProjectIds } =
+    await workQueueProjection(
+      db,
+      {
+        sources,
+        kinds,
+        sourceExclude: oneOrManyValues(input.sourceExclude),
+        kindExclude: oneOrManyValues(input.kindExclude),
+        reasons: reasonIncludes,
+        reasonExclude: oneOrManyValues(input.reasonExclude),
+        query: input.query,
+        gapChecks:
+          reasonIncludes?.length &&
+          reasonIncludes.every((key) => gapChecks.has(key))
+            ? reasonIncludes.flatMap(
+                (key) => dataCheck.safeParse(key).data ?? [],
+              )
+            : undefined,
+        reasonChecks: [
+          ...new Set([
+            ...(reasonIncludes ?? []),
+            ...(oneOrManyValues(input.reasonExclude) ?? []),
+          ]),
+        ].flatMap((key) =>
+          gapChecks.has(key) ? (dataCheck.safeParse(key).data ?? []) : [],
+        ),
+        record,
+        facts,
+      },
+      problemSelections,
+      { product: productReadContext },
+      Boolean(input.query),
+    );
   // All sources, including findings, defer planned purchases before counts
   // and paging. An empty purchase is unknown, not implicitly planned.
   const conditions: SQL[] = [
@@ -1290,6 +1309,7 @@ async function queryWorkQueue(
       pageIndex: input.pageIndex,
       pageSize: input.pageSize,
       totalCount: row.total,
+      ...(incompleteProjectIds.length > 0 ? { incompleteProjectIds } : {}),
       viewCounts: row.viewCounts,
       ...(row.groups ? { groups: row.groups } : {}),
     },

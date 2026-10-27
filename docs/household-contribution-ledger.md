@@ -79,6 +79,22 @@ payment ownership keeps its unknown share instead of silently reallocating it.
 Missing, partial,
 unavailable, and null-attributed evidence remains an explicit gap.
 
+Expense declares a typed background beneficiary result containing reusable party
+identities, relative weights and basis. Its compute adapter and live financial
+allocation share the same seed-selection SQL. The cache contains no allocated
+cents: current cost selection, Project scope and largest-remainder rounding stay
+in the live financial reader. Unpriced lines preserve recorded identities without
+extending purchaser or Household fallbacks to them.
+
+Calendar reads these published portions in its source batch rather than running
+monetary allocation or rebuilding identities separately. It preserves avatars,
+future spending, Purchase aggregation and the rule that a shared avatar is marked
+inherited only when every contributing line inherits it. Missing results remain
+Updating; stale usable avatars retain their matching status. The inspector opens
+the common field explanation for each contributing Expense. Contributor evidence
+is retained with the result and loaded on demand, separately from the live
+comparison; ordinary list payloads contain only compact portions.
+
 ## Import boundary
 
 Clients orchestrate provider reads from Splitwise, Gmail, Monarch, or local exports and send normalized reviewed changes through the standard mutations. The import recipe, including which record a repayment becomes, is the purchase-import [household-ledger guide](../.agents/skills/purchase-import/references/household-ledger.md). Cubby receives no provider credentials, raw emails, file paths, or whole exports. There is no global transaction across providers or independent records. Each record can be resumed from durable Source Claims and evidence, so a partial import does not require a global rollback or batch receipt.

@@ -43,6 +43,14 @@ describe("row-set declarations", () => {
 
   it.each([
     [
+      {
+        derived: {
+          last4: { via: "cards.last4", requiresResult: "missingResult" },
+        },
+      },
+      /requiresResult names missing stored result missingResult/,
+    ],
+    [
       { derived: { last4: { via: "cards.last4.digits" } } },
       /exactly one terminal/,
     ],
@@ -89,5 +97,15 @@ describe("row-set declarations", () => {
     ],
   ])("rejects %j", (model, error) => {
     expect(() => compileWith(model)).toThrow(error);
+  });
+
+  it("retains the owning result binding for a computed row set", () => {
+    const project = compileLoadedEntityDeclarations(declarations).find(
+      (entity) => entity.key === "project",
+    );
+    expect(project?.listFields.derived.attention).toMatchObject({
+      shape: "rows",
+      requiresResult: "rollups",
+    });
   });
 });

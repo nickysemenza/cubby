@@ -10,6 +10,7 @@ import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
   fieldExplanationSource,
+  fieldExplanationInput,
   type FieldExplanationOutput,
 } from "@cubby/schemas/field-explanation";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
@@ -23,6 +24,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ResolvedListValue } from "~/entity/display/resolved-list-value";
 import { isBrowserRoutedEntity } from "~/entity/entities";
 import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
+import { useListQuery } from "~/entity/table/list-query-context";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
@@ -305,7 +307,7 @@ function ExplanationSources({
       : null;
   return (
     <SourceStack
-      label="Current evidence sources"
+      label="Evidence sources"
       rows={sources.map(
         (source): Parameters<typeof SourceStack>[0]["rows"][number] => {
           const record = explanationRecord.safeParse(source.value);
@@ -499,6 +501,7 @@ function QualityCalculation({
 }
 
 type WhyValueProps = {
+  scope?: z.infer<typeof fieldExplanationInput>["scope"];
   entity: Entity;
   id: string;
   field: string;
@@ -518,6 +521,7 @@ export function WhyValue({
   field,
   label,
   surface = "detail",
+  scope,
   onSet,
 }: WhyValueProps) {
   const [open, setOpen] = useState(false);
@@ -552,6 +556,7 @@ export function WhyValue({
             field={field}
             label={label}
             surface={surface}
+            scope={scope}
             onSet={onSet}
           />
         ) : null}
@@ -570,13 +575,43 @@ export function WhyValueContents({
   onSet,
   qualityChecks,
   pendingSuggestion,
+  scope,
 }: WhyValueProps) {
+  const listQuery = useListQuery(entity);
+  const bindings = z
+    .object({ scopeFilters: z.record(z.string(), z.string()).optional() })
+    .parse(
+      entityFieldModels[entity].fields.find(
+        (candidate) => candidate.key === field,
+      )?.explanation ?? {},
+    ).scopeFilters;
+  const filters = z
+    .record(z.string(), z.unknown())
+    .parse(listQuery?.filters ?? {});
+  const candidates = Object.entries(bindings ?? {}).flatMap(
+    ([entityKind, filter]) => {
+      const values = z
+        .union([z.string(), z.array(z.string())])
+        .safeParse(filters[filter]);
+      if (!values.success) return [];
+      return (Array.isArray(values.data) ? values.data : [values.data]).map(
+        (entityId) =>
+          fieldExplanationInput.shape.scope
+            .unwrap()
+            .parse({ entityKind, entityId }),
+      );
+    },
+  );
+  const contextualScope =
+    scope ??
+    (surface === "list" && candidates.length === 1 ? candidates[0] : undefined);
   const result = useQuery({
     ...fieldExplanation.explain.queryOptions({
       entityKind: entity,
       entityId: id,
       field,
       surface,
+      ...(contextualScope ? { scope: contextualScope } : {}),
     }),
     staleTime: 0,
     refetchOnMount: "always",
@@ -650,6 +685,10 @@ export function WhyValueContents({
                 </>
               ) : null}
             </div>
+          ) : null}
+          {result.data.envelope.result.kind === "cached" &&
+          result.data.resolutionEvidence ? (
+            <p className="text-xs font-medium">Current resolution evidence</p>
           ) : null}
           <ResolutionEvidence evidence={result.data.resolutionEvidence} />
           {result.data.imageChain ? (

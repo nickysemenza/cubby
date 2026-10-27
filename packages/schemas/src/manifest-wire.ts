@@ -70,6 +70,7 @@ export const manifestWire = {
       readPath: "string~",
       resolver: "string",
       projections: "[string:string]",
+      scopeFilters: "[string:string]~",
       sourceDependencies: "[FieldExplanationDependency]",
     },
     { conformances: codable },

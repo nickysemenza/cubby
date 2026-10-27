@@ -135,6 +135,38 @@ not performed; migration success alone is not deployment verification.
 
 ## Derived values cutover
 
+### Remaining result materialization (0046)
+
+`0046_remaining_derived_results` installs declaration-generated invalidation
+triggers and backfills disposable results for ownership, beneficiary seeds,
+Project rollups, Shipment summaries and Email relationship facts. It does not
+rewrite member assignments, financial facts or retained source evidence.
+
+The predecessor Worker does not recognize the new target names and can discard
+their dirty marks as retired work. For an authorized release, use the staged
+procedure above with `PRODUCTION_MIGRATION_THROUGH` set to
+`0045_field_envelope_decisions`: deploy the matching Worker first, then apply
+through `0046_remaining_derived_results`, verify it and remove the boundary.
+Do not overlap another merge, Deploy retry or manual application during that
+sequence. No writer hold is required. Before 0046 the new fields truthfully show
+missing results; after it the existing drain owns catch-up.
+
+Read back the six target populations, retained assignment/evidence counts,
+ready/error backlog and successful publications. Verify initial results reach
+the canonical list and explanation interfaces without a member edit. A cleared
+backlog alone is insufficient: compare live target populations with successful
+published results so discarded or failed initial work cannot appear complete.
+Record catch-up duration separately from ordinary-edit latency. These are release
+instructions, not evidence that production application or readback occurred.
+
+During the initial Email facts backfill, an eligible Email without facts can be
+an unresolved candidate in several Purchase or Vendor sections. A large unresolved
+count is not a large known-match count. Use the existing target backlog/error
+diagnostics and unresolved-record access; do not hide those candidates or infer
+an unlinked outcome merely because the facts have not published.
+
+### Initial engine cutover (0037)
+
 `0037_derived_values` (ADR 0021) runs as one ordinary transaction with a
 30-second lock acquisition timeout and first takes `ACCESS EXCLUSIVE` on every
 table it alters, drops, triggers or writes. A timeout or deadlock rolls the

@@ -17,13 +17,16 @@ import {
   storedDerivedDeclarations,
   type StoredDerivedDeclaration,
 } from "~/server/db/derived-declarations";
+import { DERIVED_DRAIN_JOB_KEY } from "~/server/db/derived-trigger-ddl";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { notDeleted } from "~/server/db/helpers/predicates";
+import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import { findPgError } from "~/server/errors/db-errors";
 import {
   type DerivedComputed,
   computedDecision,
+  validateComputedResult,
   type DerivedComputes,
   type DerivedSink,
   isDerivedSink,
@@ -53,6 +56,7 @@ type Mark = z.output<typeof markRow>;
 
 export interface DerivedPagePlan {
   readonly marks: readonly Mark[];
+  readonly fanoutTickets: readonly number[];
   readonly computed: ReadonlyMap<string, ReadonlyMap<string, DerivedComputed>>;
   readonly sinks: ReadonlyMap<string, { sink: DerivedSink; prepared: unknown }>;
   readonly failed: ReadonlyMap<string, string>;
@@ -99,6 +103,29 @@ export async function prepareDerivedPage(
   computes: DerivedComputes,
   marks: readonly Mark[],
 ): Promise<DerivedPagePlan> {
+  // Existing fanouts precede the input reads; only later source edits can
+  // invalidate this preparation without having expanded a direct ticket yet.
+  const directTargets = [
+    ...new Set(
+      marks
+        .filter((mark) => !mark.target.includes("@"))
+        .map((mark) => mark.target),
+    ),
+  ];
+  const fanoutTickets =
+    directTargets.length === 0
+      ? []
+      : z
+          .array(z.object({ ticket: z.coerce.number() }))
+          .parse(
+            (
+              await unwrapDb(db).execute(sql`
+      SELECT ticket FROM "DerivedDirty"
+       WHERE strpos(target, '@') > 0
+         AND split_part(target, '@', 1) = ANY(ARRAY(SELECT jsonb_array_elements_text(${JSON.stringify(directTargets)}::jsonb)))`)
+            ).rows,
+          )
+          .map((mark) => mark.ticket);
   const computed = new Map<string, ReadonlyMap<string, DerivedComputed>>();
   const sinks = new Map<string, { sink: DerivedSink; prepared: unknown }>();
   const failed = new Map<string, string>();
@@ -130,7 +157,7 @@ export async function prepareDerivedPage(
         ))
           // Decision validation belongs to target preparation so a malformed
           // outcome cannot abort publication of the page's valid targets.
-          values.set(id, { ...value, decision: computedDecision(value) });
+          values.set(id, validateComputedResult({ target, computed: value }));
       computed.set(target, values);
     } catch (error) {
       failed.set(
@@ -139,7 +166,7 @@ export async function prepareDerivedPage(
       );
     }
   }
-  return { marks, computed, sinks, failed };
+  return { marks, fanoutTickets, computed, sinks, failed };
 }
 
 const sortColumns = (
@@ -164,6 +191,7 @@ const lockPublishableMarks = async (
   tx: Executor,
   declaration: StoredDerivedDeclaration,
   marks: readonly Mark[],
+  fanoutTickets: readonly number[],
 ): Promise<Mark[]> => {
   let candidates: readonly Mark[] = marks;
   if (marks.length > 0) {
@@ -204,6 +232,14 @@ const lockPublishableMarks = async (
       )}::jsonb) AS m(ref uuid, ticket bigint)
         ON d.ref = m.ref AND d.ticket = m.ticket
      WHERE d.target = ${declaration.target}
+       AND NOT EXISTS (
+         SELECT 1 FROM "DerivedDirty" pending
+          WHERE starts_with(pending.target, ${`${declaration.target}@`})
+            AND NOT EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(fanoutTickets)}::jsonb) observed(ticket)
+              WHERE observed.ticket::bigint = pending.ticket
+            )
+       )
      FOR UPDATE OF d SKIP LOCKED`);
   const refs = new Set(
     z
@@ -274,9 +310,15 @@ const publishSink = async (
   declaration: StoredDerivedDeclaration,
   marks: readonly Mark[],
   { sink, prepared }: { sink: DerivedSink; prepared: unknown },
+  fanoutTickets: readonly number[],
 ): Promise<string[]> => {
   const tx = unwrapDb(db);
-  const held = await lockPublishableMarks(tx, declaration, marks);
+  const held = await lockPublishableMarks(
+    tx,
+    declaration,
+    marks,
+    fanoutTickets,
+  );
   const ids = held.map((mark) => mark.ref);
   // Sinks reuse repository writers, which take the Database handle.
   const changed = ids.length ? await sink.publish(db, ids, prepared) : [];
@@ -285,6 +327,7 @@ const publishSink = async (
 };
 
 type ValueGroup = {
+  fanoutTickets: readonly number[];
   declaration: StoredDerivedDeclaration;
   marks: readonly Mark[];
   values: ReadonlyMap<string, DerivedComputed>;
@@ -332,6 +375,16 @@ const publishValues = async (
          AND d.ref = i."entityId" AND d.ticket = i.ticket
         LEFT JOIN "DerivedValue" v ON v."entityId" = i."entityId" AND v.key = i.key
         LEFT JOIN ${entityIdentity} ON ${entityIdentity.id} = i."entityId"
+       WHERE NOT EXISTS (
+         -- A source edit can precede dependent ticket expansion. Keep the
+         -- previous result and direct work until that fanout has expanded.
+         SELECT 1 FROM "DerivedDirty" pending
+          WHERE starts_with(pending.target, i.target || '@')
+            AND NOT EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(${JSON.stringify(groups[0]?.fanoutTickets ?? [])}::jsonb) observed(ticket)
+              WHERE observed.ticket::bigint = pending.ticket
+            )
+       )
        ORDER BY d.target, d.ref
        FOR UPDATE OF d SKIP LOCKED
     ), written AS (
@@ -416,9 +469,18 @@ const expandFanouts = async (tx: Executor, marks: readonly Mark[]) => {
   if (!groups.length) return [];
   const selections = groups.map(({ declaration, input, marks: group }) => {
     const refs = sql`SELECT unnest(${uuidArrayParam(group.map((mark) => mark.ref))})`;
-    const dependents = input.path
-      ? pathSql(input.path, refs)
-      : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
+    const dependents = input.targetWhere
+      ? sql`SELECT id FROM ${ident(declaration.table)} WHERE ${sql.join(
+          Object.entries(input.targetWhere).map(([column, value]) =>
+            value === null
+              ? sql`${ident(column)} IS NULL`
+              : sql`${ident(column)} = ${value}`,
+          ),
+          sql` AND `,
+        )}`
+      : input.path
+        ? pathSql(input.path, refs)
+        : sql`SELECT d.id FROM ${ident(declaration.table)} d WHERE d.${ident(input.entityColumn)} IN (${refs})`;
     return sql`SELECT ${declaration.target}::text AS target, r.id AS ref,
       ${Math.min(...group.map((mark) => mark.priority))}::int AS priority
       FROM (${dependents}) r(id) WHERE r.id IS NOT NULL`;
@@ -527,6 +589,7 @@ export async function publishDerivedPage(
       ? [
           {
             declaration: parsed.declaration,
+            fanoutTickets: plan.fanoutTickets,
             marks,
             values: plan.computed.get(target) ?? new Map(),
           },
@@ -594,7 +657,7 @@ export async function publishDerivedPage(
     try {
       changedIds = sink
         ? await withTransactionDatabase(db, (scoped) =>
-            publishSink(scoped, declaration, marks, sink),
+            publishSink(scoped, declaration, marks, sink, plan.fanoutTickets),
           )
         : (valueChanges.get(target) ?? []);
     } catch (error) {
@@ -673,4 +736,33 @@ export async function markAllStoredDerived(
     marked += result.rows.length;
   }
   return marked;
+}
+
+/** Calendar expiry reuses dirty marks and the existing minute drain, without resetting failures. */
+export async function markExpiredClockDerived(
+  db: Database | DrizzleTransaction,
+): Promise<number> {
+  const targets = storedDerivedDeclarations()
+    .filter(
+      (entry) =>
+        entry.clock === "householdDay" && entry.publishes === "derivedValue",
+    )
+    .map(({ target, key, entity }) => ({ target, key, entity }));
+  if (targets.length === 0) return 0;
+  const result = await unwrapDb(db).execute(sql`
+    WITH marked AS (
+      INSERT INTO "DerivedDirty" (target, ref, priority)
+      SELECT k.target, v."entityId", 2
+        FROM jsonb_to_recordset(${JSON.stringify(targets)}::jsonb) AS k(target text, key text, entity text)
+        JOIN "DerivedValue" v ON v.key = k.key
+        JOIN ${entityIdentity} ON ${entityIdentity.id} = v."entityId" AND ${entityIdentity.kind} = k.entity AND ${notDeleted(entityIdentity)}
+       WHERE ${householdDaySql(sql`v."computedAt"`)} < ${householdDaySql(sql`now() AT TIME ZONE 'UTC'`)}
+      ON CONFLICT (target, ref) DO NOTHING
+      RETURNING ref
+    ), captured AS (
+      INSERT INTO "JobInvalidationCapture" (key, "capturedAt")
+      SELECT ${DERIVED_DRAIN_JOB_KEY}, now() AT TIME ZONE 'UTC' WHERE EXISTS (SELECT 1 FROM marked)
+    )
+    SELECT count(*)::integer AS count FROM marked`);
+  return z.object({ count: z.number() }).parse(result.rows[0]).count;
 }

@@ -375,6 +375,8 @@
         "packages/schemas/src/image-processing.ts",
         "packages/schemas/src/image-identification.ts",
         "packages/schemas/src/inventory-ownership.ts",
+        "packages/schemas/src/expense-beneficiaries.ts",
+        "packages/schemas/src/email-relationship-facts.ts",
         "packages/schemas/src/meal-classification.ts",
         "packages/schemas/src/meal-shared.ts",
         "packages/schemas/src/money.ts",

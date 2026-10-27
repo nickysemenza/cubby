@@ -34,6 +34,7 @@ import {
 } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,
   createProductIdentityFixture,
@@ -50,6 +51,43 @@ describe("derived field explanations against canonical records", () => {
     entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
+
+  it("explains the published beneficiary revision separately from the live comparison", async () => {
+    const first = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Published beneficiary",
+    });
+    const second = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Live beneficiary",
+    });
+    const line = await createRepoEntity(ctx, "expense", {
+      name: "Published beneficiary evidence",
+      trade: "other",
+      cost: 4,
+      beneficiaries: [{ partyId: first.output.id, weight: 2 }],
+    });
+    await drainStoredDerived(ctx.db);
+    await updateExpense(
+      ctx.db,
+      line.output.id,
+      { beneficiaries: [{ partyId: second.output.id, weight: 3 }] },
+      ctx.actor,
+    );
+    const explanation = await explainField(context(), {
+      entityKind: "expense",
+      entityId: line.output.id,
+      field: "effectiveBeneficiaries",
+      surface: "detail",
+    });
+    expect(fieldValueOf(explanation.envelope)).toEqual([
+      expect.objectContaining({ partyId: first.output.id, weight: "2" }),
+    ]);
+    expect(explanation.envelope.result).toMatchObject({
+      kind: "cached",
+      freshness: "stale",
+    });
+    expect(JSON.stringify(explanation.sources)).toContain(first.output.id);
+    expect(JSON.stringify(explanation.sources)).not.toContain(second.output.id);
+  });
 
   async function explainExpenseCategory(line: {
     id: string;

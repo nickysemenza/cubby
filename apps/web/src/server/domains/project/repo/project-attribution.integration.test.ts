@@ -71,7 +71,7 @@ describe("project dashboard attribution", () => {
       middle.shortcode,
       late.shortcode,
     ]);
-    expect(rows.data.map((row) => row.dateWindow.effectiveStart)).toEqual([
+    expect(rows.data.map((row) => row.dateWindow?.effectiveStart)).toEqual([
       "2026-01-01",
       "2026-01-02",
       "2026-01-03",
@@ -183,11 +183,29 @@ describe("project dashboard attribution", () => {
     expect(result.projects.map((row) => row.id)).toEqual([first.shortcode]);
     expect(result.projects[0]?.locations).toEqual(["Test room"]);
     expect(result.summary.committedSpend).toBe(2.2);
+    // Portfolio money is live; cards must not invent unpublished rollups.
+    expect(result.projects[0]?.rollup).toBeNull();
     expect(result.summary.forwardCommittedSpend).toEqual({
       in30Days: 2.2,
       in60Days: 2.2,
       in90Days: 2.2,
     });
     expect(result.filterOptions.locations).toContain("Test room");
+    await drainStoredDerived(ctx.db);
+    const published = await projectDashboardSummary(ctx.db, {
+      search: "Scoped child",
+      locations: ["Test room"],
+      dateFrom: date,
+      dateTo: date,
+    });
+    const canonical = await projectList(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 500,
+    });
+    expect(published.projects[0]?.rollup).not.toBeNull();
+    expect(published.projects[0]?.rollup).toEqual(
+      canonical.data.find((row) => row.id === first.shortcode)?.rollup,
+    );
+    expect(published.summary.committedSpend).toBe(2.2);
   });
 });

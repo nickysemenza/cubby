@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  fieldResolutionSourceSchema,
+  resolvedListSchema,
+} from "./field-resolution";
 
 import {
   expenseShortcode,
@@ -55,6 +59,20 @@ export const effectiveInventoryOwnership = z.object({
 export type EffectiveInventoryOwnership = z.infer<
   typeof effectiveInventoryOwnership
 >;
+
+/** Disposable ownership output; confirmation always resolves live evidence. */
+export const storedInventoryOwnership = z.object({
+  ownership: effectiveInventoryOwnership,
+  effectiveOwnerId: ledgerPartyShortcode.nullable(),
+  ownerFilter: z.string(),
+  inheritedFilter: z.string(),
+  inheritedSource: inventoryOwnershipSource,
+  fallbackSource: fieldResolutionSourceSchema.nullable(),
+});
+export const storedProductOwnership = z.object({
+  owners: resolvedListSchema,
+  ownerFilters: z.array(z.string()),
+});
 
 export const inventoryOwnershipSelection = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("inherit"), ownerId: z.null().optional() }),

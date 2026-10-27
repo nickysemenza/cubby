@@ -1,4 +1,6 @@
+import { isProjectAttentionProblemKey } from "@cubby/schemas/problems-raw-read";
 import type { ProblemKey } from "@cubby/schemas/problems-raw-read";
+import type { ProjectAttentionIncompleteIds } from "@cubby/schemas/project";
 
 import type { ProblemSource } from "~/entity/problems/problem-query";
 import { problemQuery } from "~/entity/problems/problem-registry";
@@ -107,9 +109,18 @@ export const findProblemByType = async (
   key: ProblemKey,
   upcLookupClient: UpcLookupBatchPort,
   usdaClient: UsdaFoodBatchPort,
-): Promise<{ type: ProblemKey; items: unknown[]; total: number }> => {
+): Promise<{
+  type: ProblemKey;
+  items: unknown[];
+  total: number;
+  incompleteProjectIds?: ProjectAttentionIncompleteIds;
+}> => {
   const definition = problemQuery(key);
   if (!definition) throw new Error(`No registered Problem declares "${key}"`);
+  if (isProjectAttentionProblemKey(key))
+    return (
+      await import("~/server/generic/problems/service/problems.service")
+    ).findEntityProblemByType(db, key, upcLookupClient, usdaClient);
   if (definition.source.kind === "derived") {
     const result = await executeProblem(db, key, {
       diagnostic: { upcLookupClient },

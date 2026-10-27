@@ -13,6 +13,7 @@ const problems = (overrides: Partial<AllProblems> = {}): AllProblems => ({
   sectionTotals: {},
   totalProblems: 0,
   ...overrides,
+  incompleteProjectIds: overrides.incompleteProjectIds ?? [],
 });
 
 describe("buildAutoFixPlan", () => {

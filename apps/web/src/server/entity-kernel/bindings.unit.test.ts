@@ -37,6 +37,25 @@ const createOverrides = (entity: Entity) =>
       : undefined;
 
 describe("entity kernel bindings", () => {
+  it("preserves unresolved membership in MCP list commands", () => {
+    expect(
+      entityMcpCommandSchema.parse({
+        action: "list",
+        entity: "product",
+        filters: {},
+        resultMembership: "unresolved",
+      }),
+    ).toMatchObject({ resultMembership: "unresolved" });
+    expect(
+      entityMcpCommandSchema.safeParse({
+        action: "list",
+        entity: "product",
+        filters: {},
+        resultMembership: "unknown",
+      }).success,
+    ).toBe(false);
+  });
+
   describe("live MCP product commands", () => {
     const productData = {
       name: "Example product",

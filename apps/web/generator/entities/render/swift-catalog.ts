@@ -294,6 +294,7 @@ const explanationJSON = (explanation: Field["explanation"]) =>
         readPath: explanation.readPath ?? null,
         resolver: explanation.resolver,
         projections: { ...explanation.projections },
+        scopeFilters: explanation.scopeFilters ?? null,
         sourceDependencies: (explanation.sourceDependencies ?? []).map(
           ({ path, label }) => ({ path, label }),
         ),

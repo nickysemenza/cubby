@@ -18,6 +18,8 @@ export type ListBindingGroup = "media" | "quality" | "relations" | "derived";
 export interface ListReadPage<T = ListReadRow> {
   data: T[];
   count: number;
+  unresolvedCount?: number;
+  incompleteSums?: string[];
   fieldReads?: PageFieldReadContexts;
   sums?: Record<string, number>;
   groups?: ListGroupSummary[];

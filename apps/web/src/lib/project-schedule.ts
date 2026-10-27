@@ -1,26 +1,28 @@
 // The one place a Project or Task becomes a schedule row, shared by the server
 // (the `project.schedule` report both clients draw) and the web portfolio list.
 import type { ReportScheduleRow } from "@cubby/schemas/entity-report";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ProjectOut, TaskOut } from "@cubby/schemas/project";
 
 export type ProjectScheduleRow = ReportScheduleRow;
 
 export type ProjectForSchedule = Pick<
   ProjectOut,
-  "id" | "name" | "status" | "dateWindow" | "blockedByIds" | "blockingIds"
->;
+  "id" | "name" | "status" | "blockedByIds" | "blockingIds"
+> & { fields: Pick<ProjectOut["fields"], "dateWindow"> };
 
 export function projectScheduleRow(
   project: ProjectForSchedule,
   depth: number,
   expandable: boolean,
 ): ProjectScheduleRow {
-  const start = project.dateWindow.effectiveStart;
-  const end = project.dateWindow.effectiveEnd;
+  const envelope = project.fields.dateWindow;
+  const window = fieldValueOf(envelope);
+  const start = window?.effectiveStart;
+  const end = window?.effectiveEnd;
   const dated = start ?? end;
   const source =
-    project.dateWindow.startSource === "derived" ||
-    project.dateWindow.endSource === "derived"
+    window?.startSource === "derived" || window?.endSource === "derived"
       ? " · Derived dates"
       : "";
   const segments: ProjectScheduleRow["segments"] = [];
@@ -46,7 +48,19 @@ export function projectScheduleRow(
     blockedByIds: project.blockedByIds,
     blockingIds: project.blockingIds,
   };
-  if (!dated) row.noDateLabel = "No dates";
+  if (envelope.work.kind === "failed") row.meta += ` · ${envelope.work.error}`;
+  else if (
+    envelope.work.kind !== "idle" ||
+    (envelope.result.kind === "cached" && envelope.result.freshness === "stale")
+  )
+    row.meta += " · Updating";
+  if (!dated)
+    row.noDateLabel =
+      envelope.result.kind === "missing"
+        ? envelope.work.kind === "failed"
+          ? "Unavailable"
+          : "Updating…"
+        : "No dates";
   return row;
 }
 

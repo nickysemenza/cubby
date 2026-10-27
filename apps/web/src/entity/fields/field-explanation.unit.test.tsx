@@ -106,10 +106,10 @@ it.each(["fresh", "stale"] as const)(
       { wrapper: harness.wrapper },
     );
     expect(
-      screen.getByRole("list", { name: "Current evidence sources" }),
+      screen.getByRole("list", { name: "Evidence sources" }),
     ).toHaveTextContent("skipped");
     expect(
-      screen.getByRole("list", { name: "Current evidence sources" }),
+      screen.getByRole("list", { name: "Evidence sources" }),
     ).not.toHaveTextContent("deciding");
   },
 );

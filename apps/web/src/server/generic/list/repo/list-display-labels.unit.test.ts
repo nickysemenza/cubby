@@ -76,6 +76,11 @@ describe("estimateLabel", () => {
 });
 
 describe("listTotalLabels", () => {
+  it("identifies known subtotals without presenting missing contributions as a complete zero", () => {
+    expect(
+      listTotalLabels("inventory", { valuation: 0 }, ["valuation"]),
+    ).toEqual({ valuation: "Incomplete · $0.00 known" });
+  });
   it("words full-filter zero and signed totals, including a complete range", () => {
     expect(
       listTotalLabels("vendor", { spend: -12.5, purchaseCount: 1234 }),

@@ -189,8 +189,8 @@ export function productReadSchemas<
     // expenses, never null.
     expenseTotal: money,
     purchaseDate: plainDate.nullable(),
-    /** Owner rollup over live inventory (`loadProductOwners`). */
-    owners: resolvedListSchema,
+    /** Published owner collection; null until a result is available. */
+    owners: resolvedListSchema.nullable(),
     ...productQuantityFields,
     // Server-composed text for the Expected, Variance and Unit price columns.
     ledgerExpectedQuantityLabel: listLabel,
@@ -201,8 +201,8 @@ export function productReadSchemas<
     unitPriceMappings: productUnitPriceMappings,
     unitPriceDetailLabel: z.string().nullish(),
     ownershipEvidence: productOwnershipEvidenceOut,
-    /** Owner rollup over live inventory (`loadProductOwners`). */
-    owners: resolvedListSchema,
+    /** Published owner collection; null until a result is available. */
+    owners: resolvedListSchema.nullable(),
     nutritionDisplay: productNutritionDisplay,
     // Same derived cover rule as `productTopLevelOut`/the picker (see
     // `getProductCoverImageUrlsByProductIds`) — not a stored field.

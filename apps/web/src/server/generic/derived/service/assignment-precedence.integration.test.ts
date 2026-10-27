@@ -1,6 +1,7 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf, fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { sql } from "drizzle-orm";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -151,6 +152,17 @@ describe("assignment and stored projection precedence", () => {
     expect(reset.fields.unitPriceDetailLabel.work).toEqual(
       reset.fields.price.work,
     );
+    const resetTotals = await executeEntity(context(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [first.id, second.id] },
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    expect(resetTotals.meta).toMatchObject({
+      incompleteSums: ["price"],
+      totalLabels: { price: "Incomplete · $7.00 known" },
+    });
+    expect(resetTotals.meta.sums).not.toHaveProperty("price");
     const priced = await executeEntity(context(), {
       action: "list",
       entity: "product",
@@ -164,8 +176,73 @@ describe("assignment and stored projection precedence", () => {
       filters: { ids: [first.id, second.id], pricePresenceFilter: "none" },
       pagination: { pageIndex: 0, pageSize: 10 },
     });
-    expect(unpriced.items.map((row) => row.id)).toEqual([first.id]);
-    expect(unpriced.meta.sums).toMatchObject({ price: 0 });
+    expect(unpriced.items).toEqual([]);
+    expect(unpriced.meta.unresolvedCount).toBe(1);
+    const facets = await ENTITY_LIST_READ_OPERATIONS.product.facets(context(), {
+      filters: { ids: [first.id, second.id] },
+      facetIds: ["priced"],
+    });
+    expect(facets.facets).toContainEqual(
+      expect.objectContaining({
+        id: "priced",
+        kind: "values",
+        options: [{ value: "has", count: 1 }],
+        unresolvedCount: 1,
+      }),
+    );
+    const viewCounts = await ENTITY_LIST_READ_OPERATIONS.product.viewCounts(
+      context(),
+      {
+        views: [
+          {
+            id: "unpriced",
+            filters: {
+              ids: [first.id, second.id],
+              pricePresenceFilter: "none",
+            },
+          },
+        ],
+      },
+    );
+    expect(viewCounts.views).toEqual([
+      { id: "unpriced", count: 0, unresolvedCount: 1 },
+    ]);
+    const unresolved = await executeEntity(context(), {
+      action: "list",
+      entity: "product",
+      resultMembership: "unresolved",
+      filters: { ids: [first.id, second.id], pricePresenceFilter: "none" },
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    expect(unresolved.items.map((row) => row.id)).toEqual([first.id]);
+    await drainStoredDerived(ctx.db);
+    const completedEmpty = await executeEntity(context(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [first.id, second.id], pricePresenceFilter: "none" },
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    expect(completedEmpty.items.map((row) => row.id)).toEqual([first.id]);
+    expect(completedEmpty.meta.unresolvedCount).toBe(0);
+    const service = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic uncomputed service",
+        categoryId: taxonomyShortcode("services"),
+        price: null,
+      }),
+      ctx.actor,
+    );
+    const serviceWithoutPrice = await executeEntity(context(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [service.id], pricePresenceFilter: "none" },
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    expect(serviceWithoutPrice.items.map((row) => row.id)).toEqual([
+      service.id,
+    ]);
+    expect(serviceWithoutPrice.meta.unresolvedCount).toBe(0);
   });
 
   it("keeps unit prices on the selected valuation while expense recomputation is pending", async () => {

@@ -1,5 +1,7 @@
+import { expenseBeneficiaryEvidence } from "@cubby/schemas/expense-beneficiaries";
 import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import { financialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
   ExpenseId,
   LedgerPartyId,
@@ -8,6 +10,7 @@ import type {
 import { contributionRole, ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { and, lte, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
@@ -69,7 +72,10 @@ type RawAllocationRow = Omit<ExpenseAllocationRow, "cents"> & {
   cents: string | number;
 };
 
-const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
+const scopeCondition = (
+  scope: ExpenseAllocationScope,
+  includeUnpriced: boolean,
+): SQL =>
   and(
     notDeleted(expense),
     scope.expenseIds
@@ -77,13 +83,13 @@ const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
       : undefined,
     scope.asOf ? lte(expense.date, scope.asOf) : undefined,
     scope.includeFuture ? undefined : actualExpense(),
-    sql`${expense.cost} IS NOT NULL`,
+    includeUnpriced ? undefined : sql`${expense.cost} IS NOT NULL`,
   ) ?? sql`true`;
 
 /**
- * Allocate each scoped Expense independently for both roles in PostgreSQL.
- * Currency is converted to bigint cents before multiplication; no floating
- * arithmetic participates in splitting.
+ * Choose canonical source weights for each scoped Expense and role.
+ * Both cached beneficiary identities and live monetary allocation use this
+ * ladder; only monetary allocation selects Project-scoped costs and rounds.
  *
  * Mutually exclusive sources feed `seeded`, and every partition
  * (`expenseId`, `role`) ends up with at least one row so the largest-remainder
@@ -102,30 +108,28 @@ const scopeCondition = (scope: ExpenseAllocationScope): SQL =>
  * one role (halving the split) or none (money vanishing from both the party
  * totals and the unattributed bucket, while still counting in `expenseTotal`).
  */
-export async function loadExpenseAllocations(
-  db: Database | DrizzleTransaction,
+const expenseAllocationSeedsSql = (
   scope: ExpenseAllocationScope,
-): Promise<ExpenseAllocationRow[]> {
-  if (scope.projectIds?.length === 0) return [];
-  if (scope.expenseIds?.length === 0) return [];
+  { includeUnpriced = false }: { includeUnpriced?: boolean } = {},
+): SQL => {
   const accountOwner = alias(ledgerParty, "account_owner");
   const nullableParty = alias(ledgerParty, "p");
   const purchaserParty = alias(ledgerParty, "purchaser_party");
   const settlementKinds = sql.raw(
     purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", "),
   );
-  const result = await unwrapDb(db).execute<RawAllocationRow>(sql`
+  return sql`
     WITH scoped_expense AS (
       SELECT
         ${expense.id} AS "expenseId",
         ${expense.shortcode} AS "expenseShortcode",
-        ${scope.projectIds ? sql`derived_cost."projectId"` : effectiveExpenseProjectSql()} AS "projectId",
+        ${includeUnpriced ? sql`NULL::uuid` : scope.projectIds ? sql`derived_cost."projectId"` : effectiveExpenseProjectSql()} AS "projectId",
         ${expense.purchaseId} AS "purchaseId",
         ${expense.future} AS future,
         ${scope.projectIds ? sql`derived_cost."costCents"` : sql`round((${expense.cost})::numeric * 100)::bigint`} AS cost_cents
       FROM ${expense}
       ${scope.projectIds ? sql`JOIN (${expenseDerivedCostsSql({ projectIds: scope.projectIds }, scope.expenseIds)}) derived_cost ON derived_cost."expenseId" = ${expense.id}` : sql``}
-      WHERE ${scopeCondition(scope)}
+      WHERE ${scopeCondition(scope, includeUnpriced)}
     ), roles(role) AS (
       VALUES (${contributionRole.enum.beneficiary}::text), (${contributionRole.enum.funder}::text)
     ), explicit_attr AS (
@@ -138,7 +142,7 @@ export async function loadExpenseAllocations(
         a."ledgerPartyId",
         coalesce(p.shortcode, '~unattributed') AS "allocationKey",
         a.weight::bigint AS weight,
-        'recorded'::text AS basis
+        ${expenseBeneficiaryEvidence.shape.basis.enum.recorded}::text AS basis
       FROM scoped_expense e
       CROSS JOIN roles r
       JOIN ${expenseAttribution} a
@@ -221,7 +225,7 @@ export async function loadExpenseAllocations(
         coalesce(p.shortcode, '~unowned-account') AS "allocationKey",
         n.weight_cents AS weight,
         CASE WHEN n.owner_party_id IS NOT NULL
-          THEN 'derived_from_payment' ELSE 'unowned_account' END AS basis
+          THEN ${expenseBeneficiaryEvidence.shape.basis.enum.derived_from_payment} ELSE 'unowned_account' END AS basis
       FROM scoped_expense e
       JOIN funder_weight n ON n."expenseId" = e."expenseId"
       LEFT JOIN ${ledgerParty} p
@@ -239,7 +243,7 @@ export async function loadExpenseAllocations(
         ${contributionRole.enum.beneficiary}::text AS role, n.owner_party_id AS "ledgerPartyId",
         coalesce(p.shortcode, '~unattributed') AS "allocationKey",
         n.weight_cents AS weight,
-        CASE WHEN p.id IS NOT NULL THEN 'derived_from_payment' ELSE 'unknown' END AS basis
+        CASE WHEN p.id IS NOT NULL THEN ${expenseBeneficiaryEvidence.shape.basis.enum.derived_from_payment} ELSE ${expenseBeneficiaryEvidence.shape.basis.enum.unknown} END AS basis
       FROM scoped_expense e
       JOIN payment_weight n ON n."expenseId" = e."expenseId" AND n.role = ${contributionRole.enum.beneficiary}
       LEFT JOIN ${ledgerParty} p ON p.id = n.owner_party_id AND ${notDeleted(nullableParty)}
@@ -254,7 +258,7 @@ export async function loadExpenseAllocations(
       SELECT e."expenseId", e."expenseShortcode", e."projectId", e.cost_cents,
         ${contributionRole.enum.beneficiary}::text AS role, purchaser_party.id AS "ledgerPartyId",
         purchaser_party.shortcode AS "allocationKey", 1::bigint AS weight,
-        'derived_from_purchaser'::text AS basis
+        ${expenseBeneficiaryEvidence.shape.basis.enum.derived_from_purchaser}::text AS basis
       FROM scoped_expense e
       JOIN ${purchase} ON ${purchase.id} = e."purchaseId" AND ${notDeleted(purchase)}
       JOIN ${ledgerParty} purchaser_party
@@ -285,7 +289,7 @@ export async function loadExpenseAllocations(
         h.id AS "ledgerPartyId",
         h.shortcode AS "allocationKey",
         1::bigint AS weight,
-        'assumed_household'::text AS basis
+        ${expenseBeneficiaryEvidence.shape.basis.enum.assumed_household}::text AS basis
       FROM scoped_expense e
       CROSS JOIN household_party h
       WHERE NOT EXISTS (
@@ -320,7 +324,7 @@ export async function loadExpenseAllocations(
            partition stays non-empty and
            fundedTotal + unattributedFunding = expenseTotal keeps holding. */
         CASE WHEN r.role = ${contributionRole.enum.funder} AND e.future
-          THEN 'not_yet_paid' ELSE 'unknown' END AS basis
+          THEN 'not_yet_paid' ELSE ${expenseBeneficiaryEvidence.shape.basis.enum.unknown} END AS basis
       FROM scoped_expense e
       CROSS JOIN roles r
       WHERE NOT EXISTS (
@@ -347,7 +351,18 @@ export async function loadExpenseAllocations(
       UNION ALL SELECT * FROM beneficiary_purchaser
       UNION ALL SELECT * FROM beneficiary_assumed
       UNION ALL SELECT * FROM residual_unattributed
-    ), weighted AS (
+    )`;
+};
+
+/** Live cost selection and largest-remainder rounding remain authoritative. */
+export async function loadExpenseAllocations(
+  db: Database | DrizzleTransaction,
+  scope: ExpenseAllocationScope,
+): Promise<ExpenseAllocationRow[]> {
+  if (scope.projectIds?.length === 0 || scope.expenseIds?.length === 0)
+    return [];
+  const result = await unwrapDb(db).execute<RawAllocationRow>(sql`
+    ${expenseAllocationSeedsSql(scope)}, weighted AS (
       SELECT
         seeded.*,
         sum(weight) OVER (PARTITION BY "expenseId", role) AS total_weight
@@ -393,4 +408,66 @@ export async function loadExpenseAllocations(
     ORDER BY "expenseId", role, "allocationKey"
   `);
   return result.rows.map((row) => ({ ...row, cents: BigInt(row.cents) }));
+}
+
+const beneficiarySeedRow = expenseBeneficiaryEvidence
+  .omit({ contributors: true })
+  .extend({
+    expenseId: z.string(),
+    expenseShortcode: z.string(),
+    expenseName: z.string(),
+    purchaseShortcode: z.string().nullable(),
+    purchaseName: z.string().nullable(),
+  });
+
+/** Same seed policy as monetary allocation; unpriced lines retain only recorded identities. */
+export async function loadExpenseBeneficiaryPortions(
+  db: Database | DrizzleTransaction,
+  ids: readonly ExpenseId[],
+): Promise<Map<ExpenseId, z.output<typeof expenseBeneficiaryEvidence>[]>> {
+  if (ids.length === 0) return new Map();
+  const result = await unwrapDb(db).execute(sql`
+    ${expenseAllocationSeedsSql({ expenseIds: ids, includeFuture: true }, { includeUnpriced: true })}
+    SELECT s."expenseId", s."expenseShortcode", e.name AS "expenseName",
+      p.shortcode AS "partyId", p.name AS "partyName", s."allocationKey",
+      s.weight::text AS weight, s.basis,
+      purchase.shortcode AS "purchaseShortcode", purchase."displayLabel" AS "purchaseName"
+    FROM seeded s
+    JOIN "Expense" e ON e.id = s."expenseId"
+    LEFT JOIN "LedgerParty" p ON p.id = s."ledgerPartyId" AND ${notDeleted(alias(ledgerParty, "p"))}
+    LEFT JOIN "Purchase" purchase ON purchase.id = e."purchaseId" AND ${notDeleted(alias(purchase, "purchase"))}
+    WHERE s.role = ${contributionRole.enum.beneficiary}
+      AND (s.cost_cents IS NOT NULL OR s.basis = ${expenseBeneficiaryEvidence.shape.basis.enum.recorded})
+    ORDER BY s."expenseId", s."allocationKey"`);
+  const out = new Map<
+    ExpenseId,
+    z.output<typeof expenseBeneficiaryEvidence>[]
+  >();
+  for (const row of z.array(beneficiarySeedRow).parse(result.rows)) {
+    const id = parseEntityId("expense", row.expenseId);
+    const portions = out.get(id) ?? [];
+    portions.push(
+      expenseBeneficiaryEvidence.parse({
+        ...row,
+        contributors: [
+          {
+            entityKind: "expense",
+            entityId: row.expenseShortcode,
+            name: row.expenseName,
+          },
+          ...(row.basis !== "recorded" && row.purchaseShortcode
+            ? [
+                {
+                  entityKind: "purchase",
+                  entityId: row.purchaseShortcode,
+                  name: row.purchaseName,
+                },
+              ]
+            : []),
+        ],
+      }),
+    );
+    out.set(id, portions);
+  }
+  return out;
 }

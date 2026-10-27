@@ -89,6 +89,51 @@ async function renderListPage(
 }
 
 describe("listPage", () => {
+  it("discloses incomplete counts and switches between known and unresolved records", async () => {
+    const party = mock(ledgerPartyListItem, {
+      overrides: {
+        id: testShortcode("ledgerParty", "LPY-4K7M"),
+        name: "Synthetic unresolved party",
+        fields: {
+          displayImages: fieldValueFixture(
+            entityFieldEnvelopeSchemas.ledgerParty.list.shape.fields.shape
+              .displayImages,
+            [],
+          ),
+        },
+      },
+    });
+    const operation: ListQueryOptionsFn<object, typeof party> = (params) => ({
+      queryKey: ["browser-test", "membership", params],
+      execute: async () => ({
+        items: params.resultMembership === "unresolved" ? [party] : [],
+        meta: {
+          pageIndex: 0,
+          pageSize: 100,
+          totalCount: params.resultMembership === "unresolved" ? 1 : 0,
+          unresolvedCount: 1,
+        },
+      }),
+    });
+    await renderListPage(
+      "ledgerParty",
+      "/ledger-parties?view=table",
+      [],
+      operation,
+    );
+    expect(
+      await screen.findByText("Count incomplete · 1 unresolved"),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Show unresolved" }));
+    expect(await screen.findByText("Synthetic unresolved party")).toBeVisible();
+    expect(screen.getByText("Showing unresolved records")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Show known matches" }));
+    await waitFor(() =>
+      expect(screen.queryByText("Synthetic unresolved party")).toBeNull(),
+    );
+    expect(screen.getByText("Count incomplete · 1 unresolved")).toBeVisible();
+  });
+
   it("renders the manifest's header links, universal List/Cards/Compact choices, and Group by", async () => {
     await renderListPage("recipe", "/recipes", []);
     for (const link of entitySummary.recipe.list.links) {

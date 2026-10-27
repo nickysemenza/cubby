@@ -6,6 +6,7 @@ import type {
   ListGroupBy,
   ListGroupSummary,
   ListNesting,
+  ListResultMembership,
 } from "@cubby/schemas/pagination";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useSearch } from "@tanstack/react-router";
@@ -248,6 +249,9 @@ export interface UseEntityListReturn<
   data: TRow[];
   requestDelete: (item: TData) => void;
   totalCount: number | undefined;
+  unresolvedCount: number | undefined;
+  resultMembership: ListResultMembership;
+  setResultMembership: (membership: ListResultMembership) => void;
   sums: Record<string, number> | undefined;
   totalLabels: Record<string, string> | undefined;
   inspection: ReturnType<typeof useEntityPreview>;
@@ -484,12 +488,15 @@ export function useEntityList<
     entityListDocumentTitle(entity, routeSearch, presentationState.urlSync),
   );
 
+  const [resultMembership, setResultMembership] =
+    useState<ListResultMembership>("known");
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy,
     nesting: serverTree ? ROOTS_SCOPE : undefined,
+    resultMembership,
   });
 
   const {
@@ -790,6 +797,7 @@ export function useEntityList<
     entity,
     effectiveBuildFilters(tableState),
     serverTree,
+    resultMembership,
   ]);
   const liveSelectionScope = useRef(selectionScope);
   liveSelectionScope.current = selectionScope;
@@ -906,6 +914,7 @@ export function useEntityList<
               .record(z.string(), z.unknown())
               .parse(effectiveBuildFilters(tableState)),
             ...(serverTree ? { nesting: ROOTS_SCOPE } : {}),
+            resultMembership,
             cursor,
             limit: 500,
           },
@@ -952,6 +961,7 @@ export function useEntityList<
     }
   }, [
     selectionEntity,
+    resultMembership,
     selectionScope,
     effectiveBuildFilters,
     tableState,
@@ -1032,6 +1042,9 @@ export function useEntityList<
     totalCount: isLoading ? undefined : totalCount,
     sums,
     totalLabels: infiniteResult.totalLabels,
+    unresolvedCount: infiniteResult.unresolvedCount,
+    resultMembership,
+    setResultMembership,
     inspection,
   };
 }

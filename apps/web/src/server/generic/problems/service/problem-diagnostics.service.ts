@@ -13,7 +13,7 @@ import {
   UpcEnrichmentFreshness,
   ProblemItem,
 } from "@cubby/schemas/problems-raw-read";
-import type { ProjectAttentionItem } from "@cubby/schemas/project";
+import type { ProjectAttentionReport } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entity/problems/problem-query";
 import { completeProblemQueryDeclarations } from "~/entity/problems/problem-registry-validation";
@@ -69,7 +69,7 @@ export type UpcLookupBatchPort = Pick<UpcLookupService, "lookupBatch">;
 export type DiagnosticRunOptions = {
   upcLookupClient?: UpcLookupBatchPort;
   /** Reuse the tracker lane's complete attention relation; never a page. */
-  attentionItems?: readonly ProjectAttentionItem[];
+  attentionItems?: ProjectAttentionReport;
   /** Complete request-local tree dates shared with Project attention. */
   projectDateWindows?:
     | Awaited<ReturnType<typeof loadProjectDateWindows>>
@@ -435,24 +435,41 @@ export const diagnosticAdapters = {
     },
   },
   "project-date-window-drift": {
-    sample: async (db, options, limit) =>
-      healthySample(
-        (
-          options.attentionItems ??
-          (await (await loadAttention()).computeAttentionItems(db))
-        ).filter((item) => item.type === "date_window_drift"),
-        limit,
-      ),
-    count: async (db, options) =>
-      healthyCount(
-        (
-          options.attentionItems ??
-          (await (await loadAttention()).computeAttentionItems(db))
-        ).reduce(
-          (count, item) => count + Number(item.type === "date_window_drift"),
-          0,
-        ),
-      ),
+    sample: async (db, options, limit) => {
+      const report =
+        options.attentionItems ??
+        (await (await loadAttention()).computeAttentionItems(db));
+      const items = report.items.filter(
+        (item) => item.type === "date_window_drift",
+      );
+      return {
+        items: items.slice(0, limit),
+        count: items.length,
+        status:
+          report.incompleteProjectIds.length > 0
+            ? {
+                state: "stale" as const,
+                message: `Attention inputs are unavailable for ${report.incompleteProjectIds.length} projects; this count includes known findings only.`,
+              }
+            : { state: "healthy" as const },
+      };
+    },
+    count: async (db, options) => {
+      const report =
+        options.attentionItems ??
+        (await (await loadAttention()).computeAttentionItems(db));
+      return {
+        count: report.items.filter((item) => item.type === "date_window_drift")
+          .length,
+        status:
+          report.incompleteProjectIds.length > 0
+            ? {
+                state: "stale" as const,
+                message: `Attention inputs are unavailable for ${report.incompleteProjectIds.length} projects; this count includes known findings only.`,
+              }
+            : { state: "healthy" as const },
+      };
+    },
   },
 } as const satisfies Record<DiagnosticKey, DiagnosticAdapter>;
 

@@ -15,6 +15,8 @@ export interface StoredDerivedRead {
   >["decision"];
   readonly resultExists: boolean;
   readonly stale: boolean;
+  /** Actual queued work; expiry alone does not imply a worker is pending. */
+  readonly pending?: boolean;
   readonly retryAt: string | null;
 }
 

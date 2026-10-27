@@ -40,6 +40,7 @@ export async function executeEntitySelectionIds(
         ...filters,
         ...(ids === undefined ? {} : { ids }),
         nesting: parseNesting(binding, input.nesting),
+        resultMembership: input.resultMembership,
       },
       input,
     ),

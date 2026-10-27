@@ -468,7 +468,7 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
       result,
       work: read?.error
         ? { kind: "failed", error: read.error, retryAt: read.retryAt }
-        : read?.stale
+        : (read?.pending ?? read?.stale)
           ? { kind: "pending" }
           : { kind: "idle" },
     };
@@ -477,6 +477,7 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
     Object.entries(row).filter(
       ([key]) =>
         key !== "fieldResolutions" &&
+        key !== "storedProjectionVersions" &&
         key !== "derived" &&
         key !== "fields" &&
         !Object.hasOwn(fields, key),

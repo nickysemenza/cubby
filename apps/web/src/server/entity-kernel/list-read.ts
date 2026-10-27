@@ -1,5 +1,6 @@
 import {
   listGroupByDimensionsSchema,
+  listResultMembership,
   sortDirection,
 } from "@cubby/schemas/pagination";
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
@@ -55,6 +56,7 @@ const inputSchema = z.object({
     .optional(),
   groupBy: listGroupByDimensionsSchema.optional(),
   nesting: z.unknown().optional(),
+  resultMembership: listResultMembership.optional(),
 });
 
 export function defineListOperations<
@@ -89,6 +91,7 @@ export function defineListOperations<
     withListGroupBy(
       Object.assign(await filtersFor(context, input.filters), {
         nesting: parseNesting(binding, input.nesting),
+        resultMembership: input.resultMembership,
       }),
       parseGroupBy(binding, input.groupBy),
     );
@@ -106,7 +109,9 @@ export function defineListOperations<
     ) {
       const projection = selectedListProjection(binding.entity, fields);
       const input = inputSchema.parse(value);
-      const filters = await filtersFor(context, input.filters);
+      const filters = Object.assign(await filtersFor(context, input.filters), {
+        resultMembership: input.resultMembership,
+      });
       const pagination = input.pagination ?? { pageIndex: 0, pageSize: 50 };
       const scoped = await scopedFilters(context, input);
       const [result, sums] = await Promise.all([
@@ -152,8 +157,14 @@ export function defineListOperations<
         action: "list" as const,
         entity: binding.entity,
         ...buildPaginatedResponse(pagination, enveloped, result.count, {
+          unresolvedCount: result.unresolvedCount,
+          incompleteSums: result.incompleteSums,
           sums,
-          totalLabels: listTotalLabels(binding.entity, sums),
+          totalLabels: listTotalLabels(
+            binding.entity,
+            sums,
+            result.incompleteSums,
+          ),
           groups: result.groups,
           memberships: result.memberships,
           membershipCount: result.membershipCount,
@@ -193,18 +204,18 @@ export function defineListOperations<
     async viewCounts(context: EntityKernelContext, value: unknown) {
       const { views } = viewCountsInputSchema.parse(value);
       const preparation = new ListPreparationScope(context.db);
-      const countOf = async (raw: z.output<typeof inputSchema>["filters"]) =>
-        (
-          await reader()(
-            context,
-            await filtersFor(context, raw),
-            [],
-            { pageIndex: 0, pageSize: 1 },
-            { kind: "base" },
-            "count",
-            preparation,
-          )
-        ).count;
+      const countOf = async (raw: z.output<typeof inputSchema>["filters"]) => {
+        const result = await reader()(
+          context,
+          await filtersFor(context, raw),
+          [],
+          { pageIndex: 0, pageSize: 1 },
+          { kind: "base" },
+          "count",
+          preparation,
+        );
+        return { count: result.count, unresolvedCount: result.unresolvedCount };
+      };
       const [total, ...counts] = await withTrace(
         "entity.list.viewCounts",
         () =>
@@ -216,10 +227,13 @@ export function defineListOperations<
       );
       return {
         entity: binding.entity,
-        total: total ?? 0,
+        total: total?.count ?? 0,
         views: views.map((view, index) => ({
           id: view.id,
-          count: counts[index] ?? 0,
+          count: counts[index]?.count ?? 0,
+          ...(counts[index]?.unresolvedCount === undefined
+            ? {}
+            : { unresolvedCount: counts[index]?.unresolvedCount }),
         })),
       };
     },

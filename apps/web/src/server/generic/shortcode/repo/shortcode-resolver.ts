@@ -24,31 +24,17 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
-import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
-import {
-  financialTransaction,
-  sourceTransactionRecord,
-  gardenEntry,
-  run as runTable,
-  inventoryEntry,
-  location,
-  meal,
-  email as emailTable,
-  imageProcessingJob as imageProcessingJobTable,
-  plant,
-  planting,
-  product,
-  purchase,
-} from "~/server/db/retained-tables";
+import { inventoryEntry, location, product } from "~/server/db/retained-tables";
 import { describeUnresolvableCode } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import {
   SHORTCODE_TABLE,
   TITLE_FIELD_COLUMN,
 } from "~/server/generated/shortcode-tables.gen";
+import { LABEL_COLUMN_OVERRIDES } from "~/server/generic/entity-graph/repo/record-label";
 import type { ShortcodeTable } from "~/server/generic/shortcode/repo/shortcode-tables";
 
 export type { EntityRef } from "@cubby/schemas/identifiers";
@@ -264,84 +250,6 @@ export async function lookupShortcodes(
   );
   return codes;
 }
-
-/**
- * Entities where the display column deliberately differs from the storage
- * column behind the entity's `titleField` (`packages/schemas/src/
- * entity-definitions/*.entity.ts` `presentation.titleField`) — each with the
- * override column (or `null`, meaning no single column at all) and a
- * one-line reason. Every entry here is a considered choice, not drift — see
- * `shortcode-resolver-labels.unit.test.ts` for the parity check this backs.
- */
-export const LABEL_COLUMN_OVERRIDES = {
-  sourceTransactionRecord: {
-    column: sourceTransactionRecord.rawDescription,
-    reason:
-      "displayName falls back from source description to merchant and account; rawDescription is the best-effort stored label",
-  },
-  imageJob: {
-    column: imageProcessingJobTable.kind,
-    reason:
-      "titleField (displayName) joins the kind label to the Image's filename; kind is the stored, always-present part",
-  },
-  email: {
-    column: emailTable.subject,
-    reason:
-      "displayName falls back from unavailable historical subject/sender to the shortcode; subject is the best-effort stored label",
-  },
-  gardenEntry: {
-    column: gardenEntry.kind,
-    reason:
-      "titleField (displayName) is a computed value with no single storage column; kind is a short, always-present label",
-  },
-  plant: {
-    column: plant.name,
-    reason:
-      "titleField (displayName) appends the crop label from static data; name is the stored part",
-  },
-  planting: {
-    column: planting.status,
-    reason:
-      "titleField (displayName) is a computed value with no single storage column; status is always present",
-  },
-  inventory: {
-    column: null,
-    reason:
-      "titleField (displayName) is a computed relational value; inventoryEntryLabels() below builds the same 'product · location' label instead",
-  },
-  meal: {
-    column: meal.name,
-    reason:
-      "titleField (displayName) is computed as name || date with no single storage column; name is the best-effort audit-label fallback (blank when the meal was never named)",
-  },
-  financialTransaction: {
-    column: financialTransaction.merchant,
-    reason:
-      "titleField (displayName) is computed as merchant || rawDescription || capitalized kind with no single storage column; merchant is the best-effort audit-label fallback (null for unmatched rows)",
-  },
-  purchase: {
-    column: purchase.displayLabel,
-    reason:
-      "titleField (displayName) is computed via purchaseLabel(...) with no single storage column; displayLabel is the raw nullable label column purchaseLabel is itself built from, so it's the best-effort audit-label fallback",
-  },
-  ledgerTransfer: {
-    column: null,
-    reason:
-      "titleField (fromPartyName) is a read-only value joined from LedgerParty, not a physical LedgerTransfer column",
-  },
-  vendorAccount: {
-    column: vendorAccountLabelSql,
-    reason:
-      "titleField (displayName) is the current '<vendor> · <member>' pair, a relational SQL expression rather than a stored column",
-  },
-  run: {
-    column: runTable.purpose,
-    reason:
-      'titleField (displayName) is computed as `${vendorName ?? "Purchase agent"} · ${purpose label}` with no single storage column; purpose is the always-present best-effort audit-label fallback',
-  },
-} satisfies Partial<
-  Record<ShortcodeEntity, { column: PgColumn | SQL | null; reason: string }>
->;
 
 /**
  * The drizzle column backing `presentation.titleField`, independent of

@@ -90,6 +90,16 @@ Photo import interaction, recovery, and device-work rules live in
 
 ## Density and feedback
 
+Generic record lists distinguish known matches from unresolved membership using
+the server's `unresolvedCount`. A flat status row discloses an incomplete count
+and switches between known and unresolved records without changing filters.
+The same mode applies to base paging and rich search, including an empty result.
+The return action remains available while unresolved reads load or fail. The
+canonical List, Table and Cards presentations share this selector; switching to
+a specialist presentation restores known membership rather than implying that
+its separate query supports the selector. Counts say known or unresolved when
+that distinction matters.
+
 Today leads with Next up task rows and their Done commands, then Meals → Nutrition → Your views. Phone and iPad Today have no audit feed or activity inbox; the Activity tab owns them. Compact Today omits summary stats; iPad bounds the list to a readable width. Mac uses two columns: tasks first, then only Overdue and Due this week stats, Activity inbox and Your views on the left; Meals, Nutrition and Recent changes on the right. Problems is a named web handoff. New task (due today), Log meal and Capture live in the toolbar + menu. Re-tapping the Today tab returns to its root. A total load failure shows one raw diagnostic and Retry; partial failures stay beside their loaded siblings.
 
 Cooking on iPhone and iPad uses a full-screen cover, prevents interactive swipe dismissal, and always offers an explicit Done. Each page shows one method step in large Dynamic Type text and its section's scaled ingredient quantities, expanded where available. Previous and Next are large controls that stack at accessibility text sizes. The screen stays awake while cooking and restores its prior idle-timer setting on exit. Reopening the same recipe restores its last step from memory only; scale and position are never written to the server or durable storage. Handoff carries the recipe id and zero-based step through `NSUserActivity` and opens that recipe's cook mode. Mac keeps the same focused steps in a native sheet with explicit Done.

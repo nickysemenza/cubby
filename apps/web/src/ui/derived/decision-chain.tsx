@@ -205,8 +205,9 @@ export function DecisionChain({
       ) : null}
       {data.envelope.result.kind === "cached" ? (
         <p className="text-xs text-muted-foreground">
-          Sources below describe current inputs. The cached result retains its
-          recorded provenance until recomputed.
+          Published snapshot sources describe the cached revision. Resolution
+          evidence below describes current inputs and can differ from that
+          revision.
         </p>
       ) : null}
       {pending}
@@ -222,12 +223,25 @@ export function DerivedFreshness({
   context?: Pick<FieldExplanationOutput, "subject" | "field">;
 }) {
   const result = envelope.result;
+  const field = _context
+    ? entityFieldModels[_context.subject.entityKind].fields.find(
+        (candidate) => candidate.key === _context.field,
+      )
+    : undefined;
+  const contextual =
+    field && "storedProjection" in field && field.storedProjection;
   return (
     <div className="grid gap-1 text-xs text-muted-foreground">
       {result.kind === "cached" ? (
         <p>
-          {result.freshness === "stale" ? "Stale result" : "Cached result"} ·{" "}
-          <DateDisplay timestamp={result.computedAt} />
+          {contextual
+            ? result.freshness === "stale"
+              ? "Stale facts"
+              : "Cached facts"
+            : result.freshness === "stale"
+              ? "Stale result"
+              : "Cached result"}{" "}
+          · <DateDisplay timestamp={result.computedAt} />
         </p>
       ) : null}
       {envelope.work.kind === "pending" ? (

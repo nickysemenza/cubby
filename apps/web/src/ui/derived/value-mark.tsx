@@ -30,9 +30,12 @@ export function UpdatingDot() {
 export function FieldValueMark({
   envelope,
   children,
+  interactive = true,
 }: {
   envelope?: ReadableFieldEnvelope;
   children: ReactNode;
+  /** Event buttons expose full diagnostics in their inspector. */
+  interactive?: boolean;
 }) {
   const provenance = envelope
     ? fieldDecisionOf(envelope)?.provenance
@@ -75,7 +78,12 @@ export function FieldValueMark({
       </span>
       {auto ? <span className="shrink-0 text-3xs">auto</span> : null}
       {updating ? <UpdatingDot /> : null}
-      {error !== null ? (
+      {error !== null && !interactive ? (
+        <span title={error} className="shrink-0 text-destructive">
+          <span aria-hidden="true">!</span>
+          <span className="sr-only">{error}</span>
+        </span>
+      ) : error !== null ? (
         <Tooltip>
           <TooltipTrigger
             render={

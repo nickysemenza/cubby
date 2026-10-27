@@ -16,6 +16,7 @@ import {
   claimDerivedMarks,
   DERIVED_DRAIN_JOB_KEY,
   markAllStoredDerived,
+  markExpiredClockDerived,
   prepareDerivedPage,
   publishDerivedPage,
 } from "~/server/generic/derived/repo/drain";
@@ -34,7 +35,11 @@ const RECONCILE_BUCKETS = 24;
 export const derivedDrainHandler = (computes: DerivedComputes): JobHandler =>
   defineJobHandler(z.object({}).passthrough(), async (db) => {
     const marks = await claimDerivedMarks(db);
-    if (marks.length === 0) return { page: { done: true } };
+    if (marks.length === 0)
+      return {
+        page: { done: true },
+        publish: async (tx) => ({ marked: await markExpiredClockDerived(tx) }),
+      };
     const plan = await prepareDerivedPage(db, computes, marks);
     return {
       page: { done: false },

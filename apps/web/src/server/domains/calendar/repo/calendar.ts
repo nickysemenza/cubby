@@ -1,4 +1,5 @@
 import {
+  calendarBeneficiarySource,
   calendarMealSource,
   calendarTaskSource,
   calendarExpenseSource,
@@ -52,15 +53,7 @@ import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
-import {
-  expense,
-  expenseAttribution,
-  ledgerParty,
-  project,
-  task,
-  meal,
-  planting,
-} from "~/server/db/schema";
+import { expense, project, task, meal, planting } from "~/server/db/schema";
 import { expenseInheritanceReadExtras } from "~/server/domains/expense/repo/expense-inheritance";
 import { dbExpenseToAPI } from "~/server/domains/expense/repo/helpers";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -68,7 +61,6 @@ import {
   plantingScaffold,
   getPlanting,
 } from "~/server/domains/garden/repo/garden";
-import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import {
   mealScaffold,
   getMealsByDateRange,
@@ -600,31 +592,14 @@ export async function getCalendarRange(
     ? await getDb(db)
         .select({
           shortcode: expense.shortcode,
+          name: expense.name,
           expenseId: expense.id,
-          cost: expense.cost,
           projectName: project.name,
-          partyName: ledgerParty.name,
-          partyShortcode: ledgerParty.shortcode,
         })
         .from(expense)
         .leftJoin(
           project,
           and(eq(project.id, expense.projectId), notDeleted(project)),
-        )
-        .leftJoin(
-          expenseAttribution,
-          and(
-            eq(expenseAttribution.expenseId, expense.id),
-            eq(expenseAttribution.role, "beneficiary"),
-            notDeleted(expenseAttribution),
-          ),
-        )
-        .leftJoin(
-          ledgerParty,
-          and(
-            eq(ledgerParty.id, expenseAttribution.ledgerPartyId),
-            notDeleted(ledgerParty),
-          ),
         )
         .where(
           and(
@@ -642,45 +617,6 @@ export async function getCalendarRange(
   type SpendingParty = NonNullable<
     Extract<CalendarItem, { kind: "expense" }>["spendingContext"]
   >["parties"][number];
-  const allocations = (
-    await loadExpenseAllocations(db, {
-      expenseIds: [...new Set(spendingRows.map((row) => row.expenseId))],
-      includeFuture: true,
-    })
-  ).filter((row) => row.role === "beneficiary");
-  const partyCodes = [
-    ...new Set(
-      allocations
-        .map((row) => row.allocationKey)
-        .filter((key) => !key.startsWith("~")),
-    ),
-  ];
-  const effectiveParties = new Map(
-    (partyCodes.length
-      ? await getDb(db)
-          .select({ shortcode: ledgerParty.shortcode, name: ledgerParty.name })
-          .from(ledgerParty)
-          .where(
-            and(
-              inArray(ledgerParty.shortcode, partyCodes),
-              notDeleted(ledgerParty),
-            ),
-          )
-      : []
-    ).map((party) => [party.shortcode, party]),
-  );
-  const partiesByLine = new Map<string, SpendingParty[]>();
-  for (const allocation of allocations) {
-    const parties = partiesByLine.get(allocation.expenseShortcode) ?? [];
-    const party = effectiveParties.get(allocation.allocationKey);
-    if (party)
-      parties.push({
-        id: parseShortcodeFor("ledgerParty", party.shortcode),
-        name: party.name,
-        inherited: allocation.basis !== "recorded",
-      });
-    partiesByLine.set(allocation.expenseShortcode, parties);
-  }
   const covers = await resolvePublicEntityDisplayImageLists(
     db,
     items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
@@ -695,16 +631,33 @@ export async function getCalendarRange(
   };
   const sources = await publicFieldEnvelopeBatch({
     db,
-    reads: items.map((item) => ({
-      entity: item.kind,
-      schema: sourceSchemas[item.kind],
-      row: {
-        ...("source" in item ? item.source : undefined),
-        id: item.id,
-        displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
-      },
-    })),
+    reads: [
+      ...items.map((item) => ({
+        entity: item.kind,
+        schema: sourceSchemas[item.kind],
+        row: {
+          ...("source" in item ? item.source : undefined),
+          id: item.id,
+          displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
+        },
+      })),
+      ...spendingRows.map((row) => ({
+        entity: "expense" as const,
+        schema: calendarBeneficiarySource,
+        row: {
+          id: row.shortcode,
+          name: row.name,
+          effectiveBeneficiaries: null,
+        },
+      })),
+    ],
   });
+  const beneficiarySources = new Map(
+    spendingRows.map((row, index) => [
+      row.shortcode,
+      calendarBeneficiarySource.parse(sources[items.length + index]),
+    ]),
+  );
   const hydrated = items.map((item, index) => {
     const rows = (
       item.kind === "expense"
@@ -715,19 +668,21 @@ export async function getCalendarRange(
     ).flatMap((code) => spendingByLine.get(code) ?? []);
     const parties = new Map<string, SpendingParty>();
     for (const row of rows) {
-      // Monetary allocations omit unpriced rows; their explicit identities
-      // remain usable without inventing a zero-cost allocation.
-      const resolved =
-        partiesByLine.get(row.shortcode) ??
-        (row.cost === null && row.partyShortcode && row.partyName
-          ? [
-              {
-                id: parseShortcodeFor("ledgerParty", row.partyShortcode),
-                name: row.partyName,
-                inherited: false,
-              },
-            ]
-          : []);
+      const source = beneficiarySources.get(row.shortcode);
+      const resolved = source
+        ? (fieldValueOf(source.fields.effectiveBeneficiaries) ?? []).flatMap(
+            (portion) =>
+              portion.partyId && portion.partyName
+                ? [
+                    {
+                      id: portion.partyId,
+                      name: portion.partyName,
+                      inherited: portion.basis !== "recorded",
+                    },
+                  ]
+                : [],
+          )
+        : [];
       for (const party of resolved)
         parties.set(party.id, {
           ...party,
@@ -740,6 +695,12 @@ export async function getCalendarRange(
       source: sources[index],
       ...((item.kind === "expense" || item.kind === "purchase") && {
         spendingContext: {
+          beneficiarySources: [
+            ...new Set(rows.map((row) => row.shortcode)),
+          ].flatMap((code) => {
+            const source = beneficiarySources.get(code);
+            return source ? [source] : [];
+          }),
           projectNames: [
             ...new Set(
               rows.flatMap((row) => (row.projectName ? [row.projectName] : [])),
