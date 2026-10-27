@@ -39,6 +39,17 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
 - **A disposable cache.** Stored derived values can be truncated and rebuilt
   without loss. Overrides, explicit None, waivers, accepted Suggestions and the
   AI response cache are inputs, never derived rows.
+- **One computation can publish several fields.** The entity manifest owns a
+  typed result schema, watched inputs, storage policy, scalar projections and
+  explanation bindings. A batch adapter retains canonical domain policy; the
+  existing drain publishes its payload, provenance and projections together.
+  Contextual fields can fold those published facts with current eligibility and
+  scope, while keeping their result revision attached to explanations.
+- **Missing results leave membership unresolved.** Lists distinguish certain
+  matches from candidates whose required computation is unavailable. The same
+  predicates drive rows, selection IDs and counts. Members can inspect unresolved
+  candidates under the original filters. Missing contributions make totals
+  incomplete rather than zero; a published empty result remains a known outcome.
 - **Store what folds across rows.** Values that walk a subtree or fold related
   rows, need TypeScript or WASM, or cost money are stored in one
   `DerivedValue` table, with generated expression indexes where lists sort or
@@ -132,5 +143,10 @@ work. #3324 completes the separately tracked field contract migration, removing
 adapters. Stored results can lag a save and show an updating indicator; sorts
 and filters use the same effective result, including decisive current own
 intent. Correctness depends on declared inputs, which the read-set check and
-reconciliation guard. Additional field materialization remains #3338, and
-Image list loading optimization remains #3325.
+reconciliation guard. #3338 extends materialization to ownership, beneficiary
+seeds, Project and Shipment folds, and reusable Email facts. Task inheritance
+continues to use generated live resolution declarations. Financial allocation,
+write validation and household-date comparisons remain authoritative live policy.
+Detailed query/latency and catch-up measurement follows the functional cutover
+in #3420; the five-second dependent-publication target is not established by
+functional tests. Image list loading optimization remains #3325.

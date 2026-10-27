@@ -44,7 +44,7 @@ import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
 import { buildProjectListQuery, projectListSums } from "./lookup";
-import { collectDescendantIds, loadProjectSubtreeRollups } from "./subtree";
+import { collectDescendantIds, loadStoredProjectRollups } from "./subtree";
 
 /**
  * One page of the project WBS tree: `count` is the number of matching ROOTS
@@ -139,7 +139,7 @@ export const projectTreePage = async (
 
   const ids = rows.map((row) => row.id);
   const [projectContext, deps, dataQualities] = await Promise.all([
-    loadProjectSubtreeRollups(db, ids, tree),
+    loadStoredProjectRollups(db, tree, ids),
     projectDependencyIds(db, ids),
     loadDataQualities(db, "project", ids),
   ]);

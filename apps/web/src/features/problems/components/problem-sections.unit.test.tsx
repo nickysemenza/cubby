@@ -35,6 +35,7 @@ function keysReadBy(section: Section): ProblemKey[] {
   const read = new Set<string>();
   const probe: AllProblems = {
     ...EMPTY_PROBLEM_ARRAYS,
+    incompleteProjectIds: [],
     sectionTotals: {},
     totalProblems: 0,
   };
@@ -90,6 +91,7 @@ describe("PROBLEM_SECTIONS", () => {
     );
     const problems: AllProblems = {
       ...EMPTY_PROBLEM_ARRAYS,
+      incompleteProjectIds: [],
       ...sections,
       sectionTotals,
       totalProblems: 0,
@@ -147,6 +149,7 @@ describe("PROBLEM_SECTIONS", () => {
     });
     const problems: AllProblems = {
       ...EMPTY_PROBLEM_ARRAYS,
+      incompleteProjectIds: [],
       understatedCostMeals: [meal],
       sectionTotals: {},
       totalProblems: 1,
@@ -195,6 +198,7 @@ describe("PROBLEM_SECTIONS", () => {
     });
     const problems: AllProblems = {
       ...EMPTY_PROBLEM_ARRAYS,
+      incompleteProjectIds: [],
       imageProcessingIssues: [issue],
       sectionTotals: {},
       totalProblems: 0,
@@ -230,6 +234,7 @@ describe("PROBLEM_SECTIONS", () => {
     const email = testShortcode("email", "unclassified-vendor");
     const problems: AllProblems = {
       ...EMPTY_PROBLEM_ARRAYS,
+      incompleteProjectIds: [],
       runFindings: [
         {
           id: "00000000-0000-4000-8000-000000000001",

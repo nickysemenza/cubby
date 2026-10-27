@@ -1,3 +1,4 @@
+import { emailPurchaseLink } from "@cubby/schemas/email-fields";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
@@ -188,6 +189,38 @@ function fieldOf(entity: Entity, key: string) {
 }
 
 describe("declared entity displays", () => {
+  it("shows missing Email relationships as Updating rather than an empty Purchase list", () => {
+    const record = {
+      id: "EML-4K7M",
+      fields: {
+        purchaseLinks: computedFieldEnvelope(
+          z.array(emailPurchaseLink).nullable(),
+        ).parse({
+          current: {
+            assignment: null,
+            controls: { kind: "readonly", reason: "computed" },
+          },
+          result: { kind: "missing" },
+          work: { kind: "pending" },
+        }),
+      },
+    };
+    const columns = createEntityDisplayColumns(
+      "email",
+      createCubbyColumnHelper<typeof record>(),
+      undefined,
+      { only: ["purchaseLinks"] },
+    );
+    const harness = createBrowserTestHarness();
+    const [cell] = columns.visit((column) =>
+      renderRowCell(column.cell, record),
+    );
+    const view = render(<>{cell}</>, { wrapper: harness.wrapper });
+    expect(screen.getByText("Updating…")).toBeInTheDocument();
+    view.unmount();
+    harness.dispose();
+  });
+
   it("keeps allocated category links when the scalar resolution is null", () => {
     const harness = createBrowserTestHarness();
     const record = {

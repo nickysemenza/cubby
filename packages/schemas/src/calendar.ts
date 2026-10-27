@@ -1,3 +1,4 @@
+import { expenseBeneficiaryResult } from "./expense-beneficiaries";
 import { fieldResolutionsSchema } from "./field-resolution";
 import { withFieldEnvelopes } from "./field-envelope";
 import {
@@ -197,7 +198,17 @@ export const calendarTaskItem = z.object({
   subjectProductName: z.string().nullable(),
 });
 
+export const calendarBeneficiarySource = withFieldEnvelopes(
+  z.object({
+    id: expenseShortcode,
+    name: z.string(),
+    effectiveBeneficiaries: expenseBeneficiaryResult.shape.portions.nullable(),
+  }),
+  { effectiveBeneficiaries: null },
+);
+
 const calendarSpendingContext = z.object({
+  beneficiarySources: z.array(calendarBeneficiarySource),
   projectNames: z.array(z.string()),
   parties: z.array(
     z.object({

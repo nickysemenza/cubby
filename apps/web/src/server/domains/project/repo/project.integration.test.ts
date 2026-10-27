@@ -20,12 +20,15 @@ import {
   updateTask,
 } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { deleteProjects, getProjectByID, updateProject } from "./crud";
 import { getProjectDependencyGraph } from "./dependency-graph";
+import { projectList } from "./lookup";
 import { projectTreePage } from "./tree";
 
 describe("project repository", () => {
@@ -151,6 +154,13 @@ describe("project repository", () => {
       projectId: project.id,
     });
 
+    // Missing background work must not masquerade as an empty Project.
+    const missing = await getProjectByID(ctx.db, projectEntityId);
+    expect(missing.rollup).toBeNull();
+    expect(missing.spent).toBeNull();
+    expect(missing.taskProgress).toBeNull();
+    expect(missing.dateWindow).toBeNull();
+    await drainStoredDerived(ctx.db);
     const result = await getProjectByID(ctx.db, projectEntityId);
     expect(result.rollup).toEqual({
       spent: 150,
@@ -172,6 +182,122 @@ describe("project repository", () => {
         costEstimate: null,
       },
     });
+    const listed = await projectList(ctx.db, {}, [], {
+      pageIndex: 0,
+      pageSize: 500,
+    });
+    expect(listed.data.find((row) => row.id === project.id)?.rollup).toEqual(
+      result.rollup,
+    );
+  });
+
+  it("republishes both parent rollups when a dated child moves", async () => {
+    const first = await createRepoEntity(ctx, "project", {
+      name: "Synthetic first parent",
+    });
+    const second = await createRepoEntity(ctx, "project", {
+      name: "Synthetic second parent",
+    });
+    const child = await createRepoEntity(ctx, "project", {
+      name: "Synthetic moved child",
+      parentProjectId: first.output.id,
+      dates: { start: "2025-01-01", end: "2025-12-31" },
+    });
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic child spending",
+      projectId: child.output.id,
+      cost: 25,
+      date: "2025-03-01",
+      future: false,
+      trade: "other",
+      costType: "materials",
+    });
+    await drainStoredDerived(ctx.db);
+    const before = await getProjectByID(ctx.db, first.entityId);
+    expect(before.rollup?.subtree.spent).toBe(25);
+    expect(before.dateWindow?.effectiveStart).toBe("2025-01-01");
+    expect(before.dateWindow?.effectiveEnd).toBe("2025-12-31");
+    await updateProject(
+      ctx.db,
+      child.output.id,
+      { parentProjectId: second.output.id },
+      ctx.actor,
+    );
+    // Reads retain the last published result until the marked work drains.
+    expect((await getProjectByID(ctx.db, first.entityId)).rollup).toEqual(
+      before.rollup,
+    );
+    await drainStoredDerived(ctx.db);
+    const oldParent = await getProjectByID(ctx.db, first.entityId);
+    const newParent = await getProjectByID(ctx.db, second.entityId);
+    expect(oldParent.rollup?.subtree.spent).toBe(0);
+    expect(oldParent.dateWindow?.effectiveStart).toBeNull();
+    expect(newParent.rollup?.spent).toBe(0);
+    expect(newParent.rollup?.subtree.spent).toBe(25);
+    expect(newParent.dateWindow?.effectiveStart).toBe("2025-01-01");
+    expect(newParent.dateWindow?.effectiveEnd).toBe("2025-12-31");
+  });
+
+  it("invalidates rollups when an inherited subtask switches through explicit None", async () => {
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic mode-only Project",
+    });
+    const parent = await createRepoEntity(ctx, "task", {
+      name: "Synthetic project source Task",
+      projectId: project.output.id,
+      trade: "other",
+    });
+    const child = await createRepoEntity(ctx, "task", {
+      name: "Synthetic inherited Task",
+      parentTaskId: parent.output.id,
+      trade: "other",
+      status: "done",
+      due: { start: "2027-01-15", end: null },
+    });
+    const stored = async () =>
+      (
+        await loadStoredDerived(
+          ctx.db,
+          "project",
+          [project.entityId],
+          ["rollups"],
+        )
+      )
+        .get(project.entityId)
+        ?.get("rollups");
+    await drainStoredDerived(ctx.db);
+    const before = await getProjectByID(ctx.db, project.entityId);
+    expect(before.rollup).toMatchObject({ taskCount: 2, doneTaskCount: 1 });
+    expect(before.dateWindow?.effectiveEnd).toBe("2027-01-15");
+    expect((await stored())?.stale).toBe(false);
+    await updateTask(
+      ctx.db,
+      child.output.id,
+      {
+        projectId: null,
+        projectMode: "explicit",
+      },
+      ctx.actor,
+    );
+    expect((await stored())?.stale).toBe(true);
+    await drainStoredDerived(ctx.db);
+    const excluded = await getProjectByID(ctx.db, project.entityId);
+    expect(excluded.rollup).toMatchObject({ taskCount: 1, doneTaskCount: 0 });
+    expect(excluded.dateWindow?.effectiveEnd).toBeNull();
+    await updateTask(
+      ctx.db,
+      child.output.id,
+      {
+        projectId: null,
+        projectMode: "inherit",
+      },
+      ctx.actor,
+    );
+    expect((await stored())?.stale).toBe(true);
+    await drainStoredDerived(ctx.db);
+    const restored = await getProjectByID(ctx.db, project.entityId);
+    expect(restored.rollup).toEqual(before.rollup);
+    expect(restored.dateWindow).toEqual(before.dateWindow);
   });
 
   it("returns a scoped subtree with direct dependency and hierarchy context", async () => {
@@ -464,6 +590,7 @@ describe("project repository — date windows (derivation)", () => {
       date: "2024-01-15",
     });
 
+    await drainStoredDerived(ctx.db);
     const after = await getProjectByID(ctx.db, projectEntityId);
     expect(after.dateWindow).toEqual({
       derivedStart: "2024-01-15",

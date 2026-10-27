@@ -1,3 +1,4 @@
+import { fieldProvenance } from "@cubby/schemas/field-envelope";
 import type { FieldDecisionStep } from "@cubby/schemas/field-explanation";
 import type {
   FieldResolution,
@@ -11,10 +12,17 @@ import type {
   VendorAccountId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { EffectiveInventoryOwnership } from "@cubby/schemas/inventory-ownership";
-import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
+import {
+  inventoryOwnershipMode,
+  storedInventoryOwnership,
+  storedProductOwnership,
+  type EffectiveInventoryOwnership,
+} from "@cubby/schemas/inventory-ownership";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
+import { OWNER_FILTER_HOUSEHOLD } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, lte, not, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -23,7 +31,7 @@ import {
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { outer, quotedTable, related } from "~/server/db/helpers/related";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   entityLink,
   expense,
@@ -41,6 +49,7 @@ import {
   resolveBeneficiaryEvidence,
   resolvePaymentEvidence,
 } from "~/server/domains/inventory/repo/ownership-evidence";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
 type OwnershipEntry = Pick<
@@ -1058,13 +1067,6 @@ const ownerState = (ownership: EffectiveInventoryOwnership): OwnerState =>
       ? { kind: "household" }
       : { kind: "unknown" };
 
-const ownerFilterValue = (state: OwnerState) =>
-  state.kind === "person"
-    ? state.owner.id
-    : state.kind === "household"
-      ? OWNER_FILTER_HOUSEHOLD
-      : OWNER_FILTER_UNKNOWN;
-
 const liveOwnershipEntries = (
   db: Database | DrizzleTransaction,
   productIds?: readonly ProductId[],
@@ -1097,53 +1099,13 @@ const withOwnerStates = <Entry extends { id: InventoryId }>(
       : [];
   });
 
-async function liveEntryOwnerStates(
-  db: Database | DrizzleTransaction,
-  productIds?: readonly ProductId[],
-) {
-  if (productIds?.length === 0) return [];
-  const entries = await liveOwnershipEntries(db, productIds);
-  return withOwnerStates(
-    entries,
-    await loadEffectiveInventoryOwnership(db, entries),
-  );
-}
-
-/**
- * Filter-independent owner states of every live entry for one bounded read
- * operation: the same resolver as hydration, so inherited stock matches.
- */
-export async function loadInventoryOwnerStates(
-  db: Database | DrizzleTransaction,
-) {
-  return (await liveEntryOwnerStates(db)).map(({ id, state }) => ({
-    id,
-    state,
-  }));
-}
-
-/**
- * Live entries whose effective Owner matches any filter value: a Ledger Party
- * shortcode, `@household` or `@unknown`; callers narrow SQL by these ids
- * before paging, counts, and totals.
- */
-export function selectInventoryIdsByOwner(
-  states: Awaited<ReturnType<typeof loadInventoryOwnerStates>>,
-  values: readonly string[],
-): InventoryId[] {
-  const wanted = new Set(values);
-  return states
-    .filter(({ state }) => wanted.has(ownerFilterValue(state)))
-    .map(({ id }) => id);
-}
-
 /**
  * Each Product's Owner rollup: the distinct effective owners of its live
  * entries (a person marked inherited when any of their entries only inherits
  * them), Household, Unknown; a Product with no live entry shows the owner its
  * single acquisition would hand an `inherit` row, or nothing.
  */
-export async function loadProductOwners(
+export async function computeProductOwners(
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
 ): Promise<Map<ProductId, ResolvedListItem[]>> {
@@ -1214,84 +1176,106 @@ export async function loadProductOwners(
   return result;
 }
 
-/** Filter-independent membership inputs for one bounded read operation. */
-export async function loadProductOwnerMembership(
+/** Ordinary ownership hydration reads the published ladder, plus current own intent. */
+export async function loadStoredInventoryOwnershipTraces(
   db: Database | DrizzleTransaction,
-) {
-  const [liveEntries, unstocked] = await Promise.all([
-    liveOwnershipEntries(db),
-    unwrapDb(db)
-      .select({ id: product.id })
-      .from(product)
-      .where(
-        and(
-          notDeleted(product),
-          not(
-            related(
-              inventoryEntry,
-              (ie) => sql`${ie.productId} = ${outer(product.id)}`,
-            ).exists(),
-          ),
-        ),
-      ),
+  entries: OwnershipEntry[],
+): Promise<Map<InventoryId, InventoryOwnershipTrace>> {
+  const [reads, explicit] = await Promise.all([
+    loadStoredDerived(
+      db,
+      "inventory",
+      entries.map((entry) => entry.id),
+      ["ownership"],
+    ),
+    loadExplicitOwners(db, entries),
   ]);
-  // One inherited-candidate pass for both populations (see `loadProductOwners`).
-  const unstockedIds = unstocked.map(({ id }) => id);
-  const [candidates, explicitById] = await Promise.all([
-    loadInheritedCandidates(db, [
-      ...new Set([
-        ...liveEntries.map((entry) => entry.productId),
-        ...unstockedIds,
-      ]),
-    ]),
-    loadExplicitOwners(db, liveEntries),
-  ]);
-  const traces = await traceInventoryOwnership(
-    liveEntries,
-    candidates,
-    explicitById,
-  );
-  const states = withOwnerStates(
-    liveEntries,
-    new Map([...traces].map(([id, trace]) => [id, trace.ownership] as const)),
-  );
-  const inherited = unstockedIds.map(
-    (id) => [id, candidates.get(id)?.owner ?? null] as const,
-  );
-  return {
-    states: states.map(({ productId, state }) => ({ productId, state })),
-    inherited,
-  };
+  const out = new Map<InventoryId, InventoryOwnershipTrace>();
+  for (const entry of entries) {
+    const read = reads.get(entry.id)?.get("ownership");
+    const parsed = storedInventoryOwnership.safeParse(read?.value);
+    if (!read?.resultExists || !parsed.success) continue;
+    const saved = parsed.data.ownership;
+    const own = entry.ownerLedgerPartyId
+      ? publicOwner(explicit.get(entry.ownerLedgerPartyId) ?? null)
+      : null;
+    const ownership = {
+      ...saved,
+      mode: entry.ownershipMode,
+      explicitOwner: own,
+      effectiveOwner:
+        entry.ownershipMode === "explicit" ? own : saved.inheritedOwner,
+      source:
+        entry.ownershipMode === "explicit"
+          ? own
+            ? ("explicit" as const)
+            : ("household" as const)
+          : parsed.data.inheritedSource,
+      matchesInheritedOwner:
+        entry.ownershipMode === "explicit" &&
+        own !== null &&
+        own.id === saved.inheritedOwner?.id,
+    };
+    out.set(entry.id, {
+      ownership,
+      steps: [],
+      fallbackSource: parsed.data.fallbackSource,
+      intent: {
+        source: "inventory",
+        reason:
+          entry.ownershipMode === "inherit"
+            ? "inherit"
+            : own
+              ? "explicit"
+              : "household",
+        effect: entry.ownershipMode === "inherit" ? "fallback" : "used",
+        observed: [],
+      },
+    });
+  }
+  return out;
 }
 
-export function selectProductIdsByOwner(
-  { states, inherited }: Awaited<ReturnType<typeof loadProductOwnerMembership>>,
-  values: readonly string[],
-  presence?: "has" | "none",
-): ProductId[] {
-  const wanted = new Set(values);
-  const matches = new Set<ProductId>();
-  for (const { productId, state } of states)
-    if (wanted.has(ownerFilterValue(state)) || presence === "has")
-      matches.add(productId);
-  for (const [id, owner] of inherited)
-    if (
-      (owner !== null && wanted.has(owner.shortcode)) ||
-      (presence === "has" && owner !== null) ||
-      (presence === "none" && owner === null)
-    )
-      matches.add(id);
-  return [...matches];
+/** The published Product collection is shared by ordinary reads and SQL membership. */
+export async function loadProductOwners(
+  db: Database | DrizzleTransaction,
+  productIds: readonly ProductId[],
+): Promise<Map<ProductId, ResolvedListItem[]>> {
+  const reads = await loadStoredDerived(db, "product", productIds, [
+    "ownership",
+  ]);
+  const out = new Map<ProductId, ResolvedListItem[]>();
+  for (const id of productIds) {
+    const read = reads.get(id)?.get("ownership");
+    const parsed = storedProductOwnership.safeParse(read?.value);
+    if (read?.resultExists && parsed.success) out.set(id, parsed.data.owners);
+  }
+  return out;
 }
 
-export async function productIdsByOwner(
-  db: Database | DrizzleTransaction,
+/** Current explicit intent wins immediately; a missing inherited snapshot stays NULL. */
+export const inventoryOwnerFilterSql = () => sql`CASE
+  WHEN ${inventoryEntry.ownershipMode} = ${inventoryOwnershipMode.enum.explicit} THEN COALESCE(
+    (SELECT lp.shortcode FROM "LedgerParty" lp WHERE lp.id = ${inventoryEntry.ownerLedgerPartyId}
+      AND ${notDeleted(alias(ledgerParty, "lp"))} AND lp.kind IN (${ledgerPartyKind.enum.member}, ${ledgerPartyKind.enum.guest})), ${OWNER_FILTER_HOUSEHOLD})
+  ELSE (SELECT value->>'inheritedFilter' FROM "DerivedValue" WHERE "entityId" = ${inventoryEntry.id}
+    AND key = 'ownership' AND "decidedBy"#>>'{outcome,kind}' = 'value'
+    AND "decidedBy"#>>'{provenance,kind}' <> ${fieldProvenance.options[0].shape.kind.value}) END`;
+
+/** NULL means membership awaits a publication; false is a known nonmatch. */
+export const productOwnerFilterSql = (
   values: readonly string[],
   presence?: "has" | "none",
-): Promise<ProductId[]> {
-  return selectProductIdsByOwner(
-    await loadProductOwnerMembership(db),
-    values,
-    presence,
-  );
-}
+) => sql`(
+  SELECT (
+      ${
+        values.length
+          ? sql`ov.value->'ownerFilters' ?| ARRAY[${sql.join(
+              values.map((value) => sql`${value}`),
+              sql`, `,
+            )}]::text[]`
+          : sql`false`
+      }
+      OR ${presence === "has" ? sql`jsonb_array_length(ov.value->'owners') > 0` : presence === "none" ? sql`jsonb_array_length(ov.value->'owners') = 0` : sql`false`})
+    FROM "DerivedValue" ov WHERE ov."entityId" = ${product.id} AND ov.key = 'ownership'
+      AND ov."decidedBy"#>>'{outcome,kind}' = 'value')`;

@@ -21,6 +21,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 // Persisted-read failures: contentless messages disappear; absent historical
 // headers become invented values; owner filters leak; dismissal/thread context
@@ -153,6 +154,7 @@ describe("Email generic persisted reads", () => {
       classificationVersion: "synthetic-v1",
       status: "excluded",
     });
+    await drainStoredDerived(ctx.db);
     const context = buildKernelContext(ctx.db);
     const list = await executeEntity(context, {
       action: "list",
@@ -188,12 +190,14 @@ describe("Email generic persisted reads", () => {
       },
     ]);
     expect(list.meta.totalCount).toBe(1);
+    expect(list.items[0]).not.toHaveProperty("storedProjectionVersions");
     const detail = await executeEntity(context, {
       action: "get",
       missing: "error",
       entity: "email",
       id: parseShortcodeFor("email", metadata.shortcode),
     });
+    expect(detail.item).not.toHaveProperty("storedProjectionVersions");
     expect(detail.item).toMatchObject({
       id: metadata.shortcode,
       subject: "Workshop newsletter",
@@ -342,6 +346,7 @@ describe("Email generic persisted reads", () => {
     await getDb(ctx.db).execute(
       sql`UPDATE "OrderMail" SET "content" = '{"snippet":null,"bodyText":null,"bodyHtml":null}'::jsonb`,
     );
+    await drainStoredDerived(ctx.db);
     const context = buildKernelContext(ctx.db);
     const linked = await executeEntity(context, {
       action: "list",

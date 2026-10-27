@@ -32,6 +32,130 @@ function cached(
 }
 
 describe("canonical field reads", () => {
+  it("binds a scoped projection only to the publication it folded", () => {
+    const schema = withFieldEnvelopes(
+      z.object({
+        id: z.string(),
+        linkState: z.string().nullable(),
+        storedProjectionVersions: z
+          .record(z.string(), z.string().nullable())
+          .optional(),
+      }),
+      { linkState: null },
+    );
+    const root = cached({
+      value: { linkState: "linked", facts: [], purchaseLinks: [] },
+    });
+    const read = (revision: string | null) =>
+      publicFieldEnvelopeRow(
+        schema,
+        "email",
+        {
+          id: "EML-EXAMPLE",
+          linkState: "suggested",
+          storedProjectionVersions: { linkState: revision },
+        },
+        {
+          raw: {},
+          ownership: {},
+          stored: new Map([["relationshipFacts", root]]),
+        },
+      );
+    const matching = read(root.computedAt);
+    expect(matching.fields.linkState.result).toMatchObject({
+      kind: "cached",
+      computedAt: root.computedAt,
+      decision: { outcome: { kind: "value", value: "suggested" } },
+    });
+    expect(matching).not.toHaveProperty("storedProjectionVersions");
+    expect(read("2026-10-24T20:00:00Z").fields.linkState.result).toEqual({
+      kind: "missing",
+    });
+    expect(read(null).fields.linkState.result).toEqual({ kind: "missing" });
+  });
+
+  it("projects one published revision without turning null, zero or missing into each other", () => {
+    const schema = withFieldEnvelopes(
+      z.object({
+        id: z.string(),
+        eventCount: z.number().nullable(),
+        firstEventDate: z.string().nullable(),
+      }),
+      { eventCount: null, firstEventDate: null },
+    );
+    const published = cached({
+      value: { eventCount: 0, firstEventDate: null },
+    });
+    const row = publicFieldEnvelopeRow(
+      schema,
+      "shipment",
+      {
+        id: "SHIP-EXAMPLE",
+        eventCount: 99,
+        firstEventDate: "2026-01-01",
+      },
+      {
+        raw: {},
+        stored: new Map([["eventSummary", published]]),
+        ownership: {},
+      },
+    );
+    expect(row.fields.eventCount.result).toMatchObject({
+      kind: "cached",
+      freshness: "stale",
+      computedAt: published.computedAt,
+      decision: { outcome: { kind: "value", value: 0 } },
+    });
+    expect(row.fields.firstEventDate.result).toMatchObject({
+      kind: "cached",
+      freshness: "stale",
+      computedAt: published.computedAt,
+      decision: { outcome: { kind: "empty", reason: "unset" } },
+    });
+    const missing = publicFieldEnvelopeRow(
+      schema,
+      "shipment",
+      {
+        id: "SHIP-EXAMPLE",
+        eventCount: 99,
+        firstEventDate: "2026-01-01",
+      },
+      {
+        raw: {},
+        stored: new Map([["eventSummary", { ...published, value: {} }]]),
+        ownership: {},
+      },
+    );
+    expect(missing.fields.eventCount.result).toEqual({ kind: "missing" });
+    expect(missing.fields.firstEventDate.result).toEqual({ kind: "missing" });
+  });
+  it("keeps an expired publication stale while no work is queued", () => {
+    const schema = withFieldEnvelopes(
+      z.object({ id: z.string(), eventCount: z.number().nullable() }),
+      { eventCount: null },
+    );
+    const row = publicFieldEnvelopeRow(
+      schema,
+      "shipment",
+      { id: "SHIP-EXAMPLE", eventCount: null },
+      {
+        raw: {},
+        ownership: {},
+        stored: new Map([
+          [
+            "eventSummary",
+            { ...cached({ value: { eventCount: 0 } }), pending: false },
+          ],
+        ]),
+      },
+    );
+    expect(row.fields.eventCount.result).toMatchObject({
+      kind: "cached",
+      freshness: "stale",
+    });
+    expect(row.fields.eventCount.work).toEqual({ kind: "idle" });
+  });
+
   it("uses the current classifier for action eligibility instead of the hydrated row", () => {
     const schema = withFieldEnvelopes(
       z.object({ id: z.string(), spendingCategoryId: z.string().nullable() }),

@@ -38,6 +38,8 @@ export type DerivedStoredInput = {
     where?: Record<string, string>;
   }[];
   json?: { array?: string[]; key: string };
+  /** Fixed target rows selected during deferred fanout, never inside the source save. */
+  targetWhere?: Record<string, string | null>;
 };
 
 export const entityFieldKinds = [
@@ -693,6 +695,10 @@ const buildMetadataSchemas = () => {
       readKeyOverride: nonEmptyString().nullable().optional(),
       /** Existing DerivedValue key supplying this public field snapshot. */
       storedKey: nonEmptyString().optional(),
+      /** Typed object or scalar member of the stored snapshot supplying this field. */
+      storedPath: z.array(nonEmptyString()).min(1).optional(),
+      /** A cheap scope projection supplies its value with the owning result revision. */
+      storedProjection: z.literal(true).optional(),
       reference: entityFieldReferenceMetadataSchema
         .nullable()
         .optional()
@@ -750,6 +756,8 @@ const buildMetadataSchemas = () => {
               summary: nonEmptyString().optional(),
             })
             .optional(),
+          /** Map a contextual record kind to its existing singular list filter. */
+          scopeFilters: z.record(z.string(), nonEmptyString()).optional(),
           sourceDependencies: z
             .array(
               z.strictObject({
@@ -1053,6 +1061,13 @@ const buildMetadataSchemas = () => {
       except: z.array(nonEmptyString()).min(1).optional(),
       /** From the matched column's value to this entity's ids; `match` then names `{ column: "id" }`. */
       path: derivedPathSchema.optional(),
+      targetWhere: z
+        .record(nonEmptyString(), nonEmptyString().nullable())
+        .refine(
+          (where) => Object.keys(where).length > 0,
+          "targetWhere needs at least one column",
+        )
+        .optional(),
       /**
        * The matched column is JSON: read `key` from the object, or from each
        * element at `array` (a mail-import Run's `input.sources`).
@@ -1069,6 +1084,7 @@ const buildMetadataSchemas = () => {
   const derivedStoreSchema = z
     .object({
       compute: nonEmptyString(),
+      clock: z.literal("householdDay").optional(),
       inputs: z.array(derivedInputSchema).min(1),
       dependsOn: z
         .array(
@@ -1112,7 +1128,13 @@ const buildMetadataSchemas = () => {
     })
     .strict();
   const entityDerivedFieldMetadataSchema = z.union([
-    z.object({ via: nonEmptyString() }).strict(),
+    z
+      .object({
+        via: nonEmptyString(),
+        /** An unmatched row set is unresolved until this result is available. */
+        requiresResult: derivedKey.optional(),
+      })
+      .strict(),
     /**
      * A correlated aggregate the list compiler builds from a declared
      * relation path: `count` of the related records, or `sum`/`min`/`max` of
@@ -1147,6 +1169,16 @@ const buildMetadataSchemas = () => {
         ]),
         options: z.array(nonEmptyString()).min(1).optional(),
         stored: derivedStoreSchema.optional(),
+        /** A scalar projection of one atomically published typed result. */
+        fromResult: z
+          .object({
+            key: derivedKey,
+            path: z.array(nonEmptyString()).min(1),
+          })
+          .strict()
+          .optional(),
+        /** A contextual SQL value whose membership needs this published result. */
+        requiresResult: derivedKey.optional(),
       })
       .strict(),
     z
@@ -1161,6 +1193,8 @@ const buildMetadataSchemas = () => {
         ]),
         options: z.array(nonEmptyString()).min(1).optional(),
         reason: nonEmptyString(),
+        /** The predicate returns SQL NULL while its required result is unavailable. */
+        requiresResult: derivedKey.optional(),
       })
       .strict(),
   ]);
@@ -1256,6 +1290,8 @@ const buildMetadataSchemas = () => {
         .record(
           derivedKey,
           derivedStoreSchema.extend({
+            /** Checked at generation; adapters validate the same payload before publication. */
+            resultSchema: declaredZodSchema.optional(),
             publishes: z
               .enum(["derivedValue", "ownTable"])
               .optional()
@@ -1693,6 +1729,8 @@ const buildMetadataSchemas = () => {
                     z.tuple([nonEmptyString(), nonEmptyString()]),
                   ]),
                   format: z.enum(["currency", "currencyRange", "integer"]),
+                  /** Cached contributors required before this total is complete. */
+                  requiresResults: z.array(derivedKey).min(1).optional(),
                 })
                 .strict()
                 .refine(
@@ -3234,7 +3272,11 @@ type OwnCheckId<D> = D extends {
 export type ReadSchemaFacts<D> = Readonly<{
   ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
 }>;
+const storedProjectionVersions = z
+  .record(z.string(), z.string().nullable())
+  .optional();
 type BaseReadFields<D> = {
+  storedProjectionVersions: typeof storedProjectionVersions;
   fieldResolutions: typeof optionalFieldResolutionsSchema;
 } & (D extends ReadableDeclaration ? ReadFieldSchemas<D> : {}) &
   (D extends { capabilities: { dataQuality: object } }
@@ -3288,6 +3330,7 @@ export function defaultReadSchemas<
   const base = z.object({
     // Resolver evidence is internal to raw reads, never an entity field descriptor.
     fieldResolutions: optionalFieldResolutionsSchema,
+    storedProjectionVersions,
     ...fields,
     ...(declaration.capabilities?.dataQuality ? { dataQuality } : {}),
   }) as BaseReadSchema<D>;

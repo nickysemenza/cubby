@@ -3,6 +3,7 @@ import {
   emailPurchaseLink,
   emailPurchaseLinkState,
 } from "@cubby/schemas/email-fields";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   parseShortcodeFor,
   purchaseId,
@@ -21,7 +22,11 @@ import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
  * Link that replaces another Purchase's link keeps who proposed that link;
  * only the Email's owner decides; and none of it changes spend.
  */
-import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
+import {
+  countTestDbQueries,
+  raceUniqueInsert,
+  withTestDb,
+} from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -42,9 +47,13 @@ import {
   feedback,
   orderMailEvent,
   purchase as purchaseTable,
+  run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
-import { listEmailsRead } from "~/server/domains/email/repo/email";
+import {
+  buildEmailWhere,
+  listEmailsRead,
+} from "~/server/domains/email/repo/email";
 import {
   emailLinkedSql,
   emailMemberClassificationSql,
@@ -60,8 +69,11 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
+import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   callMcpTool,
   kernelRequestContext,
@@ -71,8 +83,10 @@ import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
 
-  const list = async (filters: EmailFilters) =>
-    (
+  const list = async (filters: EmailFilters) => {
+    // Stable fixture reads settle publications; dedicated cases below exercise missing and stale results.
+    await drainStoredDerived(ctx.db);
+    return (
       await listEmailsRead(
         ctx.db,
         filters,
@@ -84,6 +98,7 @@ describe("Email Purchase links", () => {
         purchaseLinks: emailPurchaseLink.array().parse(row.purchaseLinks),
       }),
     );
+  };
 
   async function emailCode(orderMailId: string) {
     const [row] = await getDb(ctx.db)
@@ -396,6 +411,221 @@ describe("Email Purchase links", () => {
       email: await emailCode(source.id),
     };
   }
+
+  it("discovers newly eligible matches and keeps live owner gates separate from cached facts", async () => {
+    const f = await retainedReviewFixture();
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ orderId: "SYNTHETIC-NO-MATCH" })
+      .where(eq(purchaseTable.id, f.purchase.id));
+    const filters = {
+      vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
+    };
+    const read = async () => {
+      const measured = await countTestDbQueries(() =>
+        listEmailsRead(
+          ctx.db,
+          filters,
+          [{ orderBy: "linkState", direction: "asc" }],
+          { pageIndex: 0, pageSize: 25 },
+          selectedListProjection("email", [
+            "linkState",
+            "purchaseLinks",
+            "linked",
+            "importOutcome",
+          ]),
+        ),
+      );
+      expect(
+        measured.statements.some((statement) =>
+          statement.includes('abs(event."amount" - p."statedTotal")'),
+        ),
+      ).toBe(false);
+      expect(measured.tables).not.toContain("ImportSourceClaim");
+      expect(measured.tables).not.toContain("OrderMailEvent");
+      const row = measured.result.data.find((row) => row.id === f.email);
+      if (!row)
+        throw new Error("Sender-proof Email must remain in Vendor scope");
+      return row;
+    };
+    expect(await read()).toMatchObject({
+      linkState: null,
+      purchaseLinks: null,
+    });
+    const unlinkedMembership = async () =>
+      (
+        await getDb(ctx.db)
+          .select({
+            certain: sql<boolean>`${buildEmailWhere({ linked: false })}`,
+            possible: sql<boolean>`${buildEmailWhere({ linked: false }, undefined, "possible")}`,
+          })
+          .from(emailTable)
+          .where(eq(emailTable.shortcode, f.email))
+      )[0];
+    expect(await unlinkedMembership()).toEqual({
+      certain: false,
+      possible: true,
+    });
+    expect(
+      await listEmailsRead(
+        ctx.db,
+        { purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode) },
+        [],
+        { pageIndex: 0, pageSize: 25 },
+      ),
+    ).toMatchObject({ count: 0, unresolvedCount: 1 });
+    // Sender proof settles Vendor inclusion even before candidate facts exist.
+    expect(
+      await listEmailsRead(ctx.db, filters, [], { pageIndex: 0, pageSize: 25 }),
+    ).toMatchObject({ count: 1, unresolvedCount: 0 });
+    expect(
+      await listEmailsRead(ctx.db, { ...filters, linked: false }, [], {
+        pageIndex: 0,
+        pageSize: 25,
+      }),
+    ).toMatchObject({ count: 0, unresolvedCount: 1 });
+
+    await drainStoredDerived(ctx.db);
+    expect(await read()).toMatchObject({
+      linkState: "none",
+      purchaseLinks: [],
+    });
+    expect(await unlinkedMembership()).toEqual({
+      certain: true,
+      possible: true,
+    });
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ orderId: "SYNTHETIC-RETAINED" })
+      .where(eq(purchaseTable.id, f.purchase.id));
+    expect(await read()).toMatchObject({ linkState: "none" });
+    await drainStoredDerived(ctx.db);
+    expect(await read()).toMatchObject({
+      linkState: "suggested",
+      purchaseLinks: [{ purchaseId: f.purchase.shortcode, state: "suggested" }],
+    });
+    const other = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic other mailbox owner",
+      kind: "member",
+    });
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: f.vendor.id,
+      ledgerPartyId: other.id,
+    });
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ vendorAccountId: account.id })
+      .where(eq(purchaseTable.id, f.purchase.id));
+    expect(await read()).toMatchObject({
+      linkState: "none",
+      purchaseLinks: [],
+    });
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"
+      WHERE key = 'relationshipFacts' AND "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
+    expect(
+      await listEmailsRead(
+        ctx.db,
+        { purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode) },
+        [],
+        { pageIndex: 0, pageSize: 25 },
+      ),
+    ).toMatchObject({ count: 0, unresolvedCount: 0 });
+    expect(
+      await listEmailsRead(
+        ctx.db,
+        {
+          vendorAccountId: parseShortcodeFor(
+            "vendorAccount",
+            account.shortcode,
+          ),
+        },
+        [],
+        { pageIndex: 0, pageSize: 25 },
+      ),
+    ).toMatchObject({ count: 0, unresolvedCount: 0 });
+    await drainStoredDerived(ctx.db);
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ ledgerPartyId: f.party.id })
+      .where(eq(vendorAccount.id, account.id));
+    expect(await read()).toMatchObject({ linkState: "suggested" });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ runId: f.runId })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    expect(await read()).toMatchObject({ importOutcome: "importing" });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "failed" })
+      .where(eq(runTable.id, f.runId));
+    expect(await read()).toMatchObject({ importOutcome: "failed" });
+    const explanation = await explainField(kernelCtx(ctx), {
+      entityKind: "email",
+      entityId: f.email,
+      field: "importOutcome",
+      surface: "detail",
+    });
+    expect(fieldValueOf(explanation.envelope)).toBe("failed");
+    expect(explanation.envelope.result.kind).toBe("cached");
+    expect(explanation.comparison).toMatchObject({ kind: "unavailable" });
+    expect(
+      explanation.sources.some((source) =>
+        JSON.stringify(source.value).includes(f.purchase.shortcode),
+      ),
+    ).toBe(true);
+    const [currentRun] = await getDb(ctx.db)
+      .select({ id: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, f.runId));
+    if (!currentRun) throw new Error("Missing synthetic import Run");
+    const currentRunId = currentRun.id;
+    await getDb(ctx.db).execute(sql`DELETE FROM "DerivedValue"
+      WHERE key = 'relationshipFacts' AND "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`);
+    const explainOutcome = () =>
+      explainField(kernelCtx(ctx), {
+        entityKind: "email",
+        entityId: f.email,
+        field: "importOutcome",
+        surface: "detail",
+      });
+    const failedWithoutFacts = await explainOutcome();
+    expect(failedWithoutFacts.envelope.result).toMatchObject({
+      kind: "live",
+      decision: {
+        outcome: { kind: "value", value: "failed" },
+        provenance: { kind: "computed" },
+      },
+    });
+    expect(failedWithoutFacts.envelope.result).not.toHaveProperty("computedAt");
+    expect(failedWithoutFacts.sources).toContainEqual(
+      expect.objectContaining({
+        label: "Current import Run",
+        entity: { entityKind: "run", entityId: currentRunId },
+      }),
+    );
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "running" })
+      .where(eq(runTable.id, f.runId));
+    expect((await explainOutcome()).envelope.result).toMatchObject({
+      kind: "live",
+      decision: { outcome: { kind: "value", value: "importing" } },
+    });
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed" })
+      .where(eq(runTable.id, f.runId));
+    expect((await explainOutcome()).envelope.result).toEqual({
+      kind: "missing",
+    });
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ runId: null })
+      .where(eq(emailTable.orderMailId, f.source.id));
+    expect((await explainOutcome()).envelope.result).toEqual({
+      kind: "missing",
+    });
+  });
 
   // A link-state tie reads newest first in either direction.
   it("orders Emails within one link state newest first", async () => {
@@ -1246,6 +1476,52 @@ describe("Email Purchase links", () => {
       ).toEqual([
         expect.objectContaining({ purchaseId: p.shortcode, state: "linked" }),
       ]);
+    }
+    await expect(
+      explainField(kernelCtx(ctx), {
+        entityKind: "email",
+        entityId: f.email,
+        field: "linkState",
+        surface: "list",
+        scope: { entityKind: "project", entityId: "PRJ-2345" },
+      }),
+    ).rejects.toThrow(
+      "Unsupported explanation scope project for email.linkState",
+    );
+    for (const field of ["linkState", "purchaseLinks"]) {
+      const scope = {
+        entityKind: "purchase" as const,
+        entityId: secondPurchase.shortcode,
+      };
+      const explanation = await explainField(kernelCtx(ctx), {
+        entityKind: "email",
+        entityId: f.email,
+        field,
+        surface: "list",
+        scope,
+      });
+      const expectedLinks = [
+        expect.objectContaining({
+          purchaseId: secondPurchase.shortcode,
+          state: "linked",
+        }),
+      ];
+      expect(fieldValueOf(explanation.envelope)).toEqual(
+        field === "linkState" ? "linked" : expectedLinks,
+      );
+      expect(explanation.comparison).toMatchObject({ kind: "unavailable" });
+      expect(explanation.sources).toContainEqual(
+        expect.objectContaining({
+          label: "Requested list scope",
+          entity: scope,
+        }),
+      );
+      expect(explanation.sources).toContainEqual(
+        expect.objectContaining({
+          label:
+            "Published unscoped facts before current eligibility and scope 1",
+        }),
+      );
     }
     const report = await buildEntityReport(
       ctx.db,

@@ -257,9 +257,9 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
   dataQuality,
 }: {
   row: ProjectRow;
-  ownRollup: ProjectOwnRollup;
-  subtreeRollup: ProjectSubtreeRollup;
-  dates: ProjectDateWindow;
+  ownRollup: ProjectOwnRollup | null;
+  subtreeRollup: ProjectSubtreeRollup | null;
+  dates: ProjectDateWindow | null;
   blockedByIds: string[];
   blockingIds: string[];
   parentProjectName: string | null;
@@ -292,9 +292,14 @@ const dbProjectToAPI = <Q extends DataQuality | undefined>({
     blockingIds: blockingIds.map((id) => parseShortcodeFor("project", id)),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
-    rollup: { ...ownRollup, subtree: subtreeRollup },
-    spent: ownRollup.spent,
-    taskProgress: `${ownRollup.doneTaskCount}/${ownRollup.taskCount}`,
+    rollup:
+      ownRollup && subtreeRollup
+        ? { ...ownRollup, subtree: subtreeRollup }
+        : null,
+    spent: ownRollup?.spent ?? null,
+    taskProgress: ownRollup
+      ? `${ownRollup.doneTaskCount}/${ownRollup.taskCount}`
+      : null,
     dateWindow: dates,
     dataQuality,
   };
@@ -325,10 +330,9 @@ export const hydrateProjectRow = <Q extends DataQuality | undefined>(
   const toShortcode = (id: ProjectId) => context.shortcodeById.get(id) ?? "";
   return dbProjectToAPI({
     row,
-    ownRollup: context.ownRollups.get(row.id) ?? EMPTY_PROJECT_OWN_ROLLUP,
-    subtreeRollup:
-      context.subtreeRollups.get(row.id) ?? EMPTY_PROJECT_SUBTREE_ROLLUP,
-    dates: context.dateWindows.get(row.id) ?? EMPTY_PROJECT_DATE_WINDOW,
+    ownRollup: context.ownRollups.get(row.id) ?? null,
+    subtreeRollup: context.subtreeRollups.get(row.id) ?? null,
+    dates: context.dateWindows.get(row.id) ?? null,
     blockedByIds: (dependencies.blockedBy.get(row.id) ?? []).map(toShortcode),
     blockingIds: (dependencies.blocking.get(row.id) ?? []).map(toShortcode),
     parentProjectName: row.parentProjectId

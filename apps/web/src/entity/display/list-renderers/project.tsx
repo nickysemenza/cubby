@@ -5,13 +5,16 @@ import { textCellData } from "~/ui/data-table/cell-data";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { CellBar } from "~/ui/data-table/visuals/cell-visual";
+import { FieldValueMark } from "~/ui/derived/value-mark";
 
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 
-const completion = (row: ListRowOf<"project">) =>
-  row.rollup.taskCount > 0
-    ? row.rollup.doneTaskCount / row.rollup.taskCount
+const completion = (row: ListRowOf<"project">) => {
+  const rollup = fieldValueOf(row.fields.rollup);
+  return rollup && rollup.taskCount > 0
+    ? rollup.doneTaskCount / rollup.taskCount
     : null;
+};
 
 const taskProgress: ListRenderer<"project"> = (helper) =>
   createCubbyColumnCollection((add) => {
@@ -34,22 +37,36 @@ const taskProgress: ListRenderer<"project"> = (helper) =>
         }),
         cell: function TaskProgressCell({ row, getValue }) {
           const dense = useDenseCell();
-          const { doneTaskCount, taskCount } = row.original.rollup;
+          const rollup = fieldValueOf(row.original.fields.rollup);
+          if (!rollup)
+            return (
+              <FieldValueMark envelope={row.original.fields.rollup}>
+                Updating…
+              </FieldValueMark>
+            );
+          const { doneTaskCount, taskCount } = rollup;
           const value =
             taskCount === 0 ? "No tasks" : `${doneTaskCount} / ${taskCount}`;
-          if (!dense) return <span>{value}</span>;
+          if (!dense)
+            return (
+              <FieldValueMark envelope={row.original.fields.rollup}>
+                {value}
+              </FieldValueMark>
+            );
           return (
-            <CellBar
-              value={getValue()}
-              maximum={1}
-              label={
-                taskCount === 0
-                  ? "No tasks"
-                  : `${doneTaskCount} of ${taskCount} own tasks complete`
-              }
-            >
-              <span className="text-muted-foreground">{value}</span>
-            </CellBar>
+            <FieldValueMark envelope={row.original.fields.rollup}>
+              <CellBar
+                value={getValue()}
+                maximum={1}
+                label={
+                  taskCount === 0
+                    ? "No tasks"
+                    : `${doneTaskCount} of ${taskCount} own tasks complete`
+                }
+              >
+                <span className="text-muted-foreground">{value}</span>
+              </CellBar>
+            </FieldValueMark>
           );
         },
       }),

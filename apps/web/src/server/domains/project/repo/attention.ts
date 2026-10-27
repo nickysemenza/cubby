@@ -13,10 +13,8 @@
  * view. Rollups still load the whole tree: filtering the output must not make
  * a matched parent's unmatched child disappear from its subtree spend.
  *
- * Because that scope is the WHOLE tree, the caller's own whole-tree load is
- * the identical query set — hence the optional `preloaded` argument (see
- * `loadProjectSubtreeRollups`). `projectDashboardSummary` passes its bundle
- * in; `problems.service.ts` calls this standalone and lets it load its own.
+ * Expensive Project inputs come from published rollups. Missing roots are
+ * reported separately from findings; live Task and Expense checks still run.
  */
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import {
@@ -24,6 +22,8 @@ import {
   isLiveProjectStatus,
   type ProjectAttentionDescribable,
   type ProjectAttentionItem,
+  type ProjectAttentionReport,
+  projectAttentionReport,
   type ProjectAttentionType,
   projectAttentionItemSchema,
 } from "@cubby/schemas/project";
@@ -61,10 +61,7 @@ import {
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { readTaskActionability } from "~/server/domains/task/repo/actionable";
 
-import {
-  loadProjectSubtreeRollups,
-  type ProjectSubtreeRollups,
-} from "./subtree";
+import { loadStoredProjectRollups } from "./subtree";
 
 /** `stalled_project`'s no-activity window. */
 const STALE_ACTIVITY_DAYS = 30;
@@ -139,12 +136,10 @@ const attentionItem = <T extends ProjectAttentionType>(
 export async function computeAttentionItems(
   db: Database,
   options?: {
-    /** A whole-tree load the caller already has. */
-    preloaded?: ProjectSubtreeRollups | Promise<ProjectSubtreeRollups>;
     /** Matched dashboard projects; omitted means global Problems-page scope. */
     projectIds?: ProjectId[];
   },
-): Promise<ProjectAttentionItem[]> {
+): Promise<ProjectAttentionReport> {
   const today = householdLocalDate();
   const activityCutoff = householdDaysAgo(STALE_ACTIVITY_DAYS);
   const items: ProjectAttentionItem[] = [];
@@ -198,7 +193,7 @@ export async function computeAttentionItems(
           ),
         ),
       ),
-    options?.preloaded ?? loadProjectSubtreeRollups(db),
+    loadStoredProjectRollups(db),
     overdueExpenseRead
       .select({
         id: expense.id,
@@ -288,6 +283,7 @@ export async function computeAttentionItems(
   // Undated tasks contribute no date; refunds and future dated work do.
   const appendStalledProjects = () => {
     for (const row of inProgressProjectRows) {
+      if (!ownContentDates.has(row.id)) continue;
       const candidates = [
         householdLocalDate(row.updatedAt),
         ownContentDates.get(row.id)?.contentEnd,
@@ -377,7 +373,9 @@ export async function computeAttentionItems(
       const costEstimate = row.costEstimate;
       if (costEstimate === null || costEstimate <= 0) continue;
       if (hasEstimatedAncestor(row.parentProjectId)) continue;
-      const actualSpend = subtreeRollups.get(row.id)?.actualSpent ?? 0;
+      const subtree = subtreeRollups.get(row.id);
+      if (!subtree) continue;
+      const actualSpend = subtree.actualSpent;
       if (actualSpend * 100 >= costEstimate * SPEND_BELOW_ESTIMATE_PERCENT)
         continue;
       items.push(
@@ -555,5 +553,16 @@ export async function computeAttentionItems(
   };
   appendDateWindowDrift();
 
-  return items;
+  return projectAttentionReport.parse({
+    items,
+    incompleteProjectIds: allProjectRows
+      .filter(
+        (row) =>
+          projectInScope(row.id) &&
+          (!subtreeRollups.has(row.id) ||
+            !dateWindows.has(row.id) ||
+            !ownContentDates.has(row.id)),
+      )
+      .map((row) => row.shortcode),
+  });
 }

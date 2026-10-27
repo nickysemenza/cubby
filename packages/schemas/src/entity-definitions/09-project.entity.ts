@@ -18,9 +18,11 @@ import {
 import {
   projectDateWindow,
   projectRollup,
+  projectRollupResult,
 } from "@cubby/schemas/project-output-fields";
 import {
   MAX_PROJECT_TREE_DEPTH,
+  HOUSEHOLD_PROJECT_SHORTCODE,
   projectStatusValues,
 } from "../project-fields.js";
 import { z } from "zod";
@@ -41,7 +43,14 @@ const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
   {
     table: "Task",
     match: { projectId: "id" },
-    columns: ["dueDate", "dueEndDate", "status", "projectId", "deletedAt"],
+    columns: [
+      "dueDate",
+      "dueEndDate",
+      "status",
+      "projectId",
+      "projectMode",
+      "deletedAt",
+    ],
   },
   {
     table: "Expense",
@@ -90,6 +99,7 @@ const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
       "status",
       "parentTaskId",
       "projectId",
+      "projectMode",
       "deletedAt",
     ],
     path: [{ table: "Task", from: "id", to: "projectId" }],
@@ -103,12 +113,96 @@ const PROJECT_DATE_INPUTS: DerivedStoredInput[] = [
       "status",
       "parentTaskId",
       "projectId",
+      "projectMode",
       "deletedAt",
     ],
     path: [
       { table: "Task", from: "id", to: "parentTaskId" },
       { table: "Task", from: "id", to: "projectId" },
     ],
+  },
+];
+/** Allocations include complete Purchase siblings, defaults and food fallback. */
+const PROJECT_ROLLUP_INPUTS: DerivedStoredInput[] = [
+  ...PROJECT_DATE_INPUTS,
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["costEstimate", "deletedAt", "parentProjectId"],
+  },
+  {
+    table: "Expense",
+    match: { projectId: "id" },
+    columns: [
+      "cost",
+      "future",
+      "lineKind",
+      "date",
+      "purchaseId",
+      "projectId",
+      "productId",
+      "deletedAt",
+    ],
+  },
+  {
+    table: "Expense",
+    match: { purchaseId: "id" },
+    path: [{ table: "Expense", from: "purchaseId", to: "projectId" }],
+  },
+  {
+    table: "Expense",
+    match: { purchaseId: "id" },
+    path: [{ table: "Purchase", from: "id", to: "defaultProjectId" }],
+  },
+  {
+    table: "Purchase",
+    match: { id: "id" },
+    path: [{ table: "Expense", from: "purchaseId", to: "projectId" }],
+  },
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["deletedAt"],
+    path: [
+      { table: "Expense", from: "projectId", to: "purchaseId" },
+      { table: "Expense", from: "purchaseId", to: "projectId" },
+    ],
+  },
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["deletedAt"],
+    path: [
+      { table: "Expense", from: "projectId", to: "purchaseId" },
+      { table: "Purchase", from: "id", to: "defaultProjectId" },
+    ],
+  },
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["deletedAt"],
+    path: [
+      { table: "Purchase", from: "defaultProjectId", to: "id" },
+      { table: "Expense", from: "purchaseId", to: "projectId" },
+    ],
+  },
+  {
+    table: "LedgerParty",
+    match: { id: "id" },
+    columns: ["name", "kind", "deletedAt"],
+    path: [{ table: "Project", from: "assigneeId", to: "id" }],
+  },
+  // Food fallback has a fixed canonical target even when every source FK is null.
+  ...["Expense", "Purchase", "Product", "ProductCategory"].map((table) => ({
+    table,
+    match: { id: "id" },
+    targetWhere: { shortcode: HOUSEHOLD_PROJECT_SHORTCODE },
+  })),
+  {
+    table: "Project",
+    match: { id: "id" },
+    columns: ["deletedAt", "shortcode"],
+    targetWhere: { shortcode: HOUSEHOLD_PROJECT_SHORTCODE },
   },
 ];
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
@@ -822,9 +916,15 @@ Rules:
       {
         display: { detail: false, list: false },
         key: "rollup",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Project activity and descendants" }],
+        },
+        storedKey: "rollups",
+        storedPath: ["rollup"],
         kind: "json",
         validation: {
-          read: projectRollup,
+          read: projectRollup.nullable(),
           create: null,
           update: null,
         },
@@ -832,6 +932,10 @@ Rules:
       // Preview projections of `rollup`: the numbers a hover asks for.
       {
         key: "spent",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Project expense allocations" }],
+        },
         kind: "number",
         display: {
           detail: false,
@@ -842,7 +946,8 @@ Rules:
         validation: {
           read: z
             .number()
-            .describe("`rollup.spent`: the project's own net spend"),
+            .describe("`rollup.spent`: the project's own net spend")
+            .nullable(),
           create: null,
           update: null,
         },
@@ -863,7 +968,10 @@ Rules:
           renderer: { list: "task-progress" },
         },
         validation: {
-          read: z.string().describe("Done over total own tasks, e.g. `3/5`"),
+          read: z
+            .string()
+            .describe("Done over total own tasks, e.g. `3/5`")
+            .nullable(),
           create: null,
           update: null,
         },
@@ -871,9 +979,15 @@ Rules:
       {
         display: { detail: false, list: false },
         key: "dateWindow",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Project dates and activity" }],
+        },
+        storedKey: "rollups",
+        storedPath: ["dateWindow"],
         kind: "json",
         validation: {
-          read: projectDateWindow,
+          read: projectDateWindow.nullable(),
           create: null,
           update: null,
         },
@@ -977,14 +1091,35 @@ Rules:
       "notionPageUrl",
     ],
     rows: {
-      // The project's tracker attention items, one per rule it trips,
-      // computed by the attention rules the dashboard and Problems share.
       attentionItems: {
         label: "Attention items",
         repository: { type: "text" },
       },
     },
+    stored: {
+      rollups: {
+        compute: "project.rollups",
+        publishes: "derivedValue",
+        resultSchema: projectRollupResult,
+        inputs: PROJECT_ROLLUP_INPUTS,
+        dependsOn: [
+          {
+            entity: "project",
+            key: "rollups",
+            match: { parentProjectId: "id" },
+          },
+        ],
+      },
+    },
     derived: {
+      spent: {
+        type: "number",
+        fromResult: { key: "rollups", path: ["rollup", "spent"] },
+      },
+      taskProgress: {
+        type: "text",
+        fromResult: { key: "rollups", path: ["taskProgress"] },
+      },
       // Orders by the effective assignee's name.
       assigneeId: { via: "assignee" },
       // The effective start: the stored date, else the earliest task or
@@ -1007,7 +1142,7 @@ Rules:
       // A displayable image (PDF attachments don't count).
       image: { type: "boolean" },
       // Tracker membership, from the attention rules over tasks and budgets.
-      attention: { via: "attentionItems.type" },
+      attention: { via: "attentionItems.type", requiresResult: "rollups" },
       dateRange: {
         predicate: "range",
         reason:

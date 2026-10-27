@@ -25,7 +25,7 @@ import {
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entries";
 import { scoreSql, statusSql } from "~/server/generic/data-quality/repo/sql";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 
 const scored = (kind: Entity): kind is (typeof scoredEntities)[number] =>
   scoredEntities.some((candidate) => candidate === kind);

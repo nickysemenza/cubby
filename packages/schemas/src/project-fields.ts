@@ -108,3 +108,6 @@ export type ProjectKind = z.infer<typeof projectKindSchema>;
  * they drift.
  */
 export const MAX_PROJECT_TREE_DEPTH = 100;
+
+/** Standing household spending bucket; independent of mutable names. */
+export const HOUSEHOLD_PROJECT_SHORTCODE = "PRJ-HSHD";

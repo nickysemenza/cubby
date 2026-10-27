@@ -73,6 +73,15 @@ public final class GenericEntityListModel {
     public private(set) var filters: EntityFilterState
     /// Server order for the complete result, shared by base and search pagination.
     public private(set) var sort: String?
+    public private(set) var resultMembership: ListResultMembership = .known
+
+    public var canSelectResultMembership: Bool {
+        guard source == nil, view == .table || view == .shelf else { return false }
+        switch descriptor.key.nativeReadKind {
+        case .kernel: return true
+        default: return false
+        }
+    }
     /// The selected declared view; `select(view:)` loads the timeline when it is `.timeline`.
     public private(set) var view: ListView
     public private(set) var groupDimensions: [ListGroupDimension] = []
@@ -195,7 +204,7 @@ public final class GenericEntityListModel {
                     debounceNanoseconds: searchDebounceNanoseconds,
                     loader: Self.searchLoader(
                         descriptor: descriptor, client: client, filters: filters,
-                        pageSize: pageSize, sort: sort))
+                        pageSize: pageSize, sort: sort, resultMembership: resultMembership))
             }
     }
 
@@ -275,6 +284,15 @@ public final class GenericEntityListModel {
     public func apply(filters newFilters: EntityFilterState) async {
         guard newFilters != filters else { return }
         filters = newFilters
+        await refreshQuery()
+    }
+
+    /// Keeps filters intact while selecting known matches or unresolved candidates.
+    public func apply(resultMembership newMembership: ListResultMembership) async {
+        guard canSelectResultMembership, newMembership != resultMembership,
+            newMembership == .known || newMembership == .unresolved
+        else { return }
+        resultMembership = newMembership
         await refreshQuery()
     }
 
@@ -362,7 +380,7 @@ public final class GenericEntityListModel {
             searchModel?.setLoader(
                 Self.searchLoader(
                     descriptor: descriptor, client: client, filters: filters,
-                    pageSize: pageSize, sort: sort))
+                    pageSize: pageSize, sort: sort, resultMembership: resultMembership))
         }
         await refresh()
     }
@@ -379,12 +397,18 @@ public final class GenericEntityListModel {
 
     /// Switches the declared view; the timeline loads on first selection and after filter changes.
     public func select(view newView: ListView) async {
+        let resetsMembership = resultMembership != .known && newView != .table && newView != .shelf
         view = newView
+        if resetsMembership {
+            resultMembership = .known
+            await refreshQuery()
+            return
+        }
         if source == nil {
             searchModel?.setLoader(
                 Self.searchLoader(
                     descriptor: descriptor, client: client, filters: filters, pageSize: pageSize,
-                    sort: sort))
+                    sort: sort, resultMembership: resultMembership))
         }
         if newView == .timeline, timeline == nil, !isLoadingTimeline { await loadTimeline() }
     }
@@ -509,11 +533,12 @@ public final class GenericEntityListModel {
         let pageSize = pageSize
         let sort = sort
         let filters = filters
+        let resultMembership = resultMembership
         let dimensions = groupByUnavailableReason == nil ? groupDimensions : []
         return { page in
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                groupBy: dimensions)
+                groupBy: dimensions, resultMembership: resultMembership)
         }
     }
 
@@ -532,7 +557,7 @@ public final class GenericEntityListModel {
 
     private static func searchLoader(
         descriptor: EntityDescriptor, client: CubbyClient, filters: EntityFilterState, pageSize: Int,
-        sort: String?
+        sort: String?, resultMembership: ListResultMembership = .known
     ) -> EntityListSearchModel.PageLoader {
         { query, page in
             guard let primarySearch = descriptor.primarySearch else {
@@ -541,7 +566,8 @@ public final class GenericEntityListModel {
             var scopedFilters = filters
             scopedFilters.set([query], for: primarySearch.key)
             return try await client.list(
-                descriptor, page: page, pageSize: pageSize, sort: sort, filters: scopedFilters)
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: scopedFilters,
+                resultMembership: resultMembership)
         }
     }
 }

@@ -13,6 +13,7 @@ import {
 import { listEmailsRead } from "~/server/domains/email/repo/email";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import { clearUnrelatedOriginal } from "./persistence";
@@ -101,8 +102,18 @@ describe("Gmail Email-owned metadata", () => {
         subject: null,
         receivedAt: null,
         threadId: null,
-        linkState: "none",
+        linkState: null,
       },
+    ]);
+    await drainStoredDerived(ctx.db);
+    const settled = await listEmailsRead(
+      ctx.db,
+      { vendorId: vendor.shortcode },
+      [],
+      { pageIndex: 0, pageSize: 50 },
+    );
+    expect(settled.data).toMatchObject([
+      { messageId: identity.messageId, linkState: "none" },
     ]);
     expect(await clearUnrelatedOriginal(ctx.db, identity, storage)).toBeNull();
     const [retained] = await readRetainedMail(ctx.db, {

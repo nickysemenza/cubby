@@ -15,6 +15,7 @@ import { entitySummary } from "./generated/entity-summary.gen";
 import { anyShortcodeSchema } from "./identifier-fields";
 import {
   ledgerPartyShortcode,
+  projectShortcode,
   nonEmptyTuple,
   runShortcode,
   vendorShortcode,
@@ -454,7 +455,9 @@ export const workQueueOutSchema = z.object({
   meta: z.object({
     pageIndex: z.number().int().nonnegative(),
     pageSize: z.number().int().positive(),
+    /** Known candidates only while incompleteProjectIds is nonempty. */
     totalCount: z.number().int().nonnegative(),
+    incompleteProjectIds: z.array(projectShortcode).optional(),
     viewCounts: z.object({
       all: z.number().int().nonnegative(),
       automatic: z.number().int().nonnegative(),

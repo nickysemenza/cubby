@@ -15,6 +15,46 @@ import {
   sortPaginationCombo,
 } from "./pagination";
 
+it("preserves unresolved membership separately from the known-match count", () => {
+  const schema = createPaginatedResponseSchema(z.object({ name: z.string() }));
+  const response = buildPaginatedResponse(
+    { pageIndex: 0, pageSize: 10 },
+    [],
+    0,
+    { unresolvedCount: 3 },
+  );
+  expect(schema.parse(response).meta).toEqual({
+    pageIndex: 0,
+    pageSize: 10,
+    totalCount: 0,
+    unresolvedCount: 3,
+  });
+  expect(
+    schema.safeParse({
+      ...response,
+      meta: { ...response.meta, unresolvedCount: -1 },
+    }).success,
+  ).toBe(false);
+});
+
+it("withholds incomplete numeric totals while retaining their declared status", () => {
+  const response = buildPaginatedResponse(
+    { pageIndex: 0, pageSize: 10 },
+    [],
+    2,
+    {
+      sums: { valuation: 0, count: 2 },
+      incompleteSums: ["valuation"],
+      totalLabels: { valuation: "Incomplete · $0.00 known" },
+    },
+  );
+  expect(response.meta.sums).toEqual({ count: 2 });
+  expect(response.meta.incompleteSums).toEqual(["valuation"]);
+  expect(response.meta.totalLabels).toEqual({
+    valuation: "Incomplete · $0.00 known",
+  });
+});
+
 it("carries ordered full-filter group counts in list metadata", () => {
   const response = buildPaginatedResponse(
     { pageIndex: 0, pageSize: 1 },

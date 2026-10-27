@@ -36,6 +36,7 @@ import { unwrapDb } from "~/server/db/helpers";
 import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
 import {
   hierarchyAncestorSql,
@@ -333,6 +334,19 @@ export const derivedFieldsOf = (
   entity: Entity,
 ): Readonly<Record<string, DerivedField>> =>
   generatedEntityListFields[entity].derived;
+
+/** Declared result projections share one SQL path across filtering, sorting and totals. */
+export const declaredResultProjections = (
+  entity: Entity,
+  id: AnyColumn,
+): AnyDerivedSql =>
+  Object.fromEntries(
+    entityFieldModels[entity].fields.flatMap((field) =>
+      field.storedPath && derivedFieldsOf(entity)[field.key]?.shape === "value"
+        ? [[field.key, storedDerivedSql(entity, field.key, id)]]
+        : [],
+    ),
+  );
 
 const isPrepared = (
   entry: DerivedValueSql | DerivedPredicateSql<never>,

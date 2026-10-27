@@ -1,7 +1,6 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import type { ActorContext } from "@cubby/schemas/context";
 import { emailFilters, type EmailFilters } from "@cubby/schemas/email";
-import { emailImportOutcome } from "@cubby/schemas/email-fields";
 import { rawEmailOut, type RawEmailOut } from "@cubby/schemas/email-raw-read";
 import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
@@ -11,7 +10,6 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
-import { runStatus } from "@cubby/schemas/run-fields";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -33,14 +31,14 @@ import { readEmailFinancialAssociations } from "~/server/domains/email/repo/emai
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import {
   emailInScopeSql,
+  cachedEmailLinkedSql,
   emailLinkRankSql,
   emailLinkStateSql,
-  readEmailPurchaseLinks,
+  readCachedEmailPurchaseLinks,
   strongestLinkState,
   type EmailPurchaseScope,
 } from "~/server/domains/email/repo/email-purchase-links";
 import {
-  emailAcceptedEvidenceSql,
   EMAIL_OBSERVATION_PUBLICATION_PREFIX,
   emailFeedbackClassificationSql,
   emailFeedbackHasClassificationSql,
@@ -48,6 +46,7 @@ import {
   emailPurchaseAssociationsSql,
   emailReviewConflictSql,
 } from "~/server/domains/email/repo/email-sql";
+import { loadEmailImportOutcomes } from "~/server/domains/email/repo/import-outcome";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityReader,
@@ -246,7 +245,7 @@ const scaffold = listScaffold("email", emailTable, {
       { sql: sql`${emailTable.receivedAt}`, direction: "desc" },
     ]),
     scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
-    linked: emailLinkedSql(),
+    linked: cachedEmailLinkedSql(),
     reviewConflict: emailReviewConflictSql(),
     purchaseId: inScope,
     vendorId: inScope,
@@ -301,19 +300,8 @@ export async function resolveEmailScope(
 export const buildEmailWhere = (
   filters: EmailFilters,
   context: ListContext = ListContext.empty,
-) => scaffold.where(filters, { context });
-
-/** Accepted import evidence, else the import Run's own status. */
-const OUTCOME = emailImportOutcome.enum;
-const importOutcomeSql = sql<string>`CASE
-  WHEN EXISTS (${emailAcceptedEvidenceSql()}) THEN ${OUTCOME.imported}::text
-  WHEN "Email"."runId" IS NULL THEN ${OUTCOME.not_imported}::text
-  ELSE (SELECT CASE
-    WHEN r."status" IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN ${OUTCOME.failed}::text
-    WHEN r."status" = ${runStatus.enum.completed} THEN ${OUTCOME.not_imported}::text
-    ELSE ${OUTCOME.importing}::text END
-    FROM "Run" r WHERE r."id" = "Email"."runId")
-END`;
+  membership: "certain" | "possible" = "certain",
+) => scaffold.where(filters, { context, membership });
 
 /** Who reads the list, for `ownedByViewer`; null reads as nobody's. */
 type EmailViewer = { userId: string } | null;
@@ -330,7 +318,7 @@ const emailRead = (
     runId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {
-    const facts = bind.batch(async ({ rows }) => {
+    const facts = bind.batch(async ({ rows, idPage }) => {
       // includes-deleted: immutable mail metadata keeps naming its owner and Run.
       const [associations, reviews, purchaseLinks, owners] = await Promise.all([
         rows.length === 0
@@ -338,9 +326,7 @@ const emailRead = (
           : unwrapDb(db)
               .select({
                 id: emailTable.id,
-                linked: emailLinkedSql(),
                 reviewConflict: emailReviewConflictSql(),
-                importOutcome: importOutcomeSql,
               })
               .from(emailTable)
               .where(
@@ -416,11 +402,7 @@ const emailRead = (
                 ),
               )
               .orderBy(desc(feedback.createdAt), desc(feedback.id)),
-        readEmailPurchaseLinks(
-          db,
-          rows.map((row) => parseEntityId("email", row.id)),
-          scope,
-        ),
+        readCachedEmailPurchaseLinks(db, rows, scope, idPage.stored),
         viewer === null || rows.length === 0
           ? []
           : unwrapDb(db)
@@ -445,18 +427,22 @@ const emailRead = (
       for (const review of reviews)
         if (!latestReviews.has(review.emailId))
           latestReviews.set(review.emailId, review);
+      const outcomes = await loadEmailImportOutcomes(
+        db,
+        rows.map((row) => ({
+          id: row.id,
+          accepted: purchaseLinks.get(row.id)?.accepted ?? null,
+        })),
+      );
       return {
         reviews: latestReviews,
-        linked: new Map(associations.map((row) => [row.id, row.linked])),
+        linked: new Map(
+          [...purchaseLinks].map(([id, value]) => [id, value.linked]),
+        ),
         reviewConflict: new Map(
           associations.map((row) => [row.id, row.reviewConflict]),
         ),
-        importOutcome: new Map(
-          associations.map((row) => [
-            row.id,
-            emailImportOutcome.parse(row.importOutcome),
-          ]),
-        ),
+        importOutcome: outcomes,
         purchaseLinks,
         viewerParties: new Set<string>(owners.map((row) => row.id)),
       };
@@ -477,6 +463,7 @@ const emailRead = (
       ),
       facts.fields(
         rawEmailOut.pick({
+          storedProjectionVersions: true,
           linked: true,
           reviewConflict: true,
           purchaseLinks: true,
@@ -487,12 +474,20 @@ const emailRead = (
           reviewedClassificationReason: true,
         }),
         (row, loaded) => ({
-          linked: loaded.linked.get(row.id) ?? false,
+          linked: loaded.linked.get(row.id) ?? null,
           reviewConflict: loaded.reviewConflict.get(row.id) ?? false,
-          purchaseLinks: loaded.purchaseLinks.get(row.id) ?? [],
+          storedProjectionVersions: {
+            linked: loaded.purchaseLinks.get(row.id)?.computedAt ?? null,
+            importOutcome: loaded.purchaseLinks.get(row.id)?.computedAt ?? null,
+            linkState: loaded.purchaseLinks.get(row.id)?.computedAt ?? null,
+            purchaseLinks: loaded.purchaseLinks.get(row.id)?.computedAt ?? null,
+          },
+          purchaseLinks: loaded.purchaseLinks.get(row.id)?.links ?? null,
           ownedByViewer: loaded.viewerParties.has(row.ledgerPartyId),
-          linkState: strongestLinkState(loaded.purchaseLinks.get(row.id) ?? []),
-          importOutcome: loaded.importOutcome.get(row.id) ?? "not_imported",
+          linkState: loaded.purchaseLinks.has(row.id)
+            ? strongestLinkState(loaded.purchaseLinks.get(row.id)?.links ?? [])
+            : null,
+          importOutcome: loaded.importOutcome.get(row.id) ?? null,
           reviewedClassification:
             loaded.reviews.get(row.id)?.classification ?? null,
           reviewedClassificationReason:

@@ -14,6 +14,7 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql, notDeleted } from "~/server/db/helpers/predicates";
 import { outer, quotedTable } from "~/server/db/helpers/related";
 import { product, expense } from "~/server/db/schema";
+import { productOwnershipCompute } from "~/server/domains/inventory/repo/derived";
 import { serviceProductSqlText } from "~/server/domains/product/repo/service-category";
 import type {
   DerivedCompute,
@@ -59,6 +60,7 @@ const computeServiceCost: DerivedCompute = async (db, ids) => {
 };
 
 export const productDerivedComputes = {
+  "product.ownership": productOwnershipCompute,
   "product.cost": computeServiceCost,
   "product.price": sqlColumnCompute(
     source,

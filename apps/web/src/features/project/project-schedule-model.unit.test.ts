@@ -24,11 +24,25 @@ function project(
     name: seed,
     status: "planning",
     parentProjectId: parent ? projectId(parent) : null,
-    dateWindow: {
-      effectiveStart: start ?? null,
-      effectiveEnd: end ?? null,
-      startSource: start ? "explicit" : "none",
-      endSource: end ? "explicit" : "none",
+    fields: {
+      dateWindow: {
+        result: {
+          kind: "live",
+          decision: {
+            provenance: { kind: "computed" },
+            outcome: {
+              kind: "value",
+              value: {
+                effectiveStart: start ?? null,
+                effectiveEnd: end ?? null,
+                startSource: start ? "explicit" : "none",
+                endSource: end ? "explicit" : "none",
+              },
+            },
+          },
+        },
+        work: { kind: "idle" },
+      },
     },
     blockedByIds: [],
     blockingIds: [],

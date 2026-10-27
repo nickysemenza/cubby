@@ -1,3 +1,5 @@
+import { INVENTORY_OWNERSHIP_INPUTS } from "./ownership-inputs";
+import { storedInventoryOwnership } from "@cubby/schemas/inventory-ownership";
 import { productPricingInputsFor } from "./product-pricing-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { inventoryReadSchemas } from "../inventory-fields";
@@ -273,6 +275,7 @@ export default defineEntity(
             label: "Valuation",
             keys: ["valuation"],
             format: "currency",
+            requiresResults: ["valuation"],
           },
         ],
         extraActions: ["moveTo"],
@@ -390,6 +393,8 @@ export default defineEntity(
         },
         {
           key: "ownerLedgerPartyId",
+          storedKey: "ownership",
+          storedPath: ["effectiveOwnerId"],
           kind: "identifier",
           nullable: true,
           labelOverride: "Owner",
@@ -404,7 +409,6 @@ export default defineEntity(
             listOrderOverride: 2,
             columnLabel: "Owner",
             width: "md",
-            labelPath: "effectiveOwnership.effectiveOwner.name",
             renderer: { detail: "ownerLedgerPartyId" },
           },
           resolution: {
@@ -426,6 +430,7 @@ export default defineEntity(
               summary: "ownerLedgerPartyId",
             },
             sourceDependencies: [
+              { path: "storedResult", label: "Published ownership snapshot" },
               {
                 path: "fields.ownerLedgerPartyId.result.decision.provenance.source",
                 label: "Source",
@@ -451,9 +456,11 @@ export default defineEntity(
           // Full ownership trace for the expense-beneficiary confirmation flow;
           // the Owner field above is what every client displays.
           key: "effectiveOwnership",
+          storedKey: "ownership",
+          storedPath: ["ownership"],
           kind: "json",
           validation: {
-            read: effectiveInventoryOwnership,
+            read: effectiveInventoryOwnership.nullable(),
             create: null,
             update: null,
           },
@@ -628,6 +635,15 @@ export default defineEntity(
         "ownershipMode",
         "ownerLedgerPartyId",
       ],
+      stored: {
+        ownership: {
+          compute: "inventory.ownership",
+          clock: "householdDay",
+          publishes: "derivedValue",
+          resultSchema: storedInventoryOwnership,
+          inputs: INVENTORY_OWNERSHIP_INPUTS,
+        },
+      },
       derived: {
         name: { via: "product" },
         product: { via: "product" },
@@ -673,6 +689,7 @@ export default defineEntity(
         locationRole: { type: "boolean" },
         effectiveOwner: {
           predicate: "idMulti",
+          requiresResult: "ownership",
           reason:
             "The effective owner is resolved from acquisition evidence outside SQL",
         },

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { type ReactNode, useMemo } from "react";
 
+import { AttentionInputStatus } from "~/features/project/attention-input-status";
 import { problems as problemOperations } from "~/integrations/tanstack-query/generated/catalog/problems.gen";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
@@ -207,6 +208,9 @@ export function ProblemsOverview() {
         coverage={total(coverage)}
         analyzing={detectorsLoading}
         fix={<AutoFixButton problems={problems} />}
+      />
+      <AttentionInputStatus
+        count={problems.incompleteProjectIds?.length ?? 0}
       />
       <ProblemImagesProvider>
         <IndexedSections

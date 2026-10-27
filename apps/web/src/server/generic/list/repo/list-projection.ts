@@ -31,6 +31,8 @@ import {
   withDisplayImages,
 } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { loadStoredFieldProjections } from "~/server/generic/derived/repo/read";
+import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 import type {
   ListBindingGroup,
   ListProjection,
@@ -102,6 +104,7 @@ type ListIdPage = {
   db: Database | DrizzleTransaction;
   ids: readonly string[];
   projection: ListProjection;
+  stored?: Promise<PageStoredMeta>;
 };
 
 /** Id-only page loads started before the rows arrive; see `prefetch`. */
@@ -270,7 +273,43 @@ export function listReadPlan<Row>(
         ),
     },
   );
-  const bindings = options.bindings?.(bind) ?? [];
+  const modelFields: EntityFieldModel["fields"] =
+    entityFieldModels[entity].fields;
+  const projections = modelFields.filter(
+    (field) =>
+      field.storedPath &&
+      !field.storedProjection &&
+      Object.hasOwn(schema.shape, field.readKey ?? field.key),
+  );
+  const resultBindings = projections.length
+    ? [
+        bind
+          .batch(({ db, idPage }) =>
+            loadStoredFieldProjections(db, entity, idPage.ids, idPage.stored),
+          )
+          .fields(
+            z.object(
+              Object.fromEntries(
+                projections.map((field) => [
+                  field.readKey ?? field.key,
+                  schema.shape[field.readKey ?? field.key],
+                ]),
+              ),
+            ),
+            (row, loaded) =>
+              Object.fromEntries(
+                projections.map((field) => {
+                  const key = field.readKey ?? field.key;
+                  return [
+                    key,
+                    loaded.get(sourceIdentity.parse(row).id)?.[key] ?? null,
+                  ];
+                }),
+              ),
+          ),
+      ]
+    : [];
+  const bindings = [...resultBindings, ...(options.bindings?.(bind) ?? [])];
   const written = new Set<string>(["id", "dataQuality", "displayImages"]);
   const claim = (key: string) => {
     if (!Object.hasOwn(schema.shape, key))
@@ -363,7 +402,15 @@ export function listReadPlan<Row>(
       case "full":
         return true;
       case "selected":
-        return projection.fields.includes(key);
+        return (
+          projection.fields.includes(key) ||
+          (key === "storedProjectionVersions" &&
+            modelFields.some(
+              (field) =>
+                field.storedProjection &&
+                projection.fields.includes(field.readKey ?? field.key),
+            ))
+        );
       case "base":
         return false;
     }

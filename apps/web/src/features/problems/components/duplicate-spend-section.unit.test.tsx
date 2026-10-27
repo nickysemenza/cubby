@@ -50,6 +50,7 @@ const problems = (
   rows: ProblemItem<"duplicateSpendCandidates">[],
 ): AllProblems => ({
   ...EMPTY_PROBLEM_ARRAYS,
+  incompleteProjectIds: [],
   duplicateSpendCandidates: rows,
   sectionTotals: {},
   totalProblems: rows.length,

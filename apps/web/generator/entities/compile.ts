@@ -20,6 +20,7 @@ import {
   parseEntityDeclarationMetadata,
 } from "@cubby/schemas/entity-definitions/definition";
 import { z } from "zod";
+import { entitySchema } from "@cubby/schemas/entity-core";
 import {
   FILTER_ALL,
   FILTER_ANY,
@@ -386,6 +387,10 @@ const compileDerived = (
 ): EntityFieldModel["derived"] => {
   for (const [key, entry] of Object.entries(derived)) {
     const derivedContext = `${context}.derived.${key}`;
+    if ("fromResult" in entry && entry.fromResult && entry.stored)
+      throw new EntityDeclarationError(
+        `${derivedContext} cannot both compute a value and project another result.`,
+      );
     if ("predicate" in entry && storageKeys.includes(key))
       throw new EntityDeclarationError(
         `${derivedContext} names a stored column; a filter-only predicate needs its own key.`,
@@ -535,6 +540,42 @@ function columnPresentation(
   };
 }
 
+const validateEnumField = (
+  field: EntityFieldModelMetadata["fields"][number],
+  fieldContext: string,
+): void => {
+  if (
+    field.kind === "enum" &&
+    (field.validation.read !== null ||
+      field.control?.options ||
+      field.display.valueOptions)
+  ) {
+    const options = field.control?.options ?? field.display.valueOptions ?? [];
+    let read: unknown = field.validation.read;
+    while (
+      read instanceof z.ZodOptional ||
+      read instanceof z.ZodNullable ||
+      read instanceof z.ZodDefault
+    )
+      read = read.unwrap();
+    if (options.length === 0)
+      throw new EntityDeclarationError(
+        `${fieldContext}: declare enum options and presentation.`,
+      );
+    if (read instanceof z.ZodEnum) {
+      const expected = [...read.options].sort();
+      const actual = options.map((option) => option.value).sort();
+      if (
+        expected.length !== actual.length ||
+        expected.some((value, position) => value !== actual[position])
+      )
+        throw new EntityDeclarationError(
+          `${fieldContext}.options must label exactly ${expected.join(", ")}.`,
+        );
+    }
+  }
+};
+
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
@@ -568,37 +609,7 @@ const compileFieldModel = (
     const fieldContext = `${entityKey}.${field.key}`;
     const key = field.key;
     validateFieldOverrides(field, fieldContext, titleField, index);
-    if (
-      field.kind === "enum" &&
-      (field.validation.read !== null ||
-        field.control?.options ||
-        field.display.valueOptions)
-    ) {
-      const options =
-        field.control?.options ?? field.display.valueOptions ?? [];
-      let read: unknown = field.validation.read;
-      while (
-        read instanceof z.ZodOptional ||
-        read instanceof z.ZodNullable ||
-        read instanceof z.ZodDefault
-      )
-        read = read.unwrap();
-      if (options.length === 0)
-        throw new EntityDeclarationError(
-          `${fieldContext}: declare enum options and presentation.`,
-        );
-      if (read instanceof z.ZodEnum) {
-        const expected = [...read.options].sort();
-        const actual = options.map((option) => option.value).sort();
-        if (
-          expected.length !== actual.length ||
-          expected.some((value, position) => value !== actual[position])
-        )
-          throw new EntityDeclarationError(
-            `${fieldContext}.options must label exactly ${expected.join(", ")}.`,
-          );
-      }
-    }
+    validateEnumField(field, fieldContext);
     if (field.display.columnId !== null && !field.display.columnId.trim())
       throw new EntityDeclarationError(
         `${fieldContext}.display.columnId must not be blank.`,
@@ -608,6 +619,11 @@ const compileFieldModel = (
         `${fieldContext} cannot declare provenance for a reference field.`,
       );
     const provenance = compileFieldProvenance(field, fieldContext, relations);
+    const derivedField = model.derived[key];
+    const projection =
+      derivedField && "fromResult" in derivedField
+        ? derivedField.fromResult
+        : undefined;
     const compiled: EntityField = {
       key,
       kind: field.kind,
@@ -622,6 +638,14 @@ const compileFieldModel = (
             : key
           : field.readKey,
       storedKey: field.storedKey ?? null,
+      storedPath: field.storedPath ?? null,
+      ...(field.storedProjection ? { storedProjection: true as const } : {}),
+      ...(projection
+        ? {
+            storedKey: projection.key,
+            storedPath: projection.path,
+          }
+        : {}),
       reference: field.reference,
       provenance,
       // Left undefined (so not emitted) unless declared, like detailLabelPath.
@@ -723,6 +747,11 @@ const compileFieldModel = (
       (entry) => (typeof entry === "string" ? entry : entry.key) === key,
     );
   for (const field of fields) {
+    if ((field.storedPath || field.storedProjection) && !field.storedKey)
+      throw new EntityDeclarationError(
+        `${context}.${field.key}: storedPath and storedProjection require a storedKey.`,
+      );
+
     const suggest = field.control?.suggest;
     if (!suggest) continue;
     if (!isStored(field.key) && !suggest.backedBy?.length)
@@ -889,6 +918,44 @@ const compileFieldModel = (
       throw new EntityDeclarationError(
         `${context}.${field.key}.storedKey must name a published stored derived value: ${field.storedKey}.`,
       );
+    if (field.storedPath) {
+      const source = model.stored[field.storedKey];
+      let schema = source?.resultSchema;
+      if (!schema)
+        throw new EntityDeclarationError(
+          `${context}.${field.key}: fromResult requires a resultSchema on ${field.storedKey}.`,
+        );
+      for (const segment of field.storedPath) {
+        while (
+          schema instanceof z.ZodOptional ||
+          schema instanceof z.ZodNullable ||
+          schema instanceof z.ZodDefault
+        )
+          schema = z.instanceof(z.ZodType).parse(schema.unwrap());
+        if (!(schema instanceof z.ZodObject) || !schema.shape[segment])
+          throw new EntityDeclarationError(
+            `${context}.${field.key}: fromResult path ${field.storedPath.join(".")} is not in ${field.storedKey}.`,
+          );
+        schema = schema.shape[segment];
+      }
+      while (
+        schema instanceof z.ZodOptional ||
+        schema instanceof z.ZodNullable ||
+        schema instanceof z.ZodDefault
+      )
+        schema = z.instanceof(z.ZodType).parse(schema.unwrap());
+      const entry = model.derived[field.key];
+      const expected = entry && "type" in entry ? entry.type : null;
+      if (
+        (expected === "number" && !(schema instanceof z.ZodNumber)) ||
+        ((expected === "text" || expected === "date") &&
+          !(schema instanceof z.ZodString)) ||
+        (expected === "boolean" && !(schema instanceof z.ZodBoolean))
+      )
+        throw new EntityDeclarationError(
+          `${context}.${field.key}: fromResult does not match the declared ${expected} projection.`,
+        );
+    }
   }
   const derived = compileDerived(model.derived, storageKeys, context);
   const hierarchy = compileHierarchy(
@@ -2157,6 +2224,25 @@ const suggestionFilterDescriptors = (
   ];
 };
 
+const validateStoredTotalResults = (
+  declaration: EntityDeclarationMetadata,
+  declaredFieldModel: EntityFieldModel,
+  context: string,
+): void => {
+  for (const total of declaration.presentation.list?.totals ?? []) {
+    for (const resultKey of total.requiresResults ?? []) {
+      const derived = declaredFieldModel.derived[resultKey];
+      const root =
+        declaredFieldModel.stored[resultKey] ??
+        (derived && "stored" in derived ? derived.stored : undefined);
+      if (!root || ("publishes" in root && root.publishes !== "derivedValue"))
+        throw new EntityDeclarationError(
+          `${context}.presentation.list.totals.${total.id}: ${resultKey} must publish a stored derived value.`,
+        );
+    }
+  }
+};
+
 export const compileEntity = (
   // oxlint-disable-next-line anti-slop/no-unknown-parameters -- imported declaration boundary
   value: unknown,
@@ -2209,6 +2295,7 @@ export const compileEntity = (
     readSchemas,
   );
   const table = compileEntityTable(declaration, declaredFieldModel, context);
+  validateStoredTotalResults(declaration, declaredFieldModel, context);
   const operationOwners = {
     delete: declaration.capabilities.operationOwners.delete,
     merge: declaration.capabilities.operationOwners.merge,
@@ -2249,6 +2336,19 @@ export const compileEntity = (
       `${context}.filters.descriptors[${index}]`,
     ),
   );
+  for (const field of declaredFieldModel.fields) {
+    for (const [scopeKind, filterKey] of Object.entries(
+      field.explanation?.scopeFilters ?? {},
+    )) {
+      if (
+        !entitySchema.safeParse(scopeKind).success ||
+        !declaredDescriptors.some((filter) => filter.columnId === filterKey)
+      )
+        throw new EntityDeclarationError(
+          `${context}.${field.key}: scope ${scopeKind} must bind an existing list filter (${filterKey}).`,
+        );
+    }
+  }
   for (const descriptor of declaredDescriptors) {
     const group = descriptor.exclusiveGroup;
     if (

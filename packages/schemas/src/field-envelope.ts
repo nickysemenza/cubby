@@ -219,7 +219,11 @@ export function withFieldEnvelopes<
 ): z.ZodObject<
   Omit<
     PublicFieldSchemas<ReadFields, Public>,
-    keyof Stored | "fieldResolutions" | "derived" | "fields"
+    | keyof Stored
+    | "fieldResolutions"
+    | "storedProjectionVersions"
+    | "derived"
+    | "fields"
   > & {
     fields: z.ZodObject<
       EnvelopedReadFields<PublicFieldSchemas<ReadFields, Public>, Stored>
@@ -237,7 +241,11 @@ export function withFieldEnvelopes<
 ): z.ZodType<
   Omit<
     PublicReadOutput<S, Public>,
-    keyof Stored | "fieldResolutions" | "derived" | "fields"
+    | keyof Stored
+    | "fieldResolutions"
+    | "storedProjectionVersions"
+    | "derived"
+    | "fields"
   > & {
     fields: {
       [
@@ -283,6 +291,7 @@ export function withFieldEnvelopes(
       .filter(
         ([key]) =>
           key !== "fieldResolutions" &&
+          key !== "storedProjectionVersions" &&
           key !== "derived" &&
           key !== "fields" &&
           !Object.hasOwn(fields, key),

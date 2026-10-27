@@ -1,3 +1,5 @@
+import { emailRelationshipResult } from "../email-relationship-facts";
+import { EMAIL_RELATIONSHIP_INPUTS } from "./email-relationship-inputs";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import {
@@ -461,7 +463,21 @@ export default defineEntity({
       },
       {
         key: "linked",
+        storedKey: "relationshipFacts",
+        storedPath: ["linked"],
+        storedProjection: true,
         kind: "boolean",
+        explanation: {
+          ruleId: "email.purchase-association",
+          description:
+            "Accepted import sources or reviewed links associate this Email with a live Purchase. Current account ownership gates the published candidate facts; suggestions and dismissals alone are not associations.",
+          sourceDependencies: [
+            {
+              path: "storedResult.evidence",
+              label: "Published facts before current account-owner gates",
+            },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [
@@ -469,10 +485,30 @@ export default defineEntity({
           ],
         },
         display: { list: false },
-        validation: readOnly(z.boolean()),
+        validation: readOnly(z.boolean().nullable()),
       },
       {
         key: "linkState",
+        explanation: {
+          ruleId: "email.linkState",
+          scopeFilters: {
+            purchase: "purchaseId",
+            vendor: "vendorId",
+            vendorAccount: "vendorAccountId",
+          },
+          description:
+            "The strongest eligible Purchase pair in the requested list scope determines this state. All eligible pairs are folded before narrowing the scope so replacement warnings remain visible.",
+          sourceDependencies: [
+            {
+              path: "storedResult.evidence",
+              label:
+                "Published unscoped facts before current eligibility and scope",
+            },
+          ],
+        },
+        storedKey: "relationshipFacts",
+        storedPath: ["linkState"],
+        storedProjection: true,
         kind: "enum",
         labelOverride: "Link",
         control: { kind: "select", options: linkStateOptions },
@@ -493,10 +529,30 @@ export default defineEntity({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: readOnly(emailLinkState),
+        validation: readOnly(emailLinkState.nullable()),
       },
       {
         key: "purchaseLinks",
+        explanation: {
+          ruleId: "email.purchaseLinks",
+          scopeFilters: {
+            purchase: "purchaseId",
+            vendor: "vendorId",
+            vendorAccount: "vendorAccountId",
+          },
+          description:
+            "Published relationship facts are folded with current Purchase and account-owner eligibility, then narrowed to the requested list scope. Replacement warnings retain evidence from the complete eligible set.",
+          sourceDependencies: [
+            {
+              path: "storedResult.evidence",
+              label:
+                "Published unscoped facts before current eligibility and scope",
+            },
+          ],
+        },
+        storedKey: "relationshipFacts",
+        storedPath: ["purchaseLinks"],
+        storedProjection: true,
         kind: "json",
         labelOverride: "Purchases",
         provenance: {
@@ -516,7 +572,7 @@ export default defineEntity({
           labelPath: "purchaseLinks[].label",
           renderer: { list: "purchase-links" },
         },
-        validation: readOnly(z.array(emailPurchaseLink)),
+        validation: readOnly(z.array(emailPurchaseLink).nullable()),
       },
       {
         display: { detail: false, list: false },
@@ -535,9 +591,26 @@ export default defineEntity({
       },
       {
         key: "importOutcome",
+        storedKey: "relationshipFacts",
+        storedProjection: true,
         kind: "enum",
         labelOverride: "Import",
         control: { kind: "select", options: [...importOutcomeOptions] },
+        explanation: {
+          ruleId: "email.import-outcome",
+          description:
+            "Accepted import source facts mean Imported. Otherwise the current import Run supplies Importing or Failed, even while relationship facts are missing. An absent or completed Run means Not imported only when published facts confirm no accepted source; otherwise the outcome remains unavailable.",
+          sourceDependencies: [
+            {
+              path: "storedResult.evidence",
+              label: "Published facts before current account-owner gates",
+            },
+            {
+              path: "runId",
+              label: "Current import Run",
+            },
+          ],
+        },
         provenance: {
           kind: "derived",
           sources: [
@@ -550,7 +623,7 @@ export default defineEntity({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: readOnly(emailImportOutcome),
+        validation: readOnly(emailImportOutcome.nullable()),
       },
       {
         key: "createdAt",
@@ -625,17 +698,41 @@ export default defineEntity({
     create: [],
     update: [],
     audit: [],
+    stored: {
+      relationshipFacts: {
+        compute: "email.relationshipFacts",
+        publishes: "derivedValue",
+        resultSchema: emailRelationshipResult,
+        inputs: EMAIL_RELATIONSHIP_INPUTS,
+      },
+    },
     derived: {
       // Linked, then suggested, then unlinked; newest first within one.
       linkState: { type: "enum", options: [...emailLinkState.options] },
       // The link state the list shows, relative to its scope record.
-      scopeLinkState: { type: "enum", options: [...emailLinkState.options] },
-      linked: { type: "boolean" },
+      scopeLinkState: {
+        type: "enum",
+        options: [...emailLinkState.options],
+        requiresResult: "relationshipFacts",
+      },
+      linked: { type: "boolean", requiresResult: "relationshipFacts" },
       // The pipeline stage disagrees with a review decision.
       reviewConflict: { type: "boolean" },
-      purchaseId: { predicate: "idMulti", reason: EMAIL_SCOPE_REASON },
-      vendorId: { predicate: "idMulti", reason: EMAIL_SCOPE_REASON },
-      vendorAccountId: { predicate: "idMulti", reason: EMAIL_SCOPE_REASON },
+      purchaseId: {
+        predicate: "idMulti",
+        reason: EMAIL_SCOPE_REASON,
+        requiresResult: "relationshipFacts",
+      },
+      vendorId: {
+        predicate: "idMulti",
+        reason: EMAIL_SCOPE_REASON,
+        requiresResult: "relationshipFacts",
+      },
+      vendorAccountId: {
+        predicate: "idMulti",
+        reason: EMAIL_SCOPE_REASON,
+        requiresResult: "relationshipFacts",
+      },
     },
     sort: {
       fields: [
@@ -1097,6 +1194,10 @@ export default defineEntity({
   },
   extensions: {
     ports: {
+      fieldEnvelope: {
+        module: "~/server/domains/email/repo/field-envelope",
+        export: "projectEmailFieldEnvelopes",
+      },
       repository: {
         module: "~/server/domains/email/repo/email",
         export: "emailRepository",

@@ -64,7 +64,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
-import { loadProjectSubtreeRollups, type ProjectTree } from "./subtree";
+import { loadStoredProjectRollups, type ProjectTree } from "./subtree";
 
 export const PROJECT_DELETE_EDGE_POLICY = {
   "Purchase.defaultProjectId": {
@@ -133,12 +133,11 @@ const createProjectReader = (tree?: ProjectTree) =>
     entity: "project",
     fetchById: fetchProjectById,
     fromDB: async (db: Database, row: typeof project.$inferSelect) => {
-      // Whole-tree parent/child map + this project's subtree rollup — see
-      // subtree.ts's doc comment for why the tree is loaded in full rather than
-      // walked with per-row queries.
+      // Hierarchy/settings stay live; expensive financial/date folds read the
+      // same stored result as list projection and final field envelopes.
       const [projectContext, deps, dataQualities, [withUrls]] =
         await Promise.all([
-          loadProjectSubtreeRollups(db, [row.id], tree),
+          loadStoredProjectRollups(db, tree, [row.id]),
           projectDependencyIds(db, [row.id]),
           loadDataQualities(db, "project", [row.id]),
           withProjectExternalUrls(db, [row]),

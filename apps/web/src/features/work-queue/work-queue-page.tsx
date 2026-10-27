@@ -69,6 +69,7 @@ import {
   waitingForLabel,
   WorkActionDetails,
 } from "~/entity/work-queue/work-queue-display";
+import { AttentionInputStatus } from "~/features/project/attention-input-status";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { copyShortcodes } from "~/lib/clipboard";
 import { formatCount } from "~/lib/number-format";
@@ -146,7 +147,7 @@ type QueueTableRow = Omit<WorkQueueRow, "id"> & {
 type QueueTablePage = Omit<QueuePage, "items" | "meta"> & {
   items: QueueTableRow[];
   meta: ListQueryResponse<QueueTableRow>["meta"] &
-    Pick<QueuePage["meta"], "viewCounts">;
+    Pick<QueuePage["meta"], "viewCounts" | "incompleteProjectIds">;
 };
 const helper = createCubbyColumnHelper<QueueTableRow>();
 const PREVIEW_OPTIONS = { responsiveInspector: true };
@@ -757,8 +758,10 @@ function WorkQueue() {
   const tabsTarget = usePageWorkbenchTarget("tabs");
   const PreviewSheet = inspection.PreviewSheet;
 
+  const incompleteCount = firstPage?.meta.incompleteProjectIds?.length ?? 0;
   return (
     <>
+      <AttentionInputStatus count={incompleteCount} />
       {tabsTarget &&
         createPortal(
           <ViewTabs

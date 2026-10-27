@@ -1,6 +1,7 @@
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import { contributionRole } from "@cubby/schemas/ledger-party";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -661,4 +662,59 @@ it("shows disabled account parties, payment agreement, and enabled unusable vend
       expect.objectContaining({ reason: "vendor_enabled", effect: "used" }),
     ]),
   );
+});
+
+it("selects current ownership evidence independently of an older supplied resolution", async () => {
+  const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+    name: "Synthetic current owner",
+    kind: "member",
+  });
+  const product = await insertWithShortcode(ctx.db, "product", {
+    brandId: await findOrCreateVendor(
+      ctx.db,
+      "Synthetic ownership comparison maker",
+    ),
+    name: "Synthetic ownership comparison item",
+  });
+  const location = await insertWithShortcode(ctx.db, "location", {
+    type: "room",
+    name: "Synthetic comparison shelf",
+  });
+  const entry = await insertWithShortcode(ctx.db, "inventory", {
+    productId: product.id,
+    locationId: location.id,
+    ownershipMode: "inherit",
+    amountValue: 1,
+    amountUnit: "each",
+  });
+  const traces = await loadInventoryOwnershipTraces(ctx.db, [
+    {
+      id: entry.id,
+      productId: product.id,
+      ownershipMode: "inherit",
+      ownerLedgerPartyId: null,
+    },
+  ]);
+  const previous = traces.get(entry.id);
+  if (!previous) throw new Error("Missing synthetic ownership trace");
+  const oldResolution = inventoryOwnerResolution(
+    previous.ownership,
+    previous.steps,
+  );
+  await unwrapDb(ctx.db).execute(
+    sql`UPDATE "InventoryEntry" SET "ownershipMode"=${inventoryOwnershipMode.enum.explicit}, "ownerLedgerPartyId"=${owner.id} WHERE id=${entry.id}`,
+  );
+  const current = await loadFieldResolutionEvidence(
+    ctx.db,
+    "inventory",
+    entry.shortcode,
+    "ownerLedgerPartyId",
+    oldResolution,
+  );
+  expect(current.evidence?.steps).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ reason: "explicit", effect: "used" }),
+    ]),
+  );
+  expect(current.evidence?.outcome).toBe("resolved");
 });

@@ -29,7 +29,6 @@ import type { RawImageOutput } from "@cubby/schemas/image-raw-read";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   type PaginationParams,
-  type ListGroupSummary,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ProductFilters } from "@cubby/schemas/product";
@@ -116,11 +115,7 @@ import {
 import { loadImageAnalysisSummaries } from "~/server/domains/image/repo/image-analysis-summary";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import {
-  loadProductOwners,
-  loadProductOwnerMembership,
-  selectProductIdsByOwner,
-} from "~/server/domains/inventory/repo/ownership";
+import { productOwnerFilterSql } from "~/server/domains/inventory/repo/ownership";
 import { loadCategoryStockTracking } from "~/server/domains/inventory/repo/stock-tracking";
 import {
   enrichProductRowsWithInventoryValuations,
@@ -159,7 +154,10 @@ import {
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
-import { storedDerivedSql } from "~/server/generic/derived/repo/read";
+import {
+  storedDerivedSql,
+  storedFieldAvailableSql,
+} from "~/server/generic/derived/repo/read";
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
@@ -167,14 +165,15 @@ import {
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
-  sharedListPrepare,
-  type AnyOfValue,
   type ListPreparationScope,
   listReadValue,
 } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import type {
+  ListProjection,
+  ListReadPage,
+} from "~/server/generic/list/repo/list-contracts";
 import {
   expectedQuantityLabel,
   quantityVarianceLabel,
@@ -254,9 +253,6 @@ import {
 } from "./update-helpers";
 
 const qb = new QueryBuilder();
-
-// The ownership resolver runs once per request, only when it filters by owner.
-const ownedProducts = sharedListPrepare(loadProductOwnerMembership);
 
 // Cross-entity filters stay uncorrelated id-set subqueries.
 const productIdsWithLiveInventory = qb
@@ -438,15 +434,12 @@ const productScaffold = listScaffold("product", product, {
       value: hasUnknownQuantityLinesSql(product.id),
       set: unknownQuantityLinesReadSql(),
     },
-    priced: sql`NOT ${serviceCategorySql(sql`${product.categoryId}`)} AND ${productReadPriceSql} IS NOT NULL`,
-    effectiveOwner: ownedProducts.predicate<AnyOfValue>((prepared, value) => {
-      const ids = selectProductIdsByOwner(
-        prepared,
-        value.values,
-        value.presence,
-      );
-      return ids.length === 0 ? sql`false` : inArray(product.id, ids);
-    }),
+    priced: sql`CASE WHEN ${serviceCategorySql(sql`${product.categoryId}`)} THEN false
+      WHEN ${productReadPriceSql} IS NOT NULL THEN true
+      WHEN ${storedFieldAvailableSql("product", "price", product.id, { currentValue: productReadPriceSql })} THEN false
+      ELSE NULL::boolean END`,
+    effectiveOwner: (value) =>
+      productOwnerFilterSql(value.values, value.presence),
   },
 });
 
@@ -693,7 +686,7 @@ const productWhere = async (
   readContext?: QualityReadContext,
   preparation?: ListPreparationScope,
 ) => {
-  // Filter-only: owners resolve only when a filter asks.
+  // Owner membership uses the published collection before pagination.
   const context = await productScaffold.context(db, {
     filters,
     readIntent: "count",
@@ -885,11 +878,10 @@ export const productList = async (
   };
 };
 
-type ProductListReadResult = {
-  data: ReturnType<typeof projectListRows>;
-  count: number;
+type ProductListReadResult = ListReadPage<
+  ReturnType<typeof projectListRows>[number]
+> & {
   sums?: Awaited<ReturnType<typeof loadProductListSums>>;
-  groups?: ListGroupSummary[];
 };
 
 /** Deferred reads emit canonical patches, never placeholder full records. */
@@ -984,12 +976,6 @@ export const listProductsRead = async (
           ),
         };
       });
-      const owners = bind.batch(({ rows }) =>
-        loadProductOwners(
-          db,
-          rows.map((row) => row.id),
-        ),
-      );
       const food = bind.batch(async (page) => {
         const [related, prices] = await Promise.all([
           relations.load(page),
@@ -1170,9 +1156,6 @@ export const listProductsRead = async (
             };
           },
         ),
-        owners.fields(rawProductList.pick({ owners: true }), (row, loaded) => ({
-          owners: loaded.get(row.id) ?? [],
-        })),
         bind(
           rawProductList.pick({
             expenseCount: true,
@@ -1211,24 +1194,41 @@ export const listProductsRead = async (
     },
   });
   const filtered = await productWhere(db, filters, undefined, preparation);
-  const [{ results, totalCount, groups, memberships, membershipCount }, sums] =
-    await Promise.all([
-      readProductListPage(
-        db,
-        filtered,
-        filters,
-        sorts,
-        pagination,
-        readIntent,
-        projection,
-      ),
-      projection.kind === "full" && readIntent === "page"
-        ? loadProductListSums(db, filtered.where)
-        : undefined,
-    ]);
+  const membership = productScaffold.unresolvedCount(
+    db,
+    filters,
+    filtered.context,
+  );
+  const [
+    { results, totalCount, groups, memberships, membershipCount },
+    sums,
+    unresolvedCount,
+    incompleteSums,
+  ] = await Promise.all([
+    readProductListPage(
+      db,
+      filtered,
+      filters,
+      sorts,
+      pagination,
+      readIntent,
+      projection,
+    ),
+    projection.kind === "full" && readIntent === "page"
+      ? loadProductListSums(db, filtered.where)
+      : undefined,
+    membership,
+    readIntent === "count" || projection.kind === "base"
+      ? undefined
+      : membership.then((count) =>
+          productScaffold.incompleteSums(db, filters, filtered.context, count),
+        ),
+  ]);
 
   return {
     count: totalCount,
+    unresolvedCount,
+    incompleteSums,
     ...(sums ? { sums } : {}),
     ...(groups ? { groups, memberships, membershipCount } : {}),
     // The id/count projection binds no fields, so it carries no envelope.

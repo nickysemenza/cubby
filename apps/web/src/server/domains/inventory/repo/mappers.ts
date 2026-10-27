@@ -75,7 +75,7 @@ const inventoryEntryBaseFields = <Q extends DataQuality | undefined>(
 });
 
 /** Map loaded ownership; list callers omit this block when evidence is unloaded. */
-export const inventoryEntryOwnershipFields = ({
+const inventoryEntryOwnershipFields = ({
   ownership,
   steps,
 }: InventoryOwnershipTrace) => ({

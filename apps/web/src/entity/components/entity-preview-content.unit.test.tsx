@@ -213,9 +213,12 @@ describe("manifestPreviewCard", () => {
             ],
             "3/5",
           ),
+          spent: fieldValueFixture(
+            entityFieldEnvelopeSchemas.project.detail.shape.fields.shape.spent,
+            120,
+          ),
         },
         costEstimate: 500,
-        spent: 120,
       },
     });
 

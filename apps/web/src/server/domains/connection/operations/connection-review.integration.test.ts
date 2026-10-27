@@ -249,7 +249,7 @@ describe("connection application through generic Feedback", () => {
     });
     const work = () =>
       readRecordWorkQueueWith(
-        async () => [],
+        async () => ({ selections: [], incompleteProjectIds: [] }),
         ctx.db,
         null,
         item.id,

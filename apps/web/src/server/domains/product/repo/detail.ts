@@ -231,7 +231,7 @@ export async function readProductDetail(
           ],
     ...productUnitPriceDetailFields({ ...mapped, food }),
     ownershipEvidence: ownership,
-    owners: owners.get(row.id) ?? [],
+    owners: owners.get(row.id) ?? null,
     nutritionDisplay: buildNutritionDisplay({
       labelNutrition: mapped.labelNutrition,
       food,

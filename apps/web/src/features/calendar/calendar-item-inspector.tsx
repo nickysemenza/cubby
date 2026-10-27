@@ -14,6 +14,7 @@ import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-p
 import { formatCurrency } from "~/lib/number-format";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";
 import { RecordList, RecordRow } from "~/ui/common/record-list";
+import { WhyValue } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
 import {
@@ -293,6 +294,7 @@ function EditableCalendarItem({
       {item.kind === "meal" && (
         <DuplicateMealButton mealId={item.id} onDuplicated={onSaved} />
       )}
+      <CalendarBeneficiaryExplanations item={item} />
       <OpenFullRecord item={item} />
     </FormWrapper>
   );
@@ -310,6 +312,28 @@ function EditableCalendarItem({
     </Overlay>
   ) : (
     content
+  );
+}
+
+function CalendarBeneficiaryExplanations({ item }: { item: CalendarItem }) {
+  if (item.kind !== "expense" && item.kind !== "purchase") return null;
+  const sources = item.spendingContext?.beneficiarySources ?? [];
+  if (sources.length === 0) return null;
+  return (
+    <Facts
+      layout="list"
+      facts={sources.map((source) => ({
+        label: source.name,
+        value: (
+          <WhyValue
+            entity="expense"
+            id={source.id}
+            field="effectiveBeneficiaries"
+            label={`${source.name} beneficiaries`}
+          />
+        ),
+      }))}
+    />
   );
 }
 
@@ -350,6 +374,7 @@ function ReadOnlyCalendarItem({
         <p>{item.evidenceNote}</p>
       )}
       <p className="text-muted-foreground">{reason}</p>
+      <CalendarBeneficiaryExplanations item={item} />
       <OpenFullRecord item={item} />
     </Stack>
   );

@@ -11,10 +11,12 @@ type ListTotalDescriptor = Pick<
 export function ListTotalSummary({
   totals,
   labels,
+  scopeLabel = "All matching",
 }: {
   totals: readonly ListTotalDescriptor[];
   /** The server's text for each total, by id; a missing one is unavailable. */
   labels?: Record<string, string>;
+  scopeLabel?: string;
 }) {
   const values = totals.map((total) => ({
     id: total.id,
@@ -24,8 +26,12 @@ export function ListTotalSummary({
   if (values.length === 0) return null;
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs">
-      <span className="text-muted-foreground">All matching</span>
-      <KeyNumbers layout="inline" label="All matching totals" items={values} />
+      <span className="text-muted-foreground">{scopeLabel}</span>
+      <KeyNumbers
+        layout="inline"
+        label={`${scopeLabel} totals`}
+        items={values}
+      />
     </div>
   );
 }

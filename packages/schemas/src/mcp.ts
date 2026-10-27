@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { projectShortcode } from "./identifiers";
 import { productRefOut } from "./product-fields";
 import { paginatedMetaSchema } from "./pagination";
 import {
@@ -189,7 +190,9 @@ const problemItem = z.preprocess(
 export const problemsTypeSliceOut = z.object({
   type: z.string(),
   items: z.array(problemItem),
+  /** Known findings only while incompleteProjectIds is nonempty. */
   total: z.number().int(),
+  incompleteProjectIds: z.array(projectShortcode).optional(),
   meta: paginatedMetaSchema
     .extend({ pageSize: z.number().int().positive().max(100) })
     .optional(),

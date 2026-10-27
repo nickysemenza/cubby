@@ -54,7 +54,10 @@ describe("stored derived declarations", () => {
           ...input.except,
           ...Object.keys(input.where ?? {}),
         ]),
-        ...missing(declaration.table, [input.entityColumn]),
+        ...missing(declaration.table, [
+          input.entityColumn,
+          ...Object.keys(input.targetWhere ?? {}),
+        ]),
       ]),
       ...declaration.dependsOn.flatMap((dependency) =>
         "path" in dependency

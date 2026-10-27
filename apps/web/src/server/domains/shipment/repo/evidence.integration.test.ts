@@ -8,7 +8,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -31,6 +31,7 @@ import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph"
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import {
   recordShipmentEvidence,
@@ -83,6 +84,112 @@ const capture = (
 
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
+
+  it("reads and sorts one retained summary revision until new evidence is published", async () => {
+    const first = await recordShipmentEvidence(
+      ctx.db,
+      capture("stored-summary-one"),
+      ctx.actor,
+    );
+    const code = first.shipmentIds[0];
+    if (!code) throw new Error("Synthetic Shipment missing");
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    const read = () =>
+      executeEntity(kernel, {
+        action: "get",
+        entity: "shipment",
+        id: code,
+        missing: "error",
+      });
+    expect(await read()).toMatchObject({
+      item: {
+        fields: {
+          eventCount: { result: { kind: "missing" } },
+        },
+      },
+    });
+    await drainStoredDerived(ctx.db);
+    expect(await read()).toMatchObject({
+      item: {
+        fields: {
+          eventCount: {
+            result: {
+              kind: "cached",
+              decision: { outcome: { kind: "value", value: 1 } },
+            },
+          },
+          firstEventDate: {
+            result: {
+              kind: "cached",
+              decision: { outcome: { value: "2026-06-03" } },
+            },
+          },
+        },
+      },
+    });
+
+    const parcel = packet();
+    parcel.shipmentId = code;
+    const observed = parcel.observations[0];
+    if (!observed) throw new Error("Synthetic observation missing");
+    parcel.observations.push({
+      ...observed,
+      sourceEventKey: "scan-two",
+      kind: "delivered",
+      time: { kind: "instant", value: "2026-06-04T09:00:00Z" },
+    });
+    await recordShipmentEvidence(
+      ctx.db,
+      capture("stored-summary-two", [parcel]),
+      ctx.actor,
+    );
+    expect(await read()).toMatchObject({
+      item: {
+        fields: {
+          eventCount: {
+            result: {
+              kind: "cached",
+              freshness: "stale",
+              decision: { outcome: { value: 1 } },
+            },
+          },
+        },
+      },
+    });
+    await drainStoredDerived(ctx.db);
+    const listed = await countTestDbQueries(() =>
+      executeEntity(kernel, {
+        action: "list",
+        entity: "shipment",
+        filters: {},
+        sort: [{ orderBy: "eventCount", direction: "desc" }],
+        pagination: { pageIndex: 0, pageSize: 25 },
+      }),
+    );
+    expect(listed.result).toMatchObject({
+      items: [
+        {
+          id: code,
+          fields: {
+            eventCount: {
+              result: {
+                kind: "cached",
+                freshness: "fresh",
+                decision: { outcome: { value: 2 } },
+              },
+            },
+            lastEventDate: {
+              result: { decision: { outcome: { value: "2026-06-04" } } },
+            },
+            eventSpanHours: {
+              result: { decision: { outcome: { value: 24 } } },
+            },
+          },
+        },
+      ],
+    });
+    expect(listed.tables).not.toContain("ShipmentObservation");
+  });
 
   it("labels notification dates and keeps forecasts out of completed delivery", async () => {
     const parcel = packet();

@@ -82,7 +82,9 @@ export function withFacets(
     const facet = facets.get(field.key);
     if (!facet) return field;
     if (facet.kind === "range")
-      return { ...field, bounds: { min: facet.min, max: facet.max } };
+      return (facet.unresolvedCount ?? 0) > 0
+        ? field
+        : { ...field, bounds: { min: facet.min, max: facet.max } };
     const counts = new Map(
       facet.options.map((option) => [bareCode(option.value), option.count]),
     );
@@ -95,7 +97,7 @@ export function withFacets(
           ? option
           : {
               ...option,
-              hint: String(counts.get(bareCode(option.value)) ?? 0),
+              hint: `${counts.get(bareCode(option.value)) ?? 0}${(facet.unresolvedCount ?? 0) > 0 ? " known" : ""}`,
             },
       ),
     };
@@ -126,6 +128,14 @@ export function useViewCounts(entity: ListEntity | undefined) {
   return useMemo(
     () => ({
       total: result.isError ? undefined : result.data?.total,
+      unresolvedCounts: new Map(
+        result.isError
+          ? []
+          : (result.data?.views ?? []).map((view) => [
+              view.id,
+              view.unresolvedCount ?? 0,
+            ]),
+      ),
       counts: new Map(
         result.isError
           ? []

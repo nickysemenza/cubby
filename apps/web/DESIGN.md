@@ -580,3 +580,5 @@ display clock independently of refetching: after three polling intervals,
 cached observations show their measurement age and suppress live indicators,
 pace and ETA. Derived backlog has no payload timestamp, so its successful read
 time supplies the age. The minute display clock also refreshes on focus and wake.
+
+Project attention uses one quiet shared completeness notice in its dashboard, Problems and Work surfaces, with singular-aware project counts and known-findings wording. Saved-view count pills contain numbers only; incomplete membership is explained in the tab title and shared list status strip. Missing Project task rollups display Updating… until publication.

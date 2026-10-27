@@ -882,7 +882,7 @@ export const HOUSE_TAX_RATE = 0.08625;
  * default. Note the shortcode alphabet excludes O/I/L/0/1, so `PRJ-HOME` and
  * `PRJ-HOUS` are both unparseable.
  */
-export const HOUSEHOLD_PROJECT_SHORTCODE = "PRJ-HSHD";
+export { HOUSEHOLD_PROJECT_SHORTCODE } from "./project-fields";
 
 export const MATCH_TOLERANCE_LOW = 0.1;
 export const MATCH_TOLERANCE_HIGH = 0.15;
@@ -1617,6 +1617,14 @@ export const projectAttentionItemSchema = z.discriminatedUnion("type", [
 
 export type ProjectAttentionItem = z.infer<typeof projectAttentionItemSchema>;
 
+export const projectAttentionReport = z.object({
+  items: z.array(projectAttentionItemSchema),
+  incompleteProjectIds: z.array(projectShortcode),
+});
+export type ProjectAttentionReport = z.infer<typeof projectAttentionReport>;
+export type ProjectAttentionIncompleteIds =
+  ProjectAttentionReport["incompleteProjectIds"];
+
 type _AttentionUnionIsExhaustive =
   ProjectAttentionType extends ProjectAttentionItem["type"]
     ? true
@@ -1736,6 +1744,7 @@ export const projectDashboardSummaryOut = z.object({
   taskStatusByProject: z.array(projectTaskStatusBreakdown),
   nextTasks: z.array(taskOut),
   attention: z.array(projectAttentionItemSchema),
+  attentionIncompleteProjectIds: z.array(projectShortcode),
   filterOptions: projectFilterOptionsOut,
   hiddenByDate: z.object({
     projects: z.number().int(),

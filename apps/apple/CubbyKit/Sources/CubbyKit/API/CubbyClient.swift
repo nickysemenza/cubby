@@ -84,12 +84,13 @@ public actor CubbyClient {
     // MARK: - Generic entity access
 
     public func fieldExplanation(
-        subject: EntityRef, field: String, surface: String = "detail"
+        subject: EntityRef, field: String, surface: String = "detail", scope: EntityRef? = nil
     ) async throws -> FieldExplanationOutput {
         let entityKind = subject.entity
         return try await native_fieldExplanation_explain(
             body: .init(
                 entityKind: entityKind, entityId: subject.id, field: field,
+                scope: scope.map { EntityRefInput(entityKind: $0.entity, entityId: $0.id) },
                 surface: .init(rawValue: surface))
         )
     }
@@ -102,7 +103,7 @@ public actor CubbyClient {
         pageSize: Int = 50,
         sort: String? = nil,
         filters: EntityFilterState = EntityFilterState(),
-        groupBy: [ListGroupDimension] = []
+        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known
     ) async throws -> ListPage<EntityRow> {
         switch descriptor.key.nativeReadKind {
         case .usdaFood:
@@ -111,7 +112,7 @@ public actor CubbyClient {
         case .kernel:
             let result = try await descriptor.listPage(
                 client: self, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                groupBy: groupBy)
+                groupBy: groupBy, resultMembership: resultMembership)
             return ListPage(
                 items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
         case .unavailable:

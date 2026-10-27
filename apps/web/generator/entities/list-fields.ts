@@ -1406,6 +1406,68 @@ const validateDerivedReference = (
     );
 };
 
+/** Compile one declared derived entry, including its source-result contract. */
+const compileDerivedEntry = (
+  entity: CompiledEntity,
+  key: string,
+  entry: CompiledEntity["fieldModel"]["derived"][string],
+  byKey: Parameters<typeof compileVia>[2],
+  rows: Parameters<typeof compileVia>[4],
+): CompiledListField => {
+  const derivedContext = `${entity.key}.model.derived.${key}`;
+  const requiredDerived =
+    "requiresResult" in entry && entry.requiresResult
+      ? entity.fieldModel.derived[entry.requiresResult]
+      : undefined;
+  if (
+    "requiresResult" in entry &&
+    entry.requiresResult &&
+    !entity.fieldModel.stored[entry.requiresResult] &&
+    !(requiredDerived && "stored" in requiredDerived && requiredDerived.stored)
+  )
+    throw new EntityDeclarationError(
+      `${derivedContext}.requiresResult names missing stored result ${entry.requiresResult}.`,
+    );
+  const compiled: CompiledListField =
+    "rollup" in entry
+      ? compileRollup(entity, entry, byKey, derivedContext)
+      : "via" in entry
+        ? {
+            ...compileVia(entity, entry.via, byKey, derivedContext, rows),
+            ...(entry.requiresResult
+              ? { requiresResult: entry.requiresResult }
+              : {}),
+          }
+        : "type" in entry
+          ? {
+              shape: "value",
+              type: entry.type,
+              ...(entry.fromResult ? { fromResult: entry.fromResult } : {}),
+              ...(entry.requiresResult
+                ? { requiresResult: entry.requiresResult }
+                : {}),
+              options: entry.options ?? null,
+              sort: null,
+              group:
+                entry.type === "dateInterval"
+                  ? `${humanize(key)} is a date span, so a record has no single date to group under.`
+                  : null,
+            }
+          : {
+              shape: "predicate",
+              predicate: entry.predicate,
+              options: entry.options ?? null,
+              reason: entry.reason,
+              ...(entry.requiresResult
+                ? { requiresResult: entry.requiresResult }
+                : {}),
+              sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
+              group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
+            };
+  validateDerivedReference(entity, key, compiled, derivedContext);
+  return compiled;
+};
+
 /**
  * The cross-entity half of the list-field compiler: resolves `via` paths
  * through declared relations, derives each sort/group rejection reason,
@@ -1426,32 +1488,7 @@ export const compileListFields = (
     const rows = compileRowSets(entity, byKey);
     const derived: Record<string, CompiledListField> = {};
     for (const [key, entry] of Object.entries(entity.fieldModel.derived)) {
-      const derivedContext = `${context}.model.derived.${key}`;
-      derived[key] =
-        "rollup" in entry
-          ? compileRollup(entity, entry, byKey, derivedContext)
-          : "via" in entry
-            ? compileVia(entity, entry.via, byKey, derivedContext, rows)
-            : "type" in entry
-              ? {
-                  shape: "value",
-                  type: entry.type,
-                  options: entry.options ?? null,
-                  sort: null,
-                  group:
-                    entry.type === "dateInterval"
-                      ? `${humanize(key)} is a date span, so a record has no single date to group under.`
-                      : null,
-                }
-              : {
-                  shape: "predicate",
-                  predicate: entry.predicate,
-                  options: entry.options ?? null,
-                  reason: entry.reason,
-                  sort: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
-                  group: `Filter only: ${entry.reason.replace(/\.$/, "")}.`,
-                };
-      validateDerivedReference(entity, key, derived[key], derivedContext);
+      derived[key] = compileDerivedEntry(entity, key, entry, byKey, rows);
     }
     const sort = entity.fieldModel.sort;
     for (const key of sort?.fields ?? []) {

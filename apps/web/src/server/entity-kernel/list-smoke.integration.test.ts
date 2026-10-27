@@ -75,6 +75,7 @@ import {
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 
 /* oxlint-disable anti-slop/no-unknown-returns -- the mock() walker trade-off in reference-universe.fixtures.ts */
 /**
@@ -217,6 +218,8 @@ describe("entity list smoke — shared selection/count FROM context", () => {
       .where(eq(runTable.id, inspectionRun));
     if (!inspection)
       throw new Error("Synthetic inspection Run was not retained");
+    // The matrix tests settled filter plans; an unresolved owner is not a known exclusion.
+    await drainStoredDerived(ctx.db);
 
     const failures: string[] = [];
     const skipped: string[] = [];

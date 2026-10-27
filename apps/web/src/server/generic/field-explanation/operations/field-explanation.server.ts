@@ -49,6 +49,7 @@ import type { EntitySchemaBindingEntity } from "~/server/generated/entity-bindin
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { loadQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
 import { explainLiveDerived } from "~/server/generic/derived/repo/explain";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
 import {
   loadFieldCountEvidence,
@@ -93,6 +94,7 @@ const explanationMetadata = z.object({
       summary: z.string().optional(),
     })
     .optional(),
+  scopeFilters: z.record(z.string(), z.string()).optional(),
   sourceDependencies: z
     .array(z.object({ path: z.string(), label: z.string() }))
     .optional(),
@@ -516,6 +518,8 @@ async function loadProjection(
   entity: Entity,
   entityId: string,
   surface: Surface,
+  scope?: ExplainFieldInput["scope"],
+  scopeFilter?: string,
 ): Promise<JsonRecord> {
   if (entity === "cookbook") {
     const item = await getCookbookSummary(
@@ -535,10 +539,13 @@ async function loadProjection(
   }
   if (!kernelEntities.has(entity))
     throw new Error(`Unsupported explanation entity ${entity}`);
-  if (surface !== "detail") {
+  if (surface !== "detail" || scopeFilter) {
     const result = await executeEntityAs(context, "list", {
       entity: z.enum(ENTITY_KERNEL_ENTITIES).parse(entity),
-      filters: { ids: [entityId] },
+      filters: {
+        ids: [entityId],
+        ...(scope && scopeFilter ? { [scopeFilter]: scope.entityId } : {}),
+      },
       pagination: { pageIndex: 0, pageSize: 1 },
     });
     const item = result.items[0];
@@ -613,7 +620,20 @@ async function loadExplanationSnapshot(
       },
     };
     const [projection, sourceProjection] = await Promise.all([
-      loadProjection(snapshotContext, entity, input.entityId, input.surface),
+      loadProjection(
+        snapshotContext,
+        entity,
+        input.entityId,
+        input.surface,
+        input.scope,
+        explanationMetadata
+          .nullish()
+          .parse(
+            entityFieldModels[entity].fields.find(
+              (candidate) => candidate.key === fieldKey,
+            )?.explanation,
+          )?.scopeFilters?.[input.scope?.entityKind ?? ""],
+      ),
       loadSourceProjection(
         snapshotContext,
         entity,
@@ -638,18 +658,39 @@ async function loadExplanationSnapshot(
     const internalId = shortcodeEntity
       ? await resolveLiveShortcode(snapshotDb, input.entityId, shortcodeEntity)
       : null;
-    const comparison = internalId
-      ? await explainLiveDerived(
-          snapshotDb,
-          derivedComputes,
-          entity,
-          fieldKey,
-          internalId,
-        )
-      : null;
     const field = entityFieldModels[entity].fields.find(
       (candidate) => candidate.key === fieldKey,
     );
+    const contextualProjection =
+      field && "storedProjection" in field && field.storedProjection;
+    const comparison = contextualProjection
+      ? {
+          kind: "unavailable" as const,
+          reason:
+            "The live root computation does not apply this field’s current projection context and cannot be compared with its displayed value.",
+        }
+      : internalId
+        ? await explainLiveDerived(
+            snapshotDb,
+            derivedComputes,
+            entity,
+            fieldKey,
+            internalId,
+          )
+        : null;
+    const storedResult =
+      internalId && field?.storedKey
+        ? (
+            await loadStoredDerived(
+              snapshotDb,
+              entity,
+              [internalId],
+              [field.storedKey],
+            )
+          )
+            .get(internalId)
+            ?.get(field.storedKey)
+        : undefined;
     const currentEnvelope = fieldEnvelopeFor(
       projection,
       field?.readKey ?? fieldKey,
@@ -674,7 +715,19 @@ async function loadExplanationSnapshot(
     return {
       projection,
       resetPreview,
-      sourceProjection,
+      sourceProjection:
+        storedResult?.resultExists &&
+        currentEnvelope?.result.kind === "cached" &&
+        currentEnvelope.result.computedAt === storedResult.computedAt
+          ? {
+              ...sourceProjection,
+              storedResult: z.json().parse(storedResult.value),
+            }
+          : {
+              ...sourceProjection,
+              // A declared snapshot can be unavailable while current live inputs decide a value.
+              ...(field?.storedKey ? { storedResult: null } : {}),
+            },
       comparison,
       qualityBreakdown:
         fieldKey === "dataQuality" &&
@@ -864,6 +917,14 @@ export async function explainField(
   if (!field?.explanation)
     throw new Error("This field has no declared explanation");
   const explanation = explanationMetadata.parse(field.explanation);
+  if (
+    input.scope &&
+    Object.keys(explanation.scopeFilters ?? {}).length > 0 &&
+    !explanation.scopeFilters?.[input.scope.entityKind]
+  )
+    throw new Error(
+      `Unsupported explanation scope ${input.scope.entityKind} for ${entity}.${field.key}`,
+    );
   const snapshot = await loadExplanationSnapshot(
     context,
     input,
@@ -956,6 +1017,29 @@ export async function explainField(
           value,
           resolution !== null,
         ),
+        ...(input.scope && explanation.scopeFilters?.[input.scope.entityKind]
+          ? [
+              {
+                label: "Requested list scope",
+                entity: input.scope,
+                value: input.scope,
+              },
+            ]
+          : []),
+        ...("storedProjection" in field && field.storedProjection
+          ? [
+              {
+                label: "Current projection context",
+                entity: null,
+                value:
+                  envelope.result.kind === "cached"
+                    ? "Published facts are projected with current context. The timestamp dates those facts, not the current projection."
+                    : envelope.result.kind === "live"
+                      ? "Current inputs determine this value without a cached result timestamp."
+                      : "Required published facts are unavailable.",
+              },
+            ]
+          : []),
         ...(countEvidence?.sources ?? []),
       ];
   const actions = explanationActions(subject, resolution);

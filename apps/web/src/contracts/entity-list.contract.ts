@@ -1,4 +1,7 @@
-import { listNestingSchema } from "@cubby/schemas/pagination";
+import {
+  listNestingSchema,
+  listResultMembership,
+} from "@cubby/schemas/pagination";
 import { z } from "zod";
 
 import { defineContract, query } from "~/contracts/define";
@@ -21,6 +24,7 @@ const listFacetSchema = z.discriminatedUnion("kind", [
   z.object({
     id: z.string(),
     kind: z.literal("values"),
+    unresolvedCount: z.number().int().nonnegative().optional(),
     options: z.array(
       z.object({ value: z.string(), count: z.number().int().nonnegative() }),
     ),
@@ -28,6 +32,7 @@ const listFacetSchema = z.discriminatedUnion("kind", [
   z.object({
     id: z.string(),
     kind: z.literal("range"),
+    unresolvedCount: z.number().int().nonnegative().optional(),
     min: z.string().nullable(),
     max: z.string().nullable(),
   }),
@@ -67,7 +72,11 @@ const entityViewCountsOutputSchema = z.object({
   /** The list with no filter applied: the "All" tab. */
   total: z.number().int().nonnegative(),
   views: z.array(
-    z.object({ id: z.string(), count: z.number().int().nonnegative() }),
+    z.object({
+      id: z.string(),
+      count: z.number().int().nonnegative(),
+      unresolvedCount: z.number().int().nonnegative().optional(),
+    }),
   ),
 });
 
@@ -75,6 +84,7 @@ export const entitySelectionIdsInputSchema = z.object({
   entity: z.enum(listEntities),
   filters: z.record(z.string(), z.unknown()).default({}),
   nesting: listNestingSchema.optional(),
+  resultMembership: listResultMembership.optional(),
   cursor: z
     .string()
     .min(1)

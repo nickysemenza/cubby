@@ -30,10 +30,13 @@ import {
   productWithBetterUpcDataSchema,
   productWithIslandedMappingsSchema,
   TRACKER_PROBLEM_KEY_BY_TYPE,
+  projectAttentionProblemKeys,
+  isProjectAttentionProblemKey,
   type ProblemItem,
 } from "@cubby/schemas/problems-raw-read";
 import type {
   ProjectAttentionItem,
+  ProjectAttentionIncompleteIds,
   ProjectAttentionType,
 } from "@cubby/schemas/project";
 import {
@@ -1537,16 +1540,7 @@ const findProductsWithBetterUpcData = async (
 // banner / MCP see them.
 // The detection itself stays in the repo (computeAttentionItems); this only
 // splits the flat item list into the per-rule slices.
-const TRACKER_PROBLEM_KEYS = [
-  "overdueTasks",
-  "stalledProjects",
-  "projectsMissingBudget",
-  "projectsSpendBelowEstimate",
-  "pastDuePlannedExpenses",
-  "unclassifiedExpenses",
-  "blockedWorkProjects",
-  "projectsWithDateDrift",
-] as const satisfies readonly ProblemKey[];
+const TRACKER_PROBLEM_KEYS = projectAttentionProblemKeys;
 
 type TrackerEntityProblemKey = Exclude<
   (typeof TRACKER_PROBLEM_KEYS)[number],
@@ -1564,8 +1558,7 @@ const trackerTypeFor = (key: TrackerEntityProblemKey): ProjectAttentionType => {
 const isTrackerEntityProblemKey = (
   key: ProblemKey,
 ): key is TrackerEntityProblemKey =>
-  key !== "projectsWithDateDrift" &&
-  TRACKER_PROBLEM_KEYS.some((candidate) => candidate === key);
+  key !== "projectsWithDateDrift" && isProjectAttentionProblemKey(key);
 
 const indexAttentionItems = (
   items: readonly ProjectAttentionItem[],
@@ -1616,13 +1609,14 @@ export const findTrackerProblems = async (
     diagnostic: { attentionItems },
     fieldsFor: (key) => (isTrackerEntityProblemKey(key) ? ["id"] : undefined),
   });
-  const index = indexAttentionItems(attentionItems);
+  const index = indexAttentionItems(attentionItems.items);
   const page = (key: (typeof exactKeys)[number]): ExactProblemPage => {
     const result = exact[key];
     if (!result) throw new Error(`Missing canonical Problem result "${key}"`);
     return result;
   };
   return {
+    incompleteProjectIds: attentionItems.incompleteProjectIds,
     overdueTasks: presentTrackerProblem(
       "overdueTasks",
       page("overdueTasks"),
@@ -1741,8 +1735,13 @@ export const findEntityProblemByType = async (
   key: ProblemKey,
   upcLookupClient: UpcLookupBatchPort,
   usdaClient: UsdaFoodBatchPort,
-): Promise<{ type: ProblemKey; items: unknown[]; total: number }> => {
-  const attentionItems = isTrackerEntityProblemKey(key)
+): Promise<{
+  type: ProblemKey;
+  items: unknown[];
+  total: number;
+  incompleteProjectIds?: ProjectAttentionIncompleteIds;
+}> => {
+  const attentionItems = isProjectAttentionProblemKey(key)
     ? await computeAttentionItems(db)
     : undefined;
   const result = await executeProblem(db, key, {
@@ -1777,12 +1776,20 @@ export const findEntityProblemByType = async (
     };
   }
   if (attentionItems !== undefined && isTrackerEntityProblemKey(key)) {
-    const index = indexAttentionItems(attentionItems);
+    const index = indexAttentionItems(attentionItems.items);
     return {
       type: key,
       items: presentTrackerProblem(key, result, index),
       total: result.count,
+      incompleteProjectIds: attentionItems.incompleteProjectIds,
     };
   }
-  return { type: key, items: [...result.items], total: result.count };
+  return {
+    type: key,
+    items: [...result.items],
+    total: result.count,
+    ...(attentionItems
+      ? { incompleteProjectIds: attentionItems.incompleteProjectIds }
+      : {}),
+  };
 };

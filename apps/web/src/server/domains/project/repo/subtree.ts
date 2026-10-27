@@ -1,19 +1,12 @@
 /**
- * Sub-project (WBS) tree helpers: descendant-set computation and subtree
- * rollup aggregation. See packages/schemas/src/project.ts's `projectRollup`
- * doc comment for the own-vs-subtree distinction.
+ * Project tree and own/subtree rollup policy. Canonical batch computation and
+ * authoritative financial scopes use live grouped inputs. Ordinary list,
+ * detail and attention consumers hydrate the published typed rollups through
+ * loadStoredProjectRollups; missing inputs remain unavailable.
  *
- * The load pattern every caller (crud.ts's reader, lookup.ts's list, the two
- * dashboard reads, attention.ts) follows: fetch ALL live projects' `{id,
- * name, parentProjectId, costEstimate}` via `allProjectParentRows` — cheap,
- * single query, household scale — beside the grouped rollup inputs. Build the
- * parent→children map once and scope OWN rollups to the page's descendants in
- * memory. Never one query per project or a tree-dependent SQL stage.
- *
- * That whole sequence is {@link loadProjectSubtreeRollups} — call it rather
- * than re-assembling the four steps by hand (it was copy-pasted across five
- * files, and `projectDashboardSummary` ran it twice per request because
- * `computeAttentionItems` re-derived the same thing independently).
+ * Build the parent/children map once, reuse the grouped folds and never issue
+ * one query per Project. loadProjectSubtreeRollups remains the live policy for
+ * consumers whose financial scope cannot be replaced by a cached portfolio.
  */
 import type { LedgerPartyId, ProjectId } from "@cubby/schemas/identifiers";
 import {
@@ -21,6 +14,7 @@ import {
   type ProjectDateWindow,
   type ProjectStatus,
 } from "@cubby/schemas/project";
+import { projectRollupResult } from "@cubby/schemas/project-output-fields";
 import type { RawProjectOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -33,6 +27,7 @@ import {
 } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, project } from "~/server/db/schema";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 
 import {
@@ -482,5 +477,41 @@ export async function loadProjectSubtreeRollups(
     ownContentDates: contentDates,
     subtreeRollups: aggregateSubtreeRollups(loaded.allRows, ownRollups),
     dateWindows: aggregateSubtreeDates(loaded.allRows, contentDates),
+  };
+}
+
+/** Stored expensive inputs only; absent computations stay absent, never zero. */
+export async function loadStoredProjectRollups(
+  db: Database,
+  tree?: ProjectTree | Promise<ProjectTree>,
+  ids?: readonly ProjectId[],
+): Promise<ProjectSubtreeRollups> {
+  const loaded = await (tree ?? loadProjectTree(db));
+  const stored = await loadStoredDerived(
+    db,
+    "project",
+    ids ?? loaded.allRows.map((row) => row.id),
+    ["rollups"],
+  );
+  const ownRollups = new Map<ProjectId, ProjectOwnRollup>();
+  const subtreeRollups = new Map<ProjectId, ProjectSubtreeRollup>();
+  const dateWindows = new Map<ProjectId, ProjectDateWindow>();
+  const ownContentDates = new Map<ProjectId, ProjectContentDates>();
+  for (const row of loaded.allRows) {
+    const result = stored.get(row.id)?.get("rollups");
+    if (!result?.resultExists) continue;
+    const value = projectRollupResult.parse(result.value);
+    const { subtree, ...own } = value.rollup;
+    ownRollups.set(row.id, own);
+    subtreeRollups.set(row.id, subtree);
+    dateWindows.set(row.id, value.dateWindow);
+    ownContentDates.set(row.id, value.ownContentDates);
+  }
+  return {
+    ...loaded,
+    ownRollups,
+    subtreeRollups,
+    dateWindows,
+    ownContentDates,
   };
 }

@@ -1,5 +1,9 @@
 import type { paginatedMetaSchema } from "@cubby/schemas/pagination";
-import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
+import type {
+  ListGroupBy,
+  ListNesting,
+  ListResultMembership,
+} from "@cubby/schemas/pagination";
 import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 import type { z } from "zod";
@@ -46,6 +50,7 @@ export type ListQueryOptionsFn<
   groupBy?: ListGroupBy[];
   /** A declared tree's scope; omitted reads the flat list. */
   nesting?: ListNesting;
+  resultMembership?: ListResultMembership;
 }) => ListQueryPlan<TData, TPage>;
 
 interface UsePaginatedTableCoreOptions<

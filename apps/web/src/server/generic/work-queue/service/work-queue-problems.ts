@@ -14,7 +14,7 @@ import { productFiltersSchema } from "@cubby/schemas/product";
 import {
   projectFiltersSchema,
   taskFiltersSchema,
-  type ProjectAttentionItem,
+  type ProjectAttentionReport,
 } from "@cubby/schemas/project";
 import { recipeFiltersSchema } from "@cubby/schemas/recipe";
 import { vendorFiltersSchema } from "@cubby/schemas/vendor";
@@ -43,13 +43,13 @@ import { buildMealWhere } from "~/server/domains/meal/repo/crud";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
 import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
-import { loadProjectSubtreeRollups } from "~/server/domains/project/repo/subtree";
+import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { findIncompleteTransactionImports } from "~/server/generic/problems/repo/detectors-financial";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -73,7 +73,7 @@ import { traceAllBounded } from "~/server/observability/tracing";
 type WhereBuilder = (
   db: Database,
   filters: FilterAssembly,
-  attentionItems?: readonly ProjectAttentionItem[],
+  attentionItems?: ProjectAttentionReport,
   readContext?: QualityReadContext,
 ) => SQL | undefined | Promise<SQL | undefined>;
 const sharedProblemBuilders = {
@@ -276,7 +276,10 @@ export async function additionalWorkProblemSelections(
   db: Database,
   scope: WorkQueueScope,
   readContexts?: Partial<Record<Entity, QualityReadContext>>,
-): Promise<SQL[]> {
+): Promise<{
+  selections: SQL[];
+  incompleteProjectIds: ProjectAttentionReport["incompleteProjectIds"];
+}> {
   const selections: SQL[] = [];
   const predicates: Record<string, () => Promise<SQL[]>> = {};
   const diagnostics: Record<string, () => Promise<SQL[]>> = {};
@@ -286,15 +289,12 @@ export async function additionalWorkProblemSelections(
   const includeAccounts =
     includeUnrecorded && includesWorkSource(scope, "account", "review");
   if (scope.gapChecks || (!includeProblems && !includeAccounts))
-    return selections;
-  let attentionPromise: Promise<ProjectAttentionItem[]> | undefined;
-  let projectLoadPromise:
-    | ReturnType<typeof loadProjectSubtreeRollups>
-    | undefined;
-  // Attention and tool ownership need the same complete dates. Share this
-  // request's load without serializing attention's other independent reads.
-  const projectLoad = () =>
-    (projectLoadPromise ??= loadProjectSubtreeRollups(db));
+    return { selections, incompleteProjectIds: [] };
+  let attentionPromise: ReturnType<typeof computeAttentionItems> | undefined;
+  let projectLoadPromise: ReturnType<typeof loadProjectDateWindows> | undefined;
+  // Tool ownership requires current complete dates. Attention independently
+  // reads published roots and reports any unavailable Project inputs.
+  const projectLoad = () => (projectLoadPromise ??= loadProjectDateWindows(db));
   // A Project record read evaluates the shared attention rules for that
   // project only; non-project record reads never reach the project branch.
   const scopedProjects = async () => {
@@ -304,7 +304,7 @@ export async function additionalWorkProblemSelections(
   };
   const attentionItems = () =>
     (attentionPromise ??= scopedProjects().then((projectIds) =>
-      computeAttentionItems(db, { projectIds, preloaded: projectLoad() }),
+      computeAttentionItems(db, { projectIds }),
     ));
   for (const definition of problemQueryDeclarations()) {
     if (!includeProblems) break;
@@ -396,10 +396,7 @@ export async function additionalWorkProblemSelections(
             ? { attentionItems: await attentionItems() }
             : source.diagnostic === "tools-used-outside-ownership"
               ? {
-                  projectDateWindows: projectLoad().then((loaded) => ({
-                    tree: loaded,
-                    dateWindows: loaded.dateWindows,
-                  })),
+                  projectDateWindows: projectLoad(),
                 }
               : {},
           { kind: "count" },
@@ -498,5 +495,10 @@ export async function additionalWorkProblemSelections(
     4,
   );
   selections.push(...Object.values(problemRows).flat());
-  return selections;
+  return {
+    selections,
+    incompleteProjectIds: attentionPromise
+      ? (await attentionPromise).incompleteProjectIds
+      : [],
+  };
 }

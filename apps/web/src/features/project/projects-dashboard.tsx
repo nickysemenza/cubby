@@ -37,6 +37,7 @@ import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
 import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import type { CubbyRow } from "~/ui/data-table/table-features";
+import { FieldValueMark } from "~/ui/derived/value-mark";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { DashboardSectionLoading } from "~/ui/feedback/loading-skeletons";
@@ -362,7 +363,10 @@ function OverviewView({
 
   return (
     <Stack className="pt-4">
-      <NeedsAttention items={data.attention} />
+      <NeedsAttention
+        items={data.attention}
+        incompleteCount={data.attentionIncompleteProjectIds.length}
+      />
 
       <NextWork tasks={data.nextTasks} />
 
@@ -552,13 +556,15 @@ export function ProjectCard({
   // contributions) mirrors the detail hero / table "Actual" — using the net
   // `spent` here would fold planned spend and negative contributions into the
   // badge (e.g. a −$75k contribution reading as "-$65,000 spent").
-  const spent = project.rollup.subtree.actualSpent;
+  const rollup = fieldValueOf(project.fields.rollup);
+  const dateWindow = fieldValueOf(project.fields.dateWindow);
+  const spent = rollup?.subtree.actualSpent;
   // Compare against the subtree estimate to match the subtree spend scope. No
   // `?? project.costEstimate` fallback: the subtree estimate is seeded FROM
   // the project's own, so it is null only when the own estimate is too.
-  const estimate = project.rollup.subtree.costEstimate;
+  const estimate = rollup?.subtree.costEstimate;
   const hasEstimate = estimate != null;
-  const overBudget = estimate != null && spent > estimate;
+  const overBudget = estimate != null && spent != null && spent > estimate;
   const current =
     inspection != null && inspection.currentRowId === inspection.row.id;
   const selected = inspection?.row.getIsSelected() ?? false;
@@ -657,36 +663,39 @@ export function ProjectCard({
             {loc}
           </Badge>
         ))}
-        {hasEstimate && (
-          <Badge variant="outline">
-            <CurrencyDollarIcon className="size-3" />
-            {formatCurrency(estimate ?? 0)}
-          </Badge>
-        )}
-        {spent !== 0 && (
-          <Badge
-            variant={
-              hasEstimate
-                ? overBudget
-                  ? "destructive"
-                  : "positive"
-                : "outline"
-            }
-          >
-            <WalletIcon className="size-3" />
-            {formatCurrency(spent)} spent
-          </Badge>
-        )}
-        {(project.dateWindow.effectiveStart ||
-          project.dateWindow.effectiveEnd) && (
-          <Badge variant="outline">
-            <CalendarIcon className="size-3" />
-            <DateDisplay
-              start={project.dateWindow.effectiveStart}
-              end={project.dateWindow.effectiveEnd}
-            />
-          </Badge>
-        )}
+        <FieldValueMark envelope={project.fields.rollup}>
+          {hasEstimate && (
+            <Badge variant="outline">
+              <CurrencyDollarIcon className="size-3" />
+              {formatCurrency(estimate)}
+            </Badge>
+          )}
+          {spent != null && spent !== 0 && (
+            <Badge
+              variant={
+                hasEstimate
+                  ? overBudget
+                    ? "destructive"
+                    : "positive"
+                  : "outline"
+              }
+            >
+              <WalletIcon className="size-3" />
+              {formatCurrency(spent)} spent
+            </Badge>
+          )}
+        </FieldValueMark>
+        <FieldValueMark envelope={project.fields.dateWindow}>
+          {(dateWindow?.effectiveStart || dateWindow?.effectiveEnd) && (
+            <Badge variant="outline">
+              <CalendarIcon className="size-3" />
+              <DateDisplay
+                start={dateWindow.effectiveStart}
+                end={dateWindow.effectiveEnd}
+              />
+            </Badge>
+          )}
+        </FieldValueMark>
       </Row>
     </Panel>
   );

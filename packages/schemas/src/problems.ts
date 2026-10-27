@@ -1272,6 +1272,7 @@ export const problemsViewsSchema = z.object({
 });
 export type ProblemsViewsOut = z.infer<typeof problemsViewsSchema>;
 export const problemsTrackerSchema = z.object({
+  incompleteProjectIds: z.array(projectShortcode),
   ...problemsTrackerFields,
   sectionTotals: sectionTotalsSchema,
 });
@@ -1293,6 +1294,14 @@ export const TRACKER_PROBLEM_KEY_BY_TYPE = {
   date_window_drift: "projectsWithDateDrift",
 } as const satisfies Record<ProjectAttentionType, keyof ProblemsTracker>;
 
+export const projectAttentionProblemKeys = Object.values(
+  TRACKER_PROBLEM_KEY_BY_TYPE,
+);
+export const isProjectAttentionProblemKey = (
+  key: string,
+): key is (typeof projectAttentionProblemKeys)[number] =>
+  projectAttentionProblemKeys.some((candidate) => candidate === key);
+
 // Combined output schema for all problems: every detector key is required, so
 // lazy loading/cost grouping never makes fields appear optional on the
 // aggregate response.
@@ -1305,6 +1314,7 @@ const allProblemArrayFields = {
 } satisfies { [K in ProblemKey]: ProblemRows<K> };
 
 export const allProblemsSchema = z.object({
+  incompleteProjectIds: z.array(projectShortcode),
   ...allProblemArrayFields,
   sectionTotals: sectionTotalsSchema.default({}),
   upcFreshness: upcEnrichmentFreshnessSchema.optional(),

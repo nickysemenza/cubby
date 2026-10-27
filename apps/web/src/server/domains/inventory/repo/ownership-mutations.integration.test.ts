@@ -6,8 +6,8 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { OWNER_FILTER_HOUSEHOLD } from "@cubby/shared";
-import { and, eq } from "drizzle-orm";
+import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
+import { and, eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import {
   countTestDbQueries,
@@ -24,6 +24,7 @@ import {
   financialTransactionAllocation,
   inventoryEntry,
   purchase,
+  product,
   vendorAccount,
 } from "~/server/db/schema";
 import {
@@ -40,10 +41,8 @@ import {
 import * as ownershipReads from "~/server/domains/inventory/repo/ownership";
 import {
   loadEffectiveInventoryOwnershipById,
-  loadProductOwners,
-  loadProductOwnerMembership,
-  selectProductIdsByOwner,
-  productIdsByOwner,
+  computeProductOwners,
+  productOwnerFilterSql,
 } from "~/server/domains/inventory/repo/ownership";
 import {
   confirmInventoryExpenseBeneficiary,
@@ -55,13 +54,19 @@ import {
   updateLedgerParty,
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { createLocation } from "~/server/domains/location/repo/crud";
-import { createProduct } from "~/server/domains/product/repo/crud";
+import { createProduct, productList } from "~/server/domains/product/repo/crud";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { executeEntity } from "~/server/entity-kernel";
+import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
+import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
+import { markExpiredClockDerived } from "~/server/generic/derived/repo/drain";
+import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createLocationFixture,
   createProductFixture,
@@ -75,6 +80,20 @@ import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
 
 describe("inventory ownership mutations", () => {
   const ctx = withTestDb();
+
+  const productIdsByOwner = async (
+    db: typeof ctx.db,
+    values: readonly string[],
+    presence?: "has" | "none",
+  ) =>
+    (
+      await getDb(db)
+        .select({ id: product.id })
+        .from(product)
+        .where(
+          and(notDeleted(product), productOwnerFilterSql(values, presence)),
+        )
+    ).map((row) => row.id);
 
   const createSubject = async (name: string, value = 1) => {
     const [product, location] = await Promise.all([
@@ -106,6 +125,197 @@ describe("inventory ownership mutations", () => {
       entryId: parseEntityId("inventory", entryId),
     };
   };
+
+  it("keeps missing ownership distinct and applies current Household intent before publication", async () => {
+    const subject = await createSubject("Stored ownership availability");
+    const filters = { productIdFilter: [subject.product.id] };
+    const page = { pageIndex: 0, pageSize: 12 };
+    const productPage = () =>
+      productList(ctx.db, { ids: [subject.product.id] }, [], page);
+    const membership = async () =>
+      (
+        await getDb(ctx.db)
+          .select({
+            unknown: productOwnerFilterSql([OWNER_FILTER_UNKNOWN]),
+            household: productOwnerFilterSql([OWNER_FILTER_HOUSEHOLD]),
+          })
+          .from(product)
+          .where(eq(product.id, subject.product.entityId))
+      )[0];
+    expect((await productPage()).data[0]?.owners).toBeNull();
+    // NULL membership is unresolved, rather than a known false match.
+    expect(await membership()).toEqual({ unknown: null, household: null });
+    const excludingHousehold = () =>
+      productList(
+        ctx.db,
+        {
+          ids: [subject.product.id],
+          ownerLedgerPartyIdExclude: [OWNER_FILTER_HOUSEHOLD],
+        },
+        [],
+        page,
+      );
+    expect(await excludingHousehold()).toMatchObject({
+      count: 0,
+      unresolvedCount: 1,
+    });
+    const unresolved = () =>
+      executeEntity(buildKernelContext(ctx.db), {
+        action: "list",
+        entity: "product",
+        filters: {
+          ids: [subject.product.id],
+          ownerLedgerPartyId: [OWNER_FILTER_HOUSEHOLD],
+        },
+        resultMembership: "unresolved",
+        pagination: page,
+      });
+    expect(await unresolved()).toMatchObject({
+      meta: { totalCount: 1, unresolvedCount: 1 },
+      items: [{ id: subject.product.id }],
+    });
+    expect(
+      await executeEntitySelectionIds(buildKernelContext(ctx.db), {
+        entity: "product",
+        filters: {
+          ids: [subject.product.id],
+          ownerLedgerPartyId: [OWNER_FILTER_HOUSEHOLD],
+        },
+        resultMembership: "unresolved",
+      }),
+    ).toMatchObject({ ids: [subject.product.id], totalCount: 1 });
+    const filtered = (owner: string) =>
+      inventoryentryList(
+        ctx.db,
+        { ...filters, ownerLedgerPartyId: [owner] },
+        [],
+        page,
+      );
+    expect(await filtered(OWNER_FILTER_UNKNOWN)).toMatchObject({
+      count: 0,
+      unresolvedCount: 1,
+    });
+    expect(await productIdsByOwner(ctx.db, [], "none")).not.toContain(
+      subject.product.entityId,
+    );
+    await drainStoredDerived(ctx.db);
+    expect((await productPage()).data[0]?.owners).toEqual([
+      { label: "Unknown", ref: null, inherited: true },
+    ]);
+    expect(await filtered(OWNER_FILTER_UNKNOWN)).toMatchObject({
+      count: 1,
+      unresolvedCount: 0,
+    });
+    expect(await membership()).toEqual({ unknown: true, household: false });
+    expect(await excludingHousehold()).toMatchObject({
+      count: 1,
+      unresolvedCount: 0,
+    });
+    expect(await unresolved()).toMatchObject({
+      meta: { totalCount: 0, unresolvedCount: 0 },
+      items: [],
+    });
+    await setInventoryOwnership(
+      ctx.db,
+      subject.entryId,
+      { mode: "explicit", ownerId: null },
+      undefined,
+      TEST_ACTOR,
+    );
+    expect((await filtered(OWNER_FILTER_HOUSEHOLD)).count).toBe(1);
+    expect((await filtered(OWNER_FILTER_UNKNOWN)).count).toBe(0);
+    // Product is a computed collection and retains its selected publication until refreshed.
+    expect(await productIdsByOwner(ctx.db, [OWNER_FILTER_UNKNOWN])).toContain(
+      subject.product.entityId,
+    );
+    await drainStoredDerived(ctx.db);
+    expect(await productIdsByOwner(ctx.db, [OWNER_FILTER_HOUSEHOLD])).toContain(
+      subject.product.entityId,
+    );
+    expect(
+      await productIdsByOwner(ctx.db, [OWNER_FILTER_UNKNOWN]),
+    ).not.toContain(subject.product.entityId);
+    await setInventoryOwnership(
+      ctx.db,
+      subject.entryId,
+      { mode: "inherit" },
+      undefined,
+      TEST_ACTOR,
+    );
+    // A reset withholds an old own snapshot; it cannot claim its cached fallback is current.
+    expect((await filtered(OWNER_FILTER_UNKNOWN)).count).toBe(0);
+    await drainStoredDerived(ctx.db);
+    expect((await filtered(OWNER_FILTER_UNKNOWN)).count).toBe(1);
+  });
+
+  it("marks totals incomplete without a derived filter until valuation contributors are published", async () => {
+    const subject = await createSubject("Synthetic incomplete valuation");
+    const read = () =>
+      executeEntity(buildKernelContext(ctx.db), {
+        action: "list",
+        entity: "inventory",
+        filters: { productIdFilter: [subject.product.id] },
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+    expect(await read()).toMatchObject({
+      meta: {
+        totalCount: 1,
+        incompleteSums: ["valuation"],
+        sums: {},
+        totalLabels: { valuation: "Incomplete · $0.00 known" },
+      },
+    });
+    await drainStoredDerived(ctx.db);
+    const complete = await read();
+    expect(complete).not.toHaveProperty("meta.incompleteSums");
+    expect(complete).toMatchObject({
+      meta: { totalCount: 1, sums: { valuation: expect.any(Number) } },
+    });
+  });
+
+  it("expires ownership at a household-day boundary without inventing pending work or resetting failures", async () => {
+    const subject = await createSubject("Calendar ownership expiry");
+    await drainStoredDerived(ctx.db);
+    await getDb(ctx.db).execute(sql`
+      UPDATE "DerivedValue" SET "computedAt" = (now() AT TIME ZONE 'UTC') - interval '2 days'
+      WHERE "entityId" = ${subject.entryId} AND key = 'ownership'`);
+    const read = async () =>
+      (
+        await loadStoredDerived(
+          ctx.db,
+          "inventory",
+          [subject.entryId],
+          ["ownership"],
+        )
+      )
+        .get(subject.entryId)
+        ?.get("ownership");
+    expect(await read()).toMatchObject({
+      resultExists: true,
+      stale: true,
+      pending: false,
+    });
+    expect(await markExpiredClockDerived(ctx.db)).toBeGreaterThan(0);
+    expect(await read()).toMatchObject({ stale: true, pending: true });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "DerivedDirty" SET "lastError" = 'synthetic retry', "readyAt" = (now() AT TIME ZONE 'UTC') + interval '1 hour'
+      WHERE target = 'inventory.ownership' AND ref = ${subject.entryId}`);
+    expect(await markExpiredClockDerived(ctx.db)).toBe(0);
+    expect(await read()).toMatchObject({
+      error: "synthetic retry",
+      pending: true,
+    });
+    await getDb(ctx.db).execute(sql`
+      UPDATE "DerivedDirty" SET "readyAt" = now() AT TIME ZONE 'UTC'
+      WHERE target = 'inventory.ownership' AND ref = ${subject.entryId}`);
+    await drainStoredDerived(ctx.db);
+    expect(await read()).toMatchObject({
+      stale: false,
+      pending: false,
+      error: null,
+    });
+    expect(await markExpiredClockDerived(ctx.db)).toBe(0);
+  });
 
   const addPurchase = async (args: {
     label: string;
@@ -157,8 +367,8 @@ describe("inventory ownership mutations", () => {
   };
 
   // Selected identity/price reads must not resolve acquisition ownership, but
-  // selecting any ownership field must retain the complete inherited evidence.
-  it("loads inherited ownership only for its selected consumers", async () => {
+  // selecting ownership reads its published result without resolving acquisition evidence.
+  it("reads published ownership only for its selected consumers", async () => {
     const owner = await createLedgerParty(
       ctx.db,
       { name: "Selected inventory owner", kind: "member", notes: null },
@@ -177,6 +387,7 @@ describe("inventory ownership mutations", () => {
     });
     const filters = { productIdFilter: [subject.product.id] };
     const page = { pageIndex: 0, pageSize: 12 };
+    await drainStoredDerived(ctx.db);
     const full = await inventoryentryList(ctx.db, filters, [], page);
     expect(full.data[0]?.ownerLedgerPartyId).toBe(owner.output.id);
     const read = async (fields: readonly string[]) => {
@@ -212,16 +423,7 @@ describe("inventory ownership mutations", () => {
         expect((await read(requested)).data).toEqual(
           selectListReadRows("inventory", full.data, requested),
         );
-        expect(ownership).toHaveBeenCalledOnce();
-      }
-      ownership.mockResolvedValue(new Map());
-      for (const fields of [
-        ["id", "effectiveOwnership"],
-        ["id", "product", "effectiveOwnership"],
-      ]) {
-        await expect(read(fields)).rejects.toThrow(
-          "Inventory ownership trace was not loaded",
-        );
+        expect(ownership).not.toHaveBeenCalled();
       }
     } finally {
       ownership.mockRestore();
@@ -324,7 +526,7 @@ describe("inventory ownership mutations", () => {
       );
       const productIds = [subject.product.entityId, unstocked.entityId];
       const { result: owners, statements } = await countTestDbQueries(() =>
-        loadProductOwners(ctx.db, productIds),
+        computeProductOwners(ctx.db, productIds),
       );
       // Stocked and unstocked products share one acquisition-candidate pass.
       expect(
@@ -346,6 +548,7 @@ describe("inventory ownership mutations", () => {
           },
         ]);
       }
+      await drainStoredDerived(ctx.db);
       expect(await productIdsByOwner(ctx.db, [owner.output.id])).toEqual(
         expect.arrayContaining(productIds),
       );
@@ -950,6 +1153,7 @@ describe("inventory ownership mutations", () => {
       (await inventoryentryList(ctx.db, filters, [], page)).data.map(
         (row) => row.displayName,
       );
+    await drainStoredDerived(ctx.db);
     expect(await names({ ownerLedgerPartyId: [buyer.output.id] })).toEqual([
       expect.stringContaining("Filter inherited product"),
     ]);
@@ -972,19 +1176,6 @@ describe("inventory ownership mutations", () => {
       expect.arrayContaining([inherited.product.entityId, unstocked.entityId]),
     );
     expect(owned).not.toContain(unassigned.product.entityId);
-    const prepared = await loadProductOwnerMembership(ctx.db);
-    expect(selectProductIdsByOwner(prepared, [buyer.output.id]).sort()).toEqual(
-      [...owned].sort(),
-    );
-    expect(
-      selectProductIdsByOwner(prepared, [OWNER_FILTER_HOUSEHOLD]).sort(),
-    ).toEqual(
-      (await productIdsByOwner(ctx.db, [OWNER_FILTER_HOUSEHOLD])).sort(),
-    );
-    for (const presence of ["has", "none"] as const)
-      expect(selectProductIdsByOwner(prepared, [], presence).sort()).toEqual(
-        (await productIdsByOwner(ctx.db, [], presence)).sort(),
-      );
     await setInventoryOwnership(
       ctx.db,
       unassigned.entryId,
@@ -992,10 +1183,8 @@ describe("inventory ownership mutations", () => {
       undefined,
       TEST_ACTOR,
     );
+    await drainStoredDerived(ctx.db);
     expect(await productIdsByOwner(ctx.db, [buyer.output.id])).toContain(
-      unassigned.product.entityId,
-    );
-    expect(selectProductIdsByOwner(prepared, [buyer.output.id])).not.toContain(
       unassigned.product.entityId,
     );
   });

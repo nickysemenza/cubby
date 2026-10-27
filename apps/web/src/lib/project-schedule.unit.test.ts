@@ -22,11 +22,25 @@ function project(
     status: "planning",
     parentProjectId: parent ? projectId(parent) : null,
     dates: start || end ? { start: start ?? null, end: end ?? null } : null,
-    dateWindow: {
-      effectiveStart: start ?? null,
-      effectiveEnd: end ?? null,
-      startSource: start ? "explicit" : "none",
-      endSource: end ? "explicit" : "none",
+    fields: {
+      dateWindow: {
+        result: {
+          kind: "live",
+          decision: {
+            provenance: { kind: "computed" },
+            outcome: {
+              kind: "value",
+              value: {
+                effectiveStart: start ?? null,
+                effectiveEnd: end ?? null,
+                startSource: start ? "explicit" : "none",
+                endSource: end ? "explicit" : "none",
+              },
+            },
+          },
+        },
+        work: { kind: "idle" },
+      },
     },
     blockedByIds: [],
     blockingIds: [],
@@ -53,6 +67,28 @@ function task(
 }
 
 describe("detail schedule rows", () => {
+  it("distinguishes missing and failed windows from a completed empty window", () => {
+    const root = project("pending");
+    root.fields.dateWindow = fromPartial<ProjectOut["fields"]["dateWindow"]>({
+      result: { kind: "missing" },
+      work: { kind: "pending" },
+    });
+    expect(buildDetailScheduleRows(root, [], [])[0]?.noDateLabel).toBe(
+      "Updating…",
+    );
+    root.fields.dateWindow.work = {
+      kind: "failed",
+      error: "Synthetic window failure",
+      retryAt: null,
+    };
+    const failed = buildDetailScheduleRows(root, [], [])[0];
+    expect(failed?.noDateLabel).toBe("Unavailable");
+    expect(failed?.meta).toContain("Synthetic window failure");
+    expect(
+      buildDetailScheduleRows(project("empty"), [], [])[0]?.noDateLabel,
+    ).toBe("No dates");
+  });
+
   it("includes every nested task, including undated inherited subtasks", () => {
     const root = project("root");
     const phase = project("phase", "root", "2026-07-02", "2026-07-08");

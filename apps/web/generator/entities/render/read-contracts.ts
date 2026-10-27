@@ -53,7 +53,7 @@ export const renderEntityReadArtifacts = (
   const listInputVariants = listEntitySpecs
     .map(
       ({ key, filterSchema, inspector }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:listGroupByDimensionsSchema.optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:listGroupByDimensionsSchema.optional(),resultMembership:listResultMembership.optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
     )
     .join(",\n  ");
   // Strict: an unknown filter name is a 400, not a silently wider list.
@@ -155,7 +155,7 @@ export const renderEntityReadArtifacts = (
         `${listFilterFieldImports}\n` +
         'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
         'import { compileListReadSchema } from "../model/list-read-fields";\n' +
-        'import { listChildCountSchema, listNestingSchema, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
+        'import { listChildCountSchema, listNestingSchema, listResultMembership, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(listEntityKeys)} as const;\n` +
@@ -177,7 +177,7 @@ export const renderEntityReadArtifacts = (
         "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; nesting?: z.input<typeof listNestingSchema> };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; nesting?: z.input<typeof listNestingSchema> };\n" +
         "};\n" +
         "export type ParsedEntityListInputByEntity = {\n" +
         '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
@@ -193,7 +193,7 @@ export const renderEntityReadArtifacts = (
         "  const { entity: _entity, ...params } = input;\n" +
         "  return params;\n" +
         "}\n\n" +
-        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; nesting?: z.input<typeof listNestingSchema> };\n\n" +
+        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; resultMembership?: z.input<typeof listResultMembership>; nesting?: z.input<typeof listNestingSchema> };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +

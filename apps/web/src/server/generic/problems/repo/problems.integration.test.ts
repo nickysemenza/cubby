@@ -181,6 +181,7 @@ describe("Problems card read projections", () => {
         trade: "other",
       });
     }
+    await drainStoredDerived(ctx.db);
     for (const key of ["overdueTasks", "projectsMissingBudget"] as const) {
       const full = await executeProblem(ctx.db, key);
       const selected = await executeProblem(ctx.db, key, { fields: ["id"] });
@@ -196,7 +197,7 @@ describe("Problems card read projections", () => {
       "projectsMissingBudget",
       {
         fields: ["id"],
-        diagnostic: { attentionItems: [] },
+        diagnostic: { attentionItems: { items: [], incompleteProjectIds: [] } },
       },
     );
     expect(emptySnapshot.data).toEqual([]);

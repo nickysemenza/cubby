@@ -7,6 +7,7 @@ import {
   type ShipmentPurpose,
   shipmentExtraTrackingNumbers,
   shipmentPurpose,
+  shipmentEventSummarySchema,
 } from "../shipment-fields";
 import { defineEntity } from "./definition";
 
@@ -299,11 +300,16 @@ export default defineEntity({
         key: "eventSpanLabel",
         kind: "text",
         nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Tracking events" }],
+        },
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "eventCount",
         kind: "number",
+        nullable: true,
         labelOverride: "Events",
         display: { columnGroup: "Events", format: "count" },
         provenance: {
@@ -311,7 +317,7 @@ export default defineEntity({
           sources: [{ label: "Tracking events" }],
         },
         validation: {
-          read: z.number().int().nonnegative(),
+          read: z.number().int().nonnegative().nullable(),
           create: null,
           update: null,
         },
@@ -384,10 +390,41 @@ export default defineEntity({
     ],
     derived: {
       vendorId: { via: "purchase.vendor" },
-      firstEventDate: { type: "number" },
-      lastEventDate: { type: "number" },
-      eventSpanHours: { type: "number" },
-      eventCount: { type: "number" },
+      firstEventDate: {
+        type: "date",
+        fromResult: { key: "eventSummary", path: ["firstEventDate"] },
+      },
+      lastEventDate: {
+        type: "date",
+        fromResult: { key: "eventSummary", path: ["lastEventDate"] },
+      },
+      eventSpanHours: {
+        type: "number",
+        fromResult: { key: "eventSummary", path: ["eventSpanHours"] },
+      },
+      eventSpanLabel: {
+        type: "text",
+        fromResult: { key: "eventSummary", path: ["eventSpanLabel"] },
+      },
+      eventCount: {
+        type: "number",
+        fromResult: { key: "eventSummary", path: ["eventCount"] },
+      },
+    },
+    stored: {
+      eventSummary: {
+        compute: "shipment.eventSummary",
+        publishes: "derivedValue",
+        resultSchema: shipmentEventSummarySchema,
+        inputs: [
+          { table: "Shipment", match: { id: "id" }, columns: ["deletedAt"] },
+          {
+            table: "ShipmentObservation",
+            match: { shipmentId: "id" },
+            columns: ["event", "supersededById", "shipmentId"],
+          },
+        ],
+      },
     },
     sort: {
       fields: [

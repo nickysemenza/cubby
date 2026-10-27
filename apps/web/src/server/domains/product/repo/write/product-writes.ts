@@ -168,7 +168,7 @@ export const getProductWithFood = async (
     ...product,
     ...productUnitPriceDetailFields({ ...product, food }),
     ownershipEvidence: ownership,
-    owners: owners.get(id) ?? [],
+    owners: owners.get(id) ?? null,
     nutritionDisplay: buildNutritionDisplay({
       labelNutrition: product.labelNutrition,
       food,

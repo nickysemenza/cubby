@@ -153,6 +153,7 @@ export function assembleAllProblems(groups: {
 
 export type ProblemArrays = Pick<AllProblems, publicProblems.ProblemKey>;
 const rawProblemArrays = allProblemsSchema.omit({
+  incompleteProjectIds: true,
   sectionTotals: true,
   upcFreshness: true,
   conversionCoverageFreshness: true,

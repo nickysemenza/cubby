@@ -19,6 +19,46 @@ private final class ListStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityListModel", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct GenericEntityListModelTests {
+    @Test func unresolvedMembershipReplaysBaseAndSearchWithoutChangingFilters() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let requests = Mutex<[JSONValue]>([])
+        let meta = ListPageMeta(pageIndex: 0, pageSize: 50, totalCount: 0, unresolvedCount: 1)
+        let body = try JSONEncoder().encode(
+            JSONValue.object([
+                "items": .array([]), "meta": try JSONValue(encoding: meta),
+            ]))
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                requests.withLock { $0.append(Self.body(of: request)) }
+                return (200, body)
+            }
+        }
+        let descriptor = EntityCatalog[.product]
+        let search = try #require(descriptor.primarySearch)
+        let filters = EntityFilterState(["ownerLedgerPartyId": ["@household"]])
+        let model = GenericEntityListModel(
+            descriptor: descriptor, client: try makeClient(), filters: filters,
+            searchDebounceNanoseconds: 0)
+        await model.loadInitial()
+        #expect(model.summaryMeta?.unresolvedCount == 1)
+        #expect(requests.withLock { $0.first?["resultMembership"] } == nil)
+        model.setSearchQuery("synthetic")
+        let searchModel = try #require(model.searchModel)
+        await searchModel.settled()
+        await model.apply(resultMembership: .unresolved)
+        await searchModel.settled()
+        #expect(model.resultMembership == .unresolved)
+        #expect(model.filters == filters)
+        let scoped = requests.withLock { $0.filter { $0["resultMembership"] == .string("unresolved") } }
+        #expect(scoped.contains { $0["filters"]?[search.key] == .string("synthetic") })
+        #expect(scoped.contains { $0["filters"]?[search.key] == nil })
+        #expect(scoped.allSatisfy { $0["filters"]?["ownerLedgerPartyId"] == ["@household"] })
+        await model.apply(resultMembership: .known)
+        await searchModel.settled()
+        #expect(model.resultMembership == .known)
+        #expect(requests.withLock { $0.last?["resultMembership"] } == nil)
+    }
+
     private func makeClient(credential: CubbyCredential = .bearer("tok")) throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
         try store.save(credential, for: "localhost:3000")

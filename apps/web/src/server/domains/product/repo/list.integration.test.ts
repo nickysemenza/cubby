@@ -451,6 +451,7 @@ describe("product list staged projections", () => {
     );
     // `base` is the id/count projection (view counts, relation paging); it binds no fields.
     expect(base.data[0]).toEqual({ id: first.id });
+    expect(base.incompleteSums).toBeUndefined();
     expect(queryCount).toBe(2);
     const idOnly = await listProductsRead(
       ctx.db,

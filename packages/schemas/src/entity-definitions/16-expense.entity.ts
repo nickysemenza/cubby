@@ -1,3 +1,5 @@
+import { expenseBeneficiaryResult } from "../expense-beneficiaries";
+import { EXPENSE_BENEFICIARY_INPUTS } from "./beneficiary-inputs";
 import { imageDescriptionInputs } from "./image-description-inputs";
 import { expenseChildren } from "../child-tables/expense.js";
 import { spendingCategoryAllocationsSchema } from "@cubby/schemas/spending-classification";
@@ -904,6 +906,33 @@ Rules:
         },
       },
       {
+        key: "effectiveBeneficiaries",
+        kind: "json",
+        storedKey: "beneficiaryResult",
+        storedPath: ["portions"],
+        display: { detail: false, list: false },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Beneficiary policy" }],
+        },
+        explanation: {
+          ruleId: "expense.effective-beneficiaries",
+          description:
+            "Recorded beneficiaries win; otherwise paying-account ownership, the effective purchaser and Household supply relative portions. Unpriced lines retain recorded identities only. Monetary allocation remains live.",
+          sourceDependencies: [
+            {
+              path: "storedResult.evidence",
+              label: "Published portions and contributor references",
+            },
+          ],
+        },
+        validation: {
+          read: expenseBeneficiaryResult.shape.portions.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         display: { detail: false, list: false },
         key: "beneficiaries",
         collection: { key: ["partyId"] },
@@ -1211,6 +1240,14 @@ Rules:
       "productQuantity",
       "purchaseId",
     ],
+    stored: {
+      beneficiaryResult: {
+        compute: "expense.beneficiaries",
+        publishes: "derivedValue",
+        resultSchema: expenseBeneficiaryResult,
+        inputs: EXPENSE_BENEFICIARY_INPUTS,
+      },
+    },
     rows: {
       attributions: {
         label: "Attributions",
@@ -1369,6 +1406,7 @@ Rules:
       "projectName",
       "productName",
       "beneficiaries",
+      "effectiveBeneficiaries",
       "funders",
       "sourceClaims",
       "createdAt",

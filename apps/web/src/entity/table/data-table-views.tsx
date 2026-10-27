@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ListGroupBy } from "@cubby/schemas/pagination";
+import { countLabel } from "@cubby/shared/pluralize";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
@@ -184,6 +185,7 @@ export interface ViewTab {
   key: string;
   label: string;
   count: number | undefined;
+  unresolvedCount?: number;
   active: boolean;
   onSelect: () => void;
   description?: string;
@@ -208,7 +210,11 @@ export function ViewTabs({
           key={tab.key}
           type="button"
           aria-pressed={tab.active}
-          title={tab.description}
+          title={
+            (tab.unresolvedCount ?? 0) > 0
+              ? `${tab.description ? `${tab.description}. ` : ""}Count incomplete: ${countLabel(tab.count ?? 0, "known match")}; ${countLabel(tab.unresolvedCount ?? 0, "unresolved record")}.`
+              : tab.description
+          }
           onClick={tab.onSelect}
           className={cn(
             "-mb-px flex h-8 shrink-0 items-center gap-1.5 border-b-2 px-2.5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -230,6 +236,12 @@ export function ViewTabs({
               )}
             >
               {formatCount(tab.count)}
+              {(tab.unresolvedCount ?? 0) > 0 && (
+                <span className="sr-only">
+                  ; count incomplete,{" "}
+                  {countLabel(tab.unresolvedCount ?? 0, "unresolved record")}
+                </span>
+              )}
             </span>
           )}
         </button>
@@ -250,7 +262,7 @@ export function SavedViewTabs<TData extends RowData>({
 }: DataTableViewsProps<TData>) {
   const appliers = useTableViewAppliers(table);
   const views = viewsForEntity(entity);
-  const { total, counts } = useViewCounts(
+  const { total, counts, unresolvedCounts } = useViewCounts(
     isListEntity(entity) ? entity : undefined,
   );
   if (views.length === 0) return null;
@@ -276,6 +288,7 @@ export function SavedViewTabs<TData extends RowData>({
           key: view.id,
           label: view.label,
           count: counts.get(view.id),
+          unresolvedCount: unresolvedCounts.get(view.id),
           active: view === activeView,
           onSelect: () => applyView(view, appliers),
           description: view.description,

@@ -11,6 +11,37 @@ import {
 import { renderFieldEnvelopeArtifacts } from "./field-envelopes.ts";
 
 describe("recursive field projections", () => {
+  it("rejects stored-result projections whose path or scalar type cannot exist", async () => {
+    const { declarations } = await loadEntityDeclarationBundle();
+    const shipment = z
+      .looseObject({
+        model: z.looseObject({ derived: z.record(z.string(), z.unknown()) }),
+      })
+      .parse(
+        declarations.find((declaration) => declaration.key === "shipment"),
+      );
+    const project = (path: string[]) =>
+      compileEntity(
+        {
+          ...shipment,
+          model: {
+            ...shipment.model,
+            derived: {
+              ...shipment.model.derived,
+              eventCount: {
+                type: "number",
+                fromResult: { key: "eventSummary", path },
+              },
+            },
+          },
+        },
+        0,
+      );
+    expect(() => project(["missingCount"])).toThrow("fromResult path");
+    expect(() => project(["firstEventDate"])).toThrow(
+      "does not match the declared number projection",
+    );
+  });
   it("publishes canonical wrappers while declaration inputs remain raw", async () => {
     const entities = await loadEntityDeclarations();
     const wrappers = renderSchemaWrapperArtifacts(entities);

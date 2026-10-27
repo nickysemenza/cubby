@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { shortcodeSchema } from "./identifier-fields";
 
+/** Reconciled event facts are published as one revision for all list projections. */
+export const shipmentEventSummarySchema = z.object({
+  firstEventDate: z.string().nullable(),
+  lastEventDate: z.string().nullable(),
+  eventSpanHours: z.number().nonnegative().nullable(),
+  eventSpanLabel: z.string().nullable(),
+  eventCount: z.number().int().nonnegative(),
+});
+
 export const shipmentPurpose = z.enum(["incoming", "outgoing", "unknown"]);
 export type ShipmentPurpose = z.infer<typeof shipmentPurpose>;
 

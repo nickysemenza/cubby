@@ -664,6 +664,7 @@ export const dbExpenseToAPI = <Q extends DataQuality | undefined>(
 ): Omit<RawExpenseOut, "dataQuality"> & { dataQuality: Q } => ({
   id: parseShortcodeFor("expense", row.shortcode),
   name: row.name,
+  effectiveBeneficiaries: null,
   cost: row.cost,
   date: row.date,
   ...expenseEvidenceFields(row),

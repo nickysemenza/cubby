@@ -1,12 +1,14 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -17,6 +19,85 @@ import { getCalendarRange } from "./calendar";
 
 describe("calendar day membership", () => {
   const ctx = withTestDb();
+
+  it("retains stale beneficiary avatars and exposes missing work without allocating money during reads", async () => {
+    const first = await createRepoEntity(ctx, "ledgerParty", {
+      name: "First calendar beneficiary",
+    });
+    const second = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Second calendar beneficiary",
+    });
+    const line = await createRepoEntity(ctx, "expense", {
+      name: "Cached calendar portions",
+      cost: 12,
+      trade: "other",
+      date: "2026-09-21",
+      beneficiaries: [{ partyId: first.output.id, weight: 1 }],
+    });
+    const input = calendarRangeInput.parse({
+      startDate: "2026-09-21",
+      endDateExclusive: "2026-09-22",
+      kinds: ["spending"],
+    });
+    const context = async () => {
+      const measured = await countTestDbQueries(() =>
+        getCalendarRange(ctx.db, input),
+      );
+      expect(
+        measured.statements.some((statement) =>
+          statement.includes("payment_party_flow"),
+        ),
+      ).toBe(false);
+      const item = measured.result.items.find(
+        (item) => item.id === line.output.id,
+      );
+      if (!item || item.kind !== "expense")
+        throw new Error("Expected the calendar Expense");
+      return item.spendingContext;
+    };
+    expect(await context()).toMatchObject({
+      parties: [],
+      beneficiarySources: [
+        { fields: { effectiveBeneficiaries: { result: { kind: "missing" } } } },
+      ],
+    });
+    await drainStoredDerived(ctx.db);
+    expect(await context()).toMatchObject({
+      parties: [{ id: first.output.id, inherited: false }],
+      beneficiarySources: [
+        {
+          fields: {
+            effectiveBeneficiaries: {
+              result: { kind: "cached", freshness: "fresh" },
+            },
+          },
+        },
+      ],
+    });
+    await updateExpense(
+      ctx.db,
+      line.output.id,
+      { beneficiaries: [{ partyId: second.output.id, weight: 1 }] },
+      ctx.actor,
+    );
+    expect(await context()).toMatchObject({
+      parties: [{ id: first.output.id }],
+      beneficiarySources: [
+        {
+          fields: {
+            effectiveBeneficiaries: {
+              result: { freshness: "stale" },
+              work: { kind: "pending" },
+            },
+          },
+        },
+      ],
+    });
+    await drainStoredDerived(ctx.db);
+    expect(await context()).toMatchObject({
+      parties: [{ id: second.output.id }],
+    });
+  });
 
   it("returns canonical own and transitive images for the entire mixed calendar range", async () => {
     const date = "2026-09-21";
@@ -68,6 +149,7 @@ describe("calendar day membership", () => {
       });
       expected.set(owner.output.id, image.shortcode);
     }
+    await drainStoredDerived(ctx.db);
     const range = await getCalendarRange(
       ctx.db,
       calendarRangeInput.parse({
@@ -188,6 +270,7 @@ describe("calendar day membership", () => {
         });
       }
     }
+    await drainStoredDerived(ctx.db);
     const range = await getCalendarRange(
       ctx.db,
       calendarRangeInput.parse({
@@ -280,6 +363,7 @@ describe("calendar day membership", () => {
       dueEndDate: "2026-09-22",
     });
 
+    await drainStoredDerived(ctx.db);
     const range = await getCalendarRange(
       ctx.db,
       calendarRangeInput.parse({

@@ -1,5 +1,5 @@
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
-import { EntityDeclarationError } from "../declarations.ts";
+import { declarationModules, EntityDeclarationError } from "../declarations.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import { renderRecord } from "./record.ts";
 import { browserRoutes } from "./routes.ts";
@@ -16,6 +16,11 @@ export const renderEntityMetadataArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
   const projections = entityProjectionMaps(entities);
+  const resultEntities = entities.filter((entity) =>
+    Object.values(entity.fieldModel.stored).some(
+      (stored) => stored.resultSchema,
+    ),
+  );
   const crudEntitySpecs = projections.crud;
   const browserCrudEntities = crudEntitySpecs.map(({ key }) => key);
   const kernelEntities = kernelEntitiesFor(entities);
@@ -164,6 +169,7 @@ export const renderEntityMetadataArtifacts = (
           fields: fieldModel.fields.map(({ validation, ...field }) => ({
             ...field,
             storedKey: field.storedKey ?? null,
+            storedPath: field.storedPath ?? null,
             // `resolution.inherit` is emitted compiled, as list fields' `inherit`.
             resolution: withoutInherit(field.resolution),
             // A field is required on create when it declares a create schema
@@ -414,7 +420,7 @@ export const renderEntityMetadataArtifacts = (
                   : [],
             ),
             ...Object.entries(entity.fieldModel.stored).map(
-              ([key, stored]) => ({
+              ([key, { resultSchema: _resultSchema, ...stored }]) => ({
                 entity: entity.key,
                 key,
                 table: entity.descriptor.dbTable ?? null,
@@ -525,6 +531,36 @@ export const renderEntityMetadataArtifacts = (
         )} as const;\n`,
     },
     {
+      relativePath:
+        "packages/schemas/src/generated/entity-stored-result-schemas.gen.ts",
+      source:
+        generatedHeader +
+        'import type { z } from "zod";\n' +
+        resultEntities
+          .map((entity, index) => {
+            const declaration = declarationModules.get(entity.key);
+            if (!declaration)
+              throw new EntityDeclarationError(
+                `${entity.key} has no result schema declaration module.`,
+              );
+            return `import resultDefinition${index} from ${JSON.stringify(declaration.path)};\n`;
+          })
+          .join("") +
+        "export const generatedStoredResultSchemas: Readonly<Record<string, z.ZodType>> = {\n" +
+        resultEntities
+          .flatMap((entity, index) =>
+            Object.entries(entity.fieldModel.stored).flatMap(([key, stored]) =>
+              stored.resultSchema
+                ? [
+                    `${JSON.stringify(`${entity.key}.${key}`)}: resultDefinition${index}.model.stored[${JSON.stringify(key)}].resultSchema,\n`,
+                  ]
+                : [],
+            ),
+          )
+          .join("") +
+        "};\n",
+    },
+    {
       relativePath: "packages/schemas/src/generated/entity-list-fields.gen.ts",
       source:
         generatedHeader +
@@ -572,7 +608,7 @@ export const renderEntityMetadataArtifacts = (
         'type DerivedOf<E extends Entity> = (typeof generatedEntityListFields)[E]["derived"];\n' +
         "/** Derived keys whose SQL value the repository passes to `listScaffold`; declared rollups compile their own. */\n" +
         "export type GeneratedDerivedValueKey<E extends Entity> = {\n" +
-        '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value"; rollup: object } ? never : DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
+        '  [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends { shape: "value"; rollup: object } | { shape: "value"; fromResult: object } ? never : DerivedOf<E>[K] extends { shape: "value" } ? K : never;\n' +
         "}[keyof DerivedOf<E>] & string;\n" +
         "/** Row sets whose relation the repository passes to `listScaffold`. */\n" +
         "export type GeneratedRepositoryRowSetKey<E extends Entity> = {\n" +

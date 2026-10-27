@@ -12,7 +12,11 @@ import { loadCurrentFieldOwnership } from "~/server/generic/assessment/repo/auto
 import { presentPublishedQuality } from "~/server/generic/data-quality/repo/presentation";
 import { loadCurrentAssignmentFacts } from "~/server/generic/derived/repo/assignment-read";
 import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
-import { loadPageStoredMeta } from "~/server/generic/derived/repo/read";
+import {
+  loadPageStoredMeta,
+  projectStoredResult,
+  projectStoredValue,
+} from "~/server/generic/derived/repo/read";
 import type {
   FieldReadContext,
   PageFieldReadContexts,
@@ -260,11 +264,23 @@ export function publicFieldEnvelopeRow(
     throw new Error("An entity field read requires an object schema");
   const row = rowRecord.parse(value);
   const stored = new Map(context?.stored);
+  const versions = z
+    .record(z.string(), z.string().nullable())
+    .optional()
+    .parse(row.storedProjectionVersions);
   for (const field of entityFieldModels[entity].fields) {
     const readKey = field.readKey ?? field.key;
     if (!field.storedKey) continue;
     const read = stored.get(field.storedKey);
-    if (read) stored.set(readKey, read);
+    if (read)
+      stored.set(
+        readKey,
+        "storedProjection" in field && field.storedProjection
+          ? projectStoredValue(read, row[readKey], versions?.[readKey])
+          : "storedPath" in field && field.storedPath
+            ? projectStoredResult(read, field.storedPath)
+            : read,
+      );
   }
   const quality = stored.get("dataQuality");
   const scored = z.enum(scoredEntities).safeParse(entity);

@@ -93,6 +93,10 @@ struct FieldProvenanceCaption: View {
 
 // MARK: - Presenter
 
+extension EnvironmentValues {
+    @Entry var fieldExplanationListFilters = EntityFilterState()
+}
+
 /// One row menu owns Explain and the assignment actions; a parent menu masks a nested label's
 /// context menu on iOS. Explain opens the one Why this value surface.
 struct FieldExplanationPresenter: ViewModifier {
@@ -102,7 +106,18 @@ struct FieldExplanationPresenter: ViewModifier {
     var menuActions: AnyView? = nil
     /// The editor already owns staging; its explanation is read-only.
     var allowsActions = true
+    @Environment(\.fieldExplanationListFilters) private var listFilters
     @State private var showingExplanation = false
+
+    /// Only an unambiguous declared list scope can explain a contextual value.
+    private var explanationScope: EntityRef? {
+        guard surface == "list", let bindings = field.explanation?.scopeFilters else { return nil }
+        let candidates = bindings.flatMap { entity, filter -> [EntityRef] in
+            guard let key = EntityKey(rawValue: entity) else { return [] }
+            return (listFilters[filter] ?? []).map { EntityRef(entity: key, id: $0) }
+        }
+        return candidates.count == 1 ? candidates.first : nil
+    }
 
     func body(content: Content) -> some View {
         content
@@ -118,14 +133,16 @@ struct FieldExplanationPresenter: ViewModifier {
                 menuActions
             }
             .onChange(of: subject) { _, _ in showingExplanation = false }
+            .onChange(of: explanationScope) { _, _ in showingExplanation = false }
             .popover(isPresented: $showingExplanation) {
                 NavigationStack {
                     WhyThisValueView(
-                        field: field, subject: subject, surface: surface, allowsActions: allowsActions
+                        field: field, subject: subject, surface: surface,
+                        scope: explanationScope, allowsActions: allowsActions
                     ) {
                         showingExplanation = false
                     }
-                    .id(subject.stableKey + field.key)
+                    .id(subject.stableKey + field.key + (explanationScope?.stableKey ?? ""))
                     .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
                 }
             }
@@ -147,6 +164,7 @@ struct WhyThisValueView: View {
     let field: FieldDescriptor
     let subject: EntityRef
     var surface = "detail"
+    var scope: EntityRef? = nil
     var allowsActions = true
     let onClose: () -> Void
 
@@ -743,7 +761,7 @@ struct WhyThisValueView: View {
         loadError = nil
         do {
             let result = try await appModel.client.fieldExplanation(
-                subject: subject, field: field.key, surface: surface)
+                subject: subject, field: field.key, surface: surface, scope: scope)
             try Task.checkCancellation()
             resolved = result
         } catch is CancellationError {

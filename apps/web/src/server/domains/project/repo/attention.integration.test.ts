@@ -1,3 +1,4 @@
+import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -5,13 +6,19 @@ import { describe, expect, it } from "vitest";
 import { householdDaysAgo, householdDaysFromNow } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import { entityLink } from "~/server/db/schema";
+import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { executeEntity } from "~/server/entity-kernel";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
+import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { computeAttentionItems } from "./attention";
 import { loadProjectSubtreeRollups } from "./subtree";
@@ -153,22 +160,33 @@ describe("project attention activity", () => {
       trade: "other",
       projectId: stale.id,
     });
-    const preloaded = await loadProjectSubtreeRollups(ctx.db);
+    await drainStoredDerived(ctx.db);
     const measured = await countTestDbQueries(() =>
-      computeAttentionItems(ctx.db, { preloaded: Promise.resolve(preloaded) }),
+      computeAttentionItems(ctx.db),
     );
     expect(
-      measured.result
+      measured.result.items
         .filter((item) => item.type === "stalled_project")
         .map((item) => item.entityId),
     ).toEqual([stale.shortcode]);
     const scoped = await computeAttentionItems(ctx.db, {
-      preloaded,
       projectIds: [child.id],
     });
-    expect(scoped.some((item) => item.type === "stalled_project")).toBe(false);
+    expect(scoped.items.some((item) => item.type === "stalled_project")).toBe(
+      false,
+    );
+    await drainStoredDerived(ctx.db);
     expect(await computeAttentionItems(ctx.db)).toEqual(measured.result);
-    expect(measured.queryCount).toBeLessThanOrEqual(8);
+    await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic additional attention inputs",
+      status: "in_progress",
+    });
+    await drainStoredDerived(ctx.db);
+    const expanded = await countTestDbQueries(() =>
+      computeAttentionItems(ctx.db),
+    );
+    // The stored-result batch adds readiness reads, never a read per Project.
+    expect(expanded.queryCount).toBe(measured.queryCount);
   });
 });
 
@@ -203,10 +221,12 @@ describe("spend_below_estimate", () => {
       future: false,
       projectId,
     });
-  const belowEstimate = async () =>
-    (await computeAttentionItems(ctx.db)).filter(
+  const belowEstimate = async () => {
+    await drainStoredDerived(ctx.db);
+    return (await computeAttentionItems(ctx.db)).items.filter(
       (item) => item.type === "spend_below_estimate",
     );
+  };
 
   // Fires only under 10% of the project's own estimate, counts subtree spend,
   // and leaves projects under an estimated ancestor to that ancestor.
@@ -258,6 +278,109 @@ describe("spend_below_estimate", () => {
     });
     expect(item?.description).toContain(
       "spend was recorded elsewhere or the estimate is wrong",
+    );
+  });
+});
+
+describe("Project attention input availability", () => {
+  const ctx = withTestDb();
+  it("retains live overdue findings and reports missing Project inputs until publication", async () => {
+    const project = await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic pending attention",
+      status: "in_progress",
+    });
+    const task = await insertWithShortcode(ctx.db, "task", {
+      name: "Synthetic live overdue task",
+      projectId: project.id,
+      trade: "other",
+      dueDate: householdDaysAgo(2),
+    });
+    const missing = await computeAttentionItems(ctx.db, {
+      projectIds: [project.id],
+    });
+    const filtered = (filters: {
+      attention?: string[];
+      attentionExclude?: string[];
+    }) =>
+      executeEntity(kernelCtx(ctx), {
+        action: "list",
+        entity: "project",
+        filters: { ids: [project.shortcode], ...filters },
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+    const unknown = await filtered({ attention: ["missing_budget"] });
+    if (unknown.action !== "list") throw new Error("Expected Project list");
+    expect(unknown.items).toEqual([]);
+    expect(unknown.meta.unresolvedCount).toBe(1);
+    const unknownExclusion = await filtered({
+      attentionExclude: ["missing_budget"],
+    });
+    if (unknownExclusion.action !== "list")
+      throw new Error("Expected Project list");
+    expect(unknownExclusion.items).toEqual([]);
+    expect(unknownExclusion.meta.unresolvedCount).toBe(1);
+    const clients = createTestRequestContext(ctx.db);
+    for (const key of [
+      "projectsMissingBudget",
+      "projectsWithDateDrift",
+    ] as const) {
+      const slice = await findProblemByType(
+        ctx.db,
+        key,
+        clients.upcLookupClient,
+        clients.usdaClient,
+      );
+      expect(slice.incompleteProjectIds).toContain(project.shortcode);
+      expect(slice.total).toBe(0);
+    }
+    const queue = await readWorkQueue(
+      ctx.db,
+      null,
+      workQueueHouseholdInput.parse({
+        source: "problem",
+        reason: "projectsMissingBudget",
+      }),
+      false,
+    );
+    expect(queue.meta.incompleteProjectIds).toContain(project.shortcode);
+
+    expect(missing.incompleteProjectIds).toContain(project.shortcode);
+    expect(missing.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "overdue_task",
+          entityId: task.shortcode,
+        }),
+      ]),
+    );
+    const diagnostic = await runDiagnostic(
+      ctx.db,
+      "project-date-window-drift",
+      { attentionItems: missing },
+    );
+    expect(diagnostic.status.state).toBe("stale");
+    await drainStoredDerived(ctx.db);
+    const settled = await computeAttentionItems(ctx.db, {
+      projectIds: [project.id],
+    });
+    expect(settled.incompleteProjectIds).not.toContain(project.shortcode);
+    const settledExclusion = await filtered({
+      attentionExclude: ["missing_budget"],
+    });
+    if (settledExclusion.action !== "list")
+      throw new Error("Expected Project list");
+    expect(settledExclusion.items).toEqual([
+      expect.objectContaining({ id: project.shortcode }),
+    ]);
+    expect(settledExclusion.meta.unresolvedCount ?? 0).toBe(0);
+
+    expect(settled.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "overdue_task",
+          entityId: task.shortcode,
+        }),
+      ]),
     );
   });
 });

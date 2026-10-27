@@ -1,3 +1,4 @@
+import { calendarBeneficiarySource } from "@cubby/schemas/calendar";
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -8,6 +9,7 @@ import {
   EntityDisplayImagesProvider,
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
+import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { CalendarItemPresentation } from "./calendar-item-row";
@@ -77,11 +79,69 @@ const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
     ],
   ),
   projectName: "Kitchen",
-  spendingContext: { projectNames: ["Kitchen"], parties: [] },
+  spendingContext: {
+    projectNames: ["Kitchen"],
+    parties: [],
+    beneficiarySources: [],
+  },
   productName: "Souper Cubes",
 };
 
 describe("CalendarItemPresentation", () => {
+  it("shows missing beneficiaries inside a calendar trigger without adding nested buttons", () => {
+    const source = entityReadFixture(calendarBeneficiarySource, {
+      id: plannedExpense.id,
+      name: plannedExpense.title,
+    });
+    const view = render(
+      <button type="button">
+        <CalendarItemPresentation
+          item={{
+            ...plannedExpense,
+            spendingContext: {
+              projectNames: [],
+              parties: [],
+              beneficiarySources: [source],
+            },
+          }}
+          variant="detail"
+        />
+      </button>,
+    );
+    expect(screen.getByText("Updating…")).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    const failed = calendarBeneficiarySource.parse({
+      ...source,
+      fields: {
+        effectiveBeneficiaries: {
+          ...source.fields.effectiveBeneficiaries,
+          work: {
+            kind: "failed",
+            error: "Synthetic beneficiary failure",
+            retryAt: null,
+          },
+        },
+      },
+    });
+    view.rerender(
+      <button type="button">
+        <CalendarItemPresentation
+          item={{
+            ...plannedExpense,
+            spendingContext: {
+              projectNames: [],
+              parties: [],
+              beneficiarySources: [failed],
+            },
+          }}
+          variant="detail"
+        />
+      </button>,
+    );
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+  });
+
   it("shows canonical images in compact spans and day-sheet rows without a legacy cover", () => {
     const harness = createBrowserTestHarness();
     const ref = {

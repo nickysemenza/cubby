@@ -21,7 +21,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compiledConnectedRoutes } from "~/server/generic/entity-links/repo/connected-records";
 
 const cursorSchema = z
