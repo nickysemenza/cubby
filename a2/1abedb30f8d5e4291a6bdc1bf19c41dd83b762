@@ -1,0 +1,21 @@
+apps/web/src/server/generic/list/repo/declared-filters.ts
+  s_77bdb89dbc0fc6::t_1f4ea000d91111 1-449
+apps/web/src/server/generic/list/repo/list.ts
+  s_77bdb89dbc0fc6::t_8363db32086499 136-154,171,180,182,248,361-362,395,643,851,934,942-954,995-999,2171-2172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a21abedb30f8d5e4291a6bdc1bf19c41dd83b762",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
