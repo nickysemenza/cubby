@@ -1,0 +1,31 @@
+apps/web/src/features/home/needs-you.tsx
+  s_77bdb89dbc0fc6::t_a06126acdd100b 121,130-146
+apps/web/src/features/location/location-problem-actions.tsx
+  s_77bdb89dbc0fc6::t_edc22c073d916a 1
+apps/web/src/features/work-queue/open-problem-list-action.tsx
+  s_77bdb89dbc0fc6::t_9133af66da7372 3,16-18
+apps/web/src/features/work-queue/work-row-link.tsx
+  s_77bdb89dbc0fc6::t_47da36f44b11dc 15,18,31-33
+apps/web/src/server/domains/work/repo/work-suggestions.ts
+  s_77bdb89dbc0fc6::t_45018ccdf8a253 80
+packages/schemas/src/relation-list.ts
+  s_77bdb89dbc0fc6::t_2ac11088df640e 369-374,410
+packages/schemas/src/work-queue.ts
+  s_77bdb89dbc0fc6::t_3d59aa93607cf0 82-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2610254ba639c113d583fcc4f8d0f5ba1479e2ba",
+  "prompts": {},
+  "sessions": {
+    "s_77bdb89dbc0fc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3b58d13f-3027-45c0-82f9-2bb007bfc36e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
