@@ -1,0 +1,1 @@
+ALTER TABLE "WorkItem" ADD CONSTRAINT "WorkItem_no_retired_automatic_fields" CHECK (split_part("WorkItem"."target", '@', 1) NOT LIKE '%.automaticFields');

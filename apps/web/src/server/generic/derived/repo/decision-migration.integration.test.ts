@@ -88,8 +88,20 @@ describe("field decision cache migration", () => {
       VALUES ('product.price', ${empty.entityId}, 2, 3, 'Synthetic previous refresh failure', now() + interval '1 minute'),
       ('product.automaticFields', ${valued.entityId}, 0, 0, NULL, now()),
       ('product.automaticFields@0', ${valued.entityId}, 0, 0, NULL, now())`);
+      // 0045 predates the WorkItem rename (0047); replay it on the old name.
+      await tx.execute(sql`ALTER TABLE "WorkItem" RENAME TO "DerivedDirty"`);
+      await tx.execute(
+        sql`ALTER SEQUENCE "WorkTicket" RENAME TO "DerivedTicket"`,
+      );
       for (const statement of migration.split("--> statement-breakpoint"))
         if (statement.trim()) await tx.execute(sql.raw(statement));
+      await tx.execute(sql`ALTER TABLE "DerivedDirty" RENAME TO "WorkItem"`);
+      await tx.execute(
+        sql`ALTER SEQUENCE "DerivedTicket" RENAME TO "WorkTicket"`,
+      );
+      await tx.execute(
+        sql`ALTER TABLE "WorkItem" RENAME CONSTRAINT "DerivedDirty_no_retired_automatic_fields" TO "WorkItem_no_retired_automatic_fields"`,
+      );
     });
     const values = await loadStoredDerived(
       ctx.db,

@@ -121,7 +121,7 @@ describe("finance.record source and Job lifecycle contention", () => {
       sql`SELECT target, ref, ticket FROM "WorkItem" ORDER BY target, ref`,
     );
     const invalidationsBefore = await getDb(ctx.db).execute(
-      sql`SELECT key, "restartsPass", xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
+      sql`SELECT id, key FROM "JobInvalidationCapture" ORDER BY id`,
     );
     const invalidate = changes.recordChange;
     const capture = vi
@@ -163,11 +163,11 @@ describe("finance.record source and Job lifecycle contention", () => {
           )
         ).rows,
       ).toEqual(marksBefore.rows);
-      // The rolled-back capture left no invalidation behind.
+      // The rolled-back capture left no wake behind.
       expect(
         (
           await getDb(ctx.db).execute(
-            sql`SELECT key, "restartsPass", xmin::text AS xmin FROM "JobInvalidation" ORDER BY key`,
+            sql`SELECT id, key FROM "JobInvalidationCapture" ORDER BY id`,
           )
         ).rows,
       ).toEqual(invalidationsBefore.rows);

@@ -47,7 +47,9 @@ describe("durable Job selection", () => {
       kind: "synthetic.flood",
       input: {},
     }));
-    await enqueueJobs(ctx.db, flood);
+    // One statement per slice: a 10k-row insert overflows drizzle's builder.
+    for (let start = 0; start < flood.length; start += 1_000)
+      await enqueueJobs(ctx.db, flood.slice(start, start + 1_000));
     const others = await enqueueJobs(
       ctx.db,
       [0, 1, 2].map((index) => ({
@@ -122,7 +124,8 @@ describe("durable Job selection", () => {
       release.resolve();
     }
     expect(peak).toBe(2);
-    await drainDueJobs(ctx.db, handlers, 1, 30_000, 1);
+    // A drain completes only on its first empty pass.
+    await drainDueJobs(ctx.db, handlers, 10, 30_000, 1);
     expect(
       (await getDb(ctx.db).select().from(job).where(eq(job.kind, kind))).every(
         (row) => row.state === "completed",

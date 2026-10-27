@@ -107,6 +107,7 @@ describe("generic WorkItems", () => {
       refs.map((ref) => ({ target: "synthetic", ref })),
     );
     const published: string[] = [];
+    const exhausted: string[] = [];
     const handler = defineDrain({
       limit: 10,
       maxAttempts: 2,
@@ -122,11 +123,9 @@ describe("generic WorkItems", () => {
         }
         published.push(...items.map((item) => item.ref));
       },
-      exhaust: async (tx, items) => {
-        await getDb(tx)
-          .update(job)
-          .set({ result: { exhausted: items.map((item) => item.ref) } })
-          .where(eq(job.key, drain.key));
+      // Each isolated item exhausts alone.
+      exhaust: async (_tx, items) => {
+        exhausted.push(...items.map((item) => item.ref));
       },
     });
     const handlers = { [drain.kind]: handler };
@@ -163,13 +162,8 @@ describe("generic WorkItems", () => {
     await expect(advanceJob(ctx.db, jobId, handlers)).resolves.toBe(
       "succeeded",
     );
-    const [saved] = await getDb(ctx.db)
-      .select({ result: job.result })
-      .from(job)
-      .where(eq(job.id, jobId));
-    expect(saved?.result).toMatchObject({
-      exhausted: expect.arrayContaining([...sqlStates.keys()]),
-    });
+    expect(exhausted).toHaveLength(3);
+    expect(exhausted).toEqual(expect.arrayContaining([...sqlStates.keys()]));
     expect(
       await getDb(ctx.db)
         .select()

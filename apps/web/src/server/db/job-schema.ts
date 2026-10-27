@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  check,
   boolean,
   index,
   integer,
@@ -79,6 +80,11 @@ export const workItem = pgTable(
     lastError: text("lastError"),
   },
   (t) => [
+    // The retired automaticFields family must never be marked again (0045).
+    check(
+      "WorkItem_no_retired_automatic_fields",
+      sql`split_part(${t.target}, '@', 1) NOT LIKE '%.automaticFields'`,
+    ),
     primaryKey({ columns: [t.target, t.ref] }),
     index("WorkItem_ready_idx").on(t.drain, t.priority, t.readyAt),
   ],

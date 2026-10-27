@@ -42,14 +42,14 @@ it("preserves principal evidence and queues existing quality through the derived
       ).rows;
     const before = await retained();
     // A completed old publication has no remaining dirty mark.
-    await client.query(`DELETE FROM "WorkItem"`);
+    await client.query(`DELETE FROM "DerivedDirty"`);
     await migrateDatabase(db, {
       through: "0041_unclassified_principal_product_gaps",
     });
     expect(await retained()).toEqual(before);
     const marks = async () =>
       (
-        await client.query(`SELECT target, ref, priority FROM "WorkItem"
+        await client.query(`SELECT target, ref, priority FROM "DerivedDirty"
       WHERE target IN ('expense.dataQuality', 'purchase.dataQuality') ORDER BY target`)
       ).rows;
     expect(await marks()).toEqual([

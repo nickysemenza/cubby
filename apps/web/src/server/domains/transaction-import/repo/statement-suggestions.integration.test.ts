@@ -3059,7 +3059,6 @@ describe("statement Transaction suggestions", () => {
     let publishPeak = 0;
     const publish = assessmentRepo.publishAssessments;
     const releasePublications = Promise.withResolvers<void>();
-    const renewalStarted = Promise.withResolvers<number>();
     let publicationDb: Parameters<typeof publish>[0] | undefined;
     let claim:
       | NonNullable<ReturnType<typeof currentJobExecution>>["claim"]
@@ -3123,36 +3122,17 @@ describe("statement Transaction suggestions", () => {
       release.resolve();
       await expect.poll(() => publishActive).toBe(4);
       const owner = claim;
-      const held = publicationDb;
-      if (!owner || !held) throw new Error("Expected real Job publications");
-      renewal = databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
-        const pid = await getDb(tx).execute<{ pid: number }>(
-          sql`SELECT pg_backend_pid() AS pid`,
-        );
-        const controlPid = pid.rows[0]?.pid;
-        if (!controlPid) throw new Error("Expected renewal connection");
-        renewalStarted.resolve(controlPid);
-        return renewJob(tx, owner);
-      });
-      renewal.catch(renewalStarted.reject);
-      const renewalPid = await renewalStarted.promise;
-      // Observe through a held publication connection: four holders plus the
-      // renewal already occupy the five-connection production pool shape.
-      await expect
-        .poll(async () => {
-          const waiting = await getDb(held).execute<{
-            waiting: boolean;
-          }>(sql`SELECT EXISTS (
-          SELECT 1 FROM pg_stat_activity WHERE pid = ${renewalPid}::int
-            AND cardinality(pg_blocking_pids(pid)) > 0
-        ) AS waiting`);
-          return waiting.rows[0]?.waiting;
-        })
-        .toBe(true);
+      if (!owner || !publicationDb)
+        throw new Error("Expected real Job publications");
+      // Held publications take the Job row lock only at commit, so the
+      // heartbeat renews while all four still wait.
+      renewal = databaseHelpers.withTransactionDatabase(ctx.db, (tx) =>
+        renewJob(tx, owner),
+      );
+      expect(await renewal).toBe(true);
       renewalQueued = true;
       releasePublications.resolve();
       const outcome = await pending;
-      expect(await renewal).toBe(true);
       expect(publicationsAfterQueue).toBe(2);
       expect(modelPeak).toBeGreaterThanOrEqual(30);
       expect(spendingPeak).toBeGreaterThan(1);

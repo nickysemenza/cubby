@@ -1,6 +1,6 @@
 {
-  "id": "24cef0f6-2bfc-42a5-a235-fd550734b7b7",
-  "prevId": "49f827e6-06a5-4e8a-8843-cd22493db28d",
+  "id": "68a033f3-f807-492f-af59-ddbd77ab540b",
+  "prevId": "24cef0f6-2bfc-42a5-a235-fd550734b7b7",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -5321,7 +5321,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "WorkItem_no_retired_automatic_fields": {
+          "name": "WorkItem_no_retired_automatic_fields",
+          "value": "split_part(\"WorkItem\".\"target\", '@', 1) NOT LIKE '%.automaticFields'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.AiEvaluation": {

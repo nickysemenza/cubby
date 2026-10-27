@@ -45,9 +45,11 @@ export async function markWork(
   { readyAt }: { readyAt?: Date } = {},
 ) {
   if (!items.length) return;
+  // Default to database time: claimWork compares against now(), and a JS
+  // clock ahead of Postgres would hide a fresh item from its own drain.
   await repositoryQueries(db).execute(sql`
     INSERT INTO "WorkItem" (drain, target, ref, priority, "readyAt")
-    SELECT ${drain.key}, i.target, i.ref, min(i.priority), ${(readyAt ?? new Date()).toISOString()}::timestamp
+    SELECT ${drain.key}, i.target, i.ref, min(i.priority), ${readyAt ? sql`${readyAt.toISOString()}::timestamp` : sql`now()`}
       FROM jsonb_to_recordset(${JSON.stringify(
         items.map(({ target, ref, priority = 0 }) => ({
           target,
