@@ -1,0 +1,23 @@
+apps/web/src/server/generic/derived/repo/public-read.ts
+  s_65aabc3f7163d2::t_db7b363cb0e4a7 7,10,27,334,350,359-374,383-385,413
+apps/web/src/server/generic/derived/service/public-read.ts
+  s_65aabc3f7163d2::t_1c7ece60785241 10,31,33-39,45
+docs/entities.md
+  s_65aabc3f7163d2::t_c45194ac1048f3 2109-2111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3fe3e47407b13a186c35d010aad84e0a74b5b27b",
+  "prompts": {},
+  "sessions": {
+    "s_65aabc3f7163d2": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a17f52-e6cb-77a1-b6ec-2039032a39a6",
+        "model": "gpt-6.1-terra"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
